@@ -355,16 +355,31 @@ func (service *Service) GetReservation(
 	}
 	var result ReservationView
 	err := service.transactions.WithinCostTransaction(ctx, func(repo Repository) error {
+		snapshot, findErr := repo.FindReservation(ctx, reservationID)
+		if findErr != nil {
+			return findErr
+		}
+		scope, authorizeErr := repo.AuthorizeProject(ctx, actor, snapshot.ProjectID, "read")
+		if authorizeErr != nil {
+			return authorizeErr
+		}
+		if snapshot.WorkspaceID != scope.WorkspaceID {
+			return conflict("Cost reservation scope has drifted")
+		}
+		budget, budgetErr := repo.GetBudgetForUpdate(ctx, scope.ProjectID)
+		if budgetErr != nil {
+			return budgetErr
+		}
+		if validationErr := validateBudget(budget); validationErr != nil {
+			return validationErr
+		}
 		reservation, findErr := repo.GetReservationForUpdate(ctx, reservationID)
 		if findErr != nil {
 			return findErr
 		}
-		scope, authorizeErr := repo.AuthorizeProject(ctx, actor, reservation.ProjectID, "read")
-		if authorizeErr != nil {
-			return authorizeErr
-		}
-		if reservation.WorkspaceID != scope.WorkspaceID {
-			return conflict("Cost reservation scope has drifted")
+		if !domain.SameReservationBinding(snapshot, reservation) || reservation.BudgetPolicyID != budget.ID ||
+			reservation.WorkspaceID != budget.WorkspaceID || reservation.Currency != budget.Currency {
+			return conflict("Cost reservation binding has drifted")
 		}
 		entries, listErr := repo.ListLedgerEntries(ctx, reservation.ID)
 		if listErr != nil {
@@ -498,7 +513,7 @@ func validateReservationEstimate(reservation domain.Reservation, estimate domain
 func validateReservation(value domain.Reservation) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
 		!validUUID(value.EstimateID) || !validUUID(value.BudgetPolicyID) || !validUUID(value.PriceQuoteID) ||
-		value.Metric != domain.MetricGenerationImage || value.SourceType != domain.SourceGenerationIntent ||
+		!domain.IsBillingMetric(value.Metric) || value.SourceType != domain.SourceGenerationIntent ||
 		!validUUID(value.SourceID) || value.EstimatedUnits < 1 || value.SettledUnits < 0 ||
 		value.SettledUnits > value.EstimatedUnits || !value.UnitAmount.IsPositive() || !value.ReservedAmount.IsPositive() ||
 		value.SettledAmount.IsNegative() || value.BudgetLimit.IsNegative() ||

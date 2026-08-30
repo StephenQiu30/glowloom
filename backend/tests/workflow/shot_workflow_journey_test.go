@@ -455,7 +455,7 @@ func seedShotWorkflowCandidateSet(
 	now time.Time,
 ) (generationdomain.CandidateSet, map[string]generationdomain.CandidateWithReport) {
 	t.Helper()
-	providerJobID, providerReceiptID := uuid.New(), uuid.New()
+	providerJobID := uuid.New()
 	candidateIDs := []uuid.UUID{uuid.New(), uuid.New()}
 	slices.SortFunc(candidateIDs, func(left, right uuid.UUID) int {
 		return strings.Compare(left.String(), right.String())
@@ -464,13 +464,14 @@ func seedShotWorkflowCandidateSet(
 	bundles := make(map[string]generationdomain.CandidateWithReport, len(candidateIDs))
 	for index, candidateID := range candidateIDs {
 		artifactID, reportID := uuid.New(), uuid.New()
+		providerCallID, providerReceiptID := uuid.New(), uuid.New()
 		artifactHash := strings.Repeat(string(rune('a'+index)), 64)
 		reportHash := strings.Repeat(string(rune('c'+index)), 64)
 		outputKey := "shot-image-" + string(rune('1'+index))
 		width, height := 1280+index, 720+index
 		if err := create(&model.Artifact{
 			ID: artifactID, WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
-			SourceType: "generation_provider_job", SourceID: providerJobID, OutputKey: outputKey,
+			SourceType: "generation_provider_receipt", SourceID: providerReceiptID, OutputKey: outputKey,
 			MediaType: "image/png", SHA256: artifactHash, SizeBytes: 1024, Status: "READY",
 			Width: &width, Height: &height, Revision: 2, CreatedAt: now, UpdatedAt: now,
 		}); err != nil {
@@ -478,7 +479,8 @@ func seedShotWorkflowCandidateSet(
 		}
 		if err := create(&model.GenerationCandidate{
 			ID: candidateID, WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
-			ProviderJobID: providerJobID, OutputKey: outputKey, ArtifactID: artifactID,
+			ProviderJobID: providerJobID, ProviderCallID: providerCallID, ProviderReceiptID: providerReceiptID,
+			OutputKey: outputKey, ArtifactID: artifactID,
 			ArtifactRevision: 2, ArtifactSHA256: artifactHash, MediaType: "image/png",
 			Width: width, Height: height, Status: "QC_PASSED", Revision: 1,
 			CreatedBy: fixture.userID, CreatedAt: now, UpdatedAt: now,
@@ -492,7 +494,8 @@ func seedShotWorkflowCandidateSet(
 		bundles[candidateID.String()] = generationdomain.CandidateWithReport{
 			Candidate: generationdomain.Candidate{
 				ID: candidateID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-				ProviderJobID: providerJobID.String(), OutputKey: outputKey, ArtifactID: artifactID.String(),
+				ProviderJobID: providerJobID.String(), ProviderCallID: providerCallID.String(), ProviderReceiptID: providerReceiptID.String(),
+				OutputKey: outputKey, ArtifactID: artifactID.String(),
 				ArtifactRevision: 2, ArtifactSHA256: artifactHash, MediaType: "image/png",
 				Width: width, Height: height, Status: generationdomain.CandidateQCPassed, Revision: 1,
 				CreatedBy: fixture.userID.String(), CreatedAt: now, UpdatedAt: now,
@@ -511,7 +514,7 @@ func seedShotWorkflowCandidateSet(
 	}
 	return generationdomain.CandidateSet{
 		ID: providerJobID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		ProviderReceiptID: providerReceiptID.String(), Candidates: references, ContentHash: contentHash, Revision: 1,
+		ProviderReceiptSetHash: strings.Repeat("c", 64), Candidates: references, ContentHash: contentHash, Revision: 1,
 	}, bundles
 }
 

@@ -360,7 +360,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/projects/{project_id}/cost-prices/{metric}": {
+    "/api/projects/{project_id}/media-model-profiles/{profile_version_id}/cost-price": {
         parameters: {
             query?: never;
             header?: never;
@@ -1605,7 +1605,7 @@ export interface components {
             updated_at: string;
         };
         CostPriceQuoteSetRequest: {
-            unit_amount: string;
+            reservation_unit_amount: string;
             currency: string;
             expected_revision: number;
             idempotency_key: string;
@@ -1617,11 +1617,14 @@ export interface components {
             workspace_id: string;
             /** Format: uuid */
             project_id: string;
-            /** @constant */
-            metric: "generation.image";
-            unit_amount: string;
+            /** Format: uuid */
+            model_profile_version_id: string;
+            /** @enum {string} */
+            billing_metric: "generation.image.call" | "generation.video.call";
+            reservation_unit_amount: string;
             currency: string;
             revision: number;
+            content_hash: string;
             /** Format: uuid */
             created_by: string;
             /** Format: date-time */
@@ -3139,7 +3142,7 @@ export interface components {
     parameters: {
         workspace_id: string;
         project_id: string;
-        cost_metric: "generation.image";
+        profile_version_id: string;
         upload_session_id: string;
         version_id: string;
         revision_id: string;
@@ -3740,13 +3743,13 @@ export interface operations {
             header?: never;
             path: {
                 project_id: components["parameters"]["project_id"];
-                metric: components["parameters"]["cost_metric"];
+                profile_version_id: components["parameters"]["profile_version_id"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Cost 当前不可变价格报价 */
+            /** @description Cost 当前 exact ModelProfile 不可变价格报价 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3769,7 +3772,7 @@ export interface operations {
             header?: never;
             path: {
                 project_id: components["parameters"]["project_id"];
-                metric: components["parameters"]["cost_metric"];
+                profile_version_id: components["parameters"]["profile_version_id"];
             };
             cookie?: never;
         };
@@ -3779,7 +3782,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Cost 价格 Revision 已冻结 */
+            /** @description Cost exact ModelProfile 价格 Revision 已冻结 */
             200: {
                 headers: {
                     [name: string]: unknown;

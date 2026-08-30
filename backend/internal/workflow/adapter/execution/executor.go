@@ -28,7 +28,7 @@ func (executor *NodeExecutor) Execute(
 		return domain.NodeExecutorResult{}, errors.New("Workflow executor owners are unavailable")
 	}
 	switch command.Executor {
-	case "workflow.input.generation_candidate_set":
+	case "workflow.input.generation_candidate_set", "activity.reference_asset_generation":
 		return executor.generation.Execute(ctx, command)
 	case "workflow.input.script_revision",
 		"activity.source_evidence",

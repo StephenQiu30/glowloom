@@ -252,7 +252,7 @@ func TestGenerationHumanGateOpenerExpandsAuthoritativeCandidateSet(t *testing.T)
 		NewID: func() string { return "00000000-0000-0000-0000-000000000209" },
 	})
 	sets := &generationCandidateSetSource{set: generationdomain.CandidateSet{
-		ID: setID, WorkspaceID: workspaceID, ProjectID: projectID, ProviderReceiptID: "00000000-0000-0000-0000-000000000210",
+		ID: setID, WorkspaceID: workspaceID, ProjectID: projectID, ProviderReceiptSetHash: strings.Repeat("a", 64),
 		Candidates: []generationdomain.CandidateReference{{ID: candidateB}, {ID: candidateA}}, ContentHash: setHash, Revision: 1,
 	}}
 	opener := workflowreview.NewWithGeneration(reviews, sets)
@@ -297,18 +297,19 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 	now := time.Date(2026, time.August, 27, 2, 0, 0, 0, time.UTC)
 	fixture := seedCompilerProject(t, func(value any) error { return database.Create(value).Error }, now)
 
-	setID, receiptID := uuid.New(), uuid.New()
+	setID := uuid.New()
 	candidateIDs := []uuid.UUID{uuid.New(), uuid.New()}
 	slices.SortFunc(candidateIDs, func(left, right uuid.UUID) int { return strings.Compare(left.String(), right.String()) })
 	references := make([]generationdomain.CandidateReference, len(candidateIDs))
 	bundles := make(map[string]generationdomain.CandidateWithReport, len(candidateIDs))
 	for index, candidateID := range candidateIDs {
 		artifactID, reportID := uuid.New(), uuid.New()
+		providerCallID, providerReceiptID := uuid.New(), uuid.New()
 		artifactHash, reportHash := strings.Repeat(string(rune('d'+index)), 64), strings.Repeat(string(rune('f'+index)), 64)
 		width, height := 4+index, 3+index
 		if err = database.Create(&model.Artifact{
 			ID: artifactID, WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
-			SourceType: "generation_provider_job", SourceID: setID, OutputKey: "image-" + string(rune('1'+index)),
+			SourceType: "generation_provider_receipt", SourceID: providerReceiptID, OutputKey: "image-" + string(rune('1'+index)),
 			MediaType: "image/png", SHA256: artifactHash, SizeBytes: 100, Status: "READY",
 			Width: &width, Height: &height, Revision: 2, CreatedAt: now, UpdatedAt: now,
 		}).Error; err != nil {
@@ -316,7 +317,8 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		}
 		if err = database.Create(&model.GenerationCandidate{
 			ID: candidateID, WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
-			ProviderJobID: setID, OutputKey: "image-" + string(rune('1'+index)), ArtifactID: artifactID,
+			ProviderJobID: setID, ProviderCallID: providerCallID, ProviderReceiptID: providerReceiptID,
+			OutputKey: "image-" + string(rune('1'+index)), ArtifactID: artifactID,
 			ArtifactRevision: 2, ArtifactSHA256: artifactHash, MediaType: "image/png", Width: width, Height: height,
 			Status: "QC_PASSED", Revision: 1, CreatedBy: fixture.userID, CreatedAt: now, UpdatedAt: now,
 		}).Error; err != nil {
@@ -329,7 +331,8 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		bundles[candidateID.String()] = generationdomain.CandidateWithReport{
 			Candidate: generationdomain.Candidate{
 				ID: candidateID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-				ProviderJobID: setID.String(), OutputKey: "image-" + string(rune('1'+index)), ArtifactID: artifactID.String(),
+				ProviderJobID: setID.String(), ProviderCallID: providerCallID.String(), ProviderReceiptID: providerReceiptID.String(),
+				OutputKey: "image-" + string(rune('1'+index)), ArtifactID: artifactID.String(),
 				ArtifactRevision: 2, ArtifactSHA256: artifactHash, MediaType: "image/png", Width: width, Height: height,
 				Status: generationdomain.CandidateQCPassed, Revision: 1, CreatedBy: fixture.userID.String(),
 			},
@@ -347,7 +350,7 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 	}
 	set := generationdomain.CandidateSet{
 		ID: setID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		ProviderReceiptID: receiptID.String(), Candidates: references, ContentHash: setHash, Revision: 1,
+		ProviderReceiptSetHash: strings.Repeat("a", 64), Candidates: references, ContentHash: setHash, Revision: 1,
 	}
 
 	port := func(key, valueType string) authoring.PortDefinition {

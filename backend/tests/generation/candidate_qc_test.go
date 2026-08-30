@@ -92,7 +92,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	})
 
 	ready := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "ready", true)
-	command := generationapp.RegisterReadyCandidateCommand{ArtifactID: ready.ID, IdempotencyKey: "candidate-ready"}
+	command := ready.registerCommand("candidate-ready")
 
 	const callers = 8
 	results := make(chan generationapp.RegisterCandidateResult, callers)
@@ -126,7 +126,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		}
 		if result.Candidate.ID != candidateID || result.Report.ID != reportID || result.Receipt.ID != receiptID ||
 			result.Candidate.Status != generationdomain.CandidateQCPassed || result.Report.Status != generationdomain.QCPassed ||
-			result.Candidate.ArtifactID != ready.ID || result.Candidate.ArtifactRevision != ready.Revision ||
+			result.Candidate.ArtifactID != ready.Artifact.ID || result.Candidate.ArtifactRevision != ready.Artifact.Revision ||
 			result.Report.Policy.Version != "image-deterministic" || result.Report.PolicyHash == "" || len(result.Report.FailureCodes) != 0 {
 			t.Fatalf("concurrent candidate registration drifted: %#v", result)
 		}
@@ -140,16 +140,16 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		t.Fatalf("replay candidate command: result=%#v err=%v", replayed, err)
 	}
 	redelivered, err := service.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: ready.ID, IdempotencyKey: "candidate-ready-redelivery",
+		ArtifactID: ready.Artifact.ID, ProviderJobID: ready.ProviderJobID, ProviderCallID: ready.ProviderCallID,
+		ProviderReceiptID: ready.ProviderReceiptID, OutputKey: ready.OutputKey,
+		IdempotencyKey: "candidate-ready-redelivery",
 	})
 	if err != nil || redelivered.Candidate.ID != candidateID || redelivered.Report.ID != reportID || redelivered.Receipt.ID == receiptID {
 		t.Fatalf("redeliver ready artifact with a new command key: result=%#v err=%v", redelivered, err)
 	}
 
 	tooSmall := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 2, 2, "small", true)
-	failed, err := service.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: tooSmall.ID, IdempotencyKey: "candidate-small",
-	})
+	failed, err := service.RegisterReadyCandidate(ctx, actor, tooSmall.registerCommand("candidate-small"))
 	if err != nil {
 		t.Fatalf("register deterministic QC failure: %v", err)
 	}
@@ -162,9 +162,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		t.Fatal("QC-failed candidate passed RequireQCPassed")
 	}
 	tooLarge := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 11, 10, "large", true)
-	largeFailed, err := service.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: tooLarge.ID, IdempotencyKey: "candidate-large",
-	})
+	largeFailed, err := service.RegisterReadyCandidate(ctx, actor, tooLarge.registerCommand("candidate-large"))
 	if err != nil || len(largeFailed.Report.FailureCodes) != 1 || largeFailed.Report.FailureCodes[0] != "pixel_count_exceeded" {
 		t.Fatalf("maximum pixel QC failure: result=%#v err=%v", largeFailed, err)
 	}
@@ -173,9 +171,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 		ImageQC: generationapp.ImageQCPolicy{Version: "jpeg-only", AllowedMediaTypes: []string{"image/jpeg"}, MinWidth: 4, MinHeight: 3, MaxPixels: 100},
 	})
-	mediaFailed, err := jpegOnlyService.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: pngNotAllowed.ID, IdempotencyKey: "candidate-png-not-allowed",
-	})
+	mediaFailed, err := jpegOnlyService.RegisterReadyCandidate(ctx, actor, pngNotAllowed.registerCommand("candidate-png-not-allowed"))
 	if err != nil || len(mediaFailed.Report.FailureCodes) != 1 || mediaFailed.Report.FailureCodes[0] != "media_type_not_allowed" {
 		t.Fatalf("allowed media type QC failure: result=%#v err=%v", mediaFailed, err)
 	}
@@ -191,25 +187,20 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	}
 
 	pending := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "pending", false)
-	if _, err = service.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: pending.ID, IdempotencyKey: "candidate-pending",
-	}); err == nil {
+	if _, err = service.RegisterReadyCandidate(ctx, actor, pending.registerCommand("candidate-pending")); err == nil {
 		t.Fatal("pending artifact created a generation candidate")
 	}
 
 	driftArtifact := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "drift", true)
-	if _, err = service.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: driftArtifact.ID, IdempotencyKey: command.IdempotencyKey,
-	}); err == nil {
+	driftCommand := driftArtifact.registerCommand(command.IdempotencyKey)
+	if _, err = service.RegisterReadyCandidate(ctx, actor, driftCommand); err == nil {
 		t.Fatal("candidate idempotency key accepted a different artifact")
 	}
 	driftedPolicyService := generationapp.NewService(generationStore, generationasset.NewReadiness(assetService), generationapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 		ImageQC: generationapp.ImageQCPolicy{Version: "image-deterministic-strict-width", AllowedMediaTypes: []string{"image/jpeg", "image/png"}, MinWidth: 5, MinHeight: 3, MaxPixels: 100},
 	})
-	if _, err = driftedPolicyService.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: ready.ID, IdempotencyKey: "candidate-ready-policy-drift",
-	}); err == nil {
+	if _, err = driftedPolicyService.RegisterReadyCandidate(ctx, actor, ready.registerCommand("candidate-ready-policy-drift")); err == nil {
 		t.Fatal("existing candidate accepted a different QC policy binding")
 	}
 
@@ -229,7 +220,8 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		t.Fatalf("seed non-provider artifact location: %v", err)
 	}
 	if _, err = service.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{
-		ArtifactID: nonProviderArtifactID.String(), IdempotencyKey: "candidate-upload",
+		ArtifactID: nonProviderArtifactID.String(), ProviderJobID: uuid.NewString(), ProviderCallID: uuid.NewString(),
+		ProviderReceiptID: uuid.NewString(), OutputKey: "uploaded-reference", IdempotencyKey: "candidate-upload",
 	}); err == nil {
 		t.Fatal("non-provider artifact created a generation candidate")
 	}
@@ -255,14 +247,29 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	}
 }
 
-func createArtifact(t *testing.T, ctx context.Context, objects *objectstore.Client, service *assetapp.Service, actor assetapp.Actor, workspaceID, projectID string, width, height int, key string, validate bool) assetdomain.Artifact {
+type providerArtifactFixture struct {
+	Artifact                                         assetdomain.Artifact
+	ProviderJobID, ProviderCallID, ProviderReceiptID string
+	OutputKey                                        string
+}
+
+func (fixture providerArtifactFixture) registerCommand(idempotencyKey string) generationapp.RegisterReadyCandidateCommand {
+	return generationapp.RegisterReadyCandidateCommand{
+		ArtifactID: fixture.Artifact.ID, ProviderJobID: fixture.ProviderJobID,
+		ProviderCallID: fixture.ProviderCallID, ProviderReceiptID: fixture.ProviderReceiptID,
+		OutputKey: fixture.OutputKey, IdempotencyKey: idempotencyKey,
+	}
+}
+
+func createArtifact(t *testing.T, ctx context.Context, objects *objectstore.Client, service *assetapp.Service, actor assetapp.Actor, workspaceID, projectID string, width, height int, key string, validate bool) providerArtifactFixture {
 	t.Helper()
 	contents := testPNG(t, width, height)
-	providerJobID := uuid.NewString()
-	objectKey := "staging/" + workspaceID + "/" + providerJobID + "/" + key + ".png"
+	providerJobID, providerCallID, providerReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	objectKey := "staging/" + workspaceID + "/" + providerJobID + "/" + providerCallID + "/" + key + ".png"
 	putObject(t, ctx, objects, objectKey, contents)
 	registered, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
-		WorkspaceID: workspaceID, ProjectID: projectID, SourceType: "generation_provider_job", SourceID: providerJobID,
+		WorkspaceID: workspaceID, ProjectID: projectID, SourceType: "generation_provider_receipt", SourceID: providerReceiptID,
+		ProviderJobID: providerJobID, ProviderCallID: providerCallID,
 		OutputKey: key, ObjectKey: objectKey, MediaType: "image/png", SHA256: sha256Hex(contents), SizeBytes: int64(len(contents)),
 		IdempotencyKey: "register-" + key,
 	})
@@ -270,15 +277,22 @@ func createArtifact(t *testing.T, ctx context.Context, objects *objectstore.Clie
 		t.Fatalf("register %s artifact: %v", key, err)
 	}
 	if !validate {
-		return registered.Artifact
+		return providerArtifactFixture{
+			Artifact: registered.Artifact, ProviderJobID: providerJobID, ProviderCallID: providerCallID,
+			ProviderReceiptID: providerReceiptID, OutputKey: key,
+		}
 	}
 	validated, err := service.ValidateReady(ctx, actor, assetapp.ValidateReadyCommand{
-		ArtifactID: registered.Artifact.ID, ExpectedRevision: registered.Artifact.Revision, IdempotencyKey: "validate-" + key,
+		ArtifactID: registered.Artifact.ID, ExpectedRevision: registered.Artifact.Revision,
+		ExpectedWidth: width, ExpectedHeight: height, IdempotencyKey: "validate-" + key,
 	})
 	if err != nil {
 		t.Fatalf("validate %s artifact: %v", key, err)
 	}
-	return validated.Artifact
+	return providerArtifactFixture{
+		Artifact: validated.Artifact, ProviderJobID: providerJobID, ProviderCallID: providerCallID,
+		ProviderReceiptID: providerReceiptID, OutputKey: key,
+	}
 }
 
 func testPNG(t *testing.T, width, height int) []byte {

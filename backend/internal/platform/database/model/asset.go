@@ -59,7 +59,7 @@ type Artifact struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`
 	WorkspaceID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:uq_ast_artifact_source_output,priority:1;index:ix_ast_artifact_workspace_status,priority:1"`
 	ProjectID   uuid.UUID `gorm:"type:uuid;not null;index"`
-	SourceType  string    `gorm:"type:varchar(40);not null;uniqueIndex:uq_ast_artifact_source_output,priority:2;check:ck_ast_artifact_source_type,source_type IN ('generation_provider_job','media_job','upload')"`
+	SourceType  string    `gorm:"type:varchar(40);not null;uniqueIndex:uq_ast_artifact_source_output,priority:2;check:ck_ast_artifact_source_type,source_type IN ('generation_provider_receipt','media_job','upload')"`
 	SourceID    uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:uq_ast_artifact_source_output,priority:3"`
 	OutputKey   string    `gorm:"type:varchar(120);not null;uniqueIndex:uq_ast_artifact_source_output,priority:4"`
 	MediaType   string    `gorm:"type:varchar(120);not null;check:ck_ast_artifact_media_type,media_type IN ('image/png','image/jpeg')"`

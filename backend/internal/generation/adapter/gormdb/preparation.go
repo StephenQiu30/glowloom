@@ -79,6 +79,39 @@ func (repo *preparationRepository) FindGenerationTarget(
 	return findGenerationTarget(ctx, repo.database, targetID)
 }
 
+func (repo *preparationRepository) LatestProjectProviderBindingForUpdate(
+	ctx context.Context,
+	workspaceID, projectID, purpose string,
+) (domain.ProjectProviderBindingVersion, error) {
+	return (&providerConfigurationRepository{database: repo.database}).LatestProjectProviderBindingForUpdate(
+		ctx,
+		workspaceID,
+		projectID,
+		purpose,
+	)
+}
+
+func (repo *preparationRepository) FindProviderConnection(
+	ctx context.Context,
+	connectionID string,
+) (domain.ProviderConnectionVersion, error) {
+	return (&providerConfigurationRepository{database: repo.database}).FindProviderConnection(ctx, connectionID)
+}
+
+func (repo *preparationRepository) FindProviderCredential(
+	ctx context.Context,
+	credentialID string,
+) (domain.ProviderCredentialVersion, error) {
+	return (&providerConfigurationRepository{database: repo.database}).FindProviderCredential(ctx, credentialID)
+}
+
+func (repo *preparationRepository) FindProviderModelProfile(
+	ctx context.Context,
+	profileID string,
+) (domain.ProviderModelProfileVersion, error) {
+	return (&providerConfigurationRepository{database: repo.database}).FindProviderModelProfile(ctx, profileID)
+}
+
 func (repo *preparationRepository) ValidateWorkflowSource(
 	ctx context.Context,
 	actor application.Actor,
@@ -207,7 +240,7 @@ func (repo *preparationRepository) UpdateIntent(
 			"quota_consumption_receipt_id": record.QuotaConsumptionReceiptID,
 			"generation_request_id":        record.GenerationRequestID,
 			"provider_job_id":              record.ProviderJobID,
-			"provider_receipt_id":          record.ProviderReceiptID,
+			"provider_call_set_hash":       record.ProviderCallSetHash,
 			"status":                       record.Status, "claimant": record.Claimant, "claim_token": record.ClaimToken,
 			"claim_expires_at": record.ClaimExpiresAt, "claim_fencing_version": record.ClaimFencingVersion,
 			"cancelled_at": record.CancelledAt, "revision": record.Revision,
@@ -224,7 +257,9 @@ func (repo *preparationRepository) UpdateIntent(
 
 func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 	ids := []string{
-		value.ID, value.WorkspaceID, value.ProjectID, value.WorkflowRunID, value.NodeRunID, value.TargetID, value.CreatedBy,
+		value.ID, value.WorkspaceID, value.ProjectID, value.WorkflowRunID, value.NodeRunID, value.TargetID,
+		value.BindingVersionID, value.ConnectionVersionID, value.CredentialVersionID,
+		value.ModelProfileVersionID, value.PriceQuoteID, value.CreatedBy,
 	}
 	parsed := make([]uuid.UUID, len(ids))
 	for index, raw := range ids {
@@ -282,27 +317,29 @@ func intentRecord(value domain.Intent) (model.GenerationIntent, error) {
 	if err != nil {
 		return model.GenerationIntent{}, err
 	}
-	providerReceiptID, err := optionalPreparationUUID(value.ProviderReceiptID)
-	if err != nil {
-		return model.GenerationIntent{}, err
-	}
 	claimToken, err := optionalPreparationUUID(optionalPreparationString(value.ClaimToken))
 	if err != nil {
 		return model.GenerationIntent{}, err
 	}
 	return model.GenerationIntent{
 		ID: parsed[0], WorkspaceID: parsed[1], ProjectID: parsed[2], WorkflowRunID: parsed[3], NodeRunID: parsed[4],
-		TargetID: parsed[5], Metric: value.Metric, TargetHash: value.TargetHash, Units: value.Units,
+		TargetID: parsed[5], TargetHash: value.TargetHash,
+		BindingVersionID: parsed[6], BindingRevision: value.BindingRevision, BindingContentHash: value.BindingContentHash,
+		ConnectionVersionID: parsed[7], CredentialVersionID: parsed[8], ModelProfileVersionID: parsed[9],
+		ModelProfileRevision: value.ModelProfileRevision, ModelProfileContentHash: value.ModelProfileContentHash,
+		PriceQuoteID: parsed[10], PriceQuoteRevision: value.PriceQuoteRevision,
+		PriceQuoteContentHash: value.PriceQuoteContentHash, BillingMetric: value.BillingMetric,
+		EstimatedUnits: value.EstimatedUnits,
 		CostEstimateID: costEstimateID, CostReservationID: costReservationID, QuotaReservationID: quotaReservationID,
 		CostEstimateReceiptID: costEstimateReceiptID, CostReservationReceiptID: costReservationReceiptID,
 		QuotaReservationReceiptID: quotaReservationReceiptID, CostReleaseReceiptID: costReleaseReceiptID,
 		QuotaReleaseReceiptID: quotaReleaseReceiptID, CostSettlementReceiptID: costSettlementReceiptID,
 		QuotaConsumptionReceiptID: quotaConsumptionReceiptID, GenerationRequestID: generationRequestID,
-		ProviderJobID: providerJobID, ProviderReceiptID: providerReceiptID,
+		ProviderJobID: providerJobID, ProviderCallSetHash: optionalPreparationStringPointer(value.ProviderCallSetHash),
 		Status: value.Status, Claimant: clonePreparationString(value.Claimant),
 		ClaimToken: claimToken, ClaimExpiresAt: clonePreparationTime(value.ClaimExpiresAt),
 		ClaimFencingVersion: value.ClaimFencingVersion, CancelledAt: clonePreparationTime(value.CancelledAt),
-		Revision: value.Revision, ContentHash: value.ContentHash, CreatedBy: parsed[6],
+		Revision: value.Revision, ContentHash: value.ContentHash, CreatedBy: parsed[11],
 		InitiatorTokenVersion: value.InitiatorTokenVersion, CreatedAt: value.CreatedAt.UTC(), UpdatedAt: value.UpdatedAt.UTC(),
 	}, nil
 }
@@ -311,7 +348,13 @@ func intentDomain(value model.GenerationIntent) domain.Intent {
 	return domain.Intent{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
 		WorkflowRunID: value.WorkflowRunID.String(), NodeRunID: value.NodeRunID.String(), TargetID: value.TargetID.String(),
-		Metric: value.Metric, TargetHash: value.TargetHash, Units: value.Units,
+		TargetHash: value.TargetHash, BindingVersionID: value.BindingVersionID.String(),
+		BindingRevision: value.BindingRevision, BindingContentHash: value.BindingContentHash,
+		ConnectionVersionID: value.ConnectionVersionID.String(), CredentialVersionID: value.CredentialVersionID.String(),
+		ModelProfileVersionID: value.ModelProfileVersionID.String(), ModelProfileRevision: value.ModelProfileRevision,
+		ModelProfileContentHash: value.ModelProfileContentHash, PriceQuoteID: value.PriceQuoteID.String(),
+		PriceQuoteRevision: value.PriceQuoteRevision, PriceQuoteContentHash: value.PriceQuoteContentHash,
+		BillingMetric: value.BillingMetric, EstimatedUnits: value.EstimatedUnits,
 		CostEstimateID:            optionalPreparationUUIDString(value.CostEstimateID),
 		CostReservationID:         optionalPreparationUUIDString(value.CostReservationID),
 		QuotaReservationID:        optionalPreparationUUIDString(value.QuotaReservationID),
@@ -324,7 +367,7 @@ func intentDomain(value model.GenerationIntent) domain.Intent {
 		QuotaConsumptionReceiptID: optionalPreparationUUIDString(value.QuotaConsumptionReceiptID),
 		GenerationRequestID:       optionalPreparationUUIDString(value.GenerationRequestID),
 		ProviderJobID:             optionalPreparationUUIDString(value.ProviderJobID),
-		ProviderReceiptID:         optionalPreparationUUIDString(value.ProviderReceiptID),
+		ProviderCallSetHash:       optionalPreparationStringValue(value.ProviderCallSetHash),
 		Status:                    value.Status, Claimant: clonePreparationString(value.Claimant),
 		ClaimToken: optionalPreparationUUIDPointerString(value.ClaimToken), ClaimExpiresAt: clonePreparationTime(value.ClaimExpiresAt),
 		ClaimFencingVersion: value.ClaimFencingVersion, CancelledAt: clonePreparationTime(value.CancelledAt),
@@ -360,6 +403,21 @@ func optionalPreparationUUID(value string) (*uuid.UUID, error) {
 }
 
 func optionalPreparationString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func optionalPreparationStringPointer(value string) *string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	result := value
+	return &result
+}
+
+func optionalPreparationStringValue(value *string) string {
 	if value == nil {
 		return ""
 	}

@@ -17,14 +17,16 @@ import (
 const setBudgetOperation = "cost.budget.set"
 
 var (
-	ErrBudgetNotFound      = errors.New("cost budget policy not found")
-	ErrPriceQuoteNotFound  = errors.New("cost price quote not found")
-	ErrEstimateNotFound    = errors.New("cost estimate not found")
-	ErrReservationNotFound = errors.New("cost reservation not found")
-	ErrLedgerEntryNotFound = errors.New("cost ledger entry not found")
-	amountPattern          = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$`)
-	currencyPattern        = regexp.MustCompile(`^[A-Z]{3}$`)
-	maximumAmount          = decimal.RequireFromString("99999999999999.999999")
+	ErrBudgetNotFound                 = errors.New("cost budget policy not found")
+	ErrPriceQuoteNotFound             = errors.New("cost price quote not found")
+	ErrModelProfileVersionNotFound    = errors.New("provider model profile version not found")
+	ErrProviderBindingVersionNotFound = errors.New("provider binding version not found")
+	ErrEstimateNotFound               = errors.New("cost estimate not found")
+	ErrReservationNotFound            = errors.New("cost reservation not found")
+	ErrLedgerEntryNotFound            = errors.New("cost ledger entry not found")
+	amountPattern                     = regexp.MustCompile(`^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$`)
+	currencyPattern                   = regexp.MustCompile(`^[A-Z]{3}$`)
+	maximumAmount                     = decimal.RequireFromString("99999999999999.999999")
 )
 
 type Error struct {
@@ -48,6 +50,16 @@ type ProjectScope struct {
 	WorkspaceID, ProjectID string
 }
 
+type ModelProfileVersion struct {
+	ID, WorkspaceID, BillingMetric, State, ContentHash string
+	Revision                                           int64
+}
+
+type ProviderBindingVersion struct {
+	ID, WorkspaceID, ProjectID, ModelProfileVersionID, ContentHash string
+	Revision                                                       int64
+}
+
 type Repository interface {
 	AuthorizeProject(context.Context, Actor, string, string) (ProjectScope, error)
 	FindReceipt(context.Context, string, string, string) (platformcommand.Receipt, error)
@@ -56,6 +68,9 @@ type Repository interface {
 	GetBudgetForUpdate(context.Context, string) (domain.BudgetPolicy, error)
 	EnsureBudget(context.Context, domain.BudgetPolicy) (domain.BudgetPolicy, error)
 	UpdateBudget(context.Context, domain.BudgetPolicy, int64) (domain.BudgetPolicy, error)
+	FindModelProfileVersion(context.Context, string) (ModelProfileVersion, error)
+	FindProviderBindingVersion(context.Context, string) (ProviderBindingVersion, error)
+	HasAnyPriceQuote(context.Context, string) (bool, error)
 	FindPriceQuote(context.Context, string) (domain.PriceQuote, error)
 	FindCurrentPriceQuote(context.Context, string, string) (domain.PriceQuote, error)
 	GetCurrentPriceQuoteForUpdate(context.Context, string, string) (domain.PriceQuote, error)
@@ -188,15 +203,12 @@ func (service *Service) SetBudget(ctx context.Context, actor Actor, command SetB
 				return conflict("Project budget revision has changed")
 			}
 			if current.Currency != command.Currency {
-				quote, quoteErr := repo.FindCurrentPriceQuote(ctx, scope.ProjectID, domain.MetricGenerationImage)
-				if quoteErr == nil {
-					if validateErr := validatePriceQuote(quote); validateErr != nil {
-						return validateErr
-					}
-					return conflict("Project budget currency is frozen by existing price quotes")
-				}
-				if !errors.Is(quoteErr, ErrPriceQuoteNotFound) {
+				hasQuote, quoteErr := repo.HasAnyPriceQuote(ctx, scope.ProjectID)
+				if quoteErr != nil {
 					return quoteErr
+				}
+				if hasQuote {
+					return conflict("Project budget currency is frozen by existing price quotes")
 				}
 			}
 			if !current.LimitAmount.Equal(amount) {
@@ -357,6 +369,12 @@ func normalizeError(err error) error {
 	}
 	if errors.Is(err, ErrPriceQuoteNotFound) {
 		return notFound("Project price quote is not set")
+	}
+	if errors.Is(err, ErrModelProfileVersionNotFound) {
+		return notFound("Provider model profile version not found")
+	}
+	if errors.Is(err, ErrProviderBindingVersionNotFound) {
+		return notFound("Provider binding version not found")
 	}
 	if errors.Is(err, ErrEstimateNotFound) {
 		return notFound("Cost estimate not found")

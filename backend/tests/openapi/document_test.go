@@ -2,6 +2,8 @@ package openapi_test
 
 import (
 	"encoding/json"
+	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/StephenQiu30/lanverse/backend/api/openapi"
@@ -25,7 +27,7 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		"/api/auth/register",
 		"/api/projects",
 		"/api/projects/{project_id}/cost-budget",
-		"/api/projects/{project_id}/cost-prices/{metric}",
+		"/api/projects/{project_id}/media-model-profiles/{profile_version_id}/cost-price",
 		"/api/projects/{project_id}/current-script-document",
 		"/api/document-revisions/{revision_id}/production-bibles",
 		"/api/episodes/{episode_id}/storyboard-drafts",
@@ -57,6 +59,12 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	if _, exists := document.Paths["/api/projects/{project_id}/cost-estimates"]; exists {
 		t.Error("public contract exposes internal estimates before GenerationIntent coordination")
 	}
+	if _, exists := document.Paths["/api/projects/{project_id}/cost-prices/{metric}"]; exists {
+		t.Error("public contract still exposes the removed metric-scoped price route")
+	}
+	if _, exists := document.Paths["/api/projects/{project_id}/provider-model-profiles/{model_profile_version_id}/cost-price"]; exists {
+		t.Error("public contract still exposes the rejected provider-model-profiles price route")
+	}
 	if _, exists := document.Paths["/api/projects/{project_id}/generation/image-provider-bindings"]; exists {
 		t.Error("public contract still exposes the removed fixed image Provider binding route")
 	}
@@ -78,6 +86,55 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	}
 	if _, exists := document.Components.Schemas["CostPriceQuoteResponse"]; !exists {
 		t.Error("public contract is missing CostPriceQuoteResponse")
+	}
+	var priceQuoteSetSchema struct {
+		Required   []string `json:"required"`
+		Properties map[string]struct {
+			Not *struct {
+				Pattern string `json:"pattern"`
+			} `json:"not"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(document.Components.Schemas["CostPriceQuoteSetRequest"], &priceQuoteSetSchema); err != nil {
+		t.Fatalf("decode CostPriceQuoteSetRequest: %v", err)
+	}
+	if !slices.Contains(priceQuoteSetSchema.Required, "expected_revision") {
+		t.Error("CostPriceQuoteSetRequest does not require explicit expected_revision")
+	}
+	amount := priceQuoteSetSchema.Properties["reservation_unit_amount"]
+	if amount.Not == nil || amount.Not.Pattern == "" {
+		t.Fatal("CostPriceQuoteSetRequest does not explicitly reject zero reservation amount")
+	}
+	zeroPattern, err := regexp.Compile(amount.Not.Pattern)
+	if err != nil {
+		t.Fatalf("compile zero reservation amount pattern: %v", err)
+	}
+	for _, zero := range []string{"0", "0.0", "0.000000"} {
+		if !zeroPattern.MatchString(zero) {
+			t.Errorf("zero reservation amount %q is not rejected by the public schema", zero)
+		}
+	}
+	for _, positive := range []string{"0.000001", "0.125000", "1"} {
+		if zeroPattern.MatchString(positive) {
+			t.Errorf("positive reservation amount %q is rejected by the public schema", positive)
+		}
+	}
+	var priceQuoteSchema struct {
+		Required   []string                   `json:"required"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(document.Components.Schemas["CostPriceQuoteResponse"], &priceQuoteSchema); err != nil {
+		t.Fatalf("decode CostPriceQuoteResponse: %v", err)
+	}
+	for _, field := range []string{"model_profile_version_id", "billing_metric", "reservation_unit_amount", "content_hash"} {
+		if _, exists := priceQuoteSchema.Properties[field]; !exists {
+			t.Errorf("CostPriceQuoteResponse is missing exact field %s", field)
+		}
+	}
+	for _, legacy := range []string{"metric", "unit_amount"} {
+		if _, exists := priceQuoteSchema.Properties[legacy]; exists {
+			t.Errorf("CostPriceQuoteResponse still exposes legacy field %s", legacy)
+		}
 	}
 	for _, schema := range []string{"ImageProviderBindingPublishRequest", "ImageProviderBindingResponse"} {
 		if _, exists := document.Components.Schemas[schema]; exists {

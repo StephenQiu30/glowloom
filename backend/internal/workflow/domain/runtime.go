@@ -2,6 +2,12 @@ package domain
 
 import authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 
+const (
+	NodeActivityNeedsAttention             = "NEEDS_ATTENTION"
+	ProviderOutcomeUnknownErrorCode        = "provider_outcome_unknown"
+	ManualProviderReconciliationNextAction = "manual_provider_reconciliation_required"
+)
+
 type ExecutionPlan struct {
 	WorkflowRunID         string          `json:"workflow_run_id"`
 	DefinitionVersionID   string          `json:"definition_version_id"`
@@ -30,11 +36,15 @@ type NodeActivityResult struct {
 	Status     string             `json:"status"`
 	Output     NodeOutputSnapshot `json:"output"`
 	OutputHash string             `json:"output_hash"`
+	ErrorCode  string             `json:"error_code,omitempty"`
+	NextAction string             `json:"next_action,omitempty"`
 }
 
 type NodeExecutorResult struct {
-	Status string             `json:"status"`
-	Output NodeOutputSnapshot `json:"output"`
+	Status     string             `json:"status"`
+	Output     NodeOutputSnapshot `json:"output"`
+	ErrorCode  string             `json:"error_code,omitempty"`
+	NextAction string             `json:"next_action,omitempty"`
 }
 
 type NodeExecutionClaim struct {

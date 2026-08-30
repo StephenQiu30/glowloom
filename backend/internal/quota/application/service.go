@@ -139,7 +139,7 @@ func (service *Service) SetDailyPolicy(
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
 		!validActor(actor) || !validUUID(command.WorkspaceID) || !validUUID(command.ProjectID) ||
-		command.Metric != domain.MetricGenerationImage || command.LimitUnits < 1 || command.ExpectedRevision < 0 ||
+		!domain.IsGenerationMetric(command.Metric) || command.LimitUnits < 1 || command.ExpectedRevision < 0 ||
 		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return PolicyResult{}, invalid("Invalid daily quota policy request")
 	}
@@ -256,7 +256,7 @@ func (service *Service) Reserve(
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
 		!validActor(actor) || !validUUID(command.WorkspaceID) || !validUUID(command.ProjectID) ||
-		command.Metric != domain.MetricGenerationImage || command.SourceType != "generation_intent" ||
+		!domain.IsGenerationMetric(command.Metric) || command.SourceType != "generation_intent" ||
 		!validUUID(command.SourceID) || command.Units < 1 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return ReservationResult{}, invalid("Invalid quota reservation request")
 	}
@@ -372,22 +372,36 @@ func (service *Service) GetReservation(ctx context.Context, actor Actor, reserva
 	}
 	var result domain.Reservation
 	err := service.transactions.WithinQuotaTransaction(ctx, func(repo Repository) error {
-		reservation, loadErr := repo.GetReservationForUpdate(ctx, reservationID)
+		snapshot, loadErr := repo.GetReservation(ctx, reservationID)
 		if loadErr != nil {
 			return loadErr
 		}
 		if authorizeErr := repo.AuthorizeProject(
-			ctx, actor, reservation.WorkspaceID, reservation.ProjectID, "read",
+			ctx, actor, snapshot.WorkspaceID, snapshot.ProjectID, "read",
 		); authorizeErr != nil {
 			return authorizeErr
 		}
-		policy, loadErr := repo.FindPolicy(ctx, reservation.ProjectID, reservation.Metric)
+		policy, loadErr := repo.GetPolicyForUpdate(ctx, snapshot.ProjectID, snapshot.Metric)
 		if loadErr != nil {
 			return loadErr
 		}
-		counter, loadErr := repo.GetCounterForUpdate(ctx, reservation.PolicyID, reservation.WindowStart)
+		if loadErr = validatePolicy(policy); loadErr != nil || policy.ID != snapshot.PolicyID ||
+			policy.WorkspaceID != snapshot.WorkspaceID {
+			if loadErr != nil {
+				return loadErr
+			}
+			return conflict("Quota reservation policy binding has drifted")
+		}
+		counter, loadErr := repo.GetCounterForUpdate(ctx, snapshot.PolicyID, snapshot.WindowStart)
 		if loadErr != nil {
 			return loadErr
+		}
+		reservation, loadErr := repo.GetReservationForUpdate(ctx, reservationID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if snapshot.BindingHash != reservation.BindingHash {
+			return conflict("Quota reservation facts have drifted")
 		}
 		reservations, loadErr := repo.ListReservations(ctx, counter.ID)
 		if loadErr != nil {
@@ -513,7 +527,7 @@ func (service *Service) GetDailyUsage(
 	actor.UserID = strings.TrimSpace(actor.UserID)
 	projectID, metric = strings.TrimSpace(projectID), strings.TrimSpace(metric)
 	if service == nil || service.transactions == nil || service.config.Now == nil ||
-		!validActor(actor) || !validUUID(projectID) || metric != domain.MetricGenerationImage {
+		!validActor(actor) || !validUUID(projectID) || !domain.IsGenerationMetric(metric) {
 		return domain.Usage{}, invalid("Invalid daily quota query")
 	}
 	windowStart, windowEnd := domain.DailyWindow(service.config.Now())
@@ -601,7 +615,7 @@ func reconcileUsage(policy domain.Policy, counter domain.Counter, reservations [
 
 func validatePolicy(value domain.Policy) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
-		value.Metric != domain.MetricGenerationImage || value.WindowKind != domain.WindowUTCDay ||
+		!domain.IsGenerationMetric(value.Metric) || value.WindowKind != domain.WindowUTCDay ||
 		value.LimitUnits < 1 || value.Revision < 1 || len(value.ContentHash) != 64 {
 		return conflict("Daily quota policy facts have drifted")
 	}
@@ -635,7 +649,7 @@ func validateCurrentCounter(policy domain.Policy, value domain.Counter) error {
 
 func validationReservation(value domain.Reservation) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
-		!validUUID(value.PolicyID) || !validUUID(value.CounterID) || value.Metric != domain.MetricGenerationImage ||
+		!validUUID(value.PolicyID) || !validUUID(value.CounterID) || !domain.IsGenerationMetric(value.Metric) ||
 		value.SourceType != "generation_intent" || !validUUID(value.SourceID) ||
 		!value.WindowEnd.Equal(value.WindowStart.Add(24*time.Hour)) || value.PolicyRevision < 1 ||
 		value.LimitUnits < 1 || value.Units < 1 || value.Units > value.LimitUnits || value.Revision < 1 {

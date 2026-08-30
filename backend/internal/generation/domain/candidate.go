@@ -14,7 +14,8 @@ const (
 
 type Candidate struct {
 	ID, WorkspaceID, ProjectID                   string
-	ProviderJobID, OutputKey, ArtifactID         string
+	ProviderJobID, ProviderCallID                string
+	ProviderReceiptID, OutputKey, ArtifactID     string
 	ArtifactSHA256, MediaType, Status, CreatedBy string
 	ArtifactRevision, Width, Height, Revision    int
 	CreatedAt, UpdatedAt                         time.Time
@@ -52,10 +53,10 @@ type CandidateReference struct {
 }
 
 type CandidateSet struct {
-	ID, WorkspaceID, ProjectID, ProviderReceiptID string
-	Candidates                                    []CandidateReference
-	ContentHash                                   string
-	Revision                                      int
+	ID, WorkspaceID, ProjectID, ProviderReceiptSetHash string
+	Candidates                                         []CandidateReference
+	ContentHash                                        string
+	Revision                                           int
 }
 
 type CandidateSelection struct {

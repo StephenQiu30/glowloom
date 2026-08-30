@@ -25,15 +25,31 @@ func (readiness *ProviderOutputReadiness) EnsureProviderOutputReady(
 	if readiness == nil || readiness.service == nil {
 		return generationapp.ReadyArtifact{}, errors.New("asset Provider output readiness service is unavailable")
 	}
+	if _, err := uuid.Parse(command.ProviderJobID); err != nil {
+		return generationapp.ReadyArtifact{}, &generationapp.Error{
+			Code: "invalid_request", Message: "Invalid Provider output Job", Status: 422,
+		}
+	}
+	if _, err := uuid.Parse(command.ProviderCallID); err != nil {
+		return generationapp.ReadyArtifact{}, &generationapp.Error{
+			Code: "invalid_request", Message: "Invalid Provider output Call", Status: 422,
+		}
+	}
 	if _, err := uuid.Parse(command.ProviderReceiptID); err != nil {
 		return generationapp.ReadyArtifact{}, &generationapp.Error{
 			Code: "invalid_request", Message: "Invalid Provider output receipt", Status: 422,
 		}
 	}
+	if command.ExpectedWidth < 1 || command.ExpectedHeight < 1 {
+		return generationapp.ReadyArtifact{}, &generationapp.Error{
+			Code: "invalid_request", Message: "Invalid Provider output target dimensions", Status: 422,
+		}
+	}
 	assetActor := assetapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}
 	registered, err := readiness.service.RegisterStaged(ctx, assetActor, assetapp.RegisterStagedCommand{
 		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
-		SourceType: "generation_provider_job", SourceID: command.ProviderJobID, OutputKey: command.Output.OutputKey,
+		SourceType: "generation_provider_receipt", SourceID: command.ProviderReceiptID, OutputKey: command.Output.OutputKey,
+		ProviderJobID: command.ProviderJobID, ProviderCallID: command.ProviderCallID,
 		ObjectKey: command.Output.StagingObjectKey, MediaType: command.Output.MediaType,
 		SHA256: command.Output.SHA256, SizeBytes: command.Output.Bytes,
 		IdempotencyKey: command.RegisterIdempotencyKey,
@@ -43,6 +59,7 @@ func (readiness *ProviderOutputReadiness) EnsureProviderOutputReady(
 	}
 	validated, err := readiness.service.ValidateReady(ctx, assetActor, assetapp.ValidateReadyCommand{
 		ArtifactID: registered.Artifact.ID, ExpectedRevision: 1,
+		ExpectedWidth: command.ExpectedWidth, ExpectedHeight: command.ExpectedHeight,
 		IdempotencyKey: command.ValidateIdempotencyKey,
 	})
 	if err != nil {

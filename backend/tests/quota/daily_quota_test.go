@@ -19,6 +19,14 @@ import (
 	quotadomain "github.com/StephenQiu30/lanverse/backend/internal/quota/domain"
 )
 
+func TestQuotaUsesProviderCallBillingMetrics(t *testing.T) {
+	if !quotadomain.IsGenerationMetric(quotadomain.MetricGenerationImageCall) ||
+		!quotadomain.IsGenerationMetric(quotadomain.MetricGenerationVideoCall) ||
+		quotadomain.IsGenerationMetric("generation.image") {
+		t.Fatal("quota accepted a legacy or unsupported generation metric")
+	}
+}
+
 func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -71,7 +79,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	editor := quotaapp.Actor{UserID: editorID.String(), TokenVersion: 1}
 	viewer := quotaapp.Actor{UserID: viewerID.String(), TokenVersion: 1}
 	setCommand := quotaapp.SetDailyPolicyCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		LimitUnits: 5, ExpectedRevision: 0, IdempotencyKey: "quota-policy-create",
 	}
 	if _, err = service.SetDailyPolicy(ctx, editor, setCommand); err == nil {
@@ -94,7 +102,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 
 	firstSourceID := uuid.NewString()
 	firstCommand := quotaapp.ReserveCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		SourceType: "generation_intent", SourceID: firstSourceID, Units: 3, IdempotencyKey: "quota-reserve-first",
 	}
 	const callers = 8
@@ -136,7 +144,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 
 	secondSourceID := uuid.NewString()
 	secondCommand := quotaapp.ReserveCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		SourceType: "generation_intent", SourceID: secondSourceID, Units: 3, IdempotencyKey: "quota-reserve-second-too-large",
 	}
 	if _, err = service.Reserve(ctx, editor, secondCommand); !quotaapp.IsCode(err, "quota_exceeded") {
@@ -149,40 +157,40 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 		t.Fatalf("reserve remaining daily quota: result=%#v err=%v", second, err)
 	}
 	redeliveredSecond, err := service.Reserve(ctx, editor, quotaapp.ReserveCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		SourceType: "generation_intent", SourceID: secondSourceID, Units: 2, IdempotencyKey: "quota-reserve-second-redelivery",
 	})
 	if err != nil || redeliveredSecond.Reservation.ID != second.Reservation.ID || redeliveredSecond.Receipt.ID == second.Receipt.ID {
 		t.Fatalf("redeliver the same quota source: result=%#v err=%v", redeliveredSecond, err)
 	}
 	if _, err = service.Reserve(ctx, editor, quotaapp.ReserveCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		SourceType: "generation_intent", SourceID: secondSourceID, Units: 1, IdempotencyKey: "quota-reserve-second-drift",
 	}); err == nil {
 		t.Fatal("same quota source accepted different units")
 	}
 
 	if _, err = service.SetDailyPolicy(ctx, owner, quotaapp.SetDailyPolicyCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		LimitUnits: 4, ExpectedRevision: 1, IdempotencyKey: "quota-policy-below-usage",
 	}); err == nil {
 		t.Fatal("quota policy limit was lowered below current usage")
 	}
 	updated, err := service.SetDailyPolicy(ctx, owner, quotaapp.SetDailyPolicyCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		LimitUnits: 6, ExpectedRevision: 1, IdempotencyKey: "quota-policy-update",
 	})
 	if err != nil || updated.Policy.Revision != 2 || updated.Policy.LimitUnits != 6 {
 		t.Fatalf("update daily quota policy: result=%#v err=%v", updated, err)
 	}
 	if _, err = service.SetDailyPolicy(ctx, owner, quotaapp.SetDailyPolicyCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		LimitUnits: 7, ExpectedRevision: 1, IdempotencyKey: "quota-policy-stale-update",
 	}); err == nil {
 		t.Fatal("stale quota policy revision was updated")
 	}
 	if _, err = service.Reserve(ctx, viewer, quotaapp.ReserveCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		SourceType: "generation_intent", SourceID: uuid.NewString(), Units: 1, IdempotencyKey: "quota-viewer-reserve",
 	}); err == nil {
 		t.Fatal("viewer reserved image quota")
@@ -224,13 +232,13 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	}
 
 	third, err := service.Reserve(ctx, editor, quotaapp.ReserveCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		SourceType: "generation_intent", SourceID: uuid.NewString(), Units: 3, IdempotencyKey: "quota-reserve-unknown",
 	})
 	if err != nil || third.Reservation.Status != quotadomain.ReservationReserved || third.Reservation.PolicyRevision != 2 {
 		t.Fatalf("reserve quota for unknown outcome: result=%#v err=%v", third, err)
 	}
-	usage, err := service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image")
+	usage, err := service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image.call")
 	if err != nil || usage.LimitUnits != 6 || usage.ReservedUnits != 3 || usage.ConsumedUnits != 3 ||
 		usage.AvailableUnits != 0 || usage.PolicyRevision != 2 || !usage.WindowStart.Equal(now.Truncate(24*time.Hour)) {
 		t.Fatalf("query reconciled daily quota: usage=%#v err=%v", usage, err)
@@ -252,7 +260,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	if err = database.Model(&model.QuotaCounter{}).Where("workspace_id = ?", workspaceID).Update("reserved_units", 0).Error; err != nil {
 		t.Fatalf("inject quota counter drift: %v", err)
 	}
-	if _, err = service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image"); err == nil {
+	if _, err = service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image.call"); err == nil {
 		t.Fatal("drifted quota counter passed usage reconciliation")
 	}
 	if err = database.Model(&model.QuotaCounter{}).Where("workspace_id = ?", workspaceID).Update("reserved_units", 3).Error; err != nil {
@@ -261,7 +269,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	if err = database.Model(&model.QuotaReservation{}).Where("id = ?", third.Reservation.ID).Update("binding_hash", strings.Repeat("0", 64)).Error; err != nil {
 		t.Fatalf("inject quota reservation drift: %v", err)
 	}
-	if _, err = service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image"); err == nil {
+	if _, err = service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image.call"); err == nil {
 		t.Fatal("drifted quota reservation passed usage reconciliation")
 	}
 	if err = database.Model(&model.QuotaReservation{}).Where("id = ?", third.Reservation.ID).
@@ -282,7 +290,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 			defer distinctWorkers.Done()
 			<-distinctStart
 			result, reserveErr := service.Reserve(ctx, editor, quotaapp.ReserveCommand{
-				WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+				WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 				SourceType: "generation_intent", SourceID: sourceID, Units: 2, IdempotencyKey: key,
 			})
 			if reserveErr != nil {
@@ -313,7 +321,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	if distinctSuccesses != 3 || distinctExceeded != 5 {
 		t.Fatalf("distinct concurrent quota results = successes %d exceeded %d", distinctSuccesses, distinctExceeded)
 	}
-	nextUsage, err := service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image")
+	nextUsage, err := service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image.call")
 	if err != nil || nextUsage.ReservedUnits != 6 || nextUsage.ConsumedUnits != 0 || nextUsage.AvailableUnits != 0 {
 		t.Fatalf("query next-day concurrent quota: usage=%#v err=%v", nextUsage, err)
 	}
@@ -328,7 +336,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	}
 
 	thirdPolicy, err := service.SetDailyPolicy(ctx, owner, quotaapp.SetDailyPolicyCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Metric: "generation.image.call",
 		LimitUnits: 7, ExpectedRevision: 2, IdempotencyKey: "quota-policy-next-day-update",
 	})
 	if err != nil || thirdPolicy.Policy.Revision != 3 || thirdPolicy.Policy.LimitUnits != 7 {
@@ -340,7 +348,7 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	if err != nil || historicalRelease.Reservation.Status != quotadomain.ReservationReleased {
 		t.Fatalf("release a previous-window reservation after policy update: result=%#v err=%v", historicalRelease, err)
 	}
-	nextUsage, err = service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image")
+	nextUsage, err = service.GetDailyUsage(ctx, viewer, projectID.String(), "generation.image.call")
 	if err != nil || nextUsage.PolicyRevision != 3 || nextUsage.LimitUnits != 7 ||
 		nextUsage.ReservedUnits != 6 || nextUsage.ConsumedUnits != 0 || nextUsage.AvailableUnits != 1 {
 		t.Fatalf("query current usage after policy update: usage=%#v err=%v", nextUsage, err)

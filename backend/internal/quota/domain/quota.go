@@ -3,13 +3,18 @@ package domain
 import "time"
 
 const (
-	MetricGenerationImage = "generation.image"
-	WindowUTCDay          = "UTC_DAY"
+	MetricGenerationImageCall = "generation.image.call"
+	MetricGenerationVideoCall = "generation.video.call"
+	WindowUTCDay              = "UTC_DAY"
 
 	ReservationReserved = "RESERVED"
 	ReservationConsumed = "CONSUMED"
 	ReservationReleased = "RELEASED"
 )
+
+func IsGenerationMetric(value string) bool {
+	return value == MetricGenerationImageCall || value == MetricGenerationVideoCall
+}
 
 type Policy struct {
 	ID, WorkspaceID, ProjectID, Metric, WindowKind string

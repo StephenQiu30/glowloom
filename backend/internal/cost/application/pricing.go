@@ -18,13 +18,18 @@ const (
 )
 
 type SetPriceQuoteCommand struct {
-	ProjectID, Metric, UnitAmount, Currency, IdempotencyKey string
-	ExpectedRevision                                        int64
+	ProjectID, ModelProfileVersionID, ReservationUnitAmount, Currency, IdempotencyKey string
+	ExpectedRevision                                                                  int64
 }
 
 type CreateEstimateCommand struct {
-	ProjectID, Metric, SourceType, SourceID, IdempotencyKey string
-	Units                                                   int64
+	ProjectID, ProviderBindingVersionID, ModelProfileVersionID string
+	PriceQuoteID, Metric, SourceType, SourceID, IdempotencyKey string
+	ProviderBindingRevision, ModelProfileRevision              int64
+	ProviderBindingContentHash, ModelProfileContentHash        string
+	PriceQuoteRevision                                         int64
+	PriceQuoteContentHash                                      string
+	Units                                                      int64
 }
 
 type PriceQuoteResult struct {
@@ -46,17 +51,22 @@ type estimateReceipt struct {
 }
 
 type priceQuoteHashInput struct {
-	WorkspaceID, ProjectID, Metric, UnitAmount, Currency string
-	Revision                                             int64
+	WorkspaceID, ProjectID, ModelProfileVersionID, BillingMetric string
+	ReservationUnitAmount, Currency                              string
+	Revision                                                     int64
 }
 
 type estimateHashInput struct {
-	WorkspaceID, ProjectID, BudgetPolicyID, PriceQuoteID string
-	Metric, SourceType, SourceID                         string
-	Units                                                int64
-	UnitAmount, TotalAmount, Currency                    string
-	PriceQuoteRevision, BudgetPolicyRevision             int64
-	BudgetLimit                                          string
+	WorkspaceID, ProjectID, BudgetPolicyID, PriceQuoteID    string
+	ProviderBindingVersionID, ModelProfileVersionID, Metric string
+	ProviderBindingContentHash, ModelProfileContentHash     string
+	PriceQuoteContentHash                                   string
+	SourceType, SourceID                                    string
+	Units                                                   int64
+	UnitAmount, TotalAmount, Currency                       string
+	ProviderBindingRevision, ModelProfileRevision           int64
+	PriceQuoteRevision, BudgetPolicyRevision                int64
+	BudgetLimit                                             string
 }
 
 func (service *Service) SetPriceQuote(
@@ -66,17 +76,17 @@ func (service *Service) SetPriceQuote(
 ) (PriceQuoteResult, error) {
 	actor.UserID = strings.TrimSpace(actor.UserID)
 	command.ProjectID = strings.TrimSpace(command.ProjectID)
-	command.Metric = strings.TrimSpace(command.Metric)
+	command.ModelProfileVersionID = strings.TrimSpace(command.ModelProfileVersionID)
 	command.Currency = strings.TrimSpace(command.Currency)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	unitAmount, amountErr := parseAmount(command.UnitAmount)
+	unitAmount, amountErr := parseAmount(command.ReservationUnitAmount)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
-		!validActor(actor) || !validUUID(command.ProjectID) || command.Metric != domain.MetricGenerationImage ||
+		!validActor(actor) || !validUUID(command.ProjectID) || !validUUID(command.ModelProfileVersionID) ||
 		amountErr != nil || !unitAmount.IsPositive() || !currencyPattern.MatchString(command.Currency) ||
 		command.ExpectedRevision < 0 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return PriceQuoteResult{}, invalid("Invalid cost price quote request")
 	}
-	command.UnitAmount = unitAmount.StringFixed(6)
+	command.ReservationUnitAmount = unitAmount.StringFixed(6)
 	inputHash, err := platformcommand.InputHash(struct {
 		ActorID string
 		Command SetPriceQuoteCommand
@@ -96,6 +106,16 @@ func (service *Service) SetPriceQuote(
 		} else if !errors.Is(findErr, platformcommand.ErrReceiptNotFound) {
 			return findErr
 		}
+		profile, profileErr := repo.FindModelProfileVersion(ctx, command.ModelProfileVersionID)
+		if profileErr != nil {
+			return profileErr
+		}
+		if profile.WorkspaceID != scope.WorkspaceID {
+			return ErrModelProfileVersionNotFound
+		}
+		if validationErr := validateModelProfileVersion(profile); validationErr != nil {
+			return validationErr
+		}
 		budget, budgetErr := repo.GetBudgetForUpdate(ctx, scope.ProjectID)
 		if budgetErr != nil {
 			return budgetErr
@@ -111,7 +131,7 @@ func (service *Service) SetPriceQuote(
 		} else if !errors.Is(findErr, platformcommand.ErrReceiptNotFound) {
 			return findErr
 		}
-		current, findErr := repo.GetCurrentPriceQuoteForUpdate(ctx, scope.ProjectID, command.Metric)
+		current, findErr := repo.GetCurrentPriceQuoteForUpdate(ctx, scope.ProjectID, profile.ID)
 		if errors.Is(findErr, ErrPriceQuoteNotFound) {
 			if command.ExpectedRevision != 0 {
 				return conflict("Cost price quote revision has changed")
@@ -130,7 +150,10 @@ func (service *Service) SetPriceQuote(
 				current.Revision != command.ExpectedRevision {
 				return conflict("Cost price quote revision has changed")
 			}
-			if !current.UnitAmount.Equal(unitAmount) || current.Currency != command.Currency {
+			if current.ModelProfileVersionID != profile.ID || current.BillingMetric != profile.BillingMetric {
+				return conflict("Cost price quote profile facts have drifted")
+			}
+			if !current.ReservationUnitAmount.Equal(unitAmount) || current.Currency != command.Currency {
 				current, findErr = service.createPriceQuote(
 					ctx, repo, actor, scope, command, unitAmount, current.Revision+1, now,
 				)
@@ -162,10 +185,15 @@ func (service *Service) createPriceQuote(
 	}
 	desired := domain.PriceQuote{
 		ID: quoteID, WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID,
-		Metric: command.Metric, UnitAmount: unitAmount, Currency: command.Currency, Revision: revision,
+		ModelProfileVersionID: command.ModelProfileVersionID,
+		ReservationUnitAmount: unitAmount, Currency: command.Currency, Revision: revision,
 		CreatedBy: actor.UserID, CreatedAt: now,
 	}
-	var err error
+	profile, err := repo.FindModelProfileVersion(ctx, command.ModelProfileVersionID)
+	if err != nil {
+		return domain.PriceQuote{}, err
+	}
+	desired.BillingMetric = profile.BillingMetric
 	desired.ContentHash, err = priceQuoteContentHash(desired)
 	if err != nil {
 		return domain.PriceQuote{}, err
@@ -183,11 +211,11 @@ func (service *Service) createPriceQuote(
 func (service *Service) GetCurrentPriceQuote(
 	ctx context.Context,
 	actor Actor,
-	projectID, metric string,
+	projectID, modelProfileVersionID string,
 ) (domain.PriceQuote, error) {
-	actor.UserID, projectID, metric = strings.TrimSpace(actor.UserID), strings.TrimSpace(projectID), strings.TrimSpace(metric)
+	actor.UserID, projectID, modelProfileVersionID = strings.TrimSpace(actor.UserID), strings.TrimSpace(projectID), strings.TrimSpace(modelProfileVersionID)
 	if service == nil || service.transactions == nil || !validActor(actor) || !validUUID(projectID) ||
-		metric != domain.MetricGenerationImage {
+		!validUUID(modelProfileVersionID) {
 		return domain.PriceQuote{}, invalid("Invalid cost price quote query")
 	}
 	var result domain.PriceQuote
@@ -196,14 +224,25 @@ func (service *Service) GetCurrentPriceQuote(
 		if authorizeErr != nil {
 			return authorizeErr
 		}
-		quote, findErr := repo.FindCurrentPriceQuote(ctx, scope.ProjectID, metric)
+		profile, findErr := repo.FindModelProfileVersion(ctx, modelProfileVersionID)
+		if findErr != nil {
+			return findErr
+		}
+		if profile.WorkspaceID != scope.WorkspaceID {
+			return ErrModelProfileVersionNotFound
+		}
+		if validationErr := validateModelProfileVersion(profile); validationErr != nil {
+			return validationErr
+		}
+		quote, findErr := repo.FindCurrentPriceQuote(ctx, scope.ProjectID, profile.ID)
 		if findErr != nil {
 			return findErr
 		}
 		if validationErr := validatePriceQuote(quote); validationErr != nil {
 			return validationErr
 		}
-		if quote.WorkspaceID != scope.WorkspaceID || quote.ProjectID != scope.ProjectID {
+		if quote.WorkspaceID != scope.WorkspaceID || quote.ProjectID != scope.ProjectID ||
+			quote.ModelProfileVersionID != profile.ID || quote.BillingMetric != profile.BillingMetric {
 			return conflict("Cost price quote scope has drifted")
 		}
 		result = quote
@@ -219,12 +258,23 @@ func (service *Service) CreateEstimate(
 ) (EstimateResult, error) {
 	actor.UserID = strings.TrimSpace(actor.UserID)
 	command.ProjectID = strings.TrimSpace(command.ProjectID)
+	command.ProviderBindingVersionID = strings.TrimSpace(command.ProviderBindingVersionID)
+	command.ModelProfileVersionID = strings.TrimSpace(command.ModelProfileVersionID)
+	command.PriceQuoteID = strings.TrimSpace(command.PriceQuoteID)
+	command.ProviderBindingContentHash = strings.TrimSpace(command.ProviderBindingContentHash)
+	command.ModelProfileContentHash = strings.TrimSpace(command.ModelProfileContentHash)
+	command.PriceQuoteContentHash = strings.TrimSpace(command.PriceQuoteContentHash)
 	command.Metric = strings.TrimSpace(command.Metric)
 	command.SourceType = strings.TrimSpace(command.SourceType)
 	command.SourceID = strings.TrimSpace(command.SourceID)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
-		!validActor(actor) || !validUUID(command.ProjectID) || command.Metric != domain.MetricGenerationImage ||
+		!validActor(actor) || !validUUID(command.ProjectID) || !validUUID(command.ProviderBindingVersionID) ||
+		!validUUID(command.ModelProfileVersionID) || !validUUID(command.PriceQuoteID) || command.PriceQuoteRevision < 1 ||
+		command.ProviderBindingRevision < 1 || command.ModelProfileRevision < 1 ||
+		len(command.ProviderBindingContentHash) != 64 || len(command.ModelProfileContentHash) != 64 ||
+		len(command.PriceQuoteContentHash) != 64 ||
+		!domain.IsBillingMetric(command.Metric) ||
 		command.SourceType != domain.SourceGenerationIntent || !validUUID(command.SourceID) || command.Units < 1 ||
 		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return EstimateResult{}, invalid("Invalid cost estimate request")
@@ -273,17 +323,45 @@ func (service *Service) CreateEstimate(
 		} else if !errors.Is(findErr, ErrEstimateNotFound) {
 			return findErr
 		}
-		quote, quoteErr := repo.FindCurrentPriceQuote(ctx, scope.ProjectID, command.Metric)
+		profile, quoteErr := repo.FindModelProfileVersion(ctx, command.ModelProfileVersionID)
+		if quoteErr != nil {
+			return quoteErr
+		}
+		if profile.WorkspaceID != scope.WorkspaceID {
+			return ErrModelProfileVersionNotFound
+		}
+		if validationErr := validateModelProfileVersion(profile); validationErr != nil {
+			return validationErr
+		}
+		if profile.BillingMetric != command.Metric ||
+			profile.Revision != command.ModelProfileRevision || profile.ContentHash != command.ModelProfileContentHash {
+			return conflict("Cost estimate provider profile facts have drifted")
+		}
+		binding, bindingErr := repo.FindProviderBindingVersion(ctx, command.ProviderBindingVersionID)
+		if bindingErr != nil {
+			return bindingErr
+		}
+		if binding.WorkspaceID != scope.WorkspaceID || binding.ProjectID != scope.ProjectID {
+			return ErrProviderBindingVersionNotFound
+		}
+		if binding.ModelProfileVersionID != profile.ID || binding.Revision != command.ProviderBindingRevision ||
+			binding.ContentHash != command.ProviderBindingContentHash {
+			return conflict("Cost estimate provider binding facts have drifted")
+		}
+		quote, quoteErr := repo.GetCurrentPriceQuoteForUpdate(ctx, scope.ProjectID, profile.ID)
 		if quoteErr != nil {
 			return quoteErr
 		}
 		if validationErr := validatePriceQuote(quote); validationErr != nil {
 			return validationErr
 		}
-		if quote.WorkspaceID != scope.WorkspaceID || quote.ProjectID != scope.ProjectID || quote.Currency != budget.Currency {
+		if quote.ID != command.PriceQuoteID || quote.WorkspaceID != scope.WorkspaceID ||
+			quote.ProjectID != scope.ProjectID || quote.Currency != budget.Currency ||
+			quote.ModelProfileVersionID != profile.ID || quote.BillingMetric != profile.BillingMetric ||
+			quote.Revision != command.PriceQuoteRevision || quote.ContentHash != command.PriceQuoteContentHash {
 			return conflict("Cost estimate price or budget scope has drifted")
 		}
-		totalAmount := quote.UnitAmount.Mul(decimal.NewFromInt(command.Units))
+		totalAmount := quote.ReservationUnitAmount.Mul(decimal.NewFromInt(command.Units))
 		if !totalAmount.IsPositive() || totalAmount.GreaterThan(maximumAmount) || !totalAmount.Round(6).Equal(totalAmount) {
 			return conflict("Cost estimate exceeds supported amount")
 		}
@@ -293,9 +371,16 @@ func (service *Service) CreateEstimate(
 		}
 		desired := domain.Estimate{
 			ID: estimateID, WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID,
-			BudgetPolicyID: budget.ID, PriceQuoteID: quote.ID, Metric: command.Metric,
+			BudgetPolicyID: budget.ID, PriceQuoteID: quote.ID,
+			ProviderBindingVersionID:   command.ProviderBindingVersionID,
+			ProviderBindingRevision:    command.ProviderBindingRevision,
+			ProviderBindingContentHash: command.ProviderBindingContentHash,
+			ModelProfileVersionID:      command.ModelProfileVersionID,
+			ModelProfileRevision:       command.ModelProfileRevision,
+			ModelProfileContentHash:    command.ModelProfileContentHash,
+			PriceQuoteContentHash:      command.PriceQuoteContentHash, Metric: command.Metric,
 			SourceType: command.SourceType, SourceID: command.SourceID, Units: command.Units,
-			UnitAmount: quote.UnitAmount, TotalAmount: totalAmount, Currency: quote.Currency,
+			UnitAmount: quote.ReservationUnitAmount, TotalAmount: totalAmount, Currency: quote.Currency,
 			PriceQuoteRevision: quote.Revision, BudgetPolicyRevision: budget.Revision, BudgetLimit: budget.LimitAmount,
 			CreatedBy: actor.UserID, CreatedAt: now,
 		}
@@ -355,7 +440,16 @@ func reuseEstimate(
 	now time.Time,
 	result *EstimateResult,
 ) error {
-	if validateEstimate(estimate) != nil || estimate.ProjectID != command.ProjectID || estimate.Metric != command.Metric ||
+	if validateEstimate(estimate) != nil || estimate.ProjectID != command.ProjectID ||
+		estimate.ProviderBindingVersionID != command.ProviderBindingVersionID ||
+		estimate.ProviderBindingRevision != command.ProviderBindingRevision ||
+		estimate.ProviderBindingContentHash != command.ProviderBindingContentHash ||
+		estimate.ModelProfileVersionID != command.ModelProfileVersionID ||
+		estimate.ModelProfileRevision != command.ModelProfileRevision ||
+		estimate.ModelProfileContentHash != command.ModelProfileContentHash ||
+		estimate.PriceQuoteID != command.PriceQuoteID || estimate.PriceQuoteRevision != command.PriceQuoteRevision ||
+		estimate.PriceQuoteContentHash != command.PriceQuoteContentHash ||
+		estimate.Metric != command.Metric ||
 		estimate.SourceType != command.SourceType || estimate.SourceID != command.SourceID || estimate.Units != command.Units {
 		return platformcommand.ErrInputMismatch
 	}
@@ -364,8 +458,10 @@ func reuseEstimate(
 
 func validatePriceQuote(value domain.PriceQuote) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
-		value.Metric != domain.MetricGenerationImage || !value.UnitAmount.IsPositive() ||
-		value.UnitAmount.GreaterThan(maximumAmount) || !value.UnitAmount.Round(6).Equal(value.UnitAmount) ||
+		!validUUID(value.ModelProfileVersionID) || !domain.IsBillingMetric(value.BillingMetric) ||
+		!value.ReservationUnitAmount.IsPositive() ||
+		value.ReservationUnitAmount.GreaterThan(maximumAmount) ||
+		!value.ReservationUnitAmount.Round(6).Equal(value.ReservationUnitAmount) ||
 		!currencyPattern.MatchString(value.Currency) || value.Revision < 1 || len(value.ContentHash) != 64 ||
 		!validUUID(value.CreatedBy) {
 		return conflict("Cost price quote facts have drifted")
@@ -380,7 +476,11 @@ func validatePriceQuote(value domain.PriceQuote) error {
 func validateEstimate(value domain.Estimate) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
 		!validUUID(value.BudgetPolicyID) || !validUUID(value.PriceQuoteID) ||
-		value.Metric != domain.MetricGenerationImage || value.SourceType != domain.SourceGenerationIntent ||
+		!validUUID(value.ProviderBindingVersionID) || !validUUID(value.ModelProfileVersionID) ||
+		value.ProviderBindingRevision < 1 || value.ModelProfileRevision < 1 ||
+		len(value.ProviderBindingContentHash) != 64 || len(value.ModelProfileContentHash) != 64 ||
+		len(value.PriceQuoteContentHash) != 64 ||
+		!domain.IsBillingMetric(value.Metric) || value.SourceType != domain.SourceGenerationIntent ||
 		!validUUID(value.SourceID) || value.Units < 1 || !value.UnitAmount.IsPositive() ||
 		!value.TotalAmount.IsPositive() || value.UnitAmount.GreaterThan(maximumAmount) ||
 		value.TotalAmount.GreaterThan(maximumAmount) || value.BudgetLimit.IsNegative() ||
@@ -400,8 +500,9 @@ func validateEstimate(value domain.Estimate) error {
 
 func priceQuoteContentHash(value domain.PriceQuote) (string, error) {
 	return platformcommand.InputHash(priceQuoteHashInput{
-		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID, Metric: value.Metric,
-		UnitAmount: value.UnitAmount.StringFixed(6), Currency: value.Currency, Revision: value.Revision,
+		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID,
+		ModelProfileVersionID: value.ModelProfileVersionID, BillingMetric: value.BillingMetric,
+		ReservationUnitAmount: value.ReservationUnitAmount.StringFixed(6), Currency: value.Currency, Revision: value.Revision,
 	})
 }
 
@@ -409,11 +510,24 @@ func estimateContentHash(value domain.Estimate) (string, error) {
 	return platformcommand.InputHash(estimateHashInput{
 		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID,
 		BudgetPolicyID: value.BudgetPolicyID, PriceQuoteID: value.PriceQuoteID,
-		Metric: value.Metric, SourceType: value.SourceType, SourceID: value.SourceID, Units: value.Units,
+		ProviderBindingVersionID: value.ProviderBindingVersionID, ModelProfileVersionID: value.ModelProfileVersionID,
+		ProviderBindingRevision:    value.ProviderBindingRevision,
+		ProviderBindingContentHash: value.ProviderBindingContentHash,
+		ModelProfileRevision:       value.ModelProfileRevision, ModelProfileContentHash: value.ModelProfileContentHash,
+		PriceQuoteContentHash: value.PriceQuoteContentHash,
+		Metric:                value.Metric, SourceType: value.SourceType, SourceID: value.SourceID, Units: value.Units,
 		UnitAmount: value.UnitAmount.StringFixed(6), TotalAmount: value.TotalAmount.StringFixed(6), Currency: value.Currency,
 		PriceQuoteRevision: value.PriceQuoteRevision, BudgetPolicyRevision: value.BudgetPolicyRevision,
 		BudgetLimit: value.BudgetLimit.StringFixed(6),
 	})
+}
+
+func validateModelProfileVersion(value ModelProfileVersion) error {
+	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || value.Revision < 1 ||
+		value.State != "enabled" || !domain.IsBillingMetric(value.BillingMetric) || len(value.ContentHash) != 64 {
+		return conflict("Provider model profile facts have drifted")
+	}
+	return nil
 }
 
 func storePriceQuoteReceipt(

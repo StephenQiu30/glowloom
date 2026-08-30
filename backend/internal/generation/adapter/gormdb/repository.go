@@ -128,7 +128,12 @@ func (repo *repository) EnsureCandidate(ctx context.Context, desired domain.Cand
 		First(&persistedCandidate).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("workspace_id = ? AND provider_job_id = ? AND output_key = ?", candidateRecord.WorkspaceID, candidateRecord.ProviderJobID, candidateRecord.OutputKey).
+			Where(
+				"workspace_id = ? AND provider_call_id = ? AND output_key = ?",
+				candidateRecord.WorkspaceID,
+				candidateRecord.ProviderCallID,
+				candidateRecord.OutputKey,
+			).
 			First(&persistedCandidate).Error
 	}
 	if err != nil {
@@ -181,15 +186,29 @@ func (repo *repository) GetCandidate(ctx context.Context, candidateID string) (d
 
 func (repo *repository) GetCandidateByProviderOutput(
 	ctx context.Context,
-	providerJobID, outputKey string,
+	providerJobID, providerCallID, providerReceiptID, outputKey string,
 ) (domain.CandidateWithReport, error) {
 	jobID, err := uuid.Parse(providerJobID)
 	if err != nil {
 		return domain.CandidateWithReport{}, application.ErrNotFound
 	}
+	callID, err := uuid.Parse(providerCallID)
+	if err != nil {
+		return domain.CandidateWithReport{}, application.ErrNotFound
+	}
+	receiptID, err := uuid.Parse(providerReceiptID)
+	if err != nil {
+		return domain.CandidateWithReport{}, application.ErrNotFound
+	}
 	var candidate model.GenerationCandidate
 	if err = repo.database.WithContext(ctx).
-		Where("provider_job_id = ? AND output_key = ?", jobID, outputKey).First(&candidate).Error; err != nil {
+		Where(
+			"provider_job_id = ? AND provider_call_id = ? AND provider_receipt_id = ? AND output_key = ?",
+			jobID,
+			callID,
+			receiptID,
+			outputKey,
+		).First(&candidate).Error; err != nil {
 		return domain.CandidateWithReport{}, normalizeNotFound(err)
 	}
 	var report model.GenerationQCReport
@@ -216,6 +235,14 @@ func candidateRecord(value domain.Candidate) (model.GenerationCandidate, error) 
 	if err != nil {
 		return model.GenerationCandidate{}, err
 	}
+	providerCallID, err := uuid.Parse(value.ProviderCallID)
+	if err != nil {
+		return model.GenerationCandidate{}, err
+	}
+	providerReceiptID, err := uuid.Parse(value.ProviderReceiptID)
+	if err != nil {
+		return model.GenerationCandidate{}, err
+	}
 	artifactID, err := uuid.Parse(value.ArtifactID)
 	if err != nil {
 		return model.GenerationCandidate{}, err
@@ -226,6 +253,7 @@ func candidateRecord(value domain.Candidate) (model.GenerationCandidate, error) 
 	}
 	return model.GenerationCandidate{
 		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, ProviderJobID: providerJobID,
+		ProviderCallID: providerCallID, ProviderReceiptID: providerReceiptID,
 		OutputKey: value.OutputKey, ArtifactID: artifactID, ArtifactRevision: value.ArtifactRevision,
 		ArtifactSHA256: value.ArtifactSHA256, MediaType: value.MediaType, Width: value.Width, Height: value.Height,
 		Status: value.Status, Revision: value.Revision, CreatedBy: createdBy, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
@@ -235,7 +263,8 @@ func candidateRecord(value domain.Candidate) (model.GenerationCandidate, error) 
 func candidateDomain(value model.GenerationCandidate) domain.Candidate {
 	return domain.Candidate{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
-		ProviderJobID: value.ProviderJobID.String(), OutputKey: value.OutputKey, ArtifactID: value.ArtifactID.String(),
+		ProviderJobID: value.ProviderJobID.String(), ProviderCallID: value.ProviderCallID.String(),
+		ProviderReceiptID: value.ProviderReceiptID.String(), OutputKey: value.OutputKey, ArtifactID: value.ArtifactID.String(),
 		ArtifactRevision: value.ArtifactRevision, ArtifactSHA256: value.ArtifactSHA256, MediaType: value.MediaType,
 		Width: value.Width, Height: value.Height, Status: value.Status, Revision: value.Revision,
 		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
@@ -289,7 +318,8 @@ func bundleDomain(candidate model.GenerationCandidate, report model.GenerationQC
 
 func sameCandidate(left, right model.GenerationCandidate) bool {
 	return left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
-		left.ProviderJobID == right.ProviderJobID && left.OutputKey == right.OutputKey && left.ArtifactID == right.ArtifactID &&
+		left.ProviderJobID == right.ProviderJobID && left.ProviderCallID == right.ProviderCallID &&
+		left.ProviderReceiptID == right.ProviderReceiptID && left.OutputKey == right.OutputKey && left.ArtifactID == right.ArtifactID &&
 		left.ArtifactRevision == right.ArtifactRevision && left.ArtifactSHA256 == right.ArtifactSHA256 &&
 		left.MediaType == right.MediaType && left.Width == right.Width && left.Height == right.Height &&
 		left.Status == right.Status && left.Revision == right.Revision

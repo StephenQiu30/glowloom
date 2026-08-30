@@ -26,36 +26,77 @@ func (repo *repository) FindPriceQuote(ctx context.Context, quoteID string) (dom
 	return priceQuoteDomain(record), nil
 }
 
+func (repo *repository) FindModelProfileVersion(ctx context.Context, profileID string) (application.ModelProfileVersion, error) {
+	id, err := uuid.Parse(profileID)
+	if err != nil {
+		return application.ModelProfileVersion{}, application.ErrModelProfileVersionNotFound
+	}
+	var record model.ProviderModelProfileVersion
+	if err = repo.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		return application.ModelProfileVersion{}, normalizeProviderFactNotFound(err, application.ErrModelProfileVersionNotFound)
+	}
+	return application.ModelProfileVersion{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), BillingMetric: record.BillingMetric,
+		State: record.State, ContentHash: record.ContentHash, Revision: record.Revision,
+	}, nil
+}
+
+func (repo *repository) FindProviderBindingVersion(ctx context.Context, bindingID string) (application.ProviderBindingVersion, error) {
+	id, err := uuid.Parse(bindingID)
+	if err != nil {
+		return application.ProviderBindingVersion{}, application.ErrProviderBindingVersionNotFound
+	}
+	var record model.ProjectProviderBindingVersion
+	if err = repo.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		return application.ProviderBindingVersion{}, normalizeProviderFactNotFound(err, application.ErrProviderBindingVersionNotFound)
+	}
+	return application.ProviderBindingVersion{
+		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(),
+		ModelProfileVersionID: record.ModelProfileVersionID.String(), Revision: record.Revision, ContentHash: record.ContentHash,
+	}, nil
+}
+
+func (repo *repository) HasAnyPriceQuote(ctx context.Context, projectID string) (bool, error) {
+	project, err := uuid.Parse(projectID)
+	if err != nil {
+		return false, application.ErrPriceQuoteNotFound
+	}
+	var count int64
+	err = repo.database.WithContext(ctx).Model(&model.CostPriceQuote{}).Where("project_id = ?", project).Count(&count).Error
+	return count > 0, err
+}
+
 func (repo *repository) FindCurrentPriceQuote(
 	ctx context.Context,
-	projectID, metric string,
+	projectID, modelProfileVersionID string,
 ) (domain.PriceQuote, error) {
-	return repo.findCurrentPriceQuote(ctx, projectID, metric, false)
+	return repo.findCurrentPriceQuote(ctx, projectID, modelProfileVersionID, false)
 }
 
 func (repo *repository) GetCurrentPriceQuoteForUpdate(
 	ctx context.Context,
-	projectID, metric string,
+	projectID, modelProfileVersionID string,
 ) (domain.PriceQuote, error) {
-	return repo.findCurrentPriceQuote(ctx, projectID, metric, true)
+	return repo.findCurrentPriceQuote(ctx, projectID, modelProfileVersionID, true)
 }
 
 func (repo *repository) findCurrentPriceQuote(
 	ctx context.Context,
-	projectID, metric string,
+	projectID, modelProfileVersionID string,
 	forUpdate bool,
 ) (domain.PriceQuote, error) {
-	project, err := uuid.Parse(projectID)
-	if err != nil {
+	project, projectErr := uuid.Parse(projectID)
+	profile, profileErr := uuid.Parse(modelProfileVersionID)
+	if projectErr != nil || profileErr != nil {
 		return domain.PriceQuote{}, application.ErrPriceQuoteNotFound
 	}
-	query := repo.database.WithContext(ctx).Where("project_id = ? AND metric = ?", project, metric).
+	query := repo.database.WithContext(ctx).Where("project_id = ? AND model_profile_version_id = ?", project, profile).
 		Order("revision DESC")
 	if forUpdate {
 		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
 	var record model.CostPriceQuote
-	if err = query.First(&record).Error; err != nil {
+	if err := query.First(&record).Error; err != nil {
 		return domain.PriceQuote{}, normalizePriceQuoteNotFound(err)
 	}
 	return priceQuoteDomain(record), nil
@@ -68,13 +109,14 @@ func (repo *repository) EnsurePriceQuote(ctx context.Context, desired domain.Pri
 	}
 	created := record
 	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "project_id"}, {Name: "metric"}, {Name: "revision"}}, DoNothing: true,
+		Columns: []clause.Column{{Name: "project_id"}, {Name: "model_profile_version_id"}, {Name: "revision"}}, DoNothing: true,
 	}).Create(&created).Error; err != nil {
 		return domain.PriceQuote{}, err
 	}
 	var persisted model.CostPriceQuote
 	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where(
-		"project_id = ? AND metric = ? AND revision = ?", record.ProjectID, record.Metric, record.Revision,
+		"project_id = ? AND model_profile_version_id = ? AND revision = ?",
+		record.ProjectID, record.ModelProfileVersionID, record.Revision,
 	).First(&persisted).Error; err != nil {
 		return domain.PriceQuote{}, fmt.Errorf("load ensured cost price quote: %w", err)
 	}
@@ -136,9 +178,14 @@ func priceQuoteRecord(value domain.PriceQuote) (model.CostPriceQuote, error) {
 	if err != nil {
 		return model.CostPriceQuote{}, err
 	}
+	profile, err := uuid.Parse(value.ModelProfileVersionID)
+	if err != nil {
+		return model.CostPriceQuote{}, err
+	}
 	return model.CostPriceQuote{
-		ID: id, WorkspaceID: workspace, ProjectID: project, Metric: value.Metric,
-		UnitAmount: value.UnitAmount, Currency: value.Currency, Revision: value.Revision,
+		ID: id, WorkspaceID: workspace, ProjectID: project, ModelProfileVersionID: profile,
+		BillingMetric: value.BillingMetric, ReservationUnitAmount: value.ReservationUnitAmount,
+		Currency: value.Currency, Revision: value.Revision,
 		ContentHash: value.ContentHash, CreatedBy: creator, CreatedAt: value.CreatedAt,
 	}, nil
 }
@@ -146,7 +193,8 @@ func priceQuoteRecord(value domain.PriceQuote) (model.CostPriceQuote, error) {
 func priceQuoteDomain(value model.CostPriceQuote) domain.PriceQuote {
 	return domain.PriceQuote{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
-		Metric: value.Metric, UnitAmount: value.UnitAmount, Currency: value.Currency, Revision: value.Revision,
+		ModelProfileVersionID: value.ModelProfileVersionID.String(), BillingMetric: value.BillingMetric,
+		ReservationUnitAmount: value.ReservationUnitAmount, Currency: value.Currency, Revision: value.Revision,
 		ContentHash: value.ContentHash, CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt.UTC(),
 	}
 }
@@ -154,7 +202,8 @@ func priceQuoteDomain(value model.CostPriceQuote) domain.PriceQuote {
 func estimateRecord(value domain.Estimate) (model.CostEstimate, error) {
 	ids := []string{
 		value.ID, value.WorkspaceID, value.ProjectID, value.BudgetPolicyID,
-		value.PriceQuoteID, value.SourceID, value.CreatedBy,
+		value.PriceQuoteID, value.ProviderBindingVersionID, value.ModelProfileVersionID,
+		value.SourceID, value.CreatedBy,
 	}
 	parsed := make([]uuid.UUID, len(ids))
 	for index, raw := range ids {
@@ -166,10 +215,15 @@ func estimateRecord(value domain.Estimate) (model.CostEstimate, error) {
 	}
 	return model.CostEstimate{
 		ID: parsed[0], WorkspaceID: parsed[1], ProjectID: parsed[2], BudgetPolicyID: parsed[3],
-		PriceQuoteID: parsed[4], Metric: value.Metric, SourceType: value.SourceType, SourceID: parsed[5],
+		PriceQuoteID: parsed[4], ProviderBindingVersionID: parsed[5],
+		ProviderBindingRevision:    value.ProviderBindingRevision,
+		ProviderBindingContentHash: value.ProviderBindingContentHash,
+		ModelProfileVersionID:      parsed[6], ModelProfileRevision: value.ModelProfileRevision,
+		ModelProfileContentHash: value.ModelProfileContentHash, PriceQuoteContentHash: value.PriceQuoteContentHash,
+		Metric: value.Metric, SourceType: value.SourceType, SourceID: parsed[7],
 		Units: value.Units, UnitAmount: value.UnitAmount, TotalAmount: value.TotalAmount, Currency: value.Currency,
 		PriceQuoteRevision: value.PriceQuoteRevision, BudgetPolicyRevision: value.BudgetPolicyRevision,
-		BudgetLimit: value.BudgetLimit, ContentHash: value.ContentHash, CreatedBy: parsed[6], CreatedAt: value.CreatedAt,
+		BudgetLimit: value.BudgetLimit, ContentHash: value.ContentHash, CreatedBy: parsed[8], CreatedAt: value.CreatedAt,
 	}, nil
 }
 
@@ -177,6 +231,11 @@ func estimateDomain(value model.CostEstimate) domain.Estimate {
 	return domain.Estimate{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
 		BudgetPolicyID: value.BudgetPolicyID.String(), PriceQuoteID: value.PriceQuoteID.String(),
+		ProviderBindingVersionID:   value.ProviderBindingVersionID.String(),
+		ProviderBindingRevision:    value.ProviderBindingRevision,
+		ProviderBindingContentHash: value.ProviderBindingContentHash,
+		ModelProfileVersionID:      value.ModelProfileVersionID.String(), ModelProfileRevision: value.ModelProfileRevision,
+		ModelProfileContentHash: value.ModelProfileContentHash, PriceQuoteContentHash: value.PriceQuoteContentHash,
 		Metric: value.Metric, SourceType: value.SourceType, SourceID: value.SourceID.String(), Units: value.Units,
 		UnitAmount: value.UnitAmount, TotalAmount: value.TotalAmount, Currency: value.Currency,
 		PriceQuoteRevision: value.PriceQuoteRevision, BudgetPolicyRevision: value.BudgetPolicyRevision,
@@ -208,6 +267,13 @@ func normalizePriceQuoteNotFound(err error) error {
 func normalizeEstimateNotFound(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return application.ErrEstimateNotFound
+	}
+	return err
+}
+
+func normalizeProviderFactNotFound(err, notFound error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return notFound
 	}
 	return err
 }

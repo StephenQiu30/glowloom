@@ -137,7 +137,7 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	)
 	providerService := generationapp.NewProviderService(
 		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
-		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString, Bindings: providerConfigurationService},
+		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString},
 	)
 	logger.Info("workflow Media Provider configuration ready", "secret_store_available", providerSecrets.Available(),
 		"connection_presets", len(providerConfigurationService.Catalog().Connections),

@@ -86,9 +86,9 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 	firstArtifact := createArtifact(t, ctx, objects, assetService, assetActor, workspaceID.String(), projectID.String(), 4, 3, "selection-first", true)
 	secondArtifact := createArtifact(t, ctx, objects, assetService, assetActor, workspaceID.String(), projectID.String(), 5, 4, "selection-second", true)
 	failedArtifact := createArtifact(t, ctx, objects, assetService, assetActor, workspaceID.String(), projectID.String(), 2, 2, "selection-failed", true)
-	firstCandidate := registerCandidate(t, ctx, candidateService, actor, firstArtifact.ID, "selection-candidate-first")
-	secondCandidate := registerCandidate(t, ctx, candidateService, actor, secondArtifact.ID, "selection-candidate-second")
-	failedCandidate := registerCandidate(t, ctx, candidateService, actor, failedArtifact.ID, "selection-candidate-failed")
+	firstCandidate := registerCandidate(t, ctx, candidateService, actor, firstArtifact, "selection-candidate-first")
+	secondCandidate := registerCandidate(t, ctx, candidateService, actor, secondArtifact, "selection-candidate-second")
+	failedCandidate := registerCandidate(t, ctx, candidateService, actor, failedArtifact, "selection-candidate-failed")
 
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString, ClaimLease: 5 * time.Minute,
@@ -240,9 +240,9 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 	}
 }
 
-func registerCandidate(t *testing.T, ctx context.Context, service *generationapp.Service, actor generationapp.Actor, artifactID, key string) generationapp.RegisterCandidateResult {
+func registerCandidate(t *testing.T, ctx context.Context, service *generationapp.Service, actor generationapp.Actor, artifact providerArtifactFixture, key string) generationapp.RegisterCandidateResult {
 	t.Helper()
-	result, err := service.RegisterReadyCandidate(ctx, actor, generationapp.RegisterReadyCandidateCommand{ArtifactID: artifactID, IdempotencyKey: key})
+	result, err := service.RegisterReadyCandidate(ctx, actor, artifact.registerCommand(key))
 	if err != nil {
 		t.Fatalf("register %s generation candidate: %v", key, err)
 	}

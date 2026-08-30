@@ -10,7 +10,7 @@ type QuotaPolicy struct {
 	ID          uuid.UUID   `gorm:"type:uuid;primaryKey"`
 	WorkspaceID uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_qta_policy_scope,priority:1"`
 	ProjectID   uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_qta_policy_scope,priority:2;index"`
-	Metric      string      `gorm:"type:varchar(80);not null;uniqueIndex:uq_qta_policy_scope,priority:3;check:ck_qta_policy_metric,metric = 'generation.image'"`
+	Metric      string      `gorm:"type:varchar(80);not null;uniqueIndex:uq_qta_policy_scope,priority:3;check:ck_qta_policy_metric,metric IN ('generation.image.call','generation.video.call')"`
 	WindowKind  string      `gorm:"type:varchar(20);not null;check:ck_qta_policy_window_kind,window_kind = 'UTC_DAY'"`
 	LimitUnits  int64       `gorm:"not null;check:ck_qta_policy_limit,limit_units > 0"`
 	Revision    int64       `gorm:"not null;check:ck_qta_policy_revision,revision >= 1"`
@@ -32,7 +32,7 @@ type QuotaCounter struct {
 	WorkspaceID    uuid.UUID   `gorm:"type:uuid;not null;index:ix_qta_counters_workspace_window,priority:1"`
 	ProjectID      uuid.UUID   `gorm:"type:uuid;not null;index"`
 	PolicyID       uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_qta_counter_window,priority:1"`
-	Metric         string      `gorm:"type:varchar(80);not null;check:ck_qta_counter_metric,metric = 'generation.image'"`
+	Metric         string      `gorm:"type:varchar(80);not null;check:ck_qta_counter_metric,metric IN ('generation.image.call','generation.video.call')"`
 	WindowStart    time.Time   `gorm:"type:timestamptz;not null;uniqueIndex:uq_qta_counter_window,priority:2;index:ix_qta_counters_workspace_window,priority:2"`
 	WindowEnd      time.Time   `gorm:"type:timestamptz;not null;check:ck_qta_counter_window,window_end > window_start"`
 	PolicyRevision int64       `gorm:"not null;check:ck_qta_counter_policy_revision,policy_revision >= 1"`
@@ -55,7 +55,7 @@ type QuotaReservation struct {
 	ProjectID      uuid.UUID    `gorm:"type:uuid;not null;index"`
 	PolicyID       uuid.UUID    `gorm:"type:uuid;not null;uniqueIndex:uq_qta_reservation_source,priority:1"`
 	CounterID      uuid.UUID    `gorm:"type:uuid;not null;index"`
-	Metric         string       `gorm:"type:varchar(80);not null;check:ck_qta_reservation_metric,metric = 'generation.image'"`
+	Metric         string       `gorm:"type:varchar(80);not null;check:ck_qta_reservation_metric,metric IN ('generation.image.call','generation.video.call')"`
 	SourceType     string       `gorm:"type:varchar(60);not null;uniqueIndex:uq_qta_reservation_source,priority:3;check:ck_qta_reservation_source_type,source_type = 'generation_intent'"`
 	SourceID       uuid.UUID    `gorm:"type:uuid;not null;uniqueIndex:uq_qta_reservation_source,priority:4"`
 	WindowStart    time.Time    `gorm:"type:timestamptz;not null;uniqueIndex:uq_qta_reservation_source,priority:2"`

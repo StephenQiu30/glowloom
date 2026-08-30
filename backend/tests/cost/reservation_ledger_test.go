@@ -18,6 +18,7 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	costgormtest "github.com/StephenQiu30/lanverse/backend/tests/cost/adapter/gormdb"
 )
 
 func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
@@ -81,9 +82,10 @@ func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
 	viewer := costapp.Actor{UserID: viewerID.String(), TokenVersion: 1}
 	otherOwner := costapp.Actor{UserID: otherOwnerID.String(), TokenVersion: 1}
 
-	prepareCostProject(t, ctx, service, owner, projectID.String(), "reservation")
-	estimateA := createCostEstimate(t, ctx, service, editor, projectID.String(), uuid.NewString(), 6, "estimate-a")
-	estimateB := createCostEstimate(t, ctx, service, editor, projectID.String(), uuid.NewString(), 6, "estimate-b")
+	providerFacts := prepareCostProject(t, ctx, service, owner, projectID, "reservation",
+		costgormtest.SeedProviderFacts(t, database, workspaceID, projectID, ownerID, now, "reservation"))
+	estimateA := createCostEstimate(t, ctx, service, editor, projectID.String(), providerFacts, uuid.NewString(), 6, "estimate-a")
+	estimateB := createCostEstimate(t, ctx, service, editor, projectID.String(), providerFacts, uuid.NewString(), 6, "estimate-b")
 	commands := []costapp.ReserveEstimateCommand{
 		{EstimateID: estimateA.ID, IdempotencyKey: "reserve-a"},
 		{EstimateID: estimateB.ID, IdempotencyKey: "reserve-b"},
@@ -205,7 +207,7 @@ func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
 	if _, err = service.ReserveEstimate(ctx, editor, commands[loserIndex]); !costapp.IsCode(err, "budget_exceeded") {
 		t.Fatalf("losing 60-unit estimate bypassed settled budget: %v", err)
 	}
-	estimateC := createCostEstimate(t, ctx, service, editor, projectID.String(), uuid.NewString(), 5, "estimate-c")
+	estimateC := createCostEstimate(t, ctx, service, editor, projectID.String(), providerFacts, uuid.NewString(), 5, "estimate-c")
 	reservedC, err := service.ReserveEstimate(ctx, editor, costapp.ReserveEstimateCommand{
 		EstimateID: estimateC.ID, IdempotencyKey: "reserve-c",
 	})
@@ -240,15 +242,16 @@ func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
 	}); !costapp.IsCode(err, "state_conflict") {
 		t.Fatalf("budget lowered below settled amount: %v", err)
 	}
-	estimateD := createCostEstimate(t, ctx, service, editor, projectID.String(), uuid.NewString(), 1, "estimate-d")
+	estimateD := createCostEstimate(t, ctx, service, editor, projectID.String(), providerFacts, uuid.NewString(), 1, "estimate-d")
 	if _, err = service.ReserveEstimate(ctx, editor, costapp.ReserveEstimateCommand{
 		EstimateID: estimateD.ID, IdempotencyKey: "reserve-over-settled-budget",
 	}); !costapp.IsCode(err, "budget_exceeded") {
 		t.Fatalf("reservation exceeded fully settled budget: %v", err)
 	}
 
-	prepareCostProject(t, ctx, service, owner, unknownProjectID.String(), "unknown")
-	unknownEstimate := createCostEstimate(t, ctx, service, editor, unknownProjectID.String(), uuid.NewString(), 1, "unknown-estimate")
+	unknownFacts := prepareCostProject(t, ctx, service, owner, unknownProjectID, "unknown",
+		costgormtest.SeedProviderFacts(t, database, workspaceID, unknownProjectID, ownerID, now, "unknown"))
+	unknownEstimate := createCostEstimate(t, ctx, service, editor, unknownProjectID.String(), unknownFacts, uuid.NewString(), 1, "unknown-estimate")
 	unknownReservation, err := service.ReserveEstimate(ctx, editor, costapp.ReserveEstimateCommand{
 		EstimateID: unknownEstimate.ID, IdempotencyKey: "unknown-reserve",
 	})
@@ -261,8 +264,9 @@ func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
 		t.Fatalf("unknown result reservation was released automatically: view=%#v err=%v", unknownView, err)
 	}
 
-	prepareCostProject(t, ctx, service, owner, raceProjectID.String(), "transition-race")
-	raceEstimate := createCostEstimate(t, ctx, service, editor, raceProjectID.String(), uuid.NewString(), 1, "race-estimate")
+	raceFacts := prepareCostProject(t, ctx, service, owner, raceProjectID, "transition-race",
+		costgormtest.SeedProviderFacts(t, database, workspaceID, raceProjectID, ownerID, now, "transition-race"))
+	raceEstimate := createCostEstimate(t, ctx, service, editor, raceProjectID.String(), raceFacts, uuid.NewString(), 1, "race-estimate")
 	raceReservation, err := service.ReserveEstimate(ctx, editor, costapp.ReserveEstimateCommand{
 		EstimateID: raceEstimate.ID, IdempotencyKey: "race-reserve",
 	})
@@ -359,25 +363,39 @@ func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
 	}
 }
 
+type costProviderFacts struct {
+	profileID, profileHash, bindingID, bindingHash, quoteID, quoteHash string
+	quoteRevision                                                      int64
+}
+
 func prepareCostProject(
 	t *testing.T,
 	ctx context.Context,
 	service *costapp.Service,
 	owner costapp.Actor,
-	projectID, keyPrefix string,
-) {
+	projectID uuid.UUID,
+	keyPrefix string,
+	providerSeed costgormtest.ProviderFacts,
+) costProviderFacts {
 	t.Helper()
 	if _, err := service.SetBudget(ctx, owner, costapp.SetBudgetCommand{
-		ProjectID: projectID, LimitAmount: "100", Currency: "USD",
+		ProjectID: projectID.String(), LimitAmount: "100", Currency: "USD",
 		ExpectedRevision: 0, IdempotencyKey: keyPrefix + "-budget",
 	}); err != nil {
 		t.Fatalf("create %s cost budget: %v", keyPrefix, err)
 	}
-	if _, err := service.SetPriceQuote(ctx, owner, costapp.SetPriceQuoteCommand{
-		ProjectID: projectID, Metric: "generation.image", UnitAmount: "10", Currency: "USD",
+	quote, err := service.SetPriceQuote(ctx, owner, costapp.SetPriceQuoteCommand{
+		ProjectID: projectID.String(), ModelProfileVersionID: providerSeed.ProfileID.String(),
+		ReservationUnitAmount: "10", Currency: "USD",
 		ExpectedRevision: 0, IdempotencyKey: keyPrefix + "-price",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("create %s image price: %v", keyPrefix, err)
+	}
+	return costProviderFacts{
+		profileID: providerSeed.ProfileID.String(), profileHash: providerSeed.ProfileHash,
+		bindingID: providerSeed.BindingID.String(), bindingHash: providerSeed.BindingHash,
+		quoteID: quote.Quote.ID, quoteRevision: quote.Quote.Revision, quoteHash: quote.Quote.ContentHash,
 	}
 }
 
@@ -386,13 +404,19 @@ func createCostEstimate(
 	ctx context.Context,
 	service *costapp.Service,
 	actor costapp.Actor,
-	projectID, sourceID string,
+	projectID string,
+	provider costProviderFacts,
+	sourceID string,
 	units int64,
 	key string,
 ) costdomain.Estimate {
 	t.Helper()
 	result, err := service.CreateEstimate(ctx, actor, costapp.CreateEstimateCommand{
-		ProjectID: projectID, Metric: "generation.image", SourceType: "generation_intent",
+		ProjectID: projectID, ProviderBindingVersionID: provider.bindingID,
+		ProviderBindingRevision: 1, ProviderBindingContentHash: provider.bindingHash,
+		ModelProfileVersionID: provider.profileID, ModelProfileRevision: 1, ModelProfileContentHash: provider.profileHash,
+		PriceQuoteID: provider.quoteID, PriceQuoteRevision: provider.quoteRevision, PriceQuoteContentHash: provider.quoteHash,
+		Metric: "generation.image.call", SourceType: "generation_intent",
 		SourceID: sourceID, Units: units, IdempotencyKey: key,
 	})
 	if err != nil {

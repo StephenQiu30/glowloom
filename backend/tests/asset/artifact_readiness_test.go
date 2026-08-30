@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -82,12 +83,13 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 
 	readyBytes := testPNG(t, 4, 3)
 	readyHash := sha256Hex(readyBytes)
-	providerJobID := uuid.NewString()
-	readyKey := "staging/" + workspaceID.String() + "/" + providerJobID + "/frame-0001.png"
+	providerJobID, providerCallID, providerReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	readyKey := "staging/" + workspaceID.String() + "/" + providerJobID + "/" + providerCallID + "/frame-0001.png"
 	putObject(t, ctx, objects, readyKey, "image/png", readyBytes)
 	registerCommand := assetapp.RegisterStagedCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_job",
-		SourceID: providerJobID, OutputKey: "frame-0001", ObjectKey: readyKey,
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
+		SourceID: providerReceiptID, OutputKey: "frame-0001", ProviderJobID: providerJobID, ProviderCallID: providerCallID,
+		ObjectKey: readyKey,
 		MediaType: "image/png", SHA256: readyHash, SizeBytes: int64(len(readyBytes)), IdempotencyKey: "register-frame-0001",
 	}
 
@@ -140,7 +142,8 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	}
 
 	validated, err := service.ValidateReady(ctx, actor, assetapp.ValidateReadyCommand{
-		ArtifactID: artifactID, ExpectedRevision: 1, IdempotencyKey: "validate-frame-0001",
+		ArtifactID: artifactID, ExpectedRevision: 1, ExpectedWidth: 4, ExpectedHeight: 3,
+		IdempotencyKey: "validate-frame-0001",
 	})
 	if err != nil {
 		t.Fatalf("validate ready artifact: %v", err)
@@ -151,7 +154,8 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 		t.Fatalf("ready artifact result = %#v", validated)
 	}
 	replayed, err := service.ValidateReady(ctx, actor, assetapp.ValidateReadyCommand{
-		ArtifactID: artifactID, ExpectedRevision: 1, IdempotencyKey: "validate-frame-0001",
+		ArtifactID: artifactID, ExpectedRevision: 1, ExpectedWidth: 4, ExpectedHeight: 3,
+		IdempotencyKey: "validate-frame-0001",
 	})
 	if err != nil || replayed.Receipt.ID != validated.Receipt.ID || replayed.Artifact.Revision != 2 {
 		t.Fatalf("replay artifact validation: result=%#v err=%v", replayed, err)
@@ -168,14 +172,14 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	}
 	driftedSourceOutput := redeliveryCommand
 	driftedSourceOutput.IdempotencyKey = "register-frame-0001-drifted-source"
-	driftedSourceOutput.ObjectKey = "staging/" + workspaceID.String() + "/" + providerJobID + "/different.png"
+	driftedSourceOutput.ObjectKey = "staging/" + workspaceID.String() + "/" + providerJobID + "/" + providerCallID + "/different.png"
 	if _, err = service.RegisterStaged(ctx, actor, driftedSourceOutput); err == nil {
 		t.Fatal("source output identity accepted a different object key")
 	}
 
 	quarantinedBytes := testPNG(t, 2, 2)
-	quarantinedJobID := uuid.NewString()
-	quarantinedKey := "staging/" + workspaceID.String() + "/" + quarantinedJobID + "/frame-bad.png"
+	quarantinedJobID, quarantinedCallID, quarantinedReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	quarantinedKey := "staging/" + workspaceID.String() + "/" + quarantinedJobID + "/" + quarantinedCallID + "/frame-bad.png"
 	putObject(t, ctx, objects, quarantinedKey, "image/png", quarantinedBytes)
 	badHash := sha256Hex(append([]byte(nil), quarantinedBytes...))
 	badHash = "0" + badHash[1:]
@@ -183,15 +187,17 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 		badHash = "1" + badHash[1:]
 	}
 	quarantined, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_job",
-		SourceID: quarantinedJobID, OutputKey: "frame-bad", ObjectKey: quarantinedKey,
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
+		SourceID: quarantinedReceiptID, OutputKey: "frame-bad",
+		ProviderJobID: quarantinedJobID, ProviderCallID: quarantinedCallID, ObjectKey: quarantinedKey,
 		MediaType: "image/png", SHA256: badHash, SizeBytes: int64(len(quarantinedBytes)), IdempotencyKey: "register-frame-bad",
 	})
 	if err != nil {
 		t.Fatalf("register corrupt declaration: %v", err)
 	}
 	quarantineResult, err := service.ValidateReady(ctx, actor, assetapp.ValidateReadyCommand{
-		ArtifactID: quarantined.Artifact.ID, ExpectedRevision: 1, IdempotencyKey: "validate-frame-bad",
+		ArtifactID: quarantined.Artifact.ID, ExpectedRevision: 1, ExpectedWidth: 2, ExpectedHeight: 2,
+		IdempotencyKey: "validate-frame-bad",
 	})
 	if err != nil {
 		t.Fatalf("persist corrupt artifact quarantine: %v", err)
@@ -204,31 +210,82 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 		t.Fatal("quarantined artifact passed RequireReady")
 	}
 
-	mismatchJobID := uuid.NewString()
+	mismatchJobID, mismatchCallID, mismatchReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	mismatchBytes := testJPEG(t, 2, 1)
-	mismatchKey := "staging/" + workspaceID.String() + "/" + mismatchJobID + "/frame-mismatch.png"
+	mismatchKey := "staging/" + workspaceID.String() + "/" + mismatchJobID + "/" + mismatchCallID + "/frame-mismatch.png"
 	putObject(t, ctx, objects, mismatchKey, "image/jpeg", mismatchBytes)
 	mismatch, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_job",
-		SourceID: mismatchJobID, OutputKey: "frame-mismatch", ObjectKey: mismatchKey,
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
+		SourceID: mismatchReceiptID, OutputKey: "frame-mismatch",
+		ProviderJobID: mismatchJobID, ProviderCallID: mismatchCallID, ObjectKey: mismatchKey,
 		MediaType: "image/png", SHA256: sha256Hex(mismatchBytes), SizeBytes: int64(len(mismatchBytes)), IdempotencyKey: "register-frame-mismatch",
 	})
 	if err != nil {
 		t.Fatalf("register media type mismatch: %v", err)
 	}
 	mismatchResult, err := service.ValidateReady(ctx, actor, assetapp.ValidateReadyCommand{
-		ArtifactID: mismatch.Artifact.ID, ExpectedRevision: 1, IdempotencyKey: "validate-frame-mismatch",
+		ArtifactID: mismatch.Artifact.ID, ExpectedRevision: 1, ExpectedWidth: 2, ExpectedHeight: 1,
+		IdempotencyKey: "validate-frame-mismatch",
 	})
 	if err != nil || mismatchResult.Artifact.Status != assetdomain.ReadinessQuarantined || mismatchResult.Artifact.FailureCode != "media_type_mismatch" {
 		t.Fatalf("quarantine media type mismatch: result=%#v err=%v", mismatchResult, err)
 	}
 
-	pendingJobID := uuid.NewString()
+	dimensionJobID, dimensionCallID, dimensionReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	dimensionBytes := testPNG(t, 4, 3)
+	dimensionKey := "staging/" + workspaceID.String() + "/" + dimensionJobID + "/" + dimensionCallID + "/frame-dimension-drift.png"
+	putObject(t, ctx, objects, dimensionKey, "image/png", dimensionBytes)
+	dimension, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
+		SourceID: dimensionReceiptID, OutputKey: "frame-dimension-drift",
+		ProviderJobID: dimensionJobID, ProviderCallID: dimensionCallID, ObjectKey: dimensionKey,
+		MediaType: "image/png", SHA256: sha256Hex(dimensionBytes), SizeBytes: int64(len(dimensionBytes)),
+		IdempotencyKey: "register-frame-dimension-drift",
+	})
+	if err != nil {
+		t.Fatalf("register declared image dimension drift: %v", err)
+	}
+	dimensionCommand := assetapp.ValidateReadyCommand{
+		ArtifactID: dimension.Artifact.ID, ExpectedRevision: 1, ExpectedWidth: 5, ExpectedHeight: 3,
+		IdempotencyKey: "validate-frame-dimension-drift",
+	}
+	dimensionResult, err := service.ValidateReady(ctx, actor, dimensionCommand)
+	if err != nil {
+		t.Fatalf("persist declared image dimension quarantine: %v", err)
+	}
+	if dimensionResult.Artifact.Status != assetdomain.ReadinessQuarantined ||
+		dimensionResult.Artifact.FailureCode != "image_dimensions_mismatch" ||
+		dimensionResult.Artifact.Width != 4 || dimensionResult.Artifact.Height != 3 ||
+		dimensionResult.Artifact.Revision != 2 || dimensionResult.Location.Status != assetdomain.LocationStaging ||
+		dimensionResult.Receipt.ID == "" {
+		t.Fatalf("declared image dimension quarantine result = %#v", dimensionResult)
+	}
+	dimensionReplay, err := service.ValidateReady(ctx, actor, dimensionCommand)
+	if err != nil || dimensionReplay.Receipt.ID != dimensionResult.Receipt.ID ||
+		dimensionReplay.Artifact.Status != assetdomain.ReadinessQuarantined {
+		t.Fatalf("replay declared image dimension quarantine: result=%#v err=%v", dimensionReplay, err)
+	}
+	driftedDimensionCommand := dimensionCommand
+	driftedDimensionCommand.ExpectedWidth = 4
+	if _, err = service.ValidateReady(ctx, actor, driftedDimensionCommand); err == nil {
+		t.Fatal("validation idempotency key accepted drifted expected image dimensions")
+	} else {
+		var applicationErr *assetapp.Error
+		if !errors.As(err, &applicationErr) || applicationErr.Code != "state_conflict" {
+			t.Fatalf("drifted expected image dimensions error = %T %v", err, err)
+		}
+	}
+	if _, err = service.RequireReady(ctx, actor, dimension.Artifact.ID); err == nil {
+		t.Fatal("dimension-quarantined artifact passed RequireReady")
+	}
+
+	pendingJobID, pendingCallID, pendingReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	pendingBytes := testPNG(t, 1, 1)
 	pending, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
-		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_job",
-		SourceID: pendingJobID, OutputKey: "frame-unavailable",
-		ObjectKey: "staging/" + workspaceID.String() + "/" + pendingJobID + "/frame-unavailable.png",
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
+		SourceID: pendingReceiptID, OutputKey: "frame-unavailable",
+		ProviderJobID: pendingJobID, ProviderCallID: pendingCallID,
+		ObjectKey: "staging/" + workspaceID.String() + "/" + pendingJobID + "/" + pendingCallID + "/frame-unavailable.png",
 		MediaType: "image/png", SHA256: sha256Hex(pendingBytes), SizeBytes: int64(len(pendingBytes)), IdempotencyKey: "register-frame-unavailable",
 	})
 	if err != nil {
@@ -236,7 +293,8 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	}
 	unavailableService := assetapp.NewService(store, unavailableReader{}, serviceConfig)
 	if _, err = unavailableService.ValidateReady(ctx, actor, assetapp.ValidateReadyCommand{
-		ArtifactID: pending.Artifact.ID, ExpectedRevision: 1, IdempotencyKey: "validate-frame-unavailable",
+		ArtifactID: pending.Artifact.ID, ExpectedRevision: 1, ExpectedWidth: 1, ExpectedHeight: 1,
+		IdempotencyKey: "validate-frame-unavailable",
 	}); err == nil {
 		t.Fatal("unavailable object storage was reported as a completed validation")
 	}
@@ -261,7 +319,7 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ?", workspaceID, "asset.artifact.validate_ready").Count(&validateReceiptCount).Error; err != nil {
 		t.Fatalf("count validation receipts: %v", err)
 	}
-	if artifactCount != 4 || locationCount != 4 || registerReceiptCount != 5 || validateReceiptCount != 3 {
+	if artifactCount != 5 || locationCount != 5 || registerReceiptCount != 6 || validateReceiptCount != 4 {
 		t.Fatalf("owner fact counts = artifacts %d locations %d register receipts %d validation receipts %d", artifactCount, locationCount, registerReceiptCount, validateReceiptCount)
 	}
 }

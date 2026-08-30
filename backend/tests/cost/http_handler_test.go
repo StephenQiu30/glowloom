@@ -121,8 +121,11 @@ func (service *stubService) SetPriceQuote(
 	service.actor, service.priceCommand = actor, command
 	value := domain.PriceQuote{
 		ID: "019fb2e0-a000-7000-8000-000000000005", WorkspaceID: "019fb2e0-a000-7000-8000-000000000004",
-		ProjectID: command.ProjectID, Metric: command.Metric, UnitAmount: decimal.RequireFromString(command.UnitAmount),
-		Currency: command.Currency, Revision: 1, CreatedBy: actor.UserID, CreatedAt: time.Unix(10, 0).UTC(),
+		ProjectID: command.ProjectID, ModelProfileVersionID: command.ModelProfileVersionID,
+		BillingMetric:         "generation.image.call",
+		ReservationUnitAmount: decimal.RequireFromString(command.ReservationUnitAmount),
+		Currency:              command.Currency, Revision: 1, ContentHash: strings.Repeat("a", 64),
+		CreatedBy: actor.UserID, CreatedAt: time.Unix(10, 0).UTC(),
 	}
 	return application.PriceQuoteResult{Quote: value}, nil
 }
@@ -136,40 +139,74 @@ func (*stubService) GetCurrentPriceQuote(
 	return domain.PriceQuote{}, errors.New("not implemented")
 }
 
-func TestSetPriceQuotePreservesDecimalStringContract(t *testing.T) {
+func TestSetExactProfilePriceQuotePreservesReservationAmountContract(t *testing.T) {
 	service := &stubService{}
 	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
-		strings.NewReader(`{"unit_amount":"0.125","currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
+		"/api/projects/019fb2e0-a000-7000-8000-000000000001/media-model-profiles/019fb2e0-a000-7000-8000-000000000006/cost-price",
+		strings.NewReader(`{"reservation_unit_amount":"0.125","currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
 	)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"unit_amount":"0.125000"`) ||
-		!strings.Contains(response.Body.String(), `"metric":"generation.image"`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"reservation_unit_amount":"0.125000"`) ||
+		!strings.Contains(response.Body.String(), `"billing_metric":"generation.image.call"`) ||
+		!strings.Contains(response.Body.String(), `"model_profile_version_id":"019fb2e0-a000-7000-8000-000000000006"`) {
 		t.Fatalf("price response = %d %s", response.Code, response.Body.String())
 	}
-	if service.priceCommand.UnitAmount != "0.125" || service.priceCommand.Metric != "generation.image" {
+	if service.priceCommand.ReservationUnitAmount != "0.125" ||
+		service.priceCommand.ModelProfileVersionID != "019fb2e0-a000-7000-8000-000000000006" {
 		t.Fatalf("price command = %#v", service.priceCommand)
 	}
 }
 
-func TestSetPriceQuoteRejectsNumericAmount(t *testing.T) {
+func TestSetExactProfilePriceQuoteRejectsNumericReservationAmount(t *testing.T) {
 	service := &stubService{}
 	handler := costhttp.New(service, stubAuthenticator{})
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
-		strings.NewReader(`{"unit_amount":0.125,"currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
+		"/api/projects/019fb2e0-a000-7000-8000-000000000001/media-model-profiles/019fb2e0-a000-7000-8000-000000000006/cost-price",
+		strings.NewReader(`{"reservation_unit_amount":0.125,"currency":"USD","expected_revision":0,"idempotency_key":"price-1"}`),
 	)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusUnprocessableEntity || service.priceCommand.ProjectID != "" {
 		t.Fatalf("numeric price response = %d %s command=%#v", response.Code, response.Body.String(), service.priceCommand)
+	}
+}
+
+func TestSetExactProfilePriceQuoteRequiresExplicitRevision(t *testing.T) {
+	service := &stubService{}
+	handler := costhttp.New(service, stubAuthenticator{})
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/projects/019fb2e0-a000-7000-8000-000000000001/media-model-profiles/019fb2e0-a000-7000-8000-000000000006/cost-price",
+		strings.NewReader(`{"reservation_unit_amount":"0.125","currency":"USD","idempotency_key":"price-1"}`),
+	)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusUnprocessableEntity || service.priceCommand.ProjectID != "" {
+		t.Fatalf("missing revision response = %d %s command=%#v", response.Code, response.Body.String(), service.priceCommand)
+	}
+}
+
+func TestLegacyMetricPriceQuoteRouteIsRemoved(t *testing.T) {
+	handler := costhttp.New(&stubService{}, stubAuthenticator{})
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(
+		http.MethodPost,
+		"/api/projects/019fb2e0-a000-7000-8000-000000000001/cost-prices/generation.image",
+		strings.NewReader(`{"unit_amount":"0.125","currency":"USD","expected_revision":0,"idempotency_key":"legacy"}`),
+	))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("legacy price route response = %d %s", response.Code, response.Body.String())
 	}
 }

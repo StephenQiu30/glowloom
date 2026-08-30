@@ -3,47 +3,67 @@ package domain
 import "time"
 
 const (
-	IntentPreparing      = "PREPARING"
-	IntentPrepared       = "PREPARED"
-	IntentClaimed        = "CLAIMED"
-	IntentDispatching    = "DISPATCHING"
-	IntentSubmitted      = "SUBMITTED"
-	IntentOutcomeUnknown = "OUTCOME_UNKNOWN"
-	IntentSucceeded      = "SUCCEEDED"
-	IntentFailed         = "FAILED"
-	IntentCancelled      = "CANCELLED"
+	IntentPreparing        = "PREPARING"
+	IntentPrepared         = "PREPARED"
+	IntentClaimed          = "CLAIMED"
+	IntentExecuting        = "EXECUTING"
+	IntentOutcomeUnknown   = "OUTCOME_UNKNOWN"
+	IntentSucceeded        = "SUCCEEDED"
+	IntentPartialSucceeded = "PARTIAL_SUCCEEDED"
+	IntentFailed           = "FAILED"
+	IntentCancelled        = "CANCELLED"
 )
 
 type Intent struct {
-	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID  string
-	TargetID, Metric, TargetHash                          string
-	Units                                                 int64
-	CostEstimateID, CostReservationID, QuotaReservationID string
-	CostEstimateReceiptID, CostReservationReceiptID       string
-	QuotaReservationReceiptID, CostReleaseReceiptID       string
-	QuotaReleaseReceiptID, CostSettlementReceiptID        string
-	QuotaConsumptionReceiptID                             string
-	GenerationRequestID, ProviderJobID, ProviderReceiptID string
-	Status, ContentHash, CreatedBy                        string
-	InitiatorTokenVersion                                 int
-	Claimant, ClaimToken                                  *string
-	ClaimExpiresAt, CancelledAt                           *time.Time
-	ClaimFencingVersion, Revision                         int64
-	CreatedAt, UpdatedAt                                  time.Time
+	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID    string
+	TargetID, TargetHash                                    string
+	BindingVersionID, BindingContentHash                    string
+	ConnectionVersionID, CredentialVersionID                string
+	ModelProfileVersionID, ModelProfileContentHash          string
+	PriceQuoteID, PriceQuoteContentHash, BillingMetric      string
+	BindingRevision, ModelProfileRevision                   int64
+	PriceQuoteRevision, EstimatedUnits                      int64
+	CostEstimateID, CostReservationID, QuotaReservationID   string
+	CostEstimateReceiptID, CostReservationReceiptID         string
+	QuotaReservationReceiptID, CostReleaseReceiptID         string
+	QuotaReleaseReceiptID, CostSettlementReceiptID          string
+	QuotaConsumptionReceiptID                               string
+	GenerationRequestID, ProviderJobID, ProviderCallSetHash string
+	Status, ContentHash, CreatedBy                          string
+	InitiatorTokenVersion                                   int
+	Claimant, ClaimToken                                    *string
+	ClaimExpiresAt, CancelledAt                             *time.Time
+	ClaimFencingVersion, Revision                           int64
+	CreatedAt, UpdatedAt                                    time.Time
 }
 
 type ExecutionAuthorization struct {
-	IntentID, ClaimToken, TargetID, TargetHash string
-	CostReservationID, QuotaReservationID      string
-	ClaimFencingVersion, IntentRevision, Units int64
-	ExpiresAt                                  time.Time
+	IntentID, ClaimToken, TargetID, TargetHash         string
+	BindingVersionID, BindingContentHash               string
+	ConnectionVersionID, CredentialVersionID           string
+	ModelProfileVersionID, ModelProfileContentHash     string
+	PriceQuoteID, PriceQuoteContentHash, BillingMetric string
+	CostReservationID, QuotaReservationID              string
+	BindingRevision, ModelProfileRevision              int64
+	PriceQuoteRevision                                 int64
+	ClaimFencingVersion, IntentRevision                int64
+	EstimatedUnits                                     int64
+	ExpiresAt                                          time.Time
 }
 
 func SameIntentBinding(left, right Intent) bool {
 	return left.WorkspaceID == right.WorkspaceID && left.ProjectID == right.ProjectID &&
 		left.WorkflowRunID == right.WorkflowRunID && left.NodeRunID == right.NodeRunID &&
-		left.TargetID == right.TargetID && left.Metric == right.Metric && left.TargetHash == right.TargetHash && left.Units == right.Units &&
-		left.CreatedBy == right.CreatedBy && left.InitiatorTokenVersion == right.InitiatorTokenVersion
+		left.TargetID == right.TargetID && left.TargetHash == right.TargetHash &&
+		left.BindingVersionID == right.BindingVersionID && left.BindingRevision == right.BindingRevision &&
+		left.BindingContentHash == right.BindingContentHash &&
+		left.ConnectionVersionID == right.ConnectionVersionID && left.CredentialVersionID == right.CredentialVersionID &&
+		left.ModelProfileVersionID == right.ModelProfileVersionID && left.ModelProfileRevision == right.ModelProfileRevision &&
+		left.ModelProfileContentHash == right.ModelProfileContentHash && left.PriceQuoteID == right.PriceQuoteID &&
+		left.PriceQuoteRevision == right.PriceQuoteRevision && left.PriceQuoteContentHash == right.PriceQuoteContentHash &&
+		left.BillingMetric == right.BillingMetric &&
+		left.EstimatedUnits == right.EstimatedUnits && left.CreatedBy == right.CreatedBy &&
+		left.InitiatorTokenVersion == right.InitiatorTokenVersion
 }
 
 func SameIntentState(left, right Intent) bool {
@@ -58,8 +78,8 @@ func SameIntentState(left, right Intent) bool {
 		left.CostSettlementReceiptID == right.CostSettlementReceiptID &&
 		left.QuotaConsumptionReceiptID == right.QuotaConsumptionReceiptID &&
 		left.GenerationRequestID == right.GenerationRequestID && left.ProviderJobID == right.ProviderJobID &&
-		left.ProviderReceiptID == right.ProviderReceiptID &&
-		left.Status == right.Status && optionalIntentStringEqual(left.Claimant, right.Claimant) &&
+		left.ProviderCallSetHash == right.ProviderCallSetHash && left.Status == right.Status &&
+		optionalIntentStringEqual(left.Claimant, right.Claimant) &&
 		optionalIntentStringEqual(left.ClaimToken, right.ClaimToken) &&
 		optionalIntentTimeEqual(left.ClaimExpiresAt, right.ClaimExpiresAt) &&
 		optionalIntentTimeEqual(left.CancelledAt, right.CancelledAt) &&

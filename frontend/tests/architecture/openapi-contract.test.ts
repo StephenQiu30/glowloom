@@ -33,6 +33,12 @@ describe("Go Backend OpenAPI type ownership", () => {
       "HumanGateCoordinationResponse",
     );
     expect(openapi.paths).toHaveProperty(
+      "/api/projects/{project_id}/media-model-profiles/{profile_version_id}/cost-price",
+    );
+    expect(openapi.paths).not.toHaveProperty(
+      "/api/projects/{project_id}/cost-prices/{metric}",
+    );
+    expect(openapi.paths).toHaveProperty(
       "/api/workflow-runs/{workflow_run_id}/story-analysis-recoveries",
     );
     expect(openapi.components.schemas).toHaveProperty(
@@ -41,6 +47,9 @@ describe("Go Backend OpenAPI type ownership", () => {
     expect(generated).toContain("review_decisions");
     expect(generated).toContain("HumanGateCoordinationResponse");
     expect(generated).toContain("StoryAnalysisRecoveryResponse");
+    expect(generated).toContain("reservation_unit_amount");
+    expect(generated).toContain("generation.video.call");
+    expect(generated).not.toContain("cost-prices");
     expect(generated).not.toMatch(/migration|kafka|redis|sqlalchemy/i);
   });
 });

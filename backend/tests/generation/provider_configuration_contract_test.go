@@ -608,7 +608,7 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Purpose: "reference_asset",
 		ConnectionVersionID: rotated.Connection.ID, ModelProfileVersionID: profile.Profile.ID,
 		ExpectedRevision: 1, ExpectedContentHash: binding.Binding.ContentHash,
-		IdempotencyKey: "provider-binding-publish",
+		IdempotencyKey: "provider-binding-credential-rotation",
 	})
 	if err != nil || rotatedBinding.Binding.Revision != 2 {
 		t.Fatalf("republish Project binding after credential rotation: result=%#v err=%v", rotatedBinding, err)

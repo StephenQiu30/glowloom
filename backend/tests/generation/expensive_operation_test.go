@@ -40,6 +40,7 @@ type preparationFixture struct {
 	owner, editor          generationapp.Actor
 	create                 func(any) error
 	targets                *generationgorm.TargetStore
+	provider               generationapp.ResolvedProjectProviderBinding
 	now                    time.Time
 }
 
@@ -83,6 +84,10 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 	targets := generationgorm.NewTargetStore(database)
 	main := seedPreparationFixture(t, create, targets, now, "main")
 	quotaFailure := seedPreparationFixture(t, create, targets, now, "quota-failure")
+	main.provider = seedControlledProjectProviderBinding(t, create, main, "controlled-image", "image-quality", 1)
+	quotaFailure.provider = seedControlledProjectProviderBinding(
+		t, create, quotaFailure, "controlled-image", "image-quality", 1,
+	)
 	t.Cleanup(func() {
 		for _, fixture := range []preparationFixture{main, quotaFailure} {
 			deletions := []struct {
@@ -117,13 +122,13 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 		},
 	)
 
-	failedCommand := newPreparationCommand(t, quotaFailure, 2, "quota-failure", strings.Repeat("f", 64))
+	failedCommand := newPreparationCommand(t, quotaFailure, "quota-failure", strings.Repeat("f", 64))
 	if _, err = preparations.PrepareImageGeneration(ctx, quotaFailure.editor, failedCommand); generationErrorCode(err) != "quota_exceeded" {
 		t.Fatalf("quota failure did not reject atomic preparation: %T %v", err, err)
 	}
 	assertNoPreparedFacts(t, countRecords, quotaFailure)
 
-	command := newPreparationCommand(t, main, 2, "main", strings.Repeat("a", 64))
+	command := newPreparationCommand(t, main, "main", strings.Repeat("a", 64))
 	assertGenerationTargetPersistence(
 		t, ctx, main.targets, command.TargetID, command.TargetHash,
 		func(id string) error {
@@ -187,13 +192,10 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 		redelivered.Intent.QuotaReservationReceiptID != prepared.Intent.QuotaReservationReceiptID {
 		t.Fatalf("redeliver Generation preparation by source: result=%#v err=%v", redelivered, err)
 	}
-	drifted := command
-	drifted.IdempotencyKey = "generation-prepare-main-units-drift"
-	drifted.Units = 3
-	if _, err = preparations.PrepareImageGeneration(ctx, main.editor, drifted); generationErrorCode(err) != "state_conflict" {
-		t.Fatalf("Generation preparation accepted Units drift: %T %v", err, err)
+	if prepared.Intent.EstimatedUnits != 4 {
+		t.Fatalf("Generation preparation units = %d, want target-owned 4", prepared.Intent.EstimatedUnits)
 	}
-	drifted = command
+	drifted := command
 	drifted.TargetHash = strings.Repeat("b", 64)
 	if _, err = preparations.PrepareImageGeneration(ctx, main.editor, drifted); generationErrorCode(err) != "state_conflict" {
 		t.Fatalf("Generation preparation accepted idempotent Target Hash drift: %T %v", err, err)
@@ -210,7 +212,7 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 		t.Fatalf("read prepared Generation intent: view=%#v err=%v", view, err)
 	}
 
-	cancelPreparation := prepareDistinctIntent(t, ctx, preparations, main, 3, "cancel", strings.Repeat("c", 64))
+	cancelPreparation := prepareDistinctIntent(t, ctx, preparations, main, "cancel", strings.Repeat("c", 64))
 	cancelled, err := preparations.CancelPreparedIntent(ctx, main.editor, generationapp.CancelPreparedIntentCommand{
 		IntentID: cancelPreparation.Intent.ID, IdempotencyKey: "generation-cancel-main",
 	})
@@ -226,7 +228,7 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 		t.Fatalf("replay Generation cancellation: result=%#v err=%v", replayedCancel, err)
 	}
 
-	claimPreparation := prepareDistinctIntent(t, ctx, preparations, main, 1, "claim", strings.Repeat("d", 64))
+	claimPreparation := prepareDistinctIntent(t, ctx, preparations, main, "claim", strings.Repeat("d", 64))
 	claimCommand := generationapp.AcquireExecutionClaimCommand{
 		IntentID: claimPreparation.Intent.ID, Claimant: "model-gateway:test-worker", IdempotencyKey: "generation-claim-main",
 	}
@@ -265,7 +267,7 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 		t.Fatalf("restore Generation initiator: %v", err)
 	}
 
-	racePreparation := prepareDistinctIntent(t, ctx, preparations, main, 1, "claim-cancel-race", strings.Repeat("e", 64))
+	racePreparation := prepareDistinctIntent(t, ctx, preparations, main, "claim-cancel-race", strings.Repeat("e", 64))
 	raceStart := make(chan struct{})
 	claimErrors, cancelErrors := make(chan error, 1), make(chan error, 1)
 	var raceClaim generationapp.ExecutionClaimResult
@@ -515,15 +517,15 @@ func configurePreparationLimits(
 		t.Fatalf("configure Generation preparation budget: %v", err)
 	}
 	if _, err := costs.SetPriceQuote(ctx, costActor, costapp.SetPriceQuoteCommand{
-		ProjectID: fixture.projectID.String(), Metric: costdomain.MetricGenerationImage,
-		UnitAmount: unitPrice, Currency: "USD", ExpectedRevision: 0,
+		ProjectID: fixture.projectID.String(), ModelProfileVersionID: fixture.provider.Profile.ID,
+		ReservationUnitAmount: unitPrice, Currency: "USD", ExpectedRevision: 0,
 		IdempotencyKey: "generation-preparation-price-" + fixture.projectID.String(),
 	}); err != nil {
 		t.Fatalf("configure Generation preparation price: %v", err)
 	}
 	if _, err := quotas.SetDailyPolicy(ctx, quotaapp.Actor{UserID: fixture.owner.UserID, TokenVersion: fixture.owner.TokenVersion}, quotaapp.SetDailyPolicyCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		Metric: quotadomain.MetricGenerationImage, LimitUnits: quota, ExpectedRevision: 0,
+		Metric: quotadomain.MetricGenerationImageCall, LimitUnits: quota, ExpectedRevision: 0,
 		IdempotencyKey: "generation-preparation-quota-" + fixture.projectID.String(),
 	}); err != nil {
 		t.Fatalf("configure Generation preparation quota: %v", err)
@@ -533,7 +535,6 @@ func configurePreparationLimits(
 func newPreparationCommand(
 	t *testing.T,
 	fixture preparationFixture,
-	units int64,
 	suffix, frozenHash string,
 ) generationapp.PrepareImageGenerationCommand {
 	t.Helper()
@@ -594,8 +595,7 @@ func newPreparationCommand(
 	return generationapp.PrepareImageGenerationCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		WorkflowRunID: fixture.workflowRunID.String(), NodeRunID: nodeRunID.String(), WorkflowInputHash: inputHash,
-		TargetID: target.ID, TargetHash: target.TargetHash,
-		Units: units, IdempotencyKey: "generation-prepare-" + suffix,
+		TargetID: target.ID, TargetHash: target.TargetHash, IdempotencyKey: "generation-prepare-" + suffix,
 	}
 }
 
@@ -604,11 +604,10 @@ func prepareDistinctIntent(
 	ctx context.Context,
 	service *generationapp.PreparationService,
 	fixture preparationFixture,
-	units int64,
 	suffix, inputHash string,
 ) generationapp.PreparationResult {
 	t.Helper()
-	result, err := service.PrepareImageGeneration(ctx, fixture.editor, newPreparationCommand(t, fixture, units, suffix, inputHash))
+	result, err := service.PrepareImageGeneration(ctx, fixture.editor, newPreparationCommand(t, fixture, suffix, inputHash))
 	if err != nil {
 		t.Fatalf("prepare distinct Generation intent %s: %v", suffix, err)
 	}

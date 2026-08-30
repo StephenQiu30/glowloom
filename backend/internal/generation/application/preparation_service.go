@@ -29,6 +29,7 @@ var (
 )
 
 type CostPreparationOwner interface {
+	GetCurrentPriceQuote(context.Context, costapp.Actor, string, string) (costdomain.PriceQuote, error)
 	CreateEstimate(context.Context, costapp.Actor, costapp.CreateEstimateCommand) (costapp.EstimateResult, error)
 	ReserveEstimate(context.Context, costapp.Actor, costapp.ReserveEstimateCommand) (costapp.ReservationResult, error)
 	ReleaseReservation(context.Context, costapp.Actor, costapp.ReleaseReservationCommand) (costapp.ReservationResult, error)
@@ -46,6 +47,10 @@ type PreparationRepository interface {
 	AuthorizeProject(context.Context, Actor, string, string, bool) error
 	ValidateWorkflowSource(context.Context, Actor, string, string, string, string, string) error
 	FindGenerationTarget(context.Context, string) (domain.GenerationTarget, error)
+	LatestProjectProviderBindingForUpdate(context.Context, string, string, string) (domain.ProjectProviderBindingVersion, error)
+	FindProviderConnection(context.Context, string) (domain.ProviderConnectionVersion, error)
+	FindProviderCredential(context.Context, string) (domain.ProviderCredentialVersion, error)
+	FindProviderModelProfile(context.Context, string) (domain.ProviderModelProfileVersion, error)
 	FindReceipt(context.Context, string, string, string) (platformcommand.Receipt, error)
 	FindReceiptByID(context.Context, string) (platformcommand.Receipt, error)
 	EnsureReceipt(context.Context, platformcommand.Receipt) (platformcommand.Receipt, error)
@@ -77,7 +82,6 @@ type PrepareImageGenerationCommand struct {
 	WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
 	WorkflowInputHash, TargetID, TargetHash          string
 	IdempotencyKey                                   string
-	Units                                            int64
 }
 
 type AcquireExecutionClaimCommand struct {
@@ -129,20 +133,25 @@ type cancellationReceipt struct {
 }
 
 type intentHashInput struct {
-	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID  string
-	TargetID, Metric, TargetHash                          string
-	Units                                                 int64
-	CostEstimateID, CostReservationID, QuotaReservationID string
-	CostEstimateReceiptID, CostReservationReceiptID       string
-	QuotaReservationReceiptID, CostReleaseReceiptID       string
-	QuotaReleaseReceiptID, CostSettlementReceiptID        string
-	QuotaConsumptionReceiptID                             string
-	GenerationRequestID, ProviderJobID, ProviderReceiptID string
-	Status, Claimant, ClaimToken                          string
-	ClaimExpiresAt, CancelledAt                           string
-	ClaimFencingVersion, Revision                         int64
-	CreatedBy                                             string
-	InitiatorTokenVersion                                 int
+	ID, WorkspaceID, ProjectID, WorkflowRunID, NodeRunID    string
+	TargetID, TargetHash                                    string
+	BindingVersionID, BindingContentHash                    string
+	ConnectionVersionID, CredentialVersionID                string
+	ModelProfileVersionID, ModelProfileContentHash          string
+	PriceQuoteID, PriceQuoteContentHash, BillingMetric      string
+	BindingRevision, ModelProfileRevision                   int64
+	PriceQuoteRevision, EstimatedUnits                      int64
+	CostEstimateID, CostReservationID, QuotaReservationID   string
+	CostEstimateReceiptID, CostReservationReceiptID         string
+	QuotaReservationReceiptID, CostReleaseReceiptID         string
+	QuotaReleaseReceiptID, CostSettlementReceiptID          string
+	QuotaConsumptionReceiptID                               string
+	GenerationRequestID, ProviderJobID, ProviderCallSetHash string
+	Status, Claimant, ClaimToken                            string
+	ClaimExpiresAt, CancelledAt                             string
+	ClaimFencingVersion, Revision                           int64
+	CreatedBy                                               string
+	InitiatorTokenVersion                                   int
 }
 
 func NewPreparationService(transactions PreparationTransactionManager, config PreparationConfig) *PreparationService {
@@ -167,7 +176,7 @@ func (service *PreparationService) PrepareImageGeneration(
 		!validPreparationActor(actor) || !validUUID(command.WorkspaceID) || !validUUID(command.ProjectID) ||
 		!validUUID(command.WorkflowRunID) || !validUUID(command.NodeRunID) ||
 		!intentHashPattern.MatchString(command.WorkflowInputHash) || !validUUID(command.TargetID) ||
-		!intentHashPattern.MatchString(command.TargetHash) || command.Units < 1 ||
+		!intentHashPattern.MatchString(command.TargetHash) ||
 		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return PreparationResult{}, invalid("Invalid image generation preparation")
 	}
@@ -203,9 +212,55 @@ func (service *PreparationService) PrepareImageGeneration(
 			return targetErr
 		}
 		if domain.ValidateGenerationTarget(target) != nil || target.WorkspaceID != command.WorkspaceID ||
-			target.ProjectID != command.ProjectID || target.TargetHash != command.TargetHash || target.CreatedBy != actor.UserID {
+			target.ProjectID != command.ProjectID || target.TargetHash != command.TargetHash || target.CreatedBy != actor.UserID ||
+			target.Kind != domain.GenerationTargetReferenceAsset || target.ReferenceAsset == nil ||
+			target.ReferenceAsset.NumberResults < 1 {
 			return conflict("GenerationTarget binding has drifted")
 		}
+		binding, bindingErr := repo.LatestProjectProviderBindingForUpdate(
+			ctx,
+			command.WorkspaceID,
+			command.ProjectID,
+			domain.ProviderPurposeReferenceAsset,
+		)
+		if bindingErr != nil {
+			return bindingErr
+		}
+		connection, bindingErr := repo.FindProviderConnection(ctx, binding.ConnectionVersionID)
+		if bindingErr != nil {
+			return bindingErr
+		}
+		credential, bindingErr := repo.FindProviderCredential(ctx, binding.CredentialVersionID)
+		if bindingErr != nil {
+			return bindingErr
+		}
+		profile, bindingErr := repo.FindProviderModelProfile(ctx, binding.ModelProfileVersionID)
+		if bindingErr != nil {
+			return bindingErr
+		}
+		if validateResolvedProviderFacts(binding, connection, credential, profile) != nil ||
+			binding.WorkspaceID != command.WorkspaceID || binding.ProjectID != command.ProjectID ||
+			binding.Purpose != domain.ProviderPurposeReferenceAsset || binding.Modality != domain.MediaModalityImage ||
+			profile.Modality != domain.MediaModalityImage || profile.BillingMetric != costdomain.MetricGenerationImageCall {
+			return conflict("Project Media Provider binding is not executable for image generation")
+		}
+		costActor := costapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}
+		priceQuote, bindingErr := costs.GetCurrentPriceQuote(ctx, costActor, command.ProjectID, profile.ID)
+		if bindingErr != nil {
+			if costapp.IsCode(bindingErr, "not_found") {
+				return &costapp.Error{
+					Code: "price_quote_required", Message: "Exact Provider model profile price quote is required",
+					Status: 409, NextAction: "set_provider_model_profile_price",
+				}
+			}
+			return bindingErr
+		}
+		if priceQuote.WorkspaceID != command.WorkspaceID || priceQuote.ProjectID != command.ProjectID ||
+			priceQuote.ModelProfileVersionID != profile.ID || priceQuote.BillingMetric != profile.BillingMetric ||
+			priceQuote.Revision < 1 || !intentHashPattern.MatchString(priceQuote.ContentHash) {
+			return conflict("Generation price quote snapshot has drifted")
+		}
+		estimatedUnits := int64(target.ReferenceAsset.NumberResults)
 		intentID := strings.TrimSpace(service.config.NewID())
 		if !validUUID(intentID) {
 			return errors.New("generation intent identifier is invalid")
@@ -213,7 +268,13 @@ func (service *PreparationService) PrepareImageGeneration(
 		desired := domain.Intent{
 			ID: intentID, WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
 			WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
-			TargetID: target.ID, Metric: costdomain.MetricGenerationImage, TargetHash: target.TargetHash, Units: command.Units,
+			TargetID: target.ID, TargetHash: target.TargetHash,
+			BindingVersionID: binding.ID, BindingRevision: binding.Revision, BindingContentHash: binding.ContentHash,
+			ConnectionVersionID: connection.ID, CredentialVersionID: credential.ID,
+			ModelProfileVersionID: profile.ID, ModelProfileRevision: profile.Revision,
+			ModelProfileContentHash: profile.ContentHash, PriceQuoteID: priceQuote.ID,
+			PriceQuoteRevision: priceQuote.Revision, PriceQuoteContentHash: priceQuote.ContentHash,
+			BillingMetric: profile.BillingMetric, EstimatedUnits: estimatedUnits,
 			Status: domain.IntentPreparing, ClaimFencingVersion: 0, Revision: 1,
 			CreatedBy: actor.UserID, InitiatorTokenVersion: actor.TokenVersion,
 			CreatedAt: now, UpdatedAt: now,
@@ -244,10 +305,14 @@ func (service *PreparationService) PrepareImageGeneration(
 		if intent.ID != desired.ID || !domain.SameIntentState(intent, desired) {
 			return platformcommand.ErrInputMismatch
 		}
-		costActor := costapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}
 		estimateResult, ownerErr := costs.CreateEstimate(ctx, costActor, costapp.CreateEstimateCommand{
-			ProjectID: command.ProjectID, Metric: costdomain.MetricGenerationImage,
-			SourceType: costdomain.SourceGenerationIntent, SourceID: intent.ID, Units: command.Units,
+			ProjectID: command.ProjectID, ProviderBindingVersionID: binding.ID,
+			ProviderBindingRevision: binding.Revision, ProviderBindingContentHash: binding.ContentHash,
+			ModelProfileVersionID: profile.ID, ModelProfileRevision: profile.Revision,
+			ModelProfileContentHash: profile.ContentHash, PriceQuoteID: priceQuote.ID,
+			PriceQuoteRevision: priceQuote.Revision, PriceQuoteContentHash: priceQuote.ContentHash,
+			Metric: profile.BillingMetric, SourceType: costdomain.SourceGenerationIntent,
+			SourceID: intent.ID, Units: estimatedUnits,
 			IdempotencyKey: preparationOwnerKey(intent.ID, "cost-estimate"),
 		})
 		if ownerErr != nil {
@@ -264,8 +329,8 @@ func (service *PreparationService) PrepareImageGeneration(
 			UserID: actor.UserID, TokenVersion: actor.TokenVersion,
 		}, quotaapp.ReserveCommand{
 			WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
-			Metric: quotadomain.MetricGenerationImage, SourceType: "generation_intent", SourceID: intent.ID,
-			Units: command.Units, IdempotencyKey: preparationOwnerKey(intent.ID, "quota-reserve"),
+			Metric: profile.BillingMetric, SourceType: "generation_intent", SourceID: intent.ID,
+			Units: estimatedUnits, IdempotencyKey: preparationOwnerKey(intent.ID, "quota-reserve"),
 		})
 		if ownerErr != nil {
 			return ownerErr
@@ -503,14 +568,29 @@ func (service *PreparationService) VerifyExecutionAuthorization(
 	authorization.ClaimToken = strings.TrimSpace(authorization.ClaimToken)
 	authorization.TargetID = strings.TrimSpace(authorization.TargetID)
 	authorization.TargetHash = strings.TrimSpace(authorization.TargetHash)
+	authorization.BindingVersionID = strings.TrimSpace(authorization.BindingVersionID)
+	authorization.BindingContentHash = strings.TrimSpace(authorization.BindingContentHash)
+	authorization.ConnectionVersionID = strings.TrimSpace(authorization.ConnectionVersionID)
+	authorization.CredentialVersionID = strings.TrimSpace(authorization.CredentialVersionID)
+	authorization.ModelProfileVersionID = strings.TrimSpace(authorization.ModelProfileVersionID)
+	authorization.ModelProfileContentHash = strings.TrimSpace(authorization.ModelProfileContentHash)
+	authorization.PriceQuoteID = strings.TrimSpace(authorization.PriceQuoteID)
+	authorization.PriceQuoteContentHash = strings.TrimSpace(authorization.PriceQuoteContentHash)
+	authorization.BillingMetric = strings.TrimSpace(authorization.BillingMetric)
 	authorization.CostReservationID = strings.TrimSpace(authorization.CostReservationID)
 	authorization.QuotaReservationID = strings.TrimSpace(authorization.QuotaReservationID)
 	if service == nil || service.transactions == nil || service.config.Now == nil ||
 		!validUUID(authorization.IntentID) || !validUUID(authorization.ClaimToken) ||
-		!validUUID(authorization.TargetID) ||
+		!validUUID(authorization.TargetID) || !validUUID(authorization.BindingVersionID) ||
+		!intentHashPattern.MatchString(authorization.BindingContentHash) ||
+		!validUUID(authorization.ConnectionVersionID) || !validUUID(authorization.CredentialVersionID) ||
+		!validUUID(authorization.ModelProfileVersionID) || authorization.ModelProfileRevision < 1 ||
+		!intentHashPattern.MatchString(authorization.ModelProfileContentHash) || !validUUID(authorization.PriceQuoteID) ||
+		authorization.PriceQuoteRevision < 1 || !intentHashPattern.MatchString(authorization.PriceQuoteContentHash) ||
+		!costdomain.IsBillingMetric(authorization.BillingMetric) ||
 		!validUUID(authorization.CostReservationID) || !validUUID(authorization.QuotaReservationID) ||
 		!intentHashPattern.MatchString(authorization.TargetHash) || authorization.ClaimFencingVersion < 1 ||
-		authorization.IntentRevision < 1 || authorization.Units < 1 || authorization.ExpiresAt.IsZero() {
+		authorization.IntentRevision < 1 || authorization.EstimatedUnits < 1 || authorization.ExpiresAt.IsZero() {
 		return invalid("Invalid Generation execution authorization")
 	}
 	err := service.transactions.WithinPreparationTransaction(ctx, func(
@@ -529,13 +609,8 @@ func (service *PreparationService) VerifyExecutionAuthorization(
 		if loadErr = repo.AuthorizeProject(ctx, actor, intent.WorkspaceID, intent.ProjectID, true); loadErr != nil {
 			return loadErr
 		}
-		if intent.Status != domain.IntentClaimed || intent.ClaimToken == nil || intent.ClaimExpiresAt == nil ||
-			*intent.ClaimToken != authorization.ClaimToken || !intent.ClaimExpiresAt.Equal(authorization.ExpiresAt) ||
-			intent.TargetID != authorization.TargetID || intent.TargetHash != authorization.TargetHash ||
-			intent.CostReservationID != authorization.CostReservationID ||
-			intent.QuotaReservationID != authorization.QuotaReservationID ||
-			intent.ClaimFencingVersion != authorization.ClaimFencingVersion ||
-			intent.Revision != authorization.IntentRevision || intent.Units != authorization.Units {
+		if validateAuthorizationBinding(intent, authorization, false) != nil ||
+			intent.Status != domain.IntentClaimed || intent.Revision != authorization.IntentRevision {
 			return conflict("Generation execution authorization has drifted")
 		}
 		if !service.config.Now().UTC().Before(*intent.ClaimExpiresAt) {
@@ -602,32 +677,48 @@ func validateIntentView(view IntentView) error {
 	if validateIntent(intent) != nil || estimate.ID != intent.CostEstimateID ||
 		estimate.WorkspaceID != intent.WorkspaceID || estimate.ProjectID != intent.ProjectID ||
 		estimate.SourceType != costdomain.SourceGenerationIntent || estimate.SourceID != intent.ID ||
-		estimate.Metric != intent.Metric || estimate.Units != intent.Units ||
+		estimate.ProviderBindingVersionID != intent.BindingVersionID ||
+		estimate.ProviderBindingRevision != intent.BindingRevision ||
+		estimate.ProviderBindingContentHash != intent.BindingContentHash ||
+		estimate.ModelProfileVersionID != intent.ModelProfileVersionID ||
+		estimate.ModelProfileRevision != intent.ModelProfileRevision ||
+		estimate.ModelProfileContentHash != intent.ModelProfileContentHash ||
+		estimate.PriceQuoteID != intent.PriceQuoteID || estimate.PriceQuoteRevision != intent.PriceQuoteRevision ||
+		estimate.PriceQuoteContentHash != intent.PriceQuoteContentHash ||
+		estimate.Metric != intent.BillingMetric || estimate.Units != intent.EstimatedUnits ||
 		view.CostReservation.ID != intent.CostReservationID ||
 		view.CostReservation.EstimateID != estimate.ID || view.CostReservation.SourceID != intent.ID ||
 		view.CostReservation.WorkspaceID != intent.WorkspaceID || view.CostReservation.ProjectID != intent.ProjectID ||
+		view.CostReservation.PriceQuoteID != intent.PriceQuoteID ||
+		view.CostReservation.PriceQuoteRevision != intent.PriceQuoteRevision ||
+		view.CostReservation.EstimatedUnits != intent.EstimatedUnits ||
+		view.CostReservation.Metric != intent.BillingMetric ||
 		view.QuotaReservation.ID != intent.QuotaReservationID || view.QuotaReservation.SourceType != "generation_intent" ||
 		view.QuotaReservation.SourceID != intent.ID || view.QuotaReservation.WorkspaceID != intent.WorkspaceID ||
-		view.QuotaReservation.ProjectID != intent.ProjectID || view.QuotaReservation.Metric != intent.Metric ||
-		view.QuotaReservation.Units != intent.Units {
+		view.QuotaReservation.ProjectID != intent.ProjectID || view.QuotaReservation.Metric != intent.BillingMetric ||
+		view.QuotaReservation.Units != intent.EstimatedUnits {
 		return conflict("Generation intent Owner bindings have drifted")
 	}
 	switch intent.Status {
-	case domain.IntentPrepared, domain.IntentClaimed, domain.IntentDispatching,
-		domain.IntentSubmitted, domain.IntentOutcomeUnknown:
+	case domain.IntentPrepared, domain.IntentClaimed, domain.IntentExecuting, domain.IntentOutcomeUnknown:
 		if view.CostReservation.Status != costdomain.ReservationReserved ||
 			view.QuotaReservation.Status != quotadomain.ReservationReserved {
 			return conflict("Generation intent reservations are no longer executable")
 		}
-	case domain.IntentCancelled, domain.IntentFailed:
+	case domain.IntentCancelled:
 		if view.CostReservation.Status != costdomain.ReservationReleased ||
 			view.QuotaReservation.Status != quotadomain.ReservationReleased {
 			return conflict("Generation cancellation reservations have drifted")
 		}
-	case domain.IntentSucceeded:
-		if view.CostReservation.Status != costdomain.ReservationSettled ||
-			view.QuotaReservation.Status != quotadomain.ReservationConsumed {
-			return conflict("Generation terminal reservations have drifted")
+	case domain.IntentSucceeded, domain.IntentPartialSucceeded, domain.IntentFailed:
+		if intent.CostSettlementReceiptID != "" {
+			if view.CostReservation.Status != costdomain.ReservationSettled ||
+				view.QuotaReservation.Status != quotadomain.ReservationConsumed {
+				return conflict("Generation terminal reservations have drifted")
+			}
+		} else if view.CostReservation.Status != costdomain.ReservationReleased ||
+			view.QuotaReservation.Status != quotadomain.ReservationReleased {
+			return conflict("Generation terminal reservation release has drifted")
 		}
 	default:
 		return conflict("Generation intent state is not readable")
@@ -647,13 +738,15 @@ func (service *PreparationService) validateOwnerReceipts(
 		{intent.CostReservationReceiptID, "cost.reservation.reserve", preparationOwnerKey(intent.ID, "cost-reserve"), intent.CostReservationID},
 		{intent.QuotaReservationReceiptID, "quota.reservation.reserve", preparationOwnerKey(intent.ID, "quota-reserve"), intent.QuotaReservationID},
 	}
-	if intent.Status == domain.IntentCancelled || intent.Status == domain.IntentFailed {
+	if intent.Status == domain.IntentCancelled ||
+		(intent.Status == domain.IntentFailed && intent.CostReleaseReceiptID != "") {
 		checks = append(checks,
 			struct{ id, operation, key, resource string }{intent.CostReleaseReceiptID, "cost.reservation.release", preparationOwnerKey(intent.ID, "cost-release"), intent.CostReservationID},
 			struct{ id, operation, key, resource string }{intent.QuotaReleaseReceiptID, "quota.reservation.release", preparationOwnerKey(intent.ID, "quota-release"), intent.QuotaReservationID},
 		)
 	}
-	if intent.Status == domain.IntentSucceeded {
+	if intent.Status == domain.IntentSucceeded || intent.Status == domain.IntentPartialSucceeded ||
+		(intent.Status == domain.IntentFailed && intent.CostSettlementReceiptID != "") {
 		checks = append(checks,
 			struct{ id, operation, key, resource string }{intent.CostSettlementReceiptID, "cost.reservation.settle", preparationOwnerKey(intent.ID, "cost-settle"), intent.CostReservationID},
 			struct{ id, operation, key, resource string }{intent.QuotaConsumptionReceiptID, "quota.reservation.consume", preparationOwnerKey(intent.ID, "quota-consume"), intent.QuotaReservationID},
@@ -672,8 +765,14 @@ func (service *PreparationService) validateOwnerReceipts(
 func validateIntent(value domain.Intent) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) || !validUUID(value.ProjectID) ||
 		!validUUID(value.WorkflowRunID) || !validUUID(value.NodeRunID) || !validUUID(value.TargetID) ||
-		value.Metric != costdomain.MetricGenerationImage || !intentHashPattern.MatchString(value.TargetHash) ||
-		value.Units < 1 || !validUUID(value.CreatedBy) || value.InitiatorTokenVersion < 1 ||
+		!intentHashPattern.MatchString(value.TargetHash) || !validUUID(value.BindingVersionID) ||
+		value.BindingRevision < 1 || !intentHashPattern.MatchString(value.BindingContentHash) ||
+		!validUUID(value.ConnectionVersionID) || !validUUID(value.CredentialVersionID) ||
+		!validUUID(value.ModelProfileVersionID) || value.ModelProfileRevision < 1 ||
+		!intentHashPattern.MatchString(value.ModelProfileContentHash) || !validUUID(value.PriceQuoteID) ||
+		value.PriceQuoteRevision < 1 || !intentHashPattern.MatchString(value.PriceQuoteContentHash) ||
+		!costdomain.IsBillingMetric(value.BillingMetric) || value.EstimatedUnits < 1 ||
+		!validUUID(value.CreatedBy) || value.InitiatorTokenVersion < 1 ||
 		value.Revision < 1 || len(value.ContentHash) != 64 || value.CreatedAt.IsZero() ||
 		value.UpdatedAt.Before(value.CreatedAt) {
 		return conflict("Generation intent facts have drifted")
@@ -681,8 +780,11 @@ func validateIntent(value domain.Intent) error {
 	ownerRefsValid := validUUID(value.CostEstimateID) && validUUID(value.CostReservationID) &&
 		validUUID(value.QuotaReservationID) && validUUID(value.CostEstimateReceiptID) &&
 		validUUID(value.CostReservationReceiptID) && validUUID(value.QuotaReservationReceiptID)
-	providerRefsValid := validUUID(value.GenerationRequestID) && validUUID(value.ProviderJobID)
-	terminalProviderRefsValid := providerRefsValid && validUUID(value.ProviderReceiptID)
+	providerRefsValid := validUUID(value.GenerationRequestID) && validUUID(value.ProviderJobID) &&
+		intentHashPattern.MatchString(value.ProviderCallSetHash)
+	claimValid := value.Claimant != nil && claimantPattern.MatchString(*value.Claimant) &&
+		value.ClaimToken != nil && validUUID(*value.ClaimToken) && value.ClaimExpiresAt != nil &&
+		value.ClaimFencingVersion == 1 && value.CancelledAt == nil
 	switch value.Status {
 	case domain.IntentPreparing:
 		if value.Revision != 1 || ownerRefsValid || value.CostEstimateID != "" || value.CostReservationID != "" ||
@@ -690,7 +792,7 @@ func validateIntent(value domain.Intent) error {
 			value.CostReservationReceiptID != "" || value.QuotaReservationReceiptID != "" ||
 			value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
 			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
-			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
+			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderCallSetHash != "" ||
 			value.Claimant != nil || value.ClaimToken != nil || value.ClaimExpiresAt != nil ||
 			value.ClaimFencingVersion != 0 || value.CancelledAt != nil || !value.UpdatedAt.Equal(value.CreatedAt) {
 			return conflict("Generation intent facts have drifted")
@@ -698,7 +800,7 @@ func validateIntent(value domain.Intent) error {
 	case domain.IntentPrepared:
 		if value.Revision != 2 || !ownerRefsValid || value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
 			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
-			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
+			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderCallSetHash != "" ||
 			value.Claimant != nil || value.ClaimToken != nil || value.ClaimExpiresAt != nil ||
 			value.ClaimFencingVersion != 0 || value.CancelledAt != nil {
 			return conflict("Generation intent facts have drifted")
@@ -706,44 +808,37 @@ func validateIntent(value domain.Intent) error {
 	case domain.IntentClaimed:
 		if value.Revision != 3 || !ownerRefsValid || value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
 			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
-			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
-			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
-			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
-			!value.ClaimExpiresAt.After(value.UpdatedAt) || value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
+			value.GenerationRequestID != "" || value.ProviderJobID != "" || value.ProviderCallSetHash != "" ||
+			!claimValid || !value.ClaimExpiresAt.After(value.UpdatedAt) {
 			return conflict("Generation intent facts have drifted")
 		}
-	case domain.IntentDispatching, domain.IntentSubmitted, domain.IntentOutcomeUnknown:
-		if value.Revision < 4 || !ownerRefsValid || !providerRefsValid || value.ProviderReceiptID != "" ||
+	case domain.IntentExecuting, domain.IntentOutcomeUnknown:
+		if value.Revision < 4 || !ownerRefsValid || !providerRefsValid ||
 			value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
 			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
-			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
-			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
-			value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
+			!claimValid {
 			return conflict("Generation intent facts have drifted")
 		}
-	case domain.IntentSucceeded:
-		if value.Revision < 5 || !ownerRefsValid || !terminalProviderRefsValid ||
+	case domain.IntentSucceeded, domain.IntentPartialSucceeded:
+		if value.Revision < 5 || !ownerRefsValid || !providerRefsValid ||
 			!validUUID(value.CostSettlementReceiptID) || !validUUID(value.QuotaConsumptionReceiptID) ||
 			value.CostReleaseReceiptID != "" || value.QuotaReleaseReceiptID != "" ||
-			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
-			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
-			value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
+			!claimValid {
 			return conflict("Generation intent facts have drifted")
 		}
 	case domain.IntentFailed:
-		if value.Revision < 5 || !ownerRefsValid || !terminalProviderRefsValid ||
-			!validUUID(value.CostReleaseReceiptID) || !validUUID(value.QuotaReleaseReceiptID) ||
-			value.CostSettlementReceiptID != "" || value.QuotaConsumptionReceiptID != "" ||
-			value.Claimant == nil || !claimantPattern.MatchString(*value.Claimant) ||
-			value.ClaimToken == nil || !validUUID(*value.ClaimToken) || value.ClaimExpiresAt == nil ||
-			value.ClaimFencingVersion != 1 || value.CancelledAt != nil {
+		settled := validUUID(value.CostSettlementReceiptID) && validUUID(value.QuotaConsumptionReceiptID) &&
+			value.CostReleaseReceiptID == "" && value.QuotaReleaseReceiptID == ""
+		released := validUUID(value.CostReleaseReceiptID) && validUUID(value.QuotaReleaseReceiptID) &&
+			value.CostSettlementReceiptID == "" && value.QuotaConsumptionReceiptID == ""
+		if value.Revision < 5 || !ownerRefsValid || !providerRefsValid || (!settled && !released) || !claimValid {
 			return conflict("Generation intent facts have drifted")
 		}
 	case domain.IntentCancelled:
 		if value.Revision != 3 || !ownerRefsValid || !validUUID(value.CostReleaseReceiptID) ||
 			!validUUID(value.QuotaReleaseReceiptID) || value.CostSettlementReceiptID != "" ||
 			value.QuotaConsumptionReceiptID != "" || value.GenerationRequestID != "" ||
-			value.ProviderJobID != "" || value.ProviderReceiptID != "" ||
+			value.ProviderJobID != "" || value.ProviderCallSetHash != "" ||
 			value.Claimant != nil || value.ClaimToken != nil ||
 			value.ClaimExpiresAt != nil || value.ClaimFencingVersion != 0 || value.CancelledAt == nil ||
 			!value.CancelledAt.Equal(value.UpdatedAt) {
@@ -763,7 +858,14 @@ func intentContentHash(value domain.Intent) (string, error) {
 	return platformcommand.InputHash(intentHashInput{
 		ID: value.ID, WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID,
 		WorkflowRunID: value.WorkflowRunID, NodeRunID: value.NodeRunID,
-		TargetID: value.TargetID, Metric: value.Metric, TargetHash: value.TargetHash, Units: value.Units,
+		TargetID: value.TargetID, TargetHash: value.TargetHash,
+		BindingVersionID: value.BindingVersionID, BindingRevision: value.BindingRevision,
+		BindingContentHash: value.BindingContentHash, ConnectionVersionID: value.ConnectionVersionID,
+		CredentialVersionID: value.CredentialVersionID, ModelProfileVersionID: value.ModelProfileVersionID,
+		ModelProfileRevision: value.ModelProfileRevision, ModelProfileContentHash: value.ModelProfileContentHash,
+		PriceQuoteID: value.PriceQuoteID, PriceQuoteRevision: value.PriceQuoteRevision,
+		PriceQuoteContentHash: value.PriceQuoteContentHash, BillingMetric: value.BillingMetric,
+		EstimatedUnits: value.EstimatedUnits,
 		CostEstimateID: value.CostEstimateID, CostReservationID: value.CostReservationID,
 		QuotaReservationID:        value.QuotaReservationID,
 		CostEstimateReceiptID:     value.CostEstimateReceiptID,
@@ -773,8 +875,8 @@ func intentContentHash(value domain.Intent) (string, error) {
 		CostSettlementReceiptID:   value.CostSettlementReceiptID,
 		QuotaConsumptionReceiptID: value.QuotaConsumptionReceiptID,
 		GenerationRequestID:       value.GenerationRequestID, ProviderJobID: value.ProviderJobID,
-		ProviderReceiptID: value.ProviderReceiptID,
-		Status:            value.Status, Claimant: optionalString(value.Claimant), ClaimToken: optionalString(value.ClaimToken),
+		ProviderCallSetHash: value.ProviderCallSetHash,
+		Status:              value.Status, Claimant: optionalString(value.Claimant), ClaimToken: optionalString(value.ClaimToken),
 		ClaimExpiresAt: optionalTime(value.ClaimExpiresAt), CancelledAt: optionalTime(value.CancelledAt),
 		ClaimFencingVersion: value.ClaimFencingVersion, Revision: value.Revision,
 		CreatedBy: value.CreatedBy, InitiatorTokenVersion: value.InitiatorTokenVersion,
@@ -892,8 +994,8 @@ func intentProgressedFromPreparation(current, prepared domain.Intent) bool {
 		return false
 	}
 	switch current.Status {
-	case domain.IntentPrepared, domain.IntentClaimed, domain.IntentDispatching,
-		domain.IntentSubmitted, domain.IntentOutcomeUnknown, domain.IntentSucceeded,
+	case domain.IntentPrepared, domain.IntentClaimed, domain.IntentExecuting,
+		domain.IntentOutcomeUnknown, domain.IntentSucceeded, domain.IntentPartialSucceeded,
 		domain.IntentFailed, domain.IntentCancelled:
 		return true
 	default:
@@ -910,8 +1012,8 @@ func intentProgressedFromClaim(current, claimed domain.Intent) bool {
 		return false
 	}
 	switch current.Status {
-	case domain.IntentClaimed, domain.IntentDispatching, domain.IntentSubmitted,
-		domain.IntentOutcomeUnknown, domain.IntentSucceeded, domain.IntentFailed:
+	case domain.IntentClaimed, domain.IntentExecuting, domain.IntentOutcomeUnknown,
+		domain.IntentSucceeded, domain.IntentPartialSucceeded, domain.IntentFailed:
 		return true
 	default:
 		return false
@@ -1009,9 +1111,15 @@ func authorizationForIntent(intent domain.Intent) domain.ExecutionAuthorization 
 	}
 	return domain.ExecutionAuthorization{
 		IntentID: intent.ID, ClaimToken: *intent.ClaimToken, TargetID: intent.TargetID, TargetHash: intent.TargetHash,
+		BindingVersionID: intent.BindingVersionID, BindingRevision: intent.BindingRevision,
+		BindingContentHash: intent.BindingContentHash, ConnectionVersionID: intent.ConnectionVersionID,
+		CredentialVersionID: intent.CredentialVersionID, ModelProfileVersionID: intent.ModelProfileVersionID,
+		ModelProfileRevision: intent.ModelProfileRevision, ModelProfileContentHash: intent.ModelProfileContentHash,
+		PriceQuoteID: intent.PriceQuoteID, PriceQuoteRevision: intent.PriceQuoteRevision,
+		PriceQuoteContentHash: intent.PriceQuoteContentHash, BillingMetric: intent.BillingMetric,
 		CostReservationID: intent.CostReservationID, QuotaReservationID: intent.QuotaReservationID,
 		ClaimFencingVersion: intent.ClaimFencingVersion, IntentRevision: intent.Revision,
-		Units: intent.Units, ExpiresAt: *intent.ClaimExpiresAt,
+		EstimatedUnits: intent.EstimatedUnits, ExpiresAt: *intent.ClaimExpiresAt,
 	}
 }
 

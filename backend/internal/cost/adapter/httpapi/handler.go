@@ -58,8 +58,8 @@ func New(service Service, authenticator Authenticator) *Handler {
 func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{project_id}/cost-budget", handler.get)
 	mux.HandleFunc("POST /api/projects/{project_id}/cost-budget", handler.set)
-	mux.HandleFunc("GET /api/projects/{project_id}/cost-prices/{metric}", handler.getPriceQuote)
-	mux.HandleFunc("POST /api/projects/{project_id}/cost-prices/{metric}", handler.setPriceQuote)
+	mux.HandleFunc("GET /api/projects/{project_id}/media-model-profiles/{profile_version_id}/cost-price", handler.getPriceQuote)
+	mux.HandleFunc("POST /api/projects/{project_id}/media-model-profiles/{profile_version_id}/cost-price", handler.setPriceQuote)
 }
 
 func (handler *Handler) get(writer http.ResponseWriter, request *http.Request) {

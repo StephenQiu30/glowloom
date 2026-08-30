@@ -9,22 +9,24 @@ import (
 )
 
 type setPriceQuoteRequest struct {
-	UnitAmount       string `json:"unit_amount" validate:"required"`
-	Currency         string `json:"currency" validate:"required,len=3,uppercase"`
-	ExpectedRevision int64  `json:"expected_revision" validate:"gte=0"`
-	IdempotencyKey   string `json:"idempotency_key" validate:"required,max=200"`
+	ReservationUnitAmount string `json:"reservation_unit_amount" validate:"required"`
+	Currency              string `json:"currency" validate:"required,len=3,uppercase"`
+	ExpectedRevision      *int64 `json:"expected_revision" validate:"required,gte=0"`
+	IdempotencyKey        string `json:"idempotency_key" validate:"required,max=200"`
 }
 
 type priceQuoteResponse struct {
-	ID          string    `json:"id"`
-	WorkspaceID string    `json:"workspace_id"`
-	ProjectID   string    `json:"project_id"`
-	Metric      string    `json:"metric"`
-	UnitAmount  string    `json:"unit_amount"`
-	Currency    string    `json:"currency"`
-	Revision    int64     `json:"revision"`
-	CreatedBy   string    `json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID                    string    `json:"id"`
+	WorkspaceID           string    `json:"workspace_id"`
+	ProjectID             string    `json:"project_id"`
+	ModelProfileVersionID string    `json:"model_profile_version_id"`
+	BillingMetric         string    `json:"billing_metric"`
+	ReservationUnitAmount string    `json:"reservation_unit_amount"`
+	Currency              string    `json:"currency"`
+	Revision              int64     `json:"revision"`
+	ContentHash           string    `json:"content_hash"`
+	CreatedBy             string    `json:"created_by"`
+	CreatedAt             time.Time `json:"created_at"`
 }
 
 func (handler *Handler) getPriceQuote(writer http.ResponseWriter, request *http.Request) {
@@ -33,7 +35,7 @@ func (handler *Handler) getPriceQuote(writer http.ResponseWriter, request *http.
 		return
 	}
 	quote, err := handler.service.GetCurrentPriceQuote(
-		request.Context(), actor, request.PathValue("project_id"), request.PathValue("metric"),
+		request.Context(), actor, request.PathValue("project_id"), request.PathValue("profile_version_id"),
 	)
 	if err != nil {
 		writeError(writer, request, err)
@@ -52,9 +54,10 @@ func (handler *Handler) setPriceQuote(writer http.ResponseWriter, request *http.
 		return
 	}
 	result, err := handler.service.SetPriceQuote(request.Context(), actor, application.SetPriceQuoteCommand{
-		ProjectID: request.PathValue("project_id"), Metric: request.PathValue("metric"),
-		UnitAmount: payload.UnitAmount, Currency: payload.Currency,
-		ExpectedRevision: payload.ExpectedRevision, IdempotencyKey: payload.IdempotencyKey,
+		ProjectID:             request.PathValue("project_id"),
+		ModelProfileVersionID: request.PathValue("profile_version_id"),
+		ReservationUnitAmount: payload.ReservationUnitAmount, Currency: payload.Currency,
+		ExpectedRevision: *payload.ExpectedRevision, IdempotencyKey: payload.IdempotencyKey,
 	})
 	if err != nil {
 		writeError(writer, request, err)
@@ -65,8 +68,9 @@ func (handler *Handler) setPriceQuote(writer http.ResponseWriter, request *http.
 
 func presentPriceQuote(quote domain.PriceQuote) priceQuoteResponse {
 	return priceQuoteResponse{
-		ID: quote.ID, WorkspaceID: quote.WorkspaceID, ProjectID: quote.ProjectID, Metric: quote.Metric,
-		UnitAmount: quote.UnitAmount.StringFixed(6), Currency: quote.Currency, Revision: quote.Revision,
-		CreatedBy: quote.CreatedBy, CreatedAt: quote.CreatedAt,
+		ID: quote.ID, WorkspaceID: quote.WorkspaceID, ProjectID: quote.ProjectID,
+		ModelProfileVersionID: quote.ModelProfileVersionID, BillingMetric: quote.BillingMetric,
+		ReservationUnitAmount: quote.ReservationUnitAmount.StringFixed(6), Currency: quote.Currency,
+		Revision: quote.Revision, ContentHash: quote.ContentHash, CreatedBy: quote.CreatedBy, CreatedAt: quote.CreatedAt,
 	}
 }

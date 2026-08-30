@@ -92,7 +92,7 @@ func TestShotWorkflowSourceExecutorsRouteOnlyToOwningApplications(t *testing.T) 
 	}}
 	sets := &shotCandidateSetSource{set: generationdomain.CandidateSet{
 		ID: providerJobID, WorkspaceID: workspaceID, ProjectID: projectID,
-		ProviderReceiptID: uuid.NewString(), Revision: 1, ContentHash: candidateSetHash,
+		ProviderReceiptSetHash: strings.Repeat("c", 64), Revision: 1, ContentHash: candidateSetHash,
 		Candidates: []generationdomain.CandidateReference{{
 			ID: uuid.NewString(), Revision: 1, ArtifactID: uuid.NewString(), ArtifactRevision: 1,
 			ArtifactSHA256: strings.Repeat("d", 64), QCReportID: uuid.NewString(), QCReportHash: strings.Repeat("e", 64),

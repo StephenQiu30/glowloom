@@ -25,6 +25,11 @@ type Error struct {
 
 func (value *Error) Error() string { return value.Message }
 
+func IsCode(err error, code string) bool {
+	var typed *Error
+	return errors.As(err, &typed) && typed.Code == code
+}
+
 type Actor struct {
 	UserID       string
 	TokenVersion int
@@ -48,7 +53,7 @@ type Repository interface {
 	EnsureReceipt(context.Context, platformcommand.Receipt) (platformcommand.Receipt, error)
 	EnsureCandidate(context.Context, domain.CandidateWithReport) (domain.CandidateWithReport, error)
 	GetCandidate(context.Context, string) (domain.CandidateWithReport, error)
-	GetCandidateByProviderOutput(context.Context, string, string) (domain.CandidateWithReport, error)
+	GetCandidateByProviderOutput(context.Context, string, string, string, string) (domain.CandidateWithReport, error)
 }
 
 type TransactionManager interface {
@@ -76,7 +81,9 @@ type Service struct {
 }
 
 type RegisterReadyCandidateCommand struct {
-	ArtifactID, IdempotencyKey string
+	ArtifactID, ProviderJobID, ProviderCallID string
+	ProviderReceiptID, OutputKey              string
+	IdempotencyKey                            string
 }
 
 type RegisterCandidateResult struct {
@@ -90,10 +97,11 @@ type candidateReceipt struct {
 }
 
 type candidateHashInput struct {
-	ArtifactID, WorkspaceID, ProjectID      string
-	SourceType, ProviderJobID, OutputKey    string
-	ArtifactSHA256, MediaType, QCPolicyHash string
-	ArtifactRevision, Width, Height         int
+	ArtifactID, WorkspaceID, ProjectID        string
+	SourceType, ProviderJobID, ProviderCallID string
+	ProviderReceiptID, OutputKey              string
+	ArtifactSHA256, MediaType, QCPolicyHash   string
+	ArtifactRevision, Width, Height           int
 }
 
 type reportHashInput struct {
@@ -109,11 +117,17 @@ func NewService(transactions TransactionManager, assets AssetReadiness, config C
 
 func (service *Service) RegisterReadyCandidate(ctx context.Context, actor Actor, command RegisterReadyCandidateCommand) (RegisterCandidateResult, error) {
 	command.ArtifactID = strings.TrimSpace(command.ArtifactID)
+	command.ProviderJobID = strings.TrimSpace(command.ProviderJobID)
+	command.ProviderCallID = strings.TrimSpace(command.ProviderCallID)
+	command.ProviderReceiptID = strings.TrimSpace(command.ProviderReceiptID)
+	command.OutputKey = strings.TrimSpace(command.OutputKey)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if service == nil || service.transactions == nil || service.assets == nil || service.config.Now == nil || service.config.NewID == nil {
 		return RegisterCandidateResult{}, invalid("Invalid generation candidate request")
 	}
-	if _, err := uuid.Parse(command.ArtifactID); err != nil || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+	if !validUUID(command.ArtifactID) || !validUUID(command.ProviderJobID) || !validUUID(command.ProviderCallID) ||
+		!validUUID(command.ProviderReceiptID) || !providerOutputKeyPattern.MatchString(command.OutputKey) ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return RegisterCandidateResult{}, invalid("Invalid generation candidate request")
 	}
 	policy, policyHash, err := normalizedPolicy(service.config.ImageQC)
@@ -126,6 +140,9 @@ func (service *Service) RegisterReadyCandidate(ctx context.Context, actor Actor,
 	}
 	if err = validateArtifact(artifact); err != nil {
 		return RegisterCandidateResult{}, err
+	}
+	if artifact.SourceID != command.ProviderReceiptID || artifact.OutputKey != command.OutputKey {
+		return RegisterCandidateResult{}, conflict("Provider output Artifact source has drifted")
 	}
 	failureCodes := domain.EvaluateImage(artifact.MediaType, artifact.Width, artifact.Height, policy)
 	reportStatus, candidateStatus := domain.QCPassed, domain.CandidateQCPassed
@@ -141,7 +158,8 @@ func (service *Service) RegisterReadyCandidate(ctx context.Context, actor Actor,
 	}
 	inputHash, err := platformcommand.InputHash(candidateHashInput{
 		ArtifactID: artifact.ID, WorkspaceID: artifact.WorkspaceID, ProjectID: artifact.ProjectID,
-		SourceType: artifact.SourceType, ProviderJobID: artifact.SourceID, OutputKey: artifact.OutputKey,
+		SourceType: artifact.SourceType, ProviderJobID: command.ProviderJobID, ProviderCallID: command.ProviderCallID,
+		ProviderReceiptID: command.ProviderReceiptID, OutputKey: command.OutputKey,
 		ArtifactSHA256: artifact.SHA256, MediaType: artifact.MediaType, ArtifactRevision: artifact.Revision,
 		Width: artifact.Width, Height: artifact.Height, QCPolicyHash: policyHash,
 	})
@@ -152,7 +170,8 @@ func (service *Service) RegisterReadyCandidate(ctx context.Context, actor Actor,
 	desired := domain.CandidateWithReport{
 		Candidate: domain.Candidate{
 			ID: service.config.NewID(), WorkspaceID: artifact.WorkspaceID, ProjectID: artifact.ProjectID,
-			ProviderJobID: artifact.SourceID, OutputKey: artifact.OutputKey, ArtifactID: artifact.ID,
+			ProviderJobID: command.ProviderJobID, ProviderCallID: command.ProviderCallID,
+			ProviderReceiptID: command.ProviderReceiptID, OutputKey: command.OutputKey, ArtifactID: artifact.ID,
 			ArtifactRevision: artifact.Revision, ArtifactSHA256: artifact.SHA256, MediaType: artifact.MediaType,
 			Width: artifact.Width, Height: artifact.Height, Status: candidateStatus, Revision: 1,
 			CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
@@ -238,16 +257,24 @@ func (service *Service) RequireQCPassed(ctx context.Context, actor Actor, candid
 func (service *Service) RequireEvaluatedProviderOutput(
 	ctx context.Context,
 	actor Actor,
-	providerJobID, outputKey string,
+	providerJobID, providerCallID, providerReceiptID, outputKey string,
 ) (domain.CandidateWithReport, error) {
-	providerJobID, outputKey = strings.TrimSpace(providerJobID), strings.TrimSpace(outputKey)
+	providerJobID, providerCallID = strings.TrimSpace(providerJobID), strings.TrimSpace(providerCallID)
+	providerReceiptID, outputKey = strings.TrimSpace(providerReceiptID), strings.TrimSpace(outputKey)
 	if service == nil || service.transactions == nil || service.assets == nil ||
-		!validUUID(providerJobID) || !providerOutputKeyPattern.MatchString(outputKey) {
+		!validUUID(providerJobID) || !validUUID(providerCallID) || !validUUID(providerReceiptID) ||
+		!providerOutputKeyPattern.MatchString(outputKey) {
 		return domain.CandidateWithReport{}, notFound("Generation candidate not found")
 	}
 	var result domain.CandidateWithReport
 	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
-		bundle, loadErr := repo.GetCandidateByProviderOutput(ctx, providerJobID, outputKey)
+		bundle, loadErr := repo.GetCandidateByProviderOutput(
+			ctx,
+			providerJobID,
+			providerCallID,
+			providerReceiptID,
+			outputKey,
+		)
 		if loadErr != nil {
 			return loadErr
 		}
@@ -306,7 +333,7 @@ func validateArtifact(value ReadyArtifact) error {
 			return errors.New("asset readiness returned an invalid identifier")
 		}
 	}
-	if value.SourceType != "generation_provider_job" || value.OutputKey == "" || value.MediaType == "" ||
+	if value.SourceType != "generation_provider_receipt" || value.OutputKey == "" || value.MediaType == "" ||
 		len(value.SHA256) != 64 || value.SizeBytes < 1 || value.Width < 1 || value.Height < 1 || value.Revision < 1 {
 		return invalid("Ready artifact is not a provider image output")
 	}
@@ -378,7 +405,7 @@ func qcReportHash(artifactID, artifactSHA256, mediaType string, artifactRevision
 
 func sameArtifactSnapshot(candidate domain.Candidate, artifact ReadyArtifact) bool {
 	return candidate.WorkspaceID == artifact.WorkspaceID && candidate.ProjectID == artifact.ProjectID &&
-		candidate.ProviderJobID == artifact.SourceID && candidate.OutputKey == artifact.OutputKey &&
+		candidate.ProviderReceiptID == artifact.SourceID && candidate.OutputKey == artifact.OutputKey &&
 		candidate.ArtifactID == artifact.ID && candidate.ArtifactRevision == artifact.Revision &&
 		candidate.ArtifactSHA256 == artifact.SHA256 && candidate.MediaType == artifact.MediaType &&
 		candidate.Width == artifact.Width && candidate.Height == artifact.Height

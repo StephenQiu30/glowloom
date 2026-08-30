@@ -8,81 +8,99 @@ import (
 )
 
 type GenerationIntent struct {
-	ID                        uuid.UUID         `gorm:"type:uuid;primaryKey"`
-	WorkspaceID               uuid.UUID         `gorm:"type:uuid;not null;index"`
-	ProjectID                 uuid.UUID         `gorm:"type:uuid;not null;index"`
-	WorkflowRunID             uuid.UUID         `gorm:"type:uuid;not null;index"`
-	NodeRunID                 uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_gen_intent_node_run"`
-	TargetID                  uuid.UUID         `gorm:"type:uuid;not null;index"`
-	Metric                    string            `gorm:"type:varchar(64);not null;check:ck_gen_intent_metric,metric = 'generation.image'"`
-	TargetHash                string            `gorm:"type:char(64);not null;check:ck_gen_intent_target_hash,char_length(target_hash) = 64"`
-	Units                     int64             `gorm:"not null;check:ck_gen_intent_units,units > 0"`
-	CostEstimateID            *uuid.UUID        `gorm:"type:uuid"`
-	CostReservationID         *uuid.UUID        `gorm:"type:uuid"`
-	QuotaReservationID        *uuid.UUID        `gorm:"type:uuid"`
-	CostEstimateReceiptID     *uuid.UUID        `gorm:"type:uuid"`
-	CostReservationReceiptID  *uuid.UUID        `gorm:"type:uuid"`
-	QuotaReservationReceiptID *uuid.UUID        `gorm:"type:uuid"`
-	CostReleaseReceiptID      *uuid.UUID        `gorm:"type:uuid"`
-	QuotaReleaseReceiptID     *uuid.UUID        `gorm:"type:uuid"`
-	CostSettlementReceiptID   *uuid.UUID        `gorm:"type:uuid"`
-	QuotaConsumptionReceiptID *uuid.UUID        `gorm:"type:uuid"`
-	GenerationRequestID       *uuid.UUID        `gorm:"type:uuid"`
-	ProviderJobID             *uuid.UUID        `gorm:"type:uuid"`
-	ProviderReceiptID         *uuid.UUID        `gorm:"type:uuid"`
-	Status                    string            `gorm:"type:varchar(20);not null;index;check:ck_gen_intent_state,(status = 'PREPARING' AND revision = 1 AND cost_estimate_id IS NULL AND cost_reservation_id IS NULL AND quota_reservation_id IS NULL AND cost_estimate_receipt_id IS NULL AND cost_reservation_receipt_id IS NULL AND quota_reservation_receipt_id IS NULL AND cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL AND generation_request_id IS NULL AND provider_job_id IS NULL AND provider_receipt_id IS NULL) OR (status = 'PREPARED' AND revision = 2 AND cost_estimate_id IS NOT NULL AND cost_reservation_id IS NOT NULL AND quota_reservation_id IS NOT NULL AND cost_estimate_receipt_id IS NOT NULL AND cost_reservation_receipt_id IS NOT NULL AND quota_reservation_receipt_id IS NOT NULL AND cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL AND generation_request_id IS NULL AND provider_job_id IS NULL AND provider_receipt_id IS NULL) OR (status = 'CLAIMED' AND revision = 3 AND cost_estimate_id IS NOT NULL AND cost_reservation_id IS NOT NULL AND quota_reservation_id IS NOT NULL AND cost_estimate_receipt_id IS NOT NULL AND cost_reservation_receipt_id IS NOT NULL AND quota_reservation_receipt_id IS NOT NULL AND cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL AND generation_request_id IS NULL AND provider_job_id IS NULL AND provider_receipt_id IS NULL) OR (status IN ('DISPATCHING','SUBMITTED','OUTCOME_UNKNOWN') AND revision >= 4 AND cost_estimate_id IS NOT NULL AND cost_reservation_id IS NOT NULL AND quota_reservation_id IS NOT NULL AND cost_estimate_receipt_id IS NOT NULL AND cost_reservation_receipt_id IS NOT NULL AND quota_reservation_receipt_id IS NOT NULL AND cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL AND generation_request_id IS NOT NULL AND provider_job_id IS NOT NULL AND provider_receipt_id IS NULL) OR (status = 'SUCCEEDED' AND revision >= 5 AND cost_estimate_id IS NOT NULL AND cost_reservation_id IS NOT NULL AND quota_reservation_id IS NOT NULL AND cost_estimate_receipt_id IS NOT NULL AND cost_reservation_receipt_id IS NOT NULL AND quota_reservation_receipt_id IS NOT NULL AND cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NOT NULL AND quota_consumption_receipt_id IS NOT NULL AND generation_request_id IS NOT NULL AND provider_job_id IS NOT NULL AND provider_receipt_id IS NOT NULL) OR (status = 'FAILED' AND revision >= 5 AND cost_estimate_id IS NOT NULL AND cost_reservation_id IS NOT NULL AND quota_reservation_id IS NOT NULL AND cost_estimate_receipt_id IS NOT NULL AND cost_reservation_receipt_id IS NOT NULL AND quota_reservation_receipt_id IS NOT NULL AND cost_release_receipt_id IS NOT NULL AND quota_release_receipt_id IS NOT NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL AND generation_request_id IS NOT NULL AND provider_job_id IS NOT NULL AND provider_receipt_id IS NOT NULL) OR (status = 'CANCELLED' AND revision = 3 AND cost_estimate_id IS NOT NULL AND cost_reservation_id IS NOT NULL AND quota_reservation_id IS NOT NULL AND cost_estimate_receipt_id IS NOT NULL AND cost_reservation_receipt_id IS NOT NULL AND quota_reservation_receipt_id IS NOT NULL AND cost_release_receipt_id IS NOT NULL AND quota_release_receipt_id IS NOT NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL AND generation_request_id IS NULL AND provider_job_id IS NULL AND provider_receipt_id IS NULL)"`
-	Claimant                  *string           `gorm:"type:varchar(120)"`
-	ClaimToken                *uuid.UUID        `gorm:"type:uuid;uniqueIndex"`
-	ClaimExpiresAt            *time.Time        `gorm:"type:timestamptz;index"`
-	ClaimFencingVersion       int64             `gorm:"not null;check:ck_gen_intent_claim_fields,(status IN ('CLAIMED','DISPATCHING','SUBMITTED','OUTCOME_UNKNOWN','SUCCEEDED','FAILED') AND claimant IS NOT NULL AND claim_token IS NOT NULL AND claim_expires_at IS NOT NULL AND claim_fencing_version = 1) OR (status IN ('PREPARING','PREPARED','CANCELLED') AND claimant IS NULL AND claim_token IS NULL AND claim_expires_at IS NULL AND claim_fencing_version = 0)"`
-	CancelledAt               *time.Time        `gorm:"type:timestamptz;check:ck_gen_intent_cancelled_at,(status = 'CANCELLED') = (cancelled_at IS NOT NULL)"`
-	Revision                  int64             `gorm:"not null;check:ck_gen_intent_revision,revision >= 1"`
-	ContentHash               string            `gorm:"type:char(64);not null;check:ck_gen_intent_content_hash,char_length(content_hash) = 64"`
-	CreatedBy                 uuid.UUID         `gorm:"type:uuid;not null"`
-	InitiatorTokenVersion     int               `gorm:"not null;check:ck_gen_intent_token_version,initiator_token_version >= 1"`
-	CreatedAt                 time.Time         `gorm:"type:timestamptz;not null"`
-	UpdatedAt                 time.Time         `gorm:"type:timestamptz;not null"`
-	Workspace                 Workspace         `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Project                   Project           `gorm:"foreignKey:ProjectID,WorkspaceID;references:ID,WorkspaceID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	WorkflowRun               WorkflowRun       `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	NodeRun                   NodeRunProjection `gorm:"foreignKey:NodeRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Target                    GenerationTarget  `gorm:"foreignKey:TargetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	CostEstimate              *CostEstimate     `gorm:"foreignKey:CostEstimateID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	CostReservation           *CostReservation  `gorm:"foreignKey:CostReservationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	QuotaReservation          *QuotaReservation `gorm:"foreignKey:QuotaReservationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	CostEstimateReceipt       *CommandReceipt   `gorm:"foreignKey:CostEstimateReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	CostReservationReceipt    *CommandReceipt   `gorm:"foreignKey:CostReservationReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	QuotaReservationReceipt   *CommandReceipt   `gorm:"foreignKey:QuotaReservationReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	CostReleaseReceipt        *CommandReceipt   `gorm:"foreignKey:CostReleaseReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	QuotaReleaseReceipt       *CommandReceipt   `gorm:"foreignKey:QuotaReleaseReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	CostSettlementReceipt     *CommandReceipt   `gorm:"foreignKey:CostSettlementReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	QuotaConsumptionReceipt   *CommandReceipt   `gorm:"foreignKey:QuotaConsumptionReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Creator                   UserAccount       `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ID                        uuid.UUID                     `gorm:"type:uuid;primaryKey"`
+	WorkspaceID               uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	ProjectID                 uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	WorkflowRunID             uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	NodeRunID                 uuid.UUID                     `gorm:"type:uuid;not null;uniqueIndex:uq_gen_intent_node_run"`
+	TargetID                  uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	TargetHash                string                        `gorm:"type:char(64);not null;check:ck_gen_intent_target_hash,char_length(target_hash) = 64"`
+	BindingVersionID          uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	BindingRevision           int64                         `gorm:"not null;check:ck_gen_intent_binding_revision,binding_revision >= 1"`
+	BindingContentHash        string                        `gorm:"type:char(64);not null;check:ck_gen_intent_binding_hash,char_length(binding_content_hash) = 64"`
+	ConnectionVersionID       uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	CredentialVersionID       uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	ModelProfileVersionID     uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	ModelProfileRevision      int64                         `gorm:"not null;check:ck_gen_intent_profile_revision,model_profile_revision >= 1"`
+	ModelProfileContentHash   string                        `gorm:"type:char(64);not null;check:ck_gen_intent_profile_hash,char_length(model_profile_content_hash) = 64"`
+	PriceQuoteID              uuid.UUID                     `gorm:"type:uuid;not null;index"`
+	PriceQuoteRevision        int64                         `gorm:"not null;check:ck_gen_intent_price_revision,price_quote_revision >= 1"`
+	PriceQuoteContentHash     string                        `gorm:"type:char(64);not null;check:ck_gen_intent_price_hash,char_length(price_quote_content_hash) = 64"`
+	BillingMetric             string                        `gorm:"type:varchar(80);not null;check:ck_gen_intent_billing_metric,billing_metric IN ('generation.image.call','generation.video.call')"`
+	EstimatedUnits            int64                         `gorm:"not null;check:ck_gen_intent_estimated_units,estimated_units > 0"`
+	CostEstimateID            *uuid.UUID                    `gorm:"type:uuid;check:ck_gen_intent_owner_refs,(status = 'PREPARING' AND cost_estimate_id IS NULL AND cost_reservation_id IS NULL AND quota_reservation_id IS NULL AND cost_estimate_receipt_id IS NULL AND cost_reservation_receipt_id IS NULL AND quota_reservation_receipt_id IS NULL) OR (status IN ('PREPARED','CLAIMED','EXECUTING','OUTCOME_UNKNOWN','SUCCEEDED','PARTIAL_SUCCEEDED','FAILED','CANCELLED') AND cost_estimate_id IS NOT NULL AND cost_reservation_id IS NOT NULL AND quota_reservation_id IS NOT NULL AND cost_estimate_receipt_id IS NOT NULL AND cost_reservation_receipt_id IS NOT NULL AND quota_reservation_receipt_id IS NOT NULL)"`
+	CostReservationID         *uuid.UUID                    `gorm:"type:uuid"`
+	QuotaReservationID        *uuid.UUID                    `gorm:"type:uuid"`
+	CostEstimateReceiptID     *uuid.UUID                    `gorm:"type:uuid"`
+	CostReservationReceiptID  *uuid.UUID                    `gorm:"type:uuid"`
+	QuotaReservationReceiptID *uuid.UUID                    `gorm:"type:uuid"`
+	CostReleaseReceiptID      *uuid.UUID                    `gorm:"type:uuid;check:ck_gen_intent_terminal_refs,(status IN ('PREPARING','PREPARED','CLAIMED','EXECUTING','OUTCOME_UNKNOWN') AND cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL) OR (status IN ('SUCCEEDED','PARTIAL_SUCCEEDED') AND cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NOT NULL AND quota_consumption_receipt_id IS NOT NULL) OR (status = 'FAILED' AND ((cost_release_receipt_id IS NULL AND quota_release_receipt_id IS NULL AND cost_settlement_receipt_id IS NOT NULL AND quota_consumption_receipt_id IS NOT NULL) OR (cost_release_receipt_id IS NOT NULL AND quota_release_receipt_id IS NOT NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL))) OR (status = 'CANCELLED' AND cost_release_receipt_id IS NOT NULL AND quota_release_receipt_id IS NOT NULL AND cost_settlement_receipt_id IS NULL AND quota_consumption_receipt_id IS NULL)"`
+	QuotaReleaseReceiptID     *uuid.UUID                    `gorm:"type:uuid"`
+	CostSettlementReceiptID   *uuid.UUID                    `gorm:"type:uuid"`
+	QuotaConsumptionReceiptID *uuid.UUID                    `gorm:"type:uuid"`
+	GenerationRequestID       *uuid.UUID                    `gorm:"type:uuid;check:ck_gen_intent_provider_refs,(status IN ('PREPARING','PREPARED','CLAIMED','CANCELLED') AND generation_request_id IS NULL AND provider_job_id IS NULL AND provider_call_set_hash IS NULL) OR (status IN ('EXECUTING','OUTCOME_UNKNOWN','SUCCEEDED','PARTIAL_SUCCEEDED','FAILED') AND generation_request_id IS NOT NULL AND provider_job_id IS NOT NULL AND provider_call_set_hash IS NOT NULL)"`
+	ProviderJobID             *uuid.UUID                    `gorm:"type:uuid"`
+	ProviderCallSetHash       *string                       `gorm:"type:char(64);check:ck_gen_intent_call_set_hash,provider_call_set_hash IS NULL OR char_length(provider_call_set_hash) = 64"`
+	Status                    string                        `gorm:"type:varchar(24);not null;index;check:ck_gen_intent_state,(status = 'PREPARING' AND revision = 1) OR (status = 'PREPARED' AND revision = 2) OR (status = 'CLAIMED' AND revision = 3) OR (status IN ('EXECUTING','OUTCOME_UNKNOWN') AND revision >= 4) OR (status IN ('SUCCEEDED','PARTIAL_SUCCEEDED','FAILED') AND revision >= 5) OR (status = 'CANCELLED' AND revision = 3)"`
+	Claimant                  *string                       `gorm:"type:varchar(120)"`
+	ClaimToken                *uuid.UUID                    `gorm:"type:uuid;uniqueIndex"`
+	ClaimExpiresAt            *time.Time                    `gorm:"type:timestamptz;index"`
+	ClaimFencingVersion       int64                         `gorm:"not null;check:ck_gen_intent_claim_fields,(status IN ('CLAIMED','EXECUTING','OUTCOME_UNKNOWN','SUCCEEDED','PARTIAL_SUCCEEDED','FAILED') AND claimant IS NOT NULL AND claim_token IS NOT NULL AND claim_expires_at IS NOT NULL AND claim_fencing_version = 1) OR (status IN ('PREPARING','PREPARED','CANCELLED') AND claimant IS NULL AND claim_token IS NULL AND claim_expires_at IS NULL AND claim_fencing_version = 0)"`
+	CancelledAt               *time.Time                    `gorm:"type:timestamptz;check:ck_gen_intent_cancelled_at,(status = 'CANCELLED') = (cancelled_at IS NOT NULL)"`
+	Revision                  int64                         `gorm:"not null;check:ck_gen_intent_revision,revision >= 1"`
+	ContentHash               string                        `gorm:"type:char(64);not null;check:ck_gen_intent_content_hash,char_length(content_hash) = 64"`
+	CreatedBy                 uuid.UUID                     `gorm:"type:uuid;not null"`
+	InitiatorTokenVersion     int                           `gorm:"not null;check:ck_gen_intent_token_version,initiator_token_version >= 1"`
+	CreatedAt                 time.Time                     `gorm:"type:timestamptz;not null"`
+	UpdatedAt                 time.Time                     `gorm:"type:timestamptz;not null"`
+	Workspace                 Workspace                     `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project                   Project                       `gorm:"foreignKey:ProjectID,WorkspaceID;references:ID,WorkspaceID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	WorkflowRun               WorkflowRun                   `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	NodeRun                   NodeRunProjection             `gorm:"foreignKey:NodeRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Target                    GenerationTarget              `gorm:"foreignKey:TargetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Binding                   ProjectProviderBindingVersion `gorm:"foreignKey:BindingVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Connection                ProviderConnectionVersion     `gorm:"foreignKey:ConnectionVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Credential                ProviderCredentialVersion     `gorm:"foreignKey:CredentialVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ModelProfile              ProviderModelProfileVersion   `gorm:"foreignKey:ModelProfileVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	PriceQuote                CostPriceQuote                `gorm:"foreignKey:PriceQuoteID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CostEstimate              *CostEstimate                 `gorm:"foreignKey:CostEstimateID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CostReservation           *CostReservation              `gorm:"foreignKey:CostReservationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	QuotaReservation          *QuotaReservation             `gorm:"foreignKey:QuotaReservationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CostEstimateReceipt       *CommandReceipt               `gorm:"foreignKey:CostEstimateReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CostReservationReceipt    *CommandReceipt               `gorm:"foreignKey:CostReservationReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	QuotaReservationReceipt   *CommandReceipt               `gorm:"foreignKey:QuotaReservationReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CostReleaseReceipt        *CommandReceipt               `gorm:"foreignKey:CostReleaseReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	QuotaReleaseReceipt       *CommandReceipt               `gorm:"foreignKey:QuotaReleaseReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CostSettlementReceipt     *CommandReceipt               `gorm:"foreignKey:CostSettlementReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	QuotaConsumptionReceipt   *CommandReceipt               `gorm:"foreignKey:QuotaConsumptionReceiptID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator                   UserAccount                   `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (GenerationIntent) TableName() string { return "gen_intents" }
 
 type GenerationCandidate struct {
-	ID               uuid.UUID   `gorm:"type:uuid;primaryKey"`
-	WorkspaceID      uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_gen_candidate_source_output,priority:1;uniqueIndex:uq_gen_candidate_artifact,priority:1;index:ix_gen_candidates_workspace_status,priority:1"`
-	ProjectID        uuid.UUID   `gorm:"type:uuid;not null;index"`
-	ProviderJobID    uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_gen_candidate_source_output,priority:2"`
-	OutputKey        string      `gorm:"type:varchar(120);not null;uniqueIndex:uq_gen_candidate_source_output,priority:3"`
-	ArtifactID       uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_gen_candidate_artifact,priority:2"`
-	ArtifactRevision int         `gorm:"not null;check:ck_gen_candidate_artifact_revision,artifact_revision >= 1"`
-	ArtifactSHA256   string      `gorm:"type:char(64);not null;check:ck_gen_candidate_artifact_sha256,char_length(artifact_sha256) = 64"`
-	MediaType        string      `gorm:"type:varchar(120);not null;check:ck_gen_candidate_media_type,media_type IN ('image/png','image/jpeg')"`
-	Width            int         `gorm:"not null;check:ck_gen_candidate_width,width > 0"`
-	Height           int         `gorm:"not null;check:ck_gen_candidate_height,height > 0"`
-	Status           string      `gorm:"type:varchar(20);not null;index:ix_gen_candidates_workspace_status,priority:2;check:ck_gen_candidate_status,status IN ('QC_PASSED','QC_FAILED')"`
-	Revision         int         `gorm:"not null;check:ck_gen_candidate_revision,revision >= 1"`
-	CreatedBy        uuid.UUID   `gorm:"type:uuid;not null"`
-	CreatedAt        time.Time   `gorm:"type:timestamptz;not null"`
-	UpdatedAt        time.Time   `gorm:"type:timestamptz;not null"`
-	Workspace        Workspace   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Project          Project     `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Artifact         Artifact    `gorm:"foreignKey:ArtifactID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Creator          UserAccount `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ID                uuid.UUID   `gorm:"type:uuid;primaryKey"`
+	WorkspaceID       uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_gen_candidate_source_output,priority:1;uniqueIndex:uq_gen_candidate_artifact,priority:1;index:ix_gen_candidates_workspace_status,priority:1"`
+	ProjectID         uuid.UUID   `gorm:"type:uuid;not null;index"`
+	ProviderJobID     uuid.UUID   `gorm:"type:uuid;not null;index"`
+	ProviderCallID    uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_gen_candidate_source_output,priority:2;index"`
+	ProviderReceiptID uuid.UUID   `gorm:"type:uuid;not null;index"`
+	OutputKey         string      `gorm:"type:varchar(120);not null;uniqueIndex:uq_gen_candidate_source_output,priority:3"`
+	ArtifactID        uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_gen_candidate_artifact,priority:2"`
+	ArtifactRevision  int         `gorm:"not null;check:ck_gen_candidate_artifact_revision,artifact_revision >= 1"`
+	ArtifactSHA256    string      `gorm:"type:char(64);not null;check:ck_gen_candidate_artifact_sha256,char_length(artifact_sha256) = 64"`
+	MediaType         string      `gorm:"type:varchar(120);not null;check:ck_gen_candidate_media_type,media_type IN ('image/png','image/jpeg')"`
+	Width             int         `gorm:"not null;check:ck_gen_candidate_width,width > 0"`
+	Height            int         `gorm:"not null;check:ck_gen_candidate_height,height > 0"`
+	Status            string      `gorm:"type:varchar(20);not null;index:ix_gen_candidates_workspace_status,priority:2;check:ck_gen_candidate_status,status IN ('QC_PASSED','QC_FAILED')"`
+	Revision          int         `gorm:"not null;check:ck_gen_candidate_revision,revision >= 1"`
+	CreatedBy         uuid.UUID   `gorm:"type:uuid;not null"`
+	CreatedAt         time.Time   `gorm:"type:timestamptz;not null"`
+	UpdatedAt         time.Time   `gorm:"type:timestamptz;not null"`
+	Workspace         Workspace   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project           Project     `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Artifact          Artifact    `gorm:"foreignKey:ArtifactID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator           UserAccount `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (GenerationCandidate) TableName() string { return "gen_candidates" }

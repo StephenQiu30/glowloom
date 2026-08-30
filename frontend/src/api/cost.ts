@@ -23,23 +23,23 @@ export function setCostBudgetApiProjectsProjectIdCostBudgetPost(
   );
 }
 
-export function getCurrentCostPriceQuoteApiProjectsProjectIdCostPricesMetricGet(
-  params: { project_id: string; metric: "generation.image" },
+export function getCurrentCostPriceQuoteApiProjectsProjectIdMediaModelProfilesProfileVersionIdCostPriceGet(
+  params: { project_id: string; profile_version_id: string },
   options?: RequestOptions,
 ) {
   return request<Envelope<API.CostPriceQuoteResponse>>(
-    `/api/projects/${params.project_id}/cost-prices/${params.metric}`,
+    `/api/projects/${params.project_id}/media-model-profiles/${params.profile_version_id}/cost-price`,
     { method: "GET", ...(options ?? {}) },
   );
 }
 
-export function setCostPriceQuoteApiProjectsProjectIdCostPricesMetricPost(
-  params: { project_id: string; metric: "generation.image" },
+export function setCostPriceQuoteApiProjectsProjectIdMediaModelProfilesProfileVersionIdCostPricePost(
+  params: { project_id: string; profile_version_id: string },
   body: API.CostPriceQuoteSetRequest,
   options?: RequestOptions,
 ) {
   return request<Envelope<API.CostPriceQuoteResponse>>(
-    `/api/projects/${params.project_id}/cost-prices/${params.metric}`,
+    `/api/projects/${params.project_id}/media-model-profiles/${params.profile_version_id}/cost-price`,
     { method: "POST", data: body, ...(options ?? {}) },
   );
 }

@@ -76,6 +76,7 @@ type Service struct {
 
 type RegisterStagedCommand struct {
 	WorkspaceID, ProjectID, SourceType, SourceID, OutputKey string
+	ProviderJobID, ProviderCallID                           string
 	ObjectKey, MediaType, SHA256, IdempotencyKey            string
 	SizeBytes                                               int64
 }
@@ -87,8 +88,9 @@ type RegisterResult struct {
 }
 
 type ValidateReadyCommand struct {
-	ArtifactID, IdempotencyKey string
-	ExpectedRevision           int
+	ArtifactID, IdempotencyKey    string
+	ExpectedRevision              int
+	ExpectedWidth, ExpectedHeight int
 }
 
 type ValidateResult struct {
@@ -103,6 +105,7 @@ type artifactReceipt struct {
 
 type registerHashInput struct {
 	WorkspaceID, ProjectID, SourceType, SourceID, OutputKey string
+	ProviderJobID, ProviderCallID                           string
 	ObjectKey, MediaType, SHA256                            string
 	SizeBytes                                               int64
 	Bucket, StorageProfile, Region                          string
@@ -112,6 +115,7 @@ type validateHashInput struct {
 	ArtifactID, ObjectKey, MediaType, SHA256 string
 	SizeBytes                                int64
 	ExpectedRevision                         int
+	ExpectedWidth, ExpectedHeight            int
 }
 
 func NewService(transactions TransactionManager, objects ObjectReader, config Config) *Service {
@@ -128,7 +132,8 @@ func (service *Service) RegisterStaged(ctx context.Context, actor Actor, command
 	}
 	inputHash, err := platformcommand.InputHash(registerHashInput{
 		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, SourceType: command.SourceType,
-		SourceID: command.SourceID, OutputKey: command.OutputKey, ObjectKey: command.ObjectKey,
+		SourceID: command.SourceID, OutputKey: command.OutputKey,
+		ProviderJobID: command.ProviderJobID, ProviderCallID: command.ProviderCallID, ObjectKey: command.ObjectKey,
 		MediaType: command.MediaType, SHA256: command.SHA256, SizeBytes: command.SizeBytes,
 		Bucket: service.config.Bucket, StorageProfile: service.config.StorageProfile, Region: service.config.Region,
 	})
@@ -183,7 +188,9 @@ func (service *Service) RegisterStaged(ctx context.Context, actor Actor, command
 
 func (service *Service) ValidateReady(ctx context.Context, actor Actor, command ValidateReadyCommand) (ValidateResult, error) {
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
-	if _, err := uuid.Parse(command.ArtifactID); err != nil || command.ExpectedRevision < 1 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+	if _, err := uuid.Parse(command.ArtifactID); err != nil || command.ExpectedRevision < 1 ||
+		command.ExpectedWidth < 1 || command.ExpectedHeight < 1 ||
+		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return ValidateResult{}, invalid("Invalid artifact validation request")
 	}
 	var observed domain.ArtifactWithLocation
@@ -200,6 +207,7 @@ func (service *Service) ValidateReady(ctx context.Context, actor Actor, command 
 		inputHash, loadErr = platformcommand.InputHash(validateHashInput{
 			ArtifactID: bundle.Artifact.ID, ObjectKey: bundle.Location.ObjectKey, MediaType: bundle.Artifact.MediaType,
 			SHA256: bundle.Artifact.SHA256, SizeBytes: bundle.Artifact.SizeBytes, ExpectedRevision: command.ExpectedRevision,
+			ExpectedWidth: command.ExpectedWidth, ExpectedHeight: command.ExpectedHeight,
 		})
 		if loadErr != nil {
 			return loadErr
@@ -242,6 +250,8 @@ func (service *Service) ValidateReady(ctx context.Context, actor Actor, command 
 		}
 	} else if width, height, failureCode = validateImage(contents, observed.Artifact.MediaType); failureCode != "" {
 		status = domain.ReadinessQuarantined
+	} else if width != command.ExpectedWidth || height != command.ExpectedHeight {
+		status, failureCode = domain.ReadinessQuarantined, "image_dimensions_mismatch"
 	}
 
 	now := service.config.Now().UTC()
@@ -325,13 +335,19 @@ func (service *Service) validateRegistration(command RegisterStagedCommand) erro
 	if _, err := uuid.Parse(command.SourceID); err != nil {
 		return invalid("Invalid staged artifact request")
 	}
-	if command.SourceType != "generation_provider_job" || !outputKeyPattern.MatchString(command.OutputKey) ||
+	if _, err := uuid.Parse(command.ProviderJobID); err != nil {
+		return invalid("Invalid staged artifact request")
+	}
+	if _, err := uuid.Parse(command.ProviderCallID); err != nil {
+		return invalid("Invalid staged artifact request")
+	}
+	if command.SourceType != "generation_provider_receipt" || !outputKeyPattern.MatchString(command.OutputKey) ||
 		(command.MediaType != "image/png" && command.MediaType != "image/jpeg") || !sha256Pattern.MatchString(command.SHA256) ||
 		command.SizeBytes < 1 || command.SizeBytes > service.config.MaxImageBytes || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 ||
 		service.config.Now == nil || service.config.NewID == nil || service.config.Bucket == "" || service.config.StorageProfile == "" || service.config.Region == "" {
 		return invalid("Invalid staged artifact request")
 	}
-	prefix := fmt.Sprintf("staging/%s/%s/", command.WorkspaceID, command.SourceID)
+	prefix := fmt.Sprintf("staging/%s/%s/%s/", command.WorkspaceID, command.ProviderJobID, command.ProviderCallID)
 	if !strings.HasPrefix(command.ObjectKey, prefix) || len(command.ObjectKey) > 600 || strings.Contains(command.ObjectKey, "..") || strings.HasSuffix(command.ObjectKey, "/") {
 		return invalid("Invalid staged artifact object key")
 	}
