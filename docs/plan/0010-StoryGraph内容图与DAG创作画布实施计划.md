@@ -20,7 +20,7 @@
 
 升级按 P0–P4 的十四个实现切片和一个最终浏览器验收切片顺序落地。每个切片必须形成用户可观察、服务端可查询、失败可恢复的纵向闭环，而不是先铺满表、接口或抽象层。
 
-`VP-I01` 是唯一开工入口：以真实剧本完成 SourceVersion → ScriptSpanCandidate → style-blind SceneFactCandidate → 持久 Candidate 查询的最小闭环，并只建立这条路径实际消费的 v2 Wire、Bundle 与 Owner 基础。Interaction、Preset、Generation、Storyboard 和 Guided Studio 不得提前实现。
+`VP-I01` 是唯一开工入口：以真实剧本完成 SourceVersion → ScriptSpanCandidate → style-blind SceneFactCandidate → 持久 Candidate 查询的最小闭环，并只建立这条路径实际消费的 production Wire、Bundle 与 Owner 基础。Interaction、Preset、Generation、Storyboard 和 Guided Studio 不得提前实现。
 
 历史 `SG-I01`–`SG-I20` 只证明旧合同；当前未提交 `SG-I21` 修改属于用户既有工作区事实，实施时必须精确避让或在重叠文件内保留，不能被本计划自动提交、回滚或当作完成证据。
 
@@ -29,7 +29,7 @@
 ### 2.1 当前事实
 
 - Backend 已有 production、storygraph、review、workflow、agent、asset、generation 等模块和真实 PostgreSQL/Temporal 基础，但其旧 Bible-first、旧 Stage/Wire、旧媒体/计费合同不能直接满足新 Requirement。
-- Agent 已有 candidate_runtime 和单一 build-storygraph 入口，可作为迁移输入；现有 Stage 数、Wire、Bundle 与 Candidate 合同必须按 v2 原子演进。
+- Agent 已有 candidate_runtime 和单一 build-storygraph 入口，可作为迁移输入；现有 Stage 数、Wire、Bundle 与 Candidate 合同必须按 production 原子演进。
 - Frontend 是单 Next.js/npm 应用，已使用 RTK Query/OpenAPI 生成类型；当前 /studio 流程不是新项目级 /production Guided Studio。
 - 现有 CI、Docker Compose、真实基础设施和历史测试继续作为回归门，不创建第二套运行栈。
 
@@ -60,17 +60,17 @@
 
 ### P0：文本制作世界
 
-#### VP-I01 — Scene Fact v2 首个纵向切片
+#### VP-I01 — Scene Fact 生产契约 首个纵向切片
 
 目标：真实中文剧本在不受风格污染的前提下形成可重读 SourceVersion、全覆盖 ScriptSpanCandidate 与 SceneFactCandidate。
 
 - [ ] Red：Unicode code-point、全覆盖、未知字段、注入文本、Hash 漂移、Agent 越权和零正式业务写入失败测试。
-- [ ] 建立当前路径需要的 OwnerVersionIdentity、Canonical Hash、v2 Invocation/Result、Bundle allowlist 和 Candidate persistence 最小合同。
+- [ ] 建立当前路径需要的 OwnerVersionIdentity、Canonical Hash、production Invocation/Result、Bundle allowlist 和 Candidate persistence 最小合同。
 - [ ] 实现 SourceVersion 原子发布、propose_script_spans、extract_scene_facts、strict Candidate 接受与 typed Query 回读。
 - [ ] 用至少一份真实多场中文剧本执行 Agent，不以 mock JSON 抵扣语义闭环。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
-停止点：如果 v2 Wire 不能在 Go/Python fixture 同值，或 Source span 无法逐字回读，不进入 VP-I02。
+停止点：如果 production Wire 不能在 Go/Python fixture 同值，或 Source span 无法逐字回读，不进入 VP-I02。
 
 #### VP-I02 — 全剧身份调和、Gate 1 与正式结构
 
@@ -92,9 +92,9 @@
 - [ ] 实现 Gate 2 六视图最小审核与 changes_requested 受影响闭包。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
-#### VP-I04 — storygraph-v2 制作投影与可追溯 Query
+#### VP-I04 — storygraph-production 制作投影与可追溯 Query
 
-目标：把已发布 OwnerVersion 投影为无环 storygraph-v2，并提供有界关系、反查和影响查询。
+目标：把已发布 OwnerVersion 投影为无环 storygraph-production，并提供有界关系、反查和影响查询。
 
 - [ ] Red：Owner 污染源、环、跨项目 ref、current/latest、Head CAS、事务中断、无界查询和 Search 故障。
 - [ ] 实现 OwnerVersion-first Compiler、StoryGraphVersion/Head、typed node/edge、Receipt 与原子发布。
@@ -242,7 +242,7 @@
 
 | 阶段 | 包含切片 | 进入下一阶段前必须满足 |
 |---|---|---|
-| P0 Text Production World | VP-I01–I04 | 真实剧本完成 Gate 1/2；两 Appearance、两 PropState、Interaction/Continuity 可追溯；storygraph-v2 可查询 |
+| P0 Text Production World | VP-I01–I04 | 真实剧本完成 Gate 1/2；两 Appearance、两 PropState、Interaction/Continuity 可追溯；storygraph-production 可查询 |
 | P1 Visual Identity | VP-I05–I08 | 4–6 Preset 可选；六类计划严格；基础 Bundle 经真实生成、Vision、逐 Target 选择 |
 | P2 Composition | VP-I09 | interaction/scene composition 精确消费 base，局部失败不污染其他场景 |
 | P3 Storyboard | VP-I10–I11 | Packet-first Gate 5 与项目级五 Gate 工作台可用，前端不直写正式状态 |

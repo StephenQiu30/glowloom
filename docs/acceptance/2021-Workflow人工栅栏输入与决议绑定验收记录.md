@@ -10,19 +10,19 @@
 
 ## 验收范围
 
-本记录验收 `Upstream node-output-v1 → Human Gate node-input-v1 → HumanTask Candidate IDs → immutable ReviewDecision → Signal Preparation` 的最小闭环。Backend Runtime 是 Gate 输入和协调事实的唯一 Writer，Review 是任务与不可变决议的唯一 Owner，PostgreSQL/GORM 是唯一 SQL 事实源；Temporal 仍只负责跨步骤历史。客户端不能自报候选、改写已提交 Decision，Review 状态也不能充当目标 Owner 的正式业务输出。没有兼容字段、Migration、手写 SQL 或第二数据库。
+本记录验收 `Upstream node-output-canonical → Human Gate node-input-canonical → HumanTask Candidate IDs → immutable ReviewDecision → Signal Preparation` 的最小闭环。Backend Runtime 是 Gate 输入和协调事实的唯一 Writer，Review 是任务与不可变决议的唯一 Owner，PostgreSQL/GORM 是唯一 SQL 事实源；Temporal 仍只负责跨步骤历史。客户端不能自报候选、改写已提交 Decision，Review 状态也不能充当目标 Owner 的正式业务输出。没有兼容字段、Migration、手写 SQL 或第二数据库。
 
 ## 实现证据
 
 | 契约 | 结果 |
 |---|---|
-| Gate 输入 | `PrepareHumanGate` 复用正式 Graph/Port 解析器生成 canonical `node-input-v1`，并在首次进入 `WAITING_HUMAN` 时与 Input Hash、Attempt、Revision 原子提交 |
-| 候选来源 | HumanTask Candidate IDs 只从已提交上游 `node-output-v1` 的 Owner Reference ID 排序去重生成，不接受空集合或客户端候选 |
+| Gate 输入 | `PrepareHumanGate` 复用正式 Graph/Port 解析器生成 canonical `node-input-canonical`，并在首次进入 `WAITING_HUMAN` 时与 Input Hash、Attempt、Revision 原子提交 |
+| 候选来源 | HumanTask Candidate IDs 只从已提交上游 `node-output-canonical` 的 Owner Reference ID 排序去重生成，不接受空集合或客户端候选 |
 | 重放门禁 | 重复打开同一 Gate 重新解析执行输入，并要求已存 Input Hash 与候选集合完全一致 |
 | 决议绑定 | Signal 准备从 PostgreSQL 重读 HumanTask 与 ReviewDecision，并核对 Workspace、Run、Node、Task、Subject、Subject Revision 和 Decision |
 | 选择门禁 | `selected` 决议的 Selected Candidate 必须仍在 HumanTask 冻结候选内 |
 | 副作用边界 | 决议漂移在创建 Workflow Apply Receipt、Signal Intent 和 Temporal 请求之前被拒绝 |
-| 后续输出 | 本切片只证明候选与决议一致；目标 Owner ApplyReceipt 和正式 `node-output-v1` 留给下一切片，不伪报 Gate 已产生业务产物 |
+| 后续输出 | 本切片只证明候选与决议一致；目标 Owner ApplyReceipt 和正式 `node-output-canonical` 留给下一切片，不伪报 Gate 已产生业务产物 |
 
 ## 真实验证
 

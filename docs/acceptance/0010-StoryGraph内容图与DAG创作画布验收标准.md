@@ -37,11 +37,11 @@
 - [ ] `VPR-ARC-003`（`VP-I01`）：PostgreSQL/GORM 保存业务事实，Temporal 保存长流程控制；双方用冻结身份和 Receipt 连接，不复制彼此状态机。 最低证据：Integration + Replay。
 - [ ] `VPR-ARC-004`（`VP-I01`）：Agent 只返回严格 Candidate；不得分配正式业务 UUID、确认 Gate、应用 Owner 版本、恢复 Workflow 或调用媒体 Provider。 最低证据：Contract + Negative。
 - [ ] `VPR-ARC-005`（`VP-I01`）：每个业务变更先形成 OwnerVersion，再由 StoryGraph 投影引用；StoryGraph 不得成为角色、形象、场景、道具、交互或视觉资产的第二写入源。 最低证据：Unit + Integration。
-- [ ] `VPR-ARC-006`（`VP-I01`）：v2 合同按一个实施切片内的 schema、writer、reader、fixture 原子切换；不得长期双写、fallback、latest 补全或静默兼容旧语义。 最低证据：Contract + Migration。
+- [ ] `VPR-ARC-006`（`VP-I01`）：production 合同按一个实施切片内的 schema、writer、reader、fixture 原子切换；不得长期双写、fallback、latest 补全或静默兼容旧语义。 最低证据：Contract + Migration。
 - [ ] `VPR-ARC-007`（`VP-I01`）：Workflow 只编排稳定宏观阶段；Agent shard、候选修订和视觉 Target 不得膨胀为动态 WorkflowDefinition 节点。 最低证据：Architecture + Replay。
 - [ ] `VPR-ARC-008`（`VP-I01`）：MVP 生产主链不得依赖 Cost、Quota、Payment、视频生成或通用画布成功；相关服务故障不能阻断本文图片参考与分镜闭环。 最低证据：Journey + Fault injection。
 - [ ] `VPR-ARC-009`（`VP-I01`）：只实现已被当前纵向切片消费的表、接口、目录和抽象；不得预建未来兼容层、微服务或空 Owner。 最低证据：Diff audit。
-- [ ] `VPR-COM-001`（`VP-I01`）：OwnerVersionIdentityV1 固定包含 owner_kind、logical_id、version_id、revision、content_hash、created_at；引用必须携带完整身份，禁止 current/latest。 最低证据：Contract。
+- [ ] `VPR-COM-001`（`VP-I01`）：OwnerVersionIdentityContract 固定包含 owner_kind、logical_id、version_id、revision、content_hash、created_at；引用必须携带完整身份，禁止 current/latest。 最低证据：Contract。
 - [ ] `VPR-COM-002`（`VP-I01`）：每个 logical scope 只有一个线性 Head；发布命令以 expected_head CAS，冲突返回 head_conflict 且不产生部分写入。 最低证据：Integration + Concurrency。
 - [ ] `VPR-COM-003`（`VP-I01`）：Canonical Hash 对语义字段执行版本化、排序稳定、UTF-8 与长度明确的确定性编码；Go/Python/TypeScript fixture 必须同值。 最低证据：Cross-language golden。
 - [ ] `VPR-COM-004`（`VP-I01`）：业务 OwnerReceipt 证明命令已应用，Workflow EffectReceipt 证明副作用已被流程消费；两层 Receipt 单向引用，不得形成 hash cycle。 最低证据：Unit + Replay。
@@ -194,7 +194,7 @@
 - [ ] `VPA-BDL-004`（`VP-I01`）：BundleManifest 对相对 POSIX 路径排序并覆盖路径字节、内容长度、原始 UTF-8 内容、输出 schema 和允许工具计算 Canonical SHA-256。 最低证据：Go/Python golden。
 - [ ] `VPA-BDL-005`（`VP-I01`）：Bundle hash、任一资源字节、output schema、tool policy 或 version 单独漂移都必须拒绝；不得用当前 Bundle 替代冻结版本。 最低证据：Mutation。
 - [ ] `VPA-BDL-006`（`VP-I01`）：非终态 Invocation 必须路由到精确 bundle_hash 对应的 Agent image digest；找不到返回 skill_bundle_unavailable。 最低证据：Rolling deployment。
-- [ ] `VPA-REL-001`（`VP-I05`）：StageVariantKeyV2 精确由 stage_key、profile_key、lane_key、output_schema_version 构成；四字段共同决定变体身份。 最低证据：Schema。
+- [ ] `VPA-REL-001`（`VP-I05`）：StageVariantKeyProduction 精确由 stage_key、profile_key、lane_key、output_schema_version 构成；四字段共同决定变体身份。 最低证据：Schema。
 - [ ] `VPA-REL-002`（`VP-I05`）：DefinitionCore 保存变体身份、input/output schema、allowed tools、resource policy、模型能力、预算与不变量，不引用 Release、签名或 Control，避免 hash cycle。 最低证据：Hash graph。
 - [ ] `VPA-REL-003`（`VP-I05`）：StageRelease 保存 release_id、definition_hash、bundle_hash、agent_image_digest、model capability、eval attestation、created_at 与 predecessor_release_id。 最低证据：Contract。
 - [ ] `VPA-REL-004`（`VP-I05`）：CandidateStageSet 必须对当前生产 Profile 的十三个 StageVariantKey 完整且唯一，并携带完整性 proof 和 policy proof；不能混用未声明 Release。 最低证据：Set equality。
@@ -207,8 +207,8 @@
 
 ### 3.2 Wire 与 Stage
 
-- [ ] `VPA-WIR-001`（`VP-I01`）：公共 Invocation kind 只允许 storygraph_stage，wire_schema_version 固定 storygraph-stage-wire-v2；不保留 production_bible、storyboard_draft 或无类型 map union。 最低证据：Strict schema。
-- [ ] `VPA-WIR-002`（`VP-I01`）：Invocation 固定 invocation_id、attempt_id、StageVariantKeyV2、StageRelease identity、SkillRelease identity、Control proof、scope、source refs、upstream refs、shard、payload、input_hash 与执行预算。 最低证据：Go/Python fixture。
+- [ ] `VPA-WIR-001`（`VP-I01`）：公共 Invocation kind 只允许 storygraph_stage，wire_schema_version 固定 storygraph-stage-wire-production；不保留 production_bible、storyboard_draft 或无类型 map union。 最低证据：Strict schema。
+- [ ] `VPA-WIR-002`（`VP-I01`）：Invocation 固定 invocation_id、attempt_id、StageVariantKeyProduction、StageRelease identity、SkillRelease identity、Control proof、scope、source refs、upstream refs、shard、payload、input_hash 与执行预算。 最低证据：Go/Python fixture。
 - [ ] `VPA-WIR-003`（`VP-I01`）：scope 必须显式包含 workspace、project、episode 以及该 Stage 允许的 scene/entity/target；未知层级和跨项目引用拒绝。 最低证据：Negative。
 - [ ] `VPA-WIR-004`（`VP-I01`）：source ref 使用完整 OwnerVersionIdentity；upstream ref 使用 CandidateRevision identity、producer Invocation/result hash；Agent 不得补全 current/latest。 最低证据：Mutation。
 - [ ] `VPA-WIR-005`（`VP-I01`）：Stage input 为按 stage_key/profile_key 判别的 strict union，additional properties 默认 false；自由 JSON 只能存在于明确定义的 opaque evidence 字段。 最低证据：Schema fuzz。
@@ -216,7 +216,7 @@
 - [ ] `VPA-WIR-007`（`VP-I01`）：dispatch authorization 在 Backend 运行时单独颁发并绑定 invocation、attempt、expiry 和 agent image；不能改变 Candidate 语义 Hash。 最低证据：Security。
 - [ ] `VPA-WIR-008`（`VP-I01`）：AttemptResult 只允许 accepted、rejected、outcome_unknown，包含 input_hash、output_hash、diagnostic_hash、release fence 与完成时间；同尝试结果不可覆盖。 最低证据：State machine。
 - [ ] `VPA-WIR-009`（`VP-I01`）：Go/Python 必须共用提交到仓库的正例、缺字段、未知字段、排序、Unicode、Hash 漂移和跨项目攻击 fixture。 最低证据：CI。
-- [ ] `VPA-WIR-010`（`VP-I01`）：旧 Wire 在 v2 切片中原子移除或明确隔离为历史调用路径；不得 fallback 或自动转换成 v2 正式 Candidate。 最低证据：Architecture negative。
+- [ ] `VPA-WIR-010`（`VP-I01`）：旧 Wire 在 production 切片中原子移除或明确隔离为历史调用路径；不得 fallback 或自动转换成 production 正式 Candidate。 最低证据：Architecture negative。
 - [ ] `VPA-STG-001`（`VP-I13`）：CandidateStageSet 对上表十三个 stage_key 完整且无重复；缺一项、额外项或变体碰撞均不能批准。 最低证据：Set golden。
 - [ ] `VPA-STG-002`（`VP-I02`）：每个 Stage 使用独立 strict input/output schema、allowed resource list、model capability 和 max model calls；不能共用万能 Candidate。 最低证据：Registry audit。
 - [ ] `VPA-STG-003`（`VP-I02`）：review_candidate 与 repair_candidate 的 profile 必须精确绑定被评审 Stage schema 和 rubric；未知 profile 拒绝。 最低证据：Contract。
@@ -249,7 +249,7 @@
 
 ### 3.4 Candidate、Runtime、Eval 与旅程
 
-- [ ] `VPA-CAN-001`（`VP-I02`）：ShardManifestV2 不可变，包含 manifest_hash、scope universe、shard key、coverage、dependency closure 和 fixed-point proof；同阶段所有 shard 无重叠且完整覆盖。 最低证据：Property。
+- [ ] `VPA-CAN-001`（`VP-I02`）：ShardManifestProduction 不可变，包含 manifest_hash、scope universe、shard key、coverage、dependency closure 和 fixed-point proof；同阶段所有 shard 无重叠且完整覆盖。 最低证据：Property。
 - [ ] `VPA-CAN-002`（`VP-I02`）：CandidateRevision 不可变，包含 revision_id、stage variant、shard、input_hash、output_hash、producer union、parent revision 和 status。 最低证据：Contract。
 - [ ] `VPA-CAN-003`（`VP-I02`）：producer union 明确区分 Agent Attempt、Backend mechanical、Human correction；三者字段不可混用。 最低证据：Strict union。
 - [ ] `VPA-CAN-004`（`VP-I02`）：每个 stage_instance_key 只有一个 CandidateHead，更新使用 expected revision CAS；并发 repair 只能一个成功。 最低证据：Concurrency。
@@ -283,10 +283,10 @@
 
 ## 4. 实施切片完成 Checklist
 
-- [ ] `VP-I01`：Scene Fact v2 首个纵向切片；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
+- [ ] `VP-I01`：Scene Fact 生产契约 首个纵向切片；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
 - [ ] `VP-I02`：全剧身份调和、Gate 1 与正式结构；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
 - [ ] `VP-I03`：制作世界、人物多形象、道具交互与 Gate 2；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
-- [ ] `VP-I04`：storygraph-v2 制作投影与可追溯 Query；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
+- [ ] `VP-I04`：storygraph-production 制作投影与可追溯 Query；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
 - [ ] `VP-I05`：Skill 供应链、4–6 Preset、视觉基础与 Gate 3；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
 - [ ] `VP-I06`：六类 Target 与 Provider-neutral Brief；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
 - [ ] `VP-I07`：图片执行、Bundle、确定性 QC 与 Vision Review；Plan 完成门、主 Requirement Evidence、当时全量 CI 与独立提交均已有可复核记录。
@@ -301,7 +301,7 @@
 
 ## 5. P0–P4 阶段验收
 
-- [ ] P0：真实剧本完成 Gate 1/2，人物多形象、道具状态、Interaction/Continuity 与 storygraph-v2 Query 均可追溯。
+- [ ] P0：真实剧本完成 Gate 1/2，人物多形象、道具状态、Interaction/Continuity 与 storygraph-production Query 均可追溯。
 - [ ] P1：4–6 Preset、六类 Target、真实基础 Bundle、Vision Review 和逐 Target 选择通过。
 - [ ] P2：Interaction/Scene Composition 精确消费 base，局部失败与修改不污染无关场景。
 - [ ] P3：ProductionPacket 驱动正式分镜，Gate 5 与项目级五 Gate Guided Studio 可用。
@@ -309,7 +309,7 @@
 
 ## 6. Evidence Log
 
-### `VP-I01` — Scene Fact v2 首个纵向切片
+### `VP-I01` — Scene Fact 生产契约 首个纵向切片
 
 - 状态：未开始
 - Git 基线/提交：待记录
@@ -339,7 +339,7 @@
 - 真实输入/产物/事实对账：待记录
 - 未覆盖条件与残余风险：待记录
 
-### `VP-I04` — storygraph-v2 制作投影与可追溯 Query
+### `VP-I04` — storygraph-production 制作投影与可追溯 Query
 
 - 状态：未开始
 - Git 基线/提交：待记录

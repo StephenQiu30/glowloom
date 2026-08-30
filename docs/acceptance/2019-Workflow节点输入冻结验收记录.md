@@ -1,6 +1,6 @@
 # Workflow 节点输入冻结验收记录
 
-- 状态：`node-input-v1`、Graph 输入解析与 Claim 原子输入投影切片通过；Runtime Cache 命中尚未接入
+- 状态：`node-input-canonical`、Graph 输入解析与 Claim 原子输入投影切片通过；Runtime Cache 命中尚未接入
 - 日期：2026-08-26
 - Design：[后端领域模块功能设计](../design/2002-后端领域模块功能设计.md)
 - PRD：[产品范围与验收基线](../prd/0001-产品范围与验收基线.md)
@@ -10,7 +10,7 @@
 
 ## 验收范围
 
-本记录验收 `Committed WorkflowDefinition/RunInputSnapshot → Graph Edge/Variable Resolution → node-input-v1 → Claim-fenced NodeRun Input Projection → NodeExecutor Contract` 的最小闭环。Backend Runtime 是输入解析者；Executor 和 Agent 不得自报或修改输入。PostgreSQL/GORM 仍是唯一 SQL 事实源，没有 Migration 文件、手写 SQL、测试层 GORM 依赖或第二套输入状态。
+本记录验收 `Committed WorkflowDefinition/RunInputSnapshot → Graph Edge/Variable Resolution → node-input-canonical → Claim-fenced NodeRun Input Projection → NodeExecutor Contract` 的最小闭环。Backend Runtime 是输入解析者；Executor 和 Agent 不得自报或修改输入。PostgreSQL/GORM 仍是唯一 SQL 事实源，没有 Migration 文件、手写 SQL、测试层 GORM 依赖或第二套输入状态。
 
 本切片尚未读取或写入 Node Cache，也不为 Human Gate 伪造 Owner 输出。其结果是 Cache Key 已有可信的 Normalized Input Hash 与上游 Content Hash 来源，但只有下一切片完成原子 Cache Hit/Commit 后才允许出现 `CACHED`。
 
@@ -18,7 +18,7 @@
 
 | 契约 | 结果 |
 |---|---|
-| 固定输入格式 | `node-input-v1` 包含 canonical Node Config、按目标 Port 排序的 Binding 与排序去重后的全部 Frozen Reference |
+| 固定输入格式 | `node-input-canonical` 包含 canonical Node Config、按目标 Port 排序的 Binding 与排序去重后的全部 Frozen Reference |
 | Edge 解析 | Runtime 只接受同一 Run 中已完成上游 Node 的精确 Output Port；Definition/Version/Executor/Risk、Port 与 Value Type 任一漂移均拒绝 |
 | Variable 解析 | Variable Binding 必须同时存在于编译 Graph、目标 Input Port 与 Variables，值按 JSON 语义 canonicalize |
 | 上游门禁 | 上游未完成、没有 Output、Output Hash 漂移或缺少必填输入时，目标 Node 保持 `QUEUED`，Executor 调用次数保持零 |
@@ -47,7 +47,7 @@
 
 ## 残余风险与下一切片
 
-- Human Gate 成功状态仍没有目标 Owner 输出，所以下游 Edge 会被真实输入解析器拒绝；必须先由 Production/Generation Owner 提交 Apply Receipt 与 `node-output-v1` 引用。
+- Human Gate 成功状态仍没有目标 Owner 输出，所以下游 Edge 会被真实输入解析器拒绝；必须先由 Production/Generation Owner 提交 Apply Receipt 与 `node-output-canonical` 引用。
 - 下一切片使用已验证的 Node Definition、Config Hash、Input Hash、Frozen Hash、上游 Content Hash 与 Runtime Contract 计算 Cache Key，并在 Claim fencing 事务内完成 Cache Hit 或 Cache Fact + Node Output 原子提交。
 - 正式 NodeExecutor 与 Worker Composition Root 尚未接入，当前只证明 Runtime 契约和真实数据库事实可落地。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。

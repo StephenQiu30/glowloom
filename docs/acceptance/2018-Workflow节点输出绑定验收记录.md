@@ -1,6 +1,6 @@
 # Workflow 节点输出绑定验收记录
 
-- 状态：`node-output-v1` 与 NodeRun 原子输出投影切片通过；上游输入传播与 Runtime Cache 命中尚未接入
+- 状态：`node-output-canonical` 与 NodeRun 原子输出投影切片通过；上游输入传播与 Runtime Cache 命中尚未接入
 - 日期：2026-08-26
 - Design：[后端领域模块功能设计](../design/2002-后端领域模块功能设计.md)
 - PRD：[产品范围与验收基线](../prd/0001-产品范围与验收基线.md)
@@ -10,7 +10,7 @@
 
 ## 验收范围
 
-本记录验收 `NodeExecutorResult → node-output-v1 → Runtime canonical Output Hash → Claim-fenced NodeRunProjection → Activity Replay` 的最小闭环。输出只引用 Backend Owner 已提交的事实，不让 Agent、Temporal 或缓存成为业务事实 Writer；PostgreSQL/GORM 仍是唯一 SQL 事实源，没有 Migration 文件或手写 SQL。
+本记录验收 `NodeExecutorResult → node-output-canonical → Runtime canonical Output Hash → Claim-fenced NodeRunProjection → Activity Replay` 的最小闭环。输出只引用 Backend Owner 已提交的事实，不让 Agent、Temporal 或缓存成为业务事实 Writer；PostgreSQL/GORM 仍是唯一 SQL 事实源，没有 Migration 文件或手写 SQL。
 
 本切片不解析 Graph 上游输入、不启用 Runtime Cache 命中，也不伪造 Human Gate 的 Owner 输出。Executor 尚未接入生产 Composition Root，因此本记录不宣称正式 Worker 已可执行完整制作剧集。
 
@@ -18,7 +18,7 @@
 
 | 契约 | 结果 |
 |---|---|
-| 固定输出格式 | `node-output-v1` 的 Binding 明确 Port、Value Type、Owner Reference ID/Version 与 Content Hash |
+| 固定输出格式 | `node-output-canonical` 的 Binding 明确 Port、Value Type、Owner Reference ID/Version 与 Content Hash |
 | 确定性 | Binding 按 Port 排序；重复 Port、未知字段、非法 UUID/Version/Hash 和空 Binding 集合均拒绝；规范化结果使用 SHA-256 |
 | 职责边界 | Executor 只能返回 `SUCCEEDED` / `SKIPPED` 与结构化输出；`CACHED` 只能由后续 Runtime Cache 命中产生 |
 | 失败路径 | Executor 报错、状态非法或输出非法都会释放当前 Claim 并进入 `RETRYING`，不会写入 Output/Hash |
@@ -47,6 +47,6 @@
 ## 残余风险与下一切片
 
 - Human Gate 当前只能提交 Review/Signal/Apply 状态，尚无目标 Owner 产物引用；不能用候选或审核状态替代 Production Owner 事实。
-- 后续 `node-input-v1` 切片已按 Graph Edge/Binding 校验上游 Port 与 Value Type，并生成规范化 Node Input/Hash；下一步在 NodeRun Claim fencing 下安全读取/写入 Node Cache。
+- 后续 `node-input-canonical` 切片已按 Graph Edge/Binding 校验上游 Port 与 Value Type，并生成规范化 Node Input/Hash；下一步在 NodeRun Claim fencing 下安全读取/写入 Node Cache。
 - 正式 NodeExecutor 与 Worker 生命周期仍需在 Backend Composition Root 接入；Agent 只承担受限候选执行职责，不能直接写 Production/Workflow SQL 事实。
 - 最终 `agent-browser` 仍只在全部开发与自动化回归完成后执行，本记录不计作浏览器验收。

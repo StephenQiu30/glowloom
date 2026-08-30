@@ -30,7 +30,7 @@
 ## Red → Green 与真实验证
 
 1. Red：目录合同先失败为系统目录仍是 `1.0.0` 且缺少 `human.episode_plan_review`；Executor 合同先因 `NewNodeExecutor` 尚无 Project/Planning Owner 而编译失败。
-2. Green：目录升级为独立 v2，Episode Plan Executor 通过正式 Application Interface 产出唯一 Candidate；真实 PostgreSQL 定向测试证明重复调用只留下 1 个 Plan 和 1 个 `episode_plan.create` Receipt，且无 Episode/ImportCommit。
+2. Green：目录升级为独立 production，Episode Plan Executor 通过正式 Application Interface 产出唯一 Candidate；真实 PostgreSQL 定向测试证明重复调用只留下 1 个 Plan 和 1 个 `episode_plan.create` Receipt，且无 Episode/ImportCommit。
 3. 真实 Temporal 旅程通过，用时 `6.94s`：Script → Production Bible 持久等待 → Bible HumanTask/Owner Confirm Receipt/Signal → Episode Plan Candidate → Episode Plan HumanTask；最终仍为 0 Episode、0 ImportCommit。Bible Agent 在该集成测试中使用符合正式 `AgentClient` 契约的确定性替身，不宣称真实模型运行。
 4. 第一次 Backend 全量门禁真实发现两类失败：测试文件直接导入 GORM，违反数据库架构门禁；旧 Workflow 断言仍按 9 节点计数。修正时删除测试层 GORM 依赖、按项目隔离事实计数，并把目录顺序更新为 10 节点，没有放宽架构测试或增加兼容分支。
 5. 在重建的空 PostgreSQL 16.15 和固定摘要 Temporal 上，`test -z "$(gofmt -l .)"`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全部通过；Workflow 包用时 `44.048s`。

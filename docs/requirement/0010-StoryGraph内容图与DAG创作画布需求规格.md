@@ -40,7 +40,7 @@
 | VPR-ARC-003 | PostgreSQL/GORM 保存业务事实，Temporal 保存长流程控制；双方用冻结身份和 Receipt 连接，不复制彼此状态机。 | Integration + Replay |
 | VPR-ARC-004 | Agent 只返回严格 Candidate；不得分配正式业务 UUID、确认 Gate、应用 Owner 版本、恢复 Workflow 或调用媒体 Provider。 | Contract + Negative |
 | VPR-ARC-005 | 每个业务变更先形成 OwnerVersion，再由 StoryGraph 投影引用；StoryGraph 不得成为角色、形象、场景、道具、交互或视觉资产的第二写入源。 | Unit + Integration |
-| VPR-ARC-006 | v2 合同按一个实施切片内的 schema、writer、reader、fixture 原子切换；不得长期双写、fallback、latest 补全或静默兼容旧语义。 | Contract + Migration |
+| VPR-ARC-006 | production 合同按一个实施切片内的 schema、writer、reader、fixture 原子切换；不得长期双写、fallback、latest 补全或静默兼容旧语义。 | Contract + Migration |
 | VPR-ARC-007 | Workflow 只编排稳定宏观阶段；Agent shard、候选修订和视觉 Target 不得膨胀为动态 WorkflowDefinition 节点。 | Architecture + Replay |
 | VPR-ARC-008 | MVP 生产主链不得依赖 Cost、Quota、Payment、视频生成或通用画布成功；相关服务故障不能阻断本文图片参考与分镜闭环。 | Journey + Fault injection |
 | VPR-ARC-009 | 只实现已被当前纵向切片消费的表、接口、目录和抽象；不得预建未来兼容层、微服务或空 Owner。 | Diff audit |
@@ -49,7 +49,7 @@
 
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| VPR-COM-001 | OwnerVersionIdentityV1 固定包含 owner_kind、logical_id、version_id、revision、content_hash、created_at；引用必须携带完整身份，禁止 current/latest。 | Contract |
+| VPR-COM-001 | OwnerVersionIdentityContract 固定包含 owner_kind、logical_id、version_id、revision、content_hash、created_at；引用必须携带完整身份，禁止 current/latest。 | Contract |
 | VPR-COM-002 | 每个 logical scope 只有一个线性 Head；发布命令以 expected_head CAS，冲突返回 head_conflict 且不产生部分写入。 | Integration + Concurrency |
 | VPR-COM-003 | Canonical Hash 对语义字段执行版本化、排序稳定、UTF-8 与长度明确的确定性编码；Go/Python/TypeScript fixture 必须同值。 | Cross-language golden |
 | VPR-COM-004 | 业务 OwnerReceipt 证明命令已应用，Workflow EffectReceipt 证明副作用已被流程消费；两层 Receipt 单向引用，不得形成 hash cycle。 | Unit + Replay |

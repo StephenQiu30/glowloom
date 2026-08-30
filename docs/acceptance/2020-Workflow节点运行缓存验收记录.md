@@ -10,7 +10,7 @@
 
 ## 验收范围
 
-本记录验收 `Frozen Node Execution → node-cache-key-v1 → Claim-fenced Cache Lookup → Executor Miss / Runtime Hit → NodeCacheEntry + NodeRun Output` 的最小闭环。Backend Runtime 是唯一缓存决策者，PostgreSQL/GORM 是唯一 SQL 事实源；Temporal 仍只负责跨步骤历史，Agent/Executor 不得声明 `CACHED` 或写入缓存事实。没有 Migration 文件、手写 SQL、Redis、Pending Cache、Lease、兼容分支或第二数据库。
+本记录验收 `Frozen Node Execution → node-cache-key-canonical → Claim-fenced Cache Lookup → Executor Miss / Runtime Hit → NodeCacheEntry + NodeRun Output` 的最小闭环。Backend Runtime 是唯一缓存决策者，PostgreSQL/GORM 是唯一 SQL 事实源；Temporal 仍只负责跨步骤历史，Agent/Executor 不得声明 `CACHED` 或写入缓存事实。没有 Migration 文件、手写 SQL、Redis、Pending Cache、Lease、兼容分支或第二数据库。
 
 ## 实现证据
 
@@ -43,7 +43,7 @@
 ## 残余风险与下一切片
 
 - Node Cache 只复用已完成输出，不承担运行中高成本调用防重；Generation/Agent/Media Owner 后续仍必须使用稳定 Intent/Receipt 与 Execution Claim。
-- Human Gate 仍没有目标 Owner 的正式 `node-output-v1`，下游节点会按真实输入门禁保持不可执行；下一切片需提交 Owner Apply Receipt 与输出引用。
+- Human Gate 仍没有目标 Owner 的正式 `node-output-canonical`，下游节点会按真实输入门禁保持不可执行；下一切片需提交 Owner Apply Receipt 与输出引用。
 - 正式 NodeExecutor 与生产 Worker Composition Root 尚未接入，当前不宣称完整剧集制作链路可用。
 - `agent-browser` 按约定只在全部开发完成后执行，本切片不计作浏览器验收。
 - 本地当前提交已按与仓库 CI 等价的门禁通过；`origin/main` 最近一次历史运行仍失败，因为这些本地提交尚未获准推送，不能报告为远端绿色。

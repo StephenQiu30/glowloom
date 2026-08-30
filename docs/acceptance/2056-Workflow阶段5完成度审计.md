@@ -31,7 +31,7 @@
 
 1. Episode 与 Shot 使用同一确定性执行内核，但以不同正式 Temporal Workflow Type 和编译身份启动。
 2. Start、Cancel、Pause、Resume、Human Gate Signal 均使用稳定 Intent/Receipt，并对 UNKNOWN 结果按原身份对账。
-3. Human Gate 打开时冻结 `node-input-v1`；成功 Gate 只传播目标 Owner 已提交的 canonical `node-output-v1`。
+3. Human Gate 打开时冻结 `node-input-canonical`；成功 Gate 只传播目标 Owner 已提交的 canonical `node-output-canonical`。
 4. Worker 重启依赖 Temporal History 恢复，不增加恢复表、内存队列或第二工作流引擎。
 5. 单 Shot 重跑派生新 Run 并保留源 Run；当前只在已物化 CandidateSet 内重新审核和追加 Binding Revision。
 6. Backend 是唯一业务 Writer，PostgreSQL/GORM Model Catalog 是唯一 SQL 事实源；不得增加 Migration、DDL、Raw SQL 或第二 ORM。

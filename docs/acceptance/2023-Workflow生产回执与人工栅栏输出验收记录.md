@@ -10,7 +10,7 @@
 
 ## 验收范围
 
-本记录验收 `ReviewDecision → Production Bible Confirm → CommandReceipt + confirmed Bible → Workflow Apply Receipt → Temporal Signal → Gate node-output-v1 → episodes node-input-v1` 的最小可恢复闭环。Backend 是 Production 与 Workflow 业务事实的唯一 Writer，Temporal 只保存跨步骤历史；PostgreSQL/GORM Model Catalog 是唯一 SQL 事实源。没有 Migration 文件、手写 SQL、兼容字段、第二 ORM 或 Human Gate 专用下游旁路。
+本记录验收 `ReviewDecision → Production Bible Confirm → CommandReceipt + confirmed Bible → Workflow Apply Receipt → Temporal Signal → Gate node-output-canonical → episodes node-input-canonical` 的最小可恢复闭环。Backend 是 Production 与 Workflow 业务事实的唯一 Writer，Temporal 只保存跨步骤历史；PostgreSQL/GORM Model Catalog 是唯一 SQL 事实源。没有 Migration 文件、手写 SQL、兼容字段、第二 ORM 或 Human Gate 专用下游旁路。
 
 ## 实现证据
 
@@ -20,7 +20,7 @@
 | 单次生产效果 | Bible Confirm 与 `production_bible.confirm` CommandReceipt 在现有 Owner 事务中提交；Signal 结果未知后的重试读取同一 Workflow Apply Receipt，不再次调用 Owner |
 | 协调事实 | Workflow Apply Receipt 保存 Owner Receipt ID、Operation、canonical Output Snapshot/Hash，并由 GORM CHECK 约束正向/拒绝类决议的证据形态 |
 | Temporal 对账 | Signal Request/History Hash 包含 Owner Receipt ID 与完整 Output/Hash；相同 Signal ID 的不同证据返回 Conflict |
-| Gate 投影 | Runtime 逐项核对 Intent、Apply Receipt、Node、Decision 与 Owner 证据后，原子写入 Gate `SUCCEEDED` 和同一 `node-output-v1`/Hash |
+| Gate 投影 | Runtime 逐项核对 Intent、Apply Receipt、Node、Decision 与 Owner 证据后，原子写入 Gate `SUCCEEDED` 和同一 `node-output-canonical`/Hash |
 | 下游传播 | `episodes` 继续使用普通 Graph/Port 输入解析器，并读取 Gate 输出中的 confirmed Production Bible revision 2；没有 Review 状态旁路 |
 
 ## 真实验证

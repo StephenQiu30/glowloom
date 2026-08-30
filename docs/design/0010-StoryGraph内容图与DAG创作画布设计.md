@@ -40,11 +40,11 @@ Candidate、ReviewDecision、CandidateSelection 都不进入正式 StoryGraph。
 
 上述主链标出的是“为 SceneProductionPacket 首次强制编译 Graph”的时点。p0/p1 可选发布早期只读投影供 Trace/Diff，但它们不阻断 Owner Apply、不成为 Guided Studio 上游，也不得冒充 production-ready Packet。
 
-当前 Schema 目标是 `storygraph-v2`。既有 `storygraph-v1` 版本保持不可变、可查询、可 Diff，但不能承载 Reference Plan、Reference Binding 或 Interaction 的新约束。v2 不原地改写 v1，也不借兼容字段把新语义塞回旧版本。
+当前 Schema 目标是 `storygraph-production`。既有 `storygraph-narrative` 版本保持不可变、可查询、可 Diff，但不能承载 Reference Plan、Reference Binding 或 Interaction 的新约束。production 不原地改写 legacy，也不借兼容字段把新语义塞回旧版本。
 
 ## 问题与范围
 
-既有 v1 已建立稳定 Node/Edge Key、精确 OwnerRef、不可变 JSONB Version、线性 Head、Canonical Hash、DAG 校验、Diff 与影响追踪，但它仍反映旧的 Bible-first、Storyboard-first 媒体链：
+既有 legacy 已建立稳定 Node/Edge Key、精确 OwnerRef、不可变 JSONB Version、线性 Head、Canonical Hash、DAG 校验、Diff 与影响追踪，但它仍反映旧的 Bible-first、Storyboard-first 媒体链：
 
 - Reference 依赖 Storyboard Intent，顺序与当前产品相反；
 - 没有 `production/reference` Node/Edge；
@@ -53,7 +53,7 @@ Candidate、ReviewDecision、CandidateSelection 都不进入正式 StoryGraph。
 - Compiler 曾被要求从 Evidence 推断正式 Anchor，越过了 Owner Apply；
 - Canvas/Graph Patch 与实现队列混入当前产品范围。
 
-本 Design 只解决 StoryGraph v2 的内容 Schema、输入清单、编译边界、v1→v2 线性升级和 SceneProductionPacket 交接。不定义 Agent Stage/Wire、GORM Record/Command/Receipt、GenerationTarget、HumanTask 恢复合同或前端页面。
+本 Design 只解决 StoryGraph Production Schema 的内容 Schema、输入清单、编译边界、legacy→production 线性升级和 SceneProductionPacket 交接。不定义 Agent Stage/Wire、GORM Record/Command/Receipt、GenerationTarget、HumanTask 恢复合同或前端页面。
 
 ## 非目标
 
@@ -80,23 +80,23 @@ Candidate、ReviewDecision、CandidateSelection 都不进入正式 StoryGraph。
 
 ### 固定身份
 
-| 项目 | v1 历史值 | v2 目标值 |
+| 项目 | legacy 历史值 | production 目标值 |
 |---|---|---|
-| `schema_id` | `storygraph-v1` | `storygraph-v2` |
-| Node Key 派生 | `story-node-key-v1` | 保持 `story-node-key-v1` |
-| Edge Key 派生 | `story-edge-key-v1` | 保持 `story-edge-key-v1` |
-| Graph 发布 | 不可变 Version + 单 Project 线性 Head | 同一条线性 Head，不建 v2 分支 |
-| Schema Manifest | 既有 v1 allowlist | 本 Design 的 v2 Node、Edge、Payload、Owner Input Manifest |
+| `schema_id` | `storygraph-narrative` | `storygraph-production` |
+| Node Key 派生 | `story-node-key-stable` | 保持 `story-node-key-stable` |
+| Edge Key 派生 | `story-edge-key-stable` | 保持 `story-edge-key-stable` |
+| Graph 发布 | 不可变 Version + 单 Project 线性 Head | 同一条线性 Head，不建 production 分支 |
+| Schema Manifest | 既有 legacy allowlist | 本 Design 的 production Node、Edge、Payload、Owner Input Manifest |
 
 `schema_manifest_hash` 必须对以下唯一根对象的 Canonical JSON 计算 SHA-256：
 
 ```text
 SchemaManifestHashRoot {
-  manifest_contract_id: "storygraph-schema-manifest-v1",
-  schema_id: "storygraph-v2",
-  canonical_json_contract_id: "storygraph-canonical-json-v2",
-  node_key_derivation_id: "story-node-key-v1",
-  edge_key_derivation_id: "story-edge-key-v1",
+  manifest_contract_id: "storygraph-schema-manifest-contract",
+  schema_id: "storygraph-production",
+  canonical_json_contract_id: "storygraph-canonical-json-production",
+  node_key_derivation_id: "story-node-key-stable",
+  edge_key_derivation_id: "story-edge-key-stable",
   node_definitions[]: NodeDefinition,
   payload_union_definitions[]: PayloadUnionDefinition,
   edge_alias_definitions[]: EdgeAliasDefinition,
@@ -135,12 +135,12 @@ EdgeAliasDefinition {
 }
 
 EdgeMatrixDefinition {
-  matrix_id: "edge-type-matrix-v1" | "claim-cardinality-matrix-v1" |
-             "materialization-matrix-v1" | "reference-planning-matrix-v1" |
-             "reference-target-input-compatibility-matrix-v1" |
-             "reference-target-result-matrix-v1" |
-             "reference-target-activation-matrix-v1" |
-             "reference-binding-matrix-v1",
+  matrix_id: "edge-type-matrix-contract" | "claim-cardinality-matrix-contract" |
+             "materialization-matrix-contract" | "reference-planning-matrix-contract" |
+             "reference-target-input-compatibility-matrix-contract" |
+             "reference-target-result-matrix-contract" |
+             "reference-target-activation-matrix-contract" |
+             "reference-binding-matrix-contract",
   row_index: integer in [1, 9007199254740991],
   row_payload: EdgeTypeMatrixRow | ClaimCardinalityMatrixRow |
                MaterializationMatrixRow | ReferencePlanningMatrixRow |
@@ -247,15 +247,15 @@ Manifest 数组的排序/唯一键固定为：`node_definitions` 按 `node_type`
 
 八种 `*MatrixRow` 均为 `additionalProperties=false`，列出的字段全部是 non-empty NFC String；`row_payload` 的实际类型必须与 `matrix_id` 一一对应，不得跨表复用或填充伪字段。字段值逐格取对应 Markdown 表格 Cell 的 GFM inline plain-text：移除 code/emphasis 标记，解析实体与转义，首尾 ASCII whitespace 去除，内部连续 ASCII whitespace/newline 折叠为一个 U+0020，再做 NFC；其余 Unicode 与标点逐字保留。OwnerCollectionDefinition 的 `scope_key_and_collection_cardinality/member_completeness` 分别对应 Owner Collection 表的同名列，CheckpointOwnerFamilyDefinition 的三个字段对应 Checkpoint Owner/Family 表的同名列，它们均使用同一 Cell 规范化。这样 Claim 一行可原样承载 Participant/Anchor/State 三列，Reference activation 也不需要伪造 endpoint/qualifier。
 
-`EdgeMatrixDefinition.row_index` 是对应本 Design 八张矩阵的 1-based 正文行号（不计表头）；Alias 必须先用 `EdgeAliasDefinition` 展开为排序去重 Node Type 数组，不对展开结果另行编号。`projection_rule_id/cardinality_rule_id` 分别固定为 `storygraph-v2/<matrix_id>/row-<row_index>-projection-v1` 和 `storygraph-v2/<matrix_id>/row-<row_index>-cardinality-v1`；`scope_key_rule_id/member_contract_id/cardinality_rule_id` 分别固定为 `storygraph-v2/owner-collection/<version_family>-scope-key-v1`、`storygraph-v2/owner-collection/<version_family>-members-v1` 和 `storygraph-v2/owner-collection/<version_family>-cardinality-v1`；`coverage_rule_id` 固定为 `storygraph-v2/coverage/<coverage_phase>-v1`。所有 `<row_index>` 使用无前导 0 的十进制字符串。
+`EdgeMatrixDefinition.row_index` 是对应本 Design 八张矩阵的 1-based 正文行号（不计表头）；Alias 必须先用 `EdgeAliasDefinition` 展开为排序去重 Node Type 数组，不对展开结果另行编号。`projection_rule_id/cardinality_rule_id` 分别固定为 `storygraph-production/<matrix_id>/row-<row_index>-projection-contract` 和 `storygraph-production/<matrix_id>/row-<row_index>-cardinality-contract`；`scope_key_rule_id/member_contract_id/cardinality_rule_id` 分别固定为 `storygraph-production/owner-collection/<version_family>-scope-key-contract`、`storygraph-production/owner-collection/<version_family>-members-contract` 和 `storygraph-production/owner-collection/<version_family>-cardinality-contract`；`coverage_rule_id` 固定为 `storygraph-production/coverage/<coverage_phase>-contract`。所有 `<row_index>` 使用无前导 0 的十进制字符串。
 
-本 Design 的 Node/Payload/Edge/Collection/Coverage/Checkpoint Owner/Family/排除表就是上述数组的人类可审阅来源。Node Allowlist 的合并单元格必须先按 `|`、`、` 展开，每个字面 Node Type 恰生成 1 个 `NodeDefinition`；Payload Union 按展开后的 `node_type + discriminant` 恰生成 1 个 Definition。八张 Edge 矩阵、Owner Collection、Coverage、Checkpoint Owner/Family 和 Exclusion 的每一正文行分别恰生成 1 个对应 Definition。`VP-D14` 必须逐项机械化为跨 Go/Python fixture 并冻结实际 hash；fixture/hash 未建立前不得实现或发布 v2。实现不得手填一个与清单无关的常量冒充 Schema Hash。
+本 Design 的 Node/Payload/Edge/Collection/Coverage/Checkpoint Owner/Family/排除表就是上述数组的人类可审阅来源。Node Allowlist 的合并单元格必须先按 `|`、`、` 展开，每个字面 Node Type 恰生成 1 个 `NodeDefinition`；Payload Union 按展开后的 `node_type + discriminant` 恰生成 1 个 Definition。八张 Edge 矩阵、Owner Collection、Coverage、Checkpoint Owner/Family 和 Exclusion 的每一正文行分别恰生成 1 个对应 Definition。`VP-D14` 必须逐项机械化为跨 Go/Python fixture 并冻结实际 hash；fixture/hash 未建立前不得实现或发布 production。实现不得手填一个与清单无关的常量冒充 Schema Hash。
 
 既有 Key 派生合同不变：
 
 ```text
 story_node_key = "sgn_" + SHA-256(Canonical JSON({
-  schema: "story-node-key-v1",
+  schema: "story-node-key-stable",
   node_type,
   owner_kind,
   owner_logical_id,
@@ -263,7 +263,7 @@ story_node_key = "sgn_" + SHA-256(Canonical JSON({
 }))
 
 edge_key = "sge_" + SHA-256(Canonical JSON({
-  schema: "story-edge-key-v1",
+  schema: "story-edge-key-stable",
   edge_type,
   from_node_key,
   to_node_key,
@@ -275,22 +275,22 @@ edge_key = "sge_" + SHA-256(Canonical JSON({
 
 ### 单 Head 升级
 
-1. v1 Version 永久只读，旧 ID/Hash/查询保持有效；
-2. 第一个 v2 Version 从验证过的 Coverage Proof 与精确 Owner Collections 编译，`parent_version_id` 指向当时线性 Head，即使父版本是 v1；
-3. CAS 成功后 Head 指向 v2，不复制或改写 v1；
-4. 未变 Node Type 沿用 `story-node-key-v1`，相同逻辑 Owner/fragment 的 `story_node_key` 跨 Schema 保持稳定；
-5. Cross-schema Diff 将 v2 新 Node/Edge 标为 added，将 v2 排除的旧媒体 Node/Edge 标为 removed，将同 Key 内容变化标为 changed；
-6. `schema_rank` 固定为 `storygraph-v1=1 < storygraph-v2=2`；Head 必须保存 `schema_id + schema_rank`，CAS 只允许 `v1→v1`（cutover 前）、恰一次 `v1→v2` 和之后的 `v2→v2`；
-7. v2 cutover 成功后，任何 legacy v1 Compile/Publish 即使持有旧 expected Head 也必须被 CAS 以 `schema_downgrade` 拒绝；v1 只保留 Read/Diff/Trace；
-8. v2 失败不影响当前 Head；不得建立第二个 v2 Head、v1 child 或兼容双写。
+1. legacy Version 永久只读，旧 ID/Hash/查询保持有效；
+2. 第一个 production Version 从验证过的 Coverage Proof 与精确 Owner Collections 编译，`parent_version_id` 指向当时线性 Head，即使父版本是 legacy；
+3. CAS 成功后 Head 指向 production，不复制或改写 legacy；
+4. 未变 Node Type 沿用 `story-node-key-stable`，相同逻辑 Owner/fragment 的 `story_node_key` 跨 Schema 保持稳定；
+5. Cross-schema Diff 将 production 新 Node/Edge 标为 added，将 production 排除的旧媒体 Node/Edge 标为 removed，将同 Key 内容变化标为 changed；
+6. `schema_rank` 固定为 `storygraph-narrative=1 < storygraph-production=2`；Head 必须保存 `schema_id + schema_rank`，CAS 只允许 `legacy→legacy`（cutover 前）、恰一次 `legacy→production` 和之后的 `production→production`；
+7. production cutover 成功后，任何 legacy legacy Compile/Publish 即使持有旧 expected Head 也必须被 CAS 以 `schema_downgrade` 拒绝；legacy 只保留 Read/Diff/Trace；
+8. production 失败不影响当前 Head；不得建立第二个 production Head、legacy child 或兼容双写。
 
-## `storygraph-v2` Schema-scoped Owner Input Manifest
+## `storygraph-production` Schema-scoped Owner Input Manifest
 
 Compiler 只接收经 Backend Owner Query 冻结且可证明完整的精确集合：
 
 ```text
 CompileStoryGraphVersion(
-  schema_id = storygraph-v2,
+  schema_id = storygraph-production,
   verified_coverage_proof,
   exact_owner_collections[],
   expected_graph_head_revision,
@@ -360,7 +360,7 @@ OwnerCollectionRef {
 | `p2` | `asset_composition_artifact_set` / `asset` | `scene` | 与 `reference_binding_set` 同 Scope；每 `p2_scope_key` 恰 1 Collection | `receipt_bound` | 每个正式 Scene/Interaction Binding 精确 1 个 selected READY Composition Artifact；不包含未选 Candidate Artifact |
 | `p3` | `storyboard_formal_set` / `production/storyboard` | `scene` | 对每个 `p3_scope_key` 恰 1 Collection，`scope_key` 即该 Scene Scope Key | `forbidden` | 完整正式 Shot 集；每个 Shot 精确 1 个 ShotProductionBindingVersion，Draft/Intent Candidate 为 `0` |
 
-Collection 唯一键固定为 `(workspace_id, project_id, owner_kind, version_family, scope_kind, scope_key)`，同一编译输入中不可重复。`scope_key` 必须按上表逐字节派生，Compiler 不按 Collection 成员反向猜测 Scope。上表第 4、5列分别机械生成 `cardinality_rule_id` 和 `empty_collection_policy`；`scope_key_rule_id` 固定为 `storygraph-v2/owner-collection/<version_family>-scope-key-v1`。
+Collection 唯一键固定为 `(workspace_id, project_id, owner_kind, version_family, scope_kind, scope_key)`，同一编译输入中不可重复。`scope_key` 必须按上表逐字节派生，Compiler 不按 Collection 成员反向猜测 Scope。上表第 4、5列分别机械生成 `cardinality_rule_id` 和 `empty_collection_policy`；`scope_key_rule_id` 固定为 `storygraph-production/owner-collection/<version_family>-scope-key-contract`。
 
 Coverage Rule 的累计 Family Set 固定为：
 
@@ -500,8 +500,8 @@ Coverage Scope Key 统一使用 `scene:<scene_owner_logical_id>`；`receipt_scop
 - 非空 Collection 的 `committed_owner_version_ref` 必须非空且为该 Collection member；合法空 Collection 的该字段必须为 `null`，Receipt 仍通过 `committed_collection_root_hash` 证明 Owner 已明确提交“空集合”，不得凭空伪造 SetVersion；该规则适用于全 `not_generated`/未选 optional 时的 `asset_base_reference_set`，以及无需组合结果时的 `reference_binding_set/asset_composition_artifact_set`；
 - 唯一无 Receipt 空集例外是 `scope_rebase=null` 时的 `planning_structure_rebase_set`：它必须为空且不得有对应 Receipt。`scope_rebase!=null` 时该 Collection 必须恰 1 member 且恰有 1 个 `gate_2_bible_continuity` Receipt，其 committed Ref 精确等于 `planning_structure_rebase_ref`；Gate 1 仍只由 `production/bible` 发布 StructureIdentitySetVersion，Planning Rebase 不扩大 Gate 1 Writer；
 - Compiler 按 Receipt、Collection 和基数反向推导每个 Scene 的最高 Coverage，仅在推导出的四组 Scope Set 与 Proof 声明完全相同时接受；
-- `coverage_phase` 是线性 Head 的历史最高阶高水位，不是“全项目已到该阶段”的布尔值；首个 v2 版本取当前非空 Scope Set 的最高阶，后续取 `max(parent.coverage_phase, current highest non-empty scope phase)`；
-- 同一 v2 线性 Head 只能保持或提高 `coverage_phase`；同一 Planning Structure Epoch 内，每个 phase 的 scope set 只能保持或扩大；合法删除/重切分见下文 Scope Rebase，它可以在最高阶 Scope 全被退役时保留高水位；
+- `coverage_phase` 是线性 Head 的历史最高阶高水位，不是“全项目已到该阶段”的布尔值；首个 production 版本取当前非空 Scope Set 的最高阶，后续取 `max(parent.coverage_phase, current highest non-empty scope phase)`；
+- 同一 production 线性 Head 只能保持或提高 `coverage_phase`；同一 Planning Structure Epoch 内，每个 phase 的 scope set 只能保持或扩大；合法删除/重切分见下文 Scope Rebase，它可以在最高阶 Scope 全被退役时保留高水位；
 - 任何下游准入、Target 履约和 Packet 生成都只读精确 Scope Set，绝不只看 `coverage_phase`；
 - 上游变更使高阶结果 stale 时，保留当前 Head 并重过 Gate，不发布低阶降级 Head。
 
@@ -509,7 +509,7 @@ Coverage Scope Key 统一使用 `scene:<scene_owner_logical_id>`；`receipt_scop
 
 ```text
 OwnerSetHashRoot {
-  schema_id: "storygraph-v2",
+  schema_id: "storygraph-production",
   schema_manifest_hash,
   verified_coverage_proof: complete canonical object,
   exact_owner_collections[]: complete OwnerCollectionRef objects
@@ -531,9 +531,9 @@ Collection 按 `(owner_kind, version_family, scope_kind, scope_key)` 排序，�
 
 没有上述完整 Proof 的 Scope 缩减一律拒绝；正常新 Scene 只走 Scope 扩展。
 
-所有 Coverage 均禁止 Candidate、ReviewDecision、CandidateSelection、Provider/Profile/Job/Call、Workflow/Invocation、SceneProductionPacket、ContinuityLedgerView 和未选 Artifact 进入 Collection。Owner Apply Receipt 只证明 Coverage，不投影为 Node。只有清单中当前 Schema 可见的 Collection Root 变化才使 Graph stale：`production/reference` 变化不会让 v1 stale，但会让已包含它的 v2 p1/p2/p3 stale。Compiler 发现 Owner Collection 或 Graph Head 漂移时返回 stale/conflict，由上层显式提交新编译请求。
+所有 Coverage 均禁止 Candidate、ReviewDecision、CandidateSelection、Provider/Profile/Job/Call、Workflow/Invocation、SceneProductionPacket、ContinuityLedgerView 和未选 Artifact 进入 Collection。Owner Apply Receipt 只证明 Coverage，不投影为 Node。只有清单中当前 Schema 可见的 Collection Root 变化才使 Graph stale：`production/reference` 变化不会让 legacy stale，但会让已包含它的 production p1/p2/p3 stale。Compiler 发现 Owner Collection 或 Graph Head 漂移时返回 stale/conflict，由上层显式提交新编译请求。
 
-## v2 Node Allowlist
+## production Node Allowlist
 
 StoryGraph Node 是正式 Owner 事实或其稳定聚合片段的投影，不新建第二业务 Record。
 
@@ -577,11 +577,11 @@ StoryGraph Node 是正式 Owner 事实或其稳定聚合片段的投影，不新
 
 表内 `|` 是 Node Type 分隔符，展开后按 UTF-8 字节字典序去重；四行并集必须精确等于 Node Allowlist，有遗漏或重复即拒绝 Schema Manifest。
 
-`project` 只作为 Query scope/root，不是 v2 Node。Character Look、角色卡、地点卡、Scene Card、Action、Conflict、Goal、Turning Point 都是上述 Node 的 typed View 或 payload，不得绕过 allowlist 新增 Node。
+`project` 只作为 Query scope/root，不是 production Node。Character Look、角色卡、地点卡、Scene Card、Action、Conflict、Goal、Turning Point 都是上述 Node 的 typed View 或 payload，不得绕过 allowlist 新增 Node。
 
-v2 明确排除历史 `shot_continuity_claim`、`generation_target`、`shot_image_binding_version` 和 `shot_video_binding_version`。未来若需要把 Shot 媒体执行链重新纳入内容图，必须在 `VP-D10` 接受 GenerationTarget 后发布后续 Schema，不能修改 v2 语义。
+production 明确排除历史 `shot_continuity_claim`、`generation_target`、`shot_image_binding_version` 和 `shot_video_binding_version`。未来若需要把 Shot 媒体执行链重新纳入内容图，必须在 `VP-D10` 接受 GenerationTarget 后发布后续 Schema，不能修改 production 语义。
 
-## v2 Payload Contract Registry
+## production Payload Contract Registry
 
 所有 Payload Object 都必须 `additionalProperties=false`，必需字段不可省略，只有本节显式写为 nullable/optional 的字段才可为 `null` 或省略。OwnerNodeRef 数组统一按 `(owner_kind, version_family, owner_logical_id, fragment_key ?? "", owner_version_id)` 的 UTF-8 字节元组升序并去重；省略 `fragment_key` 时唯一使用空字符串作排序哨兵，已存在的 fragment 因合同要求非空而不会碰撞。Scope Key 和字符串 ID 数组按 UTF-8 字节字典序排序并去重。
 
@@ -630,7 +630,7 @@ ContentAddressedAuditRef {
 }
 ```
 
-`workspace_id/project_id` 必须与 Graph 一致，`audit_owner_kind` 必须等于包含该 Ref 的 Node `owner_kind`，`audit_content_hash` 必须是对应 Owner 不可变审计记录的小写 SHA-256 Content Hash，并被该 Node 的 `owner_content_hash/projection_hash` 二次覆盖。该 Ref 只是业务 Owner Payload 内的内嵌内容定址引用，不是 StoryGraph Node、新 Owner Collection 或 Graph Edge；ReviewDecision 仍不进入 Graph。单个 Ref 无数组排序问题；若未来合同引入数组，必须先发布新 Payload Contract，不得在 v2 临时加字段。
+`workspace_id/project_id` 必须与 Graph 一致，`audit_owner_kind` 必须等于包含该 Ref 的 Node `owner_kind`，`audit_content_hash` 必须是对应 Owner 不可变审计记录的小写 SHA-256 Content Hash，并被该 Node 的 `owner_content_hash/projection_hash` 二次覆盖。该 Ref 只是业务 Owner Payload 内的内嵌内容定址引用，不是 StoryGraph Node、新 Owner Collection 或 Graph Edge；ReviewDecision 仍不进入 Graph。单个 Ref 无数组排序问题；若未来合同引入数组，必须先发布新 Payload Contract，不得在 production 临时加字段。
 
 ```text
 source_revision
@@ -645,13 +645,13 @@ artifact
 approved_reference_plan_version
 ```
 
-它们的 `payload_contract_id` 逐个固定为 `storygraph-v2/<node_type>-ref-payload-v1`，Manifest 必须将逐个展开后的字面量列入，不存储通配符。
+它们的 `payload_contract_id` 逐个固定为 `storygraph-production/<node_type>-ref-payload-contract`，Manifest 必须将逐个展开后的字面量列入，不存储通配符。
 
 World Rule 和全局叙事事实必须显式保存无 Evidence 时的创作决定来源：
 
 ```text
 world_rule | story_arc | plot_thread : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/auditable-bible-fact-payload-v1",
+  payload_contract_id: "storygraph-production/auditable-bible-fact-payload-contract",
   creator_decision_ref: ContentAddressedAuditRef | null
 }
 ```
@@ -672,37 +672,37 @@ ConstraintRefs {
 
 | 对象 | Contract ID |
 |---|---|
-| OwnerVersionRef | `storygraph-v2/owner-version-ref-v1` |
-| OwnerNodeRef | `storygraph-v2/owner-node-ref-v1` |
-| ProjectionRefPayload | `storygraph-v2/projection-ref-payload-base-v1` |
-| ContentAddressedAuditRef | `storygraph-v2/content-addressed-audit-ref-v1` |
-| ClaimScope | `storygraph-v2/claim-scope-v1` |
-| StoryTimeRange | `storygraph-v2/story-time-range-v1` |
-| PositiveRational | `storygraph-v2/positive-rational-v1` |
-| ConstraintRefs | `storygraph-v2/constraint-refs-v1` |
-| Reference Target `target_owner_refs` | `storygraph-v2/reference-target-owner-refs-v1` |
-| EvidenceRef | `storygraph-v2/evidence-ref-v1` |
-| ArtifactProvenanceRef | `scene-production-packet-v1/artifact-provenance-ref-v1` |
+| OwnerVersionRef | `storygraph-production/owner-version-ref-contract` |
+| OwnerNodeRef | `storygraph-production/owner-node-ref-contract` |
+| ProjectionRefPayload | `storygraph-production/projection-ref-payload-base-contract` |
+| ContentAddressedAuditRef | `storygraph-production/content-addressed-audit-ref-contract` |
+| ClaimScope | `storygraph-production/claim-scope-contract` |
+| StoryTimeRange | `storygraph-production/story-time-range-contract` |
+| PositiveRational | `storygraph-production/positive-rational-contract` |
+| ConstraintRefs | `storygraph-production/constraint-refs-contract` |
+| Reference Target `target_owner_refs` | `storygraph-production/reference-target-owner-refs-contract` |
+| EvidenceRef | `storygraph-production/evidence-ref-contract` |
+| ArtifactProvenanceRef | `scene-production-packet-contract/artifact-provenance-ref-contract` |
 
-上述嵌套 Contract 同样 `additionalProperties=false`；同名 Contract ID 在 v2 内不得指向不同字段集。
+上述嵌套 Contract 同样 `additionalProperties=false`；同名 Contract ID 在 production 内不得指向不同字段集。
 
 三类 Edge 集必须精确等于该对象；Policy/Style Ref 恰各 1，WorldRule 为 `0..n`。其余 Payload Contract 固定如下：
 
 ```text
 asset_identity : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/asset-identity-payload-v1",
+  payload_contract_id: "storygraph-production/asset-identity-payload-contract",
   asset_kind: "character" | "location" | "prop",
   creator_decision_ref: ContentAddressedAuditRef | null
 }
 
 SPECIFICATION : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/specification-payload-v1",
+  payload_contract_id: "storygraph-production/specification-payload-contract",
   asset_kind: "character" | "location" | "prop",
   creator_decision_ref: ContentAddressedAuditRef | null
 }
 
 asset_state : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/asset-state-payload-v1",
+  payload_contract_id: "storygraph-production/asset-state-payload-contract",
   asset_kind: "character" | "location" | "prop",
   state_key: StableKey,
   story_time_range: null | StoryTimeRange,
@@ -710,14 +710,14 @@ asset_state : ProjectionRefPayload + {
 }
 
 production_binding : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/production-binding-payload-v1",
+  payload_contract_id: "storygraph-production/production-binding-payload-contract",
   asset_identity_ref,
   specification_ref,
   state_refs[1..n]
 }
 
 occurrence : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/occurrence-payload-v1",
+  payload_contract_id: "storygraph-production/occurrence-payload-contract",
   asset_identity_ref,
   asset_state_ref,
   scene_ref,
@@ -726,7 +726,7 @@ occurrence : ProjectionRefPayload + {
 }
 
 asset_version : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/asset-version-payload-v1",
+  payload_contract_id: "storygraph-production/asset-version-payload-contract",
   purpose: "character_identity_anchor" | "character_appearance" |
            "location_board" | "prop_sheet",
   asset_identity_ref,
@@ -739,7 +739,7 @@ asset_version : ProjectionRefPayload + {
 }
 
 reference_plan_target : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/reference-plan-target-payload-v1",
+  payload_contract_id: "storygraph-production/reference-plan-target-payload-contract",
   target_kind: "character_identity_anchor" | "character_appearance" |
                "location_board" | "prop_sheet" |
                "scene_composition" | "interaction_composition",
@@ -759,7 +759,7 @@ reference_plan_target : ProjectionRefPayload + {
 }
 
 scene_reference_binding_version : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/scene-reference-binding-payload-v1",
+  payload_contract_id: "storygraph-production/scene-reference-binding-payload-contract",
   scene_ref,
   occurrence_refs[],
   interaction_claim_refs[],
@@ -772,7 +772,7 @@ scene_reference_binding_version : ProjectionRefPayload + {
 }
 
 interaction_reference_binding_version : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/interaction-reference-binding-payload-v1",
+  payload_contract_id: "storygraph-production/interaction-reference-binding-payload-contract",
   interaction_claim_ref,
   character_asset_version_refs[1..n],
   prop_asset_version_ref,
@@ -782,12 +782,12 @@ interaction_reference_binding_version : ProjectionRefPayload + {
 }
 
 shot : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/shot-payload-v1",
+  payload_contract_id: "storygraph-production/shot-payload-contract",
   source_beat_refs[1..n]
 }
 
 shot_production_binding_version : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/shot-production-binding-payload-v1",
+  payload_contract_id: "storygraph-production/shot-production-binding-payload-contract",
   shot_ref,
   occurrence_refs[],
   asset_version_refs[],
@@ -804,7 +804,7 @@ Bible Claim 和 Causal Claim 共用以下严格合同：
 
 ```text
 narrative_claim : ProjectionRefPayload + {
-  payload_contract_id: "storygraph-v2/narrative-claim-payload-v1",
+  payload_contract_id: "storygraph-production/narrative-claim-payload-contract",
   claim_series_key: StableKey,
   claim_revision: integer in [1, 9007199254740991],
   predicate: /^[a-z][a-z0-9_]{0,63}$/,
@@ -856,7 +856,7 @@ InvariantDefinition {
 }
 
 PayloadContractHashRoot {
-  payload_meta_contract_id: "storygraph-payload-contract-meta-v1",
+  payload_meta_contract_id: "storygraph-payload-contract-meta-contract",
   payload_contract_id: non-empty NFC String,
   allowed_node_types: non-empty NFC String[],
   discriminant_field: null | non-empty NFC String,
@@ -886,46 +886,46 @@ PayloadContractHashRoot {
 | non-empty NFC String | `nfc-nonempty` |
 | UUID | `uuid-lowercase-hyphenated` |
 | lowercase SHA-256 / `*_hash` | `sha256-lowercase-hex` |
-| StableKey | `stable-key-v1` |
-| ScopeKey | `scene-scope-key-v1` |
-| StoryTimeKey | `story-time-key-v1` |
-| SequenceKey | `sequence-key-v1` |
-| DescriptorKey | `descriptor-key-v1` |
-| `story_node_key` | `story-node-key-v1` |
-| `edge_key` | `story-edge-key-v1` |
-| UTC timestamp | `rfc3339-utc-canonical-v1` |
+| StableKey | `stable-key-contract` |
+| ScopeKey | `scene-scope-key-contract` |
+| StoryTimeKey | `story-time-key-contract` |
+| SequenceKey | `sequence-key-contract` |
+| DescriptorKey | `descriptor-key-contract` |
+| `story_node_key` | `story-node-key-stable` |
+| `edge_key` | `story-edge-key-stable` |
+| UTC timestamp | `rfc3339-utc-canonical-contract` |
 
 | Array Item | `array_item_contract_id` |
 |---|---|
-| OwnerNodeRef | `storygraph-v2/array-item/owner-node-ref-v1` |
-| EvidenceRef | `storygraph-v2/array-item/evidence-ref-v1` |
-| ScopeKey | `storygraph-v2/array-item/scene-scope-key-v1` |
-| StableKey / non-empty NFC String | `storygraph-v2/array-item/nfc-string-v1` |
-| lowercase SHA-256 | `storygraph-v2/array-item/sha256-v1` |
-| 其他已登记 Object | `<object_contract_id>/array-item-v1` |
+| OwnerNodeRef | `storygraph-production/array-item/owner-node-ref-contract` |
+| EvidenceRef | `storygraph-production/array-item/evidence-ref-contract` |
+| ScopeKey | `storygraph-production/array-item/scene-scope-key-contract` |
+| StableKey / non-empty NFC String | `storygraph-production/array-item/nfc-string-contract` |
+| lowercase SHA-256 | `storygraph-production/array-item/sha256-contract` |
+| 其他已登记 Object | `<object_contract_id>/array-item-contract` |
 
-所有 Payload Array 在 v2 都是去重集，因此 `ArraySortRuleDefinition.unique=true`。OwnerNodeRef/EvidenceRef 数组分别使用已定义的 tuple sort mode 且 `sort_key_json_pointers=[]`；Scalar 数组使用对应 UTF-8/ASCII/Integer sort mode 且 `sort_key_json_pointers=[""]`；其他 Object 数组使用 `canonical_json_ascending` 和本 Design 显式的 key Pointer，不得同时使用两种 sort mode。
+所有 Payload Array 在 production 都是去重集，因此 `ArraySortRuleDefinition.unique=true`。OwnerNodeRef/EvidenceRef 数组分别使用已定义的 tuple sort mode 且 `sort_key_json_pointers=[]`；Scalar 数组使用对应 UTF-8/ASCII/Integer sort mode 且 `sort_key_json_pointers=[""]`；其他 Object 数组使用 `canonical_json_ascending` 和本 Design 显式的 key Pointer，不得同时使用两种 sort mode。
 
-Invariant ID Registry 是下表的字面集，它们分别指向本节相应合同后的规范段落/矩阵；同一 ID 在 v2 不得改义，语义变更必须新 Contract/Schema：
+Invariant ID Registry 是下表的字面集，它们分别指向本节相应合同后的规范段落/矩阵；同一 ID 在 production 不得改义，语义变更必须新 Contract/Schema：
 
 | 适用 Contract | `invariant_id` 字面量 |
 |---|---|
-| 全部 Payload | `storygraph-v2/invariant/projection-hash-equals-owner-v1` |
-| ref-only Payload | `storygraph-v2/invariant/ref-payload-no-business-copy-v1` |
-| AssetIdentity/Specification/AssetState/Occurrence/Auditable Bible Fact/Narrative/Continuity | `storygraph-v2/invariant/evidence-xor-creator-decision-v1` |
-| AssetIdentity/Specification/AssetState | `storygraph-v2/invariant/asset-kind-and-state-range-v1` |
-| ProductionBinding | `storygraph-v2/invariant/production-binding-edge-equivalence-v1` |
-| Occurrence | `storygraph-v2/invariant/occurrence-edge-equivalence-v1` |
-| AssetVersion | `storygraph-v2/invariant/asset-version-anchor-target-artifact-constraint-v1` |
-| ReferencePlanTarget | `storygraph-v2/invariant/reference-target-scope-dependency-constraint-v1` |
-| SceneReferenceBinding | `storygraph-v2/invariant/scene-reference-binding-edge-equivalence-v1` |
-| InteractionReferenceBinding | `storygraph-v2/invariant/interaction-reference-binding-edge-equivalence-v1` |
-| Shot | `storygraph-v2/invariant/shot-source-beat-equivalence-v1` |
-| ShotProductionBinding | `storygraph-v2/invariant/shot-binding-edge-equivalence-v1` |
-| Narrative Claim | `storygraph-v2/invariant/narrative-claim-edge-equivalence-v1` |
-| Interaction Claim | `storygraph-v2/invariant/interaction-predicate-state-machine-v1` |
-| Continuity Claim | `storygraph-v2/invariant/continuity-state-transition-v1` |
-| 全部 Claim | `storygraph-v2/invariant/claim-supersession-chain-v1` |
+| 全部 Payload | `storygraph-production/invariant/projection-hash-equals-owner-contract` |
+| ref-only Payload | `storygraph-production/invariant/ref-payload-no-business-copy-contract` |
+| AssetIdentity/Specification/AssetState/Occurrence/Auditable Bible Fact/Narrative/Continuity | `storygraph-production/invariant/evidence-xor-creator-decision-contract` |
+| AssetIdentity/Specification/AssetState | `storygraph-production/invariant/asset-kind-and-state-range-contract` |
+| ProductionBinding | `storygraph-production/invariant/production-binding-edge-equivalence-contract` |
+| Occurrence | `storygraph-production/invariant/occurrence-edge-equivalence-contract` |
+| AssetVersion | `storygraph-production/invariant/asset-version-anchor-target-artifact-constraint-contract` |
+| ReferencePlanTarget | `storygraph-production/invariant/reference-target-scope-dependency-constraint-contract` |
+| SceneReferenceBinding | `storygraph-production/invariant/scene-reference-binding-edge-equivalence-contract` |
+| InteractionReferenceBinding | `storygraph-production/invariant/interaction-reference-binding-edge-equivalence-contract` |
+| Shot | `storygraph-production/invariant/shot-source-beat-equivalence-contract` |
+| ShotProductionBinding | `storygraph-production/invariant/shot-binding-edge-equivalence-contract` |
+| Narrative Claim | `storygraph-production/invariant/narrative-claim-edge-equivalence-contract` |
+| Interaction Claim | `storygraph-production/invariant/interaction-predicate-state-machine-contract` |
+| Continuity Claim | `storygraph-production/invariant/continuity-state-transition-contract` |
+| 全部 Claim | `storygraph-production/invariant/claim-supersession-chain-contract` |
 
 Schema Manifest 的 `payload_union_definitions[]` 必须为每个展开 Node Type 保存 `payload_contract_id + payload_contract_hash`。`VP-D14` 只能把本节机械转为 Schema/fixture 并计算 Hash，不得自行增删字段或修改 nullable/排序/不变量规则。
 
@@ -939,7 +939,7 @@ Evidence 的唯一 Graph 存储位置是 Node Envelope 的 `evidence_refs[]`；P
 
 ```text
 continuity_claim {
-  payload_contract_id: "storygraph-v2/continuity-interaction-payload-v1",
+  payload_contract_id: "storygraph-production/continuity-interaction-payload-contract",
   projection_hash,
   claim_type: "interaction",
   claim_series_key: StableKey,
@@ -1001,11 +1001,11 @@ Predicate 的持有和道具状态转换必须遵守以下矩阵；`actor` / `co
 
 ## `continuity_claim` 的普通 Continuity 分支
 
-普通连续性不使用自由文本 predicate，v2 只接受以下严格 payload：
+普通连续性不使用自由文本 predicate，production 只接受以下严格 payload：
 
 ```text
 continuity_claim {
-  payload_contract_id: "storygraph-v2/continuity-state-payload-v1",
+  payload_contract_id: "storygraph-production/continuity-state-payload-contract",
   projection_hash,
   claim_type: "continuity",
   claim_series_key: StableKey,
@@ -1025,15 +1025,15 @@ continuity_claim {
 }
 ```
 
-该分支必须恰有一个 `subject`，前后 State 属于该身份，故事时间不逆序，起止 Anchor 在有效范围内。`state_persists` 要求前后为同一 AssetState；`state_changes` 要求两者不同且有 Evidence 或显式创作者决定说明 delta。正式 v2 不接受 `uncertain` Continuity；未决不确定项保留在 Candidate/Review Issue，并在 Gate 2 阻断对应作用域。
+该分支必须恰有一个 `subject`，前后 State 属于该身份，故事时间不逆序，起止 Anchor 在有效范围内。`state_persists` 要求前后为同一 AssetState；`state_changes` 要求两者不同且有 Evidence 或显式创作者决定说明 delta。正式 production 不接受 `uncertain` Continuity；未决不确定项保留在 Candidate/Review Issue，并在 Gate 2 阻断对应作用域。
 
 Graph 必须为该 payload 投影恰好一条 `claim_participant(participant_role=subject)`、一条 `claim_state(state_role=before)`、一条 `claim_state(state_role=after)`、一条 `claim_anchor(anchor_role=scope_start)` 和一条 `claim_anchor(anchor_role=scope_end)`；即使起止 Ref 相同，两条不同 qualifier 的 Anchor Edge 仍必须存在。
 
 两个 Continuity 分支都必须满足“Node Envelope `evidence_refs[]` 非空”与“`creator_decision_ref` 非空”恰好一项；其 `supersedes_claim_ref` 也必须与 `supersedes` 入边精确一一等价。
 
-Manifest 对 `continuity_claim` 必须展开两个互斥的 `payload_union_definitions`：`claim_type=interaction` 唯一映射 `storygraph-v2/continuity-interaction-payload-v1`，`claim_type=continuity` 唯一映射 `storygraph-v2/continuity-state-payload-v1`。两个 Contract 各自生成独立 `payload_contract_hash`，不共用 union 虚拟 Hash，不允许第三个 discriminant。
+Manifest 对 `continuity_claim` 必须展开两个互斥的 `payload_union_definitions`：`claim_type=interaction` 唯一映射 `storygraph-production/continuity-interaction-payload-contract`，`claim_type=continuity` 唯一映射 `storygraph-production/continuity-state-payload-contract`。两个 Contract 各自生成独立 `payload_contract_hash`，不共用 union 虚拟 Hash，不允许第三个 discriminant。
 
-## v2 Edge Type Matrix
+## production Edge Type Matrix
 
 所有权威 Edge 统一保持“上游证据/约束/输入 → 下游解释/需求/结果”，并通过稳定端点 Key、Edge Type 和严格 qualifier 派生 `edge_key`。下表别名只是 Schema fixture 的可机械展开 macro，不得作为存储值：
 
@@ -1178,7 +1178,7 @@ Reference Binding Matrix 固定为：
 
 ## Canonical、Hash 与发布门禁
 
-所有 Hash 使用 SHA-256 小写十六进制。`storygraph-canonical-json-v2` 的字节合同固定为“先对所有 String Value/Object Key 做 Unicode NFC，再按 RFC 8785 JSON Canonicalization Scheme 序列化”，并附加以下更严约束：
+所有 Hash 使用 SHA-256 小写十六进制。`storygraph-canonical-json-production` 的字节合同固定为“先对所有 String Value/Object Key 做 Unicode NFC，再按 RFC 8785 JSON Canonicalization Scheme 序列化”，并附加以下更严约束：
 
 - 输出必须是 UTF-8，Object Key 按 RFC 8785 的 UTF-16 code-unit 顺序，无 BOM 和多余空白；
 - 字符串只转义 `"`、`\` 和 U+0000–U+001F 控制字符；`\\/\<\>\&` 不做 HTML 转义，U+2028/U+2029 不额外转义，`\\u00xx` 使用小写十六进制，非法 surrogate 一律拒绝；
@@ -1189,7 +1189,7 @@ Reference Binding Matrix 固定为：
 
 `VP-D14` 必须用包含中文、emoji、`<>&/`、U+2028/U+2029、控制字符、时区输入、整数边界和非法 surrogate 的同一 fixture 验证 Go/Python 成功字节或失败代码完全相同。
 
-每个 v2 Node 必须且只能包含：
+每个 production Node 必须且只能包含：
 
 ```text
 story_node_key
@@ -1211,7 +1211,7 @@ payload（按 node_type 严格判别）
 content_hash
 ```
 
-v2 不存储 `label` 或 `business_position`；这些可变展示字段由 typed Owner Query 在 Read Model 中按 `owner_ref` 补齐，不进入 Node、Schema Manifest 或 Hash。v1 中既有字段仍随历史 Version 可读，Cross-schema Diff 不将纯展示字段当成 v2 业务变更。`evidence_refs[]` 的元素合同固定为：
+production 不存储 `label` 或 `business_position`；这些可变展示字段由 typed Owner Query 在 Read Model 中按 `owner_ref` 补齐，不进入 Node、Schema Manifest 或 Hash。legacy 中既有字段仍随历史 Version 可读，Cross-schema Diff 不将纯展示字段当成 production 业务变更。`evidence_refs[]` 的元素合同固定为：
 
 ```text
 EvidenceRef {
@@ -1286,8 +1286,8 @@ TopologyHashRoot {
   schema_manifest_hash,
   coverage_phase,
   coverage_scope_manifest_hash,
-  node_key_derivation_id: "story-node-key-v1",
-  edge_key_derivation_id: "story-edge-key-v1",
+  node_key_derivation_id: "story-node-key-stable",
+  edge_key_derivation_id: "story-edge-key-stable",
   nodes[]: {story_node_key, node_type},
   edges[]: {edge_key, edge_type, from_node_key, to_node_key, qualifier}
 }
@@ -1297,8 +1297,8 @@ GraphContentHashRoot {
   schema_manifest_hash,
   coverage_phase,
   coverage_scope_manifest_hash,
-  node_key_derivation_id: "story-node-key-v1",
-  edge_key_derivation_id: "story-edge-key-v1",
+  node_key_derivation_id: "story-node-key-stable",
+  edge_key_derivation_id: "story-edge-key-stable",
   owner_set_hash,
   nodes[]: complete Node including node content_hash,
   edges[]: complete Edge including edge content_hash
@@ -1309,7 +1309,7 @@ Node 按 `story_node_key` 排序，Edge 按 `edge_key` 排序。Layout、viewpor
 
 发布前必须验证：
 
-1. Node/Edge Key 可分别按 `story-node-key-v1` / `story-edge-key-v1` 重建，唯一且稳定；
+1. Node/Edge Key 可分别按 `story-node-key-stable` / `story-edge-key-stable` 重建，唯一且稳定；
 2. OwnerNodeRef 的 workspace/project、family、logical/fragment、version/revision/owner hash 与编译 Collection 一致；
 3. Node Type、Owner、Payload discriminant 和 Edge Matrix 完全匹配；
 4. Interaction Payload 与 participant/anchor/state Edge 完全一致；
@@ -1362,7 +1362,7 @@ Scene Binding 必须绑定精确 Scene、相关 Occurrence、Location/Character/
 
 ## SceneProductionPacket
 
-Gate 4 后，系统从与 Reference 结果一致的 v2 p2 VerifiedCoverageProof 与 exact Owner Collections 编译精确 StoryGraphVersion，再由 Backend typed Query 构建 `SceneProductionPacket`。
+Gate 4 后，系统从与 Reference 结果一致的 production p2 VerifiedCoverageProof 与 exact Owner Collections 编译精确 StoryGraphVersion，再由 Backend typed Query 构建 `SceneProductionPacket`。
 
 Packet 是内容定址、只读 Query View，不是 Node、Edge、Owner Record 或 Compiler 输入。它必须使用以下 `additionalProperties=false` 合同独立冻结：
 
@@ -1374,12 +1374,12 @@ ArtifactProvenanceRef {
 }
 
 SceneProductionPacket {
-  packet_contract_id: "scene-production-packet-v1",
+  packet_contract_id: "scene-production-packet-contract",
   workspace_id: UUID,
   project_id: UUID,
   scene_scope_key: ScopeKey,
   storygraph_version_id: UUID,
-  storygraph_schema_id: "storygraph-v2",
+  storygraph_schema_id: "storygraph-production",
   storygraph_schema_manifest_hash: lowercase SHA-256,
   storygraph_content_hash: lowercase SHA-256,
   storygraph_owner_set_hash: lowercase SHA-256,
@@ -1408,13 +1408,13 @@ SceneProductionPacket {
 
 Packet 只能为 `scene_scope_key ∈ p2_scope_keys` 构建，且其 Scene 必须精确等于 `scene_ref`。Beat/Dialogue/Occurrence/State/Claim 是该 Scene 的完整 Owner 闭包；Style/Policy/Plan 恰各1个。基础 AssetVersion 集合必须满足该 Scope 的所有 active required Target；`scene_reference_binding_ref` 只有在对应 Target 为 `required` 或已选 `optional` 时非空，`not_generated`/未选 optional 时为 `null`；Interaction Binding 数组按每个 active Target 的同样规则精确等价。
 
-即使 v2 已投影 Reference，Packet 仍必须独立冻结精确 Binding Ref，并校验其与 Graph OwnerRef 一致；不能只保存 Graph Head、Packet ID 或从 Graph/Asset Catalog 搜索“最新”。这不是第二 Writer，而是 Storyboard Invocation 的重放身份。Storyboard Agent/Owner 只消费被冻结的 Packet；Packet 完整对象和 hash 随 Invocation 保存。
+即使 production 已投影 Reference，Packet 仍必须独立冻结精确 Binding Ref，并校验其与 Graph OwnerRef 一致；不能只保存 Graph Head、Packet ID 或从 Graph/Asset Catalog 搜索“最新”。这不是第二 Writer，而是 Storyboard Invocation 的重放身份。Storyboard Agent/Owner 只消费被冻结的 Packet；Packet 完整对象和 hash 随 Invocation 保存。
 
 ## Storyboard、Guided Studio 与 Story Lens
 
-Storyboard 从 P3 开始，只消费 SceneProductionPacket。正式 Shot 与 ShotProductionBindingVersion 在 Gate 5 Owner Apply 后才能进入下一份 v2 p3 Graph；Shot Draft/Intent Candidate 不进图，也不能反向启动基础参考资产生成。
+Storyboard 从 P3 开始，只消费 SceneProductionPacket。正式 Shot 与 ShotProductionBindingVersion 在 Gate 5 Owner Apply 后才能进入下一份 production p3 Graph；Shot Draft/Intent Candidate 不进图，也不能反向启动基础参考资产生成。
 
-Guided Studio 通过 Backend typed Query 完成五个 Gate、VisualProductionPackageView、Reference coverage 和 Scene readiness，不依赖用户理解 Graph。Story Lens 作为保留平台能力可读取 v1/v2 Version、Diff、Trace 与按 Scene/Episode 的有界子图，但不是当前 MVP 完成门。
+Guided Studio 通过 Backend typed Query 完成五个 Gate、VisualProductionPackageView、Reference coverage 和 Scene readiness，不依赖用户理解 Graph。Story Lens 作为保留平台能力可读取 legacy/production Version、Diff、Trace 与按 Scene/Episode 的有界子图，但不是当前 MVP 完成门。
 
 Project 是 Query scope/root，不是 Graph Node。Outline 从 Project Query scope 展示 Episode；Action 是 Dialogue/Beat payload；Conflict、Goal、Turning Point 由严格 CausalClaim、StoryArc 或 PlotThread 表达，不创建未列入 Schema 的节点。
 
@@ -1423,7 +1423,7 @@ Project 是 Query scope/root，不是 Graph Node。Outline 从 Project Query sco
 - Get current/specified StoryGraph Version；
 - Get bounded Story Lens；
 - Trace upstream/downstream；
-- Diff v1/v2 Versions；
+- Diff legacy/production Versions；
 - Get Graph stale/coverage/schema metadata。
 
 `ValidateStoryGraphCandidate`、`ProposeStoryGraphPatch`、`ApplyStoryGraphPatch` 和 Canvas Domain Intent 属于未来 Canvas 设计，不进入当前 Compiler 或 VP-D05 完成门。
@@ -1440,7 +1440,7 @@ StoryGraphVersion 只有不可变 `published` 状态；旧版本不原地改写�
 - 形象变体未绑定身份锚点、跨身份/State/Style 或修改未声明内容：AssetVersion/Graph 均不得发布；
 - Scene/Interaction Binding 缺基础版本、选择未固化、Artifact 非 READY 或 Rights/Lineage 不完整：拒绝发布；
 - DAG 成环：返回最小可解释环路径，不保存 Version；
-- v2 编译未知：按同一 idempotency/owner-set/head identity 查询结果，不创建第二版本；
+- production 编译未知：按同一 idempotency/owner-set/head identity 查询结果，不创建第二版本；
 - SceneProductionPacket 与 Graph/Binding OwnerRef 不一致：Scene 不得标记 production-ready；
 - Canvas 或 Agent 尝试直接写 Graph JSON/业务表：权限与架构测试拒绝。
 
@@ -1448,16 +1448,16 @@ StoryGraphVersion 只有不可变 `published` 状态；旧版本不原地改写�
 
 | 阶段 | StoryGraph/产品闭环 | 本阶段不要求 |
 |---|---|---|
-| P0 Text Production Bible | style-blind Scene/Identity Candidate、前两个 Gate、正式 Production World；可发布 v2 p0 Graph，不生成图片 | Preset/Reference、Storyboard、媒体 Provider |
-| P1 Visual Identity | Gate 3、Approved Plan、身份锚点、多形象/地点/道具 AssetVersion；发布 v2 p1 Graph | Scene/Interaction Composition、多 Provider 广度 |
-| P2 Composition | Scene/Interaction Binding、Gate 4、v2 p2 Graph 与 SceneProductionPacket | Storyboard、视频/声音/成片 |
-| P3 Storyboard | Packet → Storyboard/Gate 5，正式 Shot/ShotProductionBinding 后发布 v2 p3 Graph | Shot 图片/视频结果 Binding |
+| P0 Text Production Bible | style-blind Scene/Identity Candidate、前两个 Gate、正式 Production World；可发布 production p0 Graph，不生成图片 | Preset/Reference、Storyboard、媒体 Provider |
+| P1 Visual Identity | Gate 3、Approved Plan、身份锚点、多形象/地点/道具 AssetVersion；发布 production p1 Graph | Scene/Interaction Composition、多 Provider 广度 |
+| P2 Composition | Scene/Interaction Binding、Gate 4、production p2 Graph 与 SceneProductionPacket | Storyboard、视频/声音/成片 |
+| P3 Storyboard | Packet → Storyboard/Gate 5，正式 Shot/ShotProductionBinding 后发布 production p3 Graph | Shot 图片/视频结果 Binding |
 | P4 Full-script Hardening | 完整剧本分片、恢复、影响闭包、stale 防消费、质量基线和 Guided Studio 收敛 | Canvas、Platform Complete 媒体广度 |
 
 当前 MVP 只要求一条真实图片参考资产路径。Shot frame/video、Seedance、FFprobe、视频/声音/渲染、四 Provider 广度和 Canvas 只保留 Platform Complete 历史方向，不抵扣 P0–P4。
 
 ## 设计完成边界
 
-本文固定 `storygraph-v2` 的逻辑 Schema Manifest、Owner Input Manifest、Node/Edge/Payload allowlist、Interaction/Reference 约束、v1→v2 线性升级、Compiler 相对时序和 SceneProductionPacket 交接。
+本文固定 `storygraph-production` 的逻辑 Schema Manifest、Owner Input Manifest、Node/Edge/Payload allowlist、Interaction/Reference 约束、legacy→production 线性升级、Compiler 相对时序和 SceneProductionPacket 交接。
 
 本文不授权代码、GORM、OpenAPI、Agent Wire、GenerationTarget 或 Human Gate 状态机变更。`VP-D05` 已经三路独立反例评审通过并按用户的后续自动实施授权接受；下一步只进入 `VP-D06`，当前唯一顺序以[文档中心的视觉生产重排队列](../README.md#当前视觉生产重排推进顺序)为准。

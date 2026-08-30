@@ -76,18 +76,18 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `VP-D02` | [0006 领域语言](design/0006-领域语言与模块命名规范.md) | **已完成（2026-08-30）**：用户已接受 Scene Fact、Identity Resolution、Claim-backed Interaction、Reference Plan、组合 Binding 与 Scene Production Packet 规范名；本文与索引随接受记录独立提交 | 只解锁 `VP-D03`；不表示 Wire、数据库或功能已实现 |
 | `VP-D03` | [0001 完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | **已完成（2026-08-30）**：用户已接受 Production-ready Scene Coverage、视觉生产主链、Preset Owner、P0–P4 与当前 MVP/长期平台边界；本文与索引随接受记录独立提交 | 只解锁 `VP-D04`；不表示跨服务架构或功能已实现 |
 | `VP-D04` | [0003 系统总体架构](design/0003-系统总体架构.md) | **已完成（2026-08-30）**：三路独立评审通过，按用户自动实施授权接受各 Owner 先提交、typed Query 驱动主产品、StoryGraph 在后按 Schema 投影，以及 P0–P4 跨模块激活顺序 | 只解锁 `VP-D05`；不表示 StoryGraph Schema 已扩展 |
-| `VP-D05` | [0010 StoryGraph 总设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | **已完成（2026-08-30）**：三路独立反例评审通过，按用户自动实施授权接受 `storygraph-v2` Owner Input、Node/Edge/Payload/Manifest、Interaction/Reference 投影、v1→v2 线性升级与 SceneProductionPacket 交接 | 只解锁 `VP-D06`；不表示 StoryGraph v2 已实现 |
+| `VP-D05` | [0010 StoryGraph 总设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | **已完成（2026-08-30）**：三路独立反例评审通过，按用户自动实施授权接受 `storygraph-production` Owner Input、Node/Edge/Payload/Manifest、Interaction/Reference 投影、legacy→production 线性升级与 SceneProductionPacket 交接 | 只解锁 `VP-D06`；不表示 StoryGraph Production Schema 已实现 |
 | `VP-D06` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | **已完成（2026-08-30）**：三路独立反例评审通过，固定 SceneFact-first、全剧身份/状态调和、Gate 1/2、四 checkpoint/七 family、Interaction/Continuity 与局部恢复 | 只解锁 `VP-D07`；不表示 Wire、数据库或功能已实现 |
-| `VP-D07` | [3003 Agent/Harness](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | **已完成（2026-08-30）**：三路独立评审通过，固定 SceneFact-first Stage DAG、`StageVariantKeyV2`、Skill Release 供应链、严格 Vision/Wire 与恢复围栏 | 只解锁 `VP-D08`；不表示 Go/Python Wire 或 Bundle 已实现 |
+| `VP-D07` | [3003 Agent/Harness](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | **已完成（2026-08-30）**：三路独立评审通过，固定 SceneFact-first Stage DAG、`StageVariantKeyProduction`、Skill Release 供应链、严格 Vision/Wire 与恢复围栏 | 只解锁 `VP-D08`；不表示 Go/Python Wire 或 Bundle 已实现 |
 | `VP-D08` | [3002 Storyboard Harness](design/3002-本地-Codex-分镜智能体执行框架设计.md) | **已完成（2026-08-30）**：产品主链、Wire/Schema、Owner/恢复三轴隔离反例评审通过，固定 Packet-first `direct_storyboard`、Backend Binding normalizer 与 Gate 5 | 只解锁 `VP-D09`；不表示新 Wire、Bundle 或 Storyboard 功能已实现 |
 | `VP-D09` | [2002 Backend 领域设计](design/2002-后端领域模块功能设计.md) | **已完成（2026-08-30）**：Owner/事务、Hash/Query、恢复/并发三轴隔离反例评审通过，固定 13 family、具体 Record/Head、两层 Receipt、typed Query 与 Compiler | 只解锁 `VP-D10`；不表示 Model/API 或新事务已实现 |
-| `VP-D10` | [2051 Generation](design/2051-通用媒体Provider与Generation执行器设计.md) | **已完成（2026-08-30）**：产品主链、Target/Wire、Owner/恢复三轴隔离反例评审通过，固定 Approved Plan 六类 strict Target、无环 Bundle/Vision、单次发送权与 base/composition Owner Apply | 只解锁 `VP-D11`；不表示 Generation v2 或真实媒体闭环已实现 |
-| `VP-D11` | [2055 Human Gate](design/2055-Workflow公共HumanGate命令与恢复设计.md) | **已完成（2026-08-30）**：五 Gate 产品语义、Subject/Decision Wire、Effect/Resume 三轴隔离反例评审通过，固定 Gate 4 per-target task、显式 Effect Plan 与同 Decision 恢复 | 只解锁 `VP-D12`；不表示 Human Gate v2 或 Workflow 已实现 |
+| `VP-D10` | [2051 Generation](design/2051-通用媒体Provider与Generation执行器设计.md) | **已完成（2026-08-30）**：产品主链、Target/Wire、Owner/恢复三轴隔离反例评审通过，固定 Approved Plan 六类 strict Target、无环 Bundle/Vision、单次发送权与 base/composition Owner Apply | 只解锁 `VP-D11`；不表示 Generation 多候选执行契约 或真实媒体闭环已实现 |
+| `VP-D11` | [2055 Human Gate](design/2055-Workflow公共HumanGate命令与恢复设计.md) | **已完成（2026-08-30）**：五 Gate 产品语义、Subject/Decision Wire、Effect/Resume 三轴隔离反例评审通过，固定 Gate 4 per-target task、显式 Effect Plan 与同 Decision 恢复 | 只解锁 `VP-D12`；不表示 Human Gate 五栅栏契约 或 Workflow 已实现 |
 | `VP-D12` | [1002 Frontend 功能](design/1002-前端功能模块设计.md) | **已完成（2026-08-30）**：主旅程/信息架构、Gate 交互/状态、响应式/失败路径三轴隔离反例评审通过，固定项目级 Guided Studio、五 Gate 时间线、覆盖矩阵、Bundle 对比与影响抽屉 | 只解锁 `VP-D13`；不表示新页面或 Query 已实现 |
 | `VP-D13` | [0010 唯一 PRD](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | **已完成（2026-08-31）**：产品价值/范围、完整旅程/发布门、指标/非目标三轴隔离反例评审通过，北极星改为 Production-ready Scene Coverage | 只解锁 `VP-D14`；不表示 Requirement 或实现已完成 |
 | `VP-D14` | [0010 Requirement](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) 与 [3003 Agent Requirement](requirement/3003-StoryGraph剧本解析Harness与内置Skill需求规格.md) | **已完成（2026-08-31）**：产品映射、Owner/事务、失败/恢复三轴独立反例审阅通过，固定五 Gate、制作世界、Preset/六类参考、Packet-first 分镜与十三 Stage Agent/Harness 可测合同 | 只解锁 `VP-D15`；不表示任何合同已实现或验收 |
 | `VP-D15` | [0010 唯一 Plan](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) 与 [Acceptance](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | **已完成（2026-08-31）**：产品/依赖、合同覆盖、执行/回滚三轴独立反例审阅通过；126 个 VPR 与 95 个 VPA 一一映射到十五个切片，全部目标初始为 `[ ]` | 文档链完成，只解锁 `VP-I01`；历史 `SG-Ixx` 证据不抵扣 |
-| `VP-I01` | P0 Scene Fact v2 首个垂直切片 | **当前步骤**：从已接受 Plan 领取，执行 Red → Green → Refactor、定向验证、当时全量 CI、Evidence 与独立提交 | 不提前实现 Interaction、Preset 或媒体链 |
+| `VP-I01` | P0 Scene Fact 生产契约 首个垂直切片 | **当前步骤**：从已接受 Plan 领取，执行 Red → Green → Refactor、定向验证、当时全量 CI、Evidence 与独立提交 | 不提前实现 Interaction、Preset 或媒体链 |
 
 ## 编号与命名
 
@@ -127,7 +127,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 
 | 编号 | 主题 | PRD | Design | Requirement | Plan | Acceptance | 当前状态 |
 |---|---|---|---|---|---|---|---|
-| `0001` | 平台产品与完整设计基线 | [产品范围与验收基线](prd/0001-产品范围与验收基线.md) | [完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | [平台 V1 需求规格](requirement/0001-平台V1需求规格.md) | [见 0007 交付计划](plan/0007-平台0到1交付计划.md) | — | `VP-D03` 视觉生产主链与 MVP 边界已接受完成；此前 `SG-D04` 平台事实保留，旧 PRD/Requirement/Plan 不抵扣新目标 |
+| `0001` | 平台产品与完整设计基线 | [产品范围与验收基线](prd/0001-产品范围与验收基线.md) | [完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | [平台 MVP 需求规格](requirement/0001-平台MVP需求规格.md) | [见 0007 交付计划](plan/0007-平台0到1交付计划.md) | — | `VP-D03` 视觉生产主链与 MVP 边界已接受完成；此前 `SG-D04` 平台事实保留，旧 PRD/Requirement/Plan 不抵扣新目标 |
 | `0002` | 采用目标平台架构 | — | [架构决策](design/0002-采用目标平台架构决策.md) | — | — | — | 已接受目标 |
 | `0003` | 系统总体架构 | — | [总体架构](design/0003-系统总体架构.md) | — | — | — | `VP-D04` 视觉生产跨服务架构已接受完成；此前 `SG-D06` 四图与基础设施事实保留 |
 | `0004` | 架构分层与依赖 | — | [分层规则](design/0004-架构分层与依赖规则.md) | — | — | — | 已接受目标；`SG-D07` StoryGraph 依赖方向复核完成 |

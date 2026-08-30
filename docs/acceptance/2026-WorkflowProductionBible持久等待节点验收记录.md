@@ -21,7 +21,7 @@
 | 正常等待 | Bible `queued/running` 只返回无输出 `RETRYING`；Runtime 在 Claim fencing 事务中投影 `RETRYING` 并清除 Claim，不写 Node Output/Cache |
 | Temporal 持久性 | Workflow 用 5 秒持久 Timer 后重查同一 Owner Receipt；正常等待不消耗 Activity 错误重试，不设整剧业务墙钟超时 |
 | 暂停边界 | 每次持久 Timer 后先处理 Control Signal；Pause 期间不调用下一次 Activity，Resume 后才恢复 Owner 查询 |
-| 终态输出 | 只有 `needs_review` 且 Workspace/Project/Revision/Input Hash/Result Hash 与冻结输入一致才产出 `production_bible_candidate` `node-output-v1` |
+| 终态输出 | 只有 `needs_review` 且 Workspace/Project/Revision/Input Hash/Result Hash 与冻结输入一致才产出 `production_bible_candidate` `node-output-canonical` |
 | 缓存 | 等待期不写缓存；终态 Candidate Output 与 Node Cache 在现有同一 GORM 事务中提交 |
 
 ## Red → Green 与真实验证

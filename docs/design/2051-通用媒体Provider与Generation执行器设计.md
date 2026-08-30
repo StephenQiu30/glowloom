@@ -14,11 +14,11 @@
 ```text
 ApprovedReferencePlanVersion + exact ReferencePlanTarget
   → compile_reference_brief Agent Candidate
-  → Backend Provider-neutral GenerationTargetV2
-  → exact GenerationExecutionSnapshotV1
+  → Backend Provider-neutral GenerationTargetProduction
+  → exact GenerationExecutionSnapshotContract
   → ProviderCall(s) + immutable staged media
   → CandidateBundle(s)
-  → deterministic QC + vision_review_candidate_v2
+  → deterministic QC + vision_review_candidate_production
   → Human CandidateSelection
   → exact Owner Apply
       ├── base target        → AssetVersion + Artifact/Rendition
@@ -36,7 +36,7 @@ ApprovedReferencePlanVersion + exact ReferencePlanTarget
 | `scene_composition` | C | selected Composition Artifact + `SceneReferenceBindingVersion` |
 | `interaction_composition` | C | selected Composition Artifact + `InteractionReferenceBindingVersion` |
 
-`ApprovedReferencePlanVersion` 不包含 Provider、模型、价格、Prompt、Candidate 或“当前资产”。`GenerationTargetV2` 也先保持 Provider-neutral；只有 Target 通过业务、依赖、Brief、Style/Policy 和输出合同校验后，执行准备阶段才冻结具体 Provider Binding/Profile/Credential 与请求编译器版本。任何阶段都不得回到旧 `approved_storyboard_intents`、`reference_asset` 泛化 Target 或 `needs_asset` 反向触发路径。
+`ApprovedReferencePlanVersion` 不包含 Provider、模型、价格、Prompt、Candidate 或“当前资产”。`GenerationTargetProduction` 也先保持 Provider-neutral；只有 Target 通过业务、依赖、Brief、Style/Policy 和输出合同校验后，执行准备阶段才冻结具体 Provider Binding/Profile/Credential 与请求编译器版本。任何阶段都不得回到旧 `approved_storyboard_intents`、`reference_asset` 泛化 Target 或 `needs_asset` 反向触发路径。
 
 当前 MVP 必须证明六类 Target 都可通过同一条真实图片执行路径完成候选、审查、选择和 Owner Apply。多 Provider 广度、动态计费、付费产品、Shot 图片/视频与自动模型路由继续是 Platform Complete 目标，不阻塞本闭环，也不得以空 Adapter 或占位媒体抵扣未来完成度。
 
@@ -54,7 +54,7 @@ ApprovedReferencePlanVersion + exact ReferencePlanTarget
 
 ### 2.2 本文范围
 
-- 六类 `GenerationTargetV2` 严格联合和输出槽位合同；
+- 六类 `GenerationTargetProduction` 严格联合和输出槽位合同；
 - `ApprovedReferencePlanVersion`、Reference Brief、Target、执行快照的逐层绑定；
 - 身份锚点优先、Appearance 精确依赖、组合参考精确基础依赖；
 - Provider-neutral Target 与 Provider-specific Execution Snapshot 的边界；
@@ -94,7 +94,7 @@ ApprovedReferencePlanVersion + exact ReferencePlanTarget
 - Human CandidateSelection 是“选择哪个 CandidateBundle”的不可变事实；它不等于发布。
 - Owner Apply 才把选中 Staged Media 按 content digest 晋升为 `asset` 拥有的 Artifact/Rendition，并发布 AssetVersion 或 Reference Binding。
 - Provider Adapter 只返回调用观察与媒体字节；不能创建 CandidateSelection、Artifact、AssetVersion 或 Binding。
-- StoryGraph 只在 Owner Apply 后投影正式 Result；GenerationTarget、Provider 配置和未选 Candidate 不进入 `storygraph-v2` 权威内容图。
+- StoryGraph 只在 Owner Apply 后投影正式 Result；GenerationTarget、Provider 配置和未选 Candidate 不进入 `storygraph-production` 权威内容图。
 
 ## 4. 从 Reference Plan 到可执行 Target
 
@@ -106,7 +106,7 @@ Target Builder 只接受当前 Project 唯一 active `ApprovedReferencePlanVersi
 2. Target 属于该 Plan，业务键、Target kind、coverage、依赖和 fulfillment 与 Plan hash 一致；
 3. `fulfillment=not_generated` 时返回 `reference_target_not_executable`，不创建 Brief、Target、Execution、Job 或 Staged Media；
 4. `required|optional` 均可生成，但 optional 未选择不阻断 Gate 4；
-5. Target 已被同一 Plan 的正式结果履约时，普通 Start 返回 `reference_target_already_fulfilled`；显式重新生成必须有新的 `ReferenceGenerationAuthorizationV1(kind=regenerate_candidates)` 和递增 generation round。
+5. Target 已被同一 Plan 的正式结果履约时，普通 Start 返回 `reference_target_already_fulfilled`；显式重新生成必须有新的 `ReferenceGenerationAuthorizationContract(kind=regenerate_candidates)` 和递增 generation round。
 
 不得用 Target kind、显示名、Scene ID 或相似资产在项目中搜索替代项；不存在 `current/latest/default asset` 读取。
 
@@ -116,16 +116,16 @@ Target Builder 只接受当前 Project 唯一 active `ApprovedReferencePlanVersi
 
 ```text
 BuildReferenceGenerationTargetCommand
-  → GenerationTargetV2（Provider-neutral）
+  → GenerationTargetProduction（Provider-neutral）
 
 PrepareReferenceGenerationExecutionCommand
-  → GenerationExecutionSnapshotV1（exact Provider-specific）
+  → GenerationExecutionSnapshotContract（exact Provider-specific）
 ```
 
-`GenerationTargetV2`：
+`GenerationTargetProduction`：
 
 ```text
-GenerationTargetV2
+GenerationTargetProduction
 ├── target_id / revision / content_hash
 ├── workspace_id / project_id
 ├── approved_reference_plan_version_ref
@@ -136,22 +136,22 @@ GenerationTargetV2
 ├── reference_brief_candidate_revision_ref
 ├── effective_style_snapshot_ref
 ├── effective_policy_snapshot_ref
-├── source_payload: ReferenceGenerationSourceV2 strict union
+├── source_payload: ReferenceGenerationSourceProduction strict union
 ├── dependency_asset_version_refs[]
 ├── dependency_root_hash
-├── output_contract: ReferenceOutputContractV2
+├── output_contract: ReferenceOutputContractProduction
 ├── target_read_set_root
 └── created_by / created_at
 ```
 
-Target content hash 排除 `created_by/created_at` 审计字段，但覆盖其余完整字段。Target Builder 先在同一个可重复读快照内重算 `TargetReadSetV2`，再以 expected Head CAS 发布 Target；相同命令与相同 canonical input 返回同一 Target。任何 Plan、Brief、Style、Policy、source 或 dependency 漂移都必须创建新 Target，不原位改写。
+Target content hash 排除 `created_by/created_at` 审计字段，但覆盖其余完整字段。Target Builder 先在同一个可重复读快照内重算 `TargetReadSetProduction`，再以 expected Head CAS 发布 Target；相同命令与相同 canonical input 返回同一 Target。任何 Plan、Brief、Style、Policy、source 或 dependency 漂移都必须创建新 Target，不原位改写。
 
-`GenerationTargetHeadV2` 以 `(workspace, project, approved plan ref, reference plan target ref)` 为键，只用 expected revision CAS 指向最高已授权 generation round；`GenerationExecutionHeadV1` 以 Target ref 为键；`GenerationCandidateSelectionHeadV1` 以 Target ref 为键。三个 Head 都只是并发索引，不复制 Target、Execution 或 Selection 内容，也不提供“查最新资产”能力。
+`GenerationTargetHeadProduction` 以 `(workspace, project, approved plan ref, reference plan target ref)` 为键，只用 expected revision CAS 指向最高已授权 generation round；`GenerationExecutionHeadContract` 以 Target ref 为键；`GenerationCandidateSelectionHeadContract` 以 Target ref 为键。三个 Head 都只是并发索引，不复制 Target、Execution 或 Selection 内容，也不提供“查最新资产”能力。
 
 生成授权与执行授权分离：
 
 ```text
-ReferenceGenerationAuthorizationV1
+ReferenceGenerationAuthorizationContract
 ├── kind = initial_generation | regenerate_candidates
 ├── approved_reference_plan_version_ref / reference_plan_target_ref
 ├── requested_candidate_bundle_count
@@ -160,7 +160,7 @@ ReferenceGenerationAuthorizationV1
 ├── human_action_ref / membership_token_version
 └── content_hash / authorized_by / authorized_at
 
-ReferenceExecutionAuthorizationV1
+ReferenceExecutionAuthorizationContract
 ├── kind = initial_execution | retry_before_dispatch | switch_provider
 ├── generation_target_ref
 ├── previous_execution_ref?
@@ -174,7 +174,7 @@ ReferenceExecutionAuthorizationV1
 
 ### 4.3 Reference Brief fence
 
-每个可执行 Target 必须绑定恰 1 个 `reference_brief_candidate_v2` 成功 Candidate Revision：
+每个可执行 Target 必须绑定恰 1 个 `reference_brief_candidate_production` 成功 Candidate Revision：
 
 - Candidate target ref、kind、business key、source refs、dependency refs、Style/Policy refs 与正在构建的 Target 逐字节相等；
 - Candidate 所在 Stage Release 未 quarantine/revoke，Invocation Outcome、Attempt result、Candidate Head 和 review/repair chain 均有效；
@@ -186,12 +186,12 @@ ReferenceExecutionAuthorizationV1
 
 ## 5. 六类 Target strict union
 
-`ReferenceGenerationSourceV2` 只允许以下六个分支；所有 OwnerRef 都包含 `owner_kind/version_family/owner_logical_id/revision/content_hash/fragment_key?`，数组按 canonical key 排序去重，`additionalProperties=false`。
+`ReferenceGenerationSourceProduction` 只允许以下六个分支；所有 OwnerRef 都包含 `owner_kind/version_family/owner_logical_id/revision/content_hash/fragment_key?`，数组按 canonical key 排序去重，`additionalProperties=false`。
 
 ### 5.1 Character Identity Anchor
 
 ```text
-CharacterIdentityAnchorSourceV2
+CharacterIdentityAnchorSourceProduction
 ├── identity_ref
 ├── character_specification_ref
 ├── identity_anchor_asset_state_ref
@@ -209,7 +209,7 @@ CharacterIdentityAnchorSourceV2
 ### 5.2 Character Appearance
 
 ```text
-CharacterAppearanceSourceV2
+CharacterAppearanceSourceProduction
 ├── identity_ref
 ├── character_specification_ref
 ├── appearance_asset_state_ref
@@ -230,7 +230,7 @@ CharacterAppearanceSourceV2
 ### 5.3 Location Board
 
 ```text
-LocationBoardSourceV2
+LocationBoardSourceProduction
 ├── location_identity_ref
 ├── location_specification_ref
 ├── location_asset_state_ref
@@ -248,7 +248,7 @@ Location Board 默认空场，不得擅自放入人物或剧情道具。三个�
 ### 5.4 Prop Sheet
 
 ```text
-PropSheetSourceV2
+PropSheetSourceProduction
 ├── prop_identity_ref
 ├── prop_specification_ref
 ├── prop_asset_state_ref
@@ -267,7 +267,7 @@ Prop Sheet 不出现手、人物或场景；持握、传递、佩戴与使用姿
 ### 5.5 Scene Composition
 
 ```text
-SceneCompositionSourceV2
+SceneCompositionSourceProduction
 ├── scene_ref
 ├── occurrence_refs[]
 ├── interaction_claim_refs[]
@@ -287,7 +287,7 @@ SceneCompositionSourceV2
 ### 5.6 Interaction Composition
 
 ```text
-InteractionCompositionSourceV2
+InteractionCompositionSourceProduction
 ├── scene_ref
 ├── interaction_claim_ref
 ├── actor_occurrence_ref
@@ -308,8 +308,8 @@ InteractionCompositionSourceV2
 ### 5.7 输出合同
 
 ```text
-ReferenceOutputContractV2
-├── contract_id = reference-output-v2
+ReferenceOutputContractProduction
+├── contract_id = reference-output-production
 ├── modality = image
 ├── candidate_bundle_count
 ├── slots[]
@@ -357,7 +357,7 @@ Per-Scene Composition Checkpoint
 PresetVersion + typed overrides
   → EffectiveStyleSnapshot + EffectivePolicySnapshot
   → purpose profile + structured Reference Brief
-  → same GenerationTargetV2 strict union
+  → same GenerationTargetProduction strict union
   → Provider-specific Request Compiler
 ```
 
@@ -374,7 +374,7 @@ PresetVersion + typed overrides
 `PrepareReferenceGenerationExecutionCommand` 在 Target 发布后解析精确 Project Provider Binding，但不改变 Target：
 
 ```text
-GenerationExecutionSnapshotV1
+GenerationExecutionSnapshotContract
 ├── execution_id / revision / content_hash
 ├── generation_target_ref
 ├── project_provider_binding_version_ref
@@ -399,7 +399,7 @@ Secret 明文、Prompt、Provider URL 和响应内容不进入 Snapshot。Creden
 - Model Profile 能逐字节实现 Target 的尺寸、比例、输入图和 slot 数，不得静默裁切、取整、降质量或换模型；
 - Request Compiler contract 能将当前 Brief schema 和 Target kind 映射到该 Adapter；
 - 所有依赖 Artifact 都 READY、rights/lineage 可用于当前 Provider；
-- 同一 Target 通过 `GenerationExecutionHeadV1` 的 expected revision CAS 最多指向一个 active Execution Snapshot。更换 Binding/Profile 必须有新的 `ReferenceExecutionAuthorizationV1`；如果旧 Call 已越发送边界，还必须逐项确认 unresolved/remote invocation 风险。Provider 切换不改变业务 Target hash，但旧 Execution 的 CandidateSet 立即失去 active execution fence；若目标是再生成一批新 Candidate 而不是恢复未完成执行，则必须新 generation round。
+- 同一 Target 通过 `GenerationExecutionHeadContract` 的 expected revision CAS 最多指向一个 active Execution Snapshot。更换 Binding/Profile 必须有新的 `ReferenceExecutionAuthorizationContract`；如果旧 Call 已越发送边界，还必须逐项确认 unresolved/remote invocation 风险。Provider 切换不改变业务 Target hash，但旧 Execution 的 CandidateSet 立即失去 active execution fence；若目标是再生成一批新 Candidate 而不是恢复未完成执行，则必须新 generation round。
 
 无 Provider 配置时返回 `provider_configuration_required`，但 Backend、剧本解析、Gate 1–3、查询和非视觉 Workflow 正常。当前 MVP 只要求至少一条真实、可恢复、可审核的图片执行路径覆盖六类 Target；此前接受的 Seedream、GPT Image、Nano Banana 与 Seedance 广度仍是 Platform Complete，不能用本步声明为已完成。
 
@@ -429,7 +429,7 @@ Adapter 不能：
 一个 CandidateBundle 的每个 required slot 对应一个确定性 `ProviderCallKey`：
 
 ```text
-ProviderCallKeyV2
+ProviderCallKeyProduction
 = Canonical JSON([
     execution_ref,
     candidate_bundle_index,
@@ -458,7 +458,7 @@ ProviderCall
 - 一个 Call 最多一个终态 Receipt 和一个成功 Staged Media identity；重复同值观察幂等，不同值失败关闭；
 - Workflow/Temporal 负责定时与恢复，HTTP Client 内不隐藏业务重试循环，Kafka 不调度 Provider。
 
-`GenerationProviderJobV2` 是一个 Execution Snapshot 的本地聚合，只保存 expected `ProviderCallKeyV2` 完整集及其 root。全部 Call 成功才是 `SUCCEEDED`；至少一个成功且其余全部明确失败是 `PARTIAL_SUCCEEDED`；全部明确失败是 `FAILED`；任一 Call 尚未解决或 `OUTCOME_UNKNOWN` 时 Job 不得假终态。Job 聚合不拥有远程发送权，也不能用“整体重试”创建第二套 Call。
+`GenerationProviderJobProduction` 是一个 Execution Snapshot 的本地聚合，只保存 expected `ProviderCallKeyProduction` 完整集及其 root。全部 Call 成功才是 `SUCCEEDED`；至少一个成功且其余全部明确失败是 `PARTIAL_SUCCEEDED`；全部明确失败是 `FAILED`；任一 Call 尚未解决或 `OUTCOME_UNKNOWN` 时 Job 不得假终态。Job 聚合不拥有远程发送权，也不能用“整体重试”创建第二套 Call。
 
 当前 MVP 不建立新的动态 PriceQuote/付费 Reservation 完成门。运行保护只冻结 `OperationalGenerationLimitPolicy`：单 Target 最大 Bundle、单 Bundle 最大 slot、最大输入/输出字节、并发、超时和每日运维调用上限。它不表达货币、用户余额或套餐，且策略缺失时使用代码内安全默认值，不阻断已授权 MVP 旅程。
 
@@ -487,7 +487,7 @@ Provider URL、对象存储临时 URL、原始响应和 Base64 不进入正式�
 ### 8.2 CandidateBundle
 
 ```text
-ReferenceCandidateBundleInputV1
+ReferenceCandidateBundleInputContract
 ├── bundle_input_id / generation_target_ref / execution_ref
 ├── candidate_bundle_index
 ├── slots[]
@@ -501,7 +501,7 @@ ReferenceCandidateBundleInputV1
 ├── content_hash
 └── created_at
 
-GenerationCandidateBundleV2
+GenerationCandidateBundleProduction
 ├── candidate_bundle_id / generation_target_ref / execution_ref
 ├── candidate_bundle_index
 ├── bundle_input_ref / bundle_input_hash
@@ -510,7 +510,7 @@ GenerationCandidateBundleV2
 ├── content_hash
 └── created_at
 
-GenerationCandidateSetV2
+GenerationCandidateSetProduction
 ├── candidate_set_id / target_ref / execution_ref
 ├── ordered_candidate_bundle_refs[]
 ├── failed_or_unknown_slot_refs[]
@@ -519,7 +519,7 @@ GenerationCandidateSetV2
 └── created_at
 ```
 
-构造顺序严格单向：`Call/Staged/per-slot QC → canonical slot_set_root → bundle deterministic QC → ReferenceCandidateBundleInputV1 → Vision Invocation/Candidate → GenerationCandidateBundleV2 → CandidateSet`。Bundle deterministic QC Result 的 input root 必须等于 `slot_set_root`，不得引用 Bundle Input；Vision Candidate 的 input hash 覆盖 bundle input ref/hash，但 Bundle Input 不引用 Vision，因此两处都不存在内容哈希环。
+构造顺序严格单向：`Call/Staged/per-slot QC → canonical slot_set_root → bundle deterministic QC → ReferenceCandidateBundleInputContract → Vision Invocation/Candidate → GenerationCandidateBundleProduction → CandidateSet`。Bundle deterministic QC Result 的 input root 必须等于 `slot_set_root`，不得引用 Bundle Input；Vision Candidate 的 input hash 覆盖 bundle input ref/hash，但 Bundle Input 不引用 Vision，因此两处都不存在内容哈希环。
 
 `generation_completion_state` 固定为 `complete|partial_explicit_failure|outcome_unknown`。Bundle Input 必须来自同一 Target、round、Execution Snapshot、bundle index 和 dependency root。任何必需 slot 缺失、unknown 或跨 Bundle 混合都不得标为 complete。部分明确失败可以展示诊断，但只有 complete 且 deterministic QC passed 的 Bundle Input 能进入 Vision Review；最终 CandidateBundle 还必须绑定成功且 fence 有效的 bundle-level Vision Candidate。任一 Call outcome unknown 时 CandidateSet 只能用于对账，不开放选择。
 
@@ -532,12 +532,12 @@ GenerationCandidateSetV2
 | Deterministic QC | Backend | digest、解码、媒体/尺寸/比例、slot 完整、输入/输出身份、重复图片、rights policy、恶意内容 | 否 |
 | Vision Review | `review_reference_artifact` Skill | 视图语义、Identity/State、Style、跨资产一致性、Interaction 接触 | `warn/not_assessable` 可显式确认；`fail` 不可直接选择 |
 
-Vision Review 一次读取同一 complete `ReferenceCandidateBundleInputV1` 的全部 required Staged bytes，以及 exact Target、Brief、Style/Policy 和 dependency Assets，输出一个 bundle-level `vision_review_candidate_v2`；Issue 可指向单一 slot 或跨 slot 区域。这样 front/profile/back 的脸型、体型、服装和标记一致性可以整体审查，而不是三次彼此失联的单图判断。它不能修图、生成新媒体或选择 Bundle。任一 required rubric 为 `fail` 时 Bundle 不可选择；`not_assessable` 必须在 CandidateSelection 中逐项确认风险，不能默认为 pass。
+Vision Review 一次读取同一 complete `ReferenceCandidateBundleInputContract` 的全部 required Staged bytes，以及 exact Target、Brief、Style/Policy 和 dependency Assets，输出一个 bundle-level `vision_review_candidate_production`；Issue 可指向单一 slot 或跨 slot 区域。这样 front/profile/back 的脸型、体型、服装和标记一致性可以整体审查，而不是三次彼此失联的单图判断。它不能修图、生成新媒体或选择 Bundle。任一 required rubric 为 `fail` 时 Bundle 不可选择；`not_assessable` 必须在 CandidateSelection 中逐项确认风险，不能默认为 pass。
 
 ### 8.4 CandidateSelection
 
 ```text
-GenerationCandidateSelectionV2
+GenerationCandidateSelectionProduction
 ├── selection_id / selection_revision / workspace_id / project_id
 ├── generation_target_ref / execution_ref / candidate_set_ref
 ├── selected_candidate_bundle_ref
@@ -549,7 +549,7 @@ GenerationCandidateSelectionV2
 └── selected_by / selected_at
 ```
 
-同一 Target round 使用 `GenerationCandidateSelectionHeadV1` expected revision CAS，最多指向一个 active Selection。重复同值选择幂等；改选必须创建新的 ReviewDecision 和 Selection revision，并且尚未被 Owner Apply 消费。Selection 会 pin 所选 Staged Media 到 Owner Apply 或显式废弃完成，普通 retention 不能提前清理。Owner Apply 完成后不能原位改选，必须新 generation round 或显式发布新的结果 Version。
+同一 Target round 使用 `GenerationCandidateSelectionHeadContract` expected revision CAS，最多指向一个 active Selection。重复同值选择幂等；改选必须创建新的 ReviewDecision 和 Selection revision，并且尚未被 Owner Apply 消费。Selection 会 pin 所选 Staged Media 到 Owner Apply 或显式废弃完成，普通 retention 不能提前清理。Owner Apply 完成后不能原位改选，必须新 generation round 或显式发布新的结果 Version。
 
 ## 9. Owner Apply 与 Gate 4
 
@@ -618,7 +618,7 @@ Owner Apply 命令属于 `asset`/`production/reference` 协调器，不属于 Ge
 ### 11.1 Target read set
 
 ```text
-TargetReadSetV2
+TargetReadSetProduction
 ├── project_reference_plan_activation_head_ref
 ├── reference_plan_scope_head_ref
 ├── reference_plan_target_ref
@@ -635,7 +635,7 @@ TargetReadSetV2
 Execution Snapshot 再增加 Provider Binding/Profile/Connection/Credential heads 与 Adapter Registry release hash。Bundle Input 增加 Call/Receipt/Staged/QC roots，CandidateBundle 再增加 Vision Review root，CandidateSet 聚合全部 Bundle roots。Selection 增加 Human ReviewDecision fence。Owner Apply 在短事务内重读这些 exact roots；不能只验证 Target content hash 而忽略其所属 active Plan 或控制面。
 
 ```text
-ExecutionReadSetV1
+ExecutionReadSetContract
 ├── generation_target_ref / target_read_set_root
 ├── generation_execution_head_expected_revision
 ├── project_provider_binding_version_ref
@@ -646,7 +646,7 @@ ExecutionReadSetV1
 └── root_hash
 ```
 
-`GenerationExecutionSnapshotV1.execution_read_set_root` 必须等于上表 canonical root；准备、恢复和 CandidateSet assemble 均重算，而不是把 Snapshot 自报 hash 当作证明。
+`GenerationExecutionSnapshotContract.execution_read_set_root` 必须等于上表 canonical root；准备、恢复和 CandidateSet assemble 均重算，而不是把 Snapshot 自报 hash 当作证明。
 
 ### 11.2 stale 分类
 
@@ -771,7 +771,7 @@ Platform Complete 目标不得通过当前 `SG-I21` 未提交增量、旧 Runwar
 
 ## 16. 实施约束与验收门
 
-`VP-D15` 接受前不修改代码。后续 Plan 必须按 Red → Green → Refactor 拆出可独立验收的垂直切片，不能先建空 Generation v2 框架。实现至少机械证明：
+`VP-D15` 接受前不修改代码。后续 Plan 必须按 Red → Green → Refactor 拆出可独立验收的垂直切片，不能先建空 Generation 多候选执行契约 框架。实现至少机械证明：
 
 1. `approved_storyboard_intents`、`needs_asset` 和泛化 `reference_asset` 不能创建 Reference GenerationTarget；
 2. 六类 strict union 对缺字段、额外字段、错误 OwnerRef、错误 Style/Policy 和错误 dependency 全部失败；

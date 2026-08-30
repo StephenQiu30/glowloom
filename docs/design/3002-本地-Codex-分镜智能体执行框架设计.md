@@ -1,7 +1,7 @@
 # 本地 Codex 分镜智能体执行框架设计
 
 - 状态：已接受设计
-- 历史事实：旧版曾于 `SG-D12` 接受 Draft → `needs_asset` → 参考资产 → Detail 链；该顺序由本文整体取代，旧运行只允许按精确 v1 Wire/Bundle/Runtime 完成历史重放
+- 历史事实：旧版曾于 `SG-D12` 接受 Draft → `needs_asset` → 参考资产 → Detail 链；该顺序由本文整体取代，旧运行只允许按精确 legacy Wire/Bundle/Runtime 完成历史重放
 - 接受记录：`VP-D08`（2026-08-30）；产品主链、Wire/Schema、Owner/恢复三轴隔离反例评审均通过（最终正文评审 SHA-256 `8d40b29a8309cf86fc364a72f552b7da7951aa26f75c0b78bc79e851a13cd860`）
 - 已接受前置：[剧本视觉生产工作台与世界观预设设计](0011-剧本视觉生产工作台与世界观预设设计.md) · [StoryGraph 内容图与 DAG 创作画布设计](0010-StoryGraph内容图与DAG创作画布设计.md) · [项目制作圣经生成执行框架设计](3001-项目制作圣经生成执行框架设计.md) · [StoryGraph 剧本解析 Harness 与内置 Skill 设计](3003-StoryGraph剧本解析Harness与内置Skill设计.md)
 - 历史派生：[产品需求](../prd/3002-本地-Codex-分镜智能体产品需求.md) · [需求规格](../requirement/3002-本地-Codex-分镜智能体执行框架需求规格.md) · [实施计划](../plan/3002-本地-Codex-分镜智能体执行框架实施计划.md) · [验收标准](../acceptance/3002-本地-Codex-分镜智能体执行框架验收标准.md)；全部继续冻结，分别等待 `VP-D13`–`VP-D15` 的统一文档链
@@ -9,12 +9,12 @@
 
 ## 1. 结论
 
-Storyboard 不再承担“发现缺什么资产”的职责。一个 Scene 只有在 Gate 4 已完成、全部 required 基础与组合参考均已选择、v2 p2 StoryGraph 已发布并能构建完整 `SceneProductionPacket` 后，才可进入分镜。
+Storyboard 不再承担“发现缺什么资产”的职责。一个 Scene 只有在 Gate 4 已完成、全部 required 基础与组合参考均已选择、production p2 StoryGraph 已发布并能构建完整 `SceneProductionPacket` 后，才可进入分镜。
 
 ```text
 Gate 4 complete
 → Backend 验证 scene readiness
-→ v2 p2 StoryGraph + exact Owner Collections
+→ production p2 StoryGraph + exact Owner Collections
 → SceneProductionPacket + 内容定址执行物化 + 只读媒体附件
 → direct_storyboard（单 Scene、vision、单 Candidate）
 → Backend normalizer 生成精确 ShotProductionBindingCandidate
@@ -24,10 +24,10 @@ Gate 4 complete
 → Gate 5 Human Review
 → Storyboard Owner 原子 Apply
 → formal Shot + ShotProductionBindingVersion
-→ v2 p3 StoryGraph
+→ production p3 StoryGraph
 ```
 
-`Shot Intent` 与 `Shot Detail` 仍是产品上可分别阅读的两层，但不再是两个 Stage、两个资产门或两个正式 Candidate Set。`direct_storyboard` 一次输出完整镜头提案；Backend 在同一 normalized `storyboard_candidate_v2` 中形成 Intent、Detail 与机械绑定。这样不会在 Intent 之后反向生成参考资产，也不会让 Detail 使用另一批“当前资产”。
+`Shot Intent` 与 `Shot Detail` 仍是产品上可分别阅读的两层，但不再是两个 Stage、两个资产门或两个正式 Candidate Set。`direct_storyboard` 一次输出完整镜头提案；Backend 在同一 normalized `storyboard_candidate_production` 中形成 Intent、Detail 与机械绑定。这样不会在 Intent 之后反向生成参考资产，也不会让 Detail 使用另一批“当前资产”。
 
 本设计固定以下不可变边界：
 
@@ -35,7 +35,7 @@ Gate 4 complete
 2. Agent 只提出镜头结构、叙事表达、视听语言和 Packet 内 Occurrence/Interaction 的镜头表现，不选择 AssetVersion；
 3. Backend 才能把 Occurrence/Interaction 映射到 Packet 内精确 AssetVersion、ReferenceBinding、Artifact/Rendition 和 view role；
 4. Candidate、ReviewIssue 和 CandidateRepairPatch 都不是正式 Shot；Gate 5 后只有 Storyboard Owner 可以原子发布正式 Shot 与生产输入绑定；
-5. 新 v2 Schema 不存在 `needs_asset`、Draft 资产门、付费门或“先占位后补资产”的合法分支。
+5. 新 production Schema 不存在 `needs_asset`、Draft 资产门、付费门或“先占位后补资产”的合法分支。
 
 本文全部伪 Schema 均为 `additionalProperties=false`；除标记 `?` 或显式 `| null` 的字段外，列出字段全部必需。所有 `*_hash` 使用小写 SHA-256、项目 Canonical JSON 和各自 contract domain separator，对排除自身 hash 的完整对象计算；所有联合都必须以 `kind`/`ref_kind` 等判别字段展开为 `oneOf`，不得实现为任意 map。
 
@@ -57,7 +57,7 @@ Gate 4 complete
 本文只解决 P3 Storyboard 的 Agent/Harness 执行边界：
 
 - Scene readiness 与 Packet 构建完成门；
-- `direct_storyboard/default` 的严格 v2 输入、输出、normalizer、review 与 repair；
+- `direct_storyboard/default` 的严格 production 输入、输出、normalizer、review 与 repair；
 - Intent/Detail 的同一 Candidate 结构；
 - Gate 5 前后的职责、恢复、局部失效和迁移；
 - 至少两个相邻真实 Scene 分别从精确视觉生产包生成可审核分镜，并共同验证跨场状态连续性的完成条件。
@@ -80,16 +80,16 @@ Gate 4 complete
 
 Intent 表达“为什么拍、拍什么”，Detail 表达“如何拍”。二者分层是审核需要，不代表它们必须分两次模型调用。
 
-若保留两个 Stage，系统仍要在二者之间定义可变输入、第二次版本选择和失败恢复；而 Gate 4 后 Packet 已具备完整生产输入，Detail 不再需要等待资产。因此 v2 只保留：
+若保留两个 Stage，系统仍要在二者之间定义可变输入、第二次版本选择和失败恢复；而 Gate 4 后 Packet 已具备完整生产输入，Detail 不再需要等待资产。因此 production 只保留：
 
 ```text
-StageVariantKeyV2 {
+StageVariantKeyProduction {
   stage_key: "direct_storyboard",
   profile_key: "default"
 }
 ```
 
-该 Stage 使用 `packet_storyboard` lane、`vision` runtime、`storygraph-stage-wire-v2`，每个 Scene 一个 Stage instance。Review 与 Repair 使用 `review_candidate/storyboard` 和 `repair_candidate/storyboard` 两个已在 `3003` 固定的 profile-bound Variant。
+该 Stage 使用 `packet_storyboard` lane、`vision` runtime、`storygraph-stage-wire-production`，每个 Scene 一个 Stage instance。Review 与 Repair 使用 `review_candidate/storyboard` 和 `repair_candidate/storyboard` 两个已在 `3003` 固定的 profile-bound Variant。
 
 ### 3.2 一个 Scene 一个一致性单元
 
@@ -103,7 +103,7 @@ MVP 不把单 Scene 再按 Shot Batch 切开。镜头数量、时长、轴线、
 
 Backend 只有在下列条件全部成立时才能构建可 dispatch 的 Packet：
 
-1. `scene_scope_key` 属于 v2 p2 `VerifiedCoverageProof.p2_scope_keys`，Scene/Beat/Dialogue/Evidence 覆盖完整；
+1. `scene_scope_key` 属于 production p2 `VerifiedCoverageProof.p2_scope_keys`，Scene/Beat/Dialogue/Evidence 覆盖完整；
 2. Scene 中所有实际 Character/Location/Prop Occurrence 都绑定精确 Identity、Specification 与 AssetState；
 3. 所有相关 InteractionClaim、手别/握点/方向/比例、Prop 前后状态和故事时间 continuity boundary 已确认；
 4. EffectiveStyleSnapshot、EffectivePolicySnapshot 和唯一 active ApprovedReferencePlanVersion 均为精确不可变版本；
@@ -118,12 +118,12 @@ Backend 只有在下列条件全部成立时才能构建可 dispatch 的 Packet�
 
 ### 4.2 规范 Packet 与执行物化
 
-规范 `SceneProductionPacket` 继续逐字节使用 `0010` 已接受的 `scene-production-packet-v1`，不增加第二个业务 Record，也不把展示文本写回 Graph。其完整对象和 `packet_content_hash` 随 Invocation 冻结。
+规范 `SceneProductionPacket` 继续逐字节使用 `0010` 已接受的 `scene-production-packet-contract`，不增加第二个业务 Record，也不把展示文本写回 Graph。其完整对象和 `packet_content_hash` 随 Invocation 冻结。
 
 规范 Packet 使用 Owner/Evidence/Artifact refs 表达权威身份；隔离的 Agent 又不能查询数据库，因此 transport 还需要把这些 exact refs 物化成只读 Stage resources。该物化不是新业务事实，只是 Packet 的可执行编码：
 
 ```text
-PacketResourceRefV1 {
+PacketResourceRefContract {
   resource_key,
   resource_kind = owner_projection | evidence_slice | policy_projection |
                   continuity_boundary | coverage_manifest,
@@ -139,7 +139,7 @@ PacketResourceRefV1 {
   content_digest
 }
 
-PacketLocalRefV1 {
+PacketLocalRefContract {
   local_key,
   semantic_kind = scene | beat | dialogue | evidence | occurrence | asset_state |
                   claim | asset_version | reference_binding,
@@ -149,8 +149,8 @@ PacketLocalRefV1 {
   local_ref_hash
 }
 
-ScenePacketExecutionMaterializationV1 {
-  materialization_contract_id = "scene-packet-execution-materialization-v1",
+ScenePacketExecutionMaterializationContract {
+  materialization_contract_id = "scene-packet-execution-materialization-contract",
   packet_contract_id,
   packet_content_hash,
   scene_scope_key,
@@ -165,7 +165,7 @@ ScenePacketExecutionMaterializationV1 {
 
 `source` 是按 `kind` 严格判别且 `additionalProperties=false` 的联合，不存在 untyped `owner_or_evidence_ref`。`derived` 只能用于 Coverage/Continuity 等 Backend 机械投影，必须冻结 derivation contract 和完整来源集合，不能生成新业务事实。
 
-`PacketLocalRefV1.source` 同样是严格判别联合；`semantic_kind=evidence` 必须使用 Evidence 分支，其余 kind 必须使用 OwnerNodeRef 分支。`packet_local_refs[]` 为 Packet 内每个可被模型引用的对象分配短而确定性的 local key；key 由 `packet_content_hash + semantic_kind + source` 的冻结合同派生。它只是本次输入的别名，Backend 可从完整 Manifest 唯一反解，不是 Owner logical ID，也不能跨 Packet 复用。附件继续使用独立 attachment key，不塞进该联合。
+`PacketLocalRefContract.source` 同样是严格判别联合；`semantic_kind=evidence` 必须使用 Evidence 分支，其余 kind 必须使用 OwnerNodeRef 分支。`packet_local_refs[]` 为 Packet 内每个可被模型引用的对象分配短而确定性的 local key；key 由 `packet_content_hash + semantic_kind + source` 的冻结合同派生。它只是本次输入的别名，Backend 可从完整 Manifest 唯一反解，不是 Owner logical ID，也不能跨 Packet 复用。附件继续使用独立 attachment key，不塞进该联合。
 
 `direct_storyboard` 分支的 `stage_payload` 只包含完整 Packet 与完整 Execution Materialization；共用 Wire 的 `source_inputs`、`upstream_candidate_refs` 和 `owner_input_refs` 必须缺席。Resource 文件由 Harness 按 Manifest 注入临时只读目录，模型只能读列出的文件。任意 ref 未物化、重复物化、Projection Hash 不符或出现 Packet 外 Owner ref 都会使输入失败。
 
@@ -176,8 +176,8 @@ ScenePacketExecutionMaterializationV1 {
 Backend 从 Packet 的 exact Owner closure 和 EffectivePolicy 机械编译：
 
 ```text
-StoryboardCoverageManifestV1 {
-  contract_id = "storyboard-coverage-manifest-v1",
+StoryboardCoverageManifestContract {
+  contract_id = "storyboard-coverage-manifest-contract",
   packet_content_hash,
   expected_beat_keys[],
   expected_dialogue_keys[],
@@ -213,15 +213,15 @@ Backend media broker 根据 Packet 的 `artifact_provenance_refs` 和 Reference 
 - Scene 内 required 或已选 optional Interaction Composition。
 
 ```text
-StoryboardMediaAttachmentManifestV1 {
-  contract_id = "storyboard-media-attachment-manifest-v1",
+StoryboardMediaAttachmentManifestContract {
+  contract_id = "storyboard-media-attachment-manifest-contract",
   packet_content_hash,
   entries[],
   target_coverage[],
   manifest_hash
 }
 
-StoryboardMediaAttachmentEntryV1 {
+StoryboardMediaAttachmentEntryContract {
   attachment_key,
   purpose,
   view_role,
@@ -259,20 +259,20 @@ StoryboardMediaAttachmentEntryV1 {
 
 ### 6.1 模型只返回 Proposal Body
 
-模型输出合同为 `storyboard-proposal-body-v2`。Attempt Result、Candidate Revision、Hash、Owner ref 和正式 ID 均由 Harness/Backend 包装：
+模型输出合同为 `storyboard-proposal-body-production`。Attempt Result、Candidate Revision、Hash、Owner ref 和正式 ID 均由 Harness/Backend 包装：
 
-`3003` 的 Stage Release row 必须分别冻结 `output_contract=storyboard-proposal-body-v2`、`normalized_candidate_contract=storyboard-candidate-v2` 与 `normalizer_contract=storyboard-normalizer-v2`；三者不是同一个 Schema，也不得把模型 Body 直接登记为 normalized Candidate。
+`3003` 的 Stage Release row 必须分别冻结 `output_contract=storyboard-proposal-body-production`、`normalized_candidate_contract=storyboard-candidate-production` 与 `normalizer_contract=storyboard-normalizer-production`；三者不是同一个 Schema，也不得把模型 Body 直接登记为 normalized Candidate。
 
 ```text
-StoryboardProposalBodyV2 {
-  proposal_contract_id = "storyboard-proposal-body-v2",
+StoryboardProposalBodyProduction {
+  proposal_contract_id = "storyboard-proposal-body-production",
   packet_content_hash,
   scene_scope_key,
   proposed_shots[],
   scene_continuity_summary
 }
 
-ProposedShotV2 {
+ProposedShotProduction {
   proposed_shot_key,
   sequence_index,
   intent,
@@ -338,11 +338,11 @@ Agent 不可以决定：
 
 ### 7.1 normalized candidate
 
-Harness 先验证 Proposal Schema，Backend 再使用冻结的 `storyboard-normalizer-v2` 产生：
+Harness 先验证 Proposal Schema，Backend 再使用冻结的 `storyboard-normalizer-production` 产生：
 
 ```text
-StoryboardCandidateV2 {
-  candidate_contract_id = "storyboard-candidate-v2",
+StoryboardCandidateProduction {
+  candidate_contract_id = "storyboard-candidate-production",
   packet_ref { packet_contract_id, packet_content_hash, scene_scope_key },
   stage_release_ref,
   execution_materialization_hash,
@@ -354,7 +354,7 @@ StoryboardCandidateV2 {
   candidate_content_hash
 }
 
-StoryboardShotCandidateV2 {
+StoryboardShotCandidateProduction {
   temporary_shot_key,
   sequence_index,
   intent,
@@ -363,7 +363,7 @@ StoryboardShotCandidateV2 {
   shot_content_hash
 }
 
-ShotProductionBindingCandidateV2 {
+ShotProductionBindingCandidateProduction {
   scene_ref,
   occurrence_bindings[],
   interaction_bindings[],
@@ -391,15 +391,15 @@ Normalizer 先按完整 `packet_local_refs[]` 把 Proposal local keys 唯一恢�
 
 Agent Body 不携带这些 AssetVersion/Binding 选择，因此不存在模型把正确 Occurrence 绑定到另一人物形象或另一道具版本的合法路径。出现零个或多个匹配、Binding 与 Claim participant 不等价、State 错配或 view role 不满足时，Normalizer 失败，不创建 Candidate Revision。
 
-`ShotProductionBindingCandidateV2` 只是正式 Binding 的候选前像。Gate 5 后 Storyboard Owner 必须从它逐字节复制业务引用并分配正式版本身份，不能在 Apply 时重新查询“最新资产”。
+`ShotProductionBindingCandidateProduction` 只是正式 Binding 的候选前像。Gate 5 后 Storyboard Owner 必须从它逐字节复制业务引用并分配正式版本身份，不能在 Apply 时重新查询“最新资产”。
 
 ## 8. deterministic storyboard gates
 
 Backend 对每个 normalized Candidate Revision 至少执行以下可重算 Gate，并另存严格结果：
 
 ```text
-StoryboardDeterministicGateResultV1 {
-  contract_id = "storyboard-deterministic-gate-result-v1",
+StoryboardDeterministicGateResultContract {
+  contract_id = "storyboard-deterministic-gate-result-contract",
   gate_contract_id,
   gate_contract_hash,
   candidate_revision_pointer,
@@ -432,7 +432,7 @@ Mechanical blocker 不能被模型 Reviewer 降级。Gate 输出排序 issue，�
 
 `review_candidate/profile=storyboard` 是 text runtime，因为视觉附件已由 `direct_storyboard` 用于构图；Reviewer 评估的是冻结 Packet 投影、normalized Candidate 和 deterministic issues，不重新选图或做第二次 Vision Selection。
 
-Reviewer 只能输出 `production_review_candidate_v2` 中 Evidence/Owner-ref scoped 的 ReviewIssue，覆盖：
+Reviewer 只能输出 `production_review_candidate_production` 中 Evidence/Owner-ref scoped 的 ReviewIssue，覆盖：
 
 1. 叙事清晰度与 Beat 转折；
 2. 对白、动作和表演可拍性；
@@ -488,7 +488,7 @@ Gate 5 的 Subject 是精确 `StoryboardCandidateRevision`，必须同时展示�
 - deterministic issues、ReviewIssues 和 Repair lineage；
 - 上游 stale/impact 状态。
 
-用户可以批准、拒绝或要求修改。要求修改有两条受限入口：选择当前 ReviewCandidate 中可修的精确 Issue；或在 UI 提交有限枚举的 typed change（目标 Shot、允许字段/操作、期望值和原因）。Backend 对后一种请求执行同一 path/ref/allowlist 校验，并用冻结 `storyboard-human-change-review-aggregate-v1` 创建 `human_typed_change` ReviewIssue Candidate Revision。该 Revision 的 producer 必须使用 `origin=aggregate`，精确绑定当前 Gate 5 NodeRun、单 issue ShardManifest、目标 Candidate/Decision/allowlist ordered input roots 和 aggregate contract/hash，不伪造 Agent StageVariant。Repair 输入仍必须携带该 review revision/hash；自由文本不能直接变成 Patch 权限。不适合 typed Repair 的方向性变化改为新创作候选。
+用户可以批准、拒绝或要求修改。要求修改有两条受限入口：选择当前 ReviewCandidate 中可修的精确 Issue；或在 UI 提交有限枚举的 typed change（目标 Shot、允许字段/操作、期望值和原因）。Backend 对后一种请求执行同一 path/ref/allowlist 校验，并用冻结 `storyboard-human-change-review-aggregate-contract` 创建 `human_typed_change` ReviewIssue Candidate Revision。该 Revision 的 producer 必须使用 `origin=aggregate`，精确绑定当前 Gate 5 NodeRun、单 issue ShardManifest、目标 Candidate/Decision/allowlist ordered input roots 和 aggregate contract/hash，不伪造 Agent StageVariant。Repair 输入仍必须携带该 review revision/hash；自由文本不能直接变成 Patch 权限。不适合 typed Repair 的方向性变化改为新创作候选。
 
 若用户要求完全不同的镜头方案，则以新的冻结 sampling seed 创建同 Packet 的新 `direct_storyboard` Invocation/Candidate slot。它是新的创作候选，不是技术重试，也不覆盖旧 Candidate。可选候选数和模型预算由 ExecutionPolicy 冻结，不引入计费产品门。不同 candidate slot 各自有 Candidate Head，Gate 5 只能批准其中一个精确 Revision；其他候选保持可审计但不能随批准候选一起 Apply。
 
@@ -503,7 +503,7 @@ Gate 5 的 Subject 是精确 `StoryboardCandidateRevision`，必须同时展示�
 5. 为每个 Shot 创建且仅创建一个 `ShotProductionBindingVersion`；
 6. 保存 temporary → formal mapping、Candidate/Packet/Decision/Release provenance 与 Command Receipt；
 7. 在同一事务的 Outbox 中保存 committed event；
-8. 触发 Compiler 从最新一致 Owner Collections 发布 v2 p3 StoryGraph。
+8. 触发 Compiler 从最新一致 Owner Collections 发布 production p3 StoryGraph。
 
 整个 Scene Apply 只有一个 Command Receipt；每个 Shot 恰有一个生产绑定版本。任一 Shot、Binding、映射、Outbox 或 Receipt 写入失败时整 Scene 回滚，不允许部分镜头成为正式事实。重复同 idempotency key 只返回同一 Receipt；不同命令争用同一 baseline 必须整体冲突。Compiler 在 Owner 事务提交后运行；编译失败使 Graph 保持旧 Head 并重试/告警，不回滚或删除已提交的 Storyboard Owner 事实。
 
@@ -511,9 +511,9 @@ Gate 5 的 Subject 是精确 `StoryboardCandidateRevision`，必须同时展示�
 
 ### 11.3 与 Graph Head 并发
 
-Packet 绑定一个精确含当前 Scene p2 coverage 的 v2 Graph，但其他 Scene 的无关 Owner 更新或 p3 发布可能先产生新 Graph Head。Apply 不应仅因全局 Head ID 变化就迫使用户重审：
+Packet 绑定一个精确含当前 Scene p2 coverage 的 production Graph，但其他 Scene 的无关 Owner 更新或 p3 发布可能先产生新 Graph Head。Apply 不应仅因全局 Head ID 变化就迫使用户重审：
 
-- Backend 必须在事务内从当前 v2 Graph（该 Scene 仍具 p2 coverage）重算该 Scene 的 `scene_semantic_input_root`；
+- Backend 必须在事务内从当前 production Graph（该 Scene 仍具 p2 coverage）重算该 Scene 的 `scene_semantic_input_root`；
 - 若该 root、全部 Packet refs、Policy、Coverage、媒体 digest 和 Binding 逐字节未变，可记录 `gate5_scene_revalidation_proof` 并把已批准 Candidate 应用到当前 Head；
 - 若任一当前 Scene 输入变化，则返回 `storyboard_input_stale`，禁止套用旧 Decision；
 - Revalidation 只消除无关 scope 的 Graph 版本漂移，不允许替换 Packet 内任何引用。
@@ -588,7 +588,7 @@ Runtime 只能加载 `build-storygraph` 当前 Stage Release 声明的：
 | `skill_release_control_blocked` | 全链 | Release fence 变化，拒绝 Outcome/Candidate/Apply 且不 fallback |
 | `attempt_runtime_unknown` | Attempt | 保持 reconciling，先对账同一执行 |
 
-`needs_asset` 不是失败码、Candidate 状态或恢复分支；在 v2 Storyboard Schema 中出现该字段直接属于 Schema invalid。
+`needs_asset` 不是失败码、Candidate 状态或恢复分支；在 production Storyboard Schema 中出现该字段直接属于 Schema invalid。
 
 ## 16. 可观测与质量评测
 
@@ -621,15 +621,15 @@ Runtime 只能加载 `build-storygraph` 当前 Stage Release 声明的：
 
 实现阶段必须按新总 Plan 形成以下可验证闭环；本文不提前分配实施编号：
 
-1. 先建立 v2 Packet execution materialization、media manifest、proposal/candidate/normalizer 跨 Go/Python fixture 与拒绝测试；
+1. 先建立 production Packet execution materialization、media manifest、proposal/candidate/normalizer 跨 Go/Python fixture 与拒绝测试；
 2. 实现 `direct_storyboard/default` 和严格 vision transport，生产 Registry 暂不激活；
 3. 实现 storyboard review/repair profile、deterministic gates 和 Candidate Head CAS；
 4. 实现 Gate 5 Owner Apply、formal Shot/Binding 与 p3 Compiler 输入；
 5. 在一次 cutover 中使新 Workflow 只创建 Packet-first `direct_storyboard`；
 6. 删除新建路径上的 `draft_storyboard`、`detail_shots`、`approved_storyboard_intents`、`needs_asset` 与 Storyboard→Generation caller；
-7. 旧 v1 非终态 Invocation 只用精确旧 Wire/Bundle/Runtime 完成或显式终止；v2 Worker 不领取，v1 引用归零后独立删除旧 Schema/Reference/fallback。
+7. 旧 legacy 非终态 Invocation 只用精确旧 Wire/Bundle/Runtime 完成或显式终止；production Worker 不领取，legacy 引用归零后独立删除旧 Schema/Reference/fallback。
 
-不得在过渡期让一个新 Scene 同时产生 Draft/Detail 与 direct Candidate，不得把 v2 字段塞入旧 optional payload，也不得先删旧 runtime 使历史 Invocation 无法恢复。
+不得在过渡期让一个新 Scene 同时产生 Draft/Detail 与 direct Candidate，不得把 production 字段塞入旧 optional payload，也不得先删旧 runtime 使历史 Invocation 无法恢复。
 
 ## 18. 验收边界
 
@@ -638,7 +638,7 @@ Runtime 只能加载 `build-storygraph` 当前 Stage Release 声明的：
 1. Gate 4 未完成、required 资产/组合 Binding 缺失或 stale 时，系统不能创建 `direct_storyboard` Invocation；
 2. Packet、Execution Materialization、Coverage 和 Attachment Manifest 可跨 Go/Python 重算 Canonical JSON/hash，乱序、漏项、越界和 digest 错误全部拒绝；
 3. 一个 Scene 一次 `direct_storyboard` 同时形成完整 Intent/Detail，没有 Draft/Detail 中间资产门；
-4. v2 Schema 中不存在 `needs_asset`、Provider、current/latest、URL、正式 Shot ID 或 Agent 自选 AssetVersion 字段；
+4. production Schema 中不存在 `needs_asset`、Provider、current/latest、URL、正式 Shot ID 或 Agent 自选 AssetVersion 字段；
 5. Agent 只能输出 Packet local keys 与 Attachment keys，Backend normalizer 唯一恢复 Occurrence/Interaction exact refs，并映射精确 Appearance/Location/Prop AssetVersion 与 Scene/Interaction Binding；
 6. 真实角色 identity anchor + 多 Appearance 三视图、Location、Prop、人物拿 Prop 的组合参考能够进入对应镜头且不串身份/状态；
 7. Source/Dialogue/Action/Occurrence/Interaction、时长、轴线和 story-time boundary 的 deterministic gates 可重算；
@@ -646,9 +646,9 @@ Runtime 只能加载 `build-storygraph` 当前 Stage Release 声明的：
 9. Gate 5 一次事务创建完整 formal Shot set、每 Shot 恰一个 ShotProductionBindingVersion、整个 Scene Apply 恰一个 Command Receipt，失败不留部分事实；
 10. 其他 Scene 的 Graph 更新只触发严格 scene revalidation；本 Scene 任一语义输入变化会拒绝旧 Decision；
 11. technical retry、alternative candidate、Attempt unknown、late Result、Repair CAS、Release quarantine/revoke 和 Apply conflict 各有独立恢复证据；
-12. 新 run 只有 Packet-first v2 路径，历史 v1 无 fallback 或伪装升级；
+12. 新 run 只有 Packet-first production 路径，历史 legacy 无 fallback 或伪装升级；
 13. Agent 从未读取项目资产库、调用 Generation/Provider、写数据库、发布 Asset/Shot/Graph 或持久化本地 Checkpoint；
-14. 至少两个相邻真实 Scene 从 Evidence、Identity/State、三视图/道具/组合参考到 formal Shot、Binding 和 v2 p3 Graph 可全链反查，并证明人物形象、Prop 前后状态和 story-time boundary 连续。
+14. 至少两个相邻真实 Scene 从 Evidence、Identity/State、三视图/道具/组合参考到 formal Shot、Binding 和 production p3 Graph 可全链反查，并证明人物形象、Prop 前后状态和 story-time boundary 连续。
 
 ## 19. 完成边界与下一门
 

@@ -10,7 +10,7 @@
 
 ## 验收范围
 
-本记录验收 `Workflow Start Actor → WorkflowRun 身份事实 → Node Claim → NodeExecutorCommand → Script Application 授权读取 → script_revision node-output-v1` 的最小闭环。Backend 是执行投影和 Script 业务事实的唯一 Writer，PostgreSQL/GORM Model Catalog 是唯一 SQL 事实源。本切片没有 Migration、手写 SQL、默认 Token Version、兼容回退、第二 ORM 或 Repository 旁路。
+本记录验收 `Workflow Start Actor → WorkflowRun 身份事实 → Node Claim → NodeExecutorCommand → Script Application 授权读取 → script_revision node-output-canonical` 的最小闭环。Backend 是执行投影和 Script 业务事实的唯一 Writer，PostgreSQL/GORM Model Catalog 是唯一 SQL 事实源。本切片没有 Migration、手写 SQL、默认 Token Version、兼容回退、第二 ORM 或 Repository 旁路。
 
 ## 实现证据
 
@@ -22,7 +22,7 @@
 | 正式 Owner 访问 | `workflow.input.script_revision` 通过 Script Application Service `GetRevision` 重新鉴权，没有直接访问 Script Repository |
 | 不可变性 | Executor 逐项比对 Workspace、Project、Revision ID、Version 和 Normalized Hash，任一漂移都拒绝输出 |
 | 撤销语义 | Owner Application 用当前 UserAccount 核对启动时 Token Version；账户 Token Version 提升后，尚未执行节点 fail closed |
-| 输出契约 | 成功读取后只返回编译期望的 `script:script_revision` canonical `node-output-v1` |
+| 输出契约 | 成功读取后只返回编译期望的 `script:script_revision` canonical `node-output-canonical` |
 
 ## 真实验证
 

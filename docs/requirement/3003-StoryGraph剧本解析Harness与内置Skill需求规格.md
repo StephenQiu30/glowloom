@@ -16,7 +16,7 @@
 
 ## 1. 范围、术语与边界
 
-本文固定成熟 Skill 的吸收供应链、单一内置 Bundle、StageVariantKeyV2、storygraph-stage-wire-v2、十三个 Stage、Candidate Revision、Shard、Review/Repair、Vision 与发布恢复合同。
+本文固定成熟 Skill 的吸收供应链、单一内置 Bundle、StageVariantKeyProduction、storygraph-stage-wire-production、十三个 Stage、Candidate Revision、Shard、Review/Repair、Vision 与发布恢复合同。
 
 Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Candidate Head 和所有正式业务写入；Agent Runtime 只消费冻结输入并返回严格 Candidate。Agent 不得接收媒体 Provider 密钥，不调用图片或视频 Provider，不写数据库、对象存储、Kafka、Elasticsearch 或 Temporal。
 
@@ -61,7 +61,7 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| VPA-REL-001 | StageVariantKeyV2 精确由 stage_key、profile_key、lane_key、output_schema_version 构成；四字段共同决定变体身份。 | Schema |
+| VPA-REL-001 | StageVariantKeyProduction 精确由 stage_key、profile_key、lane_key、output_schema_version 构成；四字段共同决定变体身份。 | Schema |
 | VPA-REL-002 | DefinitionCore 保存变体身份、input/output schema、allowed tools、resource policy、模型能力、预算与不变量，不引用 Release、签名或 Control，避免 hash cycle。 | Hash graph |
 | VPA-REL-003 | StageRelease 保存 release_id、definition_hash、bundle_hash、agent_image_digest、model capability、eval attestation、created_at 与 predecessor_release_id。 | Contract |
 | VPA-REL-004 | CandidateStageSet 必须对当前生产 Profile 的十三个 StageVariantKey 完整且唯一，并携带完整性 proof 和 policy proof；不能混用未声明 Release。 | Set equality |
@@ -72,12 +72,12 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 | VPA-REL-009 | dispatch、accept result、apply candidate 三处分别验证 StageRelease、SkillRelease 和 ControlHead fence；任一已 quarantined/revoked 都失败关闭。 | Race + Fault injection |
 | VPA-REL-010 | Release、Signature、Attestation、Control 与 Receipt 的引用方向必须无环，Canonical Hash 排除数据库当前态和运行时租约。 | Graph/hash property |
 
-## 4. storygraph-stage-wire-v2 与执行身份
+## 4. storygraph-stage-wire-production 与执行身份
 
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| VPA-WIR-001 | 公共 Invocation kind 只允许 storygraph_stage，wire_schema_version 固定 storygraph-stage-wire-v2；不保留 production_bible、storyboard_draft 或无类型 map union。 | Strict schema |
-| VPA-WIR-002 | Invocation 固定 invocation_id、attempt_id、StageVariantKeyV2、StageRelease identity、SkillRelease identity、Control proof、scope、source refs、upstream refs、shard、payload、input_hash 与执行预算。 | Go/Python fixture |
+| VPA-WIR-001 | 公共 Invocation kind 只允许 storygraph_stage，wire_schema_version 固定 storygraph-stage-wire-production；不保留 production_bible、storyboard_draft 或无类型 map union。 | Strict schema |
+| VPA-WIR-002 | Invocation 固定 invocation_id、attempt_id、StageVariantKeyProduction、StageRelease identity、SkillRelease identity、Control proof、scope、source refs、upstream refs、shard、payload、input_hash 与执行预算。 | Go/Python fixture |
 | VPA-WIR-003 | scope 必须显式包含 workspace、project、episode 以及该 Stage 允许的 scene/entity/target；未知层级和跨项目引用拒绝。 | Negative |
 | VPA-WIR-004 | source ref 使用完整 OwnerVersionIdentity；upstream ref 使用 CandidateRevision identity、producer Invocation/result hash；Agent 不得补全 current/latest。 | Mutation |
 | VPA-WIR-005 | Stage input 为按 stage_key/profile_key 判别的 strict union，additional properties 默认 false；自由 JSON 只能存在于明确定义的 opaque evidence 字段。 | Schema fuzz |
@@ -85,7 +85,7 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 | VPA-WIR-007 | dispatch authorization 在 Backend 运行时单独颁发并绑定 invocation、attempt、expiry 和 agent image；不能改变 Candidate 语义 Hash。 | Security |
 | VPA-WIR-008 | AttemptResult 只允许 accepted、rejected、outcome_unknown，包含 input_hash、output_hash、diagnostic_hash、release fence 与完成时间；同尝试结果不可覆盖。 | State machine |
 | VPA-WIR-009 | Go/Python 必须共用提交到仓库的正例、缺字段、未知字段、排序、Unicode、Hash 漂移和跨项目攻击 fixture。 | CI |
-| VPA-WIR-010 | 旧 Wire 在 v2 切片中原子移除或明确隔离为历史调用路径；不得 fallback 或自动转换成 v2 正式 Candidate。 | Architecture negative |
+| VPA-WIR-010 | 旧 Wire 在 production 切片中原子移除或明确隔离为历史调用路径；不得 fallback 或自动转换成 production 正式 Candidate。 | Architecture negative |
 
 ## 5. 十三个 StageVariant 合同
 
@@ -155,7 +155,7 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
-| VPA-CAN-001 | ShardManifestV2 不可变，包含 manifest_hash、scope universe、shard key、coverage、dependency closure 和 fixed-point proof；同阶段所有 shard 无重叠且完整覆盖。 | Property |
+| VPA-CAN-001 | ShardManifestProduction 不可变，包含 manifest_hash、scope universe、shard key、coverage、dependency closure 和 fixed-point proof；同阶段所有 shard 无重叠且完整覆盖。 | Property |
 | VPA-CAN-002 | CandidateRevision 不可变，包含 revision_id、stage variant、shard、input_hash、output_hash、producer union、parent revision 和 status。 | Contract |
 | VPA-CAN-003 | producer union 明确区分 Agent Attempt、Backend mechanical、Human correction；三者字段不可混用。 | Strict union |
 | VPA-CAN-004 | 每个 stage_instance_key 只有一个 CandidateHead，更新使用 expected revision CAS；并发 repair 只能一个成功。 | Concurrency |

@@ -85,15 +85,15 @@ ReviewDecision recorded
 
 ```text
 Workflow Gate Node
-  → WorkflowHumanGateInputV2
+  → WorkflowHumanGateInputProduction
   → review.HumanTask
-  → review.ReviewDecisionV2
-  → workflow.GateEffectCoordinationV2
+  → review.ReviewDecisionProduction
+  → workflow.GateEffectCoordinationProduction
       → explicit gate-specific Owner Command(s)
-      → GateEffectBundleReceiptV2
-  → workflow.WorkflowResumeIntentV2
+      → GateEffectBundleReceiptProduction
+  → workflow.WorkflowResumeIntentProduction
       → Temporal Signal / History reconcile
-      → WorkflowResumeReceiptV2
+      → WorkflowResumeReceiptProduction
 ```
 
 单向 Hash/引用规则：
@@ -109,12 +109,12 @@ Review Decision、Owner Effect 和 Temporal Resume 是多个明确事务/网络�
 
 ## 4. Workflow Gate Input 与 HumanTask
 
-### 4.1 WorkflowHumanGateInputV2
+### 4.1 WorkflowHumanGateInputProduction
 
 Workflow 在打开 Task 前先持久化 immutable Gate Input：
 
 ```text
-WorkflowHumanGateInputV2
+WorkflowHumanGateInputProduction
 ├── gate_input_id / workflow_run_ref / node_run_ref
 ├── workflow_gate_wait_snapshot_ref / wait_token_hash
 ├── gate_key = gate_1_structure_identity |
@@ -125,7 +125,7 @@ WorkflowHumanGateInputV2
 ├── gate_instance_key
 ├── workspace_id / project_id / scope_keys[]
 ├── subject_type
-├── subject_payload: HumanGateSubjectV2 strict union
+├── subject_payload: HumanGateSubjectProduction strict union
 ├── subject_content_hash
 ├── subject_read_set_root
 ├── candidate_revision_refs[] / candidate_set_ref?
@@ -151,16 +151,16 @@ WorkflowHumanGateInputV2
 
 Key 的每个占位都使用 exact ref 的 canonical logical/version identity，不使用显示名、数组序号、页面 URL 或“当前”。同一 Gate Input content hash 重放返回同一记录；同一 instance key 异参冲突。
 
-`HumanGateSubjectRefV2` 统一指向 Gate Input 内嵌 Subject：`{gate_input_id, subject_type, subject_revision=1, subject_hash}`。Task/Decision 不允许有时直接指 Candidate、有时指 CandidateSet 或 Owner Snapshot；具体 Candidate/Set/Owner refs 只位于对应 strict union payload。Gate Input 顶层 `candidate_revision_refs[]/candidate_set_ref?/subject_read_set_root` 是索引前像，Backend normalizer 必须证明它们与 payload 中同类 refs/root 逐字节全等，不能形成第二份可漂移 Subject。
+`HumanGateSubjectRefProduction` 统一指向 Gate Input 内嵌 Subject：`{gate_input_id, subject_type, subject_revision=1, subject_hash}`。Task/Decision 不允许有时直接指 Candidate、有时指 CandidateSet 或 Owner Snapshot；具体 Candidate/Set/Owner refs 只位于对应 strict union payload。Gate Input 顶层 `candidate_revision_refs[]/candidate_set_ref?/subject_read_set_root` 是索引前像，Backend normalizer 必须证明它们与 payload 中同类 refs/root 逐字节全等，不能形成第二份可漂移 Subject。
 
-Workflow 在 Gate Input 之前创建 `WorkflowHumanGateWaitSnapshotV2`，只冻结 workflow execution chain、NodeRun waiting revision、gate key/instance、wait token hash 和 resume contract，不引用 Gate Input/Task/Decision。Gate Input 的 `node_run_ref` 必须逐字节等于该 waiting revision；NodeRun 后续记录 Gate Input/Task/Resume 的新状态不能反向改变 Wait Snapshot 或 Gate Input hash。实际 wait token 只在 Workflow/Backend 内部保存，Task/Frontend 只见 hash/ref。
+Workflow 在 Gate Input 之前创建 `WorkflowHumanGateWaitSnapshotProduction`，只冻结 workflow execution chain、NodeRun waiting revision、gate key/instance、wait token hash 和 resume contract，不引用 Gate Input/Task/Decision。Gate Input 的 `node_run_ref` 必须逐字节等于该 waiting revision；NodeRun 后续记录 Gate Input/Task/Resume 的新状态不能反向改变 Wait Snapshot 或 Gate Input hash。实际 wait token 只在 Workflow/Backend 内部保存，Task/Frontend 只见 hash/ref。
 
 ### 4.2 HumanTask
 
 HumanTask 只冻结审核入口，不复制 Subject 内容：
 
 ```text
-HumanTaskV2
+HumanTaskProduction
 ├── task_id / workspace_id / project_id
 ├── workflow_gate_input_ref / gate_input_hash
 ├── gate_key / gate_instance_key / subject_type
@@ -174,7 +174,7 @@ HumanTaskV2
 └── created_at / updated_at
 ```
 
-Subject ref 永远是上一节的 `HumanGateSubjectRefV2`；Agent Candidate Revision、CandidateSet 和 Owner Snapshot 只作为该 Subject payload 的内容定址依赖。Task 的 mutable claim/status revision 不进入 Subject hash。一个 Gate Input 最多创建一个 Task；Task stale 后同一旧 Input 不得重新开 Task，必须先生成新 Gate Input。
+Subject ref 永远是上一节的 `HumanGateSubjectRefProduction`；Agent Candidate Revision、CandidateSet 和 Owner Snapshot 只作为该 Subject payload 的内容定址依赖。Task 的 mutable claim/status revision 不进入 Subject hash。一个 Gate Input 最多创建一个 Task；Task stale 后同一旧 Input 不得重新开 Task，必须先生成新 Gate Input。
 
 Task Query 通过 renderer contract 调用对应 typed View；不得把大 Candidate JSON、剧本文本、媒体 bytes 或 Provider 响应塞进 Task 行。
 
@@ -193,16 +193,16 @@ Task Query 通过 renderer contract 调用对应 typed View；不得把大 Candi
 
 ## 5. Decision strict union
 
-### 5.1 ReviewDecisionV2
+### 5.1 ReviewDecisionProduction
 
 ```text
-ReviewDecisionV2
+ReviewDecisionProduction
 ├── decision_id / workspace_id / project_id
 ├── human_task_ref / expected_claimed_task_revision
 ├── workflow_gate_input_ref / gate_input_hash
 ├── subject_ref / subject_revision / subject_hash
 ├── gate_key / gate_instance_key
-├── decision_payload: HumanGateDecisionPayloadV2 strict union
+├── decision_payload: HumanGateDecisionPayloadProduction strict union
 ├── claim_owner_ref / claim_token_fingerprint
 ├── membership_token_version
 ├── idempotency_key / command_hash
@@ -226,7 +226,7 @@ selected {
 
 changes_requested {
   issue_refs[],
-  change_spec: GateChangeSpecV2 strict union,
+  change_spec: GateChangeSpecProduction strict union,
   reason_code,
   user_note?
 }
@@ -245,9 +245,9 @@ rejected {
 - `user_note` 只用于审计，不授权 Patch、Owner 写入、Prompt 或工具调用；
 - rejected/approved 不得夹带 candidate selection；selected 不得夹带 change spec。
 
-`CreatorDecisionEntryV1` 是 Decision 内嵌严格对象，至少包含 target Owner/family/logical id/field path、对应 DesignGap/semantic issue ref、typed chosen value、reason code 和 affected scope keys。它不是提前存在的 Owner Ref；正向 Owner Apply 校验其 path/value 在 Subject allowlist 内后，把它内容定址为目标 Owner 的 creator-decision fragment，并从该 fragment 反查 ReviewDecision/path。这样不会出现“Owner 结果尚未发布，Decision 却先引用结果 ID”的前向引用。Gate-specific schema 可以要求该数组为空；自由文本 note 永远不能成为 CreatorDecisionEntry。
+`CreatorDecisionEntryContract` 是 Decision 内嵌严格对象，至少包含 target Owner/family/logical id/field path、对应 DesignGap/semantic issue ref、typed chosen value、reason code 和 affected scope keys。它不是提前存在的 Owner Ref；正向 Owner Apply 校验其 path/value 在 Subject allowlist 内后，把它内容定址为目标 Owner 的 creator-decision fragment，并从该 fragment 反查 ReviewDecision/path。这样不会出现“Owner 结果尚未发布，Decision 却先引用结果 ID”的前向引用。Gate-specific schema 可以要求该数组为空；自由文本 note 永远不能成为 CreatorDecisionEntry。
 
-### 5.2 GateChangeSpecV2
+### 5.2 GateChangeSpecProduction
 
 `changes_requested` 不是自由文本修库。严格分支固定为：
 
@@ -281,7 +281,7 @@ Decision 保存的是事务开始时通过 CAS 的 claimed Task revision；Task 
 ### 6.1 Gate 1 — Structure & Identity
 
 ```text
-Gate1StructureIdentitySubjectV2
+Gate1StructureIdentitySubjectProduction
 ├── document_revision_ref / source_span_index_ref
 ├── structure_candidate_revision_ref
 ├── identity_candidate_revision_ref
@@ -306,7 +306,7 @@ Scene/Identity split/merge/rebind 必须先产生新 Candidate/Task；approved A
 ### 6.2 Gate 2 — Bible & Continuity
 
 ```text
-Gate2BibleContinuitySubjectV2
+Gate2BibleContinuitySubjectProduction
 ├── structure_identity_set_version_ref
 ├── production_world_candidate_root
 ├── bible_partition_candidate_ref
@@ -325,7 +325,7 @@ Gate 2 不创建 Preset、Reference Plan、AssetVersion、Generation Target、St
 ### 6.3 Gate 3 — Visual Foundation & Scope
 
 ```text
-Gate3VisualFoundationScopeSubjectV2
+Gate3VisualFoundationScopeSubjectProduction
 ├── confirmed_production_world_read_set_root
 ├── preset_version_ref / project_preset_binding_candidate_ref
 ├── effective_style_candidate_revision_ref
@@ -353,7 +353,7 @@ Gate 3 不调用 Provider、不生成图片、不选择 Candidate。Preset 不�
 Gate 4 是一个用户阶段，不是一个全项目 HumanTask。每个 exact Reference Target/generation round/CandidateSet 打开一个任务：
 
 ```text
-Gate4ReferenceSelectionSubjectV2
+Gate4ReferenceSelectionSubjectProduction
 ├── approved_reference_plan_version_ref
 ├── reference_plan_target_ref / target_business_key
 ├── generation_target_ref / generation_execution_ref
@@ -369,7 +369,7 @@ Gate4ReferenceSelectionSubjectV2
 
 selected 的 Effect Plan 固定为两个阶段：
 
-1. `generation.SelectReferenceCandidate` 发布 `GenerationCandidateSelectionV2`；
+1. `generation.SelectReferenceCandidate` 发布 `GenerationCandidateSelectionProduction`；
 2. 按 Target kind 显式分派：
    - base 四类 → `PublishSelectedBaseReferenceResultCommand`，由 `asset` 发布 Artifact/Rendition + AssetVersion；
    - Scene/Interaction Composition → `PublishSelectedCompositionResultCommand`，由 `asset + production/reference` 同事务发布 selected Composition Artifact + ReferenceBindingVersion。
@@ -389,7 +389,7 @@ changes_requested 可以要求重生成、编辑 Brief 或请求更换上游参�
 ### 6.5 Gate 5 — Storyboard
 
 ```text
-Gate5StoryboardSubjectV2
+Gate5StoryboardSubjectProduction
 ├── scene_production_packet_ref / packet_hash
 ├── packet_execution_materialization_ref
 ├── storyboard_candidate_revision_ref / candidate_head_ref
@@ -404,7 +404,7 @@ Gate5StoryboardSubjectV2
 
 approved 调用 `ApplyStoryboardCandidateCommand`，由 `production/storyboard` 在一个 Scene 事务中：
 
-- 重验 Candidate/Decision/Release、Packet、媒体、Binding 与 `Gate5GraphCheckV1`；
+- 重验 Candidate/Decision/Release、Packet、媒体、Binding 与 `Gate5GraphCheckContract`；
 - 创建完整 formal Shot set；
 - 每 Shot 创建恰 1 个 ShotProductionBindingVersion；
 - 保存 temporary→formal mapping、Command Receipt 和 Outbox；
@@ -414,7 +414,7 @@ approved 调用 `ApplyStoryboardCandidateCommand`，由 `production/storyboard` 
 
 ### 6.6 负向 Decision
 
-`rejected|changes_requested` 的 Effect Plan 为空，但仍发布 `GateEffectBundleReceiptV2(disposition=not_required)`，其中冻结 gate branch、Decision ref/hash、change spec/reason hash 和预期 Resume output。它不能创建任何业务 Owner Version、Collection Receipt、CandidateSelection、Generation Target 或 Provider Call。
+`rejected|changes_requested` 的 Effect Plan 为空，但仍发布 `GateEffectBundleReceiptProduction(disposition=not_required)`，其中冻结 gate branch、Decision ref/hash、change spec/reason hash 和预期 Resume output。它不能创建任何业务 Owner Version、Collection Receipt、CandidateSelection、Generation Target 或 Provider Call。
 
 Workflow Definition 只根据这个 immutable branch：
 
@@ -431,21 +431,21 @@ Workflow Definition 只根据这个 immutable branch：
 Composition Root 注册五个 gate key 的编译时 exhaustive plan，不提供数据库动态 executor、字符串反射或 fallback：
 
 ```text
-gate_1_structure_identity       → gate1-effect-plan-v2
-gate_2_bible_continuity        → gate2-effect-plan-v2
-gate_3_visual_foundation_scope → gate3-effect-plan-v2
-gate_4_reference_selection     → gate4-effect-plan-v2
-gate_5_storyboard              → gate5-effect-plan-v2
+gate_1_structure_identity       → gate-structure-identity-effect-plan
+gate_2_bible_continuity        → gate-bible-continuity-effect-plan
+gate_3_visual_foundation_scope → gate-visual-foundation-effect-plan
+gate_4_reference_selection     → gate-reference-selection-effect-plan
+gate_5_storyboard              → gate-storyboard-effect-plan
 ```
 
 Plan contract 冻结允许 decision、步骤顺序、Owner Command contract、input projector、result normalizer 和 Gate output schema hash。Task 打开时的 `effect_plan_hash` 必须与 Decision 后 Composition Root 当前已加载 release 相等；Plan 被 quarantine/revoke 或 hash 漂移时不能用新逻辑解释旧 Decision，必须由精确旧 release 恢复或明确 conflict。
 
-`GateEffectPlanReleaseV2` 是 Backend 编译发布物的签名 Manifest，包含 plan contract/hash、input/output schema hash、五个显式 projector/applier factory refs 和 control status。部署必须保留仍有 OPEN Task、recorded Decision 或 pending/unknown Coordination 引用的旧 Release；新 Release 只供新 Gate Input 使用。它不是数据库脚本插件，不能从 Task payload 下载并执行任意代码。
+`GateEffectPlanReleaseProduction` 是 Backend 编译发布物的签名 Manifest，包含 plan contract/hash、input/output schema hash、五个显式 projector/applier factory refs 和 control status。部署必须保留仍有 OPEN Task、recorded Decision 或 pending/unknown Coordination 引用的旧 Release；新 Release 只供新 Gate Input 使用。它不是数据库脚本插件，不能从 Task payload 下载并执行任意代码。
 
 ### 7.2 Coordination identity
 
 ```text
-GateEffectCoordinationV2
+GateEffectCoordinationProduction
 ├── coordination_id
 ├── coordination_key = human-gate-effect:<review_decision_id>
 ├── decision_ref / decision_hash
@@ -456,7 +456,7 @@ GateEffectCoordinationV2
 ├── conflict_code?
 └── created_at / updated_at
 
-GateEffectStepIntentV2
+GateEffectStepIntentProduction
 ├── coordination_ref / step_key / step_index
 ├── owner_command_contract_ref
 ├── owner_command_idempotency_key
@@ -465,7 +465,7 @@ GateEffectStepIntentV2
 ├── state = pending | dispatched | completed | conflict
 └── created_at / updated_at
 
-GateEffectBundleReceiptV2
+GateEffectBundleReceiptProduction
 ├── coordination_ref / decision_ref
 ├── disposition = applied | not_required
 ├── ordered_step_receipt_refs[]
@@ -499,7 +499,7 @@ Gate Output 不含完整 Candidate、剧本文本、图片 bytes、Prompt、Secr
 ### 8.1 Resume envelope
 
 ```text
-HumanGateResumeEnvelopeV2
+HumanGateResumeEnvelopeProduction
 ├── signal_id = human-gate-resume:<review_decision_id>
 ├── workflow_run_ref / node_run_ref / wait_token
 ├── gate_key / gate_instance_key
@@ -517,14 +517,14 @@ HumanGateResumeEnvelopeV2
 ### 8.2 Resume Intent/Receipt
 
 ```text
-WorkflowResumeIntentV2
+WorkflowResumeIntentProduction
 ├── signal_id / envelope_hash
 ├── workflow_run_ref / node_run_ref / wait_token
 ├── state = prepared | sending | unknown | completed | conflict
 ├── send_attempt_count / last_error_code?
 └── created_at / updated_at
 
-WorkflowResumeReceiptV2
+WorkflowResumeReceiptProduction
 ├── signal_id / envelope_hash
 ├── temporal_execution_ref
 ├── applied_node_run_ref / applied_history_event_ref
@@ -626,7 +626,7 @@ claim_token
 expected_task_revision
 expected_gate_input_hash
 expected_subject_revision / expected_subject_hash
-decision_payload: HumanGateDecisionPayloadV2
+decision_payload: HumanGateDecisionPayloadProduction
 idempotency_key
 ```
 
@@ -642,7 +642,7 @@ Decision 处理可同步推进 Effect/Resume，但响应必须分层：
 ### 10.3 只读协调响应
 
 ```text
-HumanGateCoordinationViewV2
+HumanGateCoordinationViewProduction
 ├── task_status / task_revision
 ├── decision_status / decision_ref?
 ├── effect_status / completed_step_keys[] / owner_receipt_refs[]
@@ -766,9 +766,9 @@ MVP 使用 Query polling/精确 invalidation 即可；不要求 SSE、WebSocket 
 
 ### 16.3 原子迁移
 
-新 Workflow cutover 后只创建五类 v2 Gate Input/Task。旧 Bible-first、Episode/Planning 分裂、Storyboard Intent/Detail、`reference_asset_candidate_set`、Shot Frame/Video Gate 只由精确旧 runtime 恢复或明确终止；v2 Coordinator 不领取、不映射、不 fallback。旧非终态引用归零后按独立任务删除旧 Subject/executor 路由。
+新 Workflow cutover 后只创建五类 production Gate Input/Task。旧 Bible-first、Episode/Planning 分裂、Storyboard Intent/Detail、`reference_asset_candidate_set`、Shot Frame/Video Gate 只由精确旧 runtime 恢复或明确终止；production Coordinator 不领取、不映射、不 fallback。旧非终态引用归零后按独立任务删除旧 Subject/executor 路由。
 
-迁移不改写历史 HumanTask/Decision/Receipt，不把旧 Decision伪装成新 Gate 通过，不双写 v1/v2 Task。
+迁移不改写历史 HumanTask/Decision/Receipt，不把旧 Decision伪装成新 Gate 通过，不双写 legacy/production Task。
 
 ## 17. 验收门
 

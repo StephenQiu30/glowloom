@@ -24,7 +24,7 @@
 - Red 阶段先执行 `go test ./tests/generation`，因 `internal/generation/adapter/asset` 尚不存在而编译失败；实现后同一目标测试在隔离依赖上转绿。
 - 目标旅程使用 PostgreSQL 16.15 与私有 MinIO `RELEASE.2025-09-07T16-13-09Z`，通过预签名 PUT 上传真实 PNG，再经 Asset 完整读取和 READY 门禁交给 Generation。
 - 8 路并发登记同一 READY Artifact 只形成一个 Candidate、一个 QCReport 和一个相同 CommandReceipt；换命令键重投仍复用同一 Candidate/Report，同一键更换 Artifact 和同一 Artifact 更换 QC Policy 均拒绝。
-- 4×3 PNG 在 `image-deterministic-v1` 下通过；2×2 PNG 分别得到 `width_below_minimum`、`height_below_minimum`，11×10 PNG 得到 `pixel_count_exceeded`，JPEG-only Policy 对 PNG 得到 `media_type_not_allowed`。
+- 4×3 PNG 在 `image-deterministic-policy` 下通过；2×2 PNG 分别得到 `width_below_minimum`、`height_below_minimum`，11×10 PNG 得到 `pixel_count_exceeded`，JPEG-only Policy 对 PNG 得到 `media_type_not_allowed`。
 - Pending Artifact、非 `generation_provider_job` 来源、已撤销 Token 与被篡改的 QC Report Hash 均无法通过对应门禁；最终 Workspace 事实数精确为 4 个 Candidate、4 个 QCReport、5 个登记 Receipt。
 - 全新隔离 PostgreSQL + Temporal + MinIO 执行 `go test -count=1 -p 1 ./...` 全部通过，Generation 与既有 Asset/Workflow 外部依赖旅程均实际运行；`go vet ./...`、`gofmt` 和数据库架构边界通过。
 - Agent Ruff check/format、Pyright 零错误与 12 个 Pytest 通过；Frontend OpenAPI 重生成、ESLint、TypeScript、45 个 Vitest 与 Next.js 生产构建通过，生成 Client 无漂移。

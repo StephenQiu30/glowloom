@@ -16,18 +16,18 @@
 
 ## 实现事实
 
-1. 发布 `lanverse.shot@2.0.0`，仅将 Shot Source 和 Binding Node 升级为 v2；CandidateSet/Human Gate 继续复用已接受的 v1 定义。v1 Source/Binding Executor 保留原语义，没有原地改写已发布契约。
+1. 发布 `lanverse.shot@2.0.0`，仅将 Shot Source 和 Binding Node 升级为 production；CandidateSet/Human Gate 继续复用已接受的 legacy 定义。legacy Source/Binding Executor 保留原语义，没有原地改写已发布契约。
 2. `RequireShotImageBindingTarget` 通过 Storyboard Application Interface 进入单一 GORM 事务，对 active Shot 获取写锁并读取当前最大 Binding Revision。Target 只是 canonical 节点输出，没有新表、current pointer、Migration、DDL 或 Raw SQL。
-3. Target Content Hash 冻结 Shot ID/Revision/Hash 和当前 Binding ID/Revision/Hash；节点的 Reference Version 表示下一 Binding Revision。Binding v2 不接受 Authoring 自报 Expected Revision，而是从 Target 推导并在 Owner 写事务中重建 Hash。
+3. Target Content Hash 冻结 Shot ID/Revision/Hash 和当前 Binding ID/Revision/Hash；节点的 Reference Version 表示下一 Binding Revision。Binding production 不接受 Authoring 自报 Expected Revision，而是从 Target 推导并在 Owner 写事务中重建 Hash。
 4. 重跑复用已验收的派生 Run 能力：DefinitionVersion/RunInputSnapshot 不变，Run/Temporal ID 更新，SourceWorkflowRunID/RerunRootNodeID 明确，四个 Shot 节点全部重跑且不借用 `SKIPPED`/Cache 伪造新 Target。
 5. 成功 Binding Command 优先按原输入 Hash 重放 Receipt；尚未成功的过期/篡改 Target 失败关闭。并发使用同一 Target 的两个写入者仅一个能追加下一 Revision。
 
 ## Red → Green 验收证据
 
-- Red 首先因缺少 `RequireShotImageBindingTarget`、`BindSelectedImageAtTarget`、v2 Command 和 `lanverse.shot@2.0.0` 明确编译失败；补齐 Owner 后 Catalog 身份仍为 v1，契约测试继续失败。发布 v2 Catalog/Executor 后同一契约转绿。
+- Red 首先因缺少 `RequireShotImageBindingTarget`、`BindSelectedImageAtTarget`、production Command 和 `lanverse.shot@2.0.0` 明确编译失败；补齐 Owner 后 Catalog 身份仍为 legacy，契约测试继续失败。发布 production Catalog/Executor 后同一契约转绿。
 - 真实 PostgreSQL 目标测试验证：未绑 Target Revision `0`、首绑 Revision `1`、已绑 Target 冻结当前 Binding ID/Hash、成功 Receipt 重放、过期/篡改 Target 拒绝，以及两个并发替换中仅一个产生 Revision `2`。
 - 真实 PostgreSQL + Temporal Journey 验证：首 Run 选择候选 B 产生 Binding Revision `1`；重复派生命令收敛到同一新 Run；新 Run 的 Source Node 冻结 Target Reference Version `2`，新 HumanTask 选择候选 A 后产生 Binding Revision `2`，原 Run 仍成功且无来源引用。首 Run 与重跑 Run 的 Temporal History 均使用 `lanverse.shot-production` 注册名 Replay 通过。
-- 同一 Journey 在归档 Shot 后再启动时，v2 Source 在 HumanTask 之前失败，已有两个 Binding 不变；撤销发起人 Token Version 后也不能重读 active Shot。
+- 同一 Journey 在归档 Shot 后再启动时，production Source 在 HumanTask 之前失败，已有两个 Binding 不变；撤销发起人 Token Version 后也不能重读 active Shot。
 - 新增两个目标测试在隔离 PostgreSQL/Temporal 上合计 7.601 秒通过。完整 Backend 首次因之前目标测试污染同一数据库而触发全局事实计数失败；销毁本任务专用三容器并从全新 PostgreSQL/Temporal/MinIO 重跑后，`gofmt`、`go vet ./...`、`go test -count=1 -p 1 ./...` 全绿，Workflow 包耗时 102.759 秒。
 
 ## 完整 Required CI 证据
@@ -38,7 +38,7 @@
 
 ## Requirement Checklist
 
-- [x] `BE-WF-SHOT-001`：v2 Catalog/Node Definition 和显式 v2 Executor 已发布，v1 Executor 语义保持。
+- [x] `BE-WF-SHOT-001`：production Catalog/Node Definition 和显式 production Executor 已发布，legacy Executor 语义保持。
 - [x] `BE-WF-SHOT-002`：Shot/Current Binding 在 Storyboard Owner 单事务内冻结为 canonical Target。
 - [x] `BE-WF-SHOT-003`：过期/篡改 Target、Receipt 重放与并发单胜者已通过真实 PostgreSQL 验证。
 - [x] `BE-WF-SHOT-004`：首绑后的 Shot 派生 Run、新 HumanTask/Selection/Binding、源 Run 不变和双 History Replay 已通过真实 Temporal 验证。

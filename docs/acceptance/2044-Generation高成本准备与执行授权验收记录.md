@@ -15,7 +15,7 @@
 
 ## 实现事实
 
-1. `PrepareImageGeneration` 首次或新幂等键调用必须从 `wrk_runs`/`wrk_node_run_projections` 校验 Workspace/Project、Run/Node 归属、Run 发起人与 Token Version、执行态、`external_ai` 风险等级、Runtime Claim 和 canonical `node-input-v1` Hash；孤立 UUID、非执行态或 Input 漂移均失败关闭。
+1. `PrepareImageGeneration` 首次或新幂等键调用必须从 `wrk_runs`/`wrk_node_run_projections` 校验 Workspace/Project、Run/Node 归属、Run 发起人与 Token Version、执行态、`external_ai` 风险等级、Runtime Claim 和 canonical `node-input-canonical` Hash；孤立 UUID、非执行态或 Input 漂移均失败关闭。
 2. 每个 Workflow NodeRun 只有一个 `GenerationIntent`。Intent 冻结 Input Hash、Units、发起身份、Cost Estimate/Reservation、Quota Reservation、Owner Receipt 和 Content Hash；相同来源并发或新幂等键只复用 Owner 事实，绑定漂移不会建第二份占用。
 3. Generation Coordinator 开启一个外层 GORM 事务，将同一 `*gorm.DB` 绑定给现有 Cost/Quota Application Service；Owner 仍执行自身授权、锁、账本/计数器、状态机和 Command Receipt。GORM 嵌套 Savepoint 被关闭时直接拒绝，不退化为多事务补偿或跨 Owner 写表。
 4. `PREPARING` 只用于未提交事务内的 NodeRun 并发串行化；成功后一次性提交 `PREPARED`、Estimate、Cost Reservation/Ledger、Quota Reservation/Counter 与全部 Receipt。Cost、Quota 或 Generation 任一失败时整体回滚，数据库不保留 `PREPARING` 事实。

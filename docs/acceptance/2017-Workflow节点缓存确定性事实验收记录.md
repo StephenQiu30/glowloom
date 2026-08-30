@@ -18,9 +18,9 @@
 
 | 契约 | 结果 |
 |---|---|
-| 确定性 Key | `node-cache-key-v1` 对规范化 Key Material 使用稳定 JSON 与 SHA-256；Artifact Hash 排序去重，不受调用顺序影响 |
+| 确定性 Key | `node-cache-key-canonical` 对规范化 Key Material 使用稳定 JSON 与 SHA-256；Artifact Hash 排序去重，不受调用顺序影响 |
 | 完整输入覆盖 | Node Definition、Config、规范化输入、冻结 Policy/Model/Prompt/Skill、输入 Artifact Hash 和 Runtime Contract Version 任一变化都会改变 Cache Key |
-| 输出快照 | 输出使用后续固定的 `node-output-v1` typed port bindings，并单独保存 Output Hash；重复端口、未知字段、非法引用和 Hash 漂移均拒绝 |
+| 输出快照 | 输出使用后续固定的 `node-output-canonical` typed port bindings，并单独保存 Output Hash；重复端口、未知字段、非法引用和 Hash 漂移均拒绝 |
 | 单一事实源 | `wrk_node_cache_entries` 进入现有 GORM Schema Catalog，PostgreSQL 是唯一 SQL 事实源；没有 Migration 文件或手写 SQL |
 | 并发收敛 | Workspace + Cache Key 唯一；八路并发首次 Ensure 通过 GORM Conflict Do Nothing 收敛为一条事实 |
 | 不可变冲突 | 同 Workspace/Cache Key 的不同 Output Snapshot/Hash 返回冲突，不覆盖首个已提交事实 |

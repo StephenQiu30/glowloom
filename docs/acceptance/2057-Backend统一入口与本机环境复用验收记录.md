@@ -76,6 +76,6 @@
 
 ## 残余边界
 
-- 本机现有 Logstash 按其外部配置写 `logstash-*`；仓库隔离/生产 Pipeline 写严格 `lanverse-logs-application-v1` 与 `lanverse-logs-dead-letter-v1`。两者都消费同一脱敏 `lanverse.log.v1` JSON，但索引命名由各运行环境负责。
+- 本机现有 Logstash 按其外部配置写 `logstash-*`；仓库隔离/生产 Pipeline 写严格 `lanverse-logs-application` 与 `lanverse-logs-dead-letter`。两者都消费同一脱敏 `lanverse.log.application` JSON，但索引命名由各运行环境负责。
 - 未经用户授权未推送代码，因此远端 GitHub CI 需要在后续 push/PR 时由 `required` Job 真实执行；本任务只记录已完成的本地等价门。
 - 全部 StoryGraph/Workflow 实施任务尚未完成，按约定本任务不运行 `agent-browser`，也不把本记录当作最终浏览器验收。

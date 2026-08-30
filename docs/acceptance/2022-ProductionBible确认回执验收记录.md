@@ -34,7 +34,7 @@
 
 ## 残余风险与下一切片
 
-- 本切片只暴露 Production Owner 已有的真实回执，不代表 Workflow 已绑定它；下一切片需把 ReviewDecision、Owner Receipt、正式 `node-output-v1` 与 Temporal Signal 串成一个可恢复协调链。
+- 本切片只暴露 Production Owner 已有的真实回执，不代表 Workflow 已绑定它；下一切片需把 ReviewDecision、Owner Receipt、正式 `node-output-canonical` 与 Temporal Signal 串成一个可恢复协调链。
 - 现有 Bible Confirm 尚未完成项目资产/状态/版本物化，因此不宣称 `PB-FR-009` 或 Production Bible 完整发布已经通过。
 - `agent-browser` 按约定只在全部开发完成后执行，本切片不计作浏览器验收。
 - 本地门禁通过不等于远端绿色；`origin/main` 最近一次历史运行仍失败，这些本地提交尚未获准推送。

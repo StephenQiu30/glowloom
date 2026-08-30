@@ -9,7 +9,10 @@ import (
 	"testing"
 )
 
-var numericReleaseName = regexp.MustCompile(`(^|[^[:alnum:]])[vV][12]([^[:alnum:]]|$)|[[:alnum:]][Vv][12]([A-Z_]|$)`)
+var (
+	numericReleaseName = regexp.MustCompile(`(^|[^[:alnum:]])[vV][12]([^[:alnum:]]|$)|[[:alnum:]][Vv][12]([A-Z_]|$)`)
+	externalSemver     = regexp.MustCompile(`\bv[12]\.[0-9]+\.[0-9]+\b`)
+)
 
 func TestProjectContractsUseSemanticNames(t *testing.T) {
 	t.Parallel()
@@ -17,7 +20,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 	repositoryRoot := repositoryDirectory(t)
 	for _, relativeRoot := range []string{
 		"backend/api", "backend/cmd", "backend/internal", "backend/tests",
-		"agent/app", "agent/tests", "frontend/src", "frontend/tests", ".github",
+		"agent/app", "agent/tests", "frontend/src", "frontend/tests", ".github", "docs",
 	} {
 		root := filepath.Join(repositoryRoot, relativeRoot)
 		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
@@ -59,6 +62,7 @@ func inspectSemanticNames(t *testing.T, path, relativePath string) error {
 	temporalAPIVersion := "/" + "v" + "1"
 	franzGoVersion := "franz-go " + "v" + "1.21.6"
 	codexFeature := "multi_agent_" + "v" + "2"
+	googleInteractionAPI := "interactions-" + "v" + "1beta-image"
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	for scanner.Scan() {
@@ -69,6 +73,8 @@ func inspectSemanticNames(t *testing.T, path, relativePath string) error {
 		}
 		line = strings.ReplaceAll(line, franzGoVersion, "franz-go external-version")
 		line = strings.ReplaceAll(line, codexFeature, "codex-external-feature")
+		line = strings.ReplaceAll(line, googleInteractionAPI, "google-external-api")
+		line = externalSemver.ReplaceAllString(line, "external-semver")
 		if numericReleaseName.MatchString(line) {
 			t.Errorf("%s:%d 含项目自有数字发布序号命名：%s", relativePath, lineNumber, strings.TrimSpace(scanner.Text()))
 		}
@@ -83,6 +89,6 @@ func isSemanticNamingSource(path string) bool {
 	}
 	return map[string]bool{
 		".go": true, ".py": true, ".ts": true, ".tsx": true,
-		".json": true, ".yaml": true, ".yml": true, ".toml": true, ".sh": true,
+		".json": true, ".yaml": true, ".yml": true, ".toml": true, ".sh": true, ".md": true,
 	}[extension]
 }

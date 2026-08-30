@@ -36,13 +36,13 @@ Backend source acceptance / SourceSpanIndexVersion
 → Backend Generation / Artifact READY
 → review_reference_artifact
 → Human CandidateSelection / Gate 4（非 Agent Stage）
-→ storygraph-v2 + SceneProductionPacket
+→ storygraph-production + SceneProductionPacket
 → direct_storyboard
 → review_candidate(profile=storyboard)
 → Gate 5（非 Agent Stage）
 ```
 
-`storygraph-stage-wire-v2` 是全新、严格判别的 Wire；它不兼容复用旧 Stage payload。旧 v1 Invocation 只由精确旧 runtime image/bundle hash 完成历史重放，新任务在切换点后只能创建 v2 Invocation，不双写、不 fallback、不把旧 Stage 名伪装成新语义。
+`storygraph-stage-wire-production` 是全新、严格判别的 Wire；它不兼容复用旧 Stage payload。旧 legacy Invocation 只由精确旧 runtime image/bundle hash 完成历史重放，新任务在切换点后只能创建 production Invocation，不双写、不 fallback、不把旧 Stage 名伪装成新语义。
 
 Agent 永远只返回 Candidate、ReviewIssue 或 CandidateRepairPatch。Human Gate、CandidateSelection、Owner Apply、Provider 调用、Artifact 发布、StoryGraph 编译和 SceneProductionPacket 构建都属于 Go Backend 或对应业务 Owner，不是 Skill Stage。
 
@@ -52,7 +52,7 @@ Agent 永远只返回 Candidate、ReviewIssue 或 CandidateRepairPatch。Human G
 
 本文固定：
 
-- `storygraph-stage-wire-v2` 的 Release、Envelope、Stage 联合类型与 Hash 身份；
+- `storygraph-stage-wire-production` 的 Release、Envelope、Stage 联合类型与 Hash 身份；
 - 从剧本结构到 Gate 5 的 Agent Stage DAG，以及每个 Stage 的 runtime class、输入、Candidate 和分片边界；
 - P0 Candidate 与 `3001` 的 Span、SceneFact、Identity、ProductionWorld 三分区一一映射；
 - Preset 与 style-blind Stage 的强隔离、世界观预设的视觉阶段注入规则；
@@ -72,7 +72,7 @@ Agent 永远只返回 Candidate、ReviewIssue 或 CandidateRepairPatch。Human G
 - 当前 runtime class 只有结构化文本，没有内容定址媒体输入和 Vision Review；
 - `StageCandidateRevision` 的 invocation/aggregate/repair 三 origin、Head CAS、Shard Manifest、staleness 和 Bible review loop 已有可复用实现；
 - 旧 `draft_storyboard`、Generation reference target builder 和 Storyboard Workflow 仍以 `needs_asset` 为旧顺序接口；
-- 当前工作区另有暂停、未提交的 `SG-I21` 增量，本设计不修改、不回滚，也不把它算作 v2 完成证据。
+- 当前工作区另有暂停、未提交的 `SG-I21` 增量，本设计不修改、不回滚，也不把它算作 production 完成证据。
 
 实现切换必须同时覆盖下列真实消费者，不能只改 Markdown：
 
@@ -84,7 +84,7 @@ WorkflowDefinition node contracts / stage callers
 canonical fixtures / unit / contract / integration / golden tests
 ```
 
-旧 v1 的以下 Stage 不进入 v2 Definition：`extract_source_evidence`、`analyze_story`、`reconcile_story`、`segment_episodes`、`analyze_episode`、`reconcile_episode`、`draft_storyboard`、`detail_shots`、`review_storygraph` 及旧 `repair_candidate` payload。历史数据保持可读；新 v2 不建别名或双读入口。
+旧 legacy 的以下 Stage 不进入 production Definition：`extract_source_evidence`、`analyze_story`、`reconcile_story`、`segment_episodes`、`analyze_episode`、`reconcile_episode`、`draft_storyboard`、`detail_shots`、`review_storygraph` 及旧 `repair_candidate` payload。历史数据保持可读；新 production 不建别名或双读入口。
 
 ## 3. 一个固定 Skill Release，七个能力路由
 
@@ -161,7 +161,7 @@ Release provenance manifest 与 NOTICE digest 进入 `skill_release_hash` 前像
 Backend `AgentDefinitionCoreManifest` 是允许 Stage/Policy 的唯一 pre-release Owner。发布身份必须是无环的内容 DAG，不能让签名又参与被签名 Hash：
 
 ```text
-StageVariantKeyV2 {
+StageVariantKeyProduction {
   stage_key
   profile_key
 }
@@ -170,7 +170,7 @@ AgentDefinitionCoreManifest {
   definition_core_id / definition_core_version
   wire_schema_id / wire_schema_hash
   variant_contracts[] {
-    variant_key: StageVariantKeyV2
+    variant_key: StageVariantKeyProduction
     capability_key / lane / runtime_class
     input/output/normalized-candidate contract refs and schema hashes
     normalizer contract ref/hash
@@ -189,9 +189,9 @@ BundleContentManifest {
 }
 
 StageReleaseManifest {
-  wire_schema_id = storygraph-stage-wire-v2 / wire_schema_hash
+  wire_schema_id = storygraph-stage-wire-production / wire_schema_hash
   agent_definition_core_hash
-  variant_key: StageVariantKeyV2
+  variant_key: StageVariantKeyProduction
   capability_key
   lane = style_blind_text | preset_visual | packet_storyboard
   runtime_class = text | vision
@@ -212,7 +212,7 @@ StageReleaseManifest {
 
 CandidateStageSetManifest {
   agent_definition_core_hash / bundle_content_hash
-  ordered_stage_releases[] { variant_key: StageVariantKeyV2, stage_release_hash }
+  ordered_stage_releases[] { variant_key: StageVariantKeyProduction, stage_release_hash }
   policy_validation_contract_hash / policy_validation_proof_root
   candidate_stage_set_hash
 }
@@ -276,7 +276,7 @@ SkillReleaseControlHead {
 
 所有对象 `additionalProperties=false`。除签名前像另行声明外，每个 `*_hash` 都对带 Contract domain separator、排除自身 hash 字段的完整 Canonical JSON 根计算；`signature_envelope_hash` 包含 signature 但排除自身。资源 Ref 至少含 bundle-relative path、byte length 和 lowercase SHA-256，按 UTF-8 path 排序且不可重复。`bundle_file_manifest[]` 覆盖 Release 允许的全部文本资源；`bundle_content_hash` 覆盖除自身外的完整 Bundle manifest。`loaded_resource_set_hash` 只覆盖该 Stage Variant 真正注入的入口、Reference、Recipe 与 Rubric；Failure fixture 不得进入该集合。
 
-`StageVariantKeyV2` 是唯一键对象，不再并存可分叉的 compound string 或外层重复字段。两个 key 都必须匹配 ASCII `^[a-z][a-z0-9_]{0,63}$`，无 profile 的 Stage 显式使用 `profile_key=default`。任何 Stage Set、Eval/Shadow binding、Invocation 或 Candidate Ref 分支中出现的 Variant Key 都必须与解引用后 `StageReleaseManifest.variant_key` 的 Canonical JSON bytes 完全相等；列表统一按 `(stage_key UTF-8 bytes, profile_key UTF-8 bytes)` 二元组排序。`review_candidate` 和 `repair_candidate` 的 structure/production-world/visual/storyboard profile 因而是不同 Stage Variant，分别冻结 lane、Schema、Rubric 和资源集；P0 Variant 无法加载视觉 Rubric。`stage_release_hash` 对除自身外的完整 Stage manifest 计算，其中已绑定 `bundle_content_hash` 与 `agent_definition_core_hash`。
+`StageVariantKeyProduction` 是唯一键对象，不再并存可分叉的 compound string 或外层重复字段。两个 key 都必须匹配 ASCII `^[a-z][a-z0-9_]{0,63}$`，无 profile 的 Stage 显式使用 `profile_key=default`。任何 Stage Set、Eval/Shadow binding、Invocation 或 Candidate Ref 分支中出现的 Variant Key 都必须与解引用后 `StageReleaseManifest.variant_key` 的 Canonical JSON bytes 完全相等；列表统一按 `(stage_key UTF-8 bytes, profile_key UTF-8 bytes)` 二元组排序。`review_candidate` 和 `repair_candidate` 的 structure/production-world/visual/storyboard profile 因而是不同 Stage Variant，分别冻结 lane、Schema、Rubric 和资源集；P0 Variant 无法加载视觉 Rubric。`stage_release_hash` 对除自身外的完整 Stage manifest 计算，其中已绑定 `bundle_content_hash` 与 `agent_definition_core_hash`。
 
 `AgentDefinitionCoreManifest` 只能引用在任何 Release 之前独立存在的 Wire/Schema/Contract/Policy artifact；Schema 机械拒绝 StageRelease、SkillRelease、Signature、Control 或运行 activation ref。发布后的 Definition → Release 激活绑定只存在 Backend Control/Registry 中，不回写 Core。
 
@@ -292,25 +292,25 @@ Eval/Shadow 不能只保存“通过”文本。两者都必须绑定同一 `can
 
 Control 终态复验和写入权只属于 Go Backend，不属于无数据库权限的 Harness。Backend 在 Invocation 创建、Attempt `queued→dispatched`、accepted Outcome CAS 与任何 invocation/aggregate/repair Candidate Revision 创建、以及任何 Candidate Apply/reuse 的状态写事务中，都必须先按统一锁序锁定 current `SkillReleaseControlHead`，并将 expected `control_hash + release_fence` 作为同一条件写/CAS 的谓词；Control 转移事务也锁同一 Head，从而不存在 check-before-write TOCTOU。Invocation-origin Revision 必须与 accepted Outcome CAS 在同一事务创建；aggregate/repair 也不得绕过同一 Control 谓词。若 Apply 先持锁并提交，它是撤销前事实；若 revoke/quarantine 先提交，旧 Apply 必须条件失败。
 
-Backend 完成 dispatch 状态写后签发内容定址 `DispatchAuthorizationV2`，冻结 invocation/attempt/claim、Stage/Input/Release hashes、`control_hash_at_dispatch`、`release_fence`、期限和 Backend 签名。Harness 只验证该授权、执行冻结输入，并在 Result 原样回传 authorization hash/control/fence；它不查库、不改 Control、不决定 Outcome。只有 `approved` 可创建新 Invocation；`deprecated` 只允许没有 quarantine/revoke 中间祖先的已存 Invocation 精确恢复。Head 进入 `quarantined|revoked` 时立即递增 release fence，运行中 claim 的迟到结果只留审计，不得成为 accepted Outcome；既有但未 Apply 的 Candidate/Outcome 也不得继续 Apply/reuse。若 quarantine 后重新 approved，旧 Attempt/Outcome 仍不自动复活，必须在新 Control Hash 下建新 Invocation。撤销前已提交的 Owner 事实保持可审计有效，不做隐式回滚。任何状态都不允许 fallback 到相近 Release。
+Backend 完成 dispatch 状态写后签发内容定址 `DispatchAuthorizationProduction`，冻结 invocation/attempt/claim、Stage/Input/Release hashes、`control_hash_at_dispatch`、`release_fence`、期限和 Backend 签名。Harness 只验证该授权、执行冻结输入，并在 Result 原样回传 authorization hash/control/fence；它不查库、不改 Control、不决定 Outcome。只有 `approved` 可创建新 Invocation；`deprecated` 只允许没有 quarantine/revoke 中间祖先的已存 Invocation 精确恢复。Head 进入 `quarantined|revoked` 时立即递增 release fence，运行中 claim 的迟到结果只留审计，不得成为 accepted Outcome；既有但未 Apply 的 Candidate/Outcome 也不得继续 Apply/reuse。若 quarantine 后重新 approved，旧 Attempt/Outcome 仍不自动复活，必须在新 Control Hash 下建新 Invocation。撤销前已提交的 Owner 事实保持可审计有效，不做隐式回滚。任何状态都不允许 fallback 到相近 Release。
 
 新 Release 不自动使已确认 Owner 事实 stale；只有用户/Workflow 显式以新 Release 重跑才产生新 Candidate lineage。
 
 Pydantic 严格类型是 Agent Candidate JSON Schema 的代码事实；构建时生成 Canonical Schema artifact/hash并写入 Backend Manifest。Go 拥有 Invocation、Stage、Policy 和正式业务校验，必须用同一组跨语言 success/reject fixtures 验证等价，不能各自放宽字段。Bundle Markdown 不复制 JSON Schema。
 
-## 6. `storygraph-stage-wire-v2`
+## 6. `storygraph-stage-wire-production`
 
 ### 6.1 公共 Invocation Envelope
 
-Wire 是按 `variant_key: StageVariantKeyV2` 严格判别的联合类型，不再提供可自由组合的 `source_refs[]`、`base_storygraph_version_*` 或任意 `stage_input`：
+Wire 是按 `variant_key: StageVariantKeyProduction` 严格判别的联合类型，不再提供可自由组合的 `source_refs[]`、`base_storygraph_version_*` 或任意 `stage_input`：
 
 ```text
-StoryGraphStageInvocationV2 {
+StoryGraphStageInvocationProduction {
   invocation_id
   kind = storygraph_stage
-  wire_schema_id = storygraph-stage-wire-v2
+  wire_schema_id = storygraph-stage-wire-production
   workspace_id / project_id
-  variant_key: StageVariantKeyV2
+  variant_key: StageVariantKeyProduction
   stage_release_ref {
     release_id / skill_release_hash
     stage_release_hash
@@ -329,14 +329,14 @@ StoryGraphStageInvocationV2 {
 }
 ```
 
-Invocation 输入身份不包含后发 dispatch token。实际 transport 在外层携带 `StoryGraphStageDispatchV2 { invocation, attempt_id, claim_version, dispatch_authorization }`。`DispatchAuthorizationV2` 先对 invocation/attempt/claim、input/stage/release hash、`control_hash_at_dispatch`、current `release_fence` 与过期时间计算 domain-separated unsigned root，Backend 只签该 root；再对含签名的完整 Envelope 计算 `dispatch_authorization_hash`（排除自身）。Token 不进 `input_hash`，但它的 hash 必须进 Attempt Result，因而无签名或输入循环。
+Invocation 输入身份不包含后发 dispatch token。实际 transport 在外层携带 `StoryGraphStageDispatchProduction { invocation, attempt_id, claim_version, dispatch_authorization }`。`DispatchAuthorizationProduction` 先对 invocation/attempt/claim、input/stage/release hash、`control_hash_at_dispatch`、current `release_fence` 与过期时间计算 domain-separated unsigned root，Backend 只签该 root；再对含签名的完整 Envelope 计算 `dispatch_authorization_hash`（排除自身）。Token 不进 `input_hash`，但它的 hash 必须进 Attempt Result，因而无签名或输入循环。
 
 Candidate 引用不得假设所有 Revision 都由 Agent Stage 直接生成：
 
 ```text
-RevisionPointerV2 { revision_id / revision / revision_hash }
+RevisionPointerProduction { revision_id / revision / revision_hash }
 
-CandidateRevisionRefV2 {
+CandidateRevisionRefProduction {
   revision_id / revision / revision_hash
   normalized_candidate_contract_id / normalized_candidate_schema_hash
   candidate_content_hash
@@ -374,7 +374,7 @@ InvocationInputHashRoot {
 }
 
 StageInstanceKeyRoot {
-  identity_contract_id = storygraph-stage-instance-v2
+  identity_contract_id = storygraph-stage-instance-production
   variant_key
   scope_kind / scope_key
   shard_manifest_hash / shard_key / tree_path
@@ -391,7 +391,7 @@ ShardManifest、Attempt Result、Candidate content、Candidate revision 与 Patc
 模型只生成当前 Stage Variant `output_schema_hash` 指定的 Candidate Body，不得自报 invocation/attempt/claim、status、executor、control 或 hash。Harness 完成严格 Schema 校验、canonicalization 与内容 Hash 后，才包装不可变 Attempt Result：
 
 ```text
-StoryGraphStageAttemptResultV2 {
+StoryGraphStageAttemptResultProduction {
   invocation_id / attempt_id / claim_version / release_fence
   wire_schema_id / variant_key / stage_release_hash
   skill_release_hash / release_control_hash_at_dispatch
@@ -409,33 +409,33 @@ StoryGraphStageAttemptResultV2 {
 
 成功时严格 Candidate、output contract/schema/content hash 与 result hash 非空，error 为空；确定失败时 Candidate/content hash 为空且稳定 error 非空；unknown 时 Candidate/content hash 也为空，它表示该 Attempt 的执行效果无法确认，不是逻辑 Invocation 的终态。`diagnostics[]` 只允许有限的执行/解析诊断，业务 ReviewIssue 必须属于对应 Candidate，不允许在通用 Envelope 里建第二条语义通道。Result Hash 覆盖除自身外的完整对象。用户原文、Prompt、图片 bytes 和凭据不进入日志；日志只保存内容身份、Stage Variant、scope、耗时、token/attempt 计数和安全错误摘要。
 
-## 7. v2 Stage 责任矩阵
+## 7. production Stage 责任矩阵
 
 非 Review/Repair Stage 使用 `profile_key=default`：Span 至 Continuity 属于 `style_blind_text`，Visual Foundation/Plan/Brief/Artifact Review 属于 `preset_visual`，Storyboard 属于 `packet_storyboard`。`review_candidate` 的 `structure_identity|production_world|visual_foundation_scope|storyboard` 与 `repair_candidate` 的各 target profile 都是 Manifest-bound `profile_key`，不是运行 payload 可任意切换的字符串。
 
 | Stage | runtime / 分片 | 精确输入 | Candidate 输出 | 禁止输入或行为 |
 |---|---|---|---|---|
-| `propose_script_spans` | `text`；source window map + ordered reduce | DocumentRevision、SourceSpanIndexVersion、格式诊断、Backend marker hints | `script_structure_proposal_v2`：EpisodeSpan/SceneSpan、coverage、边界 issue | Bible、Identity、Preset、Style、目标时长、正式 Episode/Scene ID |
-| `extract_scene_facts` | `text`；每个 accepted/proposed SceneSpan | 精确 structure revision、Scene source slices、邻接只读上下文 | `scene_fact_candidate_v2`：Dialogue/Beat/Mention/StateClue/InteractionFact | 正式 Identity/State、creative fill、Preset、StoryGraph |
-| `resolve_identities` | `text`；mention component map + deterministic reduce | 完整 SceneFact root；增量时可带允许复用的精确旧 Structure identity index | `identity_resolution_candidate_v2`：cluster/new/reuse/unresolved 与完整 mention partition | 同名自动合并、Agent UUID、Specification/State、Style |
-| `derive_production_entities` | `text`；每 Identity/dependency closure | StructureIdentitySetVersion、内容定址 SceneFacts、Evidence candidates | `production_entity_fragment_candidate_v2`：Specification、完整 State、World/跨集 Claim、DesignGap | raw mention 直绑、Preset、Artifact、Scene writer |
-| `bind_scene_occurrences` | `text`；每 Scene scope | Structure version、SceneFact、entity/state fragments、稳定 Scene logical ID | `scene_binding_fragment_candidate_v2`：Scene/Dialogue/Beat/Occurrence | 自建 Identity/State、mentioned_only 偷升实际 Occurrence |
-| `reconcile_interaction_continuity` | `text`；story-time closure map/reduce | State、Occurrence、InteractionFact、相邻 ledger boundary、旧 Claim lineage | `continuity_fragment_candidate_v2`：Interaction/普通 Continuity/ledger delta/issues | 自由持物备注、组合 State、双 holder、播放序替故事时间 |
-| `review_candidate` | profile-bound `text`；impact closure | 精确目标 Candidate Revision、Backend deterministic gate issues、当前 Variant Rubric | `production_review_candidate_v2`：排序 ReviewIssue 与建议 | 输出整体 Gate pass/fail、降级 mechanical blocker、Human Decision |
-| `repair_candidate` | profile-bound `text`；单 issue/typed allowlist | 目标 revision/hash、review revision/hash、当前 Variant 允许 keys/fields、只读邻接 | `candidate_repair_patch_v2` 严格联合 | 改 Evidence、stable ID、已确认 Owner Ref、Artifact bytes |
-| `resolve_visual_foundation` | `vision`；Project/design-gap closure | Confirmed World roots、PresetVersion、typed overrides、合法参考附件 | `visual_foundation_candidate_v2`：Style/Policy、冲突、source→design mapping、creative-fill 提案 | 改写 P0、未冻结网络参考、静默世界改编 |
-| `plan_reference_assets` | `text`；Project scope + expected-key batches | Confirmed World、Foundation candidate、p1 scopes、Backend expected target keys | `reference_plan_candidate_v2`：required/optional/not_generated、依赖和用途 | 从名称猜资产、漏 Target 表达不生成、直接调用 Provider |
-| `compile_reference_brief` | `text`；每个 Approved Target | Gate 3 snapshots/plan、精确 Identity/Spec/State/Scene/Occurrence/Interaction、Target contract 要求的全部已选依赖（允许空集时必须显式） | `reference_brief_candidate_v2` 六用途严格联合 | 缺少必需已选依赖、当前指针、额外人物/道具、生成图片 |
-| `review_reference_artifact` | `vision`；每 Target/Candidate Artifact | Target/Brief、Artifact digest/rights/lineage、Style、精确基础依赖与只读 bytes | `vision_review_candidate_v2` 五类审查结果 | CandidateSelection、发布 AssetVersion/Binding、修图或 Provider 调用 |
-| `direct_storyboard` | `vision`；每 Scene | 一个精确 SceneProductionPacket 及其内容定址参考附件 | `storyboard_candidate_v2`；精确字段由 `VP-D08` 固定 | `needs_asset`、搜索项目资产、触发参考生成、自由 current/latest |
+| `propose_script_spans` | `text`；source window map + ordered reduce | DocumentRevision、SourceSpanIndexVersion、格式诊断、Backend marker hints | `script_structure_proposal_production`：EpisodeSpan/SceneSpan、coverage、边界 issue | Bible、Identity、Preset、Style、目标时长、正式 Episode/Scene ID |
+| `extract_scene_facts` | `text`；每个 accepted/proposed SceneSpan | 精确 structure revision、Scene source slices、邻接只读上下文 | `scene_fact_candidate_production`：Dialogue/Beat/Mention/StateClue/InteractionFact | 正式 Identity/State、creative fill、Preset、StoryGraph |
+| `resolve_identities` | `text`；mention component map + deterministic reduce | 完整 SceneFact root；增量时可带允许复用的精确旧 Structure identity index | `identity_resolution_candidate_production`：cluster/new/reuse/unresolved 与完整 mention partition | 同名自动合并、Agent UUID、Specification/State、Style |
+| `derive_production_entities` | `text`；每 Identity/dependency closure | StructureIdentitySetVersion、内容定址 SceneFacts、Evidence candidates | `production_entity_fragment_candidate_production`：Specification、完整 State、World/跨集 Claim、DesignGap | raw mention 直绑、Preset、Artifact、Scene writer |
+| `bind_scene_occurrences` | `text`；每 Scene scope | Structure version、SceneFact、entity/state fragments、稳定 Scene logical ID | `scene_binding_fragment_candidate_production`：Scene/Dialogue/Beat/Occurrence | 自建 Identity/State、mentioned_only 偷升实际 Occurrence |
+| `reconcile_interaction_continuity` | `text`；story-time closure map/reduce | State、Occurrence、InteractionFact、相邻 ledger boundary、旧 Claim lineage | `continuity_fragment_candidate_production`：Interaction/普通 Continuity/ledger delta/issues | 自由持物备注、组合 State、双 holder、播放序替故事时间 |
+| `review_candidate` | profile-bound `text`；impact closure | 精确目标 Candidate Revision、Backend deterministic gate issues、当前 Variant Rubric | `production_review_candidate_production`：排序 ReviewIssue 与建议 | 输出整体 Gate pass/fail、降级 mechanical blocker、Human Decision |
+| `repair_candidate` | profile-bound `text`；单 issue/typed allowlist | 目标 revision/hash、review revision/hash、当前 Variant 允许 keys/fields、只读邻接 | `candidate_repair_patch_production` 严格联合 | 改 Evidence、stable ID、已确认 Owner Ref、Artifact bytes |
+| `resolve_visual_foundation` | `vision`；Project/design-gap closure | Confirmed World roots、PresetVersion、typed overrides、合法参考附件 | `visual_foundation_candidate_production`：Style/Policy、冲突、source→design mapping、creative-fill 提案 | 改写 P0、未冻结网络参考、静默世界改编 |
+| `plan_reference_assets` | `text`；Project scope + expected-key batches | Confirmed World、Foundation candidate、p1 scopes、Backend expected target keys | `reference_plan_candidate_production`：required/optional/not_generated、依赖和用途 | 从名称猜资产、漏 Target 表达不生成、直接调用 Provider |
+| `compile_reference_brief` | `text`；每个 Approved Target | Gate 3 snapshots/plan、精确 Identity/Spec/State/Scene/Occurrence/Interaction、Target contract 要求的全部已选依赖（允许空集时必须显式） | `reference_brief_candidate_production` 六用途严格联合 | 缺少必需已选依赖、当前指针、额外人物/道具、生成图片 |
+| `review_reference_artifact` | `vision`；每 Target/Candidate Artifact | Target/Brief、Artifact digest/rights/lineage、Style、精确基础依赖与只读 bytes | `vision_review_candidate_production` 五类审查结果 | CandidateSelection、发布 AssetVersion/Binding、修图或 Provider 调用 |
+| `direct_storyboard` | `vision`；每 Scene | 一个精确 SceneProductionPacket 及其内容定址参考附件 | `storyboard_candidate_production`；精确字段由 `VP-D08` 固定 | `needs_asset`、搜索项目资产、触发参考生成、自由 current/latest |
 
-`repair_candidate` 名称可保留，但 v2 payload/contract 与旧版完全不同；旧 reviewer/repairer 不能接受 v2 Candidate。视觉 Artifact 不可 Patch：审查失败后由用户拒绝、修改 Brief 或创建新的 Generation Candidate。
+`repair_candidate` 名称可保留，但 production payload/contract 与旧版完全不同；旧 reviewer/repairer 不能接受 production Candidate。视觉 Artifact 不可 Patch：审查失败后由用户拒绝、修改 Brief 或创建新的 Generation Candidate。
 
 ## 8. P0 Candidate 与 Backend 规范化
 
 ### 8.1 Script Structure
 
-Agent 的 `script_structure_proposal_v2` 只使用临时 span keys 和绝对 code-point ranges，不生成 UUID。Backend 在创建 normalized `script_structure_candidate_v2` Revision 前，按 Stage Release 冻结的 normalization contract：
+Agent 的 `script_structure_proposal_production` 只使用临时 span keys 和绝对 code-point ranges，不生成 UUID。Backend 在创建 normalized `script_structure_candidate_production` Revision 前，按 Stage Release 冻结的 normalization contract：
 
 - 验证 Episode/Scene coverage、顺序、边界和 Evidence；
 - 在 `production/planning` 拥有的 logical ID namespace 中确定性预留 `scene_owner_logical_id`；
@@ -453,7 +453,7 @@ Identity 输出必须证明精确 SceneFact root 中每个 RawMentionRef 恰进�
 
 ### 8.3 Production World 三分区
 
-Backend 从三个 Stage fragment 机械组装 `production_world_candidate_v2`：
+Backend 从三个 Stage fragment 机械组装 `production_world_candidate_production`：
 
 ```text
 bible partition
@@ -529,7 +529,7 @@ Backend 决定 Target expected business keys、两遍 Character anchor/appearanc
 
 ### 9.3 P3 Storyboard
 
-Gate 4 后 Backend 从一致 Owner set 编译 v2 p2 StoryGraph，再构建 `SceneProductionPacket`。`direct_storyboard` 只能读取该 Packet，不能把缺失参考变成 `needs_asset`，不能访问项目资产库或反向触发 Generation。其 Intent/Detail、review/repair 与 Gate 5 精确合同由 `VP-D08` 接着固定。
+Gate 4 后 Backend 从一致 Owner set 编译 production p2 StoryGraph，再构建 `SceneProductionPacket`。`direct_storyboard` 只能读取该 Packet，不能把缺失参考变成 `needs_asset`，不能访问项目资产库或反向触发 Generation。其 Intent/Detail、review/repair 与 Gate 5 精确合同由 `VP-D08` 接着固定。
 
 ## 10. Style/Preset 强隔离
 
@@ -549,7 +549,7 @@ Backend 在构造 input hash 前执行 style-isolation gate；P0 payload 或 att
 
 ## 11. Reference Brief 与 Vision Review
 
-`reference_brief_candidate_v2` 是按 `target_kind` 判别的严格联合：
+`reference_brief_candidate_production` 是按 `target_kind` 判别的严格联合：
 
 | target kind | Brief 必须固定 | 关键禁止 |
 |---|---|---|
@@ -562,7 +562,7 @@ Backend 在构造 input hash 前执行 style-isolation gate；P0 payload 或 att
 
 视觉 Stage 不输出自由 Prompt 即完成。Brief 至少含 target/ref/constraint identity、source-vs-design slots、positive/negative instructions、output view roles、layout/scale、dependency refs、rights/provenance requirements、QC rubric refs、content hash。Backend 再把 Brief 编译为 Provider-specific request；Provider Adapter 不是 Skill。
 
-`vision_review_candidate_v2` 对每项给 `pass|warn|fail|not_assessable`、证据区域/视图、issue code、置信度和建议，覆盖：
+`vision_review_candidate_production` 对每项给 `pass|warn|fail|not_assessable`、证据区域/视图、issue code、置信度和建议，覆盖：
 
 1. 结构/视图完整性；
 2. Identity/State 一致性；
@@ -574,7 +574,7 @@ Vision Reviewer 不能发布、选择、修改 Artifact 或降低 Backend determ
 
 ## 12. Shard、Coverage 与固定点
 
-Backend 为每个可 fan-out NodeRun 发布不可变 `ShardManifestV2`。Manifest Hash Root 至少覆盖 workflow/node、stage release、root input hash、candidate contract、partition rule、active/superseded shards、ordered reduce tree、coverage proof 和 parent manifest hash。
+Backend 为每个可 fan-out NodeRun 发布不可变 `ShardManifestProduction`。Manifest Hash Root 至少覆盖 workflow/node、stage release、root input hash、candidate contract、partition rule、active/superseded shards、ordered reduce tree、coverage proof 和 parent manifest hash。
 
 | Candidate/Stage | 分片身份与覆盖 |
 |---|---|
@@ -601,7 +601,7 @@ Production World 固定点每轮保存 round、input roots、changed keys、impa
 
 ```text
 origin = invocation | aggregate | repair
-parent = { kind=none } | { kind=revision, pointer: RevisionPointerV2 }
+parent = { kind=none } | { kind=revision, pointer: RevisionPointerProduction }
 producer =
   invocation { variant_key, stage_instance_key, accepted_attempt_result_ref/hash }
   | aggregate { node_run_ref, aggregate_contract_id/hash, shard_manifest_ref/hash, ordered_input_roots }
@@ -624,7 +624,7 @@ Transform 不能自由选择：invocation 必须逐字节等于 producer Variant
 
 Backend aggregate 不伪造 Agent Stage Variant，只使用自己的 aggregate contract/Manifest/input roots；Repair 则绑定真实 repair Variant。下游只引用精确 revision id/hash；Head 改变后按 semantic dependency refs 标记影响闭包 stale，不扫描名称或 Graph edge。
 
-`candidate_repair_patch_v2` 按 target profile 严格判别：`script_structure|identity_resolution|production_entity|scene_binding|continuity|visual_foundation|reference_plan|reference_brief|storyboard`。每个分支拥有自己的操作 allowlist、key type、base fragment hash 和 invariant set：
+`candidate_repair_patch_production` 按 target profile 严格判别：`script_structure|identity_resolution|production_entity|scene_binding|continuity|visual_foundation|reference_plan|reference_brief|storyboard`。每个分支拥有自己的操作 allowlist、key type、base fragment hash 和 invariant set：
 
 - Evidence range/hash、reserved Scene logical ID、已确认 identity key/Owner Ref 和 Artifact bytes 永远不可改；
 - Scene split/merge 与 identity merge/split 是 Human typed decision，产生新上游 Candidate，不由通用模型 Patch 偷改；
@@ -701,17 +701,17 @@ Agent 不直连媒体 Provider，不写数据库，不发 Owner Command，不访
 
 ## 17. 原子迁移策略
 
-`storygraph-stage-wire-v2` 的实施顺序必须形成可验证的小闭环，但正式切换只能一次：
+`storygraph-stage-wire-production` 的实施顺序必须形成可验证的小闭环，但正式切换只能一次：
 
-1. 先增加 v2 Schema/fixture/StageRelease/Attempt 模型和拒绝测试，不让生产 Workflow 创建 v2；
-2. 建立 v2 References/Recipe/Rubric 与 provenance inventory，运行 Skill 校验、golden/adversarial/vision eval；
-3. 实现 P0 v2 Stage 与 Backend deterministic aggregate，保持旧 v1 新建路径仍唯一；
+1. 先增加 production Schema/fixture/StageRelease/Attempt 模型和拒绝测试，不让生产 Workflow 创建 production；
+2. 建立 production References/Recipe/Rubric 与 provenance inventory，运行 Skill 校验、golden/adversarial/vision eval；
+3. 实现 P0 production Stage 与 Backend deterministic aggregate，保持旧 legacy 新建路径仍唯一；
 4. 实现 Visual Foundation/Reference/Vision Stage 和 D08 Storyboard Packet Stage；
-5. 在一个切换提交中修改 Workflow callers、Definition、Registry、数据库 allowlist 和 feature gate，使新 run 只创建 v2；
-6. 旧非终态 v1 仅按原 wire/bundle/runtime digest 完成或显式终止；不得被 v2 worker 领取；
-7. v1 引用归零后，独立删除旧 Stage Schema/Reference/caller，不保留兼容 fallback。
+5. 在一个切换提交中修改 Workflow callers、Definition、Registry、数据库 allowlist 和 feature gate，使新 run 只创建 production；
+6. 旧非终态 legacy 仅按原 wire/bundle/runtime digest 完成或显式终止；不得被 production worker 领取；
+7. legacy 引用归零后，独立删除旧 Stage Schema/Reference/caller，不保留兼容 fallback。
 
-每步遵循 Red → Green → Refactor、定向测试、真实跨语言 fixture 和相称的全量 CI；不得把 v2 字段塞入 v1 optional payload，也不得先改数据库 Stage allowlist后让无消费者值进入生产。
+每步遵循 Red → Green → Refactor、定向测试、真实跨语言 fixture 和相称的全量 CI；不得把 production 字段塞入 legacy optional payload，也不得先改数据库 Stage allowlist后让无消费者值进入生产。
 
 ## 18. 验收边界
 
@@ -730,7 +730,7 @@ Agent 不直连媒体 Provider，不写数据库，不发 Owner Command，不访
 11. Shard replan、fixed-point、late result、attempt unknown、repair CAS 和局部 stale 均不重复 Owner/Selection 事实；Release quarantine/revoke 能在 dispatch、Outcome CAS 和 Apply/reuse 三处 fence，撤销前已提交 Owner 事实不隐式回滚；
 12. 外部 Skill 的来源/许可证/重写映射完整；Eval/Shadow 能从 fixture 和 Stage Release 重算到 runtime/policy/baseline/阈值/观测根与签名接受记录，生产运行无远程安装或网络 Skill 搜索；
 13. 使用隔离 fixture 进行独立 forward test：给审阅 Agent 真实剧本、Preset、Prop 交互和参考图输入，不提供预期答案，验证实际产物而非关键词匹配；
-14. 旧 v1 与新 v2 无新建双路径，历史 Invocation 只由精确旧 runtime 路由。
+14. 旧 legacy 与新 production 无新建双路径，历史 Invocation 只由精确旧 runtime 路由。
 
 ## 19. 完成边界与后续门
 
