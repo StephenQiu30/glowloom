@@ -13,7 +13,7 @@ import (
 	eventing "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
 )
 
-const deadLetterSchemaV1 = "lanverse.dead-letter.v1"
+const deadLetterSchema = "lanverse.event.dead-letter"
 
 var ErrEventOwnerNotFound = errors.New("event owner project is not present")
 
@@ -177,7 +177,7 @@ func (consumer *Consumer) deadLetter(
 		return HandleResult{}, err
 	}
 	letter := DeadLetter{
-		ID: consumer.config.NewID(), Schema: deadLetterSchemaV1, ConsumerGroup: consumer.config.Group,
+		ID: consumer.config.NewID(), Schema: deadLetterSchema, ConsumerGroup: consumer.config.Group,
 		EventID: delivery.Envelope.EventID, EventType: delivery.Envelope.EventType,
 		ProjectID: delivery.Envelope.ProjectID, AggregateKind: delivery.Envelope.AggregateKind,
 		AggregateID: delivery.Envelope.AggregateID, AggregateRevision: delivery.Envelope.AggregateRevision,
@@ -203,7 +203,7 @@ func (consumer *Consumer) rejectInvalid(ctx context.Context, message IncomingMes
 	digest := sha256.Sum256(message.Value)
 	rawHash := hex.EncodeToString(digest[:])
 	letter := DeadLetter{
-		ID: consumer.config.NewID(), Schema: deadLetterSchemaV1, ConsumerGroup: consumer.config.Group,
+		ID: consumer.config.NewID(), Schema: deadLetterSchema, ConsumerGroup: consumer.config.Group,
 		EventID: "invalid:" + rawHash, OriginalTopic: message.Topic, DLQTopic: dlqTopic,
 		SourcePartition: message.Partition, SourceOffset: message.Offset, PayloadHash: rawHash,
 		FailureCode: "invalid_envelope", FailureMessage: "event envelope failed strict validation",
@@ -233,7 +233,7 @@ func (consumer *Consumer) rejectOwnerless(
 		return HandleResult{}, err
 	}
 	letter := DeadLetter{
-		ID: consumer.config.NewID(), Schema: deadLetterSchemaV1, ConsumerGroup: consumer.config.Group,
+		ID: consumer.config.NewID(), Schema: deadLetterSchema, ConsumerGroup: consumer.config.Group,
 		EventID: delivery.Envelope.EventID, EventType: delivery.Envelope.EventType,
 		ProjectID: delivery.Envelope.ProjectID, AggregateKind: delivery.Envelope.AggregateKind,
 		AggregateID: delivery.Envelope.AggregateID, AggregateRevision: delivery.Envelope.AggregateRevision,
@@ -258,7 +258,7 @@ func (consumer *Consumer) publishDeadLetter(ctx context.Context, letter DeadLett
 	}
 	if err = consumer.broker.Publish(ctx, Message{
 		Topic: letter.DLQTopic, Key: letter.EventID, Value: encoded,
-		Headers: map[string]string{"lanverse-schema": deadLetterSchemaV1, "lanverse-event-id": letter.EventID},
+		Headers: map[string]string{"lanverse-schema": deadLetterSchema, "lanverse-event-id": letter.EventID},
 	}); err != nil {
 		return fmt.Errorf("publish dead letter for event %s: %w", letter.EventID, err)
 	}

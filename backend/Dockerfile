@@ -18,13 +18,20 @@ RUN CGO_ENABLED=0 go build -trimpath \
 
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates su-exec \
+RUN apk add --no-cache bash ca-certificates curl su-exec \
     && addgroup -S lanverse \
     && adduser -S -G lanverse lanverse
 
 COPY --from=builder /out/lanverse /usr/local/bin/lanverse
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+COPY observability/elasticsearch/init.sh /usr/share/lanverse-observability/elasticsearch-init.sh
+COPY observability/elasticsearch/ilm-policy.json /usr/share/lanverse-observability/ilm-policy.json
+COPY observability/logstash/template/lanverse-logs-template.json /usr/share/lanverse-observability/lanverse-logs-template.json
+COPY observability/kibana/init.sh /usr/share/lanverse-observability/kibana-init.sh
+RUN chmod 0755 \
+    /usr/local/bin/docker-entrypoint.sh \
+    /usr/share/lanverse-observability/elasticsearch-init.sh \
+    /usr/share/lanverse-observability/kibana-init.sh
 
 EXPOSE 8686
 

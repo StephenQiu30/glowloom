@@ -17,4 +17,12 @@ else
   fi
 fi
 
+if ! /usr/share/lanverse-observability/elasticsearch-init.sh; then
+  echo "Elasticsearch formal index initialization failed; Backend will start and retry its search runtime independently" >&2
+elif ! /usr/share/lanverse-observability/kibana-init.sh; then
+  echo "Kibana data view initialization failed; Backend will start without blocking API availability" >&2
+fi
+
+unset ELASTICSEARCH_INIT_USERNAME ELASTICSEARCH_INIT_PASSWORD KIBANA_USERNAME KIBANA_PASSWORD
+
 exec su-exec lanverse:lanverse "$@"

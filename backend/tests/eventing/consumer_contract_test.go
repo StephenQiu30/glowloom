@@ -32,7 +32,7 @@ func TestConsumerUsesInboxAndRevisionFencingBeforeProjection(t *testing.T) {
 	if processor.calls != 1 || repository.completed != 1 {
 		t.Fatalf("duplicate or stale event reached projector: processor=%d complete=%d", processor.calls, repository.completed)
 	}
-	if repository.acquired[0].Group != "lanverse.search-projector.v1" || repository.acquired[0].Message.Offset != 17 {
+	if repository.acquired[0].Group != "lanverse.search-projector" || repository.acquired[0].Message.Offset != 17 {
 		t.Fatalf("consumer group or Kafka coordinate was not persisted: %#v", repository.acquired[0])
 	}
 }
@@ -50,14 +50,14 @@ func TestConsumerSendsPoisonMessageToIsolatedDLQWithoutLeakingInvalidBody(t *tes
 	if err != nil || !result.Ack || repository.deadLetters != 1 || len(broker.messages) != 1 {
 		t.Fatalf("valid poison event did not reach DLQ: result=%#v error=%v repository=%#v broker=%#v", result, err, repository, broker)
 	}
-	if broker.messages[0].Topic != "lanverse.business.storygraph-version.dlq.v1" ||
+	if broker.messages[0].Topic != "lanverse.business.storygraph-version.dead-letter" ||
 		!strings.Contains(string(broker.messages[0].Value), eventingFixture(t).EventID) {
 		t.Fatalf("DLQ identity or topic is wrong: %#v", broker.messages[0])
 	}
 
 	invalid := []byte(`{"prompt":"do not persist this secret","access_token":"private-token"}`)
 	result, err = consumer.Handle(context.Background(), eventingapp.IncomingMessage{
-		Topic: "lanverse.business.storygraph-version.v1", Partition: 0, Offset: 20, Key: "invalid", Value: invalid,
+		Topic: "lanverse.business.storygraph-version.published", Partition: 0, Offset: 20, Key: "invalid", Value: invalid,
 	})
 	if err != nil || !result.Ack || repository.rejected != 1 || len(broker.messages) != 2 {
 		t.Fatalf("invalid poison event did not reach safe DLQ: result=%#v error=%v", result, err)
@@ -95,10 +95,10 @@ func TestConsumerAcknowledgesOwnerlessEventAfterNonReplayableDeadLetter(t *testi
 func newContractConsumer(repository eventingapp.InboxRepository, processor eventingapp.Processor, broker eventingapp.PublisherBroker, now time.Time) *eventingapp.Consumer {
 	return eventingapp.NewConsumer(repository, processor, broker, eventingapp.ConsumerTopics{
 		BusinessToDLQ: map[string]string{
-			"lanverse.business.storygraph-version.v1": "lanverse.business.storygraph-version.dlq.v1",
+			"lanverse.business.storygraph-version.published": "lanverse.business.storygraph-version.dead-letter",
 		},
 	}, eventingapp.ConsumerConfig{
-		Group: "lanverse.search-projector.v1", Now: func() time.Time { return now },
+		Group: "lanverse.search-projector", Now: func() time.Time { return now },
 		NewID: func() string { return "inbox-generated-id" }, Lease: time.Minute, MaxAttempts: 3,
 	})
 }
@@ -110,7 +110,7 @@ func incomingEnvelope(t *testing.T, envelope eventing.Envelope, offset int64) ev
 		t.Fatal(err)
 	}
 	return eventingapp.IncomingMessage{
-		Topic: "lanverse.business.storygraph-version.v1", Partition: 0, Offset: offset,
+		Topic: "lanverse.business.storygraph-version.published", Partition: 0, Offset: offset,
 		Key: envelope.EventID, Value: encoded,
 	}
 }

@@ -16,7 +16,7 @@ func TestSearchServiceAuthorizesBeforeQueryAndReportsFreshness(t *testing.T) {
 	authorizer := &searchAuthorizer{project: projectdomain.Project{ID: searchProjectID, WorkspaceID: searchWorkspaceID}}
 	reader := &searchSnapshotReader{script: snapshot}
 	index := &searchIndex{result: search.IndexResult{
-		IndexVersion: "lanverse-script-search-v1-20260827", SnapshotHash: snapshot.ContentHash,
+		IndexVersion: "lanverse-script-search", SnapshotHash: snapshot.ContentHash,
 		IndexedAt: time.Date(2026, 8, 27, 16, 0, 0, 0, time.UTC), Hits: []search.Hit{{
 			Score: 4.2, Document: snapshot.Documents[0], Snippet: "<em>雨夜</em>追逐",
 		}},

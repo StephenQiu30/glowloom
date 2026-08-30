@@ -16,9 +16,10 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 	production := readText(t, filepath.Join(root, "docker-compose-prod.yml"))
 	kafkaInit := readText(t, filepath.Join(root, "backend", "observability", "kafka", "init.sh"))
 	kibanaInit := readText(t, filepath.Join(root, "backend", "observability", "kibana", "init.sh"))
+	elasticsearchInit := readText(t, filepath.Join(root, "backend", "observability", "elasticsearch", "init.sh"))
 	logstash := readText(t, filepath.Join(root, "backend", "observability", "logstash", "pipeline", "lanverse.conf"))
 	template := readText(t, filepath.Join(root, "backend", "observability", "logstash", "template", "lanverse-logs-template.json"))
-	combined := base + environment + production + kafkaInit + kibanaInit + logstash + template
+	combined := base + environment + production + kafkaInit + kibanaInit + elasticsearchInit + logstash + template
 
 	for _, required := range []string{
 		"docker.elastic.co/logstash/logstash:9.4.4",
@@ -26,9 +27,9 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 		"LOGSTASH_ADDRESS:",
 		"port => 5000",
 		"codec => json_lines",
-		"lanverse-logs-application-v1",
-		"lanverse-logs-dead-letter-v1",
-		"lanverse.log.v1",
+		"lanverse-logs-application",
+		"lanverse-logs-dead-letter",
+		"lanverse.log.application",
 		"KAFKA_USERNAME: event_worker",
 		"KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer",
 		"KIBANA_USERNAME",
@@ -38,20 +39,54 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 			t.Errorf("ELK topology is missing %q", required)
 		}
 	}
+	for _, required := range []string{
+		"ELASTICSEARCH_INIT_USERNAME",
+		"ELASTICSEARCH_INIT_PASSWORD",
+		"lanverse-logs-application-write",
+		"lanverse-logs-dead-letter-write",
+		"index.blocks.write",
+		"remove_index",
+		"is_write_index",
+		"--head",
+		`"index.lifecycle.rollover_alias":"lanverse-logs-dead-letter"`,
+		`"number_of_replicas":0`,
+	} {
+		if !strings.Contains(elasticsearchInit, required) {
+			t.Errorf("Elasticsearch startup initializer is missing %q", required)
+		}
+	}
+
+	for _, relativePath := range []string{
+		"backend/tests/search/elasticsearch_integration_test.go",
+		"backend/tests/search/adapter/gormdb/persistence_integration_test.go",
+		"backend/tests/search/adapter/gormdb/kafka_elasticsearch_integration_test.go",
+	} {
+		source := readText(t, filepath.Join(root, relativePath))
+		for _, required := range []string{"ScriptAlias: formalScriptSearchAlias", "StoryGraphAlias: formalStoryGraphSearchAlias"} {
+			if !strings.Contains(source, required) {
+				t.Errorf("%s does not verify the formal Elasticsearch alias %q", relativePath, required)
+			}
+		}
+		for _, forbidden := range []string{"lanverse-test-", "lanverse-pg-search-", "lanverse-kafka-search-", "deleteSearchIndices("} {
+			if strings.Contains(source, forbidden) {
+				t.Errorf("%s still creates or removes per-test Elasticsearch indices via %q", relativePath, forbidden)
+			}
+		}
+	}
 	for _, forbidden := range []string{
-		"filebeat", "lanverse.logs.application.v1", "lanverse.logs.application.dlq.v1",
-		"lanverse.logs-indexer.v1", "KAFKA_LOGSTASH", "user_logstash",
+		"filebeat", "lanverse.logs.application", "lanverse.logs.application.dead-letter",
+		"lanverse.logs-indexer", "KAFKA_LOGSTASH", "user_logstash",
 	} {
 		if strings.Contains(strings.ToLower(combined), strings.ToLower(forbidden)) {
 			t.Errorf("direct Logstash topology still contains obsolete %q", forbidden)
 		}
 	}
 	for _, businessName := range []string{
-		"lanverse.business.script-version.v1",
-		"lanverse.business.storygraph-version.v1",
-		"lanverse.search-projector.v1",
-		"lanverse-script-search-v1",
-		"lanverse-storygraph-search-v1",
+		"lanverse.business.script-version.published",
+		"lanverse.business.storygraph-version.published",
+		"lanverse.search-projector",
+		"lanverse-script-search",
+		"lanverse-storygraph-search",
 	} {
 		if strings.Contains(logstash+template, businessName) {
 			t.Errorf("log pipeline references business transport or index %q", businessName)

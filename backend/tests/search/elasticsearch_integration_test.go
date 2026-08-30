@@ -2,9 +2,7 @@ package search_test
 
 import (
 	"context"
-	"net/http"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,12 +12,16 @@ import (
 	search "github.com/StephenQiu30/lanverse/backend/internal/search/domain"
 )
 
+const (
+	formalScriptSearchAlias     = "lanverse-script-search"
+	formalStoryGraphSearchAlias = "lanverse-storygraph-search"
+)
+
 func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *testing.T) {
 	address := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_URL")
 	if address == "" {
 		t.Skip("set LANVERSE_TEST_ELASTICSEARCH_URL to run the real Elasticsearch journey")
 	}
-	prefix := "lanverse-test-" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
 	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")
 	if (username == "") != (password == "") {
@@ -27,7 +29,7 @@ func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *tes
 	}
 	index, err := searches.New(searches.Config{
 		Addresses: []string{address}, Username: username, Password: password,
-		ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
+		ScriptAlias: formalScriptSearchAlias, StoryGraphAlias: formalStoryGraphSearchAlias,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -37,18 +39,12 @@ func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *tes
 	if err = index.Ensure(ctx); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		request, requestErr := http.NewRequest(http.MethodDelete, strings.TrimRight(address, "/")+"/"+prefix+"-*", nil)
-		if requestErr == nil {
-			if username != "" {
-				request.SetBasicAuth(username, password)
-			}
-			_, _ = http.DefaultClient.Do(request)
-		}
-	})
-
 	script := scriptSnapshot()
 	storyGraph := storyGraphSnapshot()
+	workspaceID := uuid.NewString()
+	projectID := uuid.NewString()
+	scopeSearchSnapshot(&script, workspaceID, projectID)
+	scopeSearchSnapshot(&storyGraph, workspaceID, projectID)
 	now := time.Date(2026, 8, 27, 19, 0, 0, 0, time.UTC)
 	if err = index.Project(ctx, script, search.ProjectionSource{Kind: search.SourceEvent, ID: uuid.NewString()}, now); err != nil {
 		t.Fatal(err)
@@ -57,11 +53,11 @@ func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *tes
 	if err = index.Project(ctx, storyGraph, storySource, now); err != nil {
 		t.Fatal(err)
 	}
-	result, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: searchWorkspaceID, ProjectID: searchProjectID, Text: "雨夜", Limit: 10})
+	result, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: workspaceID, ProjectID: projectID, Text: "雨夜", Limit: 10})
 	if err != nil || len(result.Hits) != 1 || result.SnapshotHash != storyGraph.ContentHash || result.Source.ID != storySource.ID || result.IndexVersion == "" {
 		t.Fatalf("real StoryGraph search did not preserve projection metadata: %#v err=%v", result, err)
 	}
-	crossTenant, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: uuid.NewString(), ProjectID: searchProjectID, Text: "雨夜", Limit: 10})
+	crossTenant, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: uuid.NewString(), ProjectID: projectID, Text: "雨夜", Limit: 10})
 	if err != nil || len(crossTenant.Hits) != 0 {
 		t.Fatalf("workspace filter leaked a search hit: %#v err=%v", crossTenant, err)
 	}
@@ -75,7 +71,7 @@ func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *tes
 	if err = index.Project(ctx, older, search.ProjectionSource{Kind: search.SourceEvent, ID: uuid.NewString()}, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	stillCurrent, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: searchWorkspaceID, ProjectID: searchProjectID, Text: "雨夜", Limit: 10})
+	stillCurrent, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: workspaceID, ProjectID: projectID, Text: "雨夜", Limit: 10})
 	if err != nil || len(stillCurrent.Hits) != 1 || stillCurrent.SnapshotHash != storyGraph.ContentHash {
 		t.Fatalf("older StoryGraph revision overwrote current projection: %#v err=%v", stillCurrent, err)
 	}
@@ -88,8 +84,17 @@ func TestRealElasticsearchProjectsFencesAndAtomicallyReindexesBothAliases(t *tes
 	if err != nil || reindexed.IndexVersion == before || reindexed.Alias == "" {
 		t.Fatalf("real Elasticsearch alias was not switched: %#v err=%v", reindexed, err)
 	}
-	after, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: searchWorkspaceID, ProjectID: searchProjectID, Text: "码头", Limit: 10})
+	after, err := index.Search(ctx, search.IndexQuery{Kind: search.KindStoryGraph, WorkspaceID: workspaceID, ProjectID: projectID, Text: "码头", Limit: 10})
 	if err != nil || len(after.Hits) != 1 || after.IndexVersion != reindexed.IndexVersion {
 		t.Fatalf("reindexed alias did not serve the rebuilt snapshot: %#v err=%v", after, err)
+	}
+}
+
+func scopeSearchSnapshot(snapshot *search.Snapshot, workspaceID, projectID string) {
+	snapshot.WorkspaceID = workspaceID
+	snapshot.ProjectID = projectID
+	for position := range snapshot.Documents {
+		snapshot.Documents[position].WorkspaceID = workspaceID
+		snapshot.Documents[position].ProjectID = projectID
 	}
 }

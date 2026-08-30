@@ -26,7 +26,7 @@ func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t 
 	if !strings.Contains(module, "github.com/elastic/go-elasticsearch/v9 v9.4.3") {
 		t.Fatal("official Elasticsearch Go client must remain pinned to the accepted version")
 	}
-	for _, required := range []string{`["version"]["number"]`, "_alias/lanverse-script-search-v1", "backend event runtime stayed ready while Elasticsearch was unavailable"} {
+	for _, required := range []string{`["version"]["number"]`, "_alias/lanverse-script-search", "backend event runtime stayed ready while Elasticsearch was unavailable"} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("real CI Search proof is missing %q", required)
 		}
@@ -44,6 +44,20 @@ func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t 
 	}
 	if strings.Contains(backendBlock, "depends_on:") {
 		t.Fatal("Backend service startup must reuse an already-running environment")
+	}
+}
+
+func TestElasticsearchReindexUsesFixedFormalBlueGreenBackings(t *testing.T) {
+	t.Parallel()
+	repositoryRoot := searchRepositoryRoot(t)
+	source := mustReadSearchFile(t, filepath.Join(repositoryRoot, "backend", "internal", "search", "adapter", "elasticsearch", "index.go"))
+	for _, required := range []string{`alias + "-blue"`, `alias + "-green"`, "deleteInactiveBacking("} {
+		if !strings.Contains(source, required) {
+			t.Errorf("formal Elasticsearch reindex is missing %q", required)
+		}
+	}
+	if strings.Contains(source, "uuid.NewString()") {
+		t.Error("formal Elasticsearch reindex still creates one random backing index per execution")
 	}
 }
 

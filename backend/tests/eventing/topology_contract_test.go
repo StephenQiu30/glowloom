@@ -29,9 +29,9 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	}
 	baseText, environmentText, kafkaInitText := string(base), string(environment), string(kafkaInit)
 	for _, required := range []string{
-		"apache/kafka:4.3.1", "lanverse.business.script-version.v1",
-		"lanverse.business.script-version.dlq.v1", "lanverse.business.storygraph-version.v1",
-		"lanverse.business.storygraph-version.dlq.v1", "604800000", "2592000000",
+		"apache/kafka:4.3.1", "lanverse.business.script-version.published",
+		"lanverse.business.script-version.dead-letter", "lanverse.business.storygraph-version.published",
+		"lanverse.business.storygraph-version.dead-letter", "604800000", "2592000000",
 	} {
 		if !strings.Contains(baseText+environmentText+kafkaInitText, required) {
 			t.Errorf("Kafka service or environment topology is missing %q", required)
@@ -45,7 +45,7 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 			t.Errorf("Kafka runtime topology is missing %q", required)
 		}
 	}
-	if !strings.Contains(baseText, "KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1") {
+	if !strings.Contains(baseText, "KAFKA_CONSUMER_GROUP: lanverse.search-projector") {
 		t.Error("Backend service topology is missing the Event Runtime consumer group")
 	}
 	if strings.Contains(strings.ToLower(baseText+environmentText), "command-topic") ||

@@ -1,10 +1,10 @@
 {
-  "index_patterns": ["lanverse-logs-application-v1-*"],
+  "index_patterns": ["lanverse-logs-application-*"],
   "priority": 200,
   "template": {
     "settings": {
       "index.lifecycle.name": "lanverse-logs-application-30d",
-      "index.lifecycle.rollover_alias": "lanverse-logs-application-v1",
+      "index.lifecycle.rollover_alias": "lanverse-logs-application",
       "number_of_shards": 1,
       "number_of_replicas": 0,
       "refresh_interval": "1s"

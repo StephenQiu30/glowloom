@@ -69,5 +69,5 @@ func (value *recordingProjectionIndex) Project(_ context.Context, snapshot searc
 
 func (value *recordingProjectionIndex) Rebuild(_ context.Context, kind search.Kind, _ []search.Snapshot, source search.ProjectionSource, _ time.Time) (search.ReindexResult, error) {
 	value.rebuildSource = source
-	return search.ReindexResult{Kind: kind, IndexVersion: "backing-v1", Alias: "read-v1"}, nil
+	return search.ReindexResult{Kind: kind, IndexVersion: "backing-blue", Alias: "read-alias"}, nil
 }

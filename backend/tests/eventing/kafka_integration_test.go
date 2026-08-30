@@ -28,7 +28,7 @@ func TestRealKafkaCarriesTheExactEnvelopeAndCommitsOnlyAcknowledgedRecords(t *te
 	}
 	topic := os.Getenv("LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC")
 	if topic == "" {
-		topic = "lanverse.business.storygraph-version.v1"
+		topic = "lanverse.business.storygraph-version.published"
 	}
 	client, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-kafka-integration",
@@ -57,7 +57,7 @@ func TestRealKafkaCarriesTheExactEnvelopeAndCommitsOnlyAcknowledgedRecords(t *te
 		t.Fatal(err)
 	}
 	handler := &kafkaHandler{expectedKey: envelope.EventID}
-	if err = consumeUntilHandled(ctx, client, handler, 100); err != nil {
+	if err = consumeUntilHandled(ctx, client, handler); err != nil {
 		t.Fatal(err)
 	}
 	if handler.calls != 1 || handler.message.Topic != topic || handler.message.Key != envelope.EventID ||
@@ -73,7 +73,7 @@ func TestRealKafkaRunRetriesTheSameUnacknowledgedRecord(t *testing.T) {
 	}
 	topic := os.Getenv("LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC")
 	if topic == "" {
-		topic = "lanverse.business.storygraph-version.v1"
+		topic = "lanverse.business.storygraph-version.published"
 	}
 	client, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(rawBrokers, ","), ClientID: "lanverse-kafka-retry-integration",
@@ -120,11 +120,11 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	}
 	topic := os.Getenv("LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC")
 	if topic == "" {
-		topic = "lanverse.business.storygraph-version.v1"
+		topic = "lanverse.business.storygraph-version.published"
 	}
 	dlqTopic := os.Getenv("LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC")
 	if dlqTopic == "" {
-		dlqTopic = "lanverse.business.storygraph-version.dlq.v1"
+		dlqTopic = "lanverse.business.storygraph-version.dead-letter"
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -172,7 +172,7 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	revision2 := eventingFixtureForProject(t, workspaceID.String(), projectID.String(), 2)
 	publishEnvelope(t, ctx, client, topic, revision2)
 	publishEnvelope(t, ctx, client, topic, revision2)
-	if err = consumeUntilProjectCalls(ctx, client, handler, 2, 200); err != nil {
+	if err = consumeUntilProjectCalls(ctx, client, handler, 2); err != nil {
 		t.Fatal(err)
 	}
 	if processor.successful != 1 {
@@ -180,7 +180,7 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	}
 	revision1 := eventingFixtureForProject(t, workspaceID.String(), projectID.String(), 1)
 	publishEnvelope(t, ctx, client, topic, revision1)
-	if err = consumeUntilProjectCalls(ctx, client, handler, 3, 200); err != nil {
+	if err = consumeUntilProjectCalls(ctx, client, handler, 3); err != nil {
 		t.Fatal(err)
 	}
 	if processor.successful != 1 {
@@ -189,7 +189,7 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 
 	revision3 := eventingFixtureForProject(t, workspaceID.String(), projectID.String(), 3)
 	publishEnvelope(t, ctx, client, topic, revision3)
-	if err = consumeUntilProjectCalls(ctx, client, handler, 4, 200); err != nil {
+	if err = consumeUntilProjectCalls(ctx, client, handler, 4); err != nil {
 		t.Fatal(err)
 	}
 	var deadLetter model.DeadLetter
@@ -206,7 +206,7 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	}
 	t.Cleanup(dlqConsumer.Close)
 	dlqHandler := &kafkaHandler{expectedKey: revision3.EventID}
-	if err = consumeUntilHandled(ctx, dlqConsumer, dlqHandler, 200); err != nil {
+	if err = consumeUntilHandled(ctx, dlqConsumer, dlqHandler); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(dlqHandler.message.Value), revision3.EventID) {
@@ -225,7 +225,7 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	if err != nil || replayed != 1 {
 		t.Fatalf("Kafka replay failed: replayed=%d error=%v", replayed, err)
 	}
-	if err = consumeUntilProjectCalls(ctx, client, handler, 5, 200); err != nil {
+	if err = consumeUntilProjectCalls(ctx, client, handler, 5); err != nil {
 		t.Fatal(err)
 	}
 	if processor.successful != 2 || processor.poisoned != 1 {
@@ -241,7 +241,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 	}
 	topic := os.Getenv("LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC")
 	if topic == "" {
-		topic = "lanverse.business.storygraph-version.v1"
+		topic = "lanverse.business.storygraph-version.published"
 	}
 	ctx := context.Background()
 	database, err := platformdatabase.Open(ctx, databaseURL, io.Discard)
@@ -323,7 +323,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 	waitContext, cancelWait := context.WithTimeout(ctx, 20*time.Second)
 	defer cancelWait()
 	handler := &kafkaHandler{expectedKey: eventID.String()}
-	if err = consumeUntilHandled(waitContext, consumer, handler, 300); err != nil {
+	if err = consumeUntilHandled(waitContext, consumer, handler); err != nil {
 		t.Fatal(err)
 	}
 	decoded, err := domain.DecodeEnvelope(handler.message.Value)
@@ -415,8 +415,8 @@ func publishEnvelope(t *testing.T, ctx context.Context, client *eventingkafka.Cl
 	}
 }
 
-func consumeUntilHandled(ctx context.Context, client *eventingkafka.Client, handler *kafkaHandler, maximum int) error {
-	for attempt := 0; attempt < maximum && handler.calls == 0; attempt++ {
+func consumeUntilHandled(ctx context.Context, client *eventingkafka.Client, handler *kafkaHandler) error {
+	for handler.calls == 0 && ctx.Err() == nil {
 		if err := client.ConsumeOnce(ctx, handler); err != nil {
 			return err
 		}
@@ -427,8 +427,8 @@ func consumeUntilHandled(ctx context.Context, client *eventingkafka.Client, hand
 	return nil
 }
 
-func consumeUntilProjectCalls(ctx context.Context, client *eventingkafka.Client, handler *projectHandler, expected, maximum int) error {
-	for attempt := 0; attempt < maximum && handler.calls < expected; attempt++ {
+func consumeUntilProjectCalls(ctx context.Context, client *eventingkafka.Client, handler *projectHandler, expected int) error {
+	for handler.calls < expected && ctx.Err() == nil {
 		if err := client.ConsumeOnce(ctx, handler); err != nil {
 			return err
 		}

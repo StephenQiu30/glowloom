@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v9"
-	"github.com/google/uuid"
 
 	search "github.com/StephenQiu30/lanverse/backend/internal/search/domain"
 )
@@ -106,7 +105,7 @@ func (index *Index) Ensure(ctx context.Context) error {
 		if status != http.StatusNotFound {
 			return fmt.Errorf("inspect Elasticsearch alias %s: status %d", alias, status)
 		}
-		backing := alias + "-bootstrap"
+		backing := alias + "-blue"
 		if err = index.createBacking(ctx, backing, alias); err != nil {
 			return err
 		}
@@ -225,7 +224,17 @@ func (index *Index) Rebuild(ctx context.Context, kind search.Kind, snapshots []s
 		return search.ReindexResult{}, errors.New("Elasticsearch reindex source is invalid")
 	}
 	alias := index.alias(kind)
-	backing := alias + "-" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	current, err := index.aliasIndices(ctx, alias)
+	if err != nil {
+		return search.ReindexResult{}, err
+	}
+	if len(current) > 1 {
+		return search.ReindexResult{}, errors.New("Elasticsearch search alias must resolve to at most one backing index during reindex")
+	}
+	backing := nextFormalBacking(alias, current)
+	if err = index.deleteInactiveBacking(ctx, backing); err != nil {
+		return search.ReindexResult{}, err
+	}
 	if err := index.createBacking(ctx, backing, ""); err != nil {
 		return search.ReindexResult{}, err
 	}
@@ -234,7 +243,7 @@ func (index *Index) Rebuild(ctx context.Context, kind search.Kind, snapshots []s
 		if cleanup {
 			cleanupContext, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancelCleanup()
-			_, _, _ = index.perform(cleanupContext, http.MethodDelete, "/"+url.PathEscape(backing), nil)
+			_ = index.deleteInactiveBacking(cleanupContext, backing)
 		}
 	}()
 	sorted := append([]search.Snapshot(nil), snapshots...)
@@ -248,10 +257,6 @@ func (index *Index) Rebuild(ctx context.Context, kind search.Kind, snapshots []s
 			return search.ReindexResult{}, err
 		}
 		documents += len(snapshot.Documents)
-	}
-	current, err := index.aliasIndices(ctx, alias)
-	if err != nil {
-		return search.ReindexResult{}, err
 	}
 	actions := make([]map[string]any, 0, len(current)+1)
 	for _, name := range current {
@@ -270,7 +275,33 @@ func (index *Index) Rebuild(ctx context.Context, kind search.Kind, snapshots []s
 		return search.ReindexResult{}, responseError("switch Elasticsearch alias", status, raw)
 	}
 	cleanup = false
+	cleanupContext, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancelCleanup()
+	for _, name := range current {
+		if name != backing {
+			_ = index.deleteInactiveBacking(cleanupContext, name)
+		}
+	}
 	return search.ReindexResult{Kind: kind, IndexVersion: backing, Alias: alias, Documents: documents}, nil
+}
+
+func nextFormalBacking(alias string, current []string) string {
+	blue := alias + "-blue"
+	if len(current) == 1 && current[0] == blue {
+		return alias + "-green"
+	}
+	return blue
+}
+
+func (index *Index) deleteInactiveBacking(ctx context.Context, backing string) error {
+	raw, status, err := index.perform(ctx, http.MethodDelete, "/"+url.PathEscape(backing), nil)
+	if err != nil {
+		return err
+	}
+	if status == http.StatusOK || status == http.StatusNotFound {
+		return nil
+	}
+	return responseError("delete inactive Elasticsearch backing index", status, raw)
 }
 
 func (index *Index) projectTo(ctx context.Context, target string, snapshot search.Snapshot, source search.ProjectionSource, at time.Time) error {

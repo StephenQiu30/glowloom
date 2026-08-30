@@ -52,10 +52,10 @@ grant_idempotent_write() {
     --cluster --operation IdempotentWrite
 }
 
-script_topic=lanverse.business.script-version.v1
-script_dlq=lanverse.business.script-version.dlq.v1
-storygraph_topic=lanverse.business.storygraph-version.v1
-storygraph_dlq=lanverse.business.storygraph-version.dlq.v1
+script_topic=lanverse.business.script-version.published
+script_dlq=lanverse.business.script-version.dead-letter
+storygraph_topic=lanverse.business.storygraph-version.published
+storygraph_dlq=lanverse.business.storygraph-version.dead-letter
 create_topic "${script_topic}" 604800000
 create_topic "${script_dlq}" 2592000000
 create_topic "${storygraph_topic}" 604800000
@@ -64,5 +64,5 @@ create_topic "${storygraph_dlq}" 2592000000
 for topic in "${script_topic}" "${script_dlq}" "${storygraph_topic}" "${storygraph_dlq}"; do
   grant_topic event_worker "${topic}" --operation Read --operation Write --operation Describe
 done
-grant_group event_worker lanverse.search-projector.v1
+grant_group event_worker lanverse.search-projector
 grant_idempotent_write event_worker

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const LogSchemaVersion = "lanverse.log.v1"
+const LogSchemaVersion = "lanverse.log.application"
 
 var (
 	urlValuePattern         = regexp.MustCompile(`(?i)https?://[^\s"']+`)

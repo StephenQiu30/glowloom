@@ -41,7 +41,7 @@ services:
       REVIEW_CLAIM_LEASE_SECONDS: ${REVIEW_CLAIM_LEASE_SECONDS:-300}
       TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:?TEMPORAL_ADDRESS is required}
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-workflow}
       MINIO_ENDPOINT: minio:9000
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:?MINIO_PUBLIC_ENDPOINT is required}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
@@ -53,24 +53,29 @@ services:
       EVENT_WORKER_PORT: 8687
       KAFKA_BROKERS: kafka:19092
       KAFKA_CLIENT_ID: lanverse-event-worker
-      KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
+      KAFKA_CONSUMER_GROUP: lanverse.search-projector
       KAFKA_USERNAME: event_worker
       KAFKA_PASSWORD: ${KAFKA_EVENT_WORKER_PASSWORD:?KAFKA_EVENT_WORKER_PASSWORD is required}
-      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
-      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
-      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
-      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
+      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.published
+      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dead-letter
+      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.published
+      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dead-letter
       ELASTICSEARCH_URL: http://elasticsearch:9200
       ELASTICSEARCH_USERNAME: ""
       ELASTICSEARCH_PASSWORD: ""
-      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
-      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
+      ELASTICSEARCH_INIT_USERNAME: ""
+      ELASTICSEARCH_INIT_PASSWORD: ""
+      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search
+      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search
+      KIBANA_URL: http://kibana:5601
+      KIBANA_USERNAME: ""
+      KIBANA_PASSWORD: ""
     deploy:
       resources:
         limits:
           cpus: "1.0"
           memory: 768M
-    networks:
+    networks: !override
       - edge
       - internal
       - environment

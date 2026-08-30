@@ -25,7 +25,7 @@ func TestPublisherRetriesUnknownBrokerOutcomeWithSameEventIdentity(t *testing.T)
 	}}
 	broker := &recordingBroker{failures: 1}
 	publisher := eventingapp.NewPublisher(repository, broker, eventingapp.StaticTopics{
-		eventing.StoryGraphVersionPublished: "lanverse.business.storygraph-version.v1",
+		eventing.StoryGraphVersionPublished: "lanverse.business.storygraph-version.published",
 	}, eventingapp.PublisherConfig{
 		Now: func() time.Time { return now }, NewID: func() string { return "claim-token" },
 		Lease: time.Minute, BatchSize: 10,

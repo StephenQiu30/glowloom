@@ -40,7 +40,7 @@ func TestStructuredLoggerKeepsCorrelationFieldsAndDropsSensitiveValues(t *testin
 		t.Fatal(err)
 	}
 	for key, expected := range map[string]string{
-		"schema_version":  "lanverse.log.v1",
+		"schema_version":  "lanverse.log.application",
 		"service":         "lanverse-api",
 		"environment":     "test",
 		"event":           "workflow_node_failed",

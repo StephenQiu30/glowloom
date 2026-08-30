@@ -19,12 +19,12 @@ func TestDeadLetterReplayUsesOriginalTopicEnvelopeAndEventID(t *testing.T) {
 		t.Fatal(err)
 	}
 	letter := eventingapp.DeadLetter{
-		ID: "00000000-0000-0000-0000-000000000401", Schema: "lanverse.dead-letter.v1",
-		ConsumerGroup: "lanverse.search-projector.v1", EventID: envelope.EventID,
+		ID: "00000000-0000-0000-0000-000000000401", Schema: "lanverse.event.dead-letter",
+		ConsumerGroup: "lanverse.search-projector", EventID: envelope.EventID,
 		EventType: envelope.EventType, ProjectID: envelope.ProjectID, AggregateKind: envelope.AggregateKind,
 		AggregateID: envelope.AggregateID, AggregateRevision: envelope.AggregateRevision,
-		OriginalTopic: "lanverse.business.storygraph-version.v1",
-		DLQTopic:      "lanverse.business.storygraph-version.dlq.v1", PayloadHash: envelope.PayloadHash,
+		OriginalTopic: "lanverse.business.storygraph-version.published",
+		DLQTopic:      "lanverse.business.storygraph-version.dead-letter", PayloadHash: envelope.PayloadHash,
 		Replayable: true, Envelope: encoded, FailedAt: now.Add(-time.Hour),
 	}
 	repository := &replayRepository{letter: letter}

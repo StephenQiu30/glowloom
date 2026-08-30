@@ -27,7 +27,7 @@ services:
     image: lanverse/backend:development
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      LOGSTASH_ADDRESS: ${DOCKER_LOGSTASH_ADDRESS:-host.docker.internal:5000}
+      LOGSTASH_ADDRESS: ${DOCKER_LOGSTASH_ADDRESS:-logstash-local-dev:5000}
       API_HOST: 0.0.0.0
       API_PORT: 8686
       CORS_ORIGINS: ${LANVERSE_CORS_ORIGINS:-["http://localhost:8123","http://127.0.0.1:8123"]}
@@ -47,7 +47,7 @@ services:
       REVIEW_CLAIM_LEASE_SECONDS: ${REVIEW_CLAIM_LEASE_SECONDS:-300}
       TEMPORAL_ADDRESS: ${DOCKER_TEMPORAL_ADDRESS:-host.docker.internal:7233}
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-v1}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-workflow}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-127.0.0.1:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-lanverse}
@@ -60,23 +60,29 @@ services:
       EVENT_WORKER_PORT: 8687
       KAFKA_BROKERS: ${DOCKER_KAFKA_BROKERS:-host.docker.internal:19093}
       KAFKA_CLIENT_ID: lanverse-event-worker
-      KAFKA_CONSUMER_GROUP: lanverse.search-projector.v1
+      KAFKA_CONSUMER_GROUP: lanverse.search-projector
       KAFKA_USERNAME: ${KAFKA_USERNAME:-}
       KAFKA_PASSWORD: ${KAFKA_PASSWORD:-}
-      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
-      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
-      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
-      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
-      ELASTICSEARCH_URL: ${DOCKER_ELASTICSEARCH_URL:-http://host.docker.internal:9200}
+      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.published
+      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dead-letter
+      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.published
+      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dead-letter
+      ELASTICSEARCH_URL: ${DOCKER_ELASTICSEARCH_URL:-http://elasticsearch:9200}
       ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME-lanverse_dev}
       ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD-lanverse-development-elasticsearch}
-      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search-v1
-      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search-v1
+      ELASTICSEARCH_INIT_USERNAME: ${ELASTICSEARCH_INIT_USERNAME:-}
+      ELASTICSEARCH_INIT_PASSWORD: ${ELASTICSEARCH_INIT_PASSWORD:-}
+      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search
+      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search
+      KIBANA_URL: ${DOCKER_KIBANA_URL:-http://kibana-local-dev:5601}
+      KIBANA_USERNAME: ${KIBANA_USERNAME:-}
+      KIBANA_PASSWORD: ${KIBANA_PASSWORD:-}
     ports:
       - 127.0.0.1:${API_PORT:-8686}:8686
     networks:
       - edge
       - internal
+      - observability
     extra_hosts:
       - host.docker.internal:host-gateway
     security_opt:
@@ -99,6 +105,9 @@ networks:
   internal:
     driver: bridge
     internal: true
+  observability:
+    name: ${ELASTIC_OBSERVABILITY_NETWORK:-elastic-start-local_default}
+    external: true
 
 secrets:
   lanverse_media_provider_master_key:

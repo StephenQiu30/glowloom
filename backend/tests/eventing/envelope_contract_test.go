@@ -31,7 +31,7 @@ func TestEnvelopeRoundTripPreservesRequiredMetadataAndCanonicalPayloadHash(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Schema != eventing.EnvelopeSchemaV1 || decoded.EventID != envelope.EventID ||
+	if decoded.Schema != eventing.CommittedEnvelopeSchema || decoded.EventID != envelope.EventID ||
 		decoded.AggregateRevision != 2 || decoded.SourceReceiptID != envelope.SourceReceiptID ||
 		decoded.TraceContext.RequestID != "request-storygraph-2" || decoded.PayloadHash != envelope.PayloadHash {
 		t.Fatalf("required envelope metadata drifted: %#v", decoded)

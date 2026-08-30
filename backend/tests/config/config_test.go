@@ -38,7 +38,7 @@ func TestLoadBuildsSingleDatabaseAPIConfiguration(t *testing.T) {
 		t.Fatalf("unexpected review claim lease: %s", configuration.ReviewClaimLease)
 	}
 	if configuration.TemporalAddress != "127.0.0.1:7233" || configuration.TemporalNamespace != "default" ||
-		configuration.TemporalTaskQueue != "lanverse-production-v1" {
+		configuration.TemporalTaskQueue != "lanverse-production-workflow" {
 		t.Fatalf("unexpected Temporal configuration: %#v", configuration)
 	}
 	if configuration.EventWorkerListenAddress != "0.0.0.0:8687" || len(configuration.KafkaBrokers) != 1 ||

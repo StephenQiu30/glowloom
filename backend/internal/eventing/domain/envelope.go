@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	EnvelopeSchemaV1           = "lanverse.event.v1"
+	CommittedEnvelopeSchema    = "lanverse.event.committed"
 	ScriptVersionPublished     = "ScriptVersionPublished"
 	StoryGraphVersionPublished = "StoryGraphVersionPublished"
 	maximumEnvelopeBytes       = 64 << 10
@@ -72,7 +72,7 @@ func NewEnvelope(event OutboxEvent, trace TraceContext) (Envelope, error) {
 		return Envelope{}, errors.New("outbox payload hash does not match payload")
 	}
 	value := Envelope{
-		Schema: EnvelopeSchemaV1, EventID: strings.TrimSpace(event.ID),
+		Schema: CommittedEnvelopeSchema, EventID: strings.TrimSpace(event.ID),
 		EventType: strings.TrimSpace(event.EventType), EventVersion: event.EventVersion,
 		OccurredAt: event.OccurredAt.UTC(), WorkspaceID: strings.TrimSpace(event.WorkspaceID),
 		ProjectID: strings.TrimSpace(event.ProjectID), AggregateKind: strings.TrimSpace(event.AggregateKind),
@@ -120,7 +120,7 @@ func DecodeEnvelope(encoded []byte) (Envelope, error) {
 }
 
 func (value Envelope) Validate() error {
-	if value.Schema != EnvelopeSchemaV1 || value.EventID == "" || value.EventType == "" || value.EventVersion < 1 ||
+	if value.Schema != CommittedEnvelopeSchema || value.EventID == "" || value.EventType == "" || value.EventVersion < 1 ||
 		value.OccurredAt.IsZero() || value.WorkspaceID == "" || value.ProjectID == "" || value.AggregateKind == "" ||
 		value.AggregateID == "" || value.AggregateRevision < 1 || value.SourceReceiptID == "" ||
 		strings.TrimSpace(value.TraceContext.RequestID) == "" || !lowercaseHexHash.MatchString(value.PayloadHash) {

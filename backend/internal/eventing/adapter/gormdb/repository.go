@@ -542,7 +542,7 @@ func deadLetterRecord(letter eventingapp.DeadLetter, now time.Time) (model.DeadL
 
 func deadLetterDomain(record model.DeadLetter) (eventingapp.DeadLetter, error) {
 	letter := eventingapp.DeadLetter{
-		ID: record.ID.String(), Schema: "lanverse.dead-letter.v1", ConsumerGroup: record.ConsumerGroup,
+		ID: record.ID.String(), Schema: "lanverse.event.dead-letter", ConsumerGroup: record.ConsumerGroup,
 		EventID: record.EventID, EventType: record.EventType, ProjectID: record.ProjectID,
 		AggregateKind: record.AggregateKind, AggregateID: record.AggregateID,
 		AggregateRevision: record.AggregateRevision, OriginalTopic: record.OriginalTopic,

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -28,6 +27,11 @@ import (
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 )
 
+const (
+	formalScriptSearchAlias     = "lanverse-script-search"
+	formalStoryGraphSearchAlias = "lanverse-storygraph-search"
+)
+
 func TestPostgreSQLOwnerSnapshotsDriveAuthorizedRealElasticsearchSearchAndStaleness(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	elasticsearchURL := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_URL")
@@ -45,7 +49,6 @@ func TestPostgreSQLOwnerSnapshotsDriveAuthorizedRealElasticsearchSearchAndStalen
 		t.Fatal(err)
 	}
 	fixture := seedSearchOwners(t, func(value any) error { return database.Create(value).Error })
-	prefix := "lanverse-pg-search-" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
 	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")
 	if (username == "") != (password == "") {
@@ -53,7 +56,7 @@ func TestPostgreSQLOwnerSnapshotsDriveAuthorizedRealElasticsearchSearchAndStalen
 	}
 	index, err := searches.New(searches.Config{
 		Addresses: []string{elasticsearchURL}, Username: username, Password: password,
-		ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
+		ScriptAlias: formalScriptSearchAlias, StoryGraphAlias: formalStoryGraphSearchAlias,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -61,15 +64,6 @@ func TestPostgreSQLOwnerSnapshotsDriveAuthorizedRealElasticsearchSearchAndStalen
 	if err = index.Ensure(ctx); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		request, requestErr := http.NewRequest(http.MethodDelete, strings.TrimRight(elasticsearchURL, "/")+"/"+prefix+"-*", nil)
-		if requestErr == nil {
-			if username != "" {
-				request.SetBasicAuth(username, password)
-			}
-			_, _ = http.DefaultClient.Do(request)
-		}
-	})
 	snapshots := searchgorm.New(database)
 	script, err := snapshots.CurrentScriptSnapshot(ctx, fixture.projectID.String())
 	if err != nil || len(script.Documents) != 1 || script.Documents[0].OwnerVersionID != fixture.scriptVersionID.String() {

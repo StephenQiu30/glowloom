@@ -31,19 +31,19 @@ const (
 	defaultReviewLeaseSeconds = 5 * 60
 	defaultTemporalAddress    = "127.0.0.1:7233"
 	defaultTemporalNamespace  = "default"
-	defaultTemporalTaskQueue  = "lanverse-production-v1"
+	defaultTemporalTaskQueue  = "lanverse-production-workflow"
 	defaultEventWorkerHost    = "0.0.0.0"
 	defaultEventWorkerPort    = 8687
 	defaultKafkaBroker        = "127.0.0.1:9092"
 	defaultKafkaClientID      = "lanverse-event-worker"
-	defaultKafkaConsumerGroup = "lanverse.search-projector.v1"
-	defaultScriptTopic        = "lanverse.business.script-version.v1"
-	defaultScriptDLQTopic     = "lanverse.business.script-version.dlq.v1"
-	defaultStoryGraphTopic    = "lanverse.business.storygraph-version.v1"
-	defaultStoryGraphDLQTopic = "lanverse.business.storygraph-version.dlq.v1"
+	defaultKafkaConsumerGroup = "lanverse.search-projector"
+	defaultScriptTopic        = "lanverse.business.script-version.published"
+	defaultScriptDLQTopic     = "lanverse.business.script-version.dead-letter"
+	defaultStoryGraphTopic    = "lanverse.business.storygraph-version.published"
+	defaultStoryGraphDLQTopic = "lanverse.business.storygraph-version.dead-letter"
 	defaultElasticsearchURL   = "http://127.0.0.1:9200"
-	defaultScriptSearchAlias  = "lanverse-script-search-v1"
-	defaultStorySearchAlias   = "lanverse-storygraph-search-v1"
+	defaultScriptSearchAlias  = "lanverse-script-search"
+	defaultStorySearchAlias   = "lanverse-storygraph-search"
 )
 
 var numericVerificationCode = regexp.MustCompile(`^\d{6}$`)

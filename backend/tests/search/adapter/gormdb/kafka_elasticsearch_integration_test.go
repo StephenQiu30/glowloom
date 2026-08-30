@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -35,10 +34,10 @@ func TestRealKafkaProjectsPostgreSQLOwnersIntoElasticsearchWithDeepLinks(t *test
 	if databaseURL == "" || elasticsearchURL == "" || kafkaBrokers == "" {
 		t.Skip("set PostgreSQL, Elasticsearch, and Kafka test endpoints to run the Search event journey")
 	}
-	scriptTopic := environmentOr("LANVERSE_TEST_KAFKA_SCRIPT_TOPIC", "lanverse.business.script-version.v1")
-	storyGraphTopic := environmentOr("LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC", "lanverse.business.storygraph-version.v1")
-	scriptDLQ := environmentOr("LANVERSE_TEST_KAFKA_SCRIPT_DLQ_TOPIC", "lanverse.business.script-version.dlq.v1")
-	storyGraphDLQ := environmentOr("LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC", "lanverse.business.storygraph-version.dlq.v1")
+	scriptTopic := environmentOr("LANVERSE_TEST_KAFKA_SCRIPT_TOPIC", "lanverse.business.script-version.published")
+	storyGraphTopic := environmentOr("LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC", "lanverse.business.storygraph-version.published")
+	scriptDLQ := environmentOr("LANVERSE_TEST_KAFKA_SCRIPT_DLQ_TOPIC", "lanverse.business.script-version.dead-letter")
+	storyGraphDLQ := environmentOr("LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC", "lanverse.business.storygraph-version.dead-letter")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	database, err := platformdatabase.Open(ctx, databaseURL, io.Discard)
@@ -51,7 +50,6 @@ func TestRealKafkaProjectsPostgreSQLOwnersIntoElasticsearchWithDeepLinks(t *test
 	}
 	fixture := seedSearchOwners(t, func(value any) error { return database.Create(value).Error })
 
-	prefix := "lanverse-kafka-search-" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
 	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")
 	if (username == "") != (password == "") {
@@ -59,7 +57,7 @@ func TestRealKafkaProjectsPostgreSQLOwnersIntoElasticsearchWithDeepLinks(t *test
 	}
 	index, err := searches.New(searches.Config{
 		Addresses: []string{elasticsearchURL}, Username: username, Password: password,
-		ScriptAlias: prefix + "-script-v1", StoryGraphAlias: prefix + "-storygraph-v1",
+		ScriptAlias: formalScriptSearchAlias, StoryGraphAlias: formalStoryGraphSearchAlias,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -67,8 +65,6 @@ func TestRealKafkaProjectsPostgreSQLOwnersIntoElasticsearchWithDeepLinks(t *test
 	if err = index.Ensure(ctx); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { deleteSearchIndices(elasticsearchURL, prefix) })
-
 	group := "lanverse.search.integration." + uuid.NewString()
 	client, err := eventingkafka.New(eventingkafka.Config{
 		Brokers: strings.Split(kafkaBrokers, ","), ClientID: "lanverse-search-integration-" + uuid.NewString(),
@@ -213,14 +209,4 @@ func environmentOr(name, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func deleteSearchIndices(elasticsearchURL, prefix string) {
-	request, err := http.NewRequest(http.MethodDelete, strings.TrimRight(elasticsearchURL, "/")+"/"+prefix+"-*", nil)
-	if err == nil {
-		if username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME"); username != "" {
-			request.SetBasicAuth(username, os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD"))
-		}
-		_, _ = http.DefaultClient.Do(request)
-	}
 }

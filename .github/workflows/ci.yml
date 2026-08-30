@@ -88,22 +88,22 @@ jobs:
           environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.script-version.v1 --describe \
+            --entity-type topics --entity-name lanverse.business.script-version.published --describe \
             | grep -q 'retention.ms=604800000'
           environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.script-version.dlq.v1 --describe \
+            --entity-type topics --entity-name lanverse.business.script-version.dead-letter --describe \
             | grep -q 'retention.ms=2592000000'
           environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.storygraph-version.v1 --describe \
+            --entity-type topics --entity-name lanverse.business.storygraph-version.published --describe \
             | grep -q 'retention.ms=604800000'
           environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
             --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.storygraph-version.dlq.v1 --describe \
+            --entity-type topics --entity-name lanverse.business.storygraph-version.dead-letter --describe \
             | grep -q 'retention.ms=2592000000'
           ! environment_compose exec -T kafka \
             /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 \
@@ -111,8 +111,8 @@ jobs:
             | grep -qi command
           test "$(curl --fail --silent http://127.0.0.1:19200 | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"]["number"])')" = "9.4.4"
           curl --fail --silent http://127.0.0.1:19200/_ilm/policy/lanverse-logs-application-30d >/dev/null
-          curl --fail --silent http://127.0.0.1:19200/_index_template/lanverse-logs-application-v1 >/dev/null
-          curl --fail --silent http://127.0.0.1:15601/api/data_views/data_view/lanverse-logs-application-v1 >/dev/null
+          curl --fail --silent http://127.0.0.1:19200/_index_template/lanverse-logs-application >/dev/null
+          curl --fail --silent http://127.0.0.1:15601/api/data_views/data_view/lanverse-logs-application >/dev/null
       - name: Check and test Go backend
         working-directory: backend
         env:
@@ -127,17 +127,19 @@ jobs:
           LANVERSE_TEST_KAFKA_PASSWORD: lanverse-ci-kafka-admin
           LANVERSE_TEST_KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
           LANVERSE_TEST_KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
-          LANVERSE_TEST_KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.v1
-          LANVERSE_TEST_KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dlq.v1
-          LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.v1
-          LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dlq.v1
+          LANVERSE_TEST_KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.published
+          LANVERSE_TEST_KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dead-letter
+          LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.published
+          LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dead-letter
           LANVERSE_TEST_ELASTICSEARCH_URL: http://127.0.0.1:19200
           LANVERSE_TEST_KIBANA_URL: http://127.0.0.1:15601
           LANVERSE_TEST_LOGSTASH_ADDRESS: 127.0.0.1:15000
         run: |
+          set -o pipefail
           test -z "$(gofmt -l .)"
           go vet ./...
-          go test -count=1 -p 1 ./...
+          go test -json -count=1 -p 1 ./... | tee "$RUNNER_TEMP/lanverse-backend-tests.json"
+          python3 ../.github/scripts/verify-go-test-skips.py "$RUNNER_TEMP/lanverse-backend-tests.json"
 
   agent:
     name: Agent / Candidate Runtime
@@ -276,8 +278,10 @@ jobs:
           MINIO_ENDPOINT: host.docker.internal:9000
           DOCKER_TEMPORAL_ADDRESS: host.docker.internal:7233
           DOCKER_KAFKA_BROKERS: host.docker.internal:19093
-          DOCKER_ELASTICSEARCH_URL: http://host.docker.internal:9200
-          DOCKER_LOGSTASH_ADDRESS: host.docker.internal:5000
+          ELASTIC_OBSERVABILITY_NETWORK: lanverse-environment
+          DOCKER_ELASTICSEARCH_URL: http://elasticsearch:9200
+          DOCKER_LOGSTASH_ADDRESS: logstash:5000
+          DOCKER_KIBANA_URL: http://kibana:5601
           KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
           KAFKA_USERNAME: event_worker
           KAFKA_PASSWORD: lanverse-development-event-worker
@@ -365,7 +369,7 @@ jobs:
             --output /dev/null 'http://127.0.0.1:8686/healthz?token=ci-sensitive-query-value'
           for attempt in $(seq 1 60); do
             log_result=$(curl --fail --silent --show-error \
-              --request POST http://127.0.0.1:9200/lanverse-logs-application-v1/_search \
+              --request POST http://127.0.0.1:9200/lanverse-logs-application/_search \
               --header 'Content-Type: application/json' \
               --data-binary "{\"query\":{\"term\":{\"request_id\":\"$log_request_id\"}},\"size\":1}")
             if python3 -c 'import json,sys; result=json.load(sys.stdin); source=result["hits"]["hits"][0]["_source"]; assert source["service"] == "lanverse-backend"; assert source["event"] == "http_request"; assert source["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"; assert source["route"] == "/healthz"; assert "ci-sensitive-query-value" not in json.dumps(source)' <<<"$log_result" 2>/dev/null; then
@@ -378,8 +382,8 @@ jobs:
             fi
             sleep 1
           done
-          curl --fail --silent http://127.0.0.1:5601/api/data_views/data_view/lanverse-logs-application-v1 >/dev/null
-          search_index_before=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
+          curl --fail --silent http://127.0.0.1:5601/api/data_views/data_view/lanverse-logs-application >/dev/null
+          search_index_before=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
           for logging_service in logstash kibana; do
             environment_compose stop "$logging_service"
             service_compose exec -T backend \
@@ -388,7 +392,7 @@ jobs:
               wget --quiet --spider http://127.0.0.1:8687/readyz
             service_compose ps --status running --services | grep -qx backend
             create_project_during_fault "$logging_service"
-            search_index_after=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
+            search_index_after=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
             test "$search_index_after" = "$search_index_before"
             environment_compose up --detach --no-build --wait --wait-timeout 180 "$logging_service"
           done
@@ -417,9 +421,9 @@ jobs:
             sleep 1
           done
           environment_compose exec -T elasticsearch \
-            curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-script-search-v1 >/dev/null
+            curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-script-search >/dev/null
           environment_compose exec -T elasticsearch \
-            curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search-v1 >/dev/null
+            curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search >/dev/null
           environment_compose stop elasticsearch
           if service_compose exec -T backend \
             wget --quiet --spider http://127.0.0.1:8687/readyz; then
@@ -448,7 +452,7 @@ jobs:
             --output /dev/null http://127.0.0.1:8686/healthz
           for attempt in $(seq 1 60); do
             recovery_count=$(curl --fail --silent --show-error \
-              "http://127.0.0.1:9200/lanverse-logs-application-v1/_count?q=request_id:$recovery_request_id" \
+              "http://127.0.0.1:9200/lanverse-logs-application/_count?q=request_id:$recovery_request_id" \
               | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])' 2>/dev/null || echo 0)
             if [ "$recovery_count" -gt 0 ]; then
               break

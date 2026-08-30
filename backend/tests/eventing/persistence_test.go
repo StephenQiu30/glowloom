@@ -64,9 +64,9 @@ func TestGORMOutboxInboxRevisionAndDeadLetterState(t *testing.T) {
 	ownerlessProjectID := uuid.New()
 	ownerlessEnvelope := eventingFixtureForProject(t, workspaceID.String(), ownerlessProjectID.String(), 1)
 	ownerlessDelivery := eventingapp.InboxDelivery{
-		Group: "lanverse.search-projector.v1." + ownerlessProjectID.String(),
+		Group: "lanverse.search-projector." + ownerlessProjectID.String(),
 		Message: eventingapp.IncomingMessage{
-			Topic: "lanverse.business.storygraph-version.v1", Partition: 0, Offset: 20,
+			Topic: "lanverse.business.storygraph-version.published", Partition: 0, Offset: 20,
 			Key: ownerlessEnvelope.EventID,
 		},
 		Envelope: ownerlessEnvelope,
@@ -109,8 +109,8 @@ func TestGORMOutboxInboxRevisionAndDeadLetterState(t *testing.T) {
 
 	envelope := eventingFixtureForProject(t, workspaceID.String(), projectID.String(), 2)
 	delivery := eventingapp.InboxDelivery{
-		Group:    "lanverse.search-projector.v1." + projectID.String(),
-		Message:  eventingapp.IncomingMessage{Topic: "lanverse.business.storygraph-version.v1", Partition: 0, Offset: 21, Key: envelope.EventID},
+		Group:    "lanverse.search-projector." + projectID.String(),
+		Message:  eventingapp.IncomingMessage{Topic: "lanverse.business.storygraph-version.published", Partition: 0, Offset: 21, Key: envelope.EventID},
 		Envelope: envelope,
 	}
 	claim, err := repository.Acquire(ctx, delivery, now, time.Minute, uuid.NewString)
@@ -148,11 +148,11 @@ func TestGORMOutboxInboxRevisionAndDeadLetterState(t *testing.T) {
 		t.Fatal(err)
 	}
 	letter := eventingapp.DeadLetter{
-		ID: uuid.NewString(), Schema: "lanverse.dead-letter.v1", ConsumerGroup: poisonDelivery.Group,
+		ID: uuid.NewString(), Schema: "lanverse.event.dead-letter", ConsumerGroup: poisonDelivery.Group,
 		EventID: poisonEnvelope.EventID, EventType: poisonEnvelope.EventType, ProjectID: poisonEnvelope.ProjectID,
 		AggregateKind: poisonEnvelope.AggregateKind, AggregateID: poisonEnvelope.AggregateID,
 		AggregateRevision: poisonEnvelope.AggregateRevision, OriginalTopic: poisonDelivery.Message.Topic,
-		DLQTopic: "lanverse.business.storygraph-version.dlq.v1", SourcePartition: 0,
+		DLQTopic: "lanverse.business.storygraph-version.dead-letter", SourcePartition: 0,
 		SourceOffset: poisonDelivery.Message.Offset, PayloadHash: poisonEnvelope.PayloadHash,
 		FailureCode: "projection_rejected", FailureMessage: "unsupported projection contract",
 		Replayable: true, Envelope: encodedEnvelope, FailedAt: now.Add(3 * time.Second),

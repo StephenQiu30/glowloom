@@ -37,7 +37,7 @@ func TestRealLogstashPipelineIndexesCorrelationsRedactsSecretsAndBoundsInvalidLo
 		"receipt_id": uuid.NewString(), "error_code": "ci_pipeline_verification",
 	}
 	record := map[string]any{
-		"@timestamp": time.Now().UTC().Format(time.RFC3339Nano), "schema_version": "lanverse.log.v1",
+		"@timestamp": time.Now().UTC().Format(time.RFC3339Nano), "schema_version": "lanverse.log.application",
 		"service": "lanverse-ci", "environment": "test", "level": "INFO", "event": "elk_pipeline_verification",
 		"msg": "ELK pipeline verification", "status_code": 503, "duration_ms": 12.5,
 		"access_token": "secret-access-token-value", "prompt": "secret-complete-prompt-value",
@@ -48,7 +48,7 @@ func TestRealLogstashPipelineIndexesCorrelationsRedactsSecretsAndBoundsInvalidLo
 	}
 	writeLogRecord(t, environment.logstashAddress, record)
 
-	indexed := waitForIndexedLog(t, ctx, environment, "lanverse-logs-application-v1", map[string]any{
+	indexed := waitForIndexedLog(t, ctx, environment, "lanverse-logs-application", map[string]any{
 		"term": map[string]any{"request_id": requestID},
 	})
 	for key, expected := range correlations {
@@ -71,10 +71,10 @@ func TestRealLogstashPipelineIndexesCorrelationsRedactsSecretsAndBoundsInvalidLo
 
 	invalidSecret := "invalid-log-secret-" + uuid.NewString()
 	writeRawLogRecord(t, environment.logstashAddress, []byte(`{"schema_version":"unsupported","token":"`+invalidSecret+`"}`))
-	deadLetter := waitForIndexedLog(t, ctx, environment, "lanverse-logs-dead-letter-v1", map[string]any{
+	deadLetter := waitForIndexedLog(t, ctx, environment, "lanverse-logs-dead-letter", map[string]any{
 		"term": map[string]any{"error_code": "invalid_log_record"},
 	})
-	if deadLetter["schema_version"] != "lanverse.log.dlq.v1" {
+	if deadLetter["schema_version"] != "lanverse.log.dead-letter" {
 		t.Fatalf("invalid log did not use the bounded dead-letter schema: %#v", deadLetter)
 	}
 	rawHash, _ := deadLetter["raw_sha256"].(string)
@@ -92,7 +92,7 @@ func TestRealLogstashPipelineIndexesCorrelationsRedactsSecretsAndBoundsInvalidLo
 		t.Fatalf("invalid log dead-letter retained raw sensitive content: %s", deadLetterJSON)
 	}
 
-	requestJSON(t, environment, http.MethodGet, environment.kibanaURL+"/api/data_views/data_view/lanverse-logs-application-v1", nil)
+	requestJSON(t, environment, http.MethodGet, environment.kibanaURL+"/api/data_views/data_view/lanverse-logs-application", nil)
 }
 
 func requireELKEnvironment(t *testing.T) elkTestEnvironment {
