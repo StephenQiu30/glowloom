@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -25,6 +26,7 @@ from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_candidates import (
     SceneFactCandidate,
     ScriptSpanCandidate,
+    SourceEvidenceSpan,
 )
 from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 
@@ -51,7 +53,7 @@ class SceneAnalysisHarness:
 
     def _validate_runtime_policy(self) -> None:
         manifest = self.bundle.manifest
-        if self.invocation.stage_release.bundle_hash != manifest.skill_bundle_hash:
+        if self.invocation.stage_release.bundle_content_hash != manifest.skill_bundle_hash:
             raise SkillBundleUnavailable("exact Scene Analysis skill bundle is unavailable")
         if (
             self.invocation.budget.max_model_calls > manifest.max_model_calls
@@ -79,6 +81,7 @@ class SceneAnalysisHarness:
             source = ScriptSpanProposalInput.model_validate(self.invocation.payload.stage_input)
             if candidate.source_version_id != source.source_version_id:
                 raise CodexSchemaInvalid("ScriptSpan source identity drifted")
+            _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for_text(source.normalized_text)
         else:
             if not isinstance(candidate, SceneFactCandidate):
@@ -91,6 +94,7 @@ class SceneAnalysisHarness:
                 or candidate.span_candidate_revision_hash != source.span_candidate_revision_hash
             ):
                 raise CodexSchemaInvalid("SceneFact source identity drifted")
+            _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for_spans(source.normalized_text, spans.spans)
         size = len(
             json.dumps(
@@ -124,3 +128,31 @@ class SceneAnalysisHarness:
 
     async def aclose(self) -> None:
         return None
+
+
+def _materialize_evidence_hashes(
+    candidate: ScriptSpanCandidate | SceneFactCandidate,
+    normalized_text: str,
+) -> None:
+    evidence: list[SourceEvidenceSpan] = []
+    if isinstance(candidate, ScriptSpanCandidate):
+        evidence.extend(span.evidence for span in candidate.spans)
+    else:
+        for scene in candidate.scenes:
+            if scene.location is not None:
+                evidence.append(scene.location.evidence)
+            if scene.time is not None:
+                evidence.append(scene.time.evidence)
+            evidence.extend(value.evidence for value in scene.actions)
+            evidence.extend(value.evidence for value in scene.dialogues)
+            evidence.extend(value.evidence for value in scene.raw_character_mentions)
+            evidence.extend(value.evidence for value in scene.raw_prop_mentions)
+    for issue in candidate.review_issues:
+        evidence.extend(issue.evidence)
+    for value in evidence:
+        if (
+            value.source_end > len(normalized_text)
+            or normalized_text[value.source_start : value.source_end] != value.exact_anchor
+        ):
+            raise CodexSchemaInvalid("Codex CLI returned Evidence outside the frozen source")
+        value.text_hash = hashlib.sha256(value.exact_anchor.encode("utf-8")).hexdigest()

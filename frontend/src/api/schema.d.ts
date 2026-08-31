@@ -504,6 +504,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/script-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["acceptScriptSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/script-sources/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAcceptedScriptSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/scene-analysis-candidates/{candidate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSceneAnalysisCandidate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/document-revisions/{revision_id}": {
         parameters: {
             query?: never;
@@ -2737,6 +2785,140 @@ export interface components {
              */
             workspace_id: string;
         };
+        AcceptScriptSourceRequest: {
+            /** Format: uuid */
+            document_revision_id: string;
+            expected_head_revision: number;
+            expected_head_hash?: string | null;
+            idempotency_key: string;
+        };
+        ScriptSourceIdentity: {
+            /** @constant */
+            owner_kind: "production/script";
+            /** Format: uuid */
+            logical_id: string;
+            /** Format: uuid */
+            version_id: string;
+            revision: number;
+            content_hash: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AcceptedScriptSourceResponse: {
+            identity: components["schemas"]["ScriptSourceIdentity"];
+            /** Format: uuid */
+            span_index_id: string;
+            span_index_hash: string;
+            codepoint_count: number;
+            utf8_byte_count: number;
+            /** @constant */
+            newline_normalization: "lf";
+            /** @constant */
+            codepoint_index_rule: "unicode-code-point";
+            head_revision: number;
+            head_hash: string;
+            collection_root_hash: string;
+            /** Format: uuid */
+            collection_receipt_id: string;
+            /** Format: uuid */
+            command_receipt_id: string;
+        };
+        SceneAnalysisEvidence: {
+            source_start: number;
+            source_end: number;
+            text_hash: string;
+            exact_anchor: string;
+        };
+        SceneAnalysisReviewIssue: {
+            issue_key: string;
+            code: string;
+            /** @enum {string} */
+            severity: "warning" | "blocking";
+            scope: string;
+            summary: string;
+            evidence: components["schemas"]["SceneAnalysisEvidence"][];
+        };
+        ScriptSceneSpan: {
+            temporary_span_id: string;
+            /** @constant */
+            kind: "scene";
+            codepoint_start: number;
+            codepoint_end: number;
+            heading: string;
+            evidence: components["schemas"]["SceneAnalysisEvidence"];
+        };
+        ScriptSpanCandidate: {
+            /** Format: uuid */
+            source_version_id: string;
+            source_hash: string;
+            codepoint_count: number;
+            coverage: {
+                source_hash: string;
+                /** @constant */
+                codepoint_start: 0;
+                codepoint_end: number;
+                covered_codepoints: number;
+            };
+            spans: components["schemas"]["ScriptSceneSpan"][];
+            review_issues: components["schemas"]["SceneAnalysisReviewIssue"][];
+        };
+        SceneAnalysisGroundedText: {
+            text: string;
+            evidence: components["schemas"]["SceneAnalysisEvidence"];
+        };
+        SceneAnalysisDialogue: {
+            speaker_mention: string;
+            text: string;
+            evidence: components["schemas"]["SceneAnalysisEvidence"];
+        };
+        SceneFact: {
+            temporary_scene_id: string;
+            span_id: string;
+            source_start: number;
+            source_end: number;
+            location: components["schemas"]["SceneAnalysisGroundedText"] | null;
+            time: components["schemas"]["SceneAnalysisGroundedText"] | null;
+            actions: components["schemas"]["SceneAnalysisGroundedText"][];
+            dialogues: components["schemas"]["SceneAnalysisDialogue"][];
+            raw_character_mentions: components["schemas"]["SceneAnalysisGroundedText"][];
+            raw_prop_mentions: components["schemas"]["SceneAnalysisGroundedText"][];
+        };
+        SceneFactCandidate: {
+            /** Format: uuid */
+            source_version_id: string;
+            source_hash: string;
+            /** Format: uuid */
+            span_candidate_revision_id: string;
+            span_candidate_revision_hash: string;
+            scenes: components["schemas"]["SceneFact"][];
+            review_issues: components["schemas"]["SceneAnalysisReviewIssue"][];
+        };
+        SceneAnalysisCandidateResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** @enum {string} */
+            stage_key: "propose_script_spans" | "extract_scene_facts";
+            /** @constant */
+            profile_key: "default";
+            stage_instance_key: string;
+            revision: number;
+            /** @enum {string} */
+            candidate_type: "script_span_candidate" | "scene_fact_candidate";
+            candidate: components["schemas"]["ScriptSpanCandidate"] | components["schemas"]["SceneFactCandidate"];
+            candidate_content_hash: string;
+            candidate_revision_hash: string;
+            /** Format: uuid */
+            source_invocation_id: string;
+            /** Format: uuid */
+            source_result_id: string;
+            source_result_hash: string;
+            /** Format: date-time */
+            created_at: string;
+        };
         /** PublishImportCommitRequest */
         PublishImportCommitRequest: {
             /** Expected Revision */
@@ -3957,6 +4139,93 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    acceptScriptSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptScriptSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description 已接受并冻结 SourceVersion 与 SourceSpanIndex */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AcceptedScriptSourceResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAcceptedScriptSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                revision_id: components["parameters"]["revision_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 按精确 DocumentRevision 查询已接受 SourceVersion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AcceptedScriptSourceResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSceneAnalysisCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 按精确 Candidate Revision 查询 ScriptSpan 或 SceneFact 候选 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SceneAnalysisCandidateResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getDocumentRevision: {

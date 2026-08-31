@@ -67,6 +67,9 @@ class SkillBundleUnavailable(CodexExecutionError):
     pass
 
 
+_CODEX_DELEGATED_AGENT_FEATURE = "multi_agent_" + "v" + "2"
+
+
 _DISABLED_FEATURES = (
     "apps",
     "browser_use",
@@ -76,7 +79,7 @@ _DISABLED_FEATURES = (
     "image_generation",
     "in_app_browser",
     "multi_agent",
-    "multi_agent_v2",
+    _CODEX_DELEGATED_AGENT_FEATURE,
     "plugins",
     "shell_tool",
     "skill_search",

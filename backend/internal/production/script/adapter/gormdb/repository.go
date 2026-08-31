@@ -41,8 +41,12 @@ func (repo *repository) ProjectWorkspace(ctx context.Context, actor application.
 	if err = repo.database.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil || user.Status != "active" || user.TokenVersion != actor.TokenVersion {
 		return "", unauthenticated()
 	}
+	projectQuery := repo.database.WithContext(ctx)
+	if write {
+		projectQuery = projectQuery.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
 	var project model.Project
-	if err = repo.database.WithContext(ctx).First(&project, "id = ?", parsedProjectID).Error; err != nil {
+	if err = projectQuery.First(&project, "id = ?", parsedProjectID).Error; err != nil {
 		return "", notFound("Project not found")
 	}
 	var workspace model.Workspace

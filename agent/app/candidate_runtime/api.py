@@ -9,11 +9,13 @@ from typing import Literal
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import ValidationError
 
-from app.candidate_runtime.canonical import canonical_hash
+from app.candidate_runtime.canonical import canonical_hash, production_canonical_hash
 from app.candidate_runtime.grants import (
     InvalidExecutionGrant,
+    InvalidSceneAnalysisDispatchAuthorization,
+    SceneAnalysisDispatchAuthorizationEvidence,
     verify_execution_grant,
-    verify_scene_analysis_execution_grant,
+    verify_scene_analysis_dispatch_authorization,
 )
 from app.candidate_runtime.scene_analysis_schemas import (
     SceneAnalysisAttemptResult,
@@ -164,13 +166,20 @@ def _failure(
 )
 async def invoke_scene_analysis(
     invocation: SceneAnalysisInvocation,
-    execution_grant: str = Header(alias="X-Lanverse-Execution-Grant"),
+    dispatch_authorization: str = Header(alias="X-Lanverse-Dispatch-Authorization"),
 ) -> SceneAnalysisAttemptResult:
     secret = os.getenv("AGENT_EXECUTION_SECRET", "")
     try:
-        verify_scene_analysis_execution_grant(execution_grant, secret, invocation)
-    except InvalidExecutionGrant as error:
-        raise HTTPException(status_code=401, detail="invalid execution grant") from error
+        authorization = verify_scene_analysis_dispatch_authorization(
+            dispatch_authorization,
+            secret,
+            invocation,
+        )
+    except InvalidSceneAnalysisDispatchAuthorization as error:
+        raise HTTPException(
+            status_code=401,
+            detail="invalid dispatch authorization",
+        ) from error
     try:
         harness = SceneAnalysisHarness(invocation)
         try:
@@ -179,7 +188,7 @@ async def invoke_scene_analysis(
         finally:
             await harness.aclose()
         candidate = value.model_dump(mode="json")
-        result = SceneAnalysisAttemptResult(
+        result = SceneAnalysisAttemptResult.build(
             invocation_id=invocation.invocation_id,
             attempt_id=invocation.attempt_id,
             kind="storygraph_stage",
@@ -187,15 +196,17 @@ async def invoke_scene_analysis(
             variant=invocation.payload.variant,
             stage_release=invocation.stage_release,
             control=invocation.control,
+            claim_version=authorization.claim_version,
+            dispatch_authorization_hash=authorization.authorization_hash,
             status="accepted",
             candidate_type=scene_analysis_stage_spec(
                 invocation.payload.variant.stage_key
             ).candidate_type,
             candidate=candidate,
             input_hash=invocation.input_hash,
-            output_hash=canonical_hash(candidate),
+            output_hash=production_canonical_hash(candidate),
             diagnostics=[],
-            diagnostic_hash=canonical_hash([]),
+            diagnostic_hash=production_canonical_hash([]),
             completed_at=datetime.now(UTC),
             executor=SceneAnalysisExecutor(
                 runtime_class="text",
@@ -205,43 +216,52 @@ async def invoke_scene_analysis(
             ),
             error=None,
         )
-        result.validate_for(invocation)
+        result.validate_for(
+            invocation,
+            authorization.claim_version,
+            authorization.authorization_hash,
+        )
         return result
     except SkillBundleUnavailable as error:
         return _scene_analysis_failure(
-            invocation, "outcome_unknown", "skill_bundle_unavailable", str(error)
+            invocation, authorization, "outcome_unknown", "skill_bundle_unavailable", str(error)
         )
     except BundleInvalid as error:
-        return _scene_analysis_failure(invocation, "rejected", "skill_bundle_invalid", str(error))
+        return _scene_analysis_failure(
+            invocation, authorization, "rejected", "skill_bundle_invalid", str(error)
+        )
     except InvocationPolicyInvalid as error:
         return _scene_analysis_failure(
-            invocation, "rejected", "invocation_policy_invalid", str(error)
+            invocation, authorization, "rejected", "invocation_policy_invalid", str(error)
         )
     except (ValidationError, CodexSchemaInvalid, ValueError) as error:
         return _scene_analysis_failure(
-            invocation, "rejected", "candidate_schema_invalid", str(error)
+            invocation, authorization, "rejected", "candidate_schema_invalid", str(error)
         )
     except CodexBudgetExceeded as error:
         return _scene_analysis_failure(
-            invocation, "rejected", "execution_budget_exceeded", str(error)
+            invocation, authorization, "rejected", "execution_budget_exceeded", str(error)
         )
     except CodexDeadlineExceeded as error:
         return _scene_analysis_failure(
-            invocation, "rejected", "execution_deadline_exceeded", str(error)
+            invocation, authorization, "rejected", "execution_deadline_exceeded", str(error)
         )
     except CodexToolPolicyViolation as error:
-        return _scene_analysis_failure(invocation, "rejected", "tool_not_allowed", str(error))
+        return _scene_analysis_failure(
+            invocation, authorization, "rejected", "tool_not_allowed", str(error)
+        )
     except CodexRuntimeUnavailable as error:
         return _scene_analysis_failure(
-            invocation, "outcome_unknown", "runtime_unavailable", str(error)
+            invocation, authorization, "outcome_unknown", "runtime_unavailable", str(error)
         )
     except CodexExecutionError as error:
         return _scene_analysis_failure(
-            invocation, "outcome_unknown", "agent_execution_unknown", str(error)
+            invocation, authorization, "outcome_unknown", "agent_execution_unknown", str(error)
         )
     except Exception:
         return _scene_analysis_failure(
             invocation,
+            authorization,
             "outcome_unknown",
             "agent_execution_unknown",
             "Candidate execution ended without a trustworthy result",
@@ -250,6 +270,7 @@ async def invoke_scene_analysis(
 
 def _scene_analysis_failure(
     invocation: SceneAnalysisInvocation,
+    authorization: SceneAnalysisDispatchAuthorizationEvidence,
     status: Literal["rejected", "outcome_unknown"],
     code: str,
     summary: str,
@@ -258,7 +279,7 @@ def _scene_analysis_failure(
         "never" if status == "rejected" else "same_release"
     )
     diagnostics = [SceneAnalysisDiagnostic(code=code, summary=summary[:800])]
-    result = SceneAnalysisAttemptResult(
+    result = SceneAnalysisAttemptResult.build(
         invocation_id=invocation.invocation_id,
         attempt_id=invocation.attempt_id,
         kind="storygraph_stage",
@@ -266,6 +287,8 @@ def _scene_analysis_failure(
         variant=invocation.payload.variant,
         stage_release=invocation.stage_release,
         control=invocation.control,
+        claim_version=authorization.claim_version,
+        dispatch_authorization_hash=authorization.authorization_hash,
         status=status,
         candidate_type=scene_analysis_stage_spec(
             invocation.payload.variant.stage_key
@@ -274,7 +297,9 @@ def _scene_analysis_failure(
         input_hash=invocation.input_hash,
         output_hash=None,
         diagnostics=diagnostics,
-        diagnostic_hash=canonical_hash([value.model_dump(mode="json") for value in diagnostics]),
+        diagnostic_hash=production_canonical_hash(
+            [value.model_dump(mode="json") for value in diagnostics]
+        ),
         completed_at=datetime.now(UTC),
         executor=SceneAnalysisExecutor(
             runtime_class="text",
@@ -288,5 +313,9 @@ def _scene_analysis_failure(
             retry_class=retry_class,
         ),
     )
-    result.validate_for(invocation)
+    result.validate_for(
+        invocation,
+        authorization.claim_version,
+        authorization.authorization_hash,
+    )
     return result

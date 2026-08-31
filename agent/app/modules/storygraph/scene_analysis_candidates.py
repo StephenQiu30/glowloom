@@ -63,15 +63,29 @@ class ScriptSceneSpan(StrictSceneAnalysisModel):
         return self
 
 
+class ScriptSpanCoverageProof(StrictSceneAnalysisModel):
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    codepoint_start: Literal[0]
+    codepoint_end: int = Field(gt=0)
+    covered_codepoints: int = Field(gt=0)
+
+
 class ScriptSpanCandidate(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     codepoint_count: int = Field(gt=0)
+    coverage: ScriptSpanCoverageProof
     spans: list[ScriptSceneSpan] = Field(min_length=1)
     review_issues: list[CandidateReviewIssue]
 
     @model_validator(mode="after")
     def validate_coverage(self) -> ScriptSpanCandidate:
+        if (
+            self.coverage.source_hash != self.source_hash
+            or self.coverage.codepoint_end != self.codepoint_count
+            or self.coverage.covered_codepoints != self.codepoint_count
+        ):
+            raise ValueError("script span coverage proof does not match the source")
         previous_end = 0
         keys: set[str] = set()
         for span in self.spans:
@@ -108,13 +122,18 @@ class RawEntityMention(StrictSceneAnalysisModel):
     evidence: SourceEvidenceSpan
 
 
+class GroundedSceneAttribute(StrictSceneAnalysisModel):
+    text: str = Field(min_length=1)
+    evidence: SourceEvidenceSpan
+
+
 class SceneFact(StrictSceneAnalysisModel):
     temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
     span_id: str = Field(pattern=r"^span_[a-z0-9_]{1,80}$")
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
-    location_text: str | None
-    time_text: str | None
+    location: GroundedSceneAttribute | None
+    time: GroundedSceneAttribute | None
     actions: list[GroundedAction]
     dialogues: list[GroundedDialogue]
     raw_character_mentions: list[RawEntityMention]
@@ -125,6 +144,8 @@ class SceneFact(StrictSceneAnalysisModel):
         if self.source_end <= self.source_start:
             raise ValueError("scene fact range must be increasing")
         evidence = [
+            *([] if self.location is None else [self.location.evidence]),
+            *([] if self.time is None else [self.time.evidence]),
             *(value.evidence for value in self.actions),
             *(value.evidence for value in self.dialogues),
             *(value.evidence for value in self.raw_character_mentions),
@@ -165,6 +186,8 @@ class SceneFactCandidate(StrictSceneAnalysisModel):
             raise ValueError("scene facts do not map exactly to script spans")
         for scene in self.scenes:
             evidence = [
+                *([] if scene.location is None else [scene.location.evidence]),
+                *([] if scene.time is None else [scene.time.evidence]),
                 *(value.evidence for value in scene.actions),
                 *(value.evidence for value in scene.dialogues),
                 *(value.evidence for value in scene.raw_character_mentions),

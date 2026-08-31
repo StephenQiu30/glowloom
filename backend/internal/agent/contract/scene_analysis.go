@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	SceneAnalysisWireSchema      = "storygraph-scene-analysis-wire"
-	SceneAnalysisSkillBundleHash = "b395c382be96a37895a5404fc828bf5dbb163c201271b979c3d9d9a7b4b7c66a"
+	SceneAnalysisWireSchemaVersion   = "storygraph-stage-wire-production"
+	ScriptSpanCandidateSchemaVersion = "script-span-candidate-production"
+	SceneFactCandidateSchemaVersion  = "scene-fact-candidate-production"
+	SceneAnalysisSkillBundleHash     = "d096f3d38ff5383d685b2a510cea25985978e294a2a8c46841fa15320eee7b71"
 )
 
 type SceneAnalysisStageVariant struct {
@@ -27,12 +29,12 @@ type SceneAnalysisStageVariant struct {
 }
 
 func (value SceneAnalysisStageVariant) Validate() error {
-	expected := map[string]string{
-		"propose_script_spans": "script-span-candidate",
-		"extract_scene_facts":  "scene-fact-candidate",
-	}
+	expectedSchema := map[string]string{
+		"propose_script_spans": ScriptSpanCandidateSchemaVersion,
+		"extract_scene_facts":  SceneFactCandidateSchemaVersion,
+	}[value.StageKey]
 	if value.ProfileKey != "default" || value.LaneKey != "primary" ||
-		expected[value.StageKey] == "" || value.OutputSchemaVersion != expected[value.StageKey] {
+		expectedSchema == "" || value.OutputSchemaVersion != expectedSchema {
 		return errors.New("invalid Scene Analysis stage variant")
 	}
 	return nil
@@ -48,7 +50,7 @@ type ScriptSourceVersionIdentity struct {
 }
 
 func (value ScriptSourceVersionIdentity) Validate() error {
-	if value.OwnerKind != "production/script-source" || strings.TrimSpace(value.LogicalID) == "" ||
+	if value.OwnerKind != "production/script" || strings.TrimSpace(value.LogicalID) == "" ||
 		value.Revision < 1 || !hashPattern.MatchString(value.ContentHash) || value.CreatedAt.IsZero() {
 		return errors.New("invalid script source version identity")
 	}
@@ -82,18 +84,20 @@ func (value ScriptSpanRevisionIdentity) Validate() error {
 }
 
 type SceneAnalysisReleaseIdentity struct {
-	ReleaseID        string `json:"release_id"`
-	DefinitionHash   string `json:"definition_hash"`
-	BundleHash       string `json:"bundle_hash"`
-	AgentImageDigest string `json:"agent_image_digest"`
+	SkillReleaseID    string `json:"skill_release_id"`
+	SkillReleaseHash  string `json:"skill_release_hash"`
+	StageReleaseHash  string `json:"stage_release_hash"`
+	BundleContentHash string `json:"bundle_content_hash"`
+	AgentImageDigest  string `json:"agent_image_digest"`
 }
 
 func (value SceneAnalysisReleaseIdentity) Validate() error {
-	if _, err := uuid.Parse(value.ReleaseID); err != nil {
+	if _, err := uuid.Parse(value.SkillReleaseID); err != nil {
 		return errors.New("invalid Scene Analysis release identity")
 	}
-	if !hashPattern.MatchString(value.DefinitionHash) ||
-		value.BundleHash != SceneAnalysisSkillBundleHash ||
+	if !hashPattern.MatchString(value.SkillReleaseHash) ||
+		!hashPattern.MatchString(value.StageReleaseHash) ||
+		value.BundleContentHash != SceneAnalysisSkillBundleHash ||
 		!strings.HasPrefix(value.AgentImageDigest, "sha256:") ||
 		!hashPattern.MatchString(strings.TrimPrefix(value.AgentImageDigest, "sha256:")) {
 		return errors.New("invalid Scene Analysis release identity")
@@ -102,30 +106,34 @@ func (value SceneAnalysisReleaseIdentity) Validate() error {
 }
 
 type SceneAnalysisControlProof struct {
-	RecordID    string `json:"record_id"`
-	Revision    int64  `json:"revision"`
-	Status      string `json:"status"`
-	ContentHash string `json:"content_hash"`
+	ControlRecordID string `json:"control_record_id"`
+	ControlRevision int64  `json:"control_revision"`
+	Status          string `json:"status"`
+	ControlHash     string `json:"control_hash"`
+	ReleaseFence    int64  `json:"release_fence"`
 }
 
 func (value SceneAnalysisControlProof) Validate() error {
-	if _, err := uuid.Parse(value.RecordID); err != nil {
+	if _, err := uuid.Parse(value.ControlRecordID); err != nil {
 		return errors.New("invalid Scene Analysis Control proof")
 	}
-	if value.Revision < 1 || value.Status != "approved" || !hashPattern.MatchString(value.ContentHash) {
+	if value.ControlRevision < 1 || value.Status != "approved" ||
+		!hashPattern.MatchString(value.ControlHash) || value.ReleaseFence < 0 {
 		return errors.New("invalid Scene Analysis Control proof")
 	}
 	return nil
 }
 
 type SceneAnalysisExecutionBudget struct {
+	MaxAttempts         int `json:"max_attempts"`
 	MaxModelCalls       int `json:"max_model_calls"`
 	MaxExecutionSeconds int `json:"max_execution_seconds"`
 	MaxOutputBytes      int `json:"max_output_bytes"`
 }
 
 func (value SceneAnalysisExecutionBudget) Validate() error {
-	if value.MaxModelCalls < 1 || value.MaxModelCalls > 2 ||
+	if value.MaxAttempts < 1 || value.MaxAttempts > 3 ||
+		value.MaxModelCalls < 1 || value.MaxModelCalls > 2 ||
 		value.MaxExecutionSeconds < 1 || value.MaxExecutionSeconds > 600 ||
 		value.MaxOutputBytes < 1024 || value.MaxOutputBytes > 1_048_576 {
 		return errors.New("invalid Scene Analysis execution budget")
@@ -137,6 +145,9 @@ type SceneAnalysisScope struct {
 	WorkspaceID string  `json:"workspace_id"`
 	ProjectID   string  `json:"project_id"`
 	EpisodeID   *string `json:"episode_id"`
+	SceneID     *string `json:"scene_id"`
+	EntityID    *string `json:"entity_id"`
+	TargetID    *string `json:"target_id"`
 }
 
 func (value SceneAnalysisScope) Validate() error {
@@ -145,10 +156,15 @@ func (value SceneAnalysisScope) Validate() error {
 			return errors.New("invalid Scene Analysis scope")
 		}
 	}
-	if value.EpisodeID != nil {
-		if _, err := uuid.Parse(*value.EpisodeID); err != nil {
-			return errors.New("invalid Scene Analysis scope")
+	for _, identifier := range []*string{value.EpisodeID, value.SceneID, value.EntityID, value.TargetID} {
+		if identifier != nil {
+			if _, err := uuid.Parse(*identifier); err != nil {
+				return errors.New("invalid Scene Analysis scope")
+			}
 		}
+	}
+	if value.EpisodeID == nil && (value.SceneID != nil || value.EntityID != nil || value.TargetID != nil) {
+		return errors.New("invalid Scene Analysis scope")
 	}
 	return nil
 }
@@ -278,7 +294,7 @@ func NewSceneAnalysisInvocation(
 ) (SceneAnalysisInvocation, error) {
 	value := SceneAnalysisInvocation{
 		InvocationID: invocationID, AttemptID: attemptID, Kind: "storygraph_stage",
-		WireSchemaVersion: SceneAnalysisWireSchema, StageRelease: release,
+		WireSchemaVersion: SceneAnalysisWireSchemaVersion, StageRelease: release,
 		Control: control, Budget: budget, Payload: payload,
 	}
 	hash, err := value.ComputeInputHash()
@@ -309,7 +325,7 @@ func (value SceneAnalysisInvocation) Validate() error {
 			return errors.New("invalid Scene Analysis invocation identity")
 		}
 	}
-	if value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchema ||
+	if value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
 		value.StageRelease.Validate() != nil || value.Control.Validate() != nil ||
 		value.Budget.Validate() != nil || value.Payload.Validate() != nil ||
 		!hashPattern.MatchString(value.InputHash) {
@@ -352,32 +368,74 @@ func (value SceneAnalysisInvocation) ComputeInputHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return CanonicalHash(encoded)
+	return ProductionCanonicalHash(encoded)
 }
 
 func (value SceneAnalysisInvocation) StageInstanceKey() string {
-	material := "storygraph-scene-analysis-stage" + value.Payload.Variant.StageKey +
-		value.Payload.Variant.ProfileKey + value.Payload.Variant.LaneKey +
-		value.Payload.Variant.OutputSchemaVersion + value.Payload.Shard.ShardKey +
-		value.Payload.Shard.ManifestHash + value.InputHash
-	hash := sha256.Sum256([]byte(material))
-	return hex.EncodeToString(hash[:])
+	root := struct {
+		IdentityContractID string                    `json:"identity_contract_id"`
+		VariantKey         SceneAnalysisStageVariant `json:"variant_key"`
+		Scope              SceneAnalysisScope        `json:"scope"`
+		ShardManifestHash  string                    `json:"shard_manifest_hash"`
+		ShardKey           string                    `json:"shard_key"`
+		InputHash          string                    `json:"input_hash"`
+	}{
+		IdentityContractID: "storygraph-stage-instance-production",
+		VariantKey:         value.Payload.Variant,
+		Scope:              value.Payload.Scope,
+		ShardManifestHash:  value.Payload.Shard.ManifestHash,
+		ShardKey:           value.Payload.Shard.ShardKey,
+		InputHash:          value.InputHash,
+	}
+	encoded, _ := json.Marshal(root)
+	hash, _ := ProductionCanonicalHash(encoded)
+	return hash
 }
 
-type SceneAnalysisExecutionGrantClaims struct {
-	InvocationID     string `json:"invocation_id"`
-	AttemptID        string `json:"attempt_id"`
-	InputHash        string `json:"input_hash"`
-	StageReleaseID   string `json:"stage_release_id"`
-	AgentImageDigest string `json:"agent_image_digest"`
-	ExpiresAt        int64  `json:"expires_at"`
+type SceneAnalysisDispatchAuthorization struct {
+	Value        string
+	Hash         string
+	ClaimVersion int64
+	ExpiresAt    time.Time
 }
 
-func (value SceneAnalysisExecutionGrantClaims) ValidateFor(invocation SceneAnalysisInvocation, nowUnix int64) error {
+func (value SceneAnalysisDispatchAuthorization) Validate() error {
+	digest := sha256.Sum256([]byte(value.Value))
+	if strings.TrimSpace(value.Value) == "" || !hashPattern.MatchString(value.Hash) ||
+		hex.EncodeToString(digest[:]) != value.Hash || value.ClaimVersion < 1 || value.ExpiresAt.IsZero() {
+		return errors.New("invalid Scene Analysis dispatch authorization")
+	}
+	return nil
+}
+
+type SceneAnalysisDispatchAuthorizationClaims struct {
+	InvocationID      string `json:"invocation_id"`
+	AttemptID         string `json:"attempt_id"`
+	InputHash         string `json:"input_hash"`
+	SkillReleaseID    string `json:"skill_release_id"`
+	SkillReleaseHash  string `json:"skill_release_hash"`
+	StageReleaseHash  string `json:"stage_release_hash"`
+	BundleContentHash string `json:"bundle_content_hash"`
+	ControlHash       string `json:"control_hash"`
+	ReleaseFence      int64  `json:"release_fence"`
+	ClaimVersion      int64  `json:"claim_version"`
+	AgentImageDigest  string `json:"agent_image_digest"`
+	ExpiresAt         int64  `json:"expires_at"`
+}
+
+func (value SceneAnalysisDispatchAuthorizationClaims) ValidateFor(
+	invocation SceneAnalysisInvocation,
+	claimVersion, nowUnix int64,
+) error {
 	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
-		value.InputHash != invocation.InputHash || value.StageReleaseID != invocation.StageRelease.ReleaseID ||
+		value.InputHash != invocation.InputHash || value.SkillReleaseID != invocation.StageRelease.SkillReleaseID ||
+		value.SkillReleaseHash != invocation.StageRelease.SkillReleaseHash ||
+		value.StageReleaseHash != invocation.StageRelease.StageReleaseHash ||
+		value.BundleContentHash != invocation.StageRelease.BundleContentHash ||
+		value.ControlHash != invocation.Control.ControlHash ||
+		value.ReleaseFence != invocation.Control.ReleaseFence || value.ClaimVersion != claimVersion ||
 		value.AgentImageDigest != invocation.StageRelease.AgentImageDigest || value.ExpiresAt <= nowUnix {
-		return errors.New("invalid Scene Analysis execution grant claims")
+		return errors.New("invalid Scene Analysis dispatch authorization claims")
 	}
 	return nil
 }
@@ -401,23 +459,26 @@ type SceneAnalysisExecutor struct {
 }
 
 type SceneAnalysisAttemptResult struct {
-	InvocationID      string                       `json:"invocation_id"`
-	AttemptID         string                       `json:"attempt_id"`
-	Kind              string                       `json:"kind"`
-	WireSchemaVersion string                       `json:"wire_schema_version"`
-	Variant           SceneAnalysisStageVariant    `json:"variant"`
-	StageRelease      SceneAnalysisReleaseIdentity `json:"stage_release"`
-	Control           SceneAnalysisControlProof    `json:"control"`
-	Status            string                       `json:"status"`
-	CandidateType     string                       `json:"candidate_type"`
-	Candidate         json.RawMessage              `json:"candidate"`
-	InputHash         string                       `json:"input_hash"`
-	OutputHash        *string                      `json:"output_hash"`
-	Diagnostics       []SceneAnalysisDiagnostic    `json:"diagnostics"`
-	DiagnosticHash    string                       `json:"diagnostic_hash"`
-	CompletedAt       time.Time                    `json:"completed_at"`
-	Executor          SceneAnalysisExecutor        `json:"executor"`
-	Error             *SceneAnalysisResultError    `json:"error"`
+	InvocationID              string                       `json:"invocation_id"`
+	AttemptID                 string                       `json:"attempt_id"`
+	Kind                      string                       `json:"kind"`
+	WireSchemaVersion         string                       `json:"wire_schema_version"`
+	Variant                   SceneAnalysisStageVariant    `json:"variant"`
+	StageRelease              SceneAnalysisReleaseIdentity `json:"stage_release"`
+	Control                   SceneAnalysisControlProof    `json:"control"`
+	ClaimVersion              int64                        `json:"claim_version"`
+	DispatchAuthorizationHash string                       `json:"dispatch_authorization_hash"`
+	Status                    string                       `json:"status"`
+	CandidateType             string                       `json:"candidate_type"`
+	Candidate                 json.RawMessage              `json:"candidate"`
+	InputHash                 string                       `json:"input_hash"`
+	OutputHash                *string                      `json:"output_hash"`
+	Diagnostics               []SceneAnalysisDiagnostic    `json:"diagnostics"`
+	DiagnosticHash            string                       `json:"diagnostic_hash"`
+	CompletedAt               time.Time                    `json:"completed_at"`
+	Executor                  SceneAnalysisExecutor        `json:"executor"`
+	Error                     *SceneAnalysisResultError    `json:"error"`
+	ResultHash                string                       `json:"result_hash"`
 }
 
 func DecodeSceneAnalysisAttemptResult(raw []byte) (SceneAnalysisAttemptResult, error) {
@@ -428,15 +489,21 @@ func DecodeSceneAnalysisAttemptResult(raw []byte) (SceneAnalysisAttemptResult, e
 	return value, nil
 }
 
-func (value SceneAnalysisAttemptResult) ValidateFor(invocation SceneAnalysisInvocation) error {
+func (value SceneAnalysisAttemptResult) ValidateFor(
+	invocation SceneAnalysisInvocation,
+	claimVersion int64,
+	dispatchAuthorizationHash string,
+) error {
 	expectedCandidateType := map[string]string{
 		"propose_script_spans": "script_span_candidate",
 		"extract_scene_facts":  "scene_fact_candidate",
 	}
 	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
-		value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchema ||
+		value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
 		value.Variant != invocation.Payload.Variant || value.StageRelease != invocation.StageRelease ||
 		value.Control != invocation.Control || value.InputHash != invocation.InputHash ||
+		value.ClaimVersion != claimVersion || value.DispatchAuthorizationHash != dispatchAuthorizationHash ||
+		claimVersion < 1 || !hashPattern.MatchString(dispatchAuthorizationHash) ||
 		value.CandidateType != expectedCandidateType[invocation.Payload.Variant.StageKey] ||
 		value.CompletedAt.IsZero() || value.Diagnostics == nil || !hashPattern.MatchString(value.DiagnosticHash) ||
 		value.Executor.RuntimeClass != "text" ||
@@ -444,11 +511,15 @@ func (value SceneAnalysisAttemptResult) ValidateFor(invocation SceneAnalysisInvo
 		value.Executor.HarnessVersion != "scene-analysis-harness" || strings.TrimSpace(value.Executor.Model) == "" {
 		return errors.New("Scene Analysis result identity does not match invocation")
 	}
+	computedResultHash, err := value.ComputeResultHash()
+	if err != nil || !hashPattern.MatchString(value.ResultHash) || computedResultHash != value.ResultHash {
+		return errors.New("Scene Analysis result hash mismatch")
+	}
 	diagnostics, err := json.Marshal(value.Diagnostics)
 	if err != nil {
 		return err
 	}
-	diagnosticHash, err := CanonicalHash(diagnostics)
+	diagnosticHash, err := ProductionCanonicalHash(diagnostics)
 	if err != nil || diagnosticHash != value.DiagnosticHash {
 		return errors.New("Scene Analysis diagnostic hash mismatch")
 	}
@@ -457,7 +528,7 @@ func (value SceneAnalysisAttemptResult) ValidateFor(invocation SceneAnalysisInvo
 		if value.OutputHash == nil || !jsonObject(value.Candidate) || value.Error != nil {
 			return errors.New("accepted Scene Analysis result is incomplete")
 		}
-		outputHash, hashErr := CanonicalHash(value.Candidate)
+		outputHash, hashErr := ProductionCanonicalHash(value.Candidate)
 		if hashErr != nil || outputHash != *value.OutputHash {
 			return errors.New("Scene Analysis output hash mismatch")
 		}
@@ -503,6 +574,23 @@ func (value SceneAnalysisAttemptResult) ValidateFor(invocation SceneAnalysisInvo
 	return nil
 }
 
+func (value SceneAnalysisAttemptResult) ComputeResultHash() (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	var root map[string]json.RawMessage
+	if err = json.Unmarshal(encoded, &root); err != nil {
+		return "", err
+	}
+	delete(root, "result_hash")
+	material, err := json.Marshal(root)
+	if err != nil {
+		return "", err
+	}
+	return ProductionCanonicalHash(material)
+}
+
 type SourceEvidenceSpan struct {
 	SourceStart int    `json:"source_start"`
 	SourceEnd   int    `json:"source_end"`
@@ -540,18 +628,29 @@ type ScriptSceneSpan struct {
 	Evidence        SourceEvidenceSpan `json:"evidence"`
 }
 
+type ScriptSpanCoverageProof struct {
+	SourceHash        string `json:"source_hash"`
+	CodepointStart    int    `json:"codepoint_start"`
+	CodepointEnd      int    `json:"codepoint_end"`
+	CoveredCodepoints int    `json:"covered_codepoints"`
+}
+
 type ScriptSpanCandidate struct {
-	SourceVersionID string                 `json:"source_version_id"`
-	SourceHash      string                 `json:"source_hash"`
-	CodepointCount  int                    `json:"codepoint_count"`
-	Spans           []ScriptSceneSpan      `json:"spans"`
-	ReviewIssues    []CandidateReviewIssue `json:"review_issues"`
+	SourceVersionID string                  `json:"source_version_id"`
+	SourceHash      string                  `json:"source_hash"`
+	CodepointCount  int                     `json:"codepoint_count"`
+	Coverage        ScriptSpanCoverageProof `json:"coverage"`
+	Spans           []ScriptSceneSpan       `json:"spans"`
+	ReviewIssues    []CandidateReviewIssue  `json:"review_issues"`
 }
 
 func ValidateScriptSpanCandidate(raw json.RawMessage, text string) error {
 	var value ScriptSpanCandidate
 	if decodeStrict(raw, &value) != nil || value.SourceHash != hashUTF8(text) ||
-		value.CodepointCount != utf8.RuneCountInString(text) || len(value.Spans) == 0 {
+		value.CodepointCount != utf8.RuneCountInString(text) || len(value.Spans) == 0 ||
+		value.Coverage.SourceHash != value.SourceHash || value.Coverage.CodepointStart != 0 ||
+		value.Coverage.CodepointEnd != value.CodepointCount ||
+		value.Coverage.CoveredCodepoints != value.CodepointCount {
 		return errors.New("invalid Scene Analysis ScriptSpan candidate")
 	}
 	if _, err := uuid.Parse(value.SourceVersionID); err != nil {
@@ -596,17 +695,22 @@ type RawEntityMention struct {
 	Evidence SourceEvidenceSpan `json:"evidence"`
 }
 
+type GroundedSceneAttribute struct {
+	Text     string             `json:"text"`
+	Evidence SourceEvidenceSpan `json:"evidence"`
+}
+
 type SceneFact struct {
-	TemporarySceneID     string             `json:"temporary_scene_id"`
-	SpanID               string             `json:"span_id"`
-	SourceStart          int                `json:"source_start"`
-	SourceEnd            int                `json:"source_end"`
-	LocationText         *string            `json:"location_text"`
-	TimeText             *string            `json:"time_text"`
-	Actions              []GroundedAction   `json:"actions"`
-	Dialogues            []GroundedDialogue `json:"dialogues"`
-	RawCharacterMentions []RawEntityMention `json:"raw_character_mentions"`
-	RawPropMentions      []RawEntityMention `json:"raw_prop_mentions"`
+	TemporarySceneID     string                  `json:"temporary_scene_id"`
+	SpanID               string                  `json:"span_id"`
+	SourceStart          int                     `json:"source_start"`
+	SourceEnd            int                     `json:"source_end"`
+	Location             *GroundedSceneAttribute `json:"location"`
+	Time                 *GroundedSceneAttribute `json:"time"`
+	Actions              []GroundedAction        `json:"actions"`
+	Dialogues            []GroundedDialogue      `json:"dialogues"`
+	RawCharacterMentions []RawEntityMention      `json:"raw_character_mentions"`
+	RawPropMentions      []RawEntityMention      `json:"raw_prop_mentions"`
 }
 
 type SceneFactCandidate struct {
@@ -647,7 +751,19 @@ func ValidateSceneFactCandidate(raw json.RawMessage, text string, spanRaw json.R
 			return errors.New("SceneFact key is duplicated")
 		}
 		sceneKeys[scene.TemporarySceneID] = struct{}{}
-		evidence := make([]SourceEvidenceSpan, 0, len(scene.Actions)+len(scene.Dialogues)+len(scene.RawCharacterMentions)+len(scene.RawPropMentions))
+		evidence := make([]SourceEvidenceSpan, 0, len(scene.Actions)+len(scene.Dialogues)+len(scene.RawCharacterMentions)+len(scene.RawPropMentions)+2)
+		if scene.Location != nil {
+			if strings.TrimSpace(scene.Location.Text) == "" {
+				return errors.New("SceneFact location is empty")
+			}
+			evidence = append(evidence, scene.Location.Evidence)
+		}
+		if scene.Time != nil {
+			if strings.TrimSpace(scene.Time.Text) == "" {
+				return errors.New("SceneFact time is empty")
+			}
+			evidence = append(evidence, scene.Time.Evidence)
+		}
 		for _, item := range scene.Actions {
 			evidence = append(evidence, item.Evidence)
 		}

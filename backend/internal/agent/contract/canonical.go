@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"regexp"
+
+	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 )
 
 var hashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -45,6 +47,18 @@ func CanonicalJSON(raw json.RawMessage) ([]byte, error) {
 		return nil, err
 	}
 	return bytes.TrimSpace(canonical.Bytes()), nil
+}
+
+// ProductionCanonicalJSON implements the production content contract used by
+// the cross-language StoryGraph wire. Object keys and string values are NFC
+// normalized before stable UTF-8 JSON encoding. Numeric production contracts
+// only permit integers, so the encoder never depends on float formatting.
+func ProductionCanonicalJSON(raw json.RawMessage) ([]byte, error) {
+	return platformcanonical.JSON(raw)
+}
+
+func ProductionCanonicalHash(raw json.RawMessage) (string, error) {
+	return platformcanonical.Hash(raw)
 }
 
 func jsonObject(raw json.RawMessage) bool {

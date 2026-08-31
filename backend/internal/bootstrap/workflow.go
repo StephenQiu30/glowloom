@@ -48,9 +48,14 @@ func NewWorkflowRuntime(
 	providers workflowgeneration.ImageProvider,
 	segments workflowproduction.EpisodeSegmentationOwner,
 	episodes workflowproduction.EpisodeAnalysisOwner,
+	sceneAnalysis ...workflowproduction.SceneAnalysisDependencies,
 ) (*workflowapp.RuntimeService, error) {
 	if repository == nil || scripts == nil || evidence == nil || stories == nil || storyReviews == nil || bibles == nil || projects == nil || plans == nil || planningOwners == nil || storygraphs == nil || storyboards == nil || reviews == nil {
 		return nil, errors.New("workflow runtime dependencies are required")
+	}
+	if len(sceneAnalysis) > 1 || (len(sceneAnalysis) == 1 &&
+		(sceneAnalysis[0].Sources == nil || sceneAnalysis[0].Candidates == nil)) {
+		return nil, errors.New("Scene Analysis workflow dependencies must be configured together")
 	}
 	now := func() time.Time { return time.Now().UTC() }
 	humanTasks := workflowapp.HumanTaskOpener(workflowreview.New(reviews))
@@ -61,7 +66,11 @@ func NewWorkflowRuntime(
 		return nil, errors.New("reference asset workflow dependencies must be configured together")
 	}
 	executor := workflowapp.NodeExecutor(
-		workflowproduction.NewNodeExecutor(scripts, evidence, stories, storyReviews, bibles, projects, plans, planningOwners, storygraphs, storyboards, bindings, segments, episodes),
+		workflowproduction.NewNodeExecutor(
+			scripts, evidence, stories, storyReviews, bibles, projects, plans, planningOwners, storygraphs,
+			storyboards, bindings, segments, episodes,
+			sceneAnalysis...,
+		),
 	)
 	if candidateSets != nil || referenceTargets != nil {
 		materializer, _ := candidateSets.(workflowgeneration.ProviderOutputMaterializer)

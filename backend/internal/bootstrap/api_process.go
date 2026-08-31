@@ -16,6 +16,9 @@ import (
 	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/access/identity/adapter/httpapi"
 	identityverification "github.com/StephenQiu30/lanverse/backend/internal/access/identity/adapter/verification"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/access/identity/application"
+	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
+	agenthttp "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/httpapi"
+	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
 	agentclient "github.com/StephenQiu30/lanverse/backend/internal/agent/client"
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
@@ -200,13 +203,19 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	mediaHandler := mediahttp.New(mediaService, tokenVerifier)
 	scriptStore := scriptgorm.New(database)
 	scriptService := scriptapp.NewService(scriptStore, mediareader.Reader{Service: mediaService}, scriptapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
-	scriptHandler := scripthttp.New(scriptService, tokenVerifier)
+	scriptSourceService := scriptapp.NewSourceService(scriptStore, scriptapp.SourceConfig{
+		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+	})
+	scriptHandler := scripthttp.New(scriptService, scriptSourceService, tokenVerifier)
 	agentSigner, err := agentgrant.NewSigner(configuration.AgentExecutionSecret, func() time.Time { return time.Now().UTC() })
 	if err != nil {
 		return fmt.Errorf("agent execution grant configuration failed: %w", err)
 	}
 	agentRuntimeRevisions := []agentcontract.RuntimeRevision{{
 		BundleHash: agentcontract.StoryGraphSkillBundleHash, BaseURL: configuration.AgentURL,
+		ImageDigest: configuration.AgentRuntimeImageDigest,
+	}, {
+		BundleHash: agentcontract.SceneAnalysisSkillBundleHash, BaseURL: configuration.AgentURL,
 		ImageDigest: configuration.AgentRuntimeImageDigest,
 	}}
 	for _, revision := range configuration.AgentRuntimeAdditionalRevisions {
@@ -219,6 +228,17 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("agent runtime configuration failed: %w", err)
 	}
 	agentRuntime := agentclient.New(agentRuntimeCatalog, agentSigner, nil)
+	sceneAnalysisService, err := agentapp.NewSceneAnalysisService(
+		agentgorm.NewSceneAnalysisStore(database), agentRuntime, agentSigner,
+		agentapp.SceneAnalysisConfig{
+			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
+			AgentImageDigest: configuration.AgentRuntimeImageDigest,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("Scene Analysis service initialization failed: %w", err)
+	}
+	sceneAnalysisHandler := agenthttp.New(sceneAnalysisService, projectService, tokenVerifier)
 	bibleStore := biblegorm.New(database)
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 	bibleHandler := biblehttp.New(bibleService, tokenVerifier)
@@ -349,6 +369,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				projectHandler.Register(mux)
 				costHandler.Register(mux)
 				scriptHandler.Register(mux)
+				sceneAnalysisHandler.Register(mux)
 				bibleHandler.Register(mux)
 				storyAnalysisRecoveryHandler.Register(mux)
 				planningHandler.Register(mux)

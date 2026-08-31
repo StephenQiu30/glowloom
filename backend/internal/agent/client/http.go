@@ -18,6 +18,58 @@ type GrantIssuer interface {
 	Issue(contract.StageInvocation, int, int64) (string, error)
 }
 
+func (client *HTTP) InvokeSceneAnalysis(
+	ctx context.Context,
+	invocation contract.SceneAnalysisInvocation,
+	authorization contract.SceneAnalysisDispatchAuthorization,
+) (contract.SceneAnalysisAttemptResult, error) {
+	if err := invocation.Validate(); err != nil {
+		return contract.SceneAnalysisAttemptResult{}, err
+	}
+	if err := authorization.Validate(); err != nil {
+		return contract.SceneAnalysisAttemptResult{}, err
+	}
+	runtime, err := client.runtimes.Resolve(invocation.StageRelease.BundleContentHash)
+	if err != nil {
+		return contract.SceneAnalysisAttemptResult{}, err
+	}
+	if runtime.ImageDigest != invocation.StageRelease.AgentImageDigest {
+		return contract.SceneAnalysisAttemptResult{}, contract.ErrSkillBundleUnavailable
+	}
+	body, err := json.Marshal(invocation)
+	if err != nil {
+		return contract.SceneAnalysisAttemptResult{}, err
+	}
+	endpoint := strings.TrimRight(runtime.BaseURL, "/") + "/internal/storygraph/scene-analysis/invocations"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return contract.SceneAnalysisAttemptResult{}, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Lanverse-Dispatch-Authorization", authorization.Value)
+	response, err := client.client.Do(request)
+	if err != nil {
+		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("Scene Analysis outcome unknown: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("Scene Analysis returned HTTP %d", response.StatusCode)
+	}
+	encoded, err := io.ReadAll(io.LimitReader(response.Body, maxResultBytes+1))
+	if err != nil || len(encoded) > maxResultBytes {
+		return contract.SceneAnalysisAttemptResult{}, errorsOrLimit(err)
+	}
+	result, err := contract.DecodeSceneAnalysisAttemptResult(encoded)
+	if err != nil {
+		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("decode Scene Analysis result: %w", err)
+	}
+	if err = result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash); err != nil {
+		return contract.SceneAnalysisAttemptResult{}, err
+	}
+	return result, nil
+}
+
 type HTTP struct {
 	runtimes contract.RuntimeCatalog
 	client   *http.Client

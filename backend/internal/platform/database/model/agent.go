@@ -21,7 +21,7 @@ type ShardManifest struct {
 	WorkspaceID        uuid.UUID         `gorm:"type:uuid;not null"`
 	WorkflowRunID      uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:1"`
 	NodeRunID          uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:2"`
-	Stage              string            `gorm:"type:varchar(40);not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:3;check:ck_agt_manifest_stage,stage IN ('extract_source_evidence','analyze_story','reconcile_story','review_storygraph','segment_episodes','analyze_episode','reconcile_episode','draft_storyboard')"`
+	Stage              string            `gorm:"type:varchar(40);not null;uniqueIndex:uq_agt_manifest_node_stage_version,priority:3;check:ck_agt_manifest_stage,stage IN ('extract_source_evidence','analyze_story','reconcile_story','review_storygraph','segment_episodes','analyze_episode','reconcile_episode','draft_storyboard','propose_script_spans','extract_scene_facts')"`
 	RootInputHash      string            `gorm:"type:char(64);not null;check:ck_agt_manifest_root_hash,char_length(root_input_hash) = 64"`
 	ParentManifestHash *string           `gorm:"type:char(64);check:ck_agt_manifest_parent_hash,(version = 1 AND parent_manifest_hash IS NULL) OR (version > 1 AND char_length(parent_manifest_hash) = 64)"`
 	Shards             datatypes.JSON    `gorm:"type:jsonb;not null;check:ck_agt_manifest_shards,jsonb_typeof(shards) = 'array'"`

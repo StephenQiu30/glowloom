@@ -9,6 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
+	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
+	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
+	agentclient "github.com/StephenQiu30/lanverse/backend/internal/agent/client"
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
 	assetgorm "github.com/StephenQiu30/lanverse/backend/internal/asset/adapter/gormdb"
 	assetapp "github.com/StephenQiu30/lanverse/backend/internal/asset/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
@@ -37,6 +42,7 @@ import (
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
+	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
 )
 
@@ -80,9 +86,32 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("workflow worker object storage initialization failed: %w", err)
 	}
 	cancelObjects()
-	scriptService := scriptapp.NewService(
-		scriptgorm.New(database), nil, scriptapp.Config{Now: now, NewID: uuid.NewString},
+	scriptStore := scriptgorm.New(database)
+	scriptService := scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: now, NewID: uuid.NewString})
+	scriptSourceService := scriptapp.NewSourceService(
+		scriptStore, scriptapp.SourceConfig{Now: now, NewID: uuid.NewString},
 	)
+	agentSigner, err := agentgrant.NewSigner(configuration.AgentExecutionSecret, now)
+	if err != nil {
+		return fmt.Errorf("workflow Agent execution grant configuration failed: %w", err)
+	}
+	agentRuntimeCatalog, err := agentcontract.NewRuntimeCatalog([]agentcontract.RuntimeRevision{{
+		BundleHash: agentcontract.SceneAnalysisSkillBundleHash, BaseURL: configuration.AgentURL,
+		ImageDigest: configuration.AgentRuntimeImageDigest,
+	}})
+	if err != nil {
+		return fmt.Errorf("workflow Agent runtime configuration failed: %w", err)
+	}
+	sceneAnalysisService, err := agentapp.NewSceneAnalysisService(
+		agentgorm.NewSceneAnalysisStore(database), agentclient.New(agentRuntimeCatalog, agentSigner, nil),
+		agentSigner,
+		agentapp.SceneAnalysisConfig{
+			Now: now, NewID: uuid.NewString, AgentImageDigest: configuration.AgentRuntimeImageDigest,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Scene Analysis service initialization failed: %w", err)
+	}
 	bibleStore := biblegorm.New(database)
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: now, NewID: uuid.NewString})
 	evidenceService := bibleapp.NewSourceEvidenceService(bibleStore, bibleapp.SourceEvidenceConfig{
@@ -165,6 +194,7 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
 		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations, providerService,
 		episodeSegmentationService, episodeAnalysisService,
+		workflowproduction.SceneAnalysisDependencies{Sources: scriptSourceService, Candidates: sceneAnalysisService},
 	)
 	if err != nil {
 		return fmt.Errorf("workflow runtime composition failed: %w", err)

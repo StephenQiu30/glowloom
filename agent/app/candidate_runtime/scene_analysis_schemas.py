@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.candidate_runtime.canonical import canonical_hash
+from app.candidate_runtime.canonical import production_canonical_hash
 
 SceneAnalysisStageKey = Literal["propose_script_spans", "extract_scene_facts"]
 
@@ -21,23 +21,22 @@ class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
     profile_key: Literal["default"]
     lane_key: Literal["primary"]
     output_schema_version: Literal[
-        "script-span-candidate",
-        "scene-fact-candidate",
+        "script-span-candidate-production", "scene-fact-candidate-production"
     ]
 
     @model_validator(mode="after")
-    def validate_schema_for_stage(self) -> SceneAnalysisStageVariant:
+    def validate_output_schema(self) -> SceneAnalysisStageVariant:
         expected = {
-            "propose_script_spans": "script-span-candidate",
-            "extract_scene_facts": "scene-fact-candidate",
-        }
-        if self.output_schema_version != expected[self.stage_key]:
-            raise ValueError("stage output schema does not match the Scene Analysis variant")
+            "propose_script_spans": "script-span-candidate-production",
+            "extract_scene_facts": "scene-fact-candidate-production",
+        }[self.stage_key]
+        if self.output_schema_version != expected:
+            raise ValueError("Scene Analysis output schema does not match its stage")
         return self
 
 
 class ScriptSourceVersionIdentity(StrictSceneAnalysisModel):
-    owner_kind: Literal["production/script-source"]
+    owner_kind: Literal["production/script"]
     logical_id: str = Field(min_length=1)
     version_id: UUID
     revision: int = Field(ge=1)
@@ -55,20 +54,23 @@ class ScriptSpanRevisionIdentity(StrictSceneAnalysisModel):
 
 
 class SceneAnalysisReleaseIdentity(StrictSceneAnalysisModel):
-    release_id: UUID
-    definition_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    bundle_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    skill_release_id: UUID
+    skill_release_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    stage_release_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bundle_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     agent_image_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class SceneAnalysisControlProof(StrictSceneAnalysisModel):
-    record_id: UUID
-    revision: int = Field(ge=1)
+    control_record_id: UUID
+    control_revision: int = Field(ge=1)
     status: Literal["approved"]
-    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    control_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    release_fence: int = Field(ge=0)
 
 
 class SceneAnalysisExecutionBudget(StrictSceneAnalysisModel):
+    max_attempts: int = Field(ge=1, le=3)
     max_model_calls: int = Field(ge=1, le=2)
     max_execution_seconds: int = Field(ge=1, le=600)
     max_output_bytes: int = Field(ge=1024, le=1_048_576)
@@ -78,6 +80,17 @@ class SceneAnalysisScope(StrictSceneAnalysisModel):
     workspace_id: UUID
     project_id: UUID
     episode_id: UUID | None
+    scene_id: UUID | None
+    entity_id: UUID | None
+    target_id: UUID | None
+
+    @model_validator(mode="after")
+    def validate_hierarchy(self) -> SceneAnalysisScope:
+        if self.episode_id is None and any(
+            value is not None for value in (self.scene_id, self.entity_id, self.target_id)
+        ):
+            raise ValueError("nested Scene Analysis scope requires an episode")
+        return self
 
 
 class SceneAnalysisShard(StrictSceneAnalysisModel):
@@ -163,7 +176,7 @@ class SceneAnalysisInvocation(StrictSceneAnalysisModel):
     invocation_id: UUID
     attempt_id: UUID
     kind: Literal["storygraph_stage"]
-    wire_schema_version: Literal["storygraph-scene-analysis-wire"]
+    wire_schema_version: Literal["storygraph-stage-wire-production"]
     stage_release: SceneAnalysisReleaseIdentity
     control: SceneAnalysisControlProof
     budget: SceneAnalysisExecutionBudget
@@ -182,7 +195,7 @@ class SceneAnalysisInvocation(StrictSceneAnalysisModel):
         payload: SceneAnalysisPayload,
     ) -> Self:
         material = {
-            "wire_schema_version": "storygraph-scene-analysis-wire",
+            "wire_schema_version": "storygraph-stage-wire-production",
             "stage_release": stage_release.model_dump(mode="json"),
             "control": control.model_dump(mode="json"),
             "budget": budget.model_dump(mode="json"),
@@ -192,12 +205,12 @@ class SceneAnalysisInvocation(StrictSceneAnalysisModel):
             invocation_id=invocation_id,
             attempt_id=attempt_id,
             kind="storygraph_stage",
-            wire_schema_version="storygraph-scene-analysis-wire",
+            wire_schema_version="storygraph-stage-wire-production",
             stage_release=stage_release,
             control=control,
             budget=budget,
             payload=payload,
-            input_hash=canonical_hash(material),
+            input_hash=production_canonical_hash(material),
         )
 
     @model_validator(mode="after")
@@ -207,7 +220,7 @@ class SceneAnalysisInvocation(StrictSceneAnalysisModel):
         return self
 
     def compute_input_hash(self) -> str:
-        return canonical_hash(
+        return production_canonical_hash(
             {
                 "wire_schema_version": self.wire_schema_version,
                 "stage_release": self.stage_release.model_dump(mode="json"),
@@ -218,37 +231,52 @@ class SceneAnalysisInvocation(StrictSceneAnalysisModel):
         )
 
     def stage_instance_key(self) -> str:
-        material = (
-            "storygraph-scene-analysis-stage"
-            + self.payload.variant.stage_key
-            + self.payload.variant.profile_key
-            + self.payload.variant.lane_key
-            + self.payload.variant.output_schema_version
-            + self.payload.shard.shard_key
-            + self.payload.shard.manifest_hash
-            + self.input_hash
+        return production_canonical_hash(
+            {
+                "identity_contract_id": "storygraph-stage-instance-production",
+                "variant_key": self.payload.variant.model_dump(mode="json"),
+                "scope": self.payload.scope.model_dump(mode="json"),
+                "shard_manifest_hash": self.payload.shard.manifest_hash,
+                "shard_key": self.payload.shard.shard_key,
+                "input_hash": self.input_hash,
+            }
         )
-        return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-class SceneAnalysisExecutionGrantClaims(StrictSceneAnalysisModel):
+class SceneAnalysisDispatchAuthorizationClaims(StrictSceneAnalysisModel):
     invocation_id: UUID
     attempt_id: UUID
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    stage_release_id: UUID
+    skill_release_id: UUID
+    skill_release_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    stage_release_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bundle_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    control_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    release_fence: int = Field(ge=0)
+    claim_version: int = Field(ge=1)
     agent_image_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     expires_at: int = Field(ge=1)
 
-    def validate_for(self, invocation: SceneAnalysisInvocation, *, now_unix: int) -> None:
+    def validate_for(
+        self,
+        invocation: SceneAnalysisInvocation,
+        *,
+        now_unix: int,
+    ) -> None:
         if (
             self.invocation_id != invocation.invocation_id
             or self.attempt_id != invocation.attempt_id
             or self.input_hash != invocation.input_hash
-            or self.stage_release_id != invocation.stage_release.release_id
+            or self.skill_release_id != invocation.stage_release.skill_release_id
+            or self.skill_release_hash != invocation.stage_release.skill_release_hash
+            or self.stage_release_hash != invocation.stage_release.stage_release_hash
+            or self.bundle_content_hash != invocation.stage_release.bundle_content_hash
+            or self.control_hash != invocation.control.control_hash
+            or self.release_fence != invocation.control.release_fence
             or self.agent_image_digest != invocation.stage_release.agent_image_digest
             or self.expires_at <= now_unix
         ):
-            raise ValueError("invalid Scene Analysis execution grant claims")
+            raise ValueError("invalid Scene Analysis dispatch authorization claims")
 
 
 class SceneAnalysisDiagnostic(StrictSceneAnalysisModel):
@@ -273,10 +301,12 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
     invocation_id: UUID
     attempt_id: UUID
     kind: Literal["storygraph_stage"]
-    wire_schema_version: Literal["storygraph-scene-analysis-wire"]
+    wire_schema_version: Literal["storygraph-stage-wire-production"]
     variant: SceneAnalysisStageVariant
     stage_release: SceneAnalysisReleaseIdentity
     control: SceneAnalysisControlProof
+    claim_version: int = Field(ge=1)
+    dispatch_authorization_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     status: Literal["accepted", "rejected", "outcome_unknown"]
     candidate_type: Literal["script_span_candidate", "scene_fact_candidate"]
     candidate: dict[str, Any] | None
@@ -287,10 +317,22 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
     completed_at: datetime
     executor: SceneAnalysisExecutor
     error: SceneAnalysisResultError | None
+    result_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def build(cls, **values: Any) -> Self:
+        draft = cls.model_construct(result_hash="0" * 64, **values)
+        material = draft.model_dump(mode="json", exclude={"result_hash"})
+        return cls.model_validate({**material, "result_hash": production_canonical_hash(material)})
+
+    def compute_result_hash(self) -> str:
+        return production_canonical_hash(self.model_dump(mode="json", exclude={"result_hash"}))
 
     @model_validator(mode="after")
     def validate_result_state(self) -> SceneAnalysisAttemptResult:
-        expected_diagnostic_hash = canonical_hash(
+        if self.result_hash != self.compute_result_hash():
+            raise ValueError("Scene Analysis result hash mismatch")
+        expected_diagnostic_hash = production_canonical_hash(
             [value.model_dump(mode="json") for value in self.diagnostics]
         )
         if self.diagnostic_hash != expected_diagnostic_hash:
@@ -300,7 +342,7 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
                 self.candidate is None
                 or self.output_hash is None
                 or self.error is not None
-                or canonical_hash(self.candidate) != self.output_hash
+                or production_canonical_hash(self.candidate) != self.output_hash
             ):
                 raise ValueError("accepted Scene Analysis result is incomplete")
         elif (
@@ -313,15 +355,24 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
             raise ValueError("failed Scene Analysis result has invalid semantics")
         return self
 
-    def validate_for(self, invocation: SceneAnalysisInvocation) -> None:
+    def validate_for(
+        self,
+        invocation: SceneAnalysisInvocation,
+        claim_version: int,
+        dispatch_authorization_hash: str,
+    ) -> None:
         from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 
+        if self.result_hash != self.compute_result_hash():
+            raise ValueError("Scene Analysis result hash mismatch")
         if (
             self.invocation_id != invocation.invocation_id
             or self.attempt_id != invocation.attempt_id
             or self.variant != invocation.payload.variant
             or self.stage_release != invocation.stage_release
             or self.control != invocation.control
+            or self.claim_version != claim_version
+            or self.dispatch_authorization_hash != dispatch_authorization_hash
             or self.input_hash != invocation.input_hash
             or self.candidate_type
             != scene_analysis_stage_spec(invocation.payload.variant.stage_key).candidate_type

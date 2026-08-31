@@ -25,14 +25,20 @@ type Authenticator interface {
 	Authenticate(*http.Request) (authentication.Claims, error)
 }
 
+type SourceService interface {
+	Accept(context.Context, application.Actor, application.AcceptSourceCommand) (domain.AcceptedSource, error)
+	GetExact(context.Context, application.Actor, string, string) (domain.AcceptedSource, error)
+}
+
 type Handler struct {
 	service       Service
+	sources       SourceService
 	authenticator Authenticator
 	validator     *platformvalidation.Validator
 }
 
-func New(service Service, authenticator Authenticator) *Handler {
-	return &Handler{service: service, authenticator: authenticator, validator: platformvalidation.New()}
+func New(service Service, sources SourceService, authenticator Authenticator) *Handler {
+	return &Handler{service: service, sources: sources, authenticator: authenticator, validator: platformvalidation.New()}
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
@@ -41,6 +47,8 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{project_id}/current-script-document", handler.getCurrentAnalysis)
 	mux.HandleFunc("GET /api/projects/{project_id}/script-documents", handler.listDocuments)
 	mux.HandleFunc("GET /api/document-revisions/{revision_id}", handler.getRevision)
+	mux.HandleFunc("POST /api/projects/{project_id}/script-sources", handler.acceptSource)
+	mux.HandleFunc("GET /api/projects/{project_id}/script-sources/{revision_id}", handler.getSource)
 }
 
 type previewRequest struct {
@@ -55,6 +63,49 @@ type importRequest struct {
 	Language          string  `json:"language" validate:"required,max=35"`
 	RightsDeclaration string  `json:"rights_declaration" validate:"required,max=1000"`
 	IdempotencyKey    string  `json:"idempotency_key" validate:"required,max=200"`
+}
+
+type acceptSourceRequest struct {
+	DocumentRevisionID   string  `json:"document_revision_id" validate:"required,uuid"`
+	ExpectedHeadRevision *int64  `json:"expected_head_revision" validate:"required,gte=0"`
+	ExpectedHeadHash     *string `json:"expected_head_hash" validate:"omitempty,len=64,lowercase,hexadecimal"`
+	IdempotencyKey       string  `json:"idempotency_key" validate:"required,max=200"`
+}
+
+func (handler *Handler) acceptSource(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.actor(writer, request)
+	if !ok {
+		return
+	}
+	var payload acceptSourceRequest
+	if !platformhttp.DecodeStrict(writer, request, handler.validator, &payload) {
+		return
+	}
+	result, err := handler.sources.Accept(request.Context(), actor, application.AcceptSourceCommand{
+		ProjectID: request.PathValue("project_id"), DocumentRevisionID: payload.DocumentRevisionID,
+		ExpectedHeadRevision: *payload.ExpectedHeadRevision, ExpectedHeadHash: payload.ExpectedHeadHash,
+		IdempotencyKey: payload.IdempotencyKey,
+	})
+	if err != nil {
+		handler.writeError(writer, request, err)
+		return
+	}
+	platformhttp.WriteJSON(writer, http.StatusCreated, map[string]any{"data": result})
+}
+
+func (handler *Handler) getSource(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.actor(writer, request)
+	if !ok {
+		return
+	}
+	result, err := handler.sources.GetExact(
+		request.Context(), actor, request.PathValue("project_id"), request.PathValue("revision_id"),
+	)
+	if err != nil {
+		handler.writeError(writer, request, err)
+		return
+	}
+	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": result})
 }
 
 func (handler *Handler) preview(writer http.ResponseWriter, request *http.Request) {

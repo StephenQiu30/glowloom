@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
@@ -28,6 +29,9 @@ import (
 
 const (
 	scriptRevisionExecutor         = "workflow.input.script_revision"
+	scriptSourceExecutor           = "workflow.input.script_source"
+	scriptSpanProposalExecutor     = "activity.script_span_proposal"
+	sceneFactExtractionExecutor    = "activity.scene_fact_extraction"
 	sourceEvidenceExecutor         = "activity.source_evidence"
 	storyAnalysisExecutor          = "activity.story_analysis"
 	storyReviewExecutor            = "activity.story_review"
@@ -50,6 +54,20 @@ var workflowContentHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type ScriptSource interface {
 	GetRevision(context.Context, scriptapp.Actor, string) (scriptdomain.Analysis, error)
+}
+
+type AcceptedScriptSource interface {
+	GetExact(context.Context, scriptapp.Actor, string, string) (scriptdomain.AcceptedSource, error)
+}
+
+type SceneAnalysisOwner interface {
+	Execute(context.Context, agentapp.ExecuteCommand) (agentapp.Candidate, error)
+	GetCandidate(context.Context, string, string) (agentapp.Candidate, error)
+}
+
+type SceneAnalysisDependencies struct {
+	Sources    AcceptedScriptSource
+	Candidates SceneAnalysisOwner
 }
 
 type BibleCandidateOwner interface {
@@ -115,6 +133,8 @@ type ShotImageWorkflowOwner interface {
 
 type NodeExecutor struct {
 	scripts        ScriptSource
+	scriptSources  AcceptedScriptSource
+	sceneAnalysis  SceneAnalysisOwner
 	evidence       SourceEvidenceOwner
 	stories        StoryAnalysisOwner
 	storyReviews   StoryReviewOwner
@@ -143,12 +163,18 @@ func NewNodeExecutor(
 	bindings ShotImageWorkflowOwner,
 	segments EpisodeSegmentationOwner,
 	episodes EpisodeAnalysisOwner,
+	sceneAnalysis ...SceneAnalysisDependencies,
 ) *NodeExecutor {
-	return &NodeExecutor{
+	executor := &NodeExecutor{
 		scripts: scripts, evidence: evidence, stories: stories, storyReviews: storyReviews, bibles: bibles, projects: projects, plans: plans,
 		planningOwners: planningOwners, storygraphs: storygraphs,
 		storyboards: storyboards, bindings: bindings, segments: segments, episodes: episodes,
 	}
+	if len(sceneAnalysis) == 1 {
+		executor.scriptSources = sceneAnalysis[0].Sources
+		executor.sceneAnalysis = sceneAnalysis[0].Candidates
+	}
+	return executor
 }
 
 func (executor *NodeExecutor) Execute(
@@ -163,6 +189,12 @@ func (executor *NodeExecutor) Execute(
 	switch command.Executor {
 	case scriptRevisionExecutor:
 		return executor.executeScriptRevision(ctx, command)
+	case scriptSourceExecutor:
+		return executor.executeScriptSource(ctx, command)
+	case scriptSpanProposalExecutor:
+		return executor.executeSceneAnalysis(ctx, command, "propose_script_spans")
+	case sceneFactExtractionExecutor:
+		return executor.executeSceneAnalysis(ctx, command, "extract_scene_facts")
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -1099,6 +1131,165 @@ func (executor *NodeExecutor) executeScriptRevision(
 		Bindings: []domain.NodeOutputBinding{{
 			Port: "script", ValueType: "script_revision", ReferenceID: analysis.Revision.ID,
 			ReferenceVersion: strconv.Itoa(analysis.Revision.VersionNo), ContentHash: analysis.Revision.NormalizedHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeScriptSource(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.scripts == nil || executor.scriptSources == nil {
+		return domain.NodeExecutorResult{}, errors.New("accepted Script Source workflow owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 0 || len(input.FrozenInputs) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "source" ||
+		command.OutputPorts[0].ValueType != "script_source_version" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid accepted Script Source node contract")
+	}
+	var config struct {
+		DocumentRevisionID string `json:"document_revision_id"`
+	}
+	reference := input.FrozenInputs[0]
+	if reference.Kind != "script_revision" || json.Unmarshal(input.Config, &config) != nil ||
+		config.DocumentRevisionID != reference.ID {
+		return domain.NodeExecutorResult{}, errors.New("accepted Script Source input does not match node config")
+	}
+	actor := scriptapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	accepted, err := executor.scriptSources.GetExact(ctx, actor, command.ProjectID, reference.ID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	analysis, err := executor.scripts.GetRevision(ctx, actor, reference.ID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if analysis.Document.WorkspaceID != command.WorkspaceID || analysis.Document.ProjectID != command.ProjectID ||
+		accepted.Identity.OwnerKind != "production/script" || accepted.Identity.LogicalID != analysis.Document.ID ||
+		accepted.Identity.VersionID != analysis.Revision.ID || accepted.Identity.Revision != int64(analysis.Revision.VersionNo) ||
+		accepted.Identity.ContentHash != analysis.Revision.NormalizedHash || accepted.Identity.ContentHash != reference.Hash ||
+		accepted.CodepointCount != analysis.Revision.CodepointCount || accepted.NewlineNormalization != "lf" ||
+		accepted.CodepointIndexRule != "unicode-code-point" {
+		return domain.NodeExecutorResult{}, errors.New("accepted Script Source changed before workflow execution")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "source", ValueType: "script_source_version", ReferenceID: accepted.Identity.VersionID,
+			ReferenceVersion: strconv.FormatInt(accepted.Identity.Revision, 10), ContentHash: accepted.Identity.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeSceneAnalysis(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+	stageKey string,
+) (domain.NodeExecutorResult, error) {
+	if executor.scripts == nil || executor.scriptSources == nil || executor.sceneAnalysis == nil {
+		return domain.NodeExecutorResult{}, errors.New("Scene Analysis workflow owners are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	expectedBindings := 1
+	expectedOutputType := "script_span_candidate"
+	if stageKey == "extract_scene_facts" {
+		expectedBindings = 2
+		expectedOutputType = "scene_fact_candidate"
+	}
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != expectedBindings ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != expectedOutputType || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis node config")
+	}
+	var sourceBinding domain.NodeInputBinding
+	var candidateBinding *domain.NodeInputBinding
+	for index := range input.Bindings {
+		binding := input.Bindings[index]
+		switch {
+		case binding.Port == "source" && binding.ValueType == "script_source_version" &&
+			binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.SourcePort == "source":
+			sourceBinding = binding
+		case stageKey == "extract_scene_facts" && binding.Port == "spans" &&
+			binding.ValueType == "script_span_candidate" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+			binding.SourcePort == "candidate":
+			copy := binding
+			candidateBinding = &copy
+		default:
+			return domain.NodeExecutorResult{}, errors.New("Scene Analysis input binding has drifted")
+		}
+	}
+	if sourceBinding.ReferenceID == "" || sourceBinding.ReferenceVersion == "" ||
+		!workflowContentHashPattern.MatchString(sourceBinding.ContentHash) ||
+		(stageKey == "extract_scene_facts") != (candidateBinding != nil) {
+		return domain.NodeExecutorResult{}, errors.New("Scene Analysis input set is incomplete")
+	}
+	actor := scriptapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	accepted, err := executor.scriptSources.GetExact(ctx, actor, command.ProjectID, sourceBinding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	analysis, err := executor.scripts.GetRevision(ctx, actor, sourceBinding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if analysis.Document.WorkspaceID != command.WorkspaceID || analysis.Document.ProjectID != command.ProjectID ||
+		accepted.Identity.ContentHash != sourceBinding.ContentHash ||
+		strconv.FormatInt(accepted.Identity.Revision, 10) != sourceBinding.ReferenceVersion ||
+		accepted.Identity.VersionID != analysis.Revision.ID || accepted.Identity.LogicalID != analysis.Document.ID ||
+		accepted.CodepointCount != analysis.Revision.CodepointCount {
+		return domain.NodeExecutorResult{}, errors.New("Scene Analysis Source identity has drifted")
+	}
+	source := agentapp.SourceInput{
+		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+		OwnerKind: accepted.Identity.OwnerKind, LogicalID: accepted.Identity.LogicalID,
+		VersionID: accepted.Identity.VersionID, Revision: accepted.Identity.Revision,
+		ContentHash: accepted.Identity.ContentHash, CreatedAt: accepted.Identity.CreatedAt,
+		NormalizedText:       analysis.Revision.NormalizedText,
+		NewlineNormalization: accepted.NewlineNormalization, CodepointIndexRule: accepted.CodepointIndexRule,
+	}
+	var upstream *agentapp.Candidate
+	if candidateBinding != nil {
+		value, queryErr := executor.sceneAnalysis.GetCandidate(ctx, command.ProjectID, candidateBinding.ReferenceID)
+		if queryErr != nil {
+			return domain.NodeExecutorResult{}, queryErr
+		}
+		if strconv.FormatInt(value.Revision, 10) != candidateBinding.ReferenceVersion ||
+			value.CandidateRevisionHash != candidateBinding.ContentHash || value.CandidateType != "script_span_candidate" {
+			return domain.NodeExecutorResult{}, errors.New("Scene Analysis upstream Candidate identity has drifted")
+		}
+		upstream = &value
+	}
+	candidate, err := executor.sceneAnalysis.Execute(ctx, agentapp.ExecuteCommand{
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+		StageKey: stageKey, Source: source, Upstream: upstream,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if candidate.WorkspaceID != command.WorkspaceID || candidate.ProjectID != command.ProjectID ||
+		candidate.StageKey != stageKey || candidate.ProfileKey != "default" ||
+		candidate.CandidateType != expectedOutputType || candidate.Revision < 1 ||
+		!workflowContentHashPattern.MatchString(candidate.CandidateRevisionHash) {
+		return domain.NodeExecutorResult{}, errors.New("Scene Analysis Candidate does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: expectedOutputType, ReferenceID: candidate.ID,
+			ReferenceVersion: strconv.FormatInt(candidate.Revision, 10), ContentHash: candidate.CandidateRevisionHash,
 		}},
 	})
 	if err != nil {

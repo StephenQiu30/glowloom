@@ -3,11 +3,26 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "15.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "16.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
 			json.RawMessage(`{"type":"object","properties":{"document_revision_id":{"type":"string","format":"uuid"}},"required":["document_revision_id"],"additionalProperties":false}`),
+		),
+		systemNodeDefinition(
+			"input.script_source", "Accepted Script Source", "input", "workflow.input.script_source", "never", "low",
+			nil, []PortDefinition{requiredPort("source", "script_source_version")},
+			json.RawMessage(`{"type":"object","properties":{"document_revision_id":{"type":"string","format":"uuid"}},"required":["document_revision_id"],"additionalProperties":false}`),
+		),
+		systemNodeDefinition(
+			"agent.script_span_proposal", "Script Span Proposal", "agent", "activity.script_span_proposal", "by_inputs", "external_ai",
+			[]PortDefinition{requiredPort("source", "script_source_version")},
+			[]PortDefinition{requiredPort("candidate", "script_span_candidate")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
+			"agent.scene_fact_extraction", "Style-blind Scene Fact Extraction", "agent", "activity.scene_fact_extraction", "by_inputs", "external_ai",
+			[]PortDefinition{requiredPort("source", "script_source_version"), requiredPort("spans", "script_span_candidate")},
+			[]PortDefinition{requiredPort("candidate", "scene_fact_candidate")}, emptyNodeConfig(),
 		),
 		systemNodeDefinition(
 			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",

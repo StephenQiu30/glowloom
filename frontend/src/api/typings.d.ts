@@ -2,6 +2,8 @@ import type { components } from "./schema";
 
 declare global {
   namespace API {
+    type AcceptScriptSourceRequest = components["schemas"]["AcceptScriptSourceRequest"];
+    type AcceptedScriptSourceResponse = components["schemas"]["AcceptedScriptSourceResponse"];
     type AuthResponse = components["schemas"]["AuthResponse"];
     type BibleEvidence = components["schemas"]["BibleEvidence"];
     type BibleReviewIssue = components["schemas"]["BibleReviewIssue"];
@@ -64,11 +66,21 @@ declare global {
     type RegistrationVerificationRequest = components["schemas"]["RegistrationVerificationRequest"];
     type ReviewDecisionResponse = components["schemas"]["ReviewDecisionResponse"];
     type RevocationResponse = components["schemas"]["RevocationResponse"];
+    type SceneAnalysisCandidateResponse = components["schemas"]["SceneAnalysisCandidateResponse"];
+    type SceneAnalysisDialogue = components["schemas"]["SceneAnalysisDialogue"];
+    type SceneAnalysisEvidence = components["schemas"]["SceneAnalysisEvidence"];
+    type SceneAnalysisGroundedText = components["schemas"]["SceneAnalysisGroundedText"];
+    type SceneAnalysisReviewIssue = components["schemas"]["SceneAnalysisReviewIssue"];
+    type SceneFact = components["schemas"]["SceneFact"];
+    type SceneFactCandidate = components["schemas"]["SceneFactCandidate"];
     type ScriptDocumentAnalysisResponse = components["schemas"]["ScriptDocumentAnalysisResponse"];
     type ScriptDocumentImportRequest = components["schemas"]["ScriptDocumentImportRequest"];
     type ScriptDocumentPreviewRequest = components["schemas"]["ScriptDocumentPreviewRequest"];
     type ScriptDocumentPreviewResponse = components["schemas"]["ScriptDocumentPreviewResponse"];
     type ScriptDocumentResponse = components["schemas"]["ScriptDocumentResponse"];
+    type ScriptSceneSpan = components["schemas"]["ScriptSceneSpan"];
+    type ScriptSourceIdentity = components["schemas"]["ScriptSourceIdentity"];
+    type ScriptSpanCandidate = components["schemas"]["ScriptSpanCandidate"];
     type SearchEnvelope = components["schemas"]["SearchEnvelope"];
     type SearchEvidence = components["schemas"]["SearchEvidence"];
     type SearchHit = components["schemas"]["SearchHit"];
