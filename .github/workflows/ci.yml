@@ -468,7 +468,7 @@ jobs:
           curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8686/healthz
           curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8123/
           agent_health=$(curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 http://127.0.0.1:18787/healthz)
-          python3 -c 'import json,sys; value=json.load(sys.stdin); assert value["status"] == "ok"; assert value["skill_bundle_hash"] == "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"' <<<"$agent_health"
+          python3 -c 'import json,sys; value=json.load(sys.stdin); assert value["status"] == "ok"; assert value["skill_bundle_hash"] == "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"; assert value["scene_analysis_skill_bundle_hash"] == "d096f3d38ff5383d685b2a510cea25985978e294a2a8c46841fa15320eee7b71"' <<<"$agent_health"
       - name: Clean deployment runtime
         if: always()
         env:
