@@ -4,7 +4,7 @@
 >
 > 接受依据：产品/依赖、合同覆盖、执行/回滚三轴独立反例审阅通过；用户已授权设计接受后直接实施
 >
-> 正文 SHA-256：6eadf98f607abc3dc42326d034f16d6ec7aae7c160f3e1a685d5f1cd991687a2
+> 正文 SHA-256：e67f96a5a2915cc1f6edc3e4d3f6d6b390652cb4eda66ff5f211948790c0613b
 >
 > 产品依据：[Lanverse 剧本视觉生产工作台产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md)
 >
@@ -64,10 +64,10 @@
 
 目标：真实中文剧本在不受风格污染的前提下形成可重读 SourceVersion、全覆盖 ScriptSpanCandidate 与 SceneFactCandidate。
 
-- [ ] Red：Unicode code-point、全覆盖、未知字段、注入文本、Hash 漂移、Agent 越权和零正式业务写入失败测试。
-- [ ] 建立当前路径需要的 OwnerVersionIdentity、Canonical Hash、production Invocation/Result、Bundle allowlist 和 Candidate persistence 最小合同。
-- [ ] 实现 SourceVersion 原子发布、propose_script_spans、extract_scene_facts、strict Candidate 接受与 typed Query 回读。
-- [ ] 用至少一份真实多场中文剧本执行 Agent，不以 mock JSON 抵扣语义闭环。
+- [x] Red：Unicode code-point、全覆盖、未知字段、注入文本、Hash 漂移、Agent 越权和零正式业务写入失败测试。
+- [x] 建立当前路径需要的 OwnerVersionIdentity、Canonical Hash、production Invocation/Result、Bundle allowlist 和 Candidate persistence 最小合同。
+- [x] 实现 SourceVersion 原子发布、propose_script_spans、extract_scene_facts、strict Candidate 接受与 typed Query 回读。
+- [x] 用至少一份真实多场中文剧本执行 Agent，不以 mock JSON 抵扣语义闭环。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 停止点：如果 production Wire 不能在 Go/Python fixture 同值，或 Source span 无法逐字回读，不进入 VP-I02。
