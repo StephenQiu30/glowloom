@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
@@ -25,6 +26,7 @@ import (
 	searchapp "github.com/StephenQiu30/lanverse/backend/internal/search/application"
 	search "github.com/StephenQiu30/lanverse/backend/internal/search/domain"
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 const (
@@ -48,7 +50,7 @@ func TestPostgreSQLOwnerSnapshotsDriveAuthorizedRealElasticsearchSearchAndStalen
 	if err = schema.Sync(ctx, database); err != nil {
 		t.Fatal(err)
 	}
-	fixture := seedSearchOwners(t, func(value any) error { return database.Create(value).Error })
+	fixture := seedSearchOwners(t, database, func(value any) error { return database.Create(value).Error })
 	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
 	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")
 	if (username == "") != (password == "") {
@@ -123,7 +125,7 @@ type searchOwnerFixture struct {
 	storyNodeKey                                                                       string
 }
 
-func seedSearchOwners(t *testing.T, create func(any) error) searchOwnerFixture {
+func seedSearchOwners(t *testing.T, database *gorm.DB, create func(any) error) searchOwnerFixture {
 	t.Helper()
 	now := time.Date(2026, 8, 27, 20, 30, 0, 0, time.UTC)
 	fixture := searchOwnerFixture{
@@ -165,6 +167,9 @@ func seedSearchOwners(t *testing.T, create func(any) error) searchOwnerFixture {
 	if err := create(&model.StoryGraphHead{WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID, CurrentVersionID: versionID, CurrentContentHash: searchHashText("graph"), Revision: 1, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: fixture.userID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+	})
 	return fixture
 }
 

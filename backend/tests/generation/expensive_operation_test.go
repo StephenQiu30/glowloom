@@ -27,6 +27,8 @@ import (
 	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	quotadomain "github.com/StephenQiu30/lanverse/backend/internal/quota/domain"
 	workflowdomain "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
+	generationtestgorm "github.com/StephenQiu30/lanverse/backend/tests/generation/adapter/gormdb"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 const preparationClaimTTL = 5 * time.Minute
@@ -36,6 +38,7 @@ type preparationFixture struct {
 	workflowRunID          uuid.UUID
 	workflowDefinitionID   uuid.UUID
 	runInputSnapshotID     uuid.UUID
+	nodeCatalogID          uuid.UUID
 	ownerID, editorID      uuid.UUID
 	owner, editor          generationapp.Actor
 	create                 func(any) error
@@ -82,8 +85,8 @@ func TestExpensiveImagePreparationClaimAndCancellationAreAtomic(t *testing.T) {
 	now := time.Date(2026, time.August, 26, 18, 0, 0, 0, time.UTC)
 	currentTime := now
 	targets := generationgorm.NewTargetStore(database)
-	main := seedPreparationFixture(t, create, targets, now, "main")
-	quotaFailure := seedPreparationFixture(t, create, targets, now, "quota-failure")
+	main := seedPreparationFixture(t, database, create, targets, now, "main")
+	quotaFailure := seedPreparationFixture(t, database, create, targets, now, "quota-failure")
 	main.provider = seedControlledProjectProviderBinding(t, create, main, "controlled-image", "image-quality", 1)
 	quotaFailure.provider = seedControlledProjectProviderBinding(
 		t, create, quotaFailure, "controlled-image", "image-quality", 1,
@@ -402,6 +405,7 @@ func assertGenerationTargetPersistence(
 
 func seedPreparationFixture(
 	t *testing.T,
+	database *generationtestgorm.Database,
 	create func(any) error,
 	targets *generationgorm.TargetStore,
 	now time.Time,
@@ -438,8 +442,13 @@ func seedPreparationFixture(
 	}
 	fixture.owner = generationapp.Actor{UserID: fixture.ownerID.String(), TokenVersion: 1}
 	fixture.editor = generationapp.Actor{UserID: fixture.editorID.String(), TokenVersion: 1}
-	fixture.workflowRunID, fixture.workflowDefinitionID, fixture.runInputSnapshotID =
+	fixture.workflowRunID, fixture.workflowDefinitionID, fixture.runInputSnapshotID, fixture.nodeCatalogID =
 		seedPreparationWorkflowRun(t, create, fixture, now, suffix)
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs:        []string{fixture.ownerID.String(), fixture.editorID.String()},
+		WorkspaceID:    fixture.workspaceID.String(),
+		NodeCatalogIDs: []string{fixture.nodeCatalogID.String()},
+	})
 	return fixture
 }
 
@@ -449,7 +458,7 @@ func seedPreparationWorkflowRun(
 	fixture preparationFixture,
 	now time.Time,
 	suffix string,
-) (uuid.UUID, uuid.UUID, uuid.UUID) {
+) (uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	catalogID, draftID, revisionID := uuid.New(), uuid.New(), uuid.New()
 	definitionID, snapshotID, runID := uuid.New(), uuid.New(), uuid.New()
@@ -496,7 +505,7 @@ func seedPreparationWorkflowRun(
 			t.Fatalf("seed Generation Workflow source %T: %v", record, err)
 		}
 	}
-	return runID, definitionID, snapshotID
+	return runID, definitionID, snapshotID, catalogID
 }
 
 func configurePreparationLimits(

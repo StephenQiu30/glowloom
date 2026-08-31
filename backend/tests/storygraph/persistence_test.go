@@ -25,6 +25,7 @@ import (
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestStoryGraphPublishesImmutableLinearVersionsWithRealPostgreSQL(t *testing.T) {
@@ -41,6 +42,9 @@ func TestStoryGraphPublishesImmutableLinearVersionsWithRealPostgreSQL(t *testing
 		t.Fatal(err)
 	}
 	fixture := seedStoryGraphOwners(t, func(value any) error { return database.Create(value).Error }, "linear")
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: fixture.userID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+	})
 	count := func(value any, query string, args ...any) (int64, error) {
 		var result int64
 		errorFound := database.Model(value).Where(query, args...).Count(&result).Error
@@ -173,6 +177,9 @@ func TestStoryGraphConcurrentCASPublishesAtMostOneVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture := seedStoryGraphOwners(t, func(value any) error { return database.Create(value).Error }, "concurrent")
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: fixture.userID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+	})
 	count := func(value any, query string, args ...any) (int64, error) {
 		var result int64
 		errorFound := database.Model(value).Where(query, args...).Count(&result).Error
@@ -226,27 +233,38 @@ func TestStoryGraphOutboxFailureRollsBackVersionHeadAndReceipt(t *testing.T) {
 	if err = schema.Sync(context.Background(), database); err != nil {
 		t.Fatal(err)
 	}
-	fixture := seedStoryGraphOwners(t, func(value any) error { return database.Create(value).Error }, "rollback")
+	transaction := database.Begin()
+	if transaction.Error != nil {
+		t.Fatal(transaction.Error)
+	}
+	t.Cleanup(func() { _ = transaction.Rollback().Error })
+	fixture := seedStoryGraphOwners(t, func(value any) error { return transaction.Create(value).Error }, "rollback")
 	count := func(value any, query string, args ...any) (int64, error) {
 		var result int64
-		errorFound := database.Model(value).Where(query, args...).Count(&result).Error
+		errorFound := transaction.Model(value).Where(query, args...).Count(&result).Error
 		return result, errorFound
 	}
 	versionID, receiptID, duplicateEventID := uuid.New(), uuid.New(), uuid.New()
 	now := time.Date(2026, time.August, 27, 5, 0, 0, 0, time.UTC)
+	seedPayload := json.RawMessage(`{"version_id":"` + uuid.NewString() + `","version_no":1,"owner_set_hash":"` + hashText("seed-owner-set") + `","topology_hash":"` + hashText("seed-topology") + `","content_hash":"` + hashText("seed-content") + `"}`)
+	seedPayloadHash, err := eventing.HashPayload(seedPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
 	seed := model.OutboxEvent{
-		ID: duplicateEventID, EventType: "SeedEvent", EventVersion: 1,
+		ID: duplicateEventID, EventType: eventing.StoryGraphVersionPublished, EventVersion: 1,
 		WorkspaceID: fixture.workspaceID, ProjectID: fixture.projectID,
-		AggregateKind: "seed", AggregateID: uuid.NewString(), AggregateRevision: 1,
-		SourceReceiptID: uuid.New(), Payload: []byte(`{"seed":true}`), PayloadHash: hashText("seed"),
+		AggregateKind: "storygraph", AggregateID: fixture.projectID.String(), AggregateRevision: 1,
+		SourceReceiptID: uuid.New(), PayloadHash: seedPayloadHash,
 		Status: "pending", OccurredAt: now, CreatedAt: now,
 	}
-	if err := database.Create(&seed).Error; err != nil {
+	seed.Payload = append(seed.Payload, seedPayload...)
+	if err = transaction.Create(&seed).Error; err != nil {
 		t.Fatal(err)
 	}
 	ids := []string{versionID.String(), receiptID.String(), duplicateEventID.String()}
 	index := 0
-	service := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
+	service := storygraphapp.NewService(storygraphgorm.New(transaction), storygraphapp.Config{
 		Now: func() time.Time { return now },
 		NewID: func() string {
 			value := ids[index]
@@ -263,7 +281,7 @@ func TestStoryGraphOutboxFailureRollsBackVersionHeadAndReceipt(t *testing.T) {
 	}
 	assertPublicationCounts(t, count, fixture, 0, 0, 0, 1)
 	var receiptCount int64
-	if countErr := database.Model(&model.CommandReceipt{}).Where("id = ?", receiptID).Count(&receiptCount).Error; countErr != nil || receiptCount != 0 {
+	if countErr := transaction.Model(&model.CommandReceipt{}).Where("id = ?", receiptID).Count(&receiptCount).Error; countErr != nil || receiptCount != 0 {
 		t.Fatalf("failed transaction retained receipt: count=%d error=%v", receiptCount, countErr)
 	}
 }
@@ -282,6 +300,9 @@ func TestStoryGraphCompilationEnforcesTokenMembershipAndWriteRole(t *testing.T) 
 		t.Fatal(err)
 	}
 	fixture := seedStoryGraphOwners(t, func(value any) error { return database.Create(value).Error }, "authorization")
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: fixture.userID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+	})
 	now := time.Date(2026, time.August, 27, 6, 0, 0, 0, time.UTC)
 	outsiderID, viewerID := uuid.New(), uuid.New()
 	for _, record := range []any{
@@ -293,6 +314,18 @@ func TestStoryGraphCompilationEnforcesTokenMembershipAndWriteRole(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
+	t.Cleanup(func() {
+		membership := database.Where("workspace_id = ? AND user_id = ?", fixture.workspaceID, viewerID).
+			Delete(&model.Membership{})
+		if membership.Error != nil || membership.RowsAffected != 1 {
+			t.Errorf("delete exact StoryGraph viewer membership: rows=%d err=%v", membership.RowsAffected, membership.Error)
+			return
+		}
+		if err := testgorm.DeleteOwnedUserFixture(database, testgorm.OwnedUserFixture{UserID: viewerID.String()}); err != nil {
+			t.Errorf("delete exact StoryGraph viewer account: %v", err)
+		}
+	})
+	testgorm.RegisterOwnedUserFixtureCleanup(t, database, testgorm.OwnedUserFixture{UserID: outsiderID.String()})
 	service := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString})
 	command := storygraphapp.CompileCommand{ProjectID: fixture.projectID.String(), ExpectedHeadRevision: 0, IdempotencyKey: "compile-authorization"}
 	tests := []struct {

@@ -19,6 +19,7 @@ import (
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 	storygraphhttp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/httpapi"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestStoryGraphPostgreSQLQueriesReauthorizeAndNeverWrite(t *testing.T) {
@@ -35,6 +36,9 @@ func TestStoryGraphPostgreSQLQueriesReauthorizeAndNeverWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture := seedStoryGraphOwners(t, func(value any) error { return database.Create(value).Error }, "query")
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: fixture.userID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+	})
 	now := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
 	store := storygraphgorm.New(database)
 	compiler := storygraphapp.NewService(store, storygraphapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString})
@@ -66,6 +70,18 @@ func TestStoryGraphPostgreSQLQueriesReauthorizeAndNeverWrite(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	t.Cleanup(func() {
+		membership := database.Where("workspace_id = ? AND user_id = ?", fixture.workspaceID, viewerID).
+			Delete(&model.Membership{})
+		if membership.Error != nil || membership.RowsAffected != 1 {
+			t.Errorf("delete exact StoryGraph query viewer membership: rows=%d err=%v", membership.RowsAffected, membership.Error)
+			return
+		}
+		if err := testgorm.DeleteOwnedUserFixture(database, testgorm.OwnedUserFixture{UserID: viewerID.String()}); err != nil {
+			t.Errorf("delete exact StoryGraph query viewer account: %v", err)
+		}
+	})
+	testgorm.RegisterOwnedUserFixtureCleanup(t, database, testgorm.OwnedUserFixture{UserID: outsiderID.String()})
 	count := func(value any, query string, args ...any) (int64, error) {
 		var result int64
 		errorFound := database.Model(value).Where(query, args...).Count(&result).Error

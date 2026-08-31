@@ -1,22 +1,28 @@
 {
+  "canonical_unicode_root": {"z":"e\u0301","html":"<>&","a":["😀","é"]},
+  "canonical_unicode_json": "{\"a\":[\"😀\",\"é\"],\"html\":\"<>&\",\"z\":\"é\"}",
+  "canonical_unicode_hash": "abee9ba30af8613def7c36078aa9eae4b3fb4df4307eb3de61df7fd5a9b9295d",
   "valid_invocation": {
     "invocation_id": "44444444-4444-4444-8444-444444444444",
     "attempt_id": "55555555-5555-4555-8555-555555555555",
     "kind": "storygraph_stage",
-    "wire_schema_version": "storygraph-scene-analysis-wire",
+    "wire_schema_version": "storygraph-stage-wire-production",
     "stage_release": {
-      "release_id": "66666666-6666-4666-8666-666666666666",
-      "definition_hash": "3333333333333333333333333333333333333333333333333333333333333333",
-      "bundle_hash": "b395c382be96a37895a5404fc828bf5dbb163c201271b979c3d9d9a7b4b7c66a",
+      "skill_release_id": "66666666-6666-4666-8666-666666666666",
+      "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "stage_release_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+      "bundle_content_hash": "d096f3d38ff5383d685b2a510cea25985978e294a2a8c46841fa15320eee7b71",
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     },
     "control": {
-      "record_id": "77777777-7777-4777-8777-777777777777",
-      "revision": 1,
+      "control_record_id": "77777777-7777-4777-8777-777777777777",
+      "control_revision": 1,
       "status": "approved",
-      "content_hash": "5555555555555555555555555555555555555555555555555555555555555555"
+      "control_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+      "release_fence": 0
     },
     "budget": {
+      "max_attempts": 2,
       "max_model_calls": 1,
       "max_execution_seconds": 120,
       "max_output_bytes": 131072
@@ -26,16 +32,19 @@
         "stage_key": "propose_script_spans",
         "profile_key": "default",
         "lane_key": "primary",
-        "output_schema_version": "script-span-candidate"
+        "output_schema_version": "script-span-candidate-production"
       },
       "scope": {
         "workspace_id": "11111111-1111-4111-8111-111111111111",
         "project_id": "22222222-2222-4222-8222-222222222222",
-        "episode_id": null
+        "episode_id": null,
+        "scene_id": null,
+        "entity_id": null,
+        "target_id": null
       },
       "source_refs": [
         {
-          "owner_kind": "production/script-source",
+          "owner_kind": "production/script",
           "logical_id": "script:demo",
           "version_id": "33333333-3333-4333-8333-333333333333",
           "revision": 1,
@@ -59,12 +68,18 @@
         "newline_normalization": "lf"
       }
     },
-    "input_hash": "7f33a2d932c3ebabadfc0ae42c8ab7fac2a9d474fd0f55b8ec26b0c2143fb39a"
+    "input_hash": "07b904d1f3ce960a309736582ec808a7836a0fba4a7b4ec4703f4d3f8e92e289"
   },
   "valid_script_span_candidate": {
     "source_version_id": "33333333-3333-4333-8333-333333333333",
     "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
     "codepoint_count": 29,
+    "coverage": {
+      "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+      "codepoint_start": 0,
+      "codepoint_end": 29,
+      "covered_codepoints": 29
+    },
     "spans": [
       {
         "temporary_span_id": "span_0001",
@@ -95,8 +110,42 @@
     ],
     "review_issues": []
   },
-  "expected_input_hash": "7f33a2d932c3ebabadfc0ae42c8ab7fac2a9d474fd0f55b8ec26b0c2143fb39a",
-  "expected_stage_instance_key": "abe31d8cf457f0ea03bceba1c9244eb744bc38f159e69d240b2e11c373ee7e8b",
+  "valid_scene_fact_candidate": {
+    "source_version_id": "33333333-3333-4333-8333-333333333333",
+    "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+    "span_candidate_revision_id": "99999999-9999-4999-8999-999999999999",
+    "span_candidate_revision_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "scenes": [
+      {
+        "temporary_scene_id": "scene_0001",
+        "span_id": "span_0001",
+        "source_start": 0,
+        "source_end": 16,
+        "location": {"text":"内","evidence":{"source_start":6,"source_end":7,"text_hash":"b2126ce9c100bff0cc963326e29fadc751106ad7fd7f34aa46cddc06d8198c6a","exact_anchor":"内"}},
+        "time": {"text":"夜","evidence":{"source_start":4,"source_end":5,"text_hash":"a519542a5fb4163581e0630644fb105b0f0b53e4e0c5c3a176155465fe6592a9","exact_anchor":"夜"}},
+        "actions": [{"text":"林舟握住门把。","evidence":{"source_start":8,"source_end":15,"text_hash":"f2ffbd1d3cb0f5e0d95b211b12a0bdee451dd82d38bf673915e42420f7ed9ff1","exact_anchor":"林舟握住门把。"}}],
+        "dialogues": [],
+        "raw_character_mentions": [{"text":"林舟","evidence":{"source_start":8,"source_end":10,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
+        "raw_prop_mentions": [{"text":"门把","evidence":{"source_start":12,"source_end":14,"text_hash":"3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9","exact_anchor":"门把"}}]
+      },
+      {
+        "temporary_scene_id": "scene_0002",
+        "span_id": "span_0002",
+        "source_start": 16,
+        "source_end": 29,
+        "location": {"text":"外","evidence":{"source_start":22,"source_end":23,"text_hash":"0e826095b60ccf039478a7e093220d79a4614158557924383bd3c7ef1bb06d8a","exact_anchor":"外"}},
+        "time": {"text":"日","evidence":{"source_start":20,"source_end":21,"text_hash":"85217f7aff77841438439fb3e7cf37bb3062fb026453c7692247d3a5641a0115","exact_anchor":"日"}},
+        "actions": [{"text":"林舟离开。","evidence":{"source_start":24,"source_end":29,"text_hash":"d6e8609481cb01d70f08f80f286f4c2e752f1e471b55c96ca1cc5879036445c4","exact_anchor":"林舟离开。"}}],
+        "dialogues": [],
+        "raw_character_mentions": [{"text":"林舟","evidence":{"source_start":24,"source_end":26,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
+        "raw_prop_mentions": []
+      }
+    ],
+    "review_issues": []
+  },
+  "expected_input_hash": "07b904d1f3ce960a309736582ec808a7836a0fba4a7b4ec4703f4d3f8e92e289",
+  "expected_stage_instance_key": "dd0fc996bc038cbdd0fc94e6204a992e13e36685f3f93b826803e46759614169",
+  "expected_result_hash": "4b99797ab01461fc6a895e98ded59c8b91b70c8a4b263f844dad2812f9038b8c",
   "reject_mutations": [
     {"name": "missing_attempt_id", "operation": "remove", "path": "attempt_id"},
     {"name": "unknown_style_field", "operation": "add_stage_input", "path": "visual_style", "value": "赛博朋克"},

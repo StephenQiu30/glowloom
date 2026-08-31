@@ -13,7 +13,7 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
-	generationtestgorm "github.com/StephenQiu30/lanverse/backend/tests/generation/adapter/gormdb"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestGenerationCandidateIdentityIsProviderCallReceiptAndRemoteOutput(t *testing.T) {
@@ -59,24 +59,8 @@ func TestGenerationCandidateIdentityIsProviderCallReceiptAndRemoteOutput(t *test
 	}).Error; err != nil {
 		t.Fatalf("seed Provider output identity project: %v", err)
 	}
-	t.Cleanup(func() {
-		for _, deletion := range []struct {
-			name  string
-			value any
-			query string
-			args  []any
-		}{
-			{name: "Generation candidates", value: &model.GenerationCandidate{}, query: "workspace_id = ?", args: []any{workspaceID}},
-			{name: "Artifacts", value: &model.Artifact{}, query: "workspace_id = ?", args: []any{workspaceID}},
-			{name: "Memberships", value: &model.Membership{}, query: "workspace_id = ?", args: []any{workspaceID}},
-			{name: "Projects", value: &model.Project{}, query: "id = ?", args: []any{projectID}},
-			{name: "Workspaces", value: &model.Workspace{}, query: "id = ?", args: []any{workspaceID}},
-			{name: "Users", value: &model.UserAccount{}, query: "id = ?", args: []any{userID}},
-		} {
-			if deleteErr := generationtestgorm.DeleteWithoutHooks(database, deletion.value, deletion.query, deletion.args...); deleteErr != nil {
-				t.Errorf("clean test-owned %s: %v", deletion.name, deleteErr)
-			}
-		}
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: userID.String(), WorkspaceID: workspaceID.String(), ProjectID: projectID.String(),
 	})
 
 	providerJobID := uuid.New()

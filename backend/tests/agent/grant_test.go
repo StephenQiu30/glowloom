@@ -1,6 +1,8 @@
 package agent_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +57,7 @@ func fixtureStageInvocation(t *testing.T) contract.StageInvocation {
 	return invocation
 }
 
-func TestSceneAnalysisExecutionGrantBindsAttemptInputReleaseAndImage(t *testing.T) {
+func TestSceneAnalysisDispatchAuthorizationBindsAttemptClaimInputReleaseAndImage(t *testing.T) {
 	fixture := loadStoryGraphSceneAnalysisWireFixture(t)
 	invocation, err := contract.DecodeSceneAnalysisInvocation(fixture.ValidInvocation)
 	if err != nil {
@@ -67,16 +69,23 @@ func TestSceneAnalysisExecutionGrantBindsAttemptInputReleaseAndImage(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := signer.IssueSceneAnalysis(invocation)
+	authorization, err := signer.IssueSceneAnalysisDispatchAuthorization(invocation, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = signer.VerifySceneAnalysis(value, invocation); err != nil {
+	digest := sha256.Sum256([]byte(authorization.Value))
+	if authorization.Hash != hex.EncodeToString(digest[:]) || authorization.ExpiresAt.IsZero() {
+		t.Fatalf("dispatch authorization is not content addressed: %#v", authorization)
+	}
+	if err = signer.VerifySceneAnalysisDispatchAuthorization(authorization.Value, invocation, 1); err != nil {
 		t.Fatal(err)
+	}
+	if err = signer.VerifySceneAnalysisDispatchAuthorization(authorization.Value, invocation, 2); err == nil {
+		t.Fatal("dispatch authorization authorized a different claim")
 	}
 	changedAttempt := invocation
 	changedAttempt.AttemptID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-	if err = signer.VerifySceneAnalysis(value, changedAttempt); err == nil {
+	if err = signer.VerifySceneAnalysisDispatchAuthorization(authorization.Value, changedAttempt, 1); err == nil {
 		t.Fatal("Scene Analysis grant authorized a different attempt")
 	}
 	changedImage := invocation
@@ -85,11 +94,11 @@ func TestSceneAnalysisExecutionGrantBindsAttemptInputReleaseAndImage(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = signer.VerifySceneAnalysis(value, changedImage); err == nil {
+	if err = signer.VerifySceneAnalysisDispatchAuthorization(authorization.Value, changedImage, 1); err == nil {
 		t.Fatal("Scene Analysis grant authorized a different runtime image")
 	}
 	clock = now.Add(grant.TTL)
-	if err = signer.VerifySceneAnalysis(value, invocation); err == nil {
+	if err = signer.VerifySceneAnalysisDispatchAuthorization(authorization.Value, invocation, 1); err == nil {
 		t.Fatal("Scene Analysis grant remained valid at its expiry")
 	}
 }

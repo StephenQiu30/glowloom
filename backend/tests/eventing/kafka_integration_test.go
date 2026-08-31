@@ -132,10 +132,16 @@ func TestRealKafkaDuplicateOutOfOrderDLQAndReplayConvergeThroughPostgreSQL(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = platformdatabase.Close(database) })
+	rootDatabase := database
+	t.Cleanup(func() { _ = platformdatabase.Close(rootDatabase) })
 	if err = schema.Sync(ctx, database); err != nil {
 		t.Fatal(err)
 	}
+	database = database.Begin()
+	if database.Error != nil {
+		t.Fatalf("begin isolated Kafka/PostgreSQL journey: %v", database.Error)
+	}
+	t.Cleanup(func() { _ = database.Rollback().Error })
 	workspaceID, projectID := uuid.New(), uuid.New()
 	now := time.Date(2026, time.August, 27, 13, 0, 0, 0, time.UTC)
 	if err = database.Create(&model.Workspace{
@@ -248,10 +254,16 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = platformdatabase.Close(database) })
+	rootDatabase := database
+	t.Cleanup(func() { _ = platformdatabase.Close(rootDatabase) })
 	if err = schema.Sync(ctx, database); err != nil {
 		t.Fatal(err)
 	}
+	database = database.Begin()
+	if database.Error != nil {
+		t.Fatalf("begin isolated Kafka outage journey: %v", database.Error)
+	}
+	t.Cleanup(func() { _ = database.Rollback().Error })
 	now := time.Date(2026, time.August, 27, 14, 0, 0, 0, time.UTC)
 	workspaceID, projectID := uuid.New(), uuid.New()
 	if err = database.Create(&model.Workspace{
@@ -275,7 +287,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 		ID: eventID, EventType: domain.StoryGraphVersionPublished, EventVersion: 1,
 		WorkspaceID: workspaceID, ProjectID: projectID, AggregateKind: "storygraph",
 		AggregateID: projectID.String(), AggregateRevision: 1, SourceReceiptID: uuid.New(),
-		PayloadHash: payloadHash, Status: "pending", OccurredAt: now, CreatedAt: now,
+		PayloadHash: payloadHash, Status: "pending", OccurredAt: now, CreatedAt: time.Unix(1, 0).UTC(),
 	}
 	outbox.Payload = append(outbox.Payload, payload...)
 	if err = database.Create(&outbox).Error; err != nil {
@@ -288,7 +300,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 	}
 	disconnectedPublisher := eventingapp.NewPublisher(repository, disconnected, eventingapp.StaticTopics{
 		domain.StoryGraphVersionPublished: topic,
-	}, eventingapp.PublisherConfig{Now: func() time.Time { return now }, NewID: uuid.NewString, Lease: time.Minute, BatchSize: 10})
+	}, eventingapp.PublisherConfig{Now: func() time.Time { return now }, NewID: uuid.NewString, Lease: time.Minute, BatchSize: 1})
 	disconnectedContext, cancelDisconnected := context.WithTimeout(ctx, 750*time.Millisecond)
 	_, publishErr := disconnectedPublisher.PublishOnce(disconnectedContext)
 	cancelDisconnected()
@@ -307,7 +319,7 @@ func TestRealKafkaOutboxSurvivesDisconnectedBrokerWithSameEventID(t *testing.T) 
 	t.Cleanup(realClient.Close)
 	recoveredPublisher := eventingapp.NewPublisher(repository, realClient, eventingapp.StaticTopics{
 		domain.StoryGraphVersionPublished: topic,
-	}, eventingapp.PublisherConfig{Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString, Lease: time.Minute, BatchSize: 10})
+	}, eventingapp.PublisherConfig{Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString, Lease: time.Minute, BatchSize: 1})
 	if published, recoverErr := recoveredPublisher.PublishOnce(ctx); recoverErr != nil || published < 1 {
 		t.Fatalf("outbox did not recover through the real broker: published=%d error=%v", published, recoverErr)
 	}

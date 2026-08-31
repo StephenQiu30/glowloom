@@ -23,11 +23,11 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 	payload := contract.SceneAnalysisPayload{
 		Variant: contract.SceneAnalysisStageVariant{
 			StageKey: "propose_script_spans", ProfileKey: "default", LaneKey: "primary",
-			OutputSchemaVersion: "script-span-candidate",
+			OutputSchemaVersion: contract.ScriptSpanCandidateSchemaVersion,
 		},
 		Scope: contract.SceneAnalysisScope{WorkspaceID: uuid.NewString(), ProjectID: uuid.NewString()},
 		SourceRefs: []contract.ScriptSourceVersionIdentity{{
-			OwnerKind: "production/script-source", LogicalID: "script:demo",
+			OwnerKind: "production/script", LogicalID: "script:demo",
 			VersionID: sourceID, Revision: 1, ContentHash: sourceHash,
 			CreatedAt: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
 		}},
@@ -44,23 +44,24 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 		uuid.NewString(),
 		uuid.NewString(),
 		contract.SceneAnalysisReleaseIdentity{
-			ReleaseID: uuid.NewString(), DefinitionHash: strings.Repeat("3", 64),
-			BundleHash:       contract.SceneAnalysisSkillBundleHash,
-			AgentImageDigest: "sha256:" + strings.Repeat("4", 64),
+			SkillReleaseID: uuid.NewString(), SkillReleaseHash: strings.Repeat("1", 64),
+			StageReleaseHash:  strings.Repeat("3", 64),
+			BundleContentHash: contract.SceneAnalysisSkillBundleHash,
+			AgentImageDigest:  "sha256:" + strings.Repeat("4", 64),
 		},
 		contract.SceneAnalysisControlProof{
-			RecordID: uuid.NewString(), Revision: 1, Status: "approved",
-			ContentHash: strings.Repeat("5", 64),
+			ControlRecordID: uuid.NewString(), ControlRevision: 1, Status: "approved",
+			ControlHash: strings.Repeat("5", 64), ReleaseFence: 0,
 		},
 		contract.SceneAnalysisExecutionBudget{
-			MaxModelCalls: 1, MaxExecutionSeconds: 120, MaxOutputBytes: 131072,
+			MaxAttempts: 2, MaxModelCalls: 1, MaxExecutionSeconds: 120, MaxOutputBytes: 131072,
 		},
 		payload,
 	)
 	if err != nil {
 		t.Fatalf("build Scene Analysis invocation: %v", err)
 	}
-	if invocation.WireSchemaVersion != "storygraph-scene-analysis-wire" ||
+	if invocation.WireSchemaVersion != "storygraph-stage-wire-production" ||
 		invocation.InputHash == "" || len(invocation.StageInstanceKey()) != 64 {
 		t.Fatalf("unexpected Scene Analysis invocation identity: %#v", invocation)
 	}
@@ -77,6 +78,10 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 		"source_version_id": sourceID,
 		"source_hash":       sourceHash,
 		"codepoint_count":   len([]rune(text)),
+		"coverage": map[string]any{
+			"source_hash": sourceHash, "codepoint_start": 0,
+			"codepoint_end": len([]rune(text)), "covered_codepoints": len([]rune(text)),
+		},
 		"spans": []any{
 			map[string]any{
 				"temporary_span_id": "span_0001", "kind": "scene",
@@ -118,14 +123,18 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 		"scenes": []any{
 			map[string]any{
 				"temporary_scene_id": "scene_0001", "span_id": "span_0001",
-				"source_start": 0, "source_end": 16, "location_text": "室内", "time_text": "夜",
-				"actions": []any{}, "dialogues": []any{}, "raw_character_mentions": []any{},
+				"source_start": 0, "source_end": 16,
+				"location": map[string]any{"text": "内", "evidence": evidenceFor(t, text, 6, 7)},
+				"time":     map[string]any{"text": "夜", "evidence": evidenceFor(t, text, 4, 5)},
+				"actions":  []any{}, "dialogues": []any{}, "raw_character_mentions": []any{},
 				"raw_prop_mentions": []any{},
 			},
 			map[string]any{
 				"temporary_scene_id": "scene_0002", "span_id": "span_0002",
-				"source_start": 16, "source_end": len([]rune(text)), "location_text": "室外", "time_text": "日",
-				"actions": []any{}, "dialogues": []any{}, "raw_character_mentions": []any{},
+				"source_start": 16, "source_end": len([]rune(text)),
+				"location": map[string]any{"text": "外", "evidence": evidenceFor(t, text, 22, 23)},
+				"time":     map[string]any{"text": "日", "evidence": evidenceFor(t, text, 20, 21)},
+				"actions":  []any{}, "dialogues": []any{}, "raw_character_mentions": []any{},
 				"raw_prop_mentions": []any{},
 			},
 		},
@@ -149,6 +158,7 @@ type storyGraphSceneAnalysisWireFixture struct {
 	ValidScriptSpanCandidate json.RawMessage `json:"valid_script_span_candidate"`
 	ExpectedInputHash        string          `json:"expected_input_hash"`
 	ExpectedStageInstanceKey string          `json:"expected_stage_instance_key"`
+	ExpectedResultHash       string          `json:"expected_result_hash"`
 	RejectMutations          []struct {
 		Name      string `json:"name"`
 		Operation string `json:"operation"`
@@ -202,19 +212,21 @@ func TestSceneAnalysisWireMatchesSharedFixtureAndRejectsMutations(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	diagnosticHash, err := contract.CanonicalHash(diagnosticJSON)
+	diagnosticHash, err := contract.ProductionCanonicalHash(diagnosticJSON)
 	if err != nil {
 		t.Fatal(err)
 	}
-	outputHash, err := contract.CanonicalHash(fixture.ValidScriptSpanCandidate)
+	outputHash, err := contract.ProductionCanonicalHash(fixture.ValidScriptSpanCandidate)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result := contract.SceneAnalysisAttemptResult{
 		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
-		Kind: "storygraph_stage", WireSchemaVersion: contract.SceneAnalysisWireSchema,
+		Kind: "storygraph_stage", WireSchemaVersion: contract.SceneAnalysisWireSchemaVersion,
 		Variant: invocation.Payload.Variant, StageRelease: invocation.StageRelease,
-		Control: invocation.Control, Status: "accepted", CandidateType: "script_span_candidate",
+		Control: invocation.Control, ClaimVersion: 1,
+		DispatchAuthorizationHash: strings.Repeat("6", 64),
+		Status:                    "accepted", CandidateType: "script_span_candidate",
 		Candidate: fixture.ValidScriptSpanCandidate, InputHash: invocation.InputHash,
 		OutputHash: &outputHash, Diagnostics: diagnostics, DiagnosticHash: diagnosticHash,
 		CompletedAt: time.Date(2026, 8, 31, 1, 0, 0, 0, time.UTC),
@@ -223,16 +235,33 @@ func TestSceneAnalysisWireMatchesSharedFixtureAndRejectsMutations(t *testing.T) 
 			HarnessVersion: "scene-analysis-harness", Model: "codex-cli-default",
 		},
 	}
+	resultHash, err := result.ComputeResultHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultHash != fixture.ExpectedResultHash {
+		t.Fatalf("Scene Analysis result hash drifted: got=%s fixture=%s", resultHash, fixture.ExpectedResultHash)
+	}
+	result.ResultHash = resultHash
 	encodedResult, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
 	}
 	decodedResult, err := contract.DecodeSceneAnalysisAttemptResult(encodedResult)
-	if err != nil || decodedResult.ValidateFor(invocation) != nil {
-		t.Fatalf("valid Scene Analysis AttemptResult rejected: decode=%v validate=%v", err, decodedResult.ValidateFor(invocation))
+	if err != nil || decodedResult.ValidateFor(invocation, 1, strings.Repeat("6", 64)) != nil {
+		t.Fatalf(
+			"valid Scene Analysis AttemptResult rejected: decode=%v validate=%v",
+			err,
+			decodedResult.ValidateFor(invocation, 1, strings.Repeat("6", 64)),
+		)
+	}
+	changedResult := result
+	changedResult.CompletedAt = changedResult.CompletedAt.Add(time.Second)
+	if err = changedResult.ValidateFor(invocation, 1, strings.Repeat("6", 64)); err == nil {
+		t.Fatal("Scene Analysis Result Hash did not cover completion time")
 	}
 	result.Status = "succeeded"
-	if err = result.ValidateFor(invocation); err == nil {
+	if err = result.ValidateFor(invocation, 1, strings.Repeat("6", 64)); err == nil {
 		t.Fatal("legacy result status was accepted on the Scene Analysis path")
 	}
 }
@@ -256,6 +285,15 @@ func loadStoryGraphSceneAnalysisWireFixture(t *testing.T) storyGraphSceneAnalysi
 
 func hashSceneAnalysisText(value string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(value)))
+}
+
+func evidenceFor(t *testing.T, text string, start, end int) map[string]any {
+	t.Helper()
+	anchor := string([]rune(text)[start:end])
+	return map[string]any{
+		"source_start": start, "source_end": end,
+		"text_hash": hashSceneAnalysisText(anchor), "exact_anchor": anchor,
+	}
 }
 
 func mustJSON(t *testing.T, value any) json.RawMessage {

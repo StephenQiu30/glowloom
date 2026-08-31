@@ -32,6 +32,16 @@ func TestBibleResumePreservesClaimFenceAndRejectsLateResult(t *testing.T) {
 	if err = schema.Sync(ctx, database); err != nil {
 		t.Fatalf("synchronize GORM catalog: %v", err)
 	}
+	transaction := database.Begin()
+	if transaction.Error != nil {
+		t.Fatalf("begin isolated Bible resume transaction: %v", transaction.Error)
+	}
+	t.Cleanup(func() {
+		if rollbackErr := transaction.Rollback().Error; rollbackErr != nil {
+			t.Errorf("rollback isolated Bible resume transaction: %v", rollbackErr)
+		}
+	})
+	database = transaction
 
 	fixture := seedFailedBible(t, func(value any) error {
 		return database.Create(value).Error
@@ -105,9 +115,9 @@ func TestBibleResumePreservesClaimFenceAndRejectsLateResult(t *testing.T) {
 }
 
 type failedBibleFixture struct {
-	userID, bibleID, invocationID uuid.UUID
-	now                           time.Time
-	bibleRevision, claimVersion   int
+	userID, workspaceID, projectID, bibleID, invocationID uuid.UUID
+	now                                                   time.Time
+	bibleRevision, claimVersion                           int
 }
 
 func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
@@ -177,7 +187,8 @@ func seedFailedBible(t *testing.T, create func(any) error) failedBibleFixture {
 	}
 
 	return failedBibleFixture{
-		userID: userID, bibleID: bibleID, invocationID: invocationID, now: now,
+		userID: userID, workspaceID: workspaceID, projectID: projectID,
+		bibleID: bibleID, invocationID: invocationID, now: now,
 		bibleRevision: bibleRevision, claimVersion: claimVersion,
 	}
 }

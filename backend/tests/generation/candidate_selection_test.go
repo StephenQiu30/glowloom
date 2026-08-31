@@ -24,6 +24,8 @@ import (
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	reviewdomain "github.com/StephenQiu30/lanverse/backend/internal/review/domain"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
+	miniotest "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/minio"
 )
 
 func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
@@ -56,6 +58,10 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 	if err = objects.EnsureBucket(ctx); err != nil {
 		t.Fatalf("ensure MinIO test bucket: %v", err)
 	}
+	objectCleaner := miniotest.NewOwnedObjectCleaner(t, miniotest.Config{
+		Endpoint: minioEndpoint, AccessKey: minioAccessKey, SecretKey: minioSecretKey,
+		Bucket: minioBucket, Region: "us-east-1",
+	})
 
 	now := time.Date(2026, time.August, 26, 14, 0, 0, 0, time.UTC)
 	workspaceID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
@@ -71,6 +77,9 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 	if err = database.Create(&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "Selection Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 60000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatalf("seed selection project: %v", err)
 	}
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: userID.String(), WorkspaceID: workspaceID.String(), ProjectID: projectID.String(),
+	})
 
 	assetService := assetapp.NewService(assetgorm.New(database), objects, assetapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
@@ -83,9 +92,9 @@ func TestSelectedReviewDecisionCreatesOneGenerationSelection(t *testing.T) {
 	})
 	actor := generationapp.Actor{UserID: userID.String(), TokenVersion: 1}
 	assetActor := assetapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}
-	firstArtifact := createArtifact(t, ctx, objects, assetService, assetActor, workspaceID.String(), projectID.String(), 4, 3, "selection-first", true)
-	secondArtifact := createArtifact(t, ctx, objects, assetService, assetActor, workspaceID.String(), projectID.String(), 5, 4, "selection-second", true)
-	failedArtifact := createArtifact(t, ctx, objects, assetService, assetActor, workspaceID.String(), projectID.String(), 2, 2, "selection-failed", true)
+	firstArtifact := createArtifact(t, ctx, objects, objectCleaner, assetService, assetActor, workspaceID.String(), projectID.String(), 4, 3, "selection-first", true)
+	secondArtifact := createArtifact(t, ctx, objects, objectCleaner, assetService, assetActor, workspaceID.String(), projectID.String(), 5, 4, "selection-second", true)
+	failedArtifact := createArtifact(t, ctx, objects, objectCleaner, assetService, assetActor, workspaceID.String(), projectID.String(), 2, 2, "selection-failed", true)
 	firstCandidate := registerCandidate(t, ctx, candidateService, actor, firstArtifact, "selection-candidate-first")
 	secondCandidate := registerCandidate(t, ctx, candidateService, actor, secondArtifact, "selection-candidate-second")
 	failedCandidate := registerCandidate(t, ctx, candidateService, actor, failedArtifact, "selection-candidate-failed")

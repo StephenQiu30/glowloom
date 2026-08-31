@@ -803,7 +803,7 @@ func newProviderFencingHarness(t *testing.T, now time.Time, suffix string) provi
 		t.Fatalf("synchronize Provider fencing GORM catalog: %v", err)
 	}
 	create := func(value any) error { return database.Create(value).Error }
-	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), now, suffix)
+	fixture := seedPreparationFixture(t, database, create, generationgorm.NewTargetStore(database), now, suffix)
 	fixture.provider = seedControlledProjectProviderBinding(
 		t,
 		create,

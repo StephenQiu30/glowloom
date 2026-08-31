@@ -22,6 +22,7 @@ import (
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T) {
@@ -41,7 +42,7 @@ func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T
 
 	now := time.Date(2026, time.August, 28, 3, 0, 0, 0, time.UTC)
 	user := model.UserAccount{
-		ID: uuid.New(), EmailNormalized: uuid.NewString() + "@example.com", PasswordHash: "test-only",
+		ID: uuid.New(), EmailNormalized: uuid.NewString() + "@example.test", PasswordHash: "test-only",
 		TokenVersion: 1, DisplayName: "Repair Owner", Status: "active", CreatedAt: now, UpdatedAt: now,
 	}
 	workspace := model.Workspace{
@@ -62,6 +63,9 @@ func TestStoryCandidateRepairPersistsOneReceiptAndExactStaleClosure(t *testing.T
 			t.Fatalf("seed Candidate repair owner: %v", err)
 		}
 	}
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: user.ID.String(), WorkspaceID: workspace.ID.String(), ProjectID: project.ID.String(),
+	})
 
 	evidence := domain.Evidence{
 		SourceStart: 0, SourceEnd: 2, TextHash: domain.SourceTextHash("林一"), ExactAnchor: "林一",

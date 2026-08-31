@@ -18,6 +18,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestProjectBudgetHasOneCostOwner(t *testing.T) {
@@ -73,6 +74,14 @@ func TestProjectBudgetHasOneCostOwner(t *testing.T) {
 	if err = database.Create(&projects).Error; err != nil {
 		t.Fatalf("seed cost projects: %v", err)
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs:     []string{ownerID.String(), editorID.String(), viewerID.String()},
+		WorkspaceID: workspaceID.String(),
+	})
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs:     []string{otherOwnerID.String()},
+		WorkspaceID: otherWorkspaceID.String(),
+	})
 
 	service := costapp.NewService(costgorm.New(database), costapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,

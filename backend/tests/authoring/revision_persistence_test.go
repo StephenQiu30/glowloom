@@ -35,6 +35,16 @@ func TestAuthoringDraftPublishesImmutableRevisionsFromVerifiedInputs(t *testing.
 	if err = schema.Sync(ctx, database); err != nil {
 		t.Fatalf("synchronize GORM catalog: %v", err)
 	}
+	transaction := database.Begin()
+	if transaction.Error != nil {
+		t.Fatalf("begin isolated authoring transaction: %v", transaction.Error)
+	}
+	t.Cleanup(func() {
+		if rollbackErr := transaction.Rollback().Error; rollbackErr != nil {
+			t.Errorf("rollback isolated authoring transaction: %v", rollbackErr)
+		}
+	})
+	database = transaction
 	catalog, err := authoring.SystemCatalog()
 	if err != nil {
 		t.Fatal(err)

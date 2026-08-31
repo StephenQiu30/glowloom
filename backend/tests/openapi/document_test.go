@@ -29,6 +29,9 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		"/api/projects/{project_id}/cost-budget",
 		"/api/projects/{project_id}/media-model-profiles/{profile_version_id}/cost-price",
 		"/api/projects/{project_id}/current-script-document",
+		"/api/projects/{project_id}/script-sources",
+		"/api/projects/{project_id}/script-sources/{revision_id}",
+		"/api/projects/{project_id}/scene-analysis-candidates/{candidate_id}",
 		"/api/document-revisions/{revision_id}/production-bibles",
 		"/api/episodes/{episode_id}/storyboard-drafts",
 		"/api/storyboard-draft-batches/{batch_id}/apply",
@@ -86,6 +89,14 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 	}
 	if _, exists := document.Components.Schemas["CostPriceQuoteResponse"]; !exists {
 		t.Error("public contract is missing CostPriceQuoteResponse")
+	}
+	for _, schema := range []string{
+		"AcceptScriptSourceRequest", "AcceptedScriptSourceResponse",
+		"ScriptSpanCandidate", "SceneFactCandidate", "SceneAnalysisCandidateResponse",
+	} {
+		if _, exists := document.Components.Schemas[schema]; !exists {
+			t.Errorf("public contract is missing %s", schema)
+		}
 	}
 	var priceQuoteSetSchema struct {
 		Required   []string `json:"required"`

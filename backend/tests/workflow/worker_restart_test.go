@@ -25,6 +25,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 const (
@@ -52,6 +53,9 @@ func TestBibleWorkerReclaimsInvocationAfterProcessRestart(t *testing.T) {
 
 	fixture := seedFailedBible(t, func(value any) error {
 		return database.Create(value).Error
+	})
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: fixture.userID.String(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 	})
 	store := biblegorm.New(database)
 	service := bibleapp.NewService(store, bibleapp.Config{

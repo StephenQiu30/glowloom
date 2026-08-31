@@ -50,15 +50,25 @@ func TestSystemNodeCatalogIsPersistedOnceAndRejectsVersionDrift(t *testing.T) {
 		t.Fatalf("catalog retry created a new identity: first=%s second=%s", firstID, secondID)
 	}
 
-	var definitionCount, catalogCount int64
-	if err = database.Model(&model.NodeDefinitionVersion{}).Count(&definitionCount).Error; err != nil {
-		t.Fatalf("count node definitions: %v", err)
+	var catalogCount int64
+	for _, definition := range catalog.Definitions {
+		var definitionCount int64
+		if err = database.Model(&model.NodeDefinitionVersion{}).
+			Where("key = ? AND version = ?", definition.Key, definition.Version).
+			Count(&definitionCount).Error; err != nil {
+			t.Fatalf("count node definition %s: %v", definition.Key, err)
+		}
+		if definitionCount != 1 {
+			t.Fatalf("node definition %s rows=%d", definition.Key, definitionCount)
+		}
 	}
-	if err = database.Model(&model.NodeCatalogVersion{}).Count(&catalogCount).Error; err != nil {
-		t.Fatalf("count node catalogs: %v", err)
+	if err = database.Model(&model.NodeCatalogVersion{}).
+		Where("key = ? AND version = ?", catalog.Key, catalog.Version).
+		Count(&catalogCount).Error; err != nil {
+		t.Fatalf("count matching node catalog: %v", err)
 	}
-	if definitionCount != int64(len(catalog.Definitions)) || catalogCount != 1 {
-		t.Fatalf("unexpected catalog rows: definitions=%d catalogs=%d", definitionCount, catalogCount)
+	if catalogCount != 1 {
+		t.Fatalf("matching catalog rows=%d", catalogCount)
 	}
 
 	var persisted model.NodeCatalogVersion
@@ -78,7 +88,9 @@ func TestSystemNodeCatalogIsPersistedOnceAndRejectsVersionDrift(t *testing.T) {
 	if _, err = store.EnsureCatalog(ctx, drifted, now.Add(2*time.Minute), uuid.NewString); err == nil {
 		t.Fatal("same catalog version accepted changed node definitions")
 	}
-	if err = database.Model(&model.NodeCatalogVersion{}).Count(&catalogCount).Error; err != nil {
+	if err = database.Model(&model.NodeCatalogVersion{}).
+		Where("key = ? AND version = ?", catalog.Key, catalog.Version).
+		Count(&catalogCount).Error; err != nil {
 		t.Fatalf("recount node catalogs: %v", err)
 	}
 	if catalogCount != 1 {

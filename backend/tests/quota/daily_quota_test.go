@@ -17,6 +17,7 @@ import (
 	quotagorm "github.com/StephenQiu30/lanverse/backend/internal/quota/adapter/gormdb"
 	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	quotadomain "github.com/StephenQiu30/lanverse/backend/internal/quota/domain"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestQuotaUsesProviderCallBillingMetrics(t *testing.T) {
@@ -71,6 +72,10 @@ func TestDailyImageQuotaReservationLifecycle(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed quota project: %v", err)
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs:     []string{ownerID.String(), editorID.String(), viewerID.String()},
+		WorkspaceID: workspaceID.String(),
+	})
 
 	service := quotaapp.NewService(quotagorm.New(database), quotaapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,

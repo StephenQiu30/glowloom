@@ -28,10 +28,16 @@ func TestGORMOutboxInboxRevisionAndDeadLetterState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = platformdatabase.Close(database) })
+	rootDatabase := database
+	t.Cleanup(func() { _ = platformdatabase.Close(rootDatabase) })
 	if err = schema.Sync(ctx, database); err != nil {
 		t.Fatal(err)
 	}
+	database = database.Begin()
+	if database.Error != nil {
+		t.Fatalf("begin isolated eventing journey: %v", database.Error)
+	}
+	t.Cleanup(func() { _ = database.Rollback().Error })
 	workspaceID, projectID := uuid.New(), uuid.New()
 	if err = database.Create(&model.Workspace{ID: workspaceID, Name: "eventing", Status: "active", Revision: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}).Error; err != nil {
 		t.Fatal(err)
@@ -54,10 +60,17 @@ func TestGORMOutboxInboxRevisionAndDeadLetterState(t *testing.T) {
 		WorkspaceID: workspaceID, ProjectID: projectID, AggregateKind: "storygraph",
 		AggregateID: projectID.String(), AggregateRevision: 2, SourceReceiptID: receiptID,
 		PayloadHash: payloadHash, Status: "pending",
-		OccurredAt: now, CreatedAt: now,
+		OccurredAt: now, CreatedAt: time.Unix(1, 0).UTC(),
 	}
 	outbox.Payload = append(outbox.Payload, payload...)
 	if err = database.Create(&outbox).Error; err != nil {
+		t.Fatal(err)
+	}
+	sentinel := outbox
+	sentinel.ID = uuid.New()
+	sentinel.SourceReceiptID = uuid.New()
+	sentinel.CreatedAt = time.Unix(2, 0).UTC()
+	if err = database.Create(&sentinel).Error; err != nil {
 		t.Fatal(err)
 	}
 	repository := eventinggorm.New(database)
@@ -85,21 +98,25 @@ func TestGORMOutboxInboxRevisionAndDeadLetterState(t *testing.T) {
 	if ownerlessInboxCount != 0 || ownerlessCheckpointCount != 0 {
 		t.Fatalf("ownerless delivery persisted FK-backed state: inbox=%d checkpoint=%d", ownerlessInboxCount, ownerlessCheckpointCount)
 	}
-	claims, err := repository.ClaimPending(ctx, now, time.Minute, 10, uuid.NewString)
-	if err != nil || len(claims) != 1 || claims[0].Event.ID != eventID.String() {
+	claims, err := repository.ClaimPending(ctx, now, time.Minute, 1, uuid.NewString)
+	outboxClaim, claimed := claimedOutboxForEvent(claims, eventID.String())
+	if err != nil || !claimed {
 		t.Fatalf("outbox was not claimed: claims=%#v error=%v", claims, err)
 	}
-	if second, claimErr := repository.ClaimPending(ctx, now.Add(30*time.Second), time.Minute, 10, uuid.NewString); claimErr != nil || len(second) != 0 {
+	if second, claimErr := repository.ClaimPending(ctx, now.Add(30*time.Second), time.Minute, 1, uuid.NewString); claimErr != nil {
 		t.Fatalf("active outbox lease was ignored: claims=%#v error=%v", second, claimErr)
+	} else if sentinelClaim, claimedSentinel := claimedOutboxForEvent(second, sentinel.ID.String()); !claimedSentinel || sentinelClaim.Event.ID != sentinel.ID.String() {
+		t.Fatalf("active outbox lease was ignored: claims=%#v", second)
 	}
-	if err = repository.ReleaseClaim(ctx, eventID.String(), claims[0].ClaimToken, "broker outcome unknown"); err != nil {
+	if err = repository.ReleaseClaim(ctx, eventID.String(), outboxClaim.ClaimToken, "broker outcome unknown"); err != nil {
 		t.Fatal(err)
 	}
-	claims, err = repository.ClaimPending(ctx, now.Add(31*time.Second), time.Minute, 10, uuid.NewString)
-	if err != nil || len(claims) != 1 {
+	claims, err = repository.ClaimPending(ctx, now.Add(31*time.Second), time.Minute, 1, uuid.NewString)
+	outboxClaim, reclaimed := claimedOutboxForEvent(claims, eventID.String())
+	if err != nil || !reclaimed {
 		t.Fatalf("released outbox was not reclaimed: claims=%#v error=%v", claims, err)
 	}
-	if err = repository.MarkPublished(ctx, eventID.String(), claims[0].ClaimToken, now.Add(32*time.Second)); err != nil {
+	if err = repository.MarkPublished(ctx, eventID.String(), outboxClaim.ClaimToken, now.Add(32*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	var persistedOutbox model.OutboxEvent
@@ -210,3 +227,12 @@ func jsonNumber(value int64) string {
 }
 
 func countPointer(value *int64) *int64 { return value }
+
+func claimedOutboxForEvent(claims []eventingapp.ClaimedOutbox, eventID string) (eventingapp.ClaimedOutbox, bool) {
+	for _, claim := range claims {
+		if claim.Event.ID == eventID {
+			return claim, true
+		}
+	}
+	return eventingapp.ClaimedOutbox{}, false
+}

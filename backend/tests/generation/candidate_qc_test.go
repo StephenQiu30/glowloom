@@ -29,6 +29,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
+	miniotest "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/minio"
 )
 
 func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
@@ -61,6 +63,10 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	if err = objects.EnsureBucket(ctx); err != nil {
 		t.Fatalf("ensure MinIO test bucket: %v", err)
 	}
+	objectCleaner := miniotest.NewOwnedObjectCleaner(t, miniotest.Config{
+		Endpoint: minioEndpoint, AccessKey: minioAccessKey, SecretKey: minioSecretKey,
+		Bucket: minioBucket, Region: "us-east-1",
+	})
 
 	now := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
 	workspaceID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
@@ -76,6 +82,9 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	if err = database.Create(&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "Generation Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 60000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatalf("seed generation project: %v", err)
 	}
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: userID.String(), WorkspaceID: workspaceID.String(), ProjectID: projectID.String(),
+	})
 
 	assetService := assetapp.NewService(assetgorm.New(database), objects, assetapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
@@ -91,7 +100,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		},
 	})
 
-	ready := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "ready", true)
+	ready := createArtifact(t, ctx, objects, objectCleaner, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "ready", true)
 	command := ready.registerCommand("candidate-ready")
 
 	const callers = 8
@@ -148,7 +157,7 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		t.Fatalf("redeliver ready artifact with a new command key: result=%#v err=%v", redelivered, err)
 	}
 
-	tooSmall := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 2, 2, "small", true)
+	tooSmall := createArtifact(t, ctx, objects, objectCleaner, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 2, 2, "small", true)
 	failed, err := service.RegisterReadyCandidate(ctx, actor, tooSmall.registerCommand("candidate-small"))
 	if err != nil {
 		t.Fatalf("register deterministic QC failure: %v", err)
@@ -161,12 +170,12 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 	if _, err = service.RequireQCPassed(ctx, actor, failed.Candidate.ID); err == nil {
 		t.Fatal("QC-failed candidate passed RequireQCPassed")
 	}
-	tooLarge := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 11, 10, "large", true)
+	tooLarge := createArtifact(t, ctx, objects, objectCleaner, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 11, 10, "large", true)
 	largeFailed, err := service.RegisterReadyCandidate(ctx, actor, tooLarge.registerCommand("candidate-large"))
 	if err != nil || len(largeFailed.Report.FailureCodes) != 1 || largeFailed.Report.FailureCodes[0] != "pixel_count_exceeded" {
 		t.Fatalf("maximum pixel QC failure: result=%#v err=%v", largeFailed, err)
 	}
-	pngNotAllowed := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "png-not-allowed", true)
+	pngNotAllowed := createArtifact(t, ctx, objects, objectCleaner, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "png-not-allowed", true)
 	jpegOnlyService := generationapp.NewService(generationStore, generationasset.NewReadiness(assetService), generationapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 		ImageQC: generationapp.ImageQCPolicy{Version: "jpeg-only", AllowedMediaTypes: []string{"image/jpeg"}, MinWidth: 4, MinHeight: 3, MaxPixels: 100},
@@ -186,12 +195,12 @@ func TestReadyArtifactCreatesOneCandidateAndDeterministicQC(t *testing.T) {
 		t.Fatalf("restore generation actor token for remaining assertions: %v", err)
 	}
 
-	pending := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "pending", false)
+	pending := createArtifact(t, ctx, objects, objectCleaner, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "pending", false)
 	if _, err = service.RegisterReadyCandidate(ctx, actor, pending.registerCommand("candidate-pending")); err == nil {
 		t.Fatal("pending artifact created a generation candidate")
 	}
 
-	driftArtifact := createArtifact(t, ctx, objects, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "drift", true)
+	driftArtifact := createArtifact(t, ctx, objects, objectCleaner, assetService, assetapp.Actor(actor), workspaceID.String(), projectID.String(), 4, 3, "drift", true)
 	driftCommand := driftArtifact.registerCommand(command.IdempotencyKey)
 	if _, err = service.RegisterReadyCandidate(ctx, actor, driftCommand); err == nil {
 		t.Fatal("candidate idempotency key accepted a different artifact")
@@ -261,11 +270,12 @@ func (fixture providerArtifactFixture) registerCommand(idempotencyKey string) ge
 	}
 }
 
-func createArtifact(t *testing.T, ctx context.Context, objects *objectstore.Client, service *assetapp.Service, actor assetapp.Actor, workspaceID, projectID string, width, height int, key string, validate bool) providerArtifactFixture {
+func createArtifact(t *testing.T, ctx context.Context, objects *objectstore.Client, cleaner *miniotest.OwnedObjectCleaner, service *assetapp.Service, actor assetapp.Actor, workspaceID, projectID string, width, height int, key string, validate bool) providerArtifactFixture {
 	t.Helper()
 	contents := testPNG(t, width, height)
 	providerJobID, providerCallID, providerReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	objectKey := "staging/" + workspaceID + "/" + providerJobID + "/" + providerCallID + "/" + key + ".png"
+	cleaner.Track(objectKey)
 	putObject(t, ctx, objects, objectKey, contents)
 	registered, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
 		WorkspaceID: workspaceID, ProjectID: projectID, SourceType: "generation_provider_receipt", SourceID: providerReceiptID,

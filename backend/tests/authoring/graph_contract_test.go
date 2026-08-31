@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "15.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "16.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -22,6 +22,8 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"agent.episode_analysis@1.0.0",
 		"agent.episode_segmentation@1.0.0",
 		"agent.production_bible@1.0.0",
+		"agent.scene_fact_extraction@1.0.0",
+		"agent.script_span_proposal@1.0.0",
 		"agent.source_evidence@1.0.0",
 		"agent.story_analysis@1.0.0",
 		"agent.story_review@1.0.0",
@@ -35,6 +37,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"human.production_bible_review@2.0.0",
 		"human.storyboard_review@2.0.0",
 		"input.script_revision@1.0.0",
+		"input.script_source@1.0.0",
 		"production.bible_materialization@1.0.0",
 		"production.episode_plan@2.0.0",
 		"production.episode_structure@1.0.0",

@@ -226,7 +226,7 @@ func TestSucceededProviderOutputsMaterializeThroughAssetReadinessAndCandidateQC(
 			First(&artifact).Error
 		return artifact, err
 	}
-	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), now, "provider-output")
+	fixture := seedPreparationFixture(t, database, create, generationgorm.NewTargetStore(database), now, "provider-output")
 	fixture.provider = seedControlledProjectProviderBinding(
 		t, create, fixture, "staging-image", "image-quality", 1,
 	)

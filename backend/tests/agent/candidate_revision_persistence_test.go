@@ -18,6 +18,7 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestRepairCandidateRevisionAdvancesHeadOnceUnderContention(t *testing.T) {
@@ -43,6 +44,9 @@ func TestRepairCandidateRevisionAdvancesHeadOnceUnderContention(t *testing.T) {
 	if err = database.Create(&workspace).Error; err != nil {
 		t.Fatalf("seed Candidate repair workspace: %v", err)
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		WorkspaceID: workspace.ID.String(),
+	})
 	stageInstanceKey := contractHash(workspace.ID.String() + ":base-candidate")
 	baseCandidate := json.RawMessage(`{"value":"base"}`)
 	baseContentHash, err := contract.CanonicalHash(baseCandidate)

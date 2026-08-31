@@ -194,7 +194,7 @@ func TestProviderCallsUseOneDispatchBoundaryPerCandidateAndSettleExactUsage(t *t
 
 	now := time.Date(2026, time.August, 30, 15, 0, 0, 0, time.UTC)
 	create := func(value any) error { return database.Create(value).Error }
-	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), now, "provider-calls")
+	fixture := seedPreparationFixture(t, database, create, generationgorm.NewTargetStore(database), now, "provider-calls")
 	fixture.provider = seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality", 1)
 	t.Cleanup(func() {
 		cleanupProviderFixture(t, func(value any, query string, arguments ...any) error {
@@ -424,7 +424,7 @@ func TestAsyncProviderDeadlineBecomesOutcomeUnknownWithoutAnotherRemoteQuery(t *
 	deadlineAt := startedAt.Add(2 * time.Hour)
 	remoteExpiresAt := startedAt.Add(26 * time.Hour)
 	create := func(value any) error { return database.Create(value).Error }
-	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), startedAt, "provider-deadline")
+	fixture := seedPreparationFixture(t, database, create, generationgorm.NewTargetStore(database), startedAt, "provider-deadline")
 	fixture.provider = seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality", 1)
 	t.Cleanup(func() {
 		cleanupProviderFixture(t, func(value any, query string, arguments ...any) error {
@@ -613,7 +613,7 @@ func TestConcurrentTerminalProviderOutcomesFenceTheLosingResult(t *testing.T) {
 
 	now := time.Date(2026, time.August, 30, 15, 45, 0, 0, time.UTC)
 	create := func(value any) error { return database.Create(value).Error }
-	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), now, "provider-terminal-race")
+	fixture := seedPreparationFixture(t, database, create, generationgorm.NewTargetStore(database), now, "provider-terminal-race")
 	fixture.provider = seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality", 1)
 	t.Cleanup(func() {
 		cleanupProviderFixture(t, func(value any, query string, arguments ...any) error {
@@ -733,7 +733,7 @@ func TestDispatchingRecoveryBecomesOutcomeUnknownWithoutQueryOrResubmit(t *testi
 
 	now := time.Date(2026, time.August, 30, 16, 0, 0, 0, time.UTC)
 	create := func(value any) error { return database.Create(value).Error }
-	fixture := seedPreparationFixture(t, create, generationgorm.NewTargetStore(database), now, "provider-recovery")
+	fixture := seedPreparationFixture(t, database, create, generationgorm.NewTargetStore(database), now, "provider-recovery")
 	fixture.provider = seedControlledProjectProviderBinding(t, create, fixture, "controlled-image", "image-quality", 1)
 	t.Cleanup(func() {
 		cleanupProviderFixture(t, func(value any, query string, arguments ...any) error {

@@ -48,7 +48,7 @@ func TestRealKafkaProjectsPostgreSQLOwnersIntoElasticsearchWithDeepLinks(t *test
 	if err = schema.Sync(ctx, database); err != nil {
 		t.Fatal(err)
 	}
-	fixture := seedSearchOwners(t, func(value any) error { return database.Create(value).Error })
+	fixture := seedSearchOwners(t, database, func(value any) error { return database.Create(value).Error })
 
 	username := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_USERNAME")
 	password := os.Getenv("LANVERSE_TEST_ELASTICSEARCH_PASSWORD")

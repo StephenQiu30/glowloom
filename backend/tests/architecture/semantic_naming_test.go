@@ -10,8 +10,11 @@ import (
 )
 
 var (
-	numericReleaseName = regexp.MustCompile(`(^|[^[:alnum:]])[vV][12]([^[:alnum:]]|$)|[[:alnum:]][Vv][12]([A-Z_]|$)`)
-	externalSemver     = regexp.MustCompile(`\bv[12]\.[0-9]+\.[0-9]+\b`)
+	numericReleaseName    = regexp.MustCompile(`[vV][0-9]+`)
+	externalSemver        = regexp.MustCompile(`\bv[0-9]+\.[0-9]+\.[0-9]+\b`)
+	externalGoModuleMajor = regexp.MustCompile(`(?:github\.com|go\.temporal\.io|gorm\.io|google\.golang\.org|go\.opentelemetry\.io|golang\.org|gonum\.org)/[^\x60\x22[:space:]]*/v[0-9]+`)
+	externalModuleAlias   = regexp.MustCompile(`\bvalidator/v[0-9]+\b`)
+	externalGitHubAction  = regexp.MustCompile(`uses:[[:space:]]+[^[:space:]]+@v[0-9]+`)
 )
 
 func TestProjectContractsUseSemanticNames(t *testing.T) {
@@ -20,7 +23,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 	repositoryRoot := repositoryDirectory(t)
 	for _, relativeRoot := range []string{
 		"backend/api", "backend/cmd", "backend/internal", "backend/tests",
-		"agent/app", "agent/tests", "frontend/src", "frontend/tests", ".github", "docs",
+		"agent/app", "agent/skills", "agent/tests", "frontend/src", "frontend/tests", ".github", "docs",
 	} {
 		root := filepath.Join(repositoryRoot, relativeRoot)
 		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
@@ -49,6 +52,44 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 			t.Fatalf("检查 %s 的语义命名：%v", relativeRoot, err)
 		}
 	}
+	for _, relativePath := range []string{
+		"backend/Dockerfile", "agent/Dockerfile", "frontend/Dockerfile",
+		"docker-compose.yml", "docker-compose-env.yml", "docker-compose-prod.yml",
+	} {
+		path := filepath.Join(repositoryRoot, relativePath)
+		if numericReleaseName.MatchString(relativePath) {
+			t.Errorf("项目文件名必须表达业务语义，不得使用数字发布序号：%s", relativePath)
+		}
+		if err := inspectSemanticNames(t, path, relativePath); err != nil {
+			t.Fatalf("检查 %s 的语义命名：%v", relativePath, err)
+		}
+	}
+}
+
+func TestSemanticNameInspectorDistinguishesProjectAndExternalNames(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{
+		"/api/v1/projects", "StoryGraphV2", "candidate_v3", "wire-version-v4",
+	} {
+		if !hasProjectNumericReleaseName(value) {
+			t.Errorf("应拒绝项目自有数字发布序号命名：%s", value)
+		}
+	}
+	for _, value := range []string{
+		"storygraph-stage-wire-production",
+		"uses: actions/checkout@v6",
+		`go.temporal.io/api/enums/v1`,
+		`github.com/minio/minio-go/v7/pkg/credentials`,
+		"dependency v1.31.2",
+		"NewStaticV4",
+		"multi_agent_" + "v" + "2",
+		"interactions-v1beta-image",
+	} {
+		if hasProjectNumericReleaseName(value) {
+			t.Errorf("不应拒绝第三方正式版本或标识：%s", value)
+		}
+	}
 }
 
 func inspectSemanticNames(t *testing.T, path, relativePath string) error {
@@ -59,27 +100,29 @@ func inspectSemanticNames(t *testing.T, path, relativePath string) error {
 	}
 	defer file.Close()
 
-	temporalAPIVersion := "/" + "v" + "1"
-	franzGoVersion := "franz-go " + "v" + "1.21.6"
-	codexFeature := "multi_agent_" + "v" + "2"
-	googleInteractionAPI := "interactions-" + "v" + "1beta-image"
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++
-		line := scanner.Text()
-		if strings.Contains(line, "go.temporal.io/api/") {
-			line = strings.ReplaceAll(line, temporalAPIVersion, "/external-api")
-		}
-		line = strings.ReplaceAll(line, franzGoVersion, "franz-go external-version")
-		line = strings.ReplaceAll(line, codexFeature, "codex-external-feature")
-		line = strings.ReplaceAll(line, googleInteractionAPI, "google-external-api")
-		line = externalSemver.ReplaceAllString(line, "external-semver")
-		if numericReleaseName.MatchString(line) {
+		if hasProjectNumericReleaseName(scanner.Text()) {
 			t.Errorf("%s:%d 含项目自有数字发布序号命名：%s", relativePath, lineNumber, strings.TrimSpace(scanner.Text()))
 		}
 	}
 	return scanner.Err()
+}
+
+func hasProjectNumericReleaseName(line string) bool {
+	codexFeature := "multi_agent_" + "v" + "2"
+	googleInteractionAPI := "interactions-" + "v" + "1beta-image"
+	minioCredentialConstructor := "NewStatic" + "V" + "4"
+	line = strings.ReplaceAll(line, codexFeature, "codex-external-feature")
+	line = strings.ReplaceAll(line, googleInteractionAPI, "google-external-api")
+	line = strings.ReplaceAll(line, minioCredentialConstructor, "minio-external-constructor")
+	line = externalGoModuleMajor.ReplaceAllString(line, "external-go-module")
+	line = externalModuleAlias.ReplaceAllString(line, "external-module-alias")
+	line = externalGitHubAction.ReplaceAllString(line, "external-github-action")
+	line = externalSemver.ReplaceAllString(line, "external-semver")
+	return numericReleaseName.MatchString(line)
 }
 
 func isSemanticNamingSource(path string) bool {

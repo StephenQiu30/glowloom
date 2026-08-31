@@ -21,6 +21,7 @@ import (
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestWorkflowQueryAuthorizesCurrentMembershipAndReturnsNodeProjection(t *testing.T) {
@@ -98,6 +99,18 @@ func TestWorkflowQueryAuthorizesCurrentMembershipAndReturnsNodeProjection(t *tes
 	}).Error; err != nil {
 		t.Fatalf("create viewer membership: %v", err)
 	}
+	t.Cleanup(func() {
+		membership := database.Where("workspace_id = ? AND user_id = ?", fixture.workspaceID, viewerID).
+			Delete(&model.Membership{})
+		if membership.Error != nil || membership.RowsAffected != 1 {
+			t.Errorf("delete exact viewer membership: rows=%d err=%v", membership.RowsAffected, membership.Error)
+			return
+		}
+		account := database.Where("id = ?", viewerID).Delete(&model.UserAccount{})
+		if account.Error != nil || account.RowsAffected != 1 {
+			t.Errorf("delete exact viewer account: rows=%d err=%v", account.RowsAffected, account.Error)
+		}
+	})
 	outsiderID := uuid.New()
 	if err = database.Create(&model.UserAccount{
 		ID: outsiderID, EmailNormalized: outsiderID.String() + "@example.test", PasswordHash: "test-only",
@@ -105,6 +118,7 @@ func TestWorkflowQueryAuthorizesCurrentMembershipAndReturnsNodeProjection(t *tes
 	}).Error; err != nil {
 		t.Fatalf("create outsider: %v", err)
 	}
+	testgorm.RegisterOwnedUserFixtureCleanup(t, database, testgorm.OwnedUserFixture{UserID: outsiderID.String()})
 
 	queries := workflowapp.NewQueryService(store)
 	view, err := queries.GetRun(ctx, owner, run.ID)

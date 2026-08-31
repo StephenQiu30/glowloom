@@ -26,6 +26,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
+	miniotest "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/minio"
 )
 
 func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *testing.T) {
@@ -58,6 +60,10 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	if err = objects.EnsureBucket(ctx); err != nil {
 		t.Fatalf("ensure MinIO test bucket: %v", err)
 	}
+	objectCleaner := miniotest.NewOwnedObjectCleaner(t, miniotest.Config{
+		Endpoint: minioEndpoint, AccessKey: minioAccessKey, SecretKey: minioSecretKey,
+		Bucket: minioBucket, Region: "us-east-1",
+	})
 
 	now := time.Date(2026, time.August, 26, 10, 0, 0, 0, time.UTC)
 	workspaceID, projectID, userID := uuid.New(), uuid.New(), uuid.New()
@@ -73,6 +79,9 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	if err = database.Create(&model.Project{ID: projectID, WorkspaceID: workspaceID, Name: "Asset Project", AspectRatio: "9:16", Language: "zh-CN", TargetDurationMS: 60000, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatalf("seed asset project: %v", err)
 	}
+	testgorm.RegisterOwnedFixtureCleanup(t, database, testgorm.OwnedFixture{
+		UserID: userID.String(), WorkspaceID: workspaceID.String(), ProjectID: projectID.String(),
+	})
 	actor := assetapp.Actor{UserID: userID.String(), TokenVersion: 1}
 	store := assetgorm.New(database)
 	serviceConfig := assetapp.Config{
@@ -85,7 +94,7 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	readyHash := sha256Hex(readyBytes)
 	providerJobID, providerCallID, providerReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	readyKey := "staging/" + workspaceID.String() + "/" + providerJobID + "/" + providerCallID + "/frame-0001.png"
-	putObject(t, ctx, objects, readyKey, "image/png", readyBytes)
+	putObject(t, ctx, objects, objectCleaner, readyKey, "image/png", readyBytes)
 	registerCommand := assetapp.RegisterStagedCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
 		SourceID: providerReceiptID, OutputKey: "frame-0001", ProviderJobID: providerJobID, ProviderCallID: providerCallID,
@@ -180,7 +189,7 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	quarantinedBytes := testPNG(t, 2, 2)
 	quarantinedJobID, quarantinedCallID, quarantinedReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	quarantinedKey := "staging/" + workspaceID.String() + "/" + quarantinedJobID + "/" + quarantinedCallID + "/frame-bad.png"
-	putObject(t, ctx, objects, quarantinedKey, "image/png", quarantinedBytes)
+	putObject(t, ctx, objects, objectCleaner, quarantinedKey, "image/png", quarantinedBytes)
 	badHash := sha256Hex(append([]byte(nil), quarantinedBytes...))
 	badHash = "0" + badHash[1:]
 	if badHash == sha256Hex(quarantinedBytes) {
@@ -213,7 +222,7 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	mismatchJobID, mismatchCallID, mismatchReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	mismatchBytes := testJPEG(t, 2, 1)
 	mismatchKey := "staging/" + workspaceID.String() + "/" + mismatchJobID + "/" + mismatchCallID + "/frame-mismatch.png"
-	putObject(t, ctx, objects, mismatchKey, "image/jpeg", mismatchBytes)
+	putObject(t, ctx, objects, objectCleaner, mismatchKey, "image/jpeg", mismatchBytes)
 	mismatch, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
 		SourceID: mismatchReceiptID, OutputKey: "frame-mismatch",
@@ -234,7 +243,7 @@ func TestArtifactReadinessPersistsOneOwnerFactWithRealPostgreSQLAndMinIO(t *test
 	dimensionJobID, dimensionCallID, dimensionReceiptID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	dimensionBytes := testPNG(t, 4, 3)
 	dimensionKey := "staging/" + workspaceID.String() + "/" + dimensionJobID + "/" + dimensionCallID + "/frame-dimension-drift.png"
-	putObject(t, ctx, objects, dimensionKey, "image/png", dimensionBytes)
+	putObject(t, ctx, objects, objectCleaner, dimensionKey, "image/png", dimensionBytes)
 	dimension, err := service.RegisterStaged(ctx, actor, assetapp.RegisterStagedCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), SourceType: "generation_provider_receipt",
 		SourceID: dimensionReceiptID, OutputKey: "frame-dimension-drift",
@@ -360,8 +369,9 @@ func testJPEG(t *testing.T, width, height int) []byte {
 	return encoded.Bytes()
 }
 
-func putObject(t *testing.T, ctx context.Context, objects *objectstore.Client, key, mediaType string, contents []byte) {
+func putObject(t *testing.T, ctx context.Context, objects *objectstore.Client, cleaner *miniotest.OwnedObjectCleaner, key, mediaType string, contents []byte) {
 	t.Helper()
+	cleaner.Track(key)
 	putURL, err := objects.PresignPut(ctx, key, time.Minute)
 	if err != nil {
 		t.Fatalf("presign test object: %v", err)

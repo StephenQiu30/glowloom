@@ -16,6 +16,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestNodeCachePersistsOneImmutableWorkspaceScopedFactUnderConcurrency(t *testing.T) {
@@ -39,6 +40,9 @@ func TestNodeCachePersistsOneImmutableWorkspaceScopedFactUnderConcurrency(t *tes
 	}).Error; err != nil {
 		t.Fatalf("seed cache workspace: %v", err)
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		WorkspaceID: workspaceID.String(), UserIDs: []string{},
+	})
 
 	material, cacheKey, err := workflow.BuildNodeCacheKey(workflow.NodeCacheKeyMaterial{
 		SchemaVersion: workflow.NodeCacheKeySchemaVersion, NodeDefinitionContentHash: strings.Repeat("1", 64),
@@ -135,6 +139,9 @@ func TestNodeCachePersistsOneImmutableWorkspaceScopedFactUnderConcurrency(t *tes
 	}).Error; err != nil {
 		t.Fatalf("seed second cache workspace: %v", err)
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		WorkspaceID: secondWorkspaceID.String(), UserIDs: []string{},
+	})
 	drifted.WorkspaceID = secondWorkspaceID.String()
 	if crossWorkspace, ensureErr := store.EnsureNodeCache(ctx, drifted); ensureErr != nil || crossWorkspace.OutputHash != drifted.OutputHash {
 		t.Fatalf("workspace-scoped cache identity leaked across tenants: entry=%#v err=%v", crossWorkspace, ensureErr)

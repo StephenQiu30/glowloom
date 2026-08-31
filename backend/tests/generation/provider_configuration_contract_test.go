@@ -22,6 +22,7 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 	"github.com/google/uuid"
 )
 
@@ -346,6 +347,10 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 			t.Fatalf("seed Provider configuration fixture %T: %v", record, err)
 		}
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs:     []string{ownerID.String(), editorID.String()},
+		WorkspaceID: workspaceID.String(),
+	})
 	root := filepath.Join(t.TempDir(), "provider-root-key")
 	if err = os.WriteFile(root, bytes.Repeat([]byte{0x6b}, 32), 0o600); err != nil {
 		t.Fatalf("write Provider root key: %v", err)
@@ -669,14 +674,14 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 	if err != nil || enabledProfile.Profile.Revision != 3 || enabledProfile.Profile.State != "enabled" {
 		t.Fatalf("enable Provider model profile: result=%#v err=%v", enabledProfile, err)
 	}
-	bindingV3, err := configuration.PublishProjectBinding(ctx, owner, generationapp.PublishProjectProviderBindingCommand{
+	bindingAfterProfileEnable, err := configuration.PublishProjectBinding(ctx, owner, generationapp.PublishProjectProviderBindingCommand{
 		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Purpose: "reference_asset",
 		ConnectionVersionID: rotated.Connection.ID, ModelProfileVersionID: enabledProfile.Profile.ID,
 		ExpectedRevision: 2, ExpectedContentHash: rotatedBinding.Binding.ContentHash,
-		IdempotencyKey: "provider-binding-publish-v3",
+		IdempotencyKey: "provider-binding-publish-after-profile-enable",
 	})
-	if err != nil || bindingV3.Binding.Revision != 3 || bindingV3.Binding.ModelProfileVersionID != enabledProfile.Profile.ID {
-		t.Fatalf("publish Project binding after Profile enable: result=%#v err=%v", bindingV3, err)
+	if err != nil || bindingAfterProfileEnable.Binding.Revision != 3 || bindingAfterProfileEnable.Binding.ModelProfileVersionID != enabledProfile.Profile.ID {
+		t.Fatalf("publish Project binding after Profile enable: result=%#v err=%v", bindingAfterProfileEnable, err)
 	}
 	listed, err := configuration.ListWorkspaceConfiguration(ctx, owner, workspaceID.String())
 	if err != nil || len(listed.Connections) != 1 || listed.Connections[0].Connection.ID != rotated.Connection.ID ||
@@ -719,7 +724,7 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 		_, publishErr := publishConfiguration.PublishProjectBinding(raceContext, owner, generationapp.PublishProjectProviderBindingCommand{
 			WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), Purpose: "reference_asset",
 			ConnectionVersionID: rotated.Connection.ID, ModelProfileVersionID: enabledProfile.Profile.ID,
-			ExpectedRevision: 3, ExpectedContentHash: bindingV3.Binding.ContentHash,
+			ExpectedRevision: 3, ExpectedContentHash: bindingAfterProfileEnable.Binding.ContentHash,
 			IdempotencyKey: "provider-binding-racing-disable",
 		})
 		publishDone <- publishErr

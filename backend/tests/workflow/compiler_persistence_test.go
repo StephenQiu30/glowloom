@@ -195,5 +195,7 @@ func seedCompilerProject(t *testing.T, create func(any) error, now time.Time) co
 			t.Fatalf("seed %T: %v", record, err)
 		}
 	}
-	return compilerProjectFixture{userID: userID, workspaceID: workspaceID, projectID: projectID, scriptRevisionID: revisionID, normalizedHash: normalizedHash}
+	fixture := compilerProjectFixture{userID: userID, workspaceID: workspaceID, projectID: projectID, scriptRevisionID: revisionID, normalizedHash: normalizedHash}
+	trackCompilerProjectFixture(fixture)
+	return fixture
 }

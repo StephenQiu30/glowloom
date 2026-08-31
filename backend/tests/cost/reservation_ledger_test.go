@@ -19,6 +19,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	costgormtest "github.com/StephenQiu30/lanverse/backend/tests/cost/adapter/gormdb"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
@@ -73,6 +74,16 @@ func TestCostReservationAndLedgerPreserveBudget(t *testing.T) {
 	if err = database.Create(&projects).Error; err != nil {
 		t.Fatalf("seed reservation projects: %v", err)
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs: []string{
+			ownerID.String(), editorID.String(), viewerID.String(),
+		},
+		WorkspaceID: workspaceID.String(),
+	})
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs:     []string{otherOwnerID.String()},
+		WorkspaceID: otherWorkspaceID.String(),
+	})
 
 	service := costapp.NewService(costgorm.New(database), costapp.Config{
 		Now: func() time.Time { return currentTime }, NewID: uuid.NewString,

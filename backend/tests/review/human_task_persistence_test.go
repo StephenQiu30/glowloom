@@ -16,6 +16,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
 
 func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
@@ -36,10 +37,10 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	workspaceID, projectID := uuid.New(), uuid.New()
 	reviewerA, reviewerB, viewer, outsider := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	users := []model.UserAccount{
-		{ID: reviewerA, EmailNormalized: "reviewer-a@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "A", Status: "active", CreatedAt: now, UpdatedAt: now},
-		{ID: reviewerB, EmailNormalized: "reviewer-b@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "B", Status: "active", CreatedAt: now, UpdatedAt: now},
-		{ID: viewer, EmailNormalized: "viewer@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "Viewer", Status: "active", CreatedAt: now, UpdatedAt: now},
-		{ID: outsider, EmailNormalized: "outsider@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "Outsider", Status: "active", CreatedAt: now, UpdatedAt: now},
+		{ID: reviewerA, EmailNormalized: reviewerA.String() + "@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "A", Status: "active", CreatedAt: now, UpdatedAt: now},
+		{ID: reviewerB, EmailNormalized: reviewerB.String() + "@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "B", Status: "active", CreatedAt: now, UpdatedAt: now},
+		{ID: viewer, EmailNormalized: viewer.String() + "@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "Viewer", Status: "active", CreatedAt: now, UpdatedAt: now},
+		{ID: outsider, EmailNormalized: outsider.String() + "@example.test", PasswordHash: "test", TokenVersion: 1, DisplayName: "Outsider", Status: "active", CreatedAt: now, UpdatedAt: now},
 	}
 	if err = database.Create(&users).Error; err != nil {
 		t.Fatalf("seed reviewers: %v", err)
@@ -62,6 +63,11 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed project: %v", err)
 	}
+	testgorm.RegisterOwnedWorkspaceFixtureCleanup(t, database, testgorm.OwnedWorkspaceFixture{
+		UserIDs:     []string{reviewerA.String(), reviewerB.String(), viewer.String()},
+		WorkspaceID: workspaceID.String(),
+	})
+	testgorm.RegisterOwnedUserFixtureCleanup(t, database, testgorm.OwnedUserFixture{UserID: outsider.String()})
 
 	service := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString, ClaimLease: 5 * time.Minute,
