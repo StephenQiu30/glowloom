@@ -1,0 +1,20 @@
+{
+  "command": {
+    "schema": "creation-command-production",
+    "command_id": "81000000-0000-4000-8000-000000000001",
+    "run_id": "81000000-0000-4000-8000-000000000001",
+    "workspace_id": "81000000-0000-4000-8000-000000000002",
+    "project_id": "81000000-0000-4000-8000-000000000003",
+    "actor_id": "81000000-0000-4000-8000-000000000004",
+    "source": {
+      "document_id": "81000000-0000-4000-8000-000000000005",
+      "revision_id": "81000000-0000-4000-8000-000000000006",
+      "revision": 1,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "span_index_id": "81000000-0000-4000-8000-000000000007"
+    },
+    "flow_type": "lanverse.creation.text-storyboard.production",
+    "workflow_id": "lanverse:creation:81000000-0000-4000-8000-000000000001"
+  },
+  "payload_hash": "3a33c32aca8118992c4195676a1ed767cee4ab09ac80ca4ec737326570e49088"
+}

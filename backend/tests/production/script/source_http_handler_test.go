@@ -95,6 +95,31 @@ type sourceHTTPService struct {
 	queriedProjectID, queriedRevisionID string
 }
 
+func (service *sourceHTTPService) ReadSpan(_ context.Context, actor scriptapp.Actor, query scriptapp.SourceSpanQuery) (scriptdomain.SourceSpan, error) {
+	service.actor = actor
+	service.queriedProjectID, service.queriedRevisionID = query.ProjectID, query.DocumentRevisionID
+	return scriptdomain.SourceSpan{Identity: service.accepted.Identity, Start: query.Start, End: query.End, Text: "甲😀", TextHash: strings.Repeat("a", 64), CodepointIndexRule: "unicode-code-point"}, nil
+}
+
+func TestScriptSourceHTTPRequiresExplicitSpanRange(t *testing.T) {
+	sources := &sourceHTTPService{accepted: acceptedHTTPSource()}
+	mux := http.NewServeMux()
+	scripthttp.New(sourceDocumentHTTPService{}, sources, sourceHTTPAuthenticator{}).Register(mux)
+	path := "/api/projects/" + sourceHTTPProjectID + "/script-sources/" + sourceHTTPRevisionID + "/spans"
+	for _, query := range []string{"", "?start=0&end=2", "?start=0&end=2&start=1&expected_hash=" + strings.Repeat("a", 64)} {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest("GET", path+query, nil))
+		if w.Code != 422 {
+			t.Fatalf("missing/ambiguous range: %d %s", w.Code, w.Body.String())
+		}
+	}
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", path+"?start=0&end=2&expected_hash="+strings.Repeat("a", 64), nil))
+	if w.Code != 200 || sources.queriedRevisionID != sourceHTTPRevisionID || sources.actor.TokenVersion != 3 {
+		t.Fatalf("span route: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func (service *sourceHTTPService) Accept(
 	_ context.Context,
 	actor scriptapp.Actor,

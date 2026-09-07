@@ -23,7 +23,7 @@ def test_agent_entrypoint_only_mounts_candidate_runtime() -> None:
     assert "app.runtime.api" not in dockerfile
 
 
-def test_agent_runtime_has_no_business_storage_dependencies() -> None:
+def test_candidate_runtime_cannot_load_trusted_storage_or_orchestration() -> None:
     project = (AGENT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     for dependency in (
         "sqlalchemy",
@@ -32,7 +32,6 @@ def test_agent_runtime_has_no_business_storage_dependencies() -> None:
         "aiokafka",
         "minio",
         "elasticsearch",
-        "temporalio",
         "runware",
     ):
         assert dependency not in project.casefold()
@@ -42,7 +41,8 @@ def test_agent_runtime_has_no_business_storage_dependencies() -> None:
             "-c",
             (
                 "import sys; import app.candidate_runtime.api; "
-                "assert not any(name == 'sqlalchemy' or name.startswith('sqlalchemy.') "
+                "assert not any(name.split('.')[0] in ('sqlalchemy', 'psycopg', 'temporalio') "
+                "or name.startswith('app.creation') "
                 "for name in sys.modules)"
             ),
         ],
@@ -57,3 +57,15 @@ def test_agent_runtime_has_no_business_storage_dependencies() -> None:
 def test_public_openapi_contract_is_owned_by_backend() -> None:
     assert (BACKEND_ROOT / "api/openapi/lanverse-public-api.json").is_file()
     assert not (AGENT_ROOT / "openapi.json").exists()
+
+
+def test_creation_and_harness_images_have_separate_capabilities() -> None:
+    candidate = (AGENT_ROOT / "Dockerfile").read_text()
+    creation = (AGENT_ROOT / "Dockerfile.creation").read_text()
+    base_requirements = (AGENT_ROOT / "requirements.txt").read_text()
+    assert "agent/app/creation" not in candidate
+    assert "agent/app ./app" not in candidate
+    assert "app.creation.api:create_configured_app" in creation
+    assert "agent/app/modules" not in creation
+    assert "@openai/codex" not in creation
+    assert "psycopg" not in base_requirements and "temporalio" not in base_requirements
