@@ -33,6 +33,14 @@ services:
       JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-30}
       AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-2592000}
       REGISTRATION_VERIFICATION_CODE: ""
+      SMTP_ENABLED: "true"
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
+      SMTP_PORT: "${SMTP_PORT:?SMTP_PORT is required}"
+      SMTP_TLS_MODE: ${SMTP_TLS_MODE:?SMTP_TLS_MODE is required}
+      SMTP_USERNAME: ${SMTP_USERNAME:?SMTP_USERNAME is required}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD is required}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:?SMTP_FROM_EMAIL is required}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Lanverse}
       AGENT_URL: ${AGENT_URL:?AGENT_URL is required}
       AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:?AGENT_EXECUTION_SECRET is required}
       AGENT_RUNTIME_IMAGE_DIGEST: ${AGENT_RUNTIME_IMAGE_DIGEST:?AGENT_RUNTIME_IMAGE_DIGEST is required}
@@ -63,13 +71,8 @@ services:
       ELASTICSEARCH_URL: http://elasticsearch:9200
       ELASTICSEARCH_USERNAME: ""
       ELASTICSEARCH_PASSWORD: ""
-      ELASTICSEARCH_INIT_USERNAME: ""
-      ELASTICSEARCH_INIT_PASSWORD: ""
       ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search
       ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search
-      KIBANA_URL: http://kibana:5601
-      KIBANA_USERNAME: ""
-      KIBANA_PASSWORD: ""
     deploy:
       resources:
         limits:
@@ -153,10 +156,6 @@ services:
           cpus: "2.0"
           memory: 2G
 
-  elasticsearch-init:
-    profiles: !reset []
-    restart: "no"
-
   logstash:
     profiles: !reset []
     restart: unless-stopped
@@ -180,10 +179,6 @@ services:
         limits:
           cpus: "1.0"
           memory: 1280M
-
-  kibana-init:
-    profiles: !reset []
-    restart: "no"
 
 secrets:
   lanverse_media_provider_master_key:

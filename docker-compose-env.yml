@@ -187,23 +187,6 @@ services:
       retries: 40
       start_period: 20s
 
-  elasticsearch-init:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
-    profiles: ["bundled-elasticsearch"]
-    entrypoint: ["/usr/share/lanverse-observability/elasticsearch-init.sh"]
-    environment:
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-    networks:
-      - environment
-    volumes:
-      - ./backend/observability/elasticsearch/init.sh:/usr/share/lanverse-observability/elasticsearch-init.sh:ro
-      - ./backend/observability/elasticsearch/ilm-policy.json:/usr/share/lanverse-observability/ilm-policy.json:ro
-      - ./backend/observability/logstash/template/lanverse-logs-template.json:/usr/share/lanverse-observability/lanverse-logs-template.json:ro
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    restart: "no"
-
   logstash:
     image: docker.elastic.co/logstash/logstash:9.4.4
     profiles: ["bundled-logstash"]
@@ -244,29 +227,14 @@ services:
     volumes:
       - kibana-data:/usr/share/kibana/data
     depends_on:
-      elasticsearch-init:
-        condition: service_completed_successfully
+      elasticsearch:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:5601/api/status >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 40
       start_period: 30s
-
-  kibana-init:
-    image: docker.elastic.co/kibana/kibana:9.4.4
-    profiles: ["bundled-kibana"]
-    entrypoint: ["/usr/share/lanverse-observability/kibana-init.sh"]
-    environment:
-      KIBANA_URL: http://kibana:5601
-    networks:
-      - environment
-    volumes:
-      - ./backend/observability/kibana/init.sh:/usr/share/lanverse-observability/kibana-init.sh:ro
-    depends_on:
-      kibana:
-        condition: service_healthy
-    restart: "no"
 
 networks:
   environment:

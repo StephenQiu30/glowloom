@@ -79,8 +79,21 @@ jobs:
         run: |
           environment_compose() { docker compose -p lanverse-ci-env -f docker-compose-env.yml "$@"; }
           environment_compose up --detach --wait --wait-timeout 300 kafka elasticsearch logstash kibana
-          environment_compose up --detach kafka-init kibana-init
-          for init_service in kafka-init kibana-init; do
+          ci_elasticsearch() {
+            local method=$1 path=$2; shift 2
+            curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -H 'Content-Type: application/json' -X "$method" "http://127.0.0.1:19200$path" "$@" >/dev/null
+          }
+          # Configure only this disposable CI environment; never migrate existing indices.
+          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @backend/observability/elasticsearch/ilm-policy.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @backend/observability/logstash/template/lanverse-logs-template.json
+          ci_elasticsearch PUT /lanverse-logs-application-write --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
+          ci_elasticsearch PUT /lanverse-logs-dead-letter-write --data-binary '{"settings":{"index.lifecycle.name":"lanverse-logs-application-30d","index.lifecycle.rollover_alias":"lanverse-logs-dead-letter","number_of_shards":1,"number_of_replicas":0},"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
+          curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
+            http://127.0.0.1:15601/api/data_views/data_view \
+            -H 'Content-Type: application/json' -H 'kbn-xsrf: ci-fixture' \
+            --data-binary '{"data_view":{"id":"lanverse-logs-application","name":"Lanverse Application Logs","title":"lanverse-logs-application-*","timeFieldName":"@timestamp","allowNoIndex":true}}' >/dev/null
+          environment_compose up --detach kafka-init
+          for init_service in kafka-init; do
             init_container=$(environment_compose ps --all --quiet "$init_service")
             test -n "$init_container"
             test "$(docker wait "$init_container")" = 0
@@ -233,6 +246,12 @@ jobs:
           LANVERSE_CORS_ORIGINS: '["https://app.example.test"]'
           MINIO_CORS_ORIGINS: https://app.example.test
           LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE: /tmp/lanverse-ci-media-provider-master-key
+          SMTP_HOST: smtp.example.test
+          SMTP_PORT: "587"
+          SMTP_USERNAME: ci-compose-only
+          SMTP_PASSWORD: ci-compose-only-smtp
+          SMTP_FROM_EMAIL: ci@example.test
+          SMTP_TLS_MODE: starttls
         run: |
           umask 077
           openssl rand -out "$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" 32
@@ -274,14 +293,13 @@ jobs:
       - name: Run deployment images against real dependencies
         env:
           COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
-          POSTGRES_HOST: host.docker.internal
-          MINIO_ENDPOINT: host.docker.internal:9000
-          DOCKER_TEMPORAL_ADDRESS: host.docker.internal:7233
-          DOCKER_KAFKA_BROKERS: host.docker.internal:19093
+          POSTGRES_HOST: postgres
+          MINIO_ENDPOINT: minio:9000
+          DOCKER_TEMPORAL_ADDRESS: temporal:7233
+          DOCKER_KAFKA_BROKERS: kafka:19092
           ELASTIC_OBSERVABILITY_NETWORK: lanverse-environment
           DOCKER_ELASTICSEARCH_URL: http://elasticsearch:9200
           DOCKER_LOGSTASH_ADDRESS: logstash:5000
-          DOCKER_KIBANA_URL: http://kibana:5601
           KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
           KAFKA_USERNAME: event_worker
           KAFKA_PASSWORD: lanverse-development-event-worker
@@ -296,13 +314,36 @@ jobs:
           docker tag lanverse/backend:ci lanverse/backend:development
           environment_compose up --detach --no-build --wait --wait-timeout 240 \
             postgres minio temporal kafka elasticsearch logstash kibana
-          environment_compose up --detach --no-build minio-init kafka-init kibana-init
-          for init_service in minio-init kafka-init kibana-init; do
+          environment_compose up --detach --no-build minio-init kafka-init
+          for init_service in minio-init kafka-init; do
             init_container=$(environment_compose ps --all --quiet "$init_service")
             test -n "$init_container"
             test "$(docker wait "$init_container")" = 0
           done
-          service_compose up --detach --no-build --wait --wait-timeout 240 frontend backend
+          ci_elasticsearch() {
+            local method=$1 path=$2; shift 2
+            if [[ "$2" == @* ]]; then
+              cat "${2#@}"
+            else
+              printf '%s' "$2"
+            fi | environment_compose exec -T elasticsearch curl --fail --silent --show-error \
+              --connect-timeout 5 --max-time 30 -H 'Content-Type: application/json' \
+              -X "$method" "http://localhost:9200$path" --data-binary @- >/dev/null
+          }
+          # Configure only this disposable CI environment; never migrate existing indices.
+          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @backend/observability/elasticsearch/ilm-policy.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @backend/observability/logstash/template/lanverse-logs-template.json
+          ci_elasticsearch PUT /lanverse-logs-application-write --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
+          ci_elasticsearch PUT /lanverse-logs-dead-letter-write --data-binary '{"settings":{"index.lifecycle.name":"lanverse-logs-application-30d","index.lifecycle.rollover_alias":"lanverse-logs-dead-letter","number_of_shards":1,"number_of_replicas":0},"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
+          curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
+            http://127.0.0.1:5601/api/data_views/data_view \
+            -H 'Content-Type: application/json' -H 'kbn-xsrf: ci-fixture' \
+            --data-binary '{"data_view":{"id":"lanverse-logs-application","name":"Lanverse Application Logs","title":"lanverse-logs-application-*","timeFieldName":"@timestamp","allowNoIndex":true}}' >/dev/null
+          if ! service_compose up --detach --no-build --wait --wait-timeout 240 frontend backend; then
+            service_compose ps --all
+            service_compose logs --no-color backend
+            exit 1
+          fi
           service_compose ps --status running --services | grep -qx backend
           service_compose exec -T backend /bin/sh -c '
             set -- $(grep "^Uid:" /proc/1/status)
