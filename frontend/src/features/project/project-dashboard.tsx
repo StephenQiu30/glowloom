@@ -11,16 +11,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
-import {
-  appApiErrorMessage,
-  useCreateProjectMutation,
-  useMeQuery,
-  useProjectsQuery,
-  useWorkspacesQuery,
-} from "@/lib/server-state";
+import { appApiErrorMessage } from "@/lib/server-state";
+import { useCreateProjectMutation, useProjectsQuery } from "@/features/project/endpoints";
+import { useMeQuery, useWorkspacesQuery } from "@/features/identity/endpoints";
 
-import { ProjectCreateDialog } from "./project-create-dialog";
-import { ProjectServerCard } from "./project-server-card";
+import { ProjectCreateDialog } from "@/features/project/project-create-dialog";
+import { ProjectServerCard } from "@/features/project/project-server-card";
 
 type ProjectFilter = "all" | "active" | "archived";
 

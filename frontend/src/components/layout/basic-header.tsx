@@ -45,7 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import { canAccessPage, type StudioNavigation, visiblePrimaryNavigation, type WorkspaceRole } from "@/lib/access-control";
 import { clearAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/class-names";
-import { useLogoutMutation } from "@/lib/server-state";
+import { useLogoutMutation } from "@/features/identity/endpoints";
 
 import { LayoutContainer } from "./layout-container";
 import { ThemeToggle } from "./theme-toggle";

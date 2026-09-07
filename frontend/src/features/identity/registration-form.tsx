@@ -17,12 +17,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setAccessToken } from "@/lib/auth-session";
+import { appApiErrorMessage } from "@/lib/server-state";
 import {
-  appApiErrorMessage,
   useConfirmRegistrationVerificationMutation,
   useRegisterMutation,
   useRequestRegistrationVerificationMutation,
-} from "@/lib/server-state";
+} from "@/features/identity/endpoints";
 
 type RegistrationStep = "email" | "verification" | "profile";
 

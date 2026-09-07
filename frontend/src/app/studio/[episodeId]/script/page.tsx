@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { EpisodeProductionStudio } from "../episode-production-studio";
+import { EpisodeProductionStudio } from "@/features/episode-production/episode-production-studio";
 
 export const metadata: Metadata = {
   title: "剧本结构 · Lanverse",

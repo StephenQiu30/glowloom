@@ -31,17 +31,19 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
+import { appApiErrorMessage } from "@/lib/server-state";
 import {
-  appApiErrorMessage,
   useCompleteMediaUploadMutation,
-  useImportScriptDocumentMutation,
   useInitializeMediaUploadMutation,
   useLazyMediaVersionQuery,
+} from "@/features/media/endpoints";
+import {
+  useImportScriptDocumentMutation,
   usePreviewScriptDocumentMutation,
-} from "@/lib/server-state";
+} from "@/features/script/endpoints";
 
-import { EpisodePlanWorkspace } from "./episode-plan-workspace";
-import { ProductionBibleWorkspace } from "./production-bible-workspace";
+import { EpisodePlanWorkspace } from "@/features/planning/episode-plan-workspace";
+import { ProductionBibleWorkspace } from "@/features/production-bible/production-bible-workspace";
 
 const RIGHTS_DECLARATION = "我确认拥有该剧本用于本项目制作与分析的权利";
 const DOCX_MIME_TYPE =

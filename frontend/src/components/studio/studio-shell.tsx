@@ -6,7 +6,7 @@ import { BasicLayout } from "@/components/layout/basic-layout";
 import { layoutContainerClassName } from "@/components/layout/layout-container";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import { type StudioNavigation } from "@/lib/access-control";
-import { useMeQuery } from "@/lib/server-state";
+import { useMeQuery } from "@/features/identity/endpoints";
 
 export type { StudioNavigation } from "@/lib/access-control";
 export const studioContainerClassName = layoutContainerClassName;

@@ -1,6 +1,20 @@
 import request, { type RequestOptions } from "@/lib/request";
+import type { operations } from "./schema";
 
 type Envelope<T> = { data: T };
+
+type ReviewDecisionOperation = operations["decideProductionBibleReviewIssue"];
+
+export function decideProductionBibleReviewIssue(
+  params: ReviewDecisionOperation["parameters"]["path"],
+  body: ReviewDecisionOperation["requestBody"]["content"]["application/json"],
+  options?: RequestOptions,
+) {
+  return request<ReviewDecisionOperation["responses"][200]["content"]["application/json"]>(
+    `/api/production-bibles/${params.bible_id}/review-decisions`,
+    { method: "POST", data: body, ...(options ?? {}) },
+  );
+}
 
 export function createBibleApiDocumentRevisionsRevisionIdProductionBiblesPost(
   params: { revision_id: string },

@@ -6,17 +6,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState, useSyncExternalStore } from "react";
 
-import { RegistrationForm } from "@/components/auth/registration-form";
+import { RegistrationForm } from "@/features/identity/registration-form";
 import { StudioBrand } from "@/components/studio/studio-brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setAccessToken } from "@/lib/auth-session";
-import {
-  appApiErrorMessage,
-  useLoginMutation,
-} from "@/lib/server-state";
+import { appApiErrorMessage } from "@/lib/server-state";
+import { useLoginMutation } from "@/features/identity/endpoints";
 
 type AuthMode = "login" | "register";
 

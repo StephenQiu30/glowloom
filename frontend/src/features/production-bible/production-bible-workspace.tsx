@@ -20,15 +20,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { appApiErrorMessage } from "@/lib/server-state";
 import {
-  appApiErrorMessage,
   useCreateProductionBibleMutation,
   useCurrentProductionBibleQuery,
   useDecideProductionBibleReviewIssueMutation,
   useProductionBibleQuery,
   useResumeProductionBibleMutation,
-  type ProductionBibleWithDecisions,
-} from "@/lib/server-state";
+} from "@/features/production-bible/endpoints";
 
 const statusLabels: Record<API.ProductionBibleResponse["status"], string> = {
   cancelled: "已取消",
@@ -85,7 +84,7 @@ export function ProductionBibleWorkspace({
       : undefined;
   const bible = outdatedBible ? undefined : queriedBible;
   const busy = createState.isLoading || resumeState.isLoading || decideState.isLoading;
-  const reviewDecisions = (bible as ProductionBibleWithDecisions | undefined)?.review_decisions ?? {};
+  const reviewDecisions = bible?.review_decisions ?? {};
   const blockingIssues =
     bible?.review_issues.filter((issue) => issue.severity === "blocking") ?? [];
   const unresolvedBlockingIssues = blockingIssues.filter(

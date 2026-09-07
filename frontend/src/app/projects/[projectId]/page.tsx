@@ -1,4 +1,4 @@
-import { ProjectWorkspace } from "./project-workspace";
+import { ProjectWorkspace } from "@/features/project/project-workspace";
 
 export default async function ProjectPage({
   params,

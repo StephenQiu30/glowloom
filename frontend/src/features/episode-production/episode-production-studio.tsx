@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
 import request, { ApiClientError } from "@/lib/request";
 
-import type { EpisodePanel } from "./episode-studio-model";
+import type { EpisodePanel } from "@/features/episode-production/episode-studio-model";
 
 type Envelope<T> = { data: T };
 type Episode = {

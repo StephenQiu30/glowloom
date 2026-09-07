@@ -1,4 +1,4 @@
-import { ProjectDashboard } from "./project-dashboard";
+import { ProjectDashboard } from "@/features/project/project-dashboard";
 
 type ProjectsPageProps = {
   searchParams: Promise<{ workspace?: string | string[] }>;

@@ -1324,6 +1324,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProductionBibleReviewDecisionRequest: {
+            issue_key: string;
+            /** @enum {string} */
+            action: "accepted" | "rejected";
+            expected_revision: number;
+            idempotency_key: string;
+        };
+        ProductionBibleEnvelope: {
+            data: components["schemas"]["ProductionBibleResponse"];
+        };
         HumanTaskBaseResponse: {
             /** Format: uuid */
             id: string;
@@ -4317,16 +4327,27 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductionBibleReviewDecisionRequest"];
+            };
+        };
         responses: {
             /** @description 制作圣经审阅问题的人工决议已记录 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProductionBibleEnvelope"];
+                };
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     resumeProductionBible: {

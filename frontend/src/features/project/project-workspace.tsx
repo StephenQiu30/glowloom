@@ -10,15 +10,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
-import {
-  appApiErrorMessage,
-  useCurrentScriptDocumentQuery,
-  useEpisodesQuery,
-  useMeQuery,
-  useProjectQuery,
-} from "@/lib/server-state";
+import { appApiErrorMessage } from "@/lib/server-state";
+import { useCurrentScriptDocumentQuery } from "@/features/script/endpoints";
+import { useEpisodesQuery, useProjectQuery } from "@/features/project/endpoints";
+import { useMeQuery } from "@/features/identity/endpoints";
 
-import { ScriptDocumentImportCard } from "./script-document-import-card";
+import { ScriptDocumentImportCard } from "@/features/project/script-document-import-card";
 
 export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const sessionState = useAuthSessionState();

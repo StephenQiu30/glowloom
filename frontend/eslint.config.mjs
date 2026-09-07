@@ -12,8 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Generated API output is reviewed through deterministic regeneration and typecheck.
-    "src/api/**",
+    // Only these declarations are generated; transport wrappers remain handwritten.
+    "src/api/schema.d.ts",
+    "src/api/typings.d.ts",
   ]),
 ]);
 

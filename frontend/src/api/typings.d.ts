@@ -52,8 +52,10 @@ declare global {
     type ProductionBibleCreateRequest = components["schemas"]["ProductionBibleCreateRequest"];
     type ProductionBibleEntityResponse = components["schemas"]["ProductionBibleEntityResponse"];
     type ProductionBibleEntityStateResponse = components["schemas"]["ProductionBibleEntityStateResponse"];
+    type ProductionBibleEnvelope = components["schemas"]["ProductionBibleEnvelope"];
     type ProductionBibleResponse = components["schemas"]["ProductionBibleResponse"];
     type ProductionBibleResumeRequest = components["schemas"]["ProductionBibleResumeRequest"];
+    type ProductionBibleReviewDecisionRequest = components["schemas"]["ProductionBibleReviewDecisionRequest"];
     type ProductionBibleWorldEntryResponse = components["schemas"]["ProductionBibleWorldEntryResponse"];
     type ProfileUpdateRequest = components["schemas"]["ProfileUpdateRequest"];
     type ProjectCreateRequest = components["schemas"]["ProjectCreateRequest"];

@@ -10,7 +10,7 @@ import {
   canAccessPage,
   type StudioNavigation,
 } from "@/lib/access-control";
-import { useMeQuery } from "@/lib/server-state";
+import { useMeQuery } from "@/features/identity/endpoints";
 
 export function ProtectedRoute({
   page,
