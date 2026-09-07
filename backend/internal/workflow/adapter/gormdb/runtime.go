@@ -1011,9 +1011,10 @@ func (store *Store) ApplyHumanGate(
 		}
 		targetNodeStatus, targetRunStatus, progressStage := "FAILED", "NEEDS_ATTENTION", "human_gate:rejected"
 		nextAction := "review_rejected"
-		if decision == "approved" || decision == "selected" {
+		switch decision {
+		case "approved", "selected":
 			targetNodeStatus, targetRunStatus, progressStage, nextAction = "SUCCEEDED", "RUNNING", "human_gate:applied", ""
-		} else if decision == "changes_requested" {
+		case "changes_requested":
 			progressStage, nextAction = "human_gate:changes_requested", "revise_node_output"
 		}
 		candidateRevisionSubject :=

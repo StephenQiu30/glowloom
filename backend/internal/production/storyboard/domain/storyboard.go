@@ -808,19 +808,6 @@ func OrderHash(shots []Shot) (string, error) {
 	}
 	return canonicalHash(encoded)
 }
-func numberAsInt(value any) (int, bool) {
-	switch number := value.(type) {
-	case float64:
-		return int(number), number == float64(int(number))
-	case json.Number:
-		value, err := number.Int64()
-		return int(value), err == nil
-	case int:
-		return number, true
-	default:
-		return 0, false
-	}
-}
 func canonicalHash(raw []byte) (string, error) {
 	hash := sha256.Sum256(raw)
 	return hex.EncodeToString(hash[:]), nil

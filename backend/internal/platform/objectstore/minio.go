@@ -148,7 +148,7 @@ func (client *Client) ReadVerified(ctx context.Context, objectKey string, expect
 	if err != nil {
 		return nil, fmt.Errorf("get object: %w", err)
 	}
-	defer object.Close()
+	defer func() { _ = object.Close() }()
 	contents, err := io.ReadAll(io.LimitReader(object, maxBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read object: %w", err)

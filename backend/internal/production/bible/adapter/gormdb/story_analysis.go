@@ -623,11 +623,12 @@ func (store *Store) LoadStoryAnalysisReshardSeed(
 			return err
 		}
 		active := false
-		if invocation.Stage == domain.AnalyzeStoryStage {
+		switch invocation.Stage {
+		case domain.AnalyzeStoryStage:
 			for _, shard := range analyze.Shards {
 				active = active || shard.Key == invocation.ShardKey && shard.Status == "active"
 			}
-		} else if invocation.Stage == domain.ReconcileStoryStage {
+		case domain.ReconcileStoryStage:
 			for _, shard := range reconcile.Shards {
 				active = active || shard.Key == invocation.ShardKey && shard.Status == "active"
 			}

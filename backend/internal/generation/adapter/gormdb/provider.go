@@ -40,7 +40,7 @@ func (store *ProviderStore) WithinProviderTransaction(
 	if store == nil || store.database == nil || store.database.Config == nil || operation == nil {
 		return errors.New("Generation Provider transaction is not configured")
 	}
-	if store.database.Config.DisableNestedTransaction {
+	if store.database.DisableNestedTransaction {
 		return errors.New("Generation Provider transaction requires GORM nested transaction savepoints")
 	}
 	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {

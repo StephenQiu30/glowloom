@@ -44,7 +44,7 @@ func (store *PreparationStore) WithinPreparationTransaction(
 	if store == nil || store.database == nil || store.database.Config == nil || operation == nil {
 		return errors.New("Generation preparation transaction is not configured")
 	}
-	if store.database.Config.DisableNestedTransaction {
+	if store.database.DisableNestedTransaction {
 		return errors.New("Generation preparation requires GORM nested transaction savepoints")
 	}
 	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {

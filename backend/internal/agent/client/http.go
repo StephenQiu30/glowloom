@@ -51,7 +51,7 @@ func (client *HTTP) InvokeSceneAnalysis(
 	if err != nil {
 		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("Scene Analysis outcome unknown: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("Scene Analysis returned HTTP %d", response.StatusCode)
@@ -110,7 +110,7 @@ func (client *HTTP) Invoke(ctx context.Context, invocation contract.StageInvocat
 	if err != nil {
 		return contract.StageResult{}, fmt.Errorf("agent invocation outcome unknown: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		return contract.StageResult{}, fmt.Errorf("agent invocation returned HTTP %d", response.StatusCode)

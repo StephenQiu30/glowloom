@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/elastic/elastic-transport-go/v8/elastictransport"
 	"github.com/elastic/go-elasticsearch/v9"
 
 	search "github.com/StephenQiu30/lanverse/backend/internal/search/domain"
@@ -68,10 +69,15 @@ func New(config Config) (*Index, error) {
 			return nil, errors.New("Elasticsearch address is invalid")
 		}
 	}
-	client, err := elasticsearch.NewBaseClient(elasticsearch.Config{
-		Addresses: config.Addresses, Username: config.Username, Password: config.Password,
-		DisableRetry: true, AutoDrainBody: true,
-	})
+	options := []elasticsearch.Option{
+		elasticsearch.WithAddresses(config.Addresses...),
+		elasticsearch.WithTransportOptions(elastictransport.WithDisableRetry()),
+		elasticsearch.WithAutoDrainBody(),
+	}
+	if config.Username != "" || config.Password != "" {
+		options = append(options, elasticsearch.WithBasicAuth(config.Username, config.Password))
+	}
+	client, err := elasticsearch.NewBase(options...)
 	if err != nil {
 		return nil, fmt.Errorf("create Elasticsearch client: %w", err)
 	}
@@ -485,7 +491,7 @@ func (index *Index) perform(ctx context.Context, method, path string, body []byt
 	if err != nil {
 		return nil, 0, fmt.Errorf("perform Elasticsearch request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maximumResponseBytes+1))
 	if err != nil {
 		return nil, 0, fmt.Errorf("read Elasticsearch response: %w", err)

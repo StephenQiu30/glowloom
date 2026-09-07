@@ -68,8 +68,7 @@ func buildPackage(episodeID, inputHash string, shots []domain.Shot) (packageResu
 	writer := zip.NewWriter(&archive)
 	fixed := time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
 	for index, file := range files {
-		header := &zip.FileHeader{Name: file.name, Method: zip.Deflate}
-		header.SetModTime(fixed)
+		header := &zip.FileHeader{Name: file.name, Method: zip.Deflate, Modified: fixed}
 		header.SetMode(0o644)
 		entry, createErr := writer.CreateHeader(header)
 		if createErr != nil {

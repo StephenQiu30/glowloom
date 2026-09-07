@@ -179,13 +179,24 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	tokenVerifier := authentication.NewVerifier(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, func() time.Time { return time.Now().UTC() })
 	tokenIssuer := authentication.NewIssuer(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, configuration.AccessTokenTTL, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	verificationCode := authentication.RandomNumericCode
-	verificationDeliveryEnabled := false
+	var verificationSender identityapp.VerificationSender = identityverification.ConfiguredSender{}
 	if configuration.RegistrationVerificationCode != "" {
 		verificationCode = func() string { return configuration.RegistrationVerificationCode }
-		verificationDeliveryEnabled = true
+	}
+	if configuration.SMTP.Enabled {
+		verificationSender = identityverification.NewSMTPSender(identityverification.SMTPConfig{
+			Enabled:   configuration.SMTP.Enabled,
+			Host:      configuration.SMTP.Host,
+			Port:      configuration.SMTP.Port,
+			TLSMode:   configuration.SMTP.TLSMode,
+			Username:  configuration.SMTP.Username,
+			Password:  configuration.SMTP.Password,
+			FromEmail: configuration.SMTP.FromEmail,
+			FromName:  configuration.SMTP.FromName,
+		})
 	}
 	identityStore := identitygorm.New(database)
-	identityService, err := identityapp.NewService(identityStore, authentication.NewPasswordHasher(), tokenIssuer, identityverification.ConfiguredSender{Enabled: verificationDeliveryEnabled}, identityapp.Config{
+	identityService, err := identityapp.NewService(identityStore, authentication.NewPasswordHasher(), tokenIssuer, verificationSender, identityapp.Config{
 		AccessTokenTTL:   configuration.AccessTokenTTL,
 		SessionTTL:       configuration.SessionTTL,
 		DigestSecret:     configuration.JWTSecret,

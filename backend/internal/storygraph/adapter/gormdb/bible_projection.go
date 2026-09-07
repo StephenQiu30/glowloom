@@ -361,9 +361,10 @@ func projectBibleClaims(projection *snapshotProjection, projectID uuid.UUID) err
 				return invalidOwnerSnapshot("Production Bible Claim references an unknown Identity")
 			}
 			role := "participant"
-			if index == 0 {
+			switch index {
+			case 0:
 				role = "subject"
-			} else if index == 1 {
+			case 1:
 				role = "object"
 			}
 			participants[index] = storygraph.ClaimParticipant{Role: role, StoryNodeKey: identity.StoryNodeKey}

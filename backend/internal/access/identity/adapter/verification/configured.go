@@ -2,12 +2,11 @@ package verification
 
 import "context"
 
-// ConfiguredSender is only enabled when the runtime explicitly supplies a
-// verification code (for local development or isolated end-to-end tests).
-// Production delivery is intentionally reported as unavailable until an SMTP
-// adapter is configured; the API never claims that an email was sent when it was not.
-type ConfiguredSender struct{ Enabled bool }
+// ConfiguredSender supports a fixed verification code for local development or
+// isolated end-to-end tests. It never reports an email delivery because it does
+// not contact an external provider.
+type ConfiguredSender struct{}
 
-func (sender ConfiguredSender) Send(context.Context, string, string) (bool, error) {
-	return sender.Enabled, nil
+func (ConfiguredSender) Send(context.Context, string, string) (bool, error) {
+	return false, nil
 }

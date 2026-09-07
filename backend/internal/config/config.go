@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/mail"
 	"net/url"
 	"os"
 	"regexp"
@@ -57,6 +58,17 @@ type AgentRuntimeRevision struct {
 	ImageDigest string `json:"image_digest"`
 }
 
+type SMTPConfig struct {
+	Enabled   bool
+	Host      string
+	Port      int
+	TLSMode   string
+	Username  string
+	Password  string
+	FromEmail string
+	FromName  string
+}
+
 type Config struct {
 	ListenAddress                   string
 	DatabaseURL                     string
@@ -67,6 +79,7 @@ type Config struct {
 	SessionTTL                      time.Duration
 	Environment                     string
 	RegistrationVerificationCode    string
+	SMTP                            SMTPConfig
 	AllowedOrigins                  []string
 	ObjectStoreEndpoint             string
 	ObjectStorePublicEndpoint       string
@@ -127,6 +140,13 @@ func Load() (Config, error) {
 	verificationCode := os.Getenv("REGISTRATION_VERIFICATION_CODE")
 	if verificationCode != "" && !numericVerificationCode.MatchString(verificationCode) {
 		return Config{}, errors.New("REGISTRATION_VERIFICATION_CODE must contain exactly 6 digits")
+	}
+	smtp, err := loadSMTPConfig()
+	if err != nil {
+		return Config{}, err
+	}
+	if smtp.Enabled && verificationCode != "" {
+		return Config{}, errors.New("REGISTRATION_VERIFICATION_CODE must be empty when SMTP is enabled")
 	}
 	allowedOrigins, err := stringList("CORS_ORIGINS", []string{"http://localhost:8123", "http://127.0.0.1:8123"})
 	if err != nil {
@@ -250,6 +270,7 @@ func Load() (Config, error) {
 		SessionTTL:                      time.Duration(sessionSeconds) * time.Second,
 		Environment:                     environmentValue("ENVIRONMENT", "development"),
 		RegistrationVerificationCode:    verificationCode,
+		SMTP:                            smtp,
 		AllowedOrigins:                  allowedOrigins,
 		ObjectStoreEndpoint:             environmentValue("MINIO_ENDPOINT", "127.0.0.1:9000"),
 		ObjectStorePublicEndpoint:       environmentValue("MINIO_PUBLIC_ENDPOINT", "127.0.0.1:9000"),
@@ -285,6 +306,49 @@ func Load() (Config, error) {
 		ElasticsearchScriptAlias:        scriptAlias,
 		ElasticsearchStoryGraphAlias:    storyGraphAlias,
 	}, nil
+}
+
+func loadSMTPConfig() (SMTPConfig, error) {
+	enabled, err := boolean("SMTP_ENABLED", false)
+	if err != nil {
+		return SMTPConfig{}, err
+	}
+	port, err := positiveInteger("SMTP_PORT", 465)
+	if err != nil || port > 65535 {
+		return SMTPConfig{}, errors.New("SMTP_PORT must use a port between 1 and 65535")
+	}
+	configuration := SMTPConfig{
+		Enabled:   enabled,
+		Host:      strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		Port:      port,
+		TLSMode:   strings.ToLower(strings.TrimSpace(environmentValue("SMTP_TLS_MODE", "tls"))),
+		Username:  strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		Password:  os.Getenv("SMTP_PASSWORD"),
+		FromEmail: strings.TrimSpace(os.Getenv("SMTP_FROM_EMAIL")),
+		FromName:  strings.TrimSpace(environmentValue("SMTP_FROM_NAME", "Lanverse")),
+	}
+	if !configuration.Enabled {
+		return configuration, nil
+	}
+	switch {
+	case configuration.Host == "" || strings.ContainsAny(configuration.Host, " \t\r\n/"):
+		return SMTPConfig{}, errors.New("SMTP_HOST must be a valid host when SMTP is enabled")
+	case configuration.TLSMode != "tls" && configuration.TLSMode != "starttls":
+		return SMTPConfig{}, errors.New("SMTP_TLS_MODE must be tls or starttls")
+	case !validMailbox(configuration.FromEmail):
+		return SMTPConfig{}, errors.New("SMTP_FROM_EMAIL must be a valid mailbox")
+	case (configuration.Username == "") != (configuration.Password == ""):
+		return SMTPConfig{}, errors.New("SMTP_USERNAME and SMTP_PASSWORD must be configured together")
+	case strings.ContainsAny(configuration.FromName, "\r\n"):
+		return SMTPConfig{}, errors.New("SMTP_FROM_NAME must not contain line breaks")
+	default:
+		return configuration, nil
+	}
+}
+
+func validMailbox(value string) bool {
+	address, err := mail.ParseAddress(value)
+	return err == nil && address.Name == "" && address.Address == value
 }
 
 func serviceURL(name, fallback string) (string, error) {

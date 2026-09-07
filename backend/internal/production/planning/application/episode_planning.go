@@ -560,9 +560,10 @@ func buildPlanningScenes(
 			}
 			seenParticipants[key] = struct{}{}
 			role := "participant"
-			if index == 0 {
+			switch index {
+			case 0:
 				role = "subject"
-			} else if index == 1 {
+			case 1:
 				role = "object"
 			}
 			participants[index] = domain.PlanningClaimParticipant{Role: role, Identity: planningIdentityReference(identity)}
