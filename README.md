@@ -65,6 +65,19 @@ docker compose --env-file .env \
 
 日常测试直接复用已启动环境，不需要每轮重启。默认环境栈不会创建 PostgreSQL、MinIO、Kafka、Elasticsearch 或 Kibana 容器。本机服务需要满足 `.env` 中的地址与认证配置；Homebrew Kafka 需要公布容器可达的 Broker 地址并已创建项目 Topic，Elasticsearch 需要存在 Lanverse 使用的账号、模板和索引。
 
+ELK 由环境统一管理，Backend 启动不再执行 Elasticsearch/Kibana 初始化或历史日志索引迁移。保留现有 ELK 服务与数据；新环境需先配置以下资源，再启动应用日志写入：
+
+| 环境资源 | 配置契约 |
+| --- | --- |
+| ILM `lanverse-logs-application-30d` | `backend/observability/elasticsearch/ilm-policy.json`；按日或 10 GB 滚动，保留 30 天 |
+| 索引模板 `lanverse-logs-application` | `backend/observability/logstash/template/lanverse-logs-template.json`；保留严格字段映射 |
+| 写入别名 `lanverse-logs-application` | 指向符合上述模板的 backing index，并指定 `is_write_index: true` |
+| 写入别名 `lanverse-logs-dead-letter` | backing index 绑定上述 ILM 和对应 rollover alias；保留无效日志的脱敏摘要 |
+| Kibana Data View `lanverse-logs-application` | title 为 `lanverse-logs-application-*`，时间字段为 `@timestamp` |
+
+环境维护者负责权限、配置导入与旧索引迁移。业务检索别名 `lanverse-script-search`、`lanverse-storygraph-search` 仍由 Search 模块维护，与日志配置分离。CI 的一次性环境独立准备上述验收资源。
+
+
 零 Provider 配置时无需准备媒体密钥，开发 Compose 会把空 Secret 挂载到 Backend，Provider 配置命令失败关闭而其他能力保持可用。需要保存 Provider 配置时，只在本机创建 `chmod 600` 的 32-byte root-key 文件并把路径写入 `LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE`；Backend 的 root 启动器只在容器 tmpfs 中生成 `0400/lanverse` 的固定路径副本，随后立即通过 `su-exec` 降权执行唯一 Go Binary，非 tmpfs 挂载直接失败关闭。火山、OpenAI、Google 的 API Key 始终不写入 `.env`。当前只有 Backend 领域服务与持久化合同，Web 配置入口按顺序在 `SG-I22` 交付。
 
 只有需要完全隔离的容器内存储时才显式启用对应 profile，并让应用连接容器服务：
@@ -122,4 +135,4 @@ npm run build
 
 最终 `agent-browser` 验收只在所有 StoryGraph 实施任务、真实依赖全旅程与自动化回归全部完成后执行；当前进度和未决风险以 [StoryGraph 验收标准](docs/acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md)为准。
 
-本地隔离环境可通过 `.env.example` 的固定验证码完成注册测试；生产环境未接入验证码投递 Provider 前，自助注册不属于可用能力。
+本地隔离环境可通过 `.env.example` 的固定验证码完成注册测试。真实注册邮件使用 SMTP：将 `REGISTRATION_VERIFICATION_CODE` 留空，配置 `SMTP_ENABLED=true`、服务商地址、TLS 模式、账号、授权码和发件人信息；生产 Compose 会强制要求完整 SMTP 配置。固定验证码与 SMTP 同时启用时 Backend 会拒绝启动，避免把公开测试码发送到真实邮箱。

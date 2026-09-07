@@ -2,9 +2,9 @@
 
 - 状态：Production Bible Owner Receipt 返回契约切片通过；Workflow 绑定尚未接入
 - 日期：2026-08-26
-- PRD：[项目制作圣经产品需求](../prd/3001-项目制作圣经产品需求.md)
+- PRD：[项目制作圣经产品需求（历史版本）](https://github.com/StephenQiu30/lanverse/blob/3f36e3219f26bf3d64729c94419e1eef6033bed5/docs/prd/3001-项目制作圣经产品需求.md)
 - Design：[项目制作圣经生成执行框架设计](../design/3001-项目制作圣经生成执行框架设计.md) · [后端领域模块功能设计](../design/2002-后端领域模块功能设计.md)
-- Requirement：[项目制作圣经需求规格](../requirement/3001-项目制作圣经需求规格.md) · [后端领域服务与生产闭环需求规格](../requirement/2002-后端领域服务与生产闭环需求规格.md)
+- Requirement：[项目制作圣经需求规格（历史版本）](https://github.com/StephenQiu30/lanverse/blob/3f36e3219f26bf3d64729c94419e1eef6033bed5/docs/requirement/3001-项目制作圣经需求规格.md) · [后端领域服务与生产闭环需求规格](../requirement/2002-后端领域服务与生产闭环需求规格.md)
 - Plan：[后端领域服务与生产闭环实施计划](../plan/2002-后端领域服务与生产闭环实施计划.md)
 - 前置验收：[Workflow 人工栅栏输入与决议绑定验收记录](2021-Workflow人工栅栏输入与决议绑定验收记录.md)
 

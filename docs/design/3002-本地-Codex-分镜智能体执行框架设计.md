@@ -4,8 +4,9 @@
 - 历史事实：旧版曾于 `SG-D12` 接受 Draft → `needs_asset` → 参考资产 → Detail 链；该顺序由本文整体取代，旧运行只允许按精确 legacy Wire/Bundle/Runtime 完成历史重放
 - 接受记录：`VP-D08`（2026-08-30）；产品主链、Wire/Schema、Owner/恢复三轴隔离反例评审均通过（最终正文评审 SHA-256 `8d40b29a8309cf86fc364a72f552b7da7951aa26f75c0b78bc79e851a13cd860`）
 - 已接受前置：[剧本视觉生产工作台与世界观预设设计](0011-剧本视觉生产工作台与世界观预设设计.md) · [StoryGraph 内容图与 DAG 创作画布设计](0010-StoryGraph内容图与DAG创作画布设计.md) · [项目制作圣经生成执行框架设计](3001-项目制作圣经生成执行框架设计.md) · [StoryGraph 剧本解析 Harness 与内置 Skill 设计](3003-StoryGraph剧本解析Harness与内置Skill设计.md)
-- 历史派生：[产品需求](../prd/3002-本地-Codex-分镜智能体产品需求.md) · [需求规格](../requirement/3002-本地-Codex-分镜智能体执行框架需求规格.md) · [实施计划](../plan/3002-本地-Codex-分镜智能体执行框架实施计划.md) · [验收标准](../acceptance/3002-本地-Codex-分镜智能体执行框架验收标准.md)；全部继续冻结，分别等待 `VP-D13`–`VP-D15` 的统一文档链
 - 下一设计门：[后端领域模块功能设计](2002-后端领域模块功能设计.md)（`VP-D09`）
+
+- 当前派生：[统一产品需求](../prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) · [统一需求规格](../requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) · [唯一实施计划](../plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) · [验收标准](../acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md)。旧派生文件已删除，历史版本由 Git 追溯。
 
 ## 1. 结论
 

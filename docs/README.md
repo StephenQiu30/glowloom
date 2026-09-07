@@ -2,6 +2,8 @@
 
 `docs/` 是产品范围、技术决策、可验证需求、实施顺序和验收证据的长期事实入口。目录只保留 `design/`、`prd/`、`requirement/`、`plan/`、`acceptance/` 五类文档；架构与设计决策统一收口到 `design/`，不再建立平行目录。
 
+结构治理规范已收口至各模块 Design；验证与清理范围见 [结构治理验收记录](acceptance/0012-项目结构治理与ELK环境边界验收记录.md)。
+
 复杂功能先读取当前正式文档、代码、依赖、Schema、接口、测试和真实运行状态，再形成 Design；Design 必须把“当前事实”“目标设计”和“尚未验证”分开。既有实现可以作为设计输入和缺口证据，但不能自动证明新 Requirement、Plan 或 Acceptance 已完成。所有新实施与目标验收 Checklist 初始均为 `[ ]`。
 
 ## 目录职责
@@ -38,33 +40,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 
 ## 当前 StoryGraph 设计文件推进顺序
 
-下表是当前 StoryGraph 主题唯一的文档推进队列，不按文件编号、目录顺序或旧 Plan 顺序并行实施。任意时刻只激活一步；上一步已评审、完成必要修订、通过文档检查并独立提交后，下一步才解锁。只复核且无语义变化时，只更新本队列的当前步骤/复核证据并提交该可追溯状态，不为目标 Design 制造无意义正文变更或空提交。
-
-| Step | 唯一对象 | 本步完成门 | 未完成时的限制 |
-|---|---|---|---|
-| `SG-D01` | [0010 StoryGraph 总设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | **已完成（2026-08-27；通用媒体 Provider/Shot 视频关系 2026-08-29 同步）**：用户已接受 StoryGraph、DAG、角色/地点视觉、四图与图片/视频生产关系边界 | 当前只作为总设计事实；文档门禁已推进到 `SG-D17` |
-| `SG-D02` | [3003 Agent/Harness 子设计](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | **已完成（2026-08-27）**：用户已接受 Bundle、Stage、Shard、Candidate Revision 和 Codex 边界 | 仅解锁 `SG-D03`；不以 Agent 子设计反向改写 `0010` |
-| `SG-D03` | [0006 领域语言](design/0006-领域语言与模块命名规范.md) | **已完成（2026-08-27）**：已固定 StoryGraph、Asset/State/Version、Claim、Occurrence 和 Binding 规范名 | 仅解锁 `SG-D04`；下游 Design 不得自创同义词 |
-| `SG-D04` | [0001 完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | **已完成（2026-08-27；日志拓扑 2026-08-28、通用媒体 Provider 2026-08-29 同步）**：平台主干收口为 StoryGraph 与四图边界，并固定 Kafka 业务异步解耦、剧本/StoryGraph 检索、Backend → Logstash 日志链路和可空通用媒体 Provider | 仅解锁 `SG-D05`；不先改其他子模块 |
-| `SG-D05` | [2003 语言与运行边界](design/2003-后端语言与运行边界策略.md) | **已完成（2026-08-27）**：固定 Backend 唯一 Writer、GORM Catalog、`agent/skills/build-storygraph`、受控 Codex CLI 与按真实消费者创建 Binary | 仅解锁 `SG-D06`；不在 Agent 增加业务 Writer |
-| `SG-D06` | [0003 系统总体架构](design/0003-系统总体架构.md) | **已完成（2026-08-27；日志拓扑 2026-08-28、通用媒体 Provider 2026-08-29 同步）**：重建 StoryGraph/四图系统图、两条 Compiler 链、单 Writer、Kafka 业务检索、直连 Logstash 日志和媒体 Provider 配置/执行事实边界 | 仅解锁 `SG-D07`；不把 StoryGraph 与 WorkflowDefinition 合并 |
-| `SG-D07` | [0004 分层与依赖](design/0004-架构分层与依赖规则.md) | **已完成（2026-08-27）**：固定 Compiler、Harness、Owner Apply、Kafka Consumer/Projection 的单向依赖与独立测试目录 | 仅解锁 `SG-D08`；不新建通用空层 |
-| `SG-D08` | [0009 已验收 MVP 纵向切片](design/0009-剧本到分镜MVP垂直切片设计.md) | **已完成（2026-08-27）**：只增加 StoryGraph/视觉资产/Harness/Kafka-ELK 演进与新旧证据隔离说明 | 仅解锁 `SG-D09`；历史 `0009` Plan/Acceptance 不得抵扣新验收 |
-| `SG-D09` | [2001 Backend 服务架构](design/2001-后端服务架构.md) | **已完成（2026-08-27；通用媒体 Provider 2026-08-29 同步）**：固定单 Backend/GORM Catalog、Temporal、私有 Agent、Provider Registry/Secret Resolver、Kafka/Search/ELK 目标与当前缺口 | 仅解锁 `SG-D10`；不引入 Migration、Raw SQL、第二 ORM 或第二 Writer |
-| `SG-D10` | [2002 Backend 领域设计](design/2002-后端领域模块功能设计.md) | **已完成（2026-08-27；通用媒体 Provider 2026-08-29 同步）**：固定 StoryGraph Compiler、Candidate→Owner Apply、Asset/Specification/State、四类 Binding、Provider 配置/执行与 Kafka/Search 领域边界 | 仅解锁 `SG-D11`；不开始 Harness 或 Canvas |
-| `SG-D11` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | **已完成（2026-08-27）**：改为 Evidence/Claim/Specification/State 的 StoryGraph 上游，拆开 Bible Confirm 与资产物化 | 仅解锁 `SG-D12`；旧 `3001` 派生文档继续冻结 |
-| `SG-D12` | [3002 本地 Codex 分镜 Harness](design/3002-本地-Codex-分镜智能体执行框架设计.md) | **已完成（2026-08-27）**：收口到 `3003` 唯一 Bundle，固定 Draft `needs_asset`、付费前 Gate 与 Detail 精确资产边界 | 仅解锁 `SG-D13`；旧 `3002` 派生文档继续冻结 |
-| `SG-D13` | [2051 通用媒体 Provider](design/2051-通用媒体Provider与Generation执行器设计.md) | **已重新接受（2026-08-29）**：固定 CC-Switch 风格内置 `MediaProviderPresetDescriptor`、Web 创建持久连接、加密凭据，并强制真实接入 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 当前四个官方模型 | 受影响 Design 已同步；现在只解锁 `SG-D17`，四类 Provider 均为完成条件 |
-| `SG-D14` | [1001 前端应用架构](design/1001-前端应用架构.md) | **已重新同步（2026-08-29）**：在单 npm/Next.js、RTK Query 和只读 Lens 边界内加入 Workspace Provider Settings 与 Project Binding | 仅解锁 `SG-D15`；浏览器仍不直连 Provider |
-| `SG-D15` | [1002 前端功能模块](design/1002-前端功能模块设计.md) | **已重新同步（2026-08-29）**：对齐 Provider Settings、角色/地点卡、媒体审核、图片/视频 Binding、Story Lens 与 Workflow 诊断 | 仅解锁 `SG-D16`；不模拟 Backend 成功 |
-| `SG-D16` | [2055 公共 Human Gate](design/2055-Workflow公共HumanGate命令与恢复设计.md) | **已重新同步（2026-08-29）**：固定 Decision → Owner Apply → Workflow Resume 三阶段、八类显式 Gate 与同 ID 恢复 | 仅解锁 `SG-D17`；不从旧 Decision 套用漂移 Subject |
-| `SG-D17` | [0010 StoryGraph PRD](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | **已重新接受（2026-08-29）**：Web Provider 配置、四类必接 Adapter、图片/视频 Binding 与真实模型验收均进入当前 MVP | 只解锁 `SG-D18` Requirement；仍不编码 |
-| `SG-D18` | [0010 跨服务 Requirement](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | **已重新接受（2026-08-29）**：固定 Provider 配置/密钥/单次调用事实、三类图片协议、Seedance 视频协议、Web 设置与图片/视频 Binding 契约 | 只解锁 `SG-D19` Agent Requirement 复核；仍不编码 |
-| `SG-D19` | [3003 Agent Contract Requirement](requirement/3003-StoryGraph剧本解析Harness与内置Skill需求规格.md) | **已复核接受（2026-08-29）**：Skill/Bundle、Wire、Stage/Shard、Candidate Revision、Codex CLI 与恢复契约不变；媒体 Provider Secret/Adapter/调用明确不进入 Agent | 只解锁 `SG-D20` 唯一总 Plan；仍不编码 |
-| `SG-D20` | [0010 唯一总 Plan](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | **已重新接受（2026-08-29）**：保留 `SG-I01`–`SG-I19` 历史完成事实，按配置→调用→Web→三类图片→图片选择→分镜→视频→Canvas→最终验收重排 `SG-I20`–`SG-I35` | 只解锁 `SG-D21` Acceptance；仍不编码 |
-| `SG-D21` | [0010 Acceptance Criteria](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | **已重新接受（2026-08-29）**：保留未变合同历史 Evidence；新增/改写媒体合同与 `SG-I20`–`SG-I35` 全部建立为未通过目标 | 文档链路完成，只解锁新版 `SG-I20`；历史 Runware 证据不抵扣新目标 |
-
-`SG-D01`–`SG-D21` 曾于 2026-08-27 依次接受，`SG-I01`–`SG-I19` 已通过各自完成门并分别回填 Evidence；2026-08-29 用户将 `2051` 从固定 Runware/环境变量改为可空启动、Backend 管理、Web 配置的通用媒体 Provider 服务，要求参考 CC-Switch 用内置 `MediaProviderPresetDescriptor` 实例化跨重启持久连接，并明确 Seedream 5.0 Pro+、Seedance 2.0+、GPT Image 2 与 Nano Banana 当前四个官方模型都是当前必接范围而不是计划或预留。`SG-D13` 和受影响 Design、`SG-D17` PRD、`SG-D18` Requirement、`SG-D19` Agent Requirement、`SG-D20` 唯一总 Plan、`SG-D21` Acceptance 已重新接受；`SG-I20` 已于 2026-08-30 完成 Media Provider Descriptor Factory、不可变配置版本、Secret Store、root-key Docker Secret、零配置启动和旧 Runware/环境变量链原子删除，并通过当时完整真实 CI。`SG-I21` 当前存在尚未提交的工作区增量；2026-08-30 用户接受 `0011` 后，这些事实原样保留但暂停扩展，不声明完成，也不抵扣视觉生产新目标。当前唯一入口切换到下方 `VP-Dxx` 队列，`VP-D01`–`VP-D15` 已随各自接受记录独立完成；全部新目标验收仍为未通过，当前只实施 `VP-I01`；`plan/0007`、`plan/0008` 仍只表达未来 Platform Complete 目标，旧 `3001/3002` PRD、Requirement、Plan 与 Acceptance 持续冻结。
+StoryGraph 的 `SG-D01`–`SG-D21` 已完成历史文档评审，`SG-I01`–`SG-I20` 保留当时实现事实；`SG-I21` 的已有代码增量不代表切片完成。2026-08-30 接受视觉生产设计后，当前执行以以下 VP 队列和 [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) 为准。旧流程不再保留一份重复的逐步解锁表，历史评审过程通过 Git 追溯，旧证据不抵扣当前目标。
 
 ## 当前视觉生产重排推进顺序
 
@@ -128,10 +104,8 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | 编号 | 主题 | PRD | Design | Requirement | Plan | Acceptance | 当前状态 |
 |---|---|---|---|---|---|---|---|
 | `0001` | 平台产品与完整设计基线 | [产品范围与验收基线](prd/0001-产品范围与验收基线.md) | [完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | [平台 MVP 需求规格](requirement/0001-平台MVP需求规格.md) | [见 0007 交付计划](plan/0007-平台0到1交付计划.md) | — | `VP-D03` 视觉生产主链与 MVP 边界已接受完成；此前 `SG-D04` 平台事实保留，旧 PRD/Requirement/Plan 不抵扣新目标 |
-| `0002` | 采用目标平台架构 | — | [架构决策](design/0002-采用目标平台架构决策.md) | — | — | — | 已接受目标 |
 | `0003` | 系统总体架构 | — | [总体架构](design/0003-系统总体架构.md) | — | — | — | `VP-D04` 视觉生产跨服务架构已接受完成；此前 `SG-D06` 四图与基础设施事实保留 |
 | `0004` | 架构分层与依赖 | — | [分层规则](design/0004-架构分层与依赖规则.md) | — | — | — | 已接受目标；`SG-D07` StoryGraph 依赖方向复核完成 |
-| `0005` | 中文语义化文档与模块命名 | — | [命名决策](design/0005-采用中文语义化文档与模块命名决策.md) | — | — | — | 已接受目标 |
 | `0006` | 领域语言与模块命名 | — | [命名规范](design/0006-领域语言与模块命名规范.md) | — | — | — | `VP-D02` 视觉生产术语已接受（2026-08-30）；此前 `SG-D03` 事实保留 |
 | `0007` | 平台 0→1 交付 | — | — | — | [交付计划](plan/0007-平台0到1交付计划.md) | — | 未来 Platform Complete 目标；当前不是 StoryGraph 执行入口 |
 | `0008` | 资源所有权与交付 | — | — | — | [所有权台账](plan/0008-资源所有权与交付台账.md) | — | 未来 Platform Complete 资源目标；当前不是 StoryGraph 执行入口 |
@@ -139,7 +113,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `0010` | StoryGraph 内容图、DAG 与视觉资产 | [产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [内容图与 DAG 创作画布设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | [跨服务需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | `VP-D15` 已接受 P0–P4 唯一 Plan 与全未通过 Acceptance；旧 `SG-I01`–`SG-I20` 仅保留历史事实，`SG-I21` 增量暂停，当前实施 `VP-I01` |
 | `0011` | 剧本视觉生产工作台与世界观预设 | — | [跨服务产品设计](design/0011-剧本视觉生产工作台与世界观预设设计.md) | — | — | — | 已接受目标（2026-08-30）；`VP-D01`–`VP-D15` 已完成，当前只实施 `VP-I01`，不表示后续功能已实现 |
 | `1001` | 前端应用架构与交付 | — | [应用架构](design/1001-前端应用架构.md) | [架构需求规格](requirement/1001-前端应用架构需求规格.md) | [应用与功能交付计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D14` 已同步单应用、Provider Settings、只读双 Lens 与 Query Owner；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
-| `1002` | 前端创作工作台与功能模块 | [创作工作台产品需求](prd/1002-前端创作工作台产品需求.md) | [模块设计](design/1002-前端功能模块设计.md) | [功能需求规格](requirement/1002-前端功能模块需求规格.md) | [合并至 1001 计划](plan/1001-前端应用与功能交付实施计划.md) | — | `VP-D12` 已接受项目级 Guided Studio、五 Gate、逐 Target Bundle 审核、影响抽屉、RTK Query 状态 Owner 与失败/响应式边界；旧派生文档继续冻结到 `VP-D13`–`VP-D15` |
+| `1002` | 前端创作工作台与功能模块 | [创作工作台产品需求](prd/1002-前端创作工作台产品需求.md) | [模块设计](design/1002-前端功能模块设计.md) | [功能需求规格](requirement/1002-前端功能模块需求规格.md) | [合并至 1001 计划](plan/1001-前端应用与功能交付实施计划.md) | — | `VP-D12` 已接受项目级 Guided Studio、五 Gate、逐 Target Bundle 审核、影响抽屉、RTK Query 状态 Owner 与失败/响应式边界；旧派生文档按替代范围清理到 `VP-D13`–`VP-D15` |
 | `2001` | 后端服务与运行架构 | — | [服务架构](design/2001-后端服务架构.md) | [运行架构需求规格](requirement/2001-后端运行架构需求规格.md) | [运行架构实施计划](plan/2001-后端运行架构实施计划.md) | [统一入口与本机环境复用](acceptance/2057-Backend统一入口与本机环境复用验收记录.md) | 单 Backend Binary、三层 Compose 与直连现有 Logstash 已通过本机完成门；远端 CI 待后续 push 触发 |
 | `2002` | 后端领域服务与生产闭环 | — | [模块设计](design/2002-后端领域模块功能设计.md) | [领域服务需求规格](requirement/2002-后端领域服务与生产闭环需求规格.md) | [生产闭环实施计划](plan/2002-后端领域服务与生产闭环实施计划.md) | [持久任务恢复](acceptance/2007-Workflow持久任务恢复验收记录.md) · [编译输入前置](acceptance/2008-Workflow编译输入前置验收记录.md) · [确定性编译](acceptance/2009-Workflow确定性编译验收记录.md) · [启动与对账](acceptance/2010-Workflow启动事实与Temporal对账验收记录.md) · [人工信号协调](acceptance/2011-Workflow人工信号协调验收记录.md) · [取消控制协调](acceptance/2012-Workflow取消控制协调验收记录.md) · [人工任务续租与释放](acceptance/2013-Workflow人工任务续租与释放验收记录.md) · [人工任务过期回收](acceptance/2014-Workflow人工任务过期回收验收记录.md) · [暂停与恢复控制](acceptance/2015-Workflow暂停与恢复控制协调验收记录.md) · [Worker 重启恢复](acceptance/2016-Workflow工作者重启恢复验收记录.md) · [Node Cache 确定性事实](acceptance/2017-Workflow节点缓存确定性事实验收记录.md) · [Node 输出绑定](acceptance/2018-Workflow节点输出绑定验收记录.md) · [Node 输入冻结](acceptance/2019-Workflow节点输入冻结验收记录.md) · [Node Runtime Cache](acceptance/2020-Workflow节点运行缓存验收记录.md) · [Human Gate 输入与决议绑定](acceptance/2021-Workflow人工栅栏输入与决议绑定验收记录.md) · [Production Bible Owner Receipt](acceptance/2022-ProductionBible确认回执验收记录.md) · [Workflow Owner Receipt 与 Gate 输出](acceptance/2023-Workflow生产回执与人工栅栏输出验收记录.md) · [Workflow 执行身份与 Script Executor](acceptance/2024-Workflow执行身份与剧本输入节点验收记录.md) · [重复投递收敛](acceptance/2052-Workflow重复投递收敛验收记录.md) · [Agent 执行策略与独立失败](acceptance/2053-Agent执行策略与独立失败验收记录.md) · [Agent 执行总时限](acceptance/2054-Agent执行总时限验收记录.md) · [阶段 5 完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | `SG-D10` 领域 Owner 复核完成；历史验收只证明既有切片，不抵扣 StoryGraph 新链路 |
 | `2003` | 后端语言与运行边界 | — | [运行边界策略](design/2003-后端语言与运行边界策略.md) | — | — | — | 已接受目标；`SG-D05` StoryGraph/Agent 运行边界复核完成 |
@@ -147,8 +121,8 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 | `2055` | Workflow 公共 Human Gate 命令与恢复 | — | [公共 Human Gate 设计](design/2055-Workflow公共HumanGate命令与恢复设计.md) | — | — | — | `VP-D11` 已接受五 Gate strict Subject/Decision、Gate 4 per-target task、显式 Effect Plan 与 Decision→Effect→Resume 恢复；旧八类 Gate 只保留历史 |
 | `2056` | Workflow 阶段 5 完成度审计 | — | — | — | — | [完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | 静态证据审计完成，未改变阶段完成状态 |
 | `2057` | Backend 统一入口与本机环境复用 | — | [服务架构](design/2001-后端服务架构.md) | [运行架构需求规格](requirement/2001-后端运行架构需求规格.md) | [运行架构实施计划](plan/2001-后端运行架构实施计划.md) | [验收记录](acceptance/2057-Backend统一入口与本机环境复用验收记录.md) | 阶段 6 本机完成门通过；远端 CI 未触发 |
-| `3001` | 项目制作圣经与完整剧本闭环 | [产品需求](prd/3001-项目制作圣经产品需求.md) | [执行框架设计](design/3001-项目制作圣经生成执行框架设计.md) | [需求规格](requirement/3001-项目制作圣经需求规格.md) | [实施计划](plan/3001-项目制作圣经实施计划.md) | [验收 Checklist](acceptance/3001-完整剧本业务闭环验收标准.md) | `VP-D06` 已完成 SceneFact-first、两 Gate 与多 Owner 调和同步；旧 `SG-D11` 顺序由该设计取代，历史派生文档继续冻结 |
-| `3002` | 本地 Codex 分镜智能体 | [产品需求](prd/3002-本地-Codex-分镜智能体产品需求.md) | [执行框架设计](design/3002-本地-Codex-分镜智能体执行框架设计.md) | [需求规格](requirement/3002-本地-Codex-分镜智能体执行框架需求规格.md) | [实施计划](plan/3002-本地-Codex-分镜智能体执行框架实施计划.md) | [验收 Checklist](acceptance/3002-本地-Codex-分镜智能体执行框架验收标准.md) | `VP-D08` 已接受 Packet-first `direct_storyboard`、精确 Binding normalizer 与 Gate 5；所有旧派生文档继续冻结到 `VP-D13`–`VP-D15` |
+| `3001` | 项目制作圣经 | [统一产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [制作圣经设计](design/3001-项目制作圣经生成执行框架设计.md) | [统一需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [统一验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | 当前子设计保留；旧派生链已删除，完成状态以当前验收为准 |
+| `3002` | 本地 Codex 分镜智能体 | [统一产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [分镜执行框架设计](design/3002-本地-Codex-分镜智能体执行框架设计.md) | [统一需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [统一验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | 当前子设计保留；Agent 契约补充见 3003，不从旧计划领取任务 |
 | `3003` | StoryGraph 剧本解析 Harness 与内置 Skill | — | [Harness 与内置 Skill 设计](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | [Agent Contract Requirement](requirement/3003-StoryGraph剧本解析Harness与内置Skill需求规格.md) | [合并至 0010 唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [合并至 0010 验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | `VP-D14` 已接受十三 Stage、Skill 供应链、Wire/Release/Candidate 与失败恢复合同；当前尚未编码 |
 
 `2002` 的最新边界审计：[Workflow 阶段 5 完成度审计](acceptance/2056-Workflow阶段5完成度审计.md)；最新运行增量验收为 [Agent 执行总时限](acceptance/2054-Agent执行总时限验收记录.md)，前置边界见 [Workflow 重复投递收敛](acceptance/2052-Workflow重复投递收敛验收记录.md)、[Shot 绑定目标与单 Shot 局部重跑](acceptance/2050-Shot绑定目标与单Shot局部重跑验收记录.md)、[正式 Shot Workflow 后半程](acceptance/2049-正式ShotWorkflow后半程验收记录.md)、[Production Shot 图片绑定](acceptance/2048-ProductionShot图片绑定验收记录.md)、[Generation CandidateSet 与 Workflow 人工选择](acceptance/2047-GenerationCandidateSet与Workflow人工选择验收记录.md)、[Generation Provider 成功输出物化](acceptance/2046-GenerationProvider成功输出物化验收记录.md)、[Generation Provider 提交与结果对账](acceptance/2045-GenerationProvider提交与结果对账验收记录.md)、[Generation 高成本准备与执行授权](acceptance/2044-Generation高成本准备与执行授权验收记录.md)、[Cost 费用预留与追加式账本](acceptance/2043-Cost费用预留与追加式账本验收记录.md)、[Cost 图片价格与不可变估算](acceptance/2042-Cost图片价格与不可变估算验收记录.md)、[Cost Project Budget 唯一事实](acceptance/2041-Cost项目预算唯一事实验收记录.md)、[Quota 图片生成日配额](acceptance/2040-Quota图片生成日配额验收记录.md)、[Generation 人工候选选择](acceptance/2039-Generation人工候选选择验收记录.md)、[Generation 图片候选与确定性 QC](acceptance/2038-Generation图片候选与确定性QC验收记录.md) 与 [Asset 图片产物就绪](acceptance/2037-Asset图片产物就绪验收记录.md)。
@@ -171,3 +145,7 @@ Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Accepta
 4. 目标 Acceptance 只证明按新设计重新执行且明确记录的范围；历史记录不得抵扣目标 Checklist。
 5. 新增、改名、取代文档时必须同步更新本索引和相对链接，并检查目标状态、实施状态与历史证据是否被隔离。
 6. 不建立全局 `misc`、重复分类、空占位文档或第二套事实来源。
+
+## 文档归并规则
+
+同一决策只在当前负责文档维护；原 0002/0005 分别归入 0003/0006，不复用已撤销编号。3001/3002 的子设计保留，已被替代的八份旧派生文件删除，当前需求与执行统一进入 0010 链路。历史验收引用旧依据时使用不可变 Git 版本链接，不能直接替换成不同语义的新需求。只有部分内容被替代的文档继续保留，逐项确认剩余契约后再清理。Design 不保存会话日志、Git 工作区清单或重复验收输出。
