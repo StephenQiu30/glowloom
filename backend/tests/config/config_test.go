@@ -79,6 +79,82 @@ func TestLoadRejectsInvalidConfiguredRegistrationCode(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsCompleteSMTPConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	t.Setenv("SMTP_ENABLED", "true")
+	t.Setenv("SMTP_HOST", "smtp.example.test")
+	t.Setenv("SMTP_PORT", "465")
+	t.Setenv("SMTP_TLS_MODE", "tls")
+	t.Setenv("SMTP_USERNAME", "sender@example.test")
+	t.Setenv("SMTP_PASSWORD", "application-password")
+	t.Setenv("SMTP_FROM_EMAIL", "sender@example.test")
+	t.Setenv("SMTP_FROM_NAME", "Lanverse")
+
+	configuration, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !configuration.SMTP.Enabled || configuration.SMTP.Host != "smtp.example.test" ||
+		configuration.SMTP.Port != 465 || configuration.SMTP.TLSMode != "tls" ||
+		configuration.SMTP.Username != "sender@example.test" ||
+		configuration.SMTP.Password != "application-password" ||
+		configuration.SMTP.FromEmail != "sender@example.test" || configuration.SMTP.FromName != "Lanverse" {
+		t.Fatalf("unexpected SMTP configuration: %#v", configuration.SMTP)
+	}
+}
+
+func TestLoadRejectsIncompleteOrUnsafeSMTPConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	base := map[string]string{
+		"SMTP_ENABLED":    "true",
+		"SMTP_HOST":       "smtp.example.test",
+		"SMTP_PORT":       "465",
+		"SMTP_TLS_MODE":   "tls",
+		"SMTP_USERNAME":   "sender@example.test",
+		"SMTP_PASSWORD":   "application-password",
+		"SMTP_FROM_EMAIL": "sender@example.test",
+		"SMTP_FROM_NAME":  "Lanverse",
+	}
+	tests := map[string]map[string]string{
+		"missing host":         {"SMTP_HOST": ""},
+		"invalid port":         {"SMTP_PORT": "70000"},
+		"unsupported TLS mode": {"SMTP_TLS_MODE": "plain"},
+		"invalid from email":   {"SMTP_FROM_EMAIL": "not-an-email"},
+		"partial credentials":  {"SMTP_PASSWORD": ""},
+		"header injection":     {"SMTP_FROM_NAME": "Lanverse\r\nBcc: attacker@example.test"},
+	}
+	for name, overrides := range tests {
+		t.Run(name, func(t *testing.T) {
+			for key, value := range base {
+				t.Setenv(key, value)
+			}
+			for key, value := range overrides {
+				t.Setenv(key, value)
+			}
+			if _, err := config.Load(); err == nil {
+				t.Fatal("Load accepted an invalid SMTP configuration")
+			}
+		})
+	}
+}
+
+func TestLoadRejectsFixedRegistrationCodeWithSMTPDelivery(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://lanverse:secret@database:5432/lanverse")
+	t.Setenv("REGISTRATION_VERIFICATION_CODE", "123456")
+	t.Setenv("SMTP_ENABLED", "true")
+	t.Setenv("SMTP_HOST", "smtp.example.test")
+	t.Setenv("SMTP_PORT", "465")
+	t.Setenv("SMTP_TLS_MODE", "tls")
+	t.Setenv("SMTP_USERNAME", "sender@example.test")
+	t.Setenv("SMTP_PASSWORD", "application-password")
+	t.Setenv("SMTP_FROM_EMAIL", "sender@example.test")
+	t.Setenv("SMTP_FROM_NAME", "Lanverse")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("Load accepted a fixed registration code with SMTP delivery enabled")
+	}
+}
+
 func TestLoadRequiresStandardPostgreSQLDatabaseURL(t *testing.T) {
 	for _, value := range []string{"", "postgresql+asyncpg://database/lanverse", "http://database/lanverse"} {
 		t.Run(value, func(t *testing.T) {

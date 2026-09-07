@@ -22,8 +22,9 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 
 	repositoryRoot := repositoryDirectory(t)
 	for _, relativeRoot := range []string{
-		"backend/api", "backend/cmd", "backend/internal", "backend/tests",
+		"backend/api", "backend/cmd", "backend/internal", "backend/observability", "backend/tests",
 		"agent/app", "agent/skills", "agent/tests", "frontend/src", "frontend/tests", ".github", "docs",
+		"frontend/scripts",
 	} {
 		root := filepath.Join(repositoryRoot, relativeRoot)
 		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
@@ -31,7 +32,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 				return walkErr
 			}
 			if entry.IsDir() {
-				if strings.HasPrefix(entry.Name(), ".") || entry.Name() == "__pycache__" {
+				if path != root && (strings.HasPrefix(entry.Name(), ".") || entry.Name() == "__pycache__") {
 					return filepath.SkipDir
 				}
 				return nil
@@ -53,7 +54,12 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 		}
 	}
 	for _, relativePath := range []string{
+		"README.md", "AGENTS.md", "AGENTS.local.md", "LICENSE",
 		"backend/Dockerfile", "agent/Dockerfile", "frontend/Dockerfile",
+		"backend/docker-entrypoint.sh", "agent/pyproject.toml", "agent/requirements.txt",
+		"frontend/components.json", "frontend/eslint.config.mjs", "frontend/next.config.ts",
+		"frontend/package.json", "frontend/playwright.config.ts", "frontend/postcss.config.mjs",
+		"frontend/tsconfig.json", "frontend/vitest.config.ts",
 		"docker-compose.yml", "docker-compose-env.yml", "docker-compose-prod.yml",
 	} {
 		path := filepath.Join(repositoryRoot, relativePath)
@@ -70,7 +76,10 @@ func TestSemanticNameInspectorDistinguishesProjectAndExternalNames(t *testing.T)
 	t.Parallel()
 
 	for _, value := range []string{
-		"/api/v1/projects", "StoryGraphV2", "candidate_v3", "wire-version-v4",
+		"/api/" + "v" + "1/projects",
+		"StoryGraph" + "V" + "2",
+		"candidate_" + "v" + "3",
+		"wire-version-" + "v" + "4",
 	} {
 		if !hasProjectNumericReleaseName(value) {
 			t.Errorf("应拒绝项目自有数字发布序号命名：%s", value)
@@ -98,7 +107,7 @@ func inspectSemanticNames(t *testing.T, path, relativePath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
@@ -115,9 +124,11 @@ func hasProjectNumericReleaseName(line string) bool {
 	codexFeature := "multi_agent_" + "v" + "2"
 	googleInteractionAPI := "interactions-" + "v" + "1beta-image"
 	minioCredentialConstructor := "NewStatic" + "V" + "4"
+	vitestCoveragePackage := "@vitest/coverage-" + "v" + "8"
 	line = strings.ReplaceAll(line, codexFeature, "codex-external-feature")
 	line = strings.ReplaceAll(line, googleInteractionAPI, "google-external-api")
 	line = strings.ReplaceAll(line, minioCredentialConstructor, "minio-external-constructor")
+	line = strings.ReplaceAll(line, vitestCoveragePackage, "vitest-external-package")
 	line = externalGoModuleMajor.ReplaceAllString(line, "external-go-module")
 	line = externalModuleAlias.ReplaceAllString(line, "external-module-alias")
 	line = externalGitHubAction.ReplaceAllString(line, "external-github-action")

@@ -1,7 +1,6 @@
 package workflow_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -137,7 +136,7 @@ func TestTemporalReferenceAssetPollingRecoversAcrossWorkerProcesses(t *testing.T
 		t, databaseURL, temporalAddress, taskQueue, referenceAssetWorkerModeRetrying,
 	)
 	firstPollActivityID := "execute-node:" + node.ID.String()
-	waitForCompletedActivity(t, ctx, temporalClient, run.TemporalWorkflowID, firstPollActivityID)
+	waitForCompletedActivity(t, ctx, temporalClient, run.TemporalWorkflowID, firstPollActivityID, firstOutput)
 	waitForReferenceAssetPollTimer(t, ctx, temporalClient, run.TemporalWorkflowID, firstPollActivityID)
 	if err = database.First(&node, "id = ?", node.ID).Error; err != nil {
 		t.Fatalf("reload retrying reference asset node: %v", err)
@@ -316,9 +315,9 @@ func startReferenceAssetTemporalWorkerProcess(
 	temporalAddress string,
 	taskQueue string,
 	mode string,
-) (*exec.Cmd, *bytes.Buffer) {
+) (*exec.Cmd, *synchronizedBuffer) {
 	t.Helper()
-	output := &bytes.Buffer{}
+	output := &synchronizedBuffer{}
 	command := exec.Command(os.Args[0], "-test.run=^TestReferenceAssetTemporalWorkerProcessHelper$", "-test.v")
 	command.Env = append(os.Environ(),
 		referenceAssetWorkerHelperFlag+"=1",

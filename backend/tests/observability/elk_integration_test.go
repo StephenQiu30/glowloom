@@ -129,7 +129,11 @@ func writeRawLogRecord(t *testing.T, address string, record []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer connection.Close()
+	defer func() {
+		if closeErr := connection.Close(); closeErr != nil {
+			t.Errorf("close Logstash test connection: %v", closeErr)
+		}
+	}()
 	if err = connection.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +194,11 @@ func requestJSON(t *testing.T, environment elkTestEnvironment, method, url strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil {
+			t.Errorf("close %s %s response body: %v", method, url, closeErr)
+		}
+	}()
 	content, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatal(err)

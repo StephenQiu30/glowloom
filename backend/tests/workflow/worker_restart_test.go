@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,6 +28,23 @@ import (
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	testgorm "github.com/StephenQiu30/lanverse/backend/tests/platform/adapter/gormdb"
 )
+
+type synchronizedBuffer struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (buffer *synchronizedBuffer) Write(payload []byte) (int, error) {
+	buffer.mu.Lock()
+	defer buffer.mu.Unlock()
+	return buffer.buffer.Write(payload)
+}
+
+func (buffer *synchronizedBuffer) String() string {
+	buffer.mu.Lock()
+	defer buffer.mu.Unlock()
+	return buffer.buffer.String()
+}
 
 const (
 	workerProcessHelperEnv = "LANVERSE_WORKFLOW_PROCESS_HELPER"
@@ -196,9 +214,9 @@ func TestWorkflowWorkerProcessHelper(t *testing.T) {
 	worker.Run(context.Background())
 }
 
-func startWorkflowWorkerProcess(t *testing.T, databaseURL, agentURL string) (*exec.Cmd, *bytes.Buffer) {
+func startWorkflowWorkerProcess(t *testing.T, databaseURL, agentURL string) (*exec.Cmd, *synchronizedBuffer) {
 	t.Helper()
-	output := &bytes.Buffer{}
+	output := &synchronizedBuffer{}
 	command := exec.Command(os.Args[0], "-test.run=^TestWorkflowWorkerProcessHelper$", "-test.v")
 	command.Env = append(os.Environ(),
 		workerProcessHelperEnv+"=1",
@@ -219,7 +237,7 @@ func startWorkflowWorkerProcess(t *testing.T, databaseURL, agentURL string) (*ex
 	return command, output
 }
 
-func stopWorkflowWorkerProcess(t *testing.T, command *exec.Cmd, output *bytes.Buffer) {
+func stopWorkflowWorkerProcess(t *testing.T, command *exec.Cmd, output *synchronizedBuffer) {
 	t.Helper()
 	if err := command.Process.Kill(); err != nil {
 		t.Fatalf("kill workflow worker process: %v\n%s", err, output.String())
@@ -234,7 +252,7 @@ func awaitInvocation(
 	requests <-chan contract.StageInvocation,
 	serverErrors <-chan error,
 	command *exec.Cmd,
-	output *bytes.Buffer,
+	output *synchronizedBuffer,
 ) contract.StageInvocation {
 	t.Helper()
 	select {
@@ -255,7 +273,7 @@ func waitForInvocationStatus(
 	load func() model.AgentInvocation,
 	want string,
 	command *exec.Cmd,
-	output *bytes.Buffer,
+	output *synchronizedBuffer,
 ) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)

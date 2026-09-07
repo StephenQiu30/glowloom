@@ -1,7 +1,6 @@
 package workflow_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -44,6 +43,8 @@ import (
 )
 
 const (
+	formalGenerationSetupTimeout        = 40 * time.Second
+	formalGenerationRecoveryTimeout     = 40 * time.Second
 	formalGenerationWorkerHelperFlag    = "LANVERSE_FORMAL_GENERATION_WORKER_HELPER"
 	formalGenerationWorkerAddress       = "LANVERSE_FORMAL_GENERATION_WORKER_ADDRESS"
 	formalGenerationWorkerTaskQueue     = "LANVERSE_FORMAL_GENERATION_WORKER_TASK_QUEUE"
@@ -89,14 +90,14 @@ func TestTemporalEpisodeGenerationRecoversThroughFormalRuntimeAcrossWorkerProces
 		t.Skip("set LANVERSE_TEST_DATABASE_URL and LANVERSE_TEST_TEMPORAL_ADDRESS to run the formal Generation recovery journey")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
-	defer cancel()
-	database, err := platformdatabase.Open(ctx, databaseURL, io.Discard)
+	setupContext, cancelSetup := context.WithTimeout(context.Background(), formalGenerationSetupTimeout)
+	defer cancelSetup()
+	database, err := platformdatabase.Open(setupContext, databaseURL, io.Discard)
 	if err != nil {
 		t.Fatalf("open formal Generation recovery database: %v", err)
 	}
 	t.Cleanup(func() { _ = platformdatabase.Close(database) })
-	if err = schema.Sync(ctx, database); err != nil {
+	if err = schema.Sync(setupContext, database); err != nil {
 		t.Fatalf("synchronize formal Generation recovery GORM catalog: %v", err)
 	}
 
@@ -108,19 +109,22 @@ func TestTemporalEpisodeGenerationRecoversThroughFormalRuntimeAcrossWorkerProces
 		t.Fatalf("connect formal Generation Temporal runtime: %v", err)
 	}
 	t.Cleanup(temporalRuntime.Close)
-	if err = temporalRuntime.Ping(ctx); err != nil {
+	if err = temporalRuntime.Ping(setupContext); err != nil {
 		t.Fatalf("check formal Generation Temporal health: %v", err)
 	}
 
 	temporalClient := mustTemporalClient(t, temporalAddress)
-	fixture := seedFormalGenerationRecovery(t, ctx, database, temporalRuntime, temporalClient)
+	fixture := seedFormalGenerationRecovery(t, setupContext, database, temporalRuntime, temporalClient)
+	cancelSetup()
+	recoveryContext, cancelRecovery := context.WithTimeout(context.Background(), formalGenerationRecoveryTimeout)
+	defer cancelRecovery()
 	auditPath := t.TempDir() + "/formal-generation-boundaries.jsonl"
 	firstWorker, firstOutput := startFormalGenerationWorkerProcess(
 		t, databaseURL, temporalAddress, taskQueue, formalGenerationWorkerModeSubmit, auditPath, fixture.target.ID,
 	)
 	firstActivityID := "execute-node:" + fixture.nodeRunID
-	waitForCompletedActivity(t, ctx, temporalClient, fixture.workflowID, firstActivityID)
-	waitForReferenceAssetPollTimer(t, ctx, temporalClient, fixture.workflowID, firstActivityID)
+	waitForCompletedActivity(t, recoveryContext, temporalClient, fixture.workflowID, firstActivityID, firstOutput)
+	waitForReferenceAssetPollTimer(t, recoveryContext, temporalClient, fixture.workflowID, firstActivityID)
 	stopWorkflowWorkerProcess(t, firstWorker, firstOutput)
 	firstFacts := loadFormalGenerationFacts(t, database, fixture)
 	assertFormalGenerationSubmitted(t, firstFacts)
@@ -129,7 +133,7 @@ func TestTemporalEpisodeGenerationRecoversThroughFormalRuntimeAcrossWorkerProces
 		t, databaseURL, temporalAddress, taskQueue, formalGenerationWorkerModeReconcile, auditPath, fixture.target.ID,
 	)
 	var result temporaladapter.RunResult
-	if err = temporalClient.GetWorkflow(ctx, fixture.workflowID, "").Get(ctx, &result); err != nil {
+	if err = temporalClient.GetWorkflow(recoveryContext, fixture.workflowID, "").Get(recoveryContext, &result); err != nil {
 		t.Fatalf("wait for formal Generation Workflow recovery: %v\n%s", err, secondOutput.String())
 	}
 	if result.WorkflowRunID != fixture.workflowRunID || result.Status != workflowdomain.NodeActivityNeedsAttention {
@@ -139,9 +143,9 @@ func TestTemporalEpisodeGenerationRecoversThroughFormalRuntimeAcrossWorkerProces
 
 	finalFacts := loadFormalGenerationFacts(t, database, fixture)
 	assertFormalGenerationUnknown(t, firstFacts, finalFacts)
-	assertFormalGenerationCancellationFenced(t, ctx, database, fixture, finalFacts)
+	assertFormalGenerationCancellationFenced(t, recoveryContext, database, fixture, finalFacts)
 	assertFormalGenerationAudit(t, auditPath, firstFacts)
-	assertFormalGenerationHistory(t, ctx, temporalClient, fixture, firstActivityID)
+	assertFormalGenerationHistory(t, recoveryContext, temporalClient, fixture, firstActivityID)
 }
 
 func seedFormalGenerationRecovery(
@@ -996,9 +1000,9 @@ func startFormalGenerationWorkerProcess(
 	mode string,
 	auditPath string,
 	targetID string,
-) (*exec.Cmd, *bytes.Buffer) {
+) (*exec.Cmd, *synchronizedBuffer) {
 	t.Helper()
-	output := &bytes.Buffer{}
+	output := &synchronizedBuffer{}
 	command := exec.Command(os.Args[0], "-test.run=^TestFormalGenerationTemporalWorkerProcessHelper$", "-test.v")
 	command.Env = append(os.Environ(),
 		formalGenerationWorkerHelperFlag+"=1",

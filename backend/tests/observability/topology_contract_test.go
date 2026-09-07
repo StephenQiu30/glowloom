@@ -15,11 +15,9 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 	environment := readText(t, filepath.Join(root, "docker-compose-env.yml"))
 	production := readText(t, filepath.Join(root, "docker-compose-prod.yml"))
 	kafkaInit := readText(t, filepath.Join(root, "backend", "observability", "kafka", "init.sh"))
-	kibanaInit := readText(t, filepath.Join(root, "backend", "observability", "kibana", "init.sh"))
-	elasticsearchInit := readText(t, filepath.Join(root, "backend", "observability", "elasticsearch", "init.sh"))
 	logstash := readText(t, filepath.Join(root, "backend", "observability", "logstash", "pipeline", "lanverse.conf"))
 	template := readText(t, filepath.Join(root, "backend", "observability", "logstash", "template", "lanverse-logs-template.json"))
-	combined := base + environment + production + kafkaInit + kibanaInit + elasticsearchInit + logstash + template
+	combined := base + environment + production + kafkaInit + logstash + template
 
 	for _, required := range []string{
 		"docker.elastic.co/logstash/logstash:9.4.4",
@@ -32,27 +30,9 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 		"lanverse.log.application",
 		"KAFKA_USERNAME: event_worker",
 		"KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer",
-		"KIBANA_USERNAME",
-		"KIBANA_PASSWORD",
 	} {
 		if !strings.Contains(combined, required) {
 			t.Errorf("ELK topology is missing %q", required)
-		}
-	}
-	for _, required := range []string{
-		"ELASTICSEARCH_INIT_USERNAME",
-		"ELASTICSEARCH_INIT_PASSWORD",
-		"lanverse-logs-application-write",
-		"lanverse-logs-dead-letter-write",
-		"index.blocks.write",
-		"remove_index",
-		"is_write_index",
-		"--head",
-		`"index.lifecycle.rollover_alias":"lanverse-logs-dead-letter"`,
-		`"number_of_replicas":0`,
-	} {
-		if !strings.Contains(elasticsearchInit, required) {
-			t.Errorf("Elasticsearch startup initializer is missing %q", required)
 		}
 	}
 
@@ -136,4 +116,22 @@ func readText(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(content)
+}
+
+func TestELKEnvironmentOwnsLogResourcesOutsideBackendStartup(t *testing.T) {
+	t.Parallel()
+	root := repositoryRoot(t)
+	for _, path := range []string{"backend/Dockerfile", "backend/docker-entrypoint.sh", "docker-compose.yml", "docker-compose-env.yml", "docker-compose-prod.yml"} {
+		source := readText(t, filepath.Join(root, path))
+		for _, forbidden := range []string{"elasticsearch-init", "kibana-init", "ELASTICSEARCH_INIT_", "KIBANA_USERNAME", "KIBANA_PASSWORD"} {
+			if strings.Contains(source, forbidden) {
+				t.Errorf("%s still owns ELK management through %q", path, forbidden)
+			}
+		}
+	}
+	for _, path := range []string{"elasticsearch/init.sh", "kibana/init.sh"} {
+		if _, err := os.Stat(filepath.Join(root, "backend/observability", path)); !os.IsNotExist(err) {
+			t.Errorf("ELK initialization script must be removed: %s (stat: %v)", path, err)
+		}
+	}
 }

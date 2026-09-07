@@ -16,14 +16,18 @@ func TestLogstashLoggerWritesTheSameRedactedJSONToStdoutAndTCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() {
+		if closeErr := listener.Close(); closeErr != nil {
+			t.Errorf("close test listener: %v", closeErr)
+		}
+	}()
 	received := make(chan []byte, 1)
 	go func() {
 		connection, acceptErr := listener.Accept()
 		if acceptErr != nil {
 			return
 		}
-		defer connection.Close()
+		defer func() { _ = connection.Close() }()
 		line, readErr := bufio.NewReader(connection).ReadBytes('\n')
 		if readErr == nil {
 			received <- line
@@ -37,7 +41,11 @@ func TestLogstashLoggerWritesTheSameRedactedJSONToStdoutAndTCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closer.Close()
+	defer func() {
+		if closeErr := closer.Close(); closeErr != nil {
+			t.Errorf("close Logstash test logger: %v", closeErr)
+		}
+	}()
 	logger.Info("token=must-not-leak", "request_id", "request-1", "password", "must-not-leak")
 
 	var remote []byte
@@ -78,7 +86,11 @@ func TestLogstashLoggerRejectsInvalidAddressAndFailsOpenWhenEndpointIsUnavailabl
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closer.Close()
+	defer func() {
+		if closeErr := closer.Close(); closeErr != nil {
+			t.Errorf("close unavailable Logstash logger: %v", closeErr)
+		}
+	}()
 	logger.Info("service stays available", "request_id", "request-2")
 	if !bytes.Contains(stdout.Bytes(), []byte("request-2")) {
 		t.Fatalf("stdout logging failed with Logstash unavailable: %s", stdout.Bytes())

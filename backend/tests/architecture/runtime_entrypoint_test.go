@@ -53,11 +53,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 		"ENTRYPOINT [\"/usr/local/bin/docker-entrypoint.sh\"]",
 		"CMD [\"/usr/local/bin/lanverse\"]",
 		"CMD su-exec lanverse:lanverse wget",
-		"apk add --no-cache bash ca-certificates curl su-exec",
-		"COPY observability/elasticsearch/init.sh /usr/share/lanverse-observability/elasticsearch-init.sh",
-		"COPY observability/elasticsearch/ilm-policy.json /usr/share/lanverse-observability/ilm-policy.json",
-		"COPY observability/logstash/template/lanverse-logs-template.json /usr/share/lanverse-observability/lanverse-logs-template.json",
-		"COPY observability/kibana/init.sh /usr/share/lanverse-observability/kibana-init.sh",
+		"apk add --no-cache ca-certificates su-exec",
 		"su-exec",
 	} {
 		if !strings.Contains(dockerfile, required) {
@@ -72,9 +68,6 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 		"/run/secrets/lanverse_media_provider_master_key",
 		"stat -f -c %T /run/secrets",
 		"install -o lanverse -g lanverse -m 0400",
-		"/usr/share/lanverse-observability/elasticsearch-init.sh",
-		"/usr/share/lanverse-observability/kibana-init.sh",
-		"unset ELASTICSEARCH_INIT_USERNAME ELASTICSEARCH_INIT_PASSWORD KIBANA_USERNAME KIBANA_PASSWORD",
 		"exec su-exec lanverse:lanverse",
 	} {
 		if !strings.Contains(entrypoint, required) {
@@ -90,12 +83,25 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	}
 	for _, required := range []string{
 		"ELASTIC_OBSERVABILITY_NETWORK: lanverse-environment",
+		"POSTGRES_HOST: postgres",
+		"MINIO_ENDPOINT: minio:9000",
+		"DOCKER_TEMPORAL_ADDRESS: temporal:7233",
+		"DOCKER_KAFKA_BROKERS: kafka:19092",
 		"DOCKER_ELASTICSEARCH_URL: http://elasticsearch:9200",
 		"DOCKER_LOGSTASH_ADDRESS: logstash:5000",
-		"DOCKER_KIBANA_URL: http://kibana:5601",
 	} {
 		if !strings.Contains(ciWorkflow, required) {
 			t.Errorf("deployment CI does not reuse its existing ELK network via %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"POSTGRES_HOST: host.docker.internal",
+		"MINIO_ENDPOINT: host.docker.internal:9000",
+		"DOCKER_TEMPORAL_ADDRESS: host.docker.internal:7233",
+		"DOCKER_KAFKA_BROKERS: host.docker.internal:19093",
+	} {
+		if strings.Contains(ciWorkflow, forbidden) {
+			t.Errorf("deployment CI routes a container dependency through a host-only published port: %q", forbidden)
 		}
 	}
 
@@ -128,11 +134,6 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 		"no-new-privileges:true",
 		"test: [\"CMD\", \"su-exec\", \"lanverse:lanverse\", \"wget\"",
 		"file: ${LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE:-/dev/null}",
-		"ELASTICSEARCH_INIT_USERNAME: ${ELASTICSEARCH_INIT_USERNAME:-}",
-		"ELASTICSEARCH_INIT_PASSWORD: ${ELASTICSEARCH_INIT_PASSWORD:-}",
-		"KIBANA_URL: ${DOCKER_KIBANA_URL:-http://kibana-local-dev:5601}",
-		"KIBANA_USERNAME: ${KIBANA_USERNAME:-}",
-		"KIBANA_PASSWORD: ${KIBANA_PASSWORD:-}",
 		"- observability",
 		"name: ${ELASTIC_OBSERVABILITY_NETWORK:-elastic-start-local_default}",
 		"external: true",
@@ -156,14 +157,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 				t.Errorf("%s still exposes obsolete Provider environment variable %q", environmentTemplate, forbidden)
 			}
 		}
-		for _, required := range []string{
-			"ELASTICSEARCH_INIT_USERNAME=",
-			"ELASTICSEARCH_INIT_PASSWORD=",
-			"KIBANA_URL=",
-			"DOCKER_KIBANA_URL=",
-			"KIBANA_USERNAME=",
-			"KIBANA_PASSWORD=",
-		} {
+		for _, required := range []string{} {
 			if !strings.Contains(source, required) {
 				t.Errorf("%s is missing the observability startup contract %q", environmentTemplate, required)
 			}
@@ -174,7 +168,6 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 		"ELASTIC_OBSERVABILITY_NETWORK=elastic-start-local_default",
 		"DOCKER_ELASTICSEARCH_URL=http://elasticsearch:9200",
 		"DOCKER_LOGSTASH_ADDRESS=logstash-local-dev:5000",
-		"DOCKER_KIBANA_URL=http://kibana-local-dev:5601",
 	} {
 		if !strings.Contains(developmentEnvironment, required) {
 			t.Errorf("development environment template does not reuse the existing ELK network via %q", required)

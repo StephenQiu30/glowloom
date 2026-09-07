@@ -40,7 +40,8 @@ func TestDomainAndApplicationDoNotImportInfrastructureClients(t *testing.T) {
 					}
 					for _, forbidden := range []string{
 						"gorm.io/", "go.temporal.io/", "github.com/twmb/franz-go",
-						"github.com/elastic/go-elasticsearch", "github.com/minio/minio-go",
+						"github.com/elastic/go-elasticsearch", "github.com/elastic/elastic-transport-go",
+						"github.com/minio/minio-go",
 					} {
 						if strings.HasPrefix(importPath, forbidden) {
 							t.Errorf("%s imports infrastructure client %s", relativePath, importPath)
@@ -74,6 +75,7 @@ func TestOptionalInfrastructureDependenciesRequireTheirFirstConsumer(t *testing.
 	}{
 		{"github.com/twmb/franz-go", string(goModule), []string{"backend/internal/eventing/adapter/kafka", "backend/internal/bootstrap/event_process.go"}},
 		{"github.com/elastic/go-elasticsearch", string(goModule), []string{"backend/internal/search/adapter/elasticsearch", "backend/internal/bootstrap/event_process.go"}},
+		{"github.com/elastic/elastic-transport-go", string(goModule), []string{"backend/internal/search/adapter/elasticsearch"}},
 		{"@xyflow/react", string(frontendPackage), []string{"frontend/src/features/storygraph"}},
 		{"@dagrejs/dagre", string(frontendPackage), []string{"frontend/src/features/storygraph"}},
 	}

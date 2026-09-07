@@ -385,7 +385,11 @@ func putObject(t *testing.T, ctx context.Context, objects *objectstore.Client, c
 	if err != nil {
 		t.Fatalf("upload test object: %v", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil {
+			t.Errorf("close test object upload response: %v", closeErr)
+		}
+	}()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		body, _ := io.ReadAll(response.Body)
 		t.Fatalf("upload test object status %d: %s", response.StatusCode, body)

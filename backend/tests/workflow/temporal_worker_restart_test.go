@@ -1,7 +1,6 @@
 package workflow_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -71,7 +70,7 @@ func TestTemporalWorkerRecoversHumanWaitAfterCrossProcessRestart(t *testing.T) {
 		t.Fatalf("start Episode Workflow: observation=%#v err=%v", started, err)
 	}
 	waitForCompletedActivity(
-		t, ctx, temporalClient, request.WorkflowID, "open-human-gate:"+plan.Nodes[1].NodeRunID,
+		t, ctx, temporalClient, request.WorkflowID, "open-human-gate:"+plan.Nodes[1].NodeRunID, firstOutput,
 	)
 	stopWorkflowWorkerProcess(t, firstWorker, firstOutput)
 
@@ -179,13 +178,13 @@ func startTemporalWorkerProcess(
 	address string,
 	taskQueue string,
 	plan temporaladapter.ExecutionPlan,
-) (*exec.Cmd, *bytes.Buffer) {
+) (*exec.Cmd, *synchronizedBuffer) {
 	t.Helper()
 	planPayload, err := json.Marshal(plan)
 	if err != nil {
 		t.Fatalf("encode worker plan: %v", err)
 	}
-	output := &bytes.Buffer{}
+	output := &synchronizedBuffer{}
 	command := exec.Command(os.Args[0], "-test.run=^TestTemporalWorkerProcessHelper$", "-test.v")
 	command.Env = append(os.Environ(),
 		temporalWorkerHelperFlag+"=1",
@@ -212,6 +211,7 @@ func waitForCompletedActivity(
 	temporalClient client.Client,
 	workflowID string,
 	activityID string,
+	workerOutput *synchronizedBuffer,
 ) {
 	t.Helper()
 	ticker := time.NewTicker(20 * time.Millisecond)
@@ -224,7 +224,8 @@ func waitForCompletedActivity(
 		for iterator.HasNext() {
 			event, err := iterator.Next()
 			if err != nil {
-				t.Fatalf("read workflow history while waiting for activity completion: %v", err)
+				t.Fatalf("read workflow history while waiting for activity completion: %v\nworker output:\n%s",
+					err, workerOutput.String())
 			}
 			if attributes := event.GetActivityTaskScheduledEventAttributes(); attributes != nil {
 				scheduled[event.GetEventId()] = attributes.GetActivityId()
@@ -237,7 +238,8 @@ func waitForCompletedActivity(
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			t.Fatalf("wait for Temporal activity %q completion: %v", activityID, ctx.Err())
+			t.Fatalf("wait for Temporal activity %q completion: %v\nworker output:\n%s",
+				activityID, ctx.Err(), workerOutput.String())
 		}
 	}
 }
