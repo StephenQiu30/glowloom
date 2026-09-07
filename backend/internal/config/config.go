@@ -90,6 +90,8 @@ type Config struct {
 	ObjectStoreSecure               bool
 	ObjectStorePublicSecure         bool
 	AgentURL                        string
+	CreationAgentURL                string
+	CreationAgentSecret             string
 	AgentExecutionSecret            string
 	AgentRuntimeImageDigest         string
 	AgentRuntimeAdditionalRevisions []AgentRuntimeRevision
@@ -163,6 +165,23 @@ func Load() (Config, error) {
 	agentURL, err := serviceURL("AGENT_URL", defaultAgentURL)
 	if err != nil {
 		return Config{}, err
+	}
+	creationURL := strings.TrimRight(strings.TrimSpace(os.Getenv("CREATION_AGENT_URL")), "/")
+	creationSecret := os.Getenv("CREATION_AGENT_SECRET")
+	if creationURL != "" {
+		if err = validateServiceOrigin(creationURL); err != nil {
+			return Config{}, errors.New("CREATION_AGENT_URL must be a valid service origin")
+		}
+		parsed, _ := url.Parse(creationURL)
+		if parsed.Scheme != "https" && parsed.Hostname() != "localhost" && (net.ParseIP(parsed.Hostname()) == nil || !net.ParseIP(parsed.Hostname()).IsLoopback()) {
+			return Config{}, errors.New("creation agent requires HTTPS outside loopback")
+		}
+		if creationSecret == environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret) {
+			return Config{}, errors.New("creation agent must use an independent authorization secret")
+		}
+		if len(creationSecret) < 32 {
+			return Config{}, errors.New("CREATION_AGENT_SECRET must contain at least 32 bytes when creation is enabled")
+		}
 	}
 	agentImageDigest := strings.TrimSpace(environmentValue("AGENT_RUNTIME_IMAGE_DIGEST", defaultAgentImageDigest))
 	if !sha256DigestPattern.MatchString(agentImageDigest) {
@@ -281,6 +300,8 @@ func Load() (Config, error) {
 		ObjectStoreSecure:               objectStoreSecure,
 		ObjectStorePublicSecure:         objectStorePublicSecure,
 		AgentURL:                        agentURL,
+		CreationAgentURL:                creationURL,
+		CreationAgentSecret:             creationSecret,
 		AgentExecutionSecret:            environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
 		AgentRuntimeImageDigest:         agentImageDigest,
 		AgentRuntimeAdditionalRevisions: agentAdditionalRevisions,

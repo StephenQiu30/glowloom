@@ -28,6 +28,7 @@ type Authenticator interface {
 type SourceService interface {
 	Accept(context.Context, application.Actor, application.AcceptSourceCommand) (domain.AcceptedSource, error)
 	GetExact(context.Context, application.Actor, string, string) (domain.AcceptedSource, error)
+	ReadSpan(context.Context, application.Actor, application.SourceSpanQuery) (domain.SourceSpan, error)
 }
 
 type Handler struct {
@@ -49,6 +50,27 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/document-revisions/{revision_id}", handler.getRevision)
 	mux.HandleFunc("POST /api/projects/{project_id}/script-sources", handler.acceptSource)
 	mux.HandleFunc("GET /api/projects/{project_id}/script-sources/{revision_id}", handler.getSource)
+	mux.HandleFunc("GET /api/projects/{project_id}/script-sources/{revision_id}/spans", handler.getSourceSpan)
+}
+
+func (handler *Handler) getSourceSpan(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.actor(writer, request)
+	if !ok {
+		return
+	}
+	query := request.URL.Query()
+	start, startErr := strconv.Atoi(query.Get("start"))
+	end, endErr := strconv.Atoi(query.Get("end"))
+	if startErr != nil || endErr != nil || len(query["start"]) != 1 || len(query["end"]) != 1 || len(query["expected_hash"]) != 1 {
+		handler.writeError(writer, request, &application.Error{Code: "validation_failed", Message: "Explicit source range and hash are required", Status: 422})
+		return
+	}
+	result, err := handler.sources.ReadSpan(request.Context(), actor, application.SourceSpanQuery{ProjectID: request.PathValue("project_id"), DocumentRevisionID: request.PathValue("revision_id"), Start: start, End: end, ExpectedHash: query.Get("expected_hash")})
+	if err != nil {
+		handler.writeError(writer, request, err)
+		return
+	}
+	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": result})
 }
 
 type previewRequest struct {
@@ -206,7 +228,9 @@ func (handler *Handler) actor(writer http.ResponseWriter, request *http.Request)
 
 func (handler *Handler) writeError(writer http.ResponseWriter, request *http.Request, err error) {
 	var apiError *application.Error
-	if !errors.As(err, &apiError) {
+	if errors.Is(err, application.ErrNotFound) {
+		apiError = &application.Error{Code: "not_found", Message: "Script resource not found", Status: 404}
+	} else if !errors.As(err, &apiError) {
 		apiError = &application.Error{Code: "internal_error", Message: "Internal server error", Status: 500}
 	}
 	platformhttp.WriteProblem(writer, request, platformhttp.Problem{Code: apiError.Code, Message: apiError.Message, Status: apiError.Status, NextAction: apiError.NextAction, Details: apiError.Details})

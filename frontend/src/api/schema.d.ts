@@ -4,6 +4,126 @@
  */
 
 export interface paths {
+    "/api/projects/{project_id}/creation-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 按创建时间倒序返回项目最近的创作交接记录，最多 100 条。 */
+        get: operations["listCreationRuns"];
+        put?: never;
+        /** @description 持久化新 Python 创作命令和固定路由。202 表示 Go 接受交接；accepted 状态只表示 Agent 已持久接受，均不表示创作完成。未配置新流程返回 503。同项目及用户下同幂等键同输入返回原运行，异输入返回 409。 */
+        post: operations["createCreationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 校验当前项目权限后读取已持久化的运行交接状态和固定接受回执。 */
+        get: operations["getCreationRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}/retry-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 仅原创建者可使用当前权限对 delivery_blocked 重投；expected_revision 做 CAS。保留命令、原稿、目标路由和 Workflow ID；不新建创作运行。重复旧 revision 返回 409，可查询原运行恢复。 */
+        post: operations["retryCreationDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/script-sources/{revision_id}/spans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取已接受固定版本的 Unicode code point 半开区间，最多 16384 字符。每个查询参数只接受一个值；不会自动切换到最新源。 */
+        get: operations["getScriptSourceSpan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/storyboard-draft-sets/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取分镜草案集合、固定候选引用与当前状态。 */
+        get: operations["getStoryboardDraftSet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/storyboard-draft-sets/{set_id}/approved-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 按已提交 Owner 回执恢复正式文本分镜，不触发模型或工作流。未采纳返回 409；每次查询重新检查项目权限。 */
+        get: operations["getApprovedStoryboardIntents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/storyboard-intent-acceptances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 根据已有 approved ReviewDecision 原子冻结精确候选及导演意图。幂等重放返回原回执；视觉资产可以仍为 needs_asset。当前接口读取 Go-owned 候选；新 Python 提案接入另行验收。 */
+        post: operations["freezeStoryboardIntents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1324,6 +1444,235 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CreateCreationRunRequest: {
+            /** Format: uuid */
+            document_revision_id: string;
+            source_hash: string;
+            idempotency_key: string;
+        };
+        CreationSourceSnapshot: {
+            /** Format: uuid */
+            document_id: string;
+            /** Format: uuid */
+            revision_id: string;
+            revision: number;
+            content_hash: string;
+            /** Format: uuid */
+            span_index_id: string;
+        };
+        CreationAcceptanceReceipt: {
+            /** @constant */
+            schema: "creation-acceptance-production";
+            /** Format: uuid */
+            command_id: string;
+            /** Format: uuid */
+            run_id: string;
+            payload_hash: string;
+            /** @constant */
+            flow_type: "lanverse.creation.text-storyboard.production";
+            workflow_id: string;
+            /** Format: uuid */
+            receipt_id: string;
+            /** Format: date-time */
+            accepted_at: string;
+        };
+        CreationRunResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            source: components["schemas"]["CreationSourceSnapshot"];
+            /** @constant */
+            flow_type: "lanverse.creation.text-storyboard.production";
+            workflow_id: string;
+            /** @enum {string} */
+            status: "queued" | "delivery_unknown" | "delivery_blocked" | "accepted";
+            revision: number;
+            last_error: string;
+            acceptance: components["schemas"]["CreationAcceptanceReceipt"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RetryCreationDeliveryRequest: {
+            expected_revision: number;
+        };
+        StoryboardEvidenceRef: {
+            document_revision_id: string;
+            absolute_start: number;
+            absolute_end: number;
+            text_hash: string;
+        };
+        StoryboardFrameIntent: {
+            first: string;
+            key: string;
+            last: string;
+        };
+        StoryboardAssetVersionRef: {
+            asset_version_id: string;
+            revision: number;
+            content_hash: string;
+            lineage_hash: string;
+        };
+        StoryboardVisualRequirement: {
+            occurrence_story_node_key: string;
+            identity_story_node_key: string;
+            specification_story_node_key: string;
+            asset_state_story_node_key: string;
+            asset_id: string;
+            specification_version_id: string;
+            asset_state_id: string;
+            asset_role: string;
+            required_view_roles: string[] | null;
+            asset_readiness: string;
+            asset_version_ref: components["schemas"]["StoryboardAssetVersionRef"] | null;
+        };
+        StoryboardReviewIssue: {
+            code: string;
+            severity: string;
+            summary: string;
+            evidence: components["schemas"]["StoryboardEvidenceRef"][] | null;
+        };
+        StoryboardShotIntent: {
+            shot_key: string;
+            intent_order: number;
+            source_beat_story_node_keys: string[] | null;
+            source_evidence: components["schemas"]["StoryboardEvidenceRef"][] | null;
+            purpose: string;
+            proposed_duration_ms: number;
+            camera: components["schemas"]["StoryboardCameraIntent"];
+            action_intent: string;
+            dialogue_intent: string | null;
+            sound_intent: string;
+            performance_intent: string;
+            continuity_in: string;
+            continuity_out: string;
+            frame_intent: components["schemas"]["StoryboardFrameIntent"];
+            visual_requirements: components["schemas"]["StoryboardVisualRequirement"][] | null;
+            risk_codes: string[] | null;
+            review_issues: components["schemas"]["StoryboardReviewIssue"][] | null;
+        };
+        StoryboardDraftSetBatch: {
+            batch_id: string;
+            episode_id: string;
+            structure_id: string;
+            script_version_id: string;
+            scene_story_node_key: string;
+            input_hash: string;
+            baseline_order_hash: string;
+            result_hash: string | null;
+            candidate_revision_id: string | null;
+            candidate_revision_hash: string | null;
+        };
+        StoryboardApprovedIntentScene: {
+            scene_story_node_key: string;
+            batch_id: string;
+            episode_id: string;
+            structure_id: string;
+            script_version_id: string;
+            candidate_revision_id: string;
+            candidate_revision_hash: string;
+            asset_readiness: string;
+            shot_intents: components["schemas"]["StoryboardShotIntent"][] | null;
+        };
+        StoryboardApprovedIntentSet: {
+            schema_version: string;
+            id: string;
+            workspace_id: string;
+            project_id: string;
+            draft_set_id: string;
+            draft_set_revision: number;
+            candidate_revision_id: string;
+            candidate_revision_hash: string;
+            candidate_revision: number;
+            graph_version_id: string;
+            graph_version_no: number;
+            graph_content_hash: string;
+            manifest_id: string;
+            manifest_version: number;
+            manifest_hash: string;
+            review_decision_id: string;
+            scenes: components["schemas"]["StoryboardApprovedIntentScene"][] | null;
+            visual_requirements_hash: string;
+            content_hash: string;
+        };
+        StoryboardCameraIntent: {
+            scale: string;
+            angle: string;
+            movement: string;
+            composition: string;
+        };
+        StoryboardDraftSetResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            workflow_run_id: string;
+            /** Format: uuid */
+            node_run_id: string;
+            /** Format: uuid */
+            graph_version_id: string;
+            /** Format: uuid */
+            manifest_id: string;
+            graph_version_no: number;
+            manifest_version: number;
+            revision: number;
+            graph_content_hash: string;
+            manifest_hash: string;
+            input_hash: string;
+            result_hash: string | null;
+            candidate_revision_hash: string | null;
+            candidate_revision_id: string | null;
+            /** @enum {string} */
+            status: "queued" | "needs_asset" | "intent_frozen" | "failed" | "unknown" | "cancelled";
+            batches: components["schemas"]["StoryboardDraftSetBatch"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        FreezeStoryboardIntentsRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            candidate_revision_id: string;
+            candidate_revision_hash: string;
+            expected_candidate_revision: number;
+            /** Format: uuid */
+            review_decision_id: string;
+            idempotency_key: string;
+        };
+        StoryboardIntentAcceptanceResponse: {
+            set: components["schemas"]["StoryboardDraftSetResponse"];
+            approved: components["schemas"]["StoryboardApprovedIntentSet"];
+            receipt: {
+                /** Format: uuid */
+                id: string;
+                /** @constant */
+                operation: "storyboard.freeze_intent_set";
+                /** Format: uuid */
+                resource_id: string;
+                /** Format: date-time */
+                created_at: string;
+            };
+        };
+        ScriptSourceSpanResponse: {
+            identity: components["schemas"]["ScriptSourceIdentity"];
+            /** Format: uuid */
+            span_index_id: string;
+            start: number;
+            end: number;
+            text: string;
+            text_hash: string;
+            /** @constant */
+            codepoint_index_rule: "unicode-code-point";
+        };
         ProductionBibleReviewDecisionRequest: {
             issue_key: string;
             /** @enum {string} */
@@ -3363,6 +3712,269 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listCreationRuns: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationRunResponse"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createCreationRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCreationRunRequest"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationRunResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getCreationRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationRunResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    retryCreationDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryCreationDeliveryRequest"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationRunResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getScriptSourceSpan: {
+        parameters: {
+            query: {
+                start: number;
+                end: number;
+                expected_hash: string;
+            };
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                revision_id: components["parameters"]["revision_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ScriptSourceSpanResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getStoryboardDraftSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StoryboardDraftSetResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getApprovedStoryboardIntents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StoryboardIntentAcceptanceResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    freezeStoryboardIntents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FreezeStoryboardIntentsRequest"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StoryboardIntentAcceptanceResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
     health: {
         parameters: {
             query?: never;

@@ -19,6 +19,8 @@ func Catalog() []any {
 		&model.AuthSession{},
 		&model.Project{},
 		&model.CommandReceipt{},
+		&model.CreationRun{},
+		&model.CreationCommandOutbox{},
 		&model.MediaObject{},
 		&model.MediaVersion{},
 		&model.UploadSession{},

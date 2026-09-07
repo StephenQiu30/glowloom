@@ -2,6 +2,16 @@ package domain
 
 import "time"
 
+type SourceSpan struct {
+	Identity           SourceVersionIdentity `json:"identity"`
+	SpanIndexID        string                `json:"span_index_id"`
+	Start              int                   `json:"start"`
+	End                int                   `json:"end"`
+	Text               string                `json:"text"`
+	TextHash           string                `json:"text_hash"`
+	CodepointIndexRule string                `json:"codepoint_index_rule"`
+}
+
 type SourceVersionIdentity struct {
 	OwnerKind   string    `json:"owner_kind"`
 	LogicalID   string    `json:"logical_id"`

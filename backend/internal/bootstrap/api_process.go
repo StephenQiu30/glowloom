@@ -28,6 +28,11 @@ import (
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoringdomain "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
+	creationagent "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/agenthttp"
+	creationgorm "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/gormdb"
+	creationhttp "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/httpapi"
+	creationapp "github.com/StephenQiu30/lanverse/backend/internal/production/creation/application"
+
 	costgorm "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/gormdb"
 	costhttp "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/httpapi"
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
@@ -289,7 +294,20 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	planningHandler := planninghttp.New(planningService, tokenVerifier)
 	storyboardStore := storyboardgorm.New(database)
 	storyboardService := storyboardapp.NewService(storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
+
+	creationStore := creationgorm.New(database)
+	creationService := creationapp.NewService(creationStore, creationapp.Config{Endpoint: configuration.CreationAgentURL, Now: time.Now, NewID: uuid.NewString})
+	creationHandler := creationhttp.New(creationService, tokenVerifier)
+	var creationDispatcher *creationapp.Dispatcher
+	if configuration.CreationAgentURL != "" {
+		creationClient, creationErr := creationagent.New(configuration.CreationAgentSecret, nil, time.Now)
+		if creationErr != nil {
+			return fmt.Errorf("creation agent configuration: %w", creationErr)
+		}
+		creationDispatcher = creationapp.NewDispatcher(creationStore, creationClient, time.Now)
+	}
 	storyboardHandler := storyboardhttp.New(storyboardService, tokenVerifier)
+	storyboardIntentHandler := storyboardhttp.NewIntentHandler(storyboardService, tokenVerifier)
 	storyboardWorker := storyboardapp.NewWorker(storyboardStore, agentRuntime, func() time.Time { return time.Now().UTC() }, configuration.AgentPollInterval, configuration.AgentClaimLease, logger)
 	reviewStore := reviewgorm.New(database)
 	reviewService := reviewapp.NewService(reviewStore, reviewapp.Config{
@@ -384,7 +402,9 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				bibleHandler.Register(mux)
 				storyAnalysisRecoveryHandler.Register(mux)
 				planningHandler.Register(mux)
+				creationHandler.Register(mux)
 				storyboardHandler.Register(mux)
+				storyboardIntentHandler.Register(mux)
 				storyGraphHandler.Register(mux)
 				searchHandler.Register(mux)
 				workflowHandler.Register(mux)
@@ -395,6 +415,12 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	if creationDispatcher != nil {
+		dispatcherContext, stopDispatcher := context.WithCancel(apiContext)
+		dispatcherDone := make(chan struct{})
+		go func() { defer close(dispatcherDone); creationDispatcher.Run(dispatcherContext, logger) }()
+		defer func() { stopDispatcher(); <-dispatcherDone }()
+	}
 	go bibleWorker.Run(apiContext)
 	go sourceEvidenceWorker.Run(apiContext)
 	go storyAnalysisWorker.Run(apiContext)

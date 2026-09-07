@@ -38,7 +38,13 @@ func (repo *repository) ProjectWorkspace(ctx context.Context, actor application.
 		return "", notFound("Project not found")
 	}
 	var user model.UserAccount
-	if err = repo.database.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil || user.Status != "active" || user.TokenVersion != actor.TokenVersion {
+	if err = repo.database.WithContext(ctx).First(&user, "id = ?", userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", unauthenticated()
+		}
+		return "", err
+	}
+	if user.Status != "active" || user.TokenVersion != actor.TokenVersion {
 		return "", unauthenticated()
 	}
 	projectQuery := repo.database.WithContext(ctx)
@@ -47,15 +53,24 @@ func (repo *repository) ProjectWorkspace(ctx context.Context, actor application.
 	}
 	var project model.Project
 	if err = projectQuery.First(&project, "id = ?", parsedProjectID).Error; err != nil {
-		return "", notFound("Project not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", notFound("Project not found")
+		}
+		return "", err
 	}
 	var workspace model.Workspace
 	if err = repo.database.WithContext(ctx).First(&workspace, "id = ?", project.WorkspaceID).Error; err != nil {
-		return "", notFound("Project not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", notFound("Project not found")
+		}
+		return "", err
 	}
 	var membership model.Membership
 	if err = repo.database.WithContext(ctx).Where("workspace_id = ? AND user_id = ? AND status = ?", project.WorkspaceID, userID, "active").First(&membership).Error; err != nil {
-		return "", notFound("Project not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", notFound("Project not found")
+		}
+		return "", err
 	}
 	if write && (membership.Role == "viewer" || workspace.Status != "active" || project.Status != "active") {
 		return "", &application.Error{Code: "forbidden", Message: "Action is not allowed", Status: 403}

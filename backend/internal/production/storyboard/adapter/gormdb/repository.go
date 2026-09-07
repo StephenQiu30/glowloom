@@ -383,6 +383,25 @@ func (repo *repository) FindReceipt(ctx context.Context, workspaceID, operation,
 	return platformcommand.Receipt{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Operation: record.Operation, IdempotencyKey: record.IdempotencyKey, InputHash: record.InputHash, ResourceID: record.ResourceID.String(), Result: append([]byte(nil), record.Result...), CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt}, nil
 }
 
+func (repo *repository) GetIntentReceipt(ctx context.Context, setID string) (platformcommand.Receipt, error) {
+	id, err := uuid.Parse(setID)
+	if err != nil {
+		return platformcommand.Receipt{}, application.ErrNotFound
+	}
+	var records []model.CommandReceipt
+	if err = repo.database.WithContext(ctx).Where("resource_id = ? AND operation = ?", id, "storyboard.freeze_intent_set").Limit(2).Find(&records).Error; err != nil {
+		return platformcommand.Receipt{}, err
+	}
+	if len(records) == 0 {
+		return platformcommand.Receipt{}, application.ErrNotFound
+	}
+	if len(records) != 1 {
+		return platformcommand.Receipt{}, conflict("Storyboard Intent has conflicting receipts")
+	}
+	record := records[0]
+	return platformcommand.Receipt{ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), Operation: record.Operation, IdempotencyKey: record.IdempotencyKey, InputHash: record.InputHash, ResourceID: record.ResourceID.String(), Result: append([]byte(nil), record.Result...), CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt}, nil
+}
+
 func (repo *repository) CreateReceipt(ctx context.Context, value platformcommand.Receipt) error {
 	id, err := uuid.Parse(value.ID)
 	if err != nil {

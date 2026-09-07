@@ -1,0 +1,23 @@
+ARG PYTHON_IMAGE=python:3.11-slim-bookworm
+FROM ${PYTHON_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/srv/lanverse/agent
+
+WORKDIR /srv/lanverse/agent
+RUN groupadd --system lanverse \
+    && useradd --system --gid lanverse --create-home lanverse
+COPY agent/requirements-creation.txt ./requirements-creation.txt
+RUN python -m pip install --requirement requirements-creation.txt
+COPY --chown=lanverse:lanverse agent/app/__init__.py ./app/__init__.py
+COPY --chown=lanverse:lanverse agent/app/creation ./app/creation
+COPY --chown=lanverse:lanverse agent/app/candidate_runtime/__init__.py ./app/candidate_runtime/__init__.py
+COPY --chown=lanverse:lanverse agent/app/candidate_runtime/canonical.py ./app/candidate_runtime/canonical.py
+USER lanverse
+EXPOSE 8788
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=12 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/readyz', timeout=2)" || exit 1
+CMD ["uvicorn", "app.creation.api:create_configured_app", "--factory", "--host", "0.0.0.0", "--port", "8788"]

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
@@ -25,7 +26,7 @@ func DecodeStrict(writer http.ResponseWriter, request *http.Request, validator *
 		return false
 	}
 	var extra any
-	if decoder.Decode(&extra) == nil {
+	if err := decoder.Decode(&extra); err != io.EOF {
 		WriteProblem(writer, request, Problem{Code: "validation_failed", Message: "Request validation failed", Status: 422})
 		return false
 	}

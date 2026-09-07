@@ -18,6 +18,10 @@ dev = [
     "pytest-asyncio==1.4.0",
     "ruff==0.16.0",
 ]
+creation = [
+    "psycopg[binary]==3.3.5",
+    "temporalio==1.32.0",
+]
 
 [tool.setuptools.packages.find]
 include = ["app", "app.*"]

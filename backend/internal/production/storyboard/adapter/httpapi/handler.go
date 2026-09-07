@@ -252,14 +252,22 @@ func (handler *Handler) writeExport(writer http.ResponseWriter, request *http.Re
 	platformhttp.WriteJSON(writer, status, map[string]any{"data": presentExport(value)})
 }
 func (handler *Handler) actor(writer http.ResponseWriter, request *http.Request) (application.Actor, bool) {
-	claims, err := handler.authenticator.Authenticate(request)
+	return authenticateActor(handler.authenticator, writer, request)
+}
+
+func authenticateActor(authenticator Authenticator, writer http.ResponseWriter, request *http.Request) (application.Actor, bool) {
+	claims, err := authenticator.Authenticate(request)
 	if err != nil {
-		handler.writeError(writer, request, &application.Error{Code: "unauthenticated", Message: "Invalid credentials", Status: 401, NextAction: "login"})
+		writeError(writer, request, &application.Error{Code: "unauthenticated", Message: "Invalid credentials", Status: 401, NextAction: "login"})
 		return application.Actor{}, false
 	}
 	return application.Actor{UserID: claims.UserID, TokenVersion: claims.TokenVersion}, true
 }
 func (handler *Handler) writeError(writer http.ResponseWriter, request *http.Request, err error) {
+	writeError(writer, request, err)
+}
+
+func writeError(writer http.ResponseWriter, request *http.Request, err error) {
 	var apiError *application.Error
 	if !errors.As(err, &apiError) {
 		apiError = &application.Error{Code: "internal_error", Message: "Internal server error", Status: 500}

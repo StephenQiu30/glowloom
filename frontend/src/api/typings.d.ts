@@ -13,6 +13,10 @@ declare global {
     type CostBudgetSetRequest = components["schemas"]["CostBudgetSetRequest"];
     type CostPriceQuoteResponse = components["schemas"]["CostPriceQuoteResponse"];
     type CostPriceQuoteSetRequest = components["schemas"]["CostPriceQuoteSetRequest"];
+    type CreateCreationRunRequest = components["schemas"]["CreateCreationRunRequest"];
+    type CreationAcceptanceReceipt = components["schemas"]["CreationAcceptanceReceipt"];
+    type CreationRunResponse = components["schemas"]["CreationRunResponse"];
+    type CreationSourceSnapshot = components["schemas"]["CreationSourceSnapshot"];
     type DeactivateAccountRequest = components["schemas"]["DeactivateAccountRequest"];
     type DocumentRevisionResponse = components["schemas"]["DocumentRevisionResponse"];
     type EpisodePlanCreateRequest = components["schemas"]["EpisodePlanCreateRequest"];
@@ -25,6 +29,7 @@ declare global {
     type EpisodeResponse = components["schemas"]["EpisodeResponse"];
     type EpisodeSegmentOriginResponse = components["schemas"]["EpisodeSegmentOriginResponse"];
     type FormatIssueResponse = components["schemas"]["FormatIssueResponse"];
+    type FreezeStoryboardIntentsRequest = components["schemas"]["FreezeStoryboardIntentsRequest"];
     type HumanGateCoordinationResponse = components["schemas"]["HumanGateCoordinationResponse"];
     type HumanGateDecisionEnvelope = components["schemas"]["HumanGateDecisionEnvelope"];
     type HumanGateResumeEnvelope = components["schemas"]["HumanGateResumeEnvelope"];
@@ -66,6 +71,7 @@ declare global {
     type RegistrationVerificationConfirmRequest = components["schemas"]["RegistrationVerificationConfirmRequest"];
     type RegistrationVerificationConfirmed = components["schemas"]["RegistrationVerificationConfirmed"];
     type RegistrationVerificationRequest = components["schemas"]["RegistrationVerificationRequest"];
+    type RetryCreationDeliveryRequest = components["schemas"]["RetryCreationDeliveryRequest"];
     type ReviewDecisionResponse = components["schemas"]["ReviewDecisionResponse"];
     type RevocationResponse = components["schemas"]["RevocationResponse"];
     type SceneAnalysisCandidateResponse = components["schemas"]["SceneAnalysisCandidateResponse"];
@@ -82,6 +88,7 @@ declare global {
     type ScriptDocumentResponse = components["schemas"]["ScriptDocumentResponse"];
     type ScriptSceneSpan = components["schemas"]["ScriptSceneSpan"];
     type ScriptSourceIdentity = components["schemas"]["ScriptSourceIdentity"];
+    type ScriptSourceSpanResponse = components["schemas"]["ScriptSourceSpanResponse"];
     type ScriptSpanCandidate = components["schemas"]["ScriptSpanCandidate"];
     type SearchEnvelope = components["schemas"]["SearchEnvelope"];
     type SearchEvidence = components["schemas"]["SearchEvidence"];
@@ -102,6 +109,18 @@ declare global {
     type StoryGraphSubgraphResponse = components["schemas"]["StoryGraphSubgraphResponse"];
     type StoryGraphVersionEnvelope = components["schemas"]["StoryGraphVersionEnvelope"];
     type StoryGraphVersionResponse = components["schemas"]["StoryGraphVersionResponse"];
+    type StoryboardApprovedIntentScene = components["schemas"]["StoryboardApprovedIntentScene"];
+    type StoryboardApprovedIntentSet = components["schemas"]["StoryboardApprovedIntentSet"];
+    type StoryboardAssetVersionRef = components["schemas"]["StoryboardAssetVersionRef"];
+    type StoryboardCameraIntent = components["schemas"]["StoryboardCameraIntent"];
+    type StoryboardDraftSetBatch = components["schemas"]["StoryboardDraftSetBatch"];
+    type StoryboardDraftSetResponse = components["schemas"]["StoryboardDraftSetResponse"];
+    type StoryboardEvidenceRef = components["schemas"]["StoryboardEvidenceRef"];
+    type StoryboardFrameIntent = components["schemas"]["StoryboardFrameIntent"];
+    type StoryboardIntentAcceptanceResponse = components["schemas"]["StoryboardIntentAcceptanceResponse"];
+    type StoryboardReviewIssue = components["schemas"]["StoryboardReviewIssue"];
+    type StoryboardShotIntent = components["schemas"]["StoryboardShotIntent"];
+    type StoryboardVisualRequirement = components["schemas"]["StoryboardVisualRequirement"];
     type TaskErrorResponse = components["schemas"]["TaskErrorResponse"];
     type TaskResponse = components["schemas"]["TaskResponse"];
     type TaskScopeResponse = components["schemas"]["TaskScopeResponse"];

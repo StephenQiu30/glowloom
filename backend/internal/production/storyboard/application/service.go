@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -50,6 +51,7 @@ type Repository interface {
 	CreateCandidateSet(context.Context, domain.DraftSet, []domain.Batch, time.Time) (string, string, error)
 	GetIntentFreezeSource(context.Context, Actor, string, string, bool) (IntentFreezeSource, error)
 	GetSet(context.Context, Actor, string, bool) (domain.DraftSet, error)
+	GetIntentReceipt(context.Context, string) (platformcommand.Receipt, error)
 	SaveSet(context.Context, domain.DraftSet) error
 	GetBatch(context.Context, Actor, string, bool) (domain.Batch, error)
 	GetLatestBatch(context.Context, Actor, string) (domain.Batch, error)
@@ -480,8 +482,10 @@ func (service *Service) FreezeIntentSet(
 			return FreezeIntentSetResult{}, invalid("Invalid Storyboard Intent freeze identity")
 		}
 	}
+	_, hashErr := hex.DecodeString(command.CandidateRevisionHash)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
 		actor.TokenVersion < 1 || command.ExpectedCandidateRevision < 1 || len(command.CandidateRevisionHash) != 64 ||
+		hashErr != nil || command.CandidateRevisionHash != strings.ToLower(command.CandidateRevisionHash) ||
 		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return FreezeIntentSetResult{}, invalid("Invalid Storyboard Intent freeze request")
 	}

@@ -30,7 +30,9 @@ COPY agent/requirements.txt ./requirements.txt
 RUN python -m pip install --requirement requirements.txt
 
 COPY --chown=lanverse:lanverse agent/skills ./skills
-COPY --chown=lanverse:lanverse agent/app ./app
+COPY --chown=lanverse:lanverse agent/app/__init__.py agent/app/main.py ./app/
+COPY --chown=lanverse:lanverse agent/app/candidate_runtime ./app/candidate_runtime
+COPY --chown=lanverse:lanverse agent/app/modules ./app/modules
 
 USER lanverse
 
