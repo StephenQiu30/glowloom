@@ -1,5 +1,7 @@
 # Workflow 公共 Human Gate 命令与恢复设计
 
+> 2026-09-07 新流程边界已接受：本文件关于新创作编排、Agent 无存储、仅只读画布的旧限制，按 [0013 架构](0013-创作编排与多媒体画布架构调整设计.md)、[3004 Harness](3004-AgentHarness专业能力与创作流程设计.md)、[1003 画布](1003-多媒体创作画布与运行可视化设计.md) 的明确替代范围调整。Go 保留正式 Writer、审批/采纳、供应商发送权与财务；新流程由 Python 编排并拥有草案，画布布局由 Go Authoring 独立保存。本文的旧运行恢复合同及未受影响的业务约束继续有效，历史通过记录不抵扣新目标。
+
 - 状态：已接受设计
 - 接受记录：`VP-D11`（2026-08-30）；五 Gate 产品语义、Subject/Decision Wire、Effect/Resume 恢复三轴隔离反例评审通过（最终正文评审 SHA-256 `a9bc69626403cb400c8a463f7c2bfc06e719fd95abfd435dde5fddef5630161c`）
 - 历史事实：旧版曾于 `SG-D16` 接受通用 HumanTask/Decision/Resume 骨架，并同步过 Bible-first、Storyboard Intent/Detail、Reference Asset、Shot Frame/Video 路由；这些历史实现和 Evidence 保留，但旧 Subject/Owner 路由不抵扣当前五 Gate 目标

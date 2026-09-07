@@ -1,5 +1,7 @@
 # 通用媒体 Provider 与 Generation 执行器设计
 
+> 2026-09-07 新流程边界已接受：本文件关于新创作编排、Agent 无存储、仅只读画布的旧限制，按 [0013 架构](0013-创作编排与多媒体画布架构调整设计.md)、[3004 Harness](3004-AgentHarness专业能力与创作流程设计.md)、[1003 画布](1003-多媒体创作画布与运行可视化设计.md) 的明确替代范围调整。Go 保留正式 Writer、审批/采纳、供应商发送权与财务；新流程由 Python 编排并拥有草案，画布布局由 Go Authoring 独立保存。本文的旧运行恢复合同及未受影响的业务约束继续有效，历史通过记录不抵扣新目标。
+
 - 状态：已接受设计
 - 接受记录：`VP-D10`（2026-08-30）；产品主链、Target/Wire、Owner/恢复三轴隔离反例评审通过（最终正文评审 SHA-256 `e1d9448341fa5e5cf7bede4468f662140ad53c7c25eca5083eab3296feabc74f`）
 - 历史事实：本文旧版曾于 2026-08-29 接受通用 Provider 配置、Secret、ProviderCall 和四类媒体 Adapter 的 Platform Complete 目标；这些事实保留，但其模型枚举、计费、`shot_frame`、`shot_video` 与多 Provider 广度不再作为当前视觉生产 MVP 的完成门

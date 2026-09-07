@@ -1,5 +1,7 @@
 # StoryGraph 剧本解析 Harness 与内置 Skill 设计
 
+> 2026-09-07 新流程边界已接受：本文件关于新创作编排、Agent 无存储、仅只读画布的旧限制，按 [0013 架构](0013-创作编排与多媒体画布架构调整设计.md)、[3004 Harness](3004-AgentHarness专业能力与创作流程设计.md)、[1003 画布](1003-多媒体创作画布与运行可视化设计.md) 的明确替代范围调整。Go 保留正式 Writer、审批/采纳、供应商发送权与财务；新流程由 Python 编排并拥有草案，画布布局由 Go Authoring 独立保存。本文的旧运行恢复合同及未受影响的业务约束继续有效，历史通过记录不抵扣新目标。
+
 - 状态：已接受设计
 - 历史事实：旧版曾于 `SG-D02` 接受并完成单 `build-storygraph` Bundle、Candidate Revision 与 Review/Repair 切片；其 Bible-first / Storyboard-first Stage 顺序由本次设计取代
 - 接受记录：`VP-D07`（2026-08-30）；剧本/视觉生产 DAG、Skill Release 供应链与 Wire/Schema/恢复三路独立评审均通过（最终正文评审 SHA-256 `5df594553f66f64df0608fa7fe6d580f052ac65802e61410d3e804ec2dd7eac9`）
