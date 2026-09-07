@@ -43,7 +43,7 @@ vi.mock("@/api/projects", async () => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { ReviewWorkbench } from "@/app/projects/[projectId]/reviews/review-workbench";
+import { ReviewWorkbench } from "@/features/review/review-workbench";
 import { setAccessToken } from "@/lib/auth-session";
 import { ApiClientError } from "@/lib/request";
 

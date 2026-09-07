@@ -4,15 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createBible = vi.fn();
 const decideReviewIssue = vi.fn();
 const resumeBible = vi.fn();
-let currentBible:
-  | (API.ProductionBibleResponse & {
-      review_decisions?: Record<string, "accepted" | "rejected">;
-    })
-  | undefined;
+let currentBible: API.ProductionBibleResponse | undefined;
 let currentError: { code: string; message: string } | undefined;
 
 vi.mock("@/lib/server-state", () => ({
   appApiErrorMessage: (error: { message?: string }) => error?.message ?? "请求失败",
+}));
+
+vi.mock("@/features/production-bible/endpoints", () => ({
   useCreateProductionBibleMutation: () => [createBible, { isLoading: false }],
   useCurrentProductionBibleQuery: () => ({ data: currentBible, error: currentError }),
   useDecideProductionBibleReviewIssueMutation: () => [decideReviewIssue, { isLoading: false }],
@@ -20,7 +19,7 @@ vi.mock("@/lib/server-state", () => ({
   useResumeProductionBibleMutation: () => [resumeBible, { isLoading: false }],
 }));
 
-import { ProductionBibleWorkspace } from "@/app/projects/[projectId]/production-bible-workspace";
+import { ProductionBibleWorkspace } from "@/features/production-bible/production-bible-workspace";
 
 const analysis = {
   revision: {

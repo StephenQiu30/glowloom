@@ -10,7 +10,7 @@ vi.mock("@/lib/request", async (importOriginal) => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { EpisodeProductionStudio } from "@/app/studio/[episodeId]/episode-production-studio";
+import { EpisodeProductionStudio } from "@/features/episode-production/episode-production-studio";
 import { setAccessToken } from "@/lib/auth-session";
 import { ApiClientError } from "@/lib/request";
 

@@ -54,7 +54,7 @@ vi.mock("@/api/scriptDocuments", async () => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { ProjectWorkspace } from "@/app/projects/[projectId]/project-workspace";
+import { ProjectWorkspace } from "@/features/project/project-workspace";
 import { setAccessToken } from "@/lib/auth-session";
 import { ApiClientError } from "@/lib/request";
 

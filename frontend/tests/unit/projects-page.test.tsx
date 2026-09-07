@@ -22,7 +22,7 @@ vi.mock("@/api/projects", async () => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { ProjectDashboard } from "@/app/projects/project-dashboard";
+import { ProjectDashboard } from "@/features/project/project-dashboard";
 import { setAccessToken } from "@/lib/auth-session";
 
 const workspaceId = "019fb2e0-a000-7000-8000-000000000001";
