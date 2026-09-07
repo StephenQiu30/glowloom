@@ -80,6 +80,7 @@ func TestSemanticNameInspectorDistinguishesProjectAndExternalNames(t *testing.T)
 		"StoryGraph" + "V" + "2",
 		"candidate_" + "v" + "3",
 		"wire-version-" + "v" + "4",
+		"from temporalio.api.workflowservice.v1 import DescribeNamespaceRequest # flow_" + "v" + "2",
 	} {
 		if !hasProjectNumericReleaseName(value) {
 			t.Errorf("应拒绝项目自有数字发布序号命名：%s", value)
@@ -89,6 +90,7 @@ func TestSemanticNameInspectorDistinguishesProjectAndExternalNames(t *testing.T)
 		"storygraph-stage-wire-production",
 		"uses: actions/checkout@v6",
 		`go.temporal.io/api/enums/v1`,
+		"from temporalio.api.workflowservice.v1 import DescribeNamespaceRequest",
 		`github.com/minio/minio-go/v7/pkg/credentials`,
 		"dependency v1.31.2",
 		"NewStaticV4",
@@ -129,6 +131,7 @@ func hasProjectNumericReleaseName(line string) bool {
 	line = strings.ReplaceAll(line, googleInteractionAPI, "google-external-api")
 	line = strings.ReplaceAll(line, minioCredentialConstructor, "minio-external-constructor")
 	line = strings.ReplaceAll(line, vitestCoveragePackage, "vitest-external-package")
+	line = strings.ReplaceAll(line, "temporalio.api.workflowservice.v1", "temporal-external-protobuf")
 	line = externalGoModuleMajor.ReplaceAllString(line, "external-go-module")
 	line = externalModuleAlias.ReplaceAllString(line, "external-module-alias")
 	line = externalGitHubAction.ReplaceAllString(line, "external-github-action")
