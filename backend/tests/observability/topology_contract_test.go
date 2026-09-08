@@ -23,7 +23,7 @@ func TestDeadLetterTemplateDefinesFieldsBeforeFirstWriteAndRollover(t *testing.T
 			} `json:"mappings"`
 		} `json:"template"`
 	}
-	content := readText(t, filepath.Join(root, "deploy", "observability", "elasticsearch", "dead-letter-template.json"))
+	content := readText(t, filepath.Join(root, ".github", "ci", "observability", "elasticsearch", "dead-letter-template.json"))
 	if err := json.Unmarshal([]byte(content), &template); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestDeadLetterTemplateDefinesFieldsBeforeFirstWriteAndRollover(t *testing.T
 			t.Errorf("%s initial indices must support numeric rollover", alias)
 		}
 	}
-	if strings.Count(ci, "PUT /_index_template/lanverse-logs-dead-letter --data-binary @deploy/observability/elasticsearch/dead-letter-template.json") != 2 {
+	if strings.Count(ci, "PUT /_index_template/lanverse-logs-dead-letter --data-binary @.github/ci/observability/elasticsearch/dead-letter-template.json") != 2 {
 		t.Fatal("both CI environments must install the dead-letter template")
 	}
 }
@@ -53,13 +53,12 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 	t.Parallel()
 	root := repositoryRoot(t)
 	base := readText(t, filepath.Join(root, "docker-compose.yml"))
-	environment := readText(t, filepath.Join(root, "deploy/ci/compose.dependencies.yml"))
-	production := readText(t, filepath.Join(root, "deploy/compose.production.yml"))
-	kafkaInit := readText(t, filepath.Join(root, "deploy", "observability", "kafka", "init.sh"))
-	logstash := readText(t, filepath.Join(root, "deploy", "observability", "logstash", "pipeline", "lanverse.conf"))
-	template := readText(t, filepath.Join(root, "deploy", "observability", "logstash", "template", "lanverse-logs-template.json"))
-	ciApplication := readText(t, filepath.Join(root, "deploy/ci/compose.application.yml"))
-	combined := base + environment + production + kafkaInit + logstash + template + ciApplication
+	environment := readText(t, filepath.Join(root, ".github/ci/compose.dependencies.yml"))
+	kafkaInit := readText(t, filepath.Join(root, ".github", "ci", "observability", "kafka", "init.sh"))
+	logstash := readText(t, filepath.Join(root, ".github", "ci", "observability", "logstash", "pipeline", "lanverse.conf"))
+	template := readText(t, filepath.Join(root, ".github", "ci", "observability", "logstash", "template", "lanverse-logs-template.json"))
+	ciApplication := readText(t, filepath.Join(root, ".github/ci/compose.application.yml"))
+	combined := base + environment + kafkaInit + logstash + template + ciApplication
 
 	for _, required := range []string{
 		"docker.elastic.co/logstash/logstash:9.4.4",
@@ -114,7 +113,7 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 			t.Errorf("log pipeline references business transport or index %q", businessName)
 		}
 	}
-	if strings.Contains(environment+production, "User:ANONYMOUS") ||
+	if strings.Contains(environment, "User:ANONYMOUS") ||
 		!strings.Contains(environment, "CONTROLLER:SASL_PLAINTEXT") {
 		t.Error("Kafka controller traffic must not bypass the authenticated ACL boundary")
 	}
@@ -163,7 +162,7 @@ func readText(t *testing.T, path string) string {
 func TestELKEnvironmentOwnsLogResourcesOutsideBackendStartup(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
-	for _, path := range []string{"backend/Dockerfile", "docker-compose.yml", "deploy/ci/compose.dependencies.yml", "deploy/compose.production.yml"} {
+	for _, path := range []string{"backend/Dockerfile", "docker-compose.yml", ".github/ci/compose.dependencies.yml"} {
 		source := readText(t, filepath.Join(root, path))
 		for _, forbidden := range []string{"elasticsearch-init", "kibana-init", "ELASTICSEARCH_INIT_", "KIBANA_USERNAME", "KIBANA_PASSWORD"} {
 			if strings.Contains(source, forbidden) {

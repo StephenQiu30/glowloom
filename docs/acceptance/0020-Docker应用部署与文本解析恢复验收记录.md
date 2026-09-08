@@ -30,7 +30,7 @@ Harness 容器中 `codex login status` 返回已使用 ChatGPT 登录，`codex -
 - `cd agent && .venv/bin/pyright`：0 errors；Ruff check/format：通过。最初从仓库根目录错误调用 pyright 未加载 Agent 配置，已在正确目录重跑。
 - `cd backend && go test -race ./tests/config ./tests/production/creation ./tests/production/script/adapter/gormdb` 通过；受影响配置、Creation、bootstrap 的 `go vet` 通过，golangci-lint 为 0 issues。新增地址迁移配置测试最初缺少测试 DATABASE_URL，补齐测试配置后重跑通过。
 - govulncheck：原定向扫描无可达漏洞；另有 1 个导入包、3 个依赖模块漏洞不在可达调用路径。
-- 三种 Compose 配置（应用、环境、应用+环境+prod）均用合成 CI 参数执行 `config --quiet` 通过；未启动第二套环境。CI 服务清单断言同步新增三个 Agent 职责。
+- 当时存在的三种 Compose 配置（应用、环境、应用+环境+prod）均用合成 CI 参数执行 `config --quiet` 通过；未启动第二套环境。该 production 覆盖层随后移除，当前 CI 配置统一位于 `.github/ci/`。CI 服务清单断言同步新增三个 Agent 职责。
 - 最终追加 Harness 502 回执 HTTP 用例与 Go/Python 原生跨边界用例：11 passed。
 - 前端本轮早期定向用例 5 项、类型检查、lint 和生产构建通过，Docker 复用该生产产物。
 
@@ -44,11 +44,11 @@ Harness 容器中 `codex login status` 返回已使用 ChatGPT 登录，`codex -
 
 第 1 集草案仍存在闪回分支延续标记不一致、V.O. 分类与实体别名连续性等语义问题。它是待审草案，未被自动采纳。全 60 集人物、场景、全局设定和分镜尚未完成，不以服务健康、原稿落库或 ES 检索代替完整解析验收。
 
-尚未验证主机重启恢复、Codex 登录刷新、公网 TLS 或全媒体生成。不执行 Git 提交、推送或远端发布；当前代码仍在 main 工作区，文件清单如下。配置只在受限本地文件中更新，没有新增运行凭据到 Git diff。
+尚未验证主机重启恢复、Codex 登录刷新、公网 TLS 或全媒体生成。本记录生成时未执行 Git 提交、推送或远端发布；当前代码仍在 main 工作区，文件清单如下。配置只在受限本地文件中更新，没有新增运行凭据到 Git diff。
 
 ## 本地 Docker 启动精简验收（2026-09-08）
 
-本切片仅调整部署配置、入口文档及相应检查。根目录保留一个应用 Compose；原环境编排移至 `deploy/ci/compose.dependencies.yml`，Linux CI 的内部网络连接单独放在 `deploy/ci/compose.application.yml`，原生产覆盖收敛为 `deploy/compose.production.yml`。本地不会加载这些覆盖或启动基础设施。
+本切片仅调整部署配置、入口文档及相应检查。根目录保留一个应用 Compose；CI 的环境编排、内部网络连接和观测配置集中在 `.github/ci/`，仓库不再维护额外的 deploy 或生产 Compose 覆盖层。本地不会加载 CI 配置或启动基础设施。
 
 当前应用 Compose 为 171 行，`.env.example` 为 49 行。移除 DOCKER_* 平行地址、POSTGRES_* 拼接方式、特定 ELK 外部网络依赖，以及 10 个与 Go 默认值完全相同的配置常量；默认开发入口使用 development，实际本机 `.env` 的既有运行模式保持不变。Frontend 仅在镜像构建时注入公开 API 地址，共用应用启动安全设置。README 本地启动只保留一个入口和状态/日志命令。
 
@@ -69,7 +69,7 @@ Harness 容器中 `codex login status` 返回已使用 ChatGPT 登录，`codex -
 当前分支 main；本轮未提交或推送。保留此前 Agent 恢复、Go 合同和前端诊断改动，以下为当前全部遗留文件，包含本切片和此前工作。根目录两个旧 Compose 文件的删除对应迁移，不是删除运行数据。根 `.env` 仅本机连接配置调整，已确认被 Git 忽略。
 
 - [.env.example](../../.env.example) — 修改。
-- [.env.production.example](../../.env.production.example) — 修改。
+- 生产 Compose 覆盖层及 `.env.production.example` — 已移除，避免维护未使用的第二套启动合同。
 - [.github/workflows/ci.yml](../../.github/workflows/ci.yml) — 修改。
 - [README.md](../../README.md) — 修改。
 - [agent/Dockerfile](../../agent/Dockerfile) — 修改。
@@ -104,8 +104,8 @@ Harness 容器中 `codex login status` 返回已使用 ChatGPT 登录，`codex -
 - [backend/tests/production/creation/trace_test.go](../../backend/tests/production/creation/trace_test.go) — 修改。
 - [backend/tests/production/script/adapter/gormdb/creation_http_journey_test.go](../../backend/tests/production/script/adapter/gormdb/creation_http_journey_test.go) — 修改。
 - [backend/tests/search/topology_contract_test.go](../../backend/tests/search/topology_contract_test.go) — 修改。
-- `docker-compose-env.yml` — 删除（迁移至 deploy）。
-- `docker-compose-prod.yml` — 删除（迁移至 deploy）。
+- `docker-compose-env.yml` — 删除；本地入口统一为根目录 `docker-compose.yml`，CI 依赖编排位于 `.github/ci/`。
+- `docker-compose-prod.yml` — 删除；不再维护独立的生产 Compose 覆盖层。
 - [docker-compose.yml](../../docker-compose.yml) — 修改。
 - [docs/acceptance/0019-本机既有环境运行验收记录.md](../../docs/acceptance/0019-本机既有环境运行验收记录.md) — 修改。
 - [docs/design/0001-AI短剧制作平台完整设计基线.md](../../docs/design/0001-AI短剧制作平台完整设计基线.md) — 修改。
@@ -118,8 +118,8 @@ Harness 容器中 `codex login status` 返回已使用 ChatGPT 登录，`codex -
 - [agent/app/creation/recovery_schema.py](../../agent/app/creation/recovery_schema.py) — 新增。
 - [agent/app/text_contract/failure.py](../../agent/app/text_contract/failure.py) — 新增。
 - [agent/tests/creation/test_failure_recovery.py](../../agent/tests/creation/test_failure_recovery.py) — 新增。
-- [deploy/ci/compose.application.yml](../../deploy/ci/compose.application.yml) — 新增。
-- [deploy/ci/compose.dependencies.yml](../../deploy/ci/compose.dependencies.yml) — 新增。
-- [deploy/compose.production.yml](../../deploy/compose.production.yml) — 新增。
+- [.github/ci/compose.application.yml](../../.github/ci/compose.application.yml) — CI 应用连接覆盖。
+- [.github/ci/compose.dependencies.yml](../../.github/ci/compose.dependencies.yml) — CI 一次性依赖编排。
+- `.github/ci/observability/` — CI 观测初始化配置。
 - [docs/acceptance/0020-Docker应用部署与文本解析恢复验收记录.md](../../docs/acceptance/0020-Docker应用部署与文本解析恢复验收记录.md) — 新增。
 - [docs/design/0020-文本解析失败诊断与受控恢复设计.md](../../docs/design/0020-文本解析失败诊断与受控恢复设计.md) — 新增。

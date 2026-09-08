@@ -12,7 +12,7 @@ func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t 
 	t.Parallel()
 	repositoryRoot := searchRepositoryRoot(t)
 	base := mustReadSearchFile(t, filepath.Join(repositoryRoot, "docker-compose.yml"))
-	environment := mustReadSearchFile(t, filepath.Join(repositoryRoot, "deploy/ci/compose.dependencies.yml"))
+	environment := mustReadSearchFile(t, filepath.Join(repositoryRoot, ".github/ci/compose.dependencies.yml"))
 	configuration := mustReadSearchFile(t, filepath.Join(repositoryRoot, "backend/internal/config/config.go"))
 	module := mustReadSearchFile(t, filepath.Join(repositoryRoot, "backend", "go.mod"))
 	workflow := mustReadSearchFile(t, filepath.Join(repositoryRoot, ".github", "workflows", "ci.yml"))

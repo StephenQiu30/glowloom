@@ -22,7 +22,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 
 	repositoryRoot := repositoryDirectory(t)
 	for _, relativeRoot := range []string{
-		"backend/api", "backend/cmd", "backend/internal", "deploy/observability", "backend/tests",
+		"backend/api", "backend/cmd", "backend/internal", ".github/ci/observability", "backend/tests",
 		"agent/app", "agent/skills", "agent/tests", "frontend/src", "frontend/tests", ".github", "docs",
 		"frontend/scripts",
 	} {
@@ -60,7 +60,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 		"frontend/components.json", "frontend/eslint.config.mjs", "frontend/next.config.ts",
 		"frontend/package.json", "frontend/playwright.config.ts", "frontend/postcss.config.mjs",
 		"frontend/tsconfig.json", "frontend/vitest.config.ts",
-		"docker-compose.yml", "deploy/ci/compose.dependencies.yml", "deploy/ci/compose.application.yml", "deploy/compose.production.yml",
+		"docker-compose.yml", ".github/ci/compose.dependencies.yml", ".github/ci/compose.application.yml",
 	} {
 		path := filepath.Join(repositoryRoot, relativePath)
 		if numericReleaseName.MatchString(relativePath) {

@@ -75,16 +75,16 @@ jobs:
           KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
           KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
         run: |
-          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f deploy/ci/compose.dependencies.yml "$@"; }
+          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f .github/ci/compose.dependencies.yml "$@"; }
           environment_compose up --detach --wait --wait-timeout 300 kafka elasticsearch logstash kibana
           ci_elasticsearch() {
             local method=$1 path=$2; shift 2
             curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -H 'Content-Type: application/json' -X "$method" "http://127.0.0.1:19200$path" "$@" >/dev/null
           }
           # Configure only this disposable CI environment; never migrate existing indices.
-          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @deploy/observability/elasticsearch/ilm-policy.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @deploy/observability/logstash/template/lanverse-logs-template.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @deploy/observability/elasticsearch/dead-letter-template.json
+          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @.github/ci/observability/elasticsearch/ilm-policy.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @.github/ci/observability/logstash/template/lanverse-logs-template.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @.github/ci/observability/elasticsearch/dead-letter-template.json
           ci_elasticsearch PUT /lanverse-logs-application-000001 --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
           ci_elasticsearch PUT /lanverse-logs-dead-letter-000001 --data-binary '{"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
           curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
@@ -279,10 +279,9 @@ jobs:
           openssl rand -out "$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" 32
           echo "LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE=$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" >> "$GITHUB_ENV"
           docker compose -f docker-compose.yml config --quiet
-          docker compose --project-directory . -f deploy/ci/compose.dependencies.yml config --quiet
-          docker compose -f docker-compose.yml -f deploy/compose.production.yml config --quiet
+          docker compose --project-directory . -f .github/ci/compose.dependencies.yml config --quiet
           test "$(docker compose -f docker-compose.yml config --services | sort | tr '\n' ' ')" = "agent backend frontend "
-          test -z "$(docker compose --project-directory . -f deploy/ci/compose.dependencies.yml config --services)"
+          test -z "$(docker compose --project-directory . -f .github/ci/compose.dependencies.yml config --services)"
       - name: Build Frontend deployment image
         run: docker build --tag lanverse/frontend:ci frontend
       - name: Build Backend deployment image
@@ -322,8 +321,8 @@ jobs:
           ELASTICSEARCH_USERNAME: ""
           ELASTICSEARCH_PASSWORD: ""
         run: |
-          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f deploy/ci/compose.dependencies.yml "$@"; }
-          service_compose() { docker compose -p lanverse-ci -f docker-compose.yml -f deploy/ci/compose.application.yml "$@"; }
+          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f .github/ci/compose.dependencies.yml "$@"; }
+          service_compose() { docker compose -p lanverse-ci -f docker-compose.yml -f .github/ci/compose.application.yml "$@"; }
           export AGENT_RUNTIME_IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' lanverse/agent:ci)"
           test -n "$AGENT_RUNTIME_IMAGE_DIGEST"
           docker tag lanverse/frontend:ci lanverse/frontend:development
@@ -349,9 +348,9 @@ jobs:
               -X "$method" "http://localhost:9200$path" --data-binary @- >/dev/null
           }
           # Configure only this disposable CI environment; never migrate existing indices.
-          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @deploy/observability/elasticsearch/ilm-policy.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @deploy/observability/logstash/template/lanverse-logs-template.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @deploy/observability/elasticsearch/dead-letter-template.json
+          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @.github/ci/observability/elasticsearch/ilm-policy.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @.github/ci/observability/logstash/template/lanverse-logs-template.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @.github/ci/observability/elasticsearch/dead-letter-template.json
           ci_elasticsearch PUT /lanverse-logs-application-000001 --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
           ci_elasticsearch PUT /lanverse-logs-dead-letter-000001 --data-binary '{"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
           curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
@@ -533,8 +532,8 @@ jobs:
         env:
           COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
         run: |
-          docker compose -p lanverse-ci -f docker-compose.yml -f deploy/ci/compose.application.yml down --volumes --remove-orphans
-          docker compose --project-directory . -p lanverse-ci-env -f deploy/ci/compose.dependencies.yml down --volumes --remove-orphans
+          docker compose -p lanverse-ci -f docker-compose.yml -f .github/ci/compose.application.yml down --volumes --remove-orphans
+          docker compose --project-directory . -p lanverse-ci-env -f .github/ci/compose.dependencies.yml down --volumes --remove-orphans
           unlink /tmp/lanverse-ci-media-provider-master-key 2>/dev/null || true
 
   delivery:

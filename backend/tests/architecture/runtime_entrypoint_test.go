@@ -81,7 +81,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	if strings.Contains(ciWorkflow, "readlink /proc/1/exe") {
 		t.Error("deployment CI cannot require ptrace access to a different-UID Backend PID 1")
 	}
-	ciApplication := readArchitectureFile(t, filepath.Join(repositoryRoot, "deploy/ci/compose.application.yml"))
+	ciApplication := readArchitectureFile(t, filepath.Join(repositoryRoot, ".github/ci/compose.application.yml"))
 	for _, required := range []string{
 		"name: lanverse-ci-environment",
 		"MINIO_ENDPOINT: minio:9000",
@@ -94,7 +94,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 			t.Errorf("CI application override does not connect to its isolated dependencies via %q", required)
 		}
 	}
-	if !strings.Contains(ciWorkflow, "-f docker-compose.yml -f deploy/ci/compose.application.yml") {
+	if !strings.Contains(ciWorkflow, "-f docker-compose.yml -f .github/ci/compose.application.yml") {
 		t.Error("deployment CI must load its isolated connection override")
 	}
 
@@ -146,7 +146,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 			t.Errorf("service Compose still exposes obsolete Provider environment variable %q", forbidden)
 		}
 	}
-	for _, environmentTemplate := range []string{".env.example", ".env.production.example"} {
+	for _, environmentTemplate := range []string{".env.example"} {
 		source := readArchitectureFile(t, filepath.Join(repositoryRoot, environmentTemplate))
 		if !strings.Contains(source, "LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE=") {
 			t.Errorf("%s is missing the Provider root-key file contract", environmentTemplate)
@@ -177,7 +177,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 			t.Errorf("service Compose owns environment service %q", environmentService)
 		}
 	}
-	environmentCompose := readArchitectureFile(t, filepath.Join(repositoryRoot, "deploy/ci/compose.dependencies.yml"))
+	environmentCompose := readArchitectureFile(t, filepath.Join(repositoryRoot, ".github/ci/compose.dependencies.yml"))
 	for _, applicationService := range []string{"backend", "frontend"} {
 		if strings.Contains(environmentCompose, "\n  "+applicationService+":") {
 			t.Errorf("environment Compose owns application service %q", applicationService)

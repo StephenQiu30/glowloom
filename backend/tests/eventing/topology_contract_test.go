@@ -15,7 +15,7 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	environment, err := os.ReadFile(filepath.Join(repositoryRoot, "deploy/ci/compose.dependencies.yml"))
+	environment, err := os.ReadFile(filepath.Join(repositoryRoot, ".github/ci/compose.dependencies.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	kafkaInit, err := os.ReadFile(filepath.Join(repositoryRoot, "deploy", "observability", "kafka", "init.sh"))
+	kafkaInit, err := os.ReadFile(filepath.Join(repositoryRoot, ".github", "ci", "observability", "kafka", "init.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
