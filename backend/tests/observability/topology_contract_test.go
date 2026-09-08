@@ -53,12 +53,13 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 	t.Parallel()
 	root := repositoryRoot(t)
 	base := readText(t, filepath.Join(root, "docker-compose.yml"))
-	environment := readText(t, filepath.Join(root, "docker-compose-env.yml"))
-	production := readText(t, filepath.Join(root, "docker-compose-prod.yml"))
+	environment := readText(t, filepath.Join(root, "deploy/ci/compose.dependencies.yml"))
+	production := readText(t, filepath.Join(root, "deploy/compose.production.yml"))
 	kafkaInit := readText(t, filepath.Join(root, "deploy", "observability", "kafka", "init.sh"))
 	logstash := readText(t, filepath.Join(root, "deploy", "observability", "logstash", "pipeline", "lanverse.conf"))
 	template := readText(t, filepath.Join(root, "deploy", "observability", "logstash", "template", "lanverse-logs-template.json"))
-	combined := base + environment + production + kafkaInit + logstash + template
+	ciApplication := readText(t, filepath.Join(root, "deploy/ci/compose.application.yml"))
+	combined := base + environment + production + kafkaInit + logstash + template + ciApplication
 
 	for _, required := range []string{
 		"docker.elastic.co/logstash/logstash:9.4.4",
@@ -162,7 +163,7 @@ func readText(t *testing.T, path string) string {
 func TestELKEnvironmentOwnsLogResourcesOutsideBackendStartup(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
-	for _, path := range []string{"backend/Dockerfile", "docker-compose.yml", "docker-compose-env.yml", "docker-compose-prod.yml"} {
+	for _, path := range []string{"backend/Dockerfile", "docker-compose.yml", "deploy/ci/compose.dependencies.yml", "deploy/compose.production.yml"} {
 		source := readText(t, filepath.Join(root, path))
 		for _, forbidden := range []string{"elasticsearch-init", "kibana-init", "ELASTICSEARCH_INIT_", "KIBANA_USERNAME", "KIBANA_PASSWORD"} {
 			if strings.Contains(source, forbidden) {

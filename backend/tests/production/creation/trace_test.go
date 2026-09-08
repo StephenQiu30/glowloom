@@ -176,7 +176,7 @@ func TestTraceClientRejectsAmbiguousJSONAndMapsUnavailable(t *testing.T) {
 			}))
 			defer server.Close()
 			run.Endpoint = server.URL
-			client, e := adapter.New(strings.Repeat("test", 8), nil, time.Now)
+			client, e := adapter.New(adapter.Config{Secret: strings.Repeat("test", 8)}, nil, time.Now)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -206,7 +206,7 @@ func TestUnknownExecution404CannotInventQueuedState(t *testing.T) {
 	}))
 	defer server.Close()
 	run.Endpoint = server.URL
-	client, err := adapter.New(strings.Repeat("x", 32), nil, time.Now)
+	client, err := adapter.New(adapter.Config{Secret: strings.Repeat("x", 32)}, nil, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestTraceTransportPreservesCancellationAndBodyTimeout(t *testing.T) {
 		if body {
 			cause = context.DeadlineExceeded
 		}
-		client, err := adapter.New(strings.Repeat("x", 32), &http.Client{Transport: traceTransport(func(r *http.Request) (*http.Response, error) {
+		client, err := adapter.New(adapter.Config{Secret: strings.Repeat("x", 32)}, &http.Client{Transport: traceTransport(func(r *http.Request) (*http.Response, error) {
 			if body {
 				return &http.Response{StatusCode: 200, Body: traceFailedBody{cause}, Header: make(http.Header)}, nil
 			}
@@ -286,5 +286,23 @@ func TestTraceTransportPreservesCancellationAndBodyTimeout(t *testing.T) {
 		if !errors.Is(err, cause) || !errors.As(err, &problem) || problem.Status != want {
 			t.Fatalf("lost transport cause/status: %v", err)
 		}
+	}
+}
+
+func TestAttemptsAcceptVerifiedFailureAndRejectUnknownErrorAsFailure(t *testing.T) {
+	run, _ := traceFixture(t)
+	step, id := uuid.NewString(), uuid.NewString()
+	now := time.Now().UTC()
+	finished, deadline, lease := now.Add(time.Second), now.Add(time.Minute), now.Add(2*time.Minute)
+	code := "candidate_contract_invalid"
+	history := domain.AttemptHistory{Schema: "creation-attempt-history-production", CommandID: run.Command.CommandID, RunID: run.Command.RunID, StepID: step, StepKey: "map_manuscript", CurrentAttemptID: &id, HistoryOrigin: "recorded", Attempts: []domain.Attempt{{AttemptID: id, AttemptNo: 1, Fence: 1, InputHash: strings.Repeat("a", 64), State: "failed", StartedAt: now, ExecutionDeadline: deadline, LeaseExpiresAt: lease, FinishedAt: &finished, LastError: &code, UsageStatus: "unknown"}}}
+	peer := &tracePeer{history: history}
+	service := app.NewTraceService(traceAccess{run: run}, peer)
+	if _, err := service.Attempts(context.Background(), app.Actor{}, run.Command.RunID, step); err != nil {
+		t.Fatal(err)
+	}
+	code = "harness_response_unknown"
+	if _, err := service.Attempts(context.Background(), app.Actor{}, run.Command.RunID, step); err == nil {
+		t.Fatal("unknown outcome accepted as verified failure")
 	}
 }

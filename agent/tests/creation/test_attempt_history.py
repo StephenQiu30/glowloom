@@ -275,6 +275,11 @@ async def test_upgrade_preserves_legacy_results_without_inventing_attempts(
         await conn.execute("ALTER TABLE creation_result_outbox DROP COLUMN attempt_id")
         await conn.execute("ALTER TABLE creation_drafts DROP COLUMN attempt_id")
         await conn.execute("ALTER TABLE creation_steps DROP COLUMN current_attempt_id")
+        await conn.execute("DROP TABLE creation_recoveries, creation_attempt_failures")
+        await conn.execute(
+            "DROP FUNCTION creation_guard_recovery(), creation_guard_failure_receipt()"
+        )
+        await conn.execute("DELETE FROM creation_schema WHERE name = 'text-recovery'")
         await conn.execute("DROP TABLE creation_attempts")
         await conn.execute("DROP FUNCTION creation_guard_attempt()")
         await conn.execute("DELETE FROM creation_schema WHERE name = 'text-attempts'")
@@ -296,7 +301,7 @@ async def test_upgrade_preserves_legacy_results_without_inventing_attempts(
         )
     from app.creation.repository import SchemaMismatch
 
-    with pytest.raises(SchemaMismatch, match="attempt migration"):
+    with pytest.raises(SchemaMismatch, match="(attempt|recovery) migration"):
         await repository.ready()
     await repository.migrate()
     await repository.migrate()

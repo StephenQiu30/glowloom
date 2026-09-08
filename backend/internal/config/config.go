@@ -91,6 +91,7 @@ type Config struct {
 	ObjectStorePublicSecure         bool
 	AgentURL                        string
 	CreationAgentURL                string
+	CreationAgentRelocatedFrom      string
 	CreationAgentSecret             string
 	AgentExecutionSecret            string
 	AgentRuntimeImageDigest         string
@@ -166,6 +167,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	creationDockerNetwork, err := boolean("CREATION_DOCKER_NETWORK", false)
+	if err != nil {
+		return Config{}, err
+	}
 	creationURL := strings.TrimRight(strings.TrimSpace(os.Getenv("CREATION_AGENT_URL")), "/")
 	creationSecret := os.Getenv("CREATION_AGENT_SECRET")
 	if creationURL != "" {
@@ -173,7 +178,8 @@ func Load() (Config, error) {
 			return Config{}, errors.New("CREATION_AGENT_URL must be a valid service origin")
 		}
 		parsed, _ := url.Parse(creationURL)
-		if parsed.Scheme != "https" && parsed.Hostname() != "localhost" && (net.ParseIP(parsed.Hostname()) == nil || !net.ParseIP(parsed.Hostname()).IsLoopback()) {
+		dockerPeer := creationDockerNetwork && creationURL == "http://creation-api:8788"
+		if !dockerPeer && parsed.Scheme != "https" && parsed.Hostname() != "localhost" && (net.ParseIP(parsed.Hostname()) == nil || !net.ParseIP(parsed.Hostname()).IsLoopback()) {
 			return Config{}, errors.New("creation agent requires HTTPS outside loopback")
 		}
 		if creationSecret == environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret) {
@@ -181,6 +187,12 @@ func Load() (Config, error) {
 		}
 		if len(creationSecret) < 32 {
 			return Config{}, errors.New("CREATION_AGENT_SECRET must contain at least 32 bytes when creation is enabled")
+		}
+	}
+	creationRelocatedFrom := strings.TrimRight(strings.TrimSpace(os.Getenv("CREATION_AGENT_RELOCATED_FROM")), "/")
+	if creationRelocatedFrom != "" {
+		if creationURL == "" || validateServiceOrigin(creationRelocatedFrom) != nil {
+			return Config{}, errors.New("creation relocation requires valid source and target origins")
 		}
 	}
 	agentImageDigest := strings.TrimSpace(environmentValue("AGENT_RUNTIME_IMAGE_DIGEST", defaultAgentImageDigest))
@@ -301,6 +313,7 @@ func Load() (Config, error) {
 		ObjectStorePublicSecure:         objectStorePublicSecure,
 		AgentURL:                        agentURL,
 		CreationAgentURL:                creationURL,
+		CreationAgentRelocatedFrom:      creationRelocatedFrom,
 		CreationAgentSecret:             creationSecret,
 		AgentExecutionSecret:            environmentValue("AGENT_EXECUTION_SECRET", defaultAgentSecret),
 		AgentRuntimeImageDigest:         agentImageDigest,

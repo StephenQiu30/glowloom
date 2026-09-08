@@ -12,14 +12,15 @@ func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t 
 	t.Parallel()
 	repositoryRoot := searchRepositoryRoot(t)
 	base := mustReadSearchFile(t, filepath.Join(repositoryRoot, "docker-compose.yml"))
-	environment := mustReadSearchFile(t, filepath.Join(repositoryRoot, "docker-compose-env.yml"))
+	environment := mustReadSearchFile(t, filepath.Join(repositoryRoot, "deploy/ci/compose.dependencies.yml"))
+	configuration := mustReadSearchFile(t, filepath.Join(repositoryRoot, "backend/internal/config/config.go"))
 	module := mustReadSearchFile(t, filepath.Join(repositoryRoot, "backend", "go.mod"))
 	workflow := mustReadSearchFile(t, filepath.Join(repositoryRoot, ".github", "workflows", "ci.yml"))
 	for _, required := range []string{
 		"docker.elastic.co/elasticsearch/elasticsearch:9.4.4", "discovery.type: single-node",
 		`xpack.security.enabled: "false"`, "ELASTICSEARCH_SCRIPT_ALIAS", "ELASTICSEARCH_STORYGRAPH_ALIAS",
 	} {
-		if !strings.Contains(base+environment, required) {
+		if !strings.Contains(base+environment+configuration, required) {
 			t.Errorf("Search runtime topology is missing %q", required)
 		}
 	}
@@ -39,7 +40,7 @@ func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t 
 		t.Fatal("service Compose is missing Backend")
 	}
 	backendBlock := base[backendStart:]
-	if backendEnd := strings.Index(backendBlock, "\nnetworks:"); backendEnd > 0 {
+	if backendEnd := strings.Index(backendBlock, "\n  harness:"); backendEnd > 0 {
 		backendBlock = backendBlock[:backendEnd]
 	}
 	if strings.Contains(backendBlock, "depends_on:") {

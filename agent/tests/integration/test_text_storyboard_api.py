@@ -64,7 +64,8 @@ async def test_authenticated_invalid_release_never_calls_model(
             },
         )
     assert response.status_code == 409
-    assert response.json() == {"detail": "skill_release_unavailable"}
+    assert response.json()["detail"]["code"] == "skill_release_unavailable"
+    assert response.json()["detail"]["phase"] == "preflight"
 
 
 async def test_signed_request_returns_validated_draft_with_source_and_release_bindings(
@@ -97,3 +98,68 @@ async def test_signed_request_returns_validated_draft_with_source_and_release_bi
     assert (
         result.status == "needs_review" and result.context.source_hash == value.source.content_hash
     )
+
+
+async def test_invalid_candidate_receipt_retains_output_without_marking_it_as_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENT_EXECUTION_SECRET", SECRET)
+    value = task()
+    _, episode_map, _, _, _ = sample()
+    invalid = episode_map.model_copy(deep=True)
+    invalid.episodes.append(invalid.episodes[0])
+
+    async def reason(*_: object) -> BaseModel:
+        return invalid
+
+    monkeypatch.setattr(
+        "app.candidate_runtime.text_storyboard_api.TextHarness", lambda: TextHarness(reason)
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://agent"
+    ) as client:
+        response = await client.post(
+            "/internal/text-storyboard/invocations",
+            json=value.model_dump(mode="json"),
+            headers={
+                "X-Lanverse-Text-Authorization": sign_task(value, SECRET, int(time.time()) + 30)
+            },
+        )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["phase"] == "validation" and detail["code"] == "candidate_contract_invalid"
+    assert detail["diagnostic"] == "duplicate episode key"
+    assert detail["candidate"] == invalid.model_dump(mode="json")
+    assert "status" not in detail
+
+
+async def test_execution_error_returns_bound_unknown_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.protocol.canonical import canonical_hash
+    from app.reasoning.codex import CodexRuntimeUnavailable
+    from app.text_contract.failure import InvocationFailure
+
+    monkeypatch.setenv("AGENT_EXECUTION_SECRET", SECRET)
+    value = task()
+
+    async def unavailable(*_: object) -> TextResult:
+        raise CodexRuntimeUnavailable("synthetic model process failure")
+
+    monkeypatch.setattr(TextHarness, "execute", unavailable)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://agent"
+    ) as client:
+        response = await client.post(
+            "/internal/text-storyboard/invocations",
+            json=value.model_dump(mode="json"),
+            headers={
+                "X-Lanverse-Text-Authorization": sign_task(value, SECRET, int(time.time()) + 30)
+            },
+        )
+    assert response.status_code == 502
+    failure = InvocationFailure.model_validate(response.json()["detail"])
+    assert failure.state == "unknown" and failure.error_code == "harness_response_unknown"
+    assert failure.input_hash == canonical_hash(value.model_dump(mode="json"))
+    assert failure.diagnostic == "synthetic model process failure"
+    assert failure.candidate is None

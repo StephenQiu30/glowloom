@@ -12,6 +12,7 @@ from app.creation.manifest import read_manifest, save_manifest
 from app.creation.repository import Repository
 from app.protocol.canonical import canonical_hash, canonical_json
 from app.text_contract.checks import validate_result
+from app.text_contract.failure import InvocationFailure
 from app.text_contract.source import Digest
 from app.text_contract.task import TextTask
 
@@ -106,8 +107,11 @@ class ExecutionStore:
                     if not saved or canonical_hash(saved["result"]) != saved["result_hash"]:
                         raise ExecutionConflict("persisted_draft_drift")
                     return validate_result(task, saved["result"]).model_dump(mode="json")
-                if row["state"] == "unknown":
-                    raise ExecutionConflict("invocation_outcome_unknown")
+                if row["state"] in {"unknown", "failed"}:
+                    from app.creation.recovery import claim_recovery
+
+                    return await claim_recovery(conn, run, row, task)
+
                 if row["active"]:
                     raise ExecutionConflict("invocation_in_progress")
                 if row["current_attempt_id"] is not None:
@@ -243,6 +247,54 @@ class ExecutionStore:
                 (lease.step_id,),
             )
             return result
+
+    async def failed(self, lease: InvocationLease, failure: InvocationFailure) -> bool:
+        raw = failure.model_dump(mode="json")
+        if len(canonical_json(raw)) > 8000000:
+            raise ValueError("failure receipt exceeds storage limit")
+        async with await self.repository.connect() as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT * FROM creation_steps WHERE id=%s AND command_id=%s FOR UPDATE",
+                    (lease.step_id, lease.command_id),
+                )
+            ).fetchone()
+            if (
+                not row
+                or row["input_hash"] != lease.input_hash
+                or row["fence"] != lease.fence
+                or str(row["current_attempt_id"]) != lease.attempt_id
+                or row["state"] != "running"
+            ):
+                return False
+            task = TextTask.model_validate(row["task"])
+            if (failure.invocation_id, failure.input_hash, failure.release_hash) != (
+                task.invocation_id,
+                lease.input_hash,
+                task.release_hash,
+            ):
+                raise ValueError("failure binding mismatch")
+            updated = await conn.execute(
+                """UPDATE creation_steps SET state=%s, fence=fence+1, lease_until=NULL,
+                   last_error=%s, updated_at=clock_timestamp() WHERE id=%s AND
+                   lease_until>clock_timestamp()""",
+                (failure.state, failure.error_code, lease.step_id),
+            )
+            if updated.rowcount != 1:
+                return False
+            updated = await conn.execute(
+                """UPDATE creation_attempts SET state=%s, finished_at=clock_timestamp(),
+                   last_error=%s WHERE id=%s AND state='running'""",
+                (failure.state, failure.error_code, lease.attempt_id),
+            )
+            if updated.rowcount != 1:
+                raise ExecutionConflict("attempt_fence_lost")
+            await conn.execute(
+                "INSERT INTO creation_attempt_failures (attempt_id,receipt,receipt_hash) "
+                "VALUES (%s,%s,%s)",
+                (lease.attempt_id, Jsonb(raw), canonical_hash(raw)),
+            )
+            return True
 
     async def unknown(self, lease: InvocationLease, code: str) -> bool:
         if code not in {"harness_response_unknown", "harness_result_invalid", "attempt_cancelled"}:

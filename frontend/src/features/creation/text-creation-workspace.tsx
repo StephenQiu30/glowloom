@@ -25,6 +25,13 @@ const executionLabels: Record<API.CreationExecution["status"], string> = {
 };
 const polling = { pollingInterval: 5000, refetchOnFocus: true, refetchOnReconnect: true };
 const executionErrors: Record<string, string> = {
+  context_insufficient: "本阶段上下文超过限制，已在模型调用前停止。请联系管理员核查范围。",
+  skill_release_unavailable: "本次运行固定的专业能力版本不可用，请联系管理员恢复原版本。",
+  input_contract_invalid: "本阶段输入未通过校验，已在模型调用前停止。",
+  candidate_contract_invalid: "模型候选未通过来源或结构校验，失败候选和诊断已保存，需核查后恢复。",
+  structured_output_invalid: "模型返回的结构化内容无效，已保存可用的原始输出供核查。",
+  execution_output_budget_exceeded: "模型输出超过本次限制，调用已停止，需核查后恢复。",
+  execution_deadline_exceeded: "本次模型执行超时并已结束，需核查后恢复。",
   platform_unavailable: "原稿或采纳服务暂时无法连接。服务恢复后，可继续本次运行。",
   invocation_budget_exhausted: "本次创作的模型调用额度已用完，运行已停止。",
   harness_response_unknown: "模型调用结果尚未确认，已停止重复调用，请联系管理员核查。",

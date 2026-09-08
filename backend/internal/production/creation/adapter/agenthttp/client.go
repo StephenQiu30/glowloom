@@ -20,14 +20,24 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/production/creation/domain"
 )
 
-type Client struct {
-	secret []byte
-	http   *http.Client
-	now    func() time.Time
+// Config relocates only an explicitly declared origin of the same Creation service.
+// Historical run endpoints and engine identities remain unchanged.
+type Config struct {
+	Secret        string
+	RelocatedFrom string
+	Endpoint      string
 }
 
-func New(secret string, httpClient *http.Client, now func() time.Time) (*Client, error) {
-	if len(secret) < 32 {
+type Client struct {
+	relocatedFrom string
+	endpoint      string
+	secret        []byte
+	http          *http.Client
+	now           func() time.Time
+}
+
+func New(config Config, httpClient *http.Client, now func() time.Time) (*Client, error) {
+	if len(config.Secret) < 32 {
 		return nil, errors.New("creation agent secret must contain at least 32 bytes")
 	}
 	client := http.Client{Timeout: 10 * time.Second}
@@ -35,8 +45,18 @@ func New(secret string, httpClient *http.Client, now func() time.Time) (*Client,
 		client = *httpClient
 	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{secret: []byte(secret), http: &client, now: now}, nil
+	if config.RelocatedFrom != "" && config.Endpoint == "" {
+		return nil, errors.New("creation relocation target is required")
+	}
+	return &Client{secret: []byte(config.Secret), http: &client, now: now, relocatedFrom: config.RelocatedFrom, endpoint: config.Endpoint}, nil
 }
+func (c *Client) origin(run domain.Run) string {
+	if c.relocatedFrom != "" && run.Endpoint == c.relocatedFrom {
+		return strings.TrimRight(c.endpoint, "/")
+	}
+	return strings.TrimRight(run.Endpoint, "/")
+}
+
 func (c *Client) Lookup(ctx context.Context, run domain.Run) (domain.Acceptance, error) {
 	return c.request(ctx, run, http.MethodGet, "/internal/creation/commands/"+run.Command.CommandID, nil)
 }
@@ -65,7 +85,7 @@ type authorization struct {
 }
 
 func (c *Client) request(ctx context.Context, run domain.Run, method, path string, body []byte) (domain.Acceptance, error) {
-	request, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(run.Endpoint, "/")+path, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, method, c.origin(run)+path, bytes.NewReader(body))
 	if err != nil {
 		return domain.Acceptance{}, err
 	}

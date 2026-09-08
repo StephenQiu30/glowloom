@@ -307,7 +307,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	var creationProposalHandler *creationhttp.ProposalHandler
 	var creationTraceReader creationapp.TraceReader
 	if configuration.CreationAgentURL != "" {
-		creationClient, creationErr := creationagent.New(configuration.CreationAgentSecret, nil, time.Now)
+		creationClient, creationErr := creationagent.New(creationagent.Config{Secret: configuration.CreationAgentSecret, Endpoint: configuration.CreationAgentURL, RelocatedFrom: configuration.CreationAgentRelocatedFrom}, nil, time.Now)
 		if creationErr != nil {
 			return fmt.Errorf("creation agent configuration: %w", creationErr)
 		}

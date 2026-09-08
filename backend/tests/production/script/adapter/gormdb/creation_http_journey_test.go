@@ -92,7 +92,7 @@ func TestCreationPublicCommandRecoversPeerReceiptAfterResponseLoss(t *testing.T)
 	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	client, err := agenthttp.New(strings.Repeat("x", 32), nil, func() time.Time { return now })
+	client, err := agenthttp.New(agenthttp.Config{Secret: strings.Repeat("x", 32)}, nil, func() time.Time { return now })
 	if err != nil {
 		t.Fatal(err)
 	}

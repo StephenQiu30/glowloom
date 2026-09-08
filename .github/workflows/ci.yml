@@ -68,8 +68,6 @@ jobs:
       - name: Start real Kafka and ELK services
         env:
           COMPOSE_PROFILES: bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
-          DOCKER_KAFKA_BROKERS: kafka:19092
-          DOCKER_ELASTICSEARCH_URL: http://elasticsearch:9200
           KAFKA_PORT: 19092
           LOGSTASH_PORT: 15000
           ELASTICSEARCH_PORT: 19200
@@ -77,7 +75,7 @@ jobs:
           KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
           KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
         run: |
-          environment_compose() { docker compose -p lanverse-ci-env -f docker-compose-env.yml "$@"; }
+          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f deploy/ci/compose.dependencies.yml "$@"; }
           environment_compose up --detach --wait --wait-timeout 300 kafka elasticsearch logstash kibana
           ci_elasticsearch() {
             local method=$1 path=$2; shift 2
@@ -242,6 +240,16 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+      - name: Configure synthetic Compose inputs
+        run: |
+          echo "DATABASE_URL=postgresql://postgres:synthetic@localhost/lanverse" >> "$GITHUB_ENV"
+          echo "AGENT_EXECUTION_SECRET=synthetic-compose-harness-secret-32-bytes" >> "$GITHUB_ENV"
+          echo "CREATION_DATABASE_URL=postgresql://creation:synthetic@localhost/creation" >> "$GITHUB_ENV"
+          echo "CREATION_AGENT_SECRET=synthetic-compose-creation-secret-32-bytes" >> "$GITHUB_ENV"
+          echo "CREATION_TEXT_RELEASE_HASH=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" >> "$GITHUB_ENV"
+          echo "LANVERSE_CODEX_AUTH_FILE=/tmp/lanverse-ci-synthetic-codex-auth.json" >> "$GITHUB_ENV"
+          umask 077
+          echo '{}' > /tmp/lanverse-ci-synthetic-codex-auth.json
       - name: Validate development and production Compose
         env:
           LANVERSE_FRONTEND_IMAGE: lanverse/frontend:ci
@@ -257,7 +265,7 @@ jobs:
           MINIO_SECRET_KEY: ci-compose-only-secret
           KAFKA_ADMIN_PASSWORD: ci-compose-only-kafka-admin
           KAFKA_EVENT_WORKER_PASSWORD: ci-compose-only-event-worker
-          LANVERSE_CORS_ORIGINS: '["https://app.example.test"]'
+          CORS_ORIGINS: '["https://app.example.test"]'
           MINIO_CORS_ORIGINS: https://app.example.test
           LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE: /tmp/lanverse-ci-media-provider-master-key
           SMTP_HOST: smtp.example.test
@@ -271,10 +279,10 @@ jobs:
           openssl rand -out "$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" 32
           echo "LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE=$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" >> "$GITHUB_ENV"
           docker compose -f docker-compose.yml config --quiet
-          docker compose -f docker-compose-env.yml config --quiet
-          docker compose -f docker-compose.yml -f docker-compose-env.yml -f docker-compose-prod.yml config --quiet
-          test "$(docker compose -f docker-compose.yml config --services | sort | tr '\n' ' ')" = "backend frontend "
-          test -z "$(docker compose -f docker-compose-env.yml config --services)"
+          docker compose --project-directory . -f deploy/ci/compose.dependencies.yml config --quiet
+          docker compose -f docker-compose.yml -f deploy/compose.production.yml config --quiet
+          test "$(docker compose -f docker-compose.yml config --services | sort | tr '\n' ' ')" = "backend creation-api creation-worker frontend harness "
+          test -z "$(docker compose --project-directory . -f deploy/ci/compose.dependencies.yml config --services)"
       - name: Build Frontend deployment image
         run: docker build --tag lanverse/frontend:ci frontend
       - name: Build Backend deployment image
@@ -297,7 +305,7 @@ jobs:
           docker run --rm --entrypoint /bin/sh lanverse/agent:ci -c '
             test "$(id -u)" -ne 0
             command -v codex >/dev/null
-            codex --version | grep -q "0.147.0"
+            codex --version | grep -q "0.149.1"
             test -d skills/build-storygraph
             test "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
             test ! -e /srv/lanverse/.agents
@@ -307,21 +315,15 @@ jobs:
       - name: Run deployment images against real dependencies
         env:
           COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
-          POSTGRES_HOST: postgres
           MINIO_ENDPOINT: minio:9000
-          DOCKER_TEMPORAL_ADDRESS: temporal:7233
-          DOCKER_KAFKA_BROKERS: kafka:19092
-          ELASTIC_OBSERVABILITY_NETWORK: lanverse-environment
-          DOCKER_ELASTICSEARCH_URL: http://elasticsearch:9200
-          DOCKER_LOGSTASH_ADDRESS: logstash:5000
           KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
           KAFKA_USERNAME: event_worker
           KAFKA_PASSWORD: lanverse-development-event-worker
           ELASTICSEARCH_USERNAME: ""
           ELASTICSEARCH_PASSWORD: ""
         run: |
-          environment_compose() { docker compose -p lanverse-ci-env -f docker-compose-env.yml "$@"; }
-          service_compose() { docker compose -p lanverse-ci -f docker-compose.yml "$@"; }
+          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f deploy/ci/compose.dependencies.yml "$@"; }
+          service_compose() { docker compose -p lanverse-ci -f docker-compose.yml -f deploy/ci/compose.application.yml "$@"; }
           export AGENT_RUNTIME_IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' lanverse/agent:ci)"
           test -n "$AGENT_RUNTIME_IMAGE_DIGEST"
           docker tag lanverse/frontend:ci lanverse/frontend:development
@@ -531,8 +533,8 @@ jobs:
           COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
         run: |
           docker rm --force lanverse-ci-agent-runtime 2>/dev/null || true
-          docker compose -p lanverse-ci -f docker-compose.yml down --volumes --remove-orphans
-          docker compose -p lanverse-ci-env -f docker-compose-env.yml down --volumes --remove-orphans
+          docker compose -p lanverse-ci -f docker-compose.yml -f deploy/ci/compose.application.yml down --volumes --remove-orphans
+          docker compose --project-directory . -p lanverse-ci-env -f deploy/ci/compose.dependencies.yml down --volumes --remove-orphans
           unlink /tmp/lanverse-ci-media-provider-master-key 2>/dev/null || true
 
   delivery:

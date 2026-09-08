@@ -157,7 +157,7 @@ func TestCreationRuntimeClientSignsResumeAndTreatsNotStartedAsQueued(t *testing.
 	}))
 	defer peer.Close()
 	run.Endpoint = peer.URL
-	client, err := agenthttp.New(sourceTestSecret, peer.Client(), func() time.Time { return now })
+	client, err := agenthttp.New(agenthttp.Config{Secret: sourceTestSecret}, peer.Client(), func() time.Time { return now })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestCreationExecutionDecodesPythonOutputBindings(t *testing.T) {
 	}))
 	defer peer.Close()
 	run.Endpoint = peer.URL
-	client, err := agenthttp.New(sourceTestSecret, peer.Client(), time.Now)
+	client, err := agenthttp.New(agenthttp.Config{Secret: sourceTestSecret}, peer.Client(), time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

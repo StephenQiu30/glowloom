@@ -60,6 +60,17 @@ class SkillReleaseInvalid(ValueError):
     pass
 
 
+class InputContractInvalid(ValueError):
+    pass
+
+
+class CandidateContractInvalid(ValueError):
+    def __init__(self, candidate: dict[str, Any], diagnostic: str) -> None:
+        super().__init__(diagnostic[:500])
+        self.candidate = candidate
+        self.diagnostic = diagnostic[:500]
+
+
 class TextSkill:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or Path(__file__).resolve().parents[3] / "skills" / "text-storyboard"
@@ -265,14 +276,33 @@ class TextHarness:
         # Pydantic's frozen records still contain mutable lists. Own a validated snapshot
         # before awaiting inference so callers cannot change the input/result binding.
         task = TextTask.model_validate_json(task.model_dump_json())
-        guidance, prompt, manifest = self.prepare(task)
+        try:
+            guidance, prompt, manifest = self.prepare(task)
+        except (SkillReleaseInvalid, ContextInsufficient):
+            raise
+        except ValueError:
+            raise InputContractInvalid("input_contract_invalid") from None
         model = MODELS[task.stage]
         candidate = await self.reasoner(guidance, prompt, model, task.timeout_seconds)
         if type(candidate) is not model:
-            raise ValueError("reasoner returned a different task schema")
+            raise CandidateContractInvalid(
+                candidate.model_dump(mode="json"), "reasoner returned a different task schema"
+            )
         payload = candidate.model_dump(mode="json")
         if len(canonical_json(payload)) > 2000000:
-            raise ValueError("candidate exceeds output budget")
+            raise CandidateContractInvalid({}, "candidate exceeds output budget")
+        try:
+            return self.validate_candidate(task, candidate, payload, manifest)
+        except ValueError as error:
+            raise CandidateContractInvalid(payload, str(error)) from None
+
+    def validate_candidate(
+        self,
+        task: TextTask,
+        candidate: BaseModel,
+        payload: dict[str, Any],
+        manifest: ContextManifest,
+    ) -> TextResult:
         issues: list[Issue]
         if isinstance(candidate, EpisodeMap):
             issues = check_episode_map(task.source, candidate)

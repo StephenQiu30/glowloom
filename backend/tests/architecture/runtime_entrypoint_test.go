@@ -81,28 +81,21 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	if strings.Contains(ciWorkflow, "readlink /proc/1/exe") {
 		t.Error("deployment CI cannot require ptrace access to a different-UID Backend PID 1")
 	}
+	ciApplication := readArchitectureFile(t, filepath.Join(repositoryRoot, "deploy/ci/compose.application.yml"))
 	for _, required := range []string{
-		"ELASTIC_OBSERVABILITY_NETWORK: lanverse-environment",
-		"POSTGRES_HOST: postgres",
+		"name: lanverse-ci-environment",
 		"MINIO_ENDPOINT: minio:9000",
-		"DOCKER_TEMPORAL_ADDRESS: temporal:7233",
-		"DOCKER_KAFKA_BROKERS: kafka:19092",
-		"DOCKER_ELASTICSEARCH_URL: http://elasticsearch:9200",
-		"DOCKER_LOGSTASH_ADDRESS: logstash:5000",
+		"TEMPORAL_ADDRESS: temporal:7233",
+		"KAFKA_BROKERS: kafka:19092",
+		"ELASTICSEARCH_URL: http://elasticsearch:9200",
+		"LOGSTASH_ADDRESS: logstash:5000",
 	} {
-		if !strings.Contains(ciWorkflow, required) {
-			t.Errorf("deployment CI does not reuse its existing ELK network via %q", required)
+		if !strings.Contains(ciApplication, required) {
+			t.Errorf("CI application override does not connect to its isolated dependencies via %q", required)
 		}
 	}
-	for _, forbidden := range []string{
-		"POSTGRES_HOST: host.docker.internal",
-		"MINIO_ENDPOINT: host.docker.internal:9000",
-		"DOCKER_TEMPORAL_ADDRESS: host.docker.internal:7233",
-		"DOCKER_KAFKA_BROKERS: host.docker.internal:19093",
-	} {
-		if strings.Contains(ciWorkflow, forbidden) {
-			t.Errorf("deployment CI routes a container dependency through a host-only published port: %q", forbidden)
-		}
+	if !strings.Contains(ciWorkflow, "-f docker-compose.yml -f deploy/ci/compose.application.yml") {
+		t.Error("deployment CI must load its isolated connection override")
 	}
 
 	apiSource := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "internal", "bootstrap", "api_process.go"))
@@ -134,9 +127,6 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 		"no-new-privileges:true",
 		"test: [\"CMD\", \"su-exec\", \"lanverse:lanverse\", \"wget\"",
 		"file: ${LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE:-/dev/null}",
-		"- observability",
-		"name: ${ELASTIC_OBSERVABILITY_NETWORK:-elastic-start-local_default}",
-		"external: true",
 	} {
 		if !strings.Contains(compose, required) {
 			t.Errorf("service Compose is missing Provider root-key contract %q", required)
@@ -157,23 +147,18 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 				t.Errorf("%s still exposes obsolete Provider environment variable %q", environmentTemplate, forbidden)
 			}
 		}
-		for _, required := range []string{} {
-			if !strings.Contains(source, required) {
-				t.Errorf("%s is missing the observability startup contract %q", environmentTemplate, required)
-			}
-		}
 	}
 	developmentEnvironment := readArchitectureFile(t, filepath.Join(repositoryRoot, ".env.example"))
 	for _, required := range []string{
-		"ELASTIC_OBSERVABILITY_NETWORK=elastic-start-local_default",
-		"DOCKER_ELASTICSEARCH_URL=http://elasticsearch:9200",
-		"DOCKER_LOGSTASH_ADDRESS=logstash-local-dev:5000",
+		"DATABASE_URL=postgresql://postgres:replace-with-local-password@host.docker.internal:5432/lanverse",
+		"ELASTICSEARCH_URL=http://host.docker.internal:9200",
+		"LOGSTASH_ADDRESS=host.docker.internal:5000",
 	} {
 		if !strings.Contains(developmentEnvironment, required) {
-			t.Errorf("development environment template does not reuse the existing ELK network via %q", required)
+			t.Errorf("development environment template does not connect to existing host services via %q", required)
 		}
 	}
-	for _, forbidden := range []string{"\n  workflow-worker:", "\n  event-worker:"} {
+	for _, forbidden := range []string{"\n  workflow-worker:", "\n  event-worker:", "external: true", "DOCKER_ELASTICSEARCH_URL", "DOCKER_KAFKA_BROKERS"} {
 		if strings.Contains(compose, forbidden) {
 			t.Errorf("project Compose still declares obsolete service %q", strings.TrimSpace(forbidden))
 		}
@@ -183,7 +168,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 			t.Errorf("service Compose owns environment service %q", environmentService)
 		}
 	}
-	environmentCompose := readArchitectureFile(t, filepath.Join(repositoryRoot, "docker-compose-env.yml"))
+	environmentCompose := readArchitectureFile(t, filepath.Join(repositoryRoot, "deploy/ci/compose.dependencies.yml"))
 	for _, applicationService := range []string{"backend", "frontend"} {
 		if strings.Contains(environmentCompose, "\n  "+applicationService+":") {
 			t.Errorf("environment Compose owns application service %q", applicationService)

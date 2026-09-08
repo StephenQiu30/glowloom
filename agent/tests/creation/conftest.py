@@ -15,7 +15,8 @@ async def repository() -> AsyncIterator[Repository]:
     await store.migrate()
     async with await store.connect() as conn:
         await conn.execute(
-            "TRUNCATE creation_result_outbox, creation_output_bindings, "
+            "TRUNCATE creation_recoveries, creation_attempt_failures, "
+            "creation_result_outbox, creation_output_bindings, "
             "creation_drafts, creation_attempts, creation_steps, creation_manifests, "
             "creation_executions, "
             "creation_start_outbox, creation_commands"

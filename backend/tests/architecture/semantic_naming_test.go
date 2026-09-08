@@ -60,7 +60,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 		"frontend/components.json", "frontend/eslint.config.mjs", "frontend/next.config.ts",
 		"frontend/package.json", "frontend/playwright.config.ts", "frontend/postcss.config.mjs",
 		"frontend/tsconfig.json", "frontend/vitest.config.ts",
-		"docker-compose.yml", "docker-compose-env.yml", "docker-compose-prod.yml",
+		"docker-compose.yml", "deploy/ci/compose.dependencies.yml", "deploy/ci/compose.application.yml", "deploy/compose.production.yml",
 	} {
 		path := filepath.Join(repositoryRoot, relativePath)
 		if numericReleaseName.MatchString(relativePath) {
@@ -91,6 +91,8 @@ func TestSemanticNameInspectorDistinguishesProjectAndExternalNames(t *testing.T)
 		"uses: actions/checkout@v6",
 		`go.temporal.io/api/enums/v1`,
 		"from temporalio.api.workflowservice.v1 import DescribeNamespaceRequest",
+		"from temporalio.api.common.v1 import WorkflowExecution",
+		"from temporalio.api.enums.v1 import EventType, ResetReapplyType",
 		`github.com/minio/minio-go/v7/pkg/credentials`,
 		"dependency v1.31.2",
 		"NewStaticV4",
@@ -134,7 +136,9 @@ func hasProjectNumericReleaseName(line string) bool {
 	line = strings.ReplaceAll(line, googleInteractionAPI, "google-external-api")
 	line = strings.ReplaceAll(line, minioCredentialConstructor, "minio-external-constructor")
 	line = strings.ReplaceAll(line, vitestCoveragePackage, "vitest-external-package")
-	line = strings.ReplaceAll(line, "temporalio.api.workflowservice.v1", "temporal-external-protobuf")
+	for _, module := range []string{"workflowservice", "common", "enums"} {
+		line = strings.ReplaceAll(line, "temporalio.api."+module+".v1", "temporal-external-protobuf")
+	}
 	line = externalGoModuleMajor.ReplaceAllString(line, "external-go-module")
 	line = externalModuleAlias.ReplaceAllString(line, "external-module-alias")
 	line = externalGitHubAction.ReplaceAllString(line, "external-github-action")

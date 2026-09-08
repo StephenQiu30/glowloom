@@ -1,4 +1,5 @@
-name: lanverse-env
+# CI dependencies only. Local development uses existing host services.
+name: lanverse-ci-env
 
 services:
   postgres:
@@ -192,7 +193,7 @@ services:
     profiles: ["bundled-logstash"]
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
-      ELASTICSEARCH_URL: ${DOCKER_ELASTICSEARCH_URL:-http://host.docker.internal:9200}
+      ELASTICSEARCH_URL: http://elasticsearch:9200
       ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME-lanverse_dev}
       ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD-lanverse-development-elasticsearch}
     ports:
@@ -238,7 +239,7 @@ services:
 
 networks:
   environment:
-    name: lanverse-environment
+    name: lanverse-ci-environment
     driver: bridge
 
 volumes:

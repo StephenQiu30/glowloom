@@ -1,0 +1,20 @@
+# Only used by CI with compose.dependencies.yml; never loaded by local startup.
+services:
+  backend:
+    environment:
+      DATABASE_URL: postgresql://postgres:lanverse-development-only@postgres:5432/lanverse
+      MINIO_ENDPOINT: minio:9000
+      TEMPORAL_ADDRESS: temporal:7233
+      KAFKA_BROKERS: kafka:19092
+      KAFKA_USERNAME: event_worker
+      KAFKA_PASSWORD: lanverse-development-event-worker
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ""
+      ELASTICSEARCH_PASSWORD: ""
+      LOGSTASH_ADDRESS: logstash:5000
+    networks:
+      - ci-dependencies
+networks:
+  ci-dependencies:
+    external: true
+    name: lanverse-ci-environment

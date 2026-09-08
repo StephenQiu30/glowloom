@@ -9,6 +9,13 @@ from pydantic import TypeAdapter
 from app.text_contract.source import Digest
 
 
+def docker_network() -> bool:
+    value = os.getenv("CREATION_DOCKER_NETWORK", "false")
+    if value not in {"true", "false"}:
+        raise ValueError("CREATION_DOCKER_NETWORK must be true or false")
+    return value == "true"
+
+
 def database_url() -> str:
     value = os.getenv("CREATION_DATABASE_URL", "")
     parsed = urlsplit(value)
@@ -43,7 +50,10 @@ class Settings:
             raise ValueError("CREATION_TEMPORAL_TLS must be true or false")
         tls = tls_value == "true"
         host = urlsplit("http://" + address).hostname
-        if not host or (not tls and host not in {"localhost", "127.0.0.1", "::1"}):
+        docker_temporal = docker_network() and address == "host.docker.internal:7233"
+        if not host or (
+            not tls and host not in {"localhost", "127.0.0.1", "::1"} and not docker_temporal
+        ):
             raise ValueError("non-loopback Temporal connections require TLS")
         namespace = os.getenv("CREATION_TEMPORAL_NAMESPACE", "default")
         queue = os.getenv("CREATION_TASK_QUEUE", "lanverse-creation-text")
@@ -55,6 +65,11 @@ class Settings:
 def trusted_url(name: str) -> str:
     value = os.getenv(name, "")
     parsed = urlsplit(value)
+    docker_origins = {
+        "CREATION_PLATFORM_URL": "http://backend:8686",
+        "CREATION_HARNESS_URL": "http://harness:8787",
+    }
+    docker_peer = docker_network() and value.rstrip("/") == docker_origins.get(name)
     if (
         not parsed.hostname
         or parsed.username
@@ -63,7 +78,11 @@ def trusted_url(name: str) -> str:
         or parsed.fragment
         or parsed.path not in {"", "/"}
         or parsed.scheme not in {"http", "https"}
-        or (parsed.scheme == "http" and parsed.hostname not in {"127.0.0.1", "localhost", "::1"})
+        or (
+            parsed.scheme == "http"
+            and parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+            and not docker_peer
+        )
     ):
         raise ValueError(f"{name} requires an HTTPS origin (HTTP is loopback-only)")
     return value.rstrip("/")

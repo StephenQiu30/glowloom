@@ -21,6 +21,7 @@ from app.creation.execution_schema import (
     WORKFLOW_SCHEMA_HASH,
 )
 from app.creation.manifest_schema import MANIFEST_SCHEMA, MANIFEST_SCHEMA_HASH
+from app.creation.recovery_schema import RECOVERY_SCHEMA, RECOVERY_SCHEMA_HASH
 
 # This schema belongs exclusively to the Agent database. Migration is explicit.
 SCHEMA = """
@@ -93,6 +94,7 @@ class Repository:
                 await self._migrate_resume(conn)
                 await self._migrate_attempts(conn)
                 await self._migrate_manifest(conn)
+                await self._migrate_recovery(conn)
                 return
             existing = await (
                 await conn.execute(
@@ -115,6 +117,20 @@ class Repository:
             await self._migrate_resume(conn)
             await self._migrate_attempts(conn)
             await self._migrate_manifest(conn)
+            await self._migrate_recovery(conn)
+
+    async def _migrate_recovery(self, conn: AsyncConnection[dict[str, Any]]) -> None:
+        row = await (
+            await conn.execute("SELECT checksum FROM creation_schema WHERE name = 'text-recovery'")
+        ).fetchone()
+        if row:
+            if row["checksum"] != RECOVERY_SCHEMA_HASH:
+                raise SchemaMismatch("text recovery migration checksum differs")
+            return
+        await conn.execute(RECOVERY_SCHEMA)
+        await conn.execute(
+            "INSERT INTO creation_schema VALUES (%s, %s)", ("text-recovery", RECOVERY_SCHEMA_HASH)
+        )
 
     async def _migrate_manifest(self, conn: AsyncConnection[dict[str, Any]]) -> None:
         row = await (
@@ -193,6 +209,13 @@ class Repository:
     async def ready(self) -> None:
         async with await self.connect() as conn:
             await self._check_schema(conn)
+            recovery = await (
+                await conn.execute(
+                    "SELECT checksum FROM creation_schema WHERE name = 'text-recovery'"
+                )
+            ).fetchone()
+            if not recovery or recovery["checksum"] != RECOVERY_SCHEMA_HASH:
+                raise SchemaMismatch("text recovery migration is missing or differs")
             manifest = await (
                 await conn.execute(
                     "SELECT checksum FROM creation_schema WHERE name = 'text-manifest'"

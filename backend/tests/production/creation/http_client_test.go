@@ -67,7 +67,7 @@ func TestCreationHTTPBindsShortLivedAuthorizationToExactRequest(t *testing.T) {
 	}))
 	defer server.Close()
 	run.Endpoint = server.URL
-	client, err := adapter.New(secret, nil, func() time.Time { return now })
+	client, err := adapter.New(adapter.Config{Secret: secret}, nil, func() time.Time { return now })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestCreationHTTPRejectsRedirectsMalformedAndForeignReceipts(t *testing.T) {
 			}))
 			defer server.Close()
 			run.Endpoint = server.URL
-			client, err := adapter.New(strings.Repeat("x", 32), nil, time.Now)
+			client, err := adapter.New(adapter.Config{Secret: strings.Repeat("x", 32)}, nil, time.Now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -114,5 +114,44 @@ func TestCreationHTTPRejectsRedirectsMalformedAndForeignReceipts(t *testing.T) {
 				t.Fatal("authorization followed redirect")
 			}
 		})
+	}
+}
+
+func TestCreationRelocationRoutesOnlyDeclaredOriginAndPreservesRun(t *testing.T) {
+	store, peer := deliveryFixture()
+	run := store.delivery.Run
+	run.Endpoint = "http://127.0.0.1:8788"
+	run.PayloadHash, _ = app.PayloadHash(run.Command)
+	peer.receipt.PayloadHash = run.PayloadHash
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if strings.HasSuffix(r.URL.Path, "/execution") {
+			w.WriteHeader(404)
+			_, _ = io.WriteString(w, `{"detail":"creation_execution_not_started"}`)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(peer.receipt)
+	}))
+	defer server.Close()
+	client, err := adapter.New(adapter.Config{Secret: strings.Repeat("x", 32), RelocatedFrom: run.Endpoint, Endpoint: server.URL}, nil, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Accept(context.Background(), run); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Lookup(context.Background(), run); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = client.Execution(context.Background(), run); err != nil {
+		t.Fatal(err)
+	}
+	if run.Endpoint != "http://127.0.0.1:8788" || calls != 3 {
+		t.Fatal("migration rewrote run or missed a request path")
+	}
+	run.Endpoint = "http://127.0.0.1:1"
+	if _, err = client.Lookup(context.Background(), run); err == nil || calls != 3 {
+		t.Fatal("undeclared origin was rerouted")
 	}
 }

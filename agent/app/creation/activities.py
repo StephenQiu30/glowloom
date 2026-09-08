@@ -10,6 +10,7 @@ from app.creation.contract import Command
 from app.creation.execution import ExecutionConflict, ExecutionStore, InvocationLease
 from app.creation.platform import HarnessClient, PlatformClient
 from app.protocol.canonical import canonical_hash
+from app.text_contract.failure import HarnessFailed
 from app.text_contract.schemas import EpisodeAnalysis, EpisodeMap, WorldBook
 from app.text_contract.task import Stage, TextTask
 
@@ -106,6 +107,10 @@ class CreationActivities:
         if isinstance(lease, InvocationLease):
             try:
                 raw = await self.harness.invoke(task)
+            except HarnessFailed as error:
+                if not await self.store.failed(lease, error.failure):
+                    raise ApplicationError("attempt_fence_lost", non_retryable=True) from None
+                raise ApplicationError(error.failure.error_code, non_retryable=True) from None
             except asyncio.CancelledError:
                 await self.store.unknown(lease, "attempt_cancelled")
                 raise

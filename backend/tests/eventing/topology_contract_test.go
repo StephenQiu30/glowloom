@@ -15,7 +15,7 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	environment, err := os.ReadFile(filepath.Join(repositoryRoot, "docker-compose-env.yml"))
+	environment, err := os.ReadFile(filepath.Join(repositoryRoot, "deploy/ci/compose.dependencies.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,11 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 			t.Errorf("Kafka runtime topology is missing %q", required)
 		}
 	}
-	if !strings.Contains(baseText, "KAFKA_CONSUMER_GROUP: lanverse.search-projector") {
+	configuration, err := os.ReadFile(filepath.Join(repositoryRoot, "backend/internal/config/config.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(configuration), `defaultKafkaConsumerGroup = "lanverse.search-projector"`) {
 		t.Error("Backend service topology is missing the Event Runtime consumer group")
 	}
 	if strings.Contains(strings.ToLower(baseText+environmentText), "command-topic") ||

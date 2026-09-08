@@ -1,19 +1,38 @@
 name: lanverse
 
-x-backend-build: &backend-build
-  context: ./backend
-  dockerfile: Dockerfile
+x-application: &application
+  init: true
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+
+x-creation-environment: &creation-environment
+  CREATION_DATABASE_URL: ${CREATION_DATABASE_URL:?Set the existing dedicated Creation database URL}
+  CREATION_AGENT_SECRET: ${CREATION_AGENT_SECRET:?Set the independent Creation authorization secret}
+  CREATION_TEMPORAL_ADDRESS: host.docker.internal:7233
+  CREATION_TEMPORAL_NAMESPACE: ${CREATION_TEMPORAL_NAMESPACE:-default}
+  CREATION_TASK_QUEUE: ${CREATION_TASK_QUEUE:-lanverse-creation-text}
+  CREATION_TEMPORAL_TLS: "false"
+  CREATION_DOCKER_NETWORK: "true"
+
+x-creation-service: &creation-service
+  <<: *application
+  build:
+    context: .
+    dockerfile: agent/Dockerfile.creation
+  image: lanverse/creation:local
+  networks: [runtime]
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  stop_grace_period: 960s
 
 services:
   frontend:
+    <<: *application
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:${API_PORT:-8686}
     image: lanverse/frontend:development
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:${API_PORT:-8686}
     ports:
       - 127.0.0.1:${FRONTEND_PORT:-8123}:8123
     networks:
@@ -23,16 +42,14 @@ services:
         condition: service_healthy
 
   backend:
-    build: *backend-build
+    <<: *application
+    build: ./backend
     image: lanverse/backend:development
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      LOGSTASH_ADDRESS: ${DOCKER_LOGSTASH_ADDRESS:-logstash-local-dev:5000}
-      API_HOST: 0.0.0.0
-      API_PORT: 8686
-      CORS_ORIGINS: ${LANVERSE_CORS_ORIGINS:-["http://localhost:8123","http://127.0.0.1:8123"]}
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-lanverse-development-only}@${POSTGRES_HOST:-host.docker.internal}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-lanverse}
+      LOGSTASH_ADDRESS: ${LOGSTASH_ADDRESS:-host.docker.internal:5000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:8123","http://127.0.0.1:8123"]}
+      DATABASE_URL: ${DATABASE_URL:?Set the existing local database URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-jwt-secret-change-before-production}
       JWT_ISSUER: ${JWT_ISSUER:-lanverse-api}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-lanverse-web}
@@ -47,15 +64,17 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Lanverse}
-      CREATION_AGENT_URL: ${CREATION_AGENT_URL:-}
+      CREATION_AGENT_URL: http://creation-api:8788
+      CREATION_DOCKER_NETWORK: "true"
+      CREATION_AGENT_RELOCATED_FROM: ${CREATION_AGENT_RELOCATED_FROM:-}
       CREATION_AGENT_SECRET: ${CREATION_AGENT_SECRET:-}
-      AGENT_URL: ${AGENT_URL:-http://host.docker.internal:8787}
+      AGENT_URL: http://harness:8787
       AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:-development-only-agent-execution-secret}
       AGENT_RUNTIME_IMAGE_DIGEST: ${AGENT_RUNTIME_IMAGE_DIGEST:-sha256:352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb}
       AGENT_RUNTIME_ADDITIONAL_REVISIONS: ${AGENT_RUNTIME_ADDITIONAL_REVISIONS:-[]}
       AGENT_POLL_INTERVAL_MS: ${AGENT_POLL_INTERVAL_MS:-500}
       REVIEW_CLAIM_LEASE_SECONDS: ${REVIEW_CLAIM_LEASE_SECONDS:-300}
-      TEMPORAL_ADDRESS: ${DOCKER_TEMPORAL_ADDRESS:-host.docker.internal:7233}
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-host.docker.internal:7233}
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-lanverse-production-workflow}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-host.docker.internal:9000}
@@ -64,34 +83,23 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-lanverse-development-only}
       MINIO_BUCKET: ${MINIO_BUCKET:-lanverse-media}
       MINIO_REGION: ${MINIO_REGION:-us-east-1}
-      MINIO_SECURE: "false"
+      MINIO_SECURE: ${MINIO_SECURE:-false}
       MINIO_PUBLIC_SECURE: ${MINIO_PUBLIC_SECURE:-false}
       EVENT_WORKER_HOST: 127.0.0.1
       EVENT_WORKER_PORT: 8687
-      KAFKA_BROKERS: ${DOCKER_KAFKA_BROKERS:-host.docker.internal:19093}
-      KAFKA_CLIENT_ID: lanverse-event-worker
-      KAFKA_CONSUMER_GROUP: lanverse.search-projector
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-host.docker.internal:19093}
       KAFKA_USERNAME: ${KAFKA_USERNAME:-}
       KAFKA_PASSWORD: ${KAFKA_PASSWORD:-}
-      KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.published
-      KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dead-letter
-      KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.published
-      KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dead-letter
-      ELASTICSEARCH_URL: ${DOCKER_ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-http://host.docker.internal:9200}
       ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME-lanverse_dev}
       ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD-lanverse-development-elasticsearch}
-      ELASTICSEARCH_SCRIPT_ALIAS: lanverse-script-search
-      ELASTICSEARCH_STORYGRAPH_ALIAS: lanverse-storygraph-search
     ports:
       - 127.0.0.1:${API_PORT:-8686}:8686
     networks:
       - edge
-      - internal
-      - observability
+      - runtime
     extra_hosts:
       - host.docker.internal:host-gateway
-    security_opt:
-      - no-new-privileges:true
     tmpfs:
       - /run/secrets:rw,noexec,nosuid,nodev,mode=0711
     secrets:
@@ -104,16 +112,60 @@ services:
       retries: 24
       start_period: 10s
 
+  harness:
+    <<: *application
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    image: lanverse/harness:local
+    environment:
+      AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:?Set the Harness authorization secret}
+      CODEX_HOME: /home/lanverse/.codex
+    volumes:
+      - codex-state:/home/lanverse/.codex
+      - type: bind
+        source: ${LANVERSE_CODEX_AUTH_FILE:?Set the local Codex auth.json path}
+        target: /home/lanverse/.codex/auth.json
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [runtime]
+    stop_grace_period: 960s
+
+  creation-api:
+    <<: *creation-service
+    environment: *creation-environment
+
+  creation-worker:
+    <<: *creation-service
+    command: ["python", "-m", "app.creation.worker"]
+    environment:
+      <<: *creation-environment
+      CREATION_PLATFORM_URL: http://backend:8686
+      CREATION_HARNESS_URL: http://harness:8787
+      CREATION_HARNESS_SECRET: ${AGENT_EXECUTION_SECRET:?Set the Harness authorization secret}
+      CREATION_TEXT_RELEASE_HASH: ${CREATION_TEXT_RELEASE_HASH:?Set the reviewed frozen text release hash}
+      CREATION_CALL_LIMIT: ${CREATION_CALL_LIMIT:-1000}
+      CREATION_INVOCATION_TIMEOUT_SECONDS: ${CREATION_INVOCATION_TIMEOUT_SECONDS:-900}
+    healthcheck:
+      disable: true
+    depends_on:
+      backend:
+        condition: service_healthy
+      creation-api:
+        condition: service_healthy
+      harness:
+        condition: service_healthy
+
 networks:
   edge:
     driver: bridge
-  internal:
+  runtime:
     driver: bridge
-    internal: true
-  observability:
-    name: ${ELASTIC_OBSERVABILITY_NETWORK:-elastic-start-local_default}
-    external: true
 
 secrets:
   lanverse_media_provider_master_key:
     file: ${LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE:-/dev/null}
+
+volumes:
+  codex-state:

@@ -12,7 +12,7 @@ Go lanverse Backend（唯一 Binary / 唯一业务 Writer）
         ├─────────→ MinIO（私有对象字节）
         ├─────────→ Temporal（内置 Workflow Runtime）
         ├─────────→ Kafka（内置 Event Runtime）→ Elasticsearch（业务检索投影）
-        └─────────→ Python Candidate Runtime ──→ 本机 Codex CLI
+        └─────────→ Python Creation / Harness ──→ 容器内 Codex CLI
 
 JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 ```
@@ -20,7 +20,7 @@ JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 - `frontend/`：Next.js 创作工作台，只读取服务端事实并提交人工决议。
 - `backend/`：唯一公共业务 API 与唯一业务 Writer；认证、项目、剧本、制作圣经、分集、结构、分镜、正式镜头、导出和持久任务都在此实现。
 - `backend/cmd/main.go`：唯一 Go 启动入口；同一 `lanverse` 进程装配 API、Workflow 与 Event 三个职责运行时，不创建 Worker Binary 或 Compose 服务。
-- `agent/`：私有 Candidate Runtime；校验短时 Execution Grant，只执行结构化 Codex Harness，不连接 PostgreSQL/MinIO，不拥有公共业务路由。
+- `agent/`：可信 Creation API/Worker 管理独立运行库与 Temporal 编排；私有 Harness 执行结构化 Codex 调用，不接收数据库或对象存储凭据。正式业务事实仍由 Go 写入。
 - `backend/internal/platform/database/model`：唯一 GORM Model Catalog 与表结构事实源。
 - `backend/api/openapi/lanverse-public-api.json`：唯一公共 REST 契约源。
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
@@ -42,77 +42,26 @@ StoryGraph 已完成到 `SG-I20` 的通用媒体 Provider 配置事实，当前�
 
 ## 本机启动
 
-当前工作机已按用户要求采用固定发布副本和 macOS `launchd`，复用本机既有基础设施。实际管理入口、搜索重建结果和剩余阻断见 [本机既有环境运行验收](docs/acceptance/0019-本机既有环境运行验收记录.md)；下文 Compose 命令是另一种部署方式，不能与当前监听相同端口的应用服务同时启动。
-
-先按 `.env.example` 准备根目录 `.env`。私有 Agent 需要本机可用且已登录的 Codex CLI：
+按 [.env.example](.env.example) 填写根目录 `.env`，然后执行：
 
 ```bash
-cd agent
-uv sync --extra dev
-AGENT_EXECUTION_SECRET=development-only-agent-execution-secret \
-  uv run uvicorn app.candidate_runtime.api:app --host 127.0.0.1 --port 8787
+docker compose up -d --build
+docker compose ps
 ```
 
-本机开发默认复用已经启动的 PostgreSQL、MinIO、Homebrew Kafka、Homebrew Temporal、Elasticsearch 与 Kibana；项目容器通过 `host.docker.internal` 连接这些服务。`docker-compose.yml` 只声明 Frontend/Backend 项目服务，`docker-compose-env.yml` 是可独立运行的环境栈。
-
-本机已运行 Logstash 与 Homebrew Temporal，开发时不再创建同类容器。Backend 通过 `host.docker.internal:5000` 直连现有 Logstash；`docker-compose-env.yml` 中的所有环境服务均由显式 `bundled-*` profile 控制，只用于 CI、生产组合或确需隔离环境的场景。
-
-环境保持运行后，日常开发只启动或更新项目服务：
+访问前端 <http://127.0.0.1:8123>，后端 <http://127.0.0.1:8686>。查看应用日志：
 
 ```bash
-docker compose --env-file .env \
-  -f docker-compose.yml \
-  up --build -d
+docker compose logs --tail=50 backend frontend
 ```
 
-日常测试直接复用已启动环境，不需要每轮重启。默认环境栈不会创建 PostgreSQL、MinIO、Kafka、Elasticsearch 或 Kibana 容器。本机服务需要满足 `.env` 中的地址与认证配置；Homebrew Kafka 需要公布容器可达的 Broker 地址并已创建项目 Topic，Elasticsearch 需要存在 Lanverse 使用的账号、模板和索引。
+默认只启动应用：Frontend、Backend，以及剧本解析必需的 Harness、Creation API 和 Creation Worker。Go API、Workflow、Event Runtime 共用一个 Backend 容器；Agent 保持 Docker 运行，私有端口不对宿主机发布。
 
-ELK 由环境统一管理，Backend 启动不再执行 Elasticsearch/Kibana 初始化或历史日志索引迁移。保留现有 ELK 服务与数据；新环境需先配置以下资源，再启动应用日志写入：
+PostgreSQL、MinIO、Temporal、Kafka、ES 和 Logstash 直接使用本机已启动的服务，容器通过 `host.docker.internal` 访问。填写真实地址和认证信息即可；本地启动不创建基础设施、初始化索引或清除历史数据。MinIO 的内部地址与浏览器访问地址分别使用 `MINIO_ENDPOINT` 和 `MINIO_PUBLIC_ENDPOINT`。
 
-| 环境资源 | 配置契约 |
-| --- | --- |
-| ILM `lanverse-logs-application-30d` | `deploy/observability/elasticsearch/ilm-policy.json`；按日或 10 GB 滚动，保留 30 天 |
-| 索引模板 `lanverse-logs-application` | `deploy/observability/logstash/template/lanverse-logs-template.json`；保留严格字段映射 |
-| 写入别名 `lanverse-logs-application` | 指向符合上述模板且以数字结尾的 backing index（如 `lanverse-logs-application-000001`），并指定 `is_write_index: true` |
-| 索引模板 `lanverse-logs-dead-letter` | `deploy/observability/elasticsearch/dead-letter-template.json`；首次写入前定义时间和受限摘要字段，覆盖后续滚动索引 |
-| 写入别名 `lanverse-logs-dead-letter` | backing index 匹配死信模板且以数字结尾（如 `lanverse-logs-dead-letter-000001`），并指定 `is_write_index: true` |
-| Kibana Data View `lanverse-logs-application` | title 为 `lanverse-logs-application-*`，时间字段为 `@timestamp` |
+Creation 使用已迁移的独立数据库、独立签名密钥和已审阅的冻结 SkillRelease 摘要。Harness 只读挂载已登录 Codex 的 `auth.json`；配置说明与恢复约束见 [部署设计](docs/design/0020-文本解析失败诊断与受控恢复设计.md)。媒体供应商配置需要另行填写本机 root-key 文件路径。
 
-环境维护者负责权限、配置导入与旧索引迁移。业务检索别名 `lanverse-script-search`、`lanverse-storygraph-search` 仍由 Search 模块维护，与日志配置分离。CI 的一次性环境独立准备上述验收资源。
-
-
-零 Provider 配置时无需准备媒体密钥，开发 Compose 会把空 Secret 挂载到 Backend，Provider 配置命令失败关闭而其他能力保持可用。需要保存 Provider 配置时，只在本机创建 `chmod 600` 的 32-byte root-key 文件并把路径写入 `LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE`；Backend 的 root 启动器只在容器 tmpfs 中生成 `0400/lanverse` 的固定路径副本，随后立即通过 `su-exec` 降权执行唯一 Go Binary，非 tmpfs 挂载直接失败关闭。火山、OpenAI、Google 的 API Key 始终不写入 `.env`。当前只有 Backend 领域服务与持久化合同，Web 配置入口按顺序在 `SG-I22` 交付。
-
-只有需要完全隔离的容器内存储时才显式启用对应 profile，并让应用连接容器服务：
-
-```bash
-docker compose --env-file .env \
-  --profile bundled-postgres \
-  --profile bundled-minio \
-  --profile bundled-kafka \
-  --profile bundled-elasticsearch \
-  --profile bundled-kibana \
-  --profile bundled-logstash \
-  --profile bundled-temporal \
-  -f docker-compose-env.yml \
-  up -d
-```
-
-隔离环境通过宿主机发布端口供项目服务使用；环境健康后仍单独执行 `docker-compose.yml` 启动项目。CI 和生产可使用独立项目名与线上覆盖组合两层编排，但不把环境服务重新塞入项目启动文件。
-
-CI 和生产编排继续显式启用隔离依赖及其安全配置；本机开发以本机现有服务为准，不另外启动同类环境。
-
-开发 Compose 中 Backend 通过 `host.docker.internal:8787` 调用私有 Agent，并通过 `host.docker.internal:7233` 连接本机 Temporal。生产环境必须显式提供私有网络内的 `AGENT_URL` 与 `TEMPORAL_ADDRESS`，并为 Backend/Agent 注入相同的高强度 `AGENT_EXECUTION_SECRET`；Agent 不接收数据库、JWT、Temporal 或对象存储凭据。
-
-需要独立部署 Agent 时，从仓库根目录构建，镜像会固定安装 Codex CLI 并带入本项目所需的 Skill Pack：
-
-```bash
-docker build --file agent/Dockerfile --tag lanverse/agent-runtime:development .
-```
-
-运行镜像时仍须通过运行平台向容器用户 `/home/lanverse/.codex` 提供有效的 Codex 登录配置；镜像不会复制本机凭据。未提供登录配置时健康检查仍可成功，但生成请求会返回可追踪的 Agent 不可用结果。
-
-对象存储区分 Backend 内部地址 `MINIO_ENDPOINT` 与 Browser 可达的 `MINIO_PUBLIC_ENDPOINT`。Bucket 保持私有，Browser 只使用短时预签名 URL。
+CI 的一次性依赖与连接覆盖仅保存在 `deploy/ci/`，不会被本地启动加载。镜像部署覆盖位于 `deploy/compose.production.yml`，也不包含基础设施服务。
 
 ## 验证
 

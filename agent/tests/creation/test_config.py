@@ -84,3 +84,26 @@ def test_worker_fails_fast_without_independent_trusted_endpoints(
             changed.setenv(key, value)
             with pytest.raises(ValueError):
                 WorkerSettings.from_environment()
+
+
+def test_docker_transport_is_explicit_and_limited_to_compose_peers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.creation.config import trusted_url
+
+    configure(monkeypatch)
+    monkeypatch.setenv("CREATION_DOCKER_NETWORK", "true")
+    monkeypatch.setenv("CREATION_TEMPORAL_ADDRESS", "host.docker.internal:7233")
+    assert Settings.from_environment().temporal_address == "host.docker.internal:7233"
+    for key, value in [
+        ("CREATION_PLATFORM_URL", "http://backend:8686"),
+        ("CREATION_HARNESS_URL", "http://harness:8787"),
+    ]:
+        monkeypatch.setenv(key, value)
+        assert trusted_url(key) == value
+        monkeypatch.setenv(key, "http://remote.example:8686")
+        with pytest.raises(ValueError):
+            trusted_url(key)
+    monkeypatch.setenv("CREATION_DOCKER_NETWORK", "false")
+    with pytest.raises(ValueError):
+        Settings.from_environment()

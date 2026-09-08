@@ -32,7 +32,9 @@ class CodexToolPolicyViolation(CodexExecutionError):
 
 
 class CodexSchemaInvalid(CodexExecutionError):
-    pass
+    def __init__(self, message: str, raw_output: str | None = None) -> None:
+        super().__init__(message)
+        self.raw_output = raw_output
 
 
 class CodexRuntimeUnavailable(CodexExecutionError):
@@ -193,6 +195,7 @@ async def run_codex_process(
             raise CodexRuntimeUnavailable(
                 f"Codex CLI exited {process.returncode}: {structured_diagnostic(stdout, stderr)}"
             )
+        raw = b""
         try:
             # Check the opened descriptor, not a path that could change between stat and read.
             flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
@@ -208,7 +211,10 @@ async def run_codex_process(
             value = decode_structured_output(raw.decode("utf-8"))
             return output_model.model_validate(value)
         except (OSError, json.JSONDecodeError, ValueError) as error:
-            raise CodexSchemaInvalid("Codex CLI returned an invalid structured result") from error
+            raise CodexSchemaInvalid(
+                "Codex CLI returned an invalid structured result",
+                raw.decode("utf-8", errors="replace")[:2000000],
+            ) from error
 
 
 def codex_environment() -> dict[str, str]:

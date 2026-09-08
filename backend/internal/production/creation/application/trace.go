@@ -154,6 +154,10 @@ func ValidateAttempts(run domain.Run, stepID string, v domain.AttemptHistory) er
 			if a.FinishedAt == nil || a.FinishedAt.Before(a.StartedAt) || a.ResultHash == nil || !validHash(*a.ResultHash) || a.LastError != nil || a.LeaseExpired {
 				return fail
 			}
+		case "failed":
+			if a.FinishedAt == nil || a.FinishedAt.Before(a.StartedAt) || a.ResultHash != nil || a.LastError == nil || !slices.Contains([]string{"context_insufficient", "skill_release_unavailable", "input_contract_invalid", "candidate_contract_invalid", "execution_output_budget_exceeded", "execution_deadline_exceeded", "structured_output_invalid"}, *a.LastError) || a.LeaseExpired {
+				return fail
+			}
 		case "unknown":
 			if a.FinishedAt == nil || a.FinishedAt.Before(a.StartedAt) || a.ResultHash != nil || a.LastError == nil || !slices.Contains([]string{"harness_response_unknown", "harness_result_invalid", "attempt_cancelled", "attempt_expired"}, *a.LastError) || a.LeaseExpired {
 				return fail

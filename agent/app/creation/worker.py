@@ -1,6 +1,8 @@
 """Run the trusted worker: python -m app.creation.worker."""
 
 import asyncio
+import signal
+from datetime import timedelta
 
 import httpx
 from temporalio.client import Client
@@ -15,6 +17,10 @@ from app.creation.workflow import TextStoryboardWorkflow
 
 
 async def run_worker() -> None:
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(signum, stop.set)
     settings = WorkerSettings.from_environment()
     repository = Repository(settings.base.database_url)
     await repository.ready()
@@ -38,8 +44,10 @@ async def run_worker() -> None:
             workflows=[TextStoryboardWorkflow],
             activities=[activities.invoke, activities.gate, activities.progress],
             max_concurrent_activities=4,
+            graceful_shutdown_timeout=timedelta(seconds=settings.invocation_timeout_seconds + 20),
         )
-        await worker.run()
+        async with worker:
+            await stop.wait()
 
 
 if __name__ == "__main__":

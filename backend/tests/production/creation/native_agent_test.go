@@ -29,7 +29,7 @@ func TestNativeAgentCommandAcceptance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := adapter.New(os.Getenv("LANVERSE_TEST_CREATION_SECRET"), nil, time.Now)
+	client, err := adapter.New(adapter.Config{Secret: os.Getenv("LANVERSE_TEST_CREATION_SECRET")}, nil, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

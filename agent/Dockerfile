@@ -3,7 +3,8 @@ ARG NODE_IMAGE=node:22-bookworm-slim
 FROM ${NODE_IMAGE} AS node-runtime
 FROM ${PYTHON_IMAGE}
 
-ARG CODEX_CLI_VERSION=0.147.0
+ARG CODEX_CLI_VERSION=0.149.1
+ARG TARGETARCH
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -23,7 +24,10 @@ COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && case "$TARGETARCH" in arm64) CODEX_ARCH=arm64 ;; amd64) CODEX_ARCH=x64 ;; *) exit 1 ;; esac \
     && npm install --global "@openai/codex@${CODEX_CLI_VERSION}" \
+       "@openai/codex-linux-${CODEX_ARCH}@npm:@openai/codex@${CODEX_CLI_VERSION}-linux-${CODEX_ARCH}" \
+    && codex --version \
     && npm cache clean --force
 
 COPY agent/requirements.txt ./requirements.txt
@@ -37,6 +41,7 @@ COPY --chown=lanverse:lanverse agent/app/reasoning ./app/reasoning
 COPY --chown=lanverse:lanverse agent/app/protocol ./app/protocol
 
 COPY --chown=lanverse:lanverse agent/app/text_contract ./app/text_contract
+RUN mkdir -p /home/lanverse/.codex && chown lanverse:lanverse /home/lanverse/.codex
 USER lanverse
 
 EXPOSE 8787

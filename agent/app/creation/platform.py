@@ -15,7 +15,9 @@ from pydantic import TypeAdapter
 
 from app.creation.authorization import HEADER
 from app.creation.contract import Command, decode_object
+from app.protocol.canonical import canonical_hash
 from app.text_contract.authorization import sign_task
+from app.text_contract.failure import HarnessFailed, InvocationFailure
 from app.text_contract.source import SourceEdition
 from app.text_contract.task import Stage, TextTask
 
@@ -42,7 +44,13 @@ def sign_request(secret: str, audience: str, path: str, body: bytes) -> str:
 
 
 async def bounded_json(
-    client: httpx.AsyncClient, url: str, body: bytes, headers: dict[str, str], deadline_seconds: int
+    client: httpx.AsyncClient,
+    url: str,
+    body: bytes,
+    headers: dict[str, str],
+    deadline_seconds: int,
+    *,
+    task: TextTask | None = None,
 ) -> dict[str, Any]:
     # Streaming bounds the response even when Content-Length is absent or dishonest.
     async with (
@@ -56,13 +64,41 @@ async def bounded_json(
             follow_redirects=False,
         ) as response,
     ):
-        if response.status_code != 200:
+        if response.status_code != 200 and (
+            task is None or response.status_code not in {409, 422, 502}
+        ):
             raise PlatformUnavailable(f"internal_http_{response.status_code}")
         raw = bytearray()
         async for chunk in response.aiter_bytes():
             if len(raw) + len(chunk) > 16000000:
                 raise ValueError("internal_response_too_large")
             raw.extend(chunk)
+        if response.status_code != 200:
+            try:
+                envelope = decode_object(bytes(raw))
+                if set(envelope) != {"detail"}:
+                    raise ValueError("invalid failure envelope")
+                failure = InvocationFailure.model_validate(envelope["detail"])
+                expected_status = (
+                    502
+                    if failure.state == "unknown"
+                    else (409 if failure.code == "skill_release_unavailable" else 422)
+                )
+                if response.status_code != expected_status:
+                    raise ValueError("failure status mismatch")
+                if task is None or (
+                    failure.invocation_id,
+                    failure.input_hash,
+                    failure.release_hash,
+                ) != (
+                    task.invocation_id,
+                    canonical_hash(task.model_dump(mode="json")),
+                    task.release_hash,
+                ):
+                    raise ValueError("failure binding mismatch")
+            except ValueError:
+                raise PlatformUnavailable(f"internal_http_{response.status_code}") from None
+            raise HarnessFailed(failure)
         return decode_object(bytes(raw))
 
 
@@ -176,4 +212,5 @@ class HarnessClient:
                 "Content-Type": "application/json",
             },
             task.timeout_seconds + 10,
+            task=task,
         )

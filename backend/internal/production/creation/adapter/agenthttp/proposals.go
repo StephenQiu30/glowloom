@@ -51,7 +51,7 @@ func (c *Client) Resume(ctx context.Context, run domain.Run) (domain.ResumeRecei
 	return receipt, err
 }
 func (c *Client) proposalRequest(ctx context.Context, run domain.Run, method, path string, body []byte, target any) error {
-	request, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(run.Endpoint, "/")+path, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, method, c.origin(run)+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
