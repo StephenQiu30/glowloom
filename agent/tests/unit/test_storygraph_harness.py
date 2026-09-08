@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 from anyio import Path as AsyncPath
 
-from app.candidate_runtime.schemas import SourceEvidenceStageInput, StoryGraphStageInvocation
+from app.harness.schemas import SourceEvidenceStageInput, StoryGraphStageInvocation
 from app.modules.storygraph.bundle import StoryGraphBundle
 from app.modules.storygraph.candidate_schemas import SourceEvidenceCandidate
 from app.modules.storygraph.harness import (

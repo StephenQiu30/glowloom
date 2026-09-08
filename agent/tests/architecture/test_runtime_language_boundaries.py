@@ -15,16 +15,18 @@ def test_backend_is_the_only_public_business_runtime() -> None:
     assert not (BACKEND_ROOT / "pyproject.toml").exists()
 
 
-def test_agent_entrypoint_mounts_the_single_agent_service() -> None:
+def test_agent_entrypoint_uses_the_single_standard_factory() -> None:
     entrypoint = (AGENT_ROOT / "app/main.py").read_text(encoding="utf-8")
     dockerfile = (AGENT_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "from app.api.application import create_agent_app" in entrypoint
-    assert "app.main:create_agent_app" in dockerfile
+    assert "def create_app" in entrypoint
+    assert "app.main:create_app" in dockerfile
+    assert "--factory" in dockerfile
     assert "agent/app/creation" in dockerfile
-    assert "agent/app/candidate_runtime" in dockerfile
+    assert "agent/app/harness" in dockerfile
+    assert "agent/app/core" in dockerfile
 
 
-def test_candidate_runtime_cannot_load_trusted_storage_or_orchestration() -> None:
+def test_harness_cannot_load_trusted_storage_or_orchestration() -> None:
     project = (AGENT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     for dependency in (
         "sqlalchemy",
@@ -41,10 +43,9 @@ def test_candidate_runtime_cannot_load_trusted_storage_or_orchestration() -> Non
             sys.executable,
             "-c",
             (
-                "import sys; import app.candidate_runtime.api; "
+                "import sys; import app.harness.service; "
                 "assert not any(name.split('.')[0] in ('sqlalchemy', 'psycopg', 'temporalio') "
-                "or name.startswith('app.creation') "
-                "for name in sys.modules)"
+                "or name.startswith('app.creation') for name in sys.modules)"
             ),
         ],
         cwd=AGENT_ROOT,

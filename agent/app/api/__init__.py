@@ -1,1 +1,1 @@
-"""FastAPI application assembly for the single Agent service."""
+"""HTTP transport layer for the Agent service."""

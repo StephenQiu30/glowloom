@@ -9,9 +9,9 @@ import httpx
 import pytest
 from psycopg.types.json import Jsonb
 
-from app.creation.api import create_app
 from app.creation.execution import ExecutionConflict, ExecutionStore, InvocationLease
 from app.creation.repository import Repository
+from app.main import create_app
 from app.protocol.canonical import canonical_hash
 from tests.creation.test_contract import SECRET, authorization
 from tests.creation.test_execution import result_for, setup_execution

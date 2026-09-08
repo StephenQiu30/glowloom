@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.schemas import StoryGraphStageInvocation, StoryGraphStagePayload
+from app.harness.schemas import StoryGraphStageInvocation, StoryGraphStagePayload
 from app.modules.storygraph.candidate_schemas import StoryboardRowCandidate
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -149,7 +149,7 @@ def test_storyboard_candidate_rejects_review_evidence_outside_scene() -> None:
 
 
 def exact_storyboard_contract() -> tuple[Any, dict[str, Any]]:
-    from app.candidate_runtime.schemas import StoryboardDraftStageInput
+    from app.harness.schemas import StoryboardDraftStageInput
 
     stage_input = StoryboardDraftStageInput.model_validate(
         {

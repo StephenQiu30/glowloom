@@ -5,7 +5,7 @@ import os
 import shutil
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel
 
@@ -35,6 +35,10 @@ from app.text_contract.validation import (
     check_world,
     unique,
 )
+
+if TYPE_CHECKING:
+    from app.skills.catalog import SkillCatalog
+
 
 MODELS: dict[Stage, type[BaseModel]] = {
     "map_manuscript": EpisodeMap,
@@ -177,6 +181,7 @@ class TextHarness:
         reasoner: Reasoner = codex_reasoner,
         skill: TextSkill | None = None,
         repository_root: Path | None = None,
+        skill_catalog: SkillCatalog | None = None,
     ) -> None:
         self.reasoner = reasoner
         if skill is not None:
@@ -184,7 +189,8 @@ class TextHarness:
         else:
             from app.skills.catalog import SkillCatalog
 
-            self.skill = cast(TextSkill, SkillCatalog(repository_root).load("text_storyboard"))
+            catalog = skill_catalog or SkillCatalog(repository_root)
+            self.skill = cast(TextSkill, catalog.load("text_storyboard"))
 
     def prepare(self, task: TextTask) -> tuple[str, str, ContextManifest]:
         guidance = self.skill.guidance(task.stage, task.release_hash)

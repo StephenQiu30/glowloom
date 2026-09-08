@@ -10,7 +10,7 @@ from uuid import UUID
 import pytest
 from pydantic import BaseModel
 
-from app.candidate_runtime.schemas import (
+from app.harness.schemas import (
     EpisodeAnalysisStageInput,
     EpisodeReconciliationStageInput,
     EpisodeSegmentationStageInput,

@@ -8,25 +8,32 @@ import httpx
 from temporalio.client import Client
 from temporalio.worker import Worker
 
+from app.core.config import WorkerSettings
 from app.creation.activities import CreationActivities
-from app.creation.config import WorkerSettings
 from app.creation.execution import ExecutionStore
 from app.creation.platform import HarnessClient, PlatformClient
 from app.creation.repository import Repository
 from app.creation.workflow import TextStoryboardWorkflow
 
 
-async def run_worker(stop: asyncio.Event | None = None, ready: asyncio.Event | None = None) -> None:
+async def run_worker(
+    stop: asyncio.Event | None = None,
+    ready: asyncio.Event | None = None,
+    *,
+    settings: WorkerSettings | None = None,
+    repository: Repository | None = None,
+    client: Client | None = None,
+) -> None:
     if stop is None:
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(signum, stop.set)
     assert stop is not None
-    settings = WorkerSettings.from_environment()
-    repository = Repository(settings.base.database_url)
+    settings = settings or WorkerSettings.from_environment()
+    repository = repository or Repository(settings.base.database_url)
     await repository.ready()
-    client = await Client.connect(
+    client = client or await Client.connect(
         settings.base.temporal_address,
         namespace=settings.base.temporal_namespace,
         tls=settings.base.temporal_tls,

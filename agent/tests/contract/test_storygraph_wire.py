@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.schemas import (
+from app.harness.schemas import (
     EpisodeSegmentationStageInput,
     StoryAnalysisStageInput,
     StoryGraphExecutionGrantClaims,

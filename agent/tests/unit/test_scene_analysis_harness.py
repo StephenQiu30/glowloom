@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from anyio import Path as AsyncPath
 
-from app.candidate_runtime.scene_analysis_schemas import SceneAnalysisInvocation
+from app.harness.scene_analysis_schemas import SceneAnalysisInvocation
 from app.modules.storygraph.scene_analysis_candidates import ScriptSpanCandidate
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
 

@@ -545,7 +545,7 @@ class StoryboardRowCandidate(StrictModel):
         return self
 
     def validate_for(self, stage_input: Any) -> None:
-        from app.candidate_runtime.schemas import StoryboardDraftStageInput
+        from app.harness.schemas import StoryboardDraftStageInput
 
         if not isinstance(stage_input, StoryboardDraftStageInput):
             raise ValueError("Storyboard candidate has no exact Stage input")

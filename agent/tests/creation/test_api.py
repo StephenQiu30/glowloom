@@ -3,8 +3,8 @@ import time
 
 import httpx
 
-from app.creation.api import create_app
 from app.creation.repository import Repository
+from app.main import create_app
 from tests.creation.test_contract import SECRET, authorization
 from tests.creation.test_repository import new_command
 

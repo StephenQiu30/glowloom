@@ -2,7 +2,7 @@
 
 import asyncio
 
-from app.creation.config import database_url
+from app.core.config import database_url
 from app.creation.repository import Repository
 
 

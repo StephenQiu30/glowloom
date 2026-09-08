@@ -7,7 +7,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.schemas import StoryGraphStageResult
+from app.harness.schemas import StoryGraphStageResult
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 

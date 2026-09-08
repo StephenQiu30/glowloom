@@ -10,8 +10,8 @@ from typing import Any, cast
 
 import pytest
 
-from app.candidate_runtime.grants import InvalidExecutionGrant, verify_execution_grant
-from app.candidate_runtime.schemas import StoryGraphStageInvocation
+from app.harness.grants import InvalidExecutionGrant, verify_execution_grant
+from app.harness.schemas import StoryGraphStageInvocation
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire.json"

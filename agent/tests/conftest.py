@@ -4,12 +4,12 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from app.candidate_runtime.api import app as candidate_app
+from tests.app_factory import test_app
 
 
 @pytest.fixture
 def app() -> FastAPI:
-    return candidate_app
+    return test_app
 
 
 @pytest.fixture

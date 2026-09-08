@@ -14,7 +14,7 @@ from temporalio.api.enums.v1 import EventType, ResetReapplyType
 from temporalio.api.workflowservice.v1 import ResetWorkflowExecutionRequest
 from temporalio.client import Client, WorkflowExecutionStatus
 
-from app.creation.config import Settings
+from app.core.config import Settings
 from app.creation.execution import ExecutionConflict, ExecutionStore
 from app.creation.recovery import RecoveryStore
 from app.creation.repository import Repository

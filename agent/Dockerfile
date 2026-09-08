@@ -36,8 +36,9 @@ RUN python -m pip install --requirement requirements-creation.txt
 COPY --chown=lanverse:lanverse agent/skills ./skills
 COPY --chown=lanverse:lanverse agent/app/__init__.py agent/app/main.py ./app/
 COPY --chown=lanverse:lanverse agent/app/api ./app/api
+COPY --chown=lanverse:lanverse agent/app/core ./app/core
 COPY --chown=lanverse:lanverse agent/app/skills ./app/skills
-COPY --chown=lanverse:lanverse agent/app/candidate_runtime ./app/candidate_runtime
+COPY --chown=lanverse:lanverse agent/app/harness ./app/harness
 COPY --chown=lanverse:lanverse agent/app/modules ./app/modules
 COPY --chown=lanverse:lanverse agent/app/reasoning ./app/reasoning
 COPY --chown=lanverse:lanverse agent/app/protocol ./app/protocol
@@ -52,4 +53,4 @@ EXPOSE 8787
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=12 \
     CMD curl --fail --silent http://127.0.0.1:8787/readyz >/dev/null || exit 1
 
-CMD ["uvicorn", "app.main:create_agent_app", "--factory", "--host", "0.0.0.0", "--port", "8787"]
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8787"]

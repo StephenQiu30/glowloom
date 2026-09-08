@@ -11,7 +11,7 @@ from typing import Any, cast
 import httpx
 import pytest
 
-from app.candidate_runtime.schemas import StoryGraphStageInvocation
+from app.harness.schemas import StoryGraphStageInvocation
 from app.modules.storygraph.candidate_schemas import SourceEvidenceCandidate
 from app.modules.storygraph.harness import (
     StoryGraphHarness,

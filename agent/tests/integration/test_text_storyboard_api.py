@@ -6,9 +6,9 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from app.candidate_runtime.api import app
 from app.modules.text_storyboard.harness import RELEASE_HASH, TextHarness, TextResult, TextTask
 from app.text_contract.authorization import sign_task
+from tests.app_factory import test_app as app
 from tests.unit.text_storyboard_samples import sample
 
 SECRET = "synthetic-text-execution-secret-for-tests"
@@ -80,7 +80,11 @@ async def test_signed_request_returns_validated_draft_with_source_and_release_bi
         return episode_map
 
     harness = TextHarness(reason)
-    monkeypatch.setattr("app.candidate_runtime.text_storyboard_api.TextHarness", lambda: harness)
+
+    def fake_harness(**_: object) -> TextHarness:
+        return harness
+
+    monkeypatch.setattr("app.harness.service.TextHarness", fake_harness)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://agent"
     ) as client:
@@ -112,9 +116,10 @@ async def test_invalid_candidate_receipt_retains_output_without_marking_it_as_dr
     async def reason(*_: object) -> BaseModel:
         return invalid
 
-    monkeypatch.setattr(
-        "app.candidate_runtime.text_storyboard_api.TextHarness", lambda: TextHarness(reason)
-    )
+    def fake_harness(**_: object) -> TextHarness:
+        return TextHarness(reason)
+
+    monkeypatch.setattr("app.harness.service.TextHarness", fake_harness)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://agent"
     ) as client:

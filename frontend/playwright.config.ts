@@ -41,7 +41,7 @@ export default defineConfig({
     },
     {
       command:
-        "cd ../agent && uv run --all-extras python -m uvicorn app.candidate_runtime.api:app --host 127.0.0.1 --port " +
+        "cd ../agent && uv run --all-extras python -m uvicorn tests.app_factory:create_test_app --factory --host 127.0.0.1 --port " +
         agentPort,
       env: {
         AGENT_EXECUTION_SECRET: executionSecret,

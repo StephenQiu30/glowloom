@@ -8,11 +8,11 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from app.candidate_runtime.scene_analysis_schemas import (
+from app.harness.scene_analysis_schemas import (
     SceneAnalysisDispatchAuthorizationClaims,
     SceneAnalysisInvocation,
 )
-from app.candidate_runtime.schemas import (
+from app.harness.schemas import (
     StoryGraphExecutionGrantClaims,
     StoryGraphStageInvocation,
 )

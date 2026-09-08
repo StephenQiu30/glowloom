@@ -12,7 +12,7 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.scene_analysis_schemas import (
+from app.harness.scene_analysis_schemas import (
     SceneAnalysisAttemptResult,
     SceneAnalysisControlProof,
     SceneAnalysisExecutionBudget,

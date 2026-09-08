@@ -6,14 +6,14 @@
 
 | 目录 | 职责与依赖 |
 | --- | --- |
-| `app/api/` | FastAPI 应用工厂、生命周期和内部能力路由组合；不拥有业务事实 |
+| `app/api/` | FastAPI 路由、依赖和 HTTP 错误映射；不创建业务资源 |
 | `app/skills/` | 当前镜像内置 Skill 的显式注册和发布摘要校验；不下载或修改 Skill |
 | `app/protocol/` | 跨进程 canonical JSON/摘要，纯编码合同，不依赖运行层 |
 | `app/text_contract/` | 文本任务/结果、来源与专业检查、短期调用签名；可信编排与受限执行共享 |
 | `app/reasoning/` | Codex 进程适配器：隔离、Schema、时间/字节预算、取消及退出等待；不依赖业务模块 |
 | `app/modules/` | StoryGraph、文本分镜等专业上下文与领域规则；文本模块不依赖旧 StoryGraph 执行器 |
-| `app/candidate_runtime/` | 受限 HTTP 边界与能力就绪检查，调用专业 Harness |
-| `app/creation/` | 可信命令、执行存储、Temporal 编排、失败恢复和 Agent 服务组装 |
+| `app/harness/` | Harness 输入/输出合同、就绪探针和执行服务；不创建 FastAPI 应用 |
+| `app/creation/` | 可信命令、执行存储、Temporal 编排和失败恢复；不注册 HTTP 路由 |
 
 这些模块部署在一个 Agent 镜像和一个容器中；模块边界仍由导入、凭据白名单和 HTTP 合同维护，不把模块误拆成多个产品服务。跨语言编码和专业发布摘要保持原合同。实施与检查见 [Agent 单服务设计](../docs/design/0021-Agent单服务架构调整设计.md)。
 
@@ -23,8 +23,8 @@
 
 | 模块 | 入口 | 当前职责 |
 | --- | --- | --- |
-| Agent 服务 | `app.main:create_agent_app --factory` | 统一 HTTP、命令鉴权、持久回执、Temporal 编排、运行与草案读取、Harness 调用 |
-| Candidate Runtime | `app.candidate_runtime` | 同一 Agent 内部的 StoryGraph/SceneAnalysis/Text Harness 路由和 Codex 执行 |
+| Agent 服务 | `app.main:create_app --factory` | 统一 HTTP、命令鉴权、持久回执、Temporal 编排、运行与草案读取、Harness 调用 |
+| Harness Runtime | `app.harness` | 同一 Agent 内部的 StoryGraph/SceneAnalysis/Text Harness 路由和 Codex 执行 |
 | Creation Workflow | `app.creation.worker` | 同一 Agent 进程内的 Temporal Worker、冻结源读取、草案保存、人工门等待与恢复 |
 
 `accepted` 表示命令数据库已提交，`started` 表示已核验 Temporal 执行身份；两者都不表示已生成或正式采纳文本。Agent 实际注册四阶段文本 Workflow，正式采纳由 Go 人工门与业务 Owner 决定。`CREATION_AGENT_URL` 和 `AGENT_URL` 在 Docker 中都指向同一个 `agent:8787` origin。
@@ -71,7 +71,7 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 
 ```sh
 .venv/bin/python -m app.creation.migrate
-.venv/bin/uvicorn app.main:create_agent_app --factory --host 127.0.0.1 --port 8787
+.venv/bin/uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8787
 ```
 
 初次迁移要求空的独立数据库，重复迁移核对 checksum。应用启动只检查迁移，不执行 DDL。`/healthz` 是进程存活检查；`/readyz` 证明 Creation 存储和候选执行前置条件就绪，但不证明 Worker 已完成业务任务、模型推理成功或正式业务主链就绪。

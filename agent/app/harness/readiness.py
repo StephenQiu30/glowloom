@@ -1,4 +1,4 @@
-"""Probe installed candidate capabilities without invoking a model."""
+"""Deterministic probes for installed Harness capabilities."""
 
 from __future__ import annotations
 
@@ -7,13 +7,9 @@ import shutil
 from collections.abc import Callable
 from typing import Literal
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.skills.catalog import SkillCatalog, SkillUnavailable
-
-router = APIRouter()
 
 
 class Capability(BaseModel):
@@ -34,28 +30,7 @@ def release_capability(key: str, expected: str, verify: Callable[[], str]) -> Ca
     return Capability(key=key, status="ready", release_hash=expected)
 
 
-@router.get("/readyz")
-def readiness() -> JSONResponse:
-    capabilities = collect_capabilities()
-    ready = all(item.status == "ready" for item in capabilities)
-    return JSONResponse(
-        status_code=200 if ready else 503,
-        content={
-            "status": "ready" if ready else "blocked",
-            "scope": "installed_candidate_capabilities",
-            "capabilities": [item.model_dump(exclude_none=True) for item in capabilities],
-        },
-    )
-
-
-def candidate_runtime_ready() -> bool:
-    """Return whether all local candidate execution prerequisites are installed."""
-
-    return all(item.status == "ready" for item in collect_capabilities())
-
-
-def collect_capabilities() -> list[Capability]:
-    catalog = SkillCatalog()
+def collect_capabilities(catalog: SkillCatalog) -> list[Capability]:
     capabilities = [
         release_capability(
             registration.key,
@@ -81,3 +56,9 @@ def collect_capabilities() -> list[Capability]:
         )
     )
     return capabilities
+
+
+def harness_ready(catalog: SkillCatalog) -> bool:
+    """Return whether all local Harness execution prerequisites are installed."""
+
+    return all(item.status == "ready" for item in collect_capabilities(catalog))

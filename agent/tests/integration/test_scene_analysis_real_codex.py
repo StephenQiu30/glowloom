@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 
-from app.candidate_runtime.scene_analysis_schemas import (
+from app.harness.scene_analysis_schemas import (
     SceneAnalysisInvocation,
     SceneAnalysisPayload,
 )

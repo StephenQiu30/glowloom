@@ -1,17 +1,20 @@
+"""Text Storyboard Harness invocation routes."""
+
 from __future__ import annotations
 
 import os
 import time
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
+from app.api.dependencies import get_harness_service
+from app.harness.service import HarnessService
 from app.modules.text_storyboard.harness import (
     CandidateContractInvalid,
     ContextInsufficient,
     InputContractInvalid,
     SkillReleaseInvalid,
-    TextHarness,
     TextResult,
     TextTask,
 )
@@ -25,6 +28,9 @@ from app.reasoning.codex import (
 from app.text_contract.authorization import verify_task
 from app.text_contract.failure import InvocationFailure
 
+router = APIRouter(tags=["text-storyboard"])
+Service = Annotated[HarnessService, Depends(get_harness_service)]
+
 
 class FailureIdentity(TypedDict):
     invocation_id: str
@@ -32,24 +38,23 @@ class FailureIdentity(TypedDict):
     release_hash: str
 
 
-router = APIRouter()
-
-
 @router.post("/internal/text-storyboard/invocations", response_model=TextResult)
 async def invoke_text(
-    task: TextTask, authorization: str = Header(alias="X-Lanverse-Text-Authorization")
+    task: TextTask,
+    service: Service,
+    authorization: str = Header(alias="X-Lanverse-Text-Authorization"),
 ) -> TextResult:
     try:
         verify_task(task, authorization, os.getenv("AGENT_EXECUTION_SECRET", ""), int(time.time()))
     except ValueError as error:
-        raise HTTPException(401, "invalid text task authorization") from error
+        raise HTTPException(status_code=401, detail="invalid text task authorization") from error
     identity: FailureIdentity = {
         "invocation_id": task.invocation_id,
         "input_hash": canonical_hash(task.model_dump(mode="json")),
         "release_hash": task.release_hash,
     }
     try:
-        return await TextHarness().execute(task)
+        return await service.text_storyboard(task)
     except SkillReleaseInvalid:
         failure = InvocationFailure(**identity, phase="preflight", code="skill_release_unavailable")
     except ContextInsufficient:

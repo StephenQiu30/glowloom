@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.schemas import (
+from app.harness.schemas import (
     StoryGraphDeterministicGateResult,
     StoryGraphRepairStageInput,
     StoryGraphReviewStageInput,

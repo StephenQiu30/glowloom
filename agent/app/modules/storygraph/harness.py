@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from app.candidate_runtime.schemas import (
+from app.harness.schemas import (
     EpisodeAnalysisStageInput,
     EpisodeReconciliationStageInput,
     SourceEvidenceStageInput,
@@ -55,12 +55,11 @@ class StoryGraphHarness:
         invocation: StoryGraphStageInvocation,
         *,
         repository_root: Path | None = None,
+        skill_catalog: SkillCatalog | None = None,
     ) -> None:
         self.invocation = invocation
-        self.bundle = cast(
-            StoryGraphBundle,
-            SkillCatalog(repository_root).load("storygraph"),
-        )
+        catalog = skill_catalog or SkillCatalog(repository_root)
+        self.bundle = cast(StoryGraphBundle, catalog.load("storygraph"))
         self._validate_runtime_policy(invocation.execution_policy)
         try:
             self.bundle.verify_installed_bundle()

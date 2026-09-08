@@ -1,6 +1,6 @@
 import pytest
 
-from app.creation.config import Settings, database_url
+from app.core.config import Settings, database_url
 from tests.creation.test_contract import SECRET
 
 
@@ -59,7 +59,7 @@ def test_configuration_requires_distinct_harness_key(monkeypatch: pytest.MonkeyP
 def test_worker_fails_fast_without_independent_trusted_endpoints(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.creation.config import WorkerSettings
+    from app.core.config import WorkerSettings
 
     configure(monkeypatch)
     monkeypatch.setenv("CREATION_HARNESS_SECRET", "independent-harness-key-" * 3)
@@ -89,7 +89,7 @@ def test_worker_fails_fast_without_independent_trusted_endpoints(
 def test_docker_transport_is_explicit_and_limited_to_compose_peers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.creation.config import trusted_url
+    from app.core.config import trusted_url
 
     configure(monkeypatch)
     monkeypatch.setenv("CREATION_DOCKER_NETWORK", "true")

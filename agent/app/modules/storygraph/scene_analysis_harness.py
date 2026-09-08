@@ -10,7 +10,7 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from app.candidate_runtime.scene_analysis_schemas import (
+from app.harness.scene_analysis_schemas import (
     SceneAnalysisInvocation,
     SceneFactExtractionInput,
     ScriptSpanProposalInput,
@@ -41,12 +41,11 @@ class SceneAnalysisHarness:
         invocation: SceneAnalysisInvocation,
         *,
         repository_root: Path | None = None,
+        skill_catalog: SkillCatalog | None = None,
     ) -> None:
         self.invocation = invocation
-        self.bundle = cast(
-            SceneAnalysisBundle,
-            SkillCatalog(repository_root).load("scene_analysis"),
-        )
+        catalog = skill_catalog or SkillCatalog(repository_root)
+        self.bundle = cast(SceneAnalysisBundle, catalog.load("scene_analysis"))
         self._validate_runtime_policy()
         try:
             self.bundle.verify_installed_bundle()

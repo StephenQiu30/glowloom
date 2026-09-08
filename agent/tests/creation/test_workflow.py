@@ -22,11 +22,11 @@ async def test_native_worker_waits_at_every_gate_and_resumes_after_restart(
     from temporalio.client import Client, WorkflowExecutionStatus
     from temporalio.worker import Worker
 
-    from app.creation.api import create_app
     from app.creation.execution import ExecutionStore
     from app.creation.platform import PlatformUnavailable
     from app.creation.temporal import TemporalStarter
     from app.creation.workflow import TextStoryboardWorkflow
+    from app.main import create_app
     from app.modules.text_storyboard.harness import RELEASE_HASH, TextHarness
     from app.text_contract.task import TextTask
     from tests.creation.test_contract import SECRET, authorization

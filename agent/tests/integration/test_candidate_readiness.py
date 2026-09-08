@@ -6,8 +6,8 @@ from typing import Any
 import httpx
 import pytest
 
-from app.candidate_runtime.api import app
 from app.modules.text_storyboard.harness import RELEASE_HASH, TextSkill
+from tests.app_factory import test_app as app
 
 
 @pytest.mark.parametrize("blocked", [None, "release", "executable", "authorization"])

@@ -8,9 +8,9 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from app.creation.api import create_app
 from app.creation.execution import ExecutionConflict, ExecutionStore
 from app.creation.repository import Repository, SchemaMismatch
+from app.main import create_app
 from app.protocol.canonical import canonical_hash
 from tests.creation.test_contract import SECRET, authorization
 from tests.creation.test_execution import setup_execution

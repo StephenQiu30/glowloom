@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.schemas import (
+from app.harness.schemas import (
     EpisodeAnalysisStageInput,
     EpisodeReconciliationStageInput,
     StoryGraphExecutionPolicy,
