@@ -301,7 +301,11 @@ jobs:
           'test -f /srv/lanverse/frontend/server.js && test -d /srv/lanverse/frontend/.next/static'
       - name: Require combined Agent runtime image
         run: |
-          docker run --rm --entrypoint /bin/sh lanverse/agent:ci -c '
+          docker run --rm --entrypoint /bin/sh \
+            --env CREATION_DATABASE_URL=postgresql://creation:test@localhost/creation \
+            --env CREATION_AGENT_SECRET=synthetic-creation-secret-at-least-32-bytes \
+            --env AGENT_EXECUTION_SECRET=synthetic-execution-secret-at-least-32-bytes \
+            lanverse/agent:ci -c '
             test "$(id -u)" -ne 0
             command -v codex >/dev/null
             codex --version | grep -q "0.149.1"
@@ -309,7 +313,7 @@ jobs:
             test "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 2
             test ! -e /srv/lanverse/.agents
             test -z "$(find skills -name openai.yaml -print -quit)"
-            python -c "import os; os.environ.update({'CREATION_DATABASE_URL': 'postgresql://creation:test@localhost/creation', 'CREATION_AGENT_SECRET': 'synthetic-creation-secret-at-least-32-bytes', 'AGENT_EXECUTION_SECRET': 'synthetic-execution-secret-at-least-32-bytes'}); from app.main import create_app; from app.skills.catalog import SkillCatalog; app = create_app(); assert app.title == '\''Lanverse Agent'\''; assert callable(create_app); SkillCatalog().verify_all()"
+            python -c "from app.main import create_app; from app.skills.catalog import SkillCatalog; application = create_app(); assert application.title == \"Lanverse Agent\"; assert callable(create_app); SkillCatalog().verify_all()"
           '
       - name: Run deployment images against real dependencies
         env:
