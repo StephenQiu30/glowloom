@@ -88,7 +88,9 @@ async def test_migration_is_explicit_and_detects_checksum_drift(repository: Repo
     await repository.ready()
     await repository.migrate()
     async with await repository.connect() as conn:
-        await conn.execute("UPDATE creation_schema SET checksum = 'drift'")
+        await conn.execute(
+            "UPDATE creation_schema SET checksum = 'drift' WHERE name = 'command-acceptance'"
+        )
     try:
         with pytest.raises(SchemaMismatch):
             await repository.ready()
@@ -98,7 +100,10 @@ async def test_migration_is_explicit_and_detects_checksum_drift(repository: Repo
         from app.creation.repository import SCHEMA_HASH
 
         async with await repository.connect() as conn:
-            await conn.execute("UPDATE creation_schema SET checksum = %s", (SCHEMA_HASH,))
+            await conn.execute(
+                "UPDATE creation_schema SET checksum = %s WHERE name = 'command-acceptance'",
+                (SCHEMA_HASH,),
+            )
 
 
 async def test_initial_migration_refuses_an_existing_business_database(

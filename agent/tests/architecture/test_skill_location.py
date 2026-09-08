@@ -12,8 +12,11 @@ SKILLS_ROOT = AGENT_ROOT / "skills"
 LEGACY_SKILLS_ROOT = REPOSITORY_ROOT / ".agents" / "skills"
 
 
-def test_build_storygraph_is_the_only_agent_owned_skill_bundle() -> None:
-    assert {path.name for path in SKILLS_ROOT.iterdir() if path.is_dir()} == {"build-storygraph"}
+def test_only_declared_agent_owned_skill_bundles_are_installed() -> None:
+    assert {path.name for path in SKILLS_ROOT.iterdir() if path.is_dir()} == {
+        "build-storygraph",
+        "text-storyboard",
+    }
     assert not LEGACY_SKILLS_ROOT.exists()
 
     fixture = cast(
