@@ -376,6 +376,12 @@ InputSnapshot 的输入变化、用户要求新创意候选或改稿产生新 ge
 
 新增签名 GET `/internal/creation/commands/{command_id}/steps/{step_id}/attempts`，沿用命令入口的精确 path/method/body 签名、空请求体和查询串拒绝规则；校验步骤所属运行。只返回尝试身份、状态、摘要、时间及结果引用，不返回原稿、提示词或候选正文。旧 execution/draft 响应保持原字段，Go 公共 API 与画布后续按独立合同接入。
 
+### 8.2.1 初始 Manifest 实施边界
+
+下一切片按 [Spec](../requirement/0015-Agent执行清单与尝试追踪需求规格.md) 实施：`freeze` 在首次模型调用之前，同事务冻结执行策略及初始清单。之所以选择此边界，是当前 command 不携带 release_hash/call_limit；接受 command 不能伪称这些配置已经固定。未 freeze 的命令查询明确返回 not_frozen。模板固定四个文本阶段、必要审阅门及逐集/逐场未展开集合；不创造未知集数、场数或正式 ID。
+
+清单引用 command/run、payload/source 摘要、release_hash 和 call_limit，模板及清单均有固定摘要。查询读取已保存内容，重放不依据新部署重新编译旧清单；策略冲突失败。独立追加迁移，不给已有执行补造清单，旧记录返回 unavailable。清单是运行计划事实，实际执行/审阅/采纳状态仍由各自 Owner 提供。阶段实例、动态 PlanExpansion、多输出和 Go/画布接入仍待后续切片。
+
 ### 8.3 动态展开与部分结果
 
 运行接受后先展示“分集确认→逐集解析集合→总册→逐场导演集合”等已知阶段。尚不知道集/场数时用动态占位，不预造正式 ID。收到合法采纳回执后，原子追加 StepInstances、集合计数和 PlanExpansion 事件。
@@ -750,7 +756,7 @@ SkillRelease、Playbook、Workflow、公共 Schema、renderer registry、模型�
 
 接受本补充设计后，将批准的细则按 Owner 归并回 0013/3004/1003，并同步受影响的 2002/2051/2055/1001/1002 等设计。本文件保留代码缺口快照和追踪关系；已经归并的合同改为引用，避免四份文件长期重复维护。
 
-需求、实施计划和验收条件沿既有文档体系更新；不新建平行 PRD/Plan/Acceptance 全套。本轮不修改旧“已接受”状态，也不把此次设计提案自动标成用户已批准。
+需求、实施计划和验收条件沿既有文档体系更新。依据用户 2026-09-08 明确要求，为 0015 的 Agent 切片在既有 prd/requirement/plan/acceptance 目录建立唯一关联文档，不另建平行体系。本轮不修改旧“已接受”状态，也不把此次设计提案自动标成用户已批准。
 
 ## 16. 待确认事项与默认设计
 

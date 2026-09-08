@@ -69,10 +69,11 @@ ELK 由环境统一管理，Backend 启动不再执行 Elasticsearch/Kibana 初�
 
 | 环境资源 | 配置契约 |
 | --- | --- |
-| ILM `lanverse-logs-application-30d` | `backend/observability/elasticsearch/ilm-policy.json`；按日或 10 GB 滚动，保留 30 天 |
-| 索引模板 `lanverse-logs-application` | `backend/observability/logstash/template/lanverse-logs-template.json`；保留严格字段映射 |
-| 写入别名 `lanverse-logs-application` | 指向符合上述模板的 backing index，并指定 `is_write_index: true` |
-| 写入别名 `lanverse-logs-dead-letter` | backing index 绑定上述 ILM 和对应 rollover alias；保留无效日志的脱敏摘要 |
+| ILM `lanverse-logs-application-30d` | `deploy/observability/elasticsearch/ilm-policy.json`；按日或 10 GB 滚动，保留 30 天 |
+| 索引模板 `lanverse-logs-application` | `deploy/observability/logstash/template/lanverse-logs-template.json`；保留严格字段映射 |
+| 写入别名 `lanverse-logs-application` | 指向符合上述模板且以数字结尾的 backing index（如 `lanverse-logs-application-000001`），并指定 `is_write_index: true` |
+| 索引模板 `lanverse-logs-dead-letter` | `deploy/observability/elasticsearch/dead-letter-template.json`；首次写入前定义时间和受限摘要字段，覆盖后续滚动索引 |
+| 写入别名 `lanverse-logs-dead-letter` | backing index 匹配死信模板且以数字结尾（如 `lanverse-logs-dead-letter-000001`），并指定 `is_write_index: true` |
 | Kibana Data View `lanverse-logs-application` | title 为 `lanverse-logs-application-*`，时间字段为 `@timestamp` |
 
 环境维护者负责权限、配置导入与旧索引迁移。业务检索别名 `lanverse-script-search`、`lanverse-storygraph-search` 仍由 Search 模块维护，与日志配置分离。CI 的一次性环境独立准备上述验收资源。

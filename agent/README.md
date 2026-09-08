@@ -22,9 +22,10 @@
 | 进程 | 入口 | 当前职责 |
 | --- | --- | --- |
 | 受限候选生成 | `app.candidate_runtime.api:app` | StoryGraph/SceneAnalysis Stage，以及分集→分场解析→设定→文字分镜四类有来源的 Harness 任务 |
-| 可信命令接受 | `app.creation.api:create_configured_app --factory` | Go 命令鉴权、持久回执、启动 Outbox、Temporal 原身份对账 |
+| 可信命令接受 | `app.creation.api:create_configured_app --factory` | Go 命令鉴权、持久回执、启动 Outbox、Temporal 原身份对账、运行与草案读取 |
+| 可信创作 Worker | `python -m app.creation.worker` | 冻结源读取、受限 Harness 调用、持久草案、四道人审门与恢复 |
 
-新服务目前完成可靠接受和启动交接。`accepted` 表示数据库已提交，`started` 表示已核验 Temporal 执行身份；两者都不表示已生成或正式采纳文本。真实文本 Workflow/Worker、Python 草案及 Go 采纳桥接仍按实施计划推进。部署匹配的 Worker 前，保持 Go 的 `CREATION_AGENT_URL` 为空。
+`accepted` 表示命令数据库已提交，`started` 表示已核验 Temporal 执行身份；两者都不表示已生成或正式采纳文本。可信 Worker 实际注册四阶段文本 Workflow，正式采纳由 Go 人工门与业务 Owner 决定。部署匹配 Worker、Harness 和平台采纳桥前，保持 Go 的 `CREATION_AGENT_URL` 为空。
 
 ## 文本与分镜 Harness
 
@@ -34,7 +35,7 @@
 
 请求头 `X-Lanverse-Text-Authorization` 由可信调用者通过 `sign_task(task, AGENT_EXECUTION_SECRET, expires_at)` 生成，最多有效 60 秒，绑定完整任务、release 与 invocation；它与旧接口和 Creation 命令使用不同 audience。此短期授权不替代可信应用层的持久预算、租约和项目权限。Harness 没有幂等数据库；超时或断线后不能盲目重投并假定没有消耗推理额度。
 
-结果为 `TextResult`：候选及其 hash、来源证据、实际 ContextManifest、待审 Issue。所有成功结果都是 `needs_review`，model_calls=1，用量暂标 unknown；不会伪造正式采纳或可读取的持久资源引用。每次上下文最多 240,000 UTF-8 bytes（含规则），结果和各诊断流最多 2,000,000 bytes，deadline 不超过 900 秒。超限明确失败，不截断全稿。此受限接口尚未接通可信持久执行存储，不具备超长稿分块归并和审批恢复；跨场状态使用需要平台已审阅的披露映射。
+结果为 `TextResult`：候选及其 hash、来源证据、实际 ContextManifest、待审 Issue。所有成功结果都是 `needs_review`，model_calls=1，用量暂标 unknown；持久引用和正式采纳分别由可信 Worker、Go 保存。每次上下文最多 240,000 UTF-8 bytes（含规则），结果和各诊断流最多 2,000,000 bytes，deadline 不超过 900 秒。超限明确失败，不截断全稿。受限接口不拥有持久状态；其调用预算、草案保存与审批恢复由可信执行层控制。当前不具备超长稿分块归并；跨场状态使用仍需要平台已审阅的披露映射。
 
 本机完整候选链评测使用设计中的合成三集剧本，不读取业务库或真实用户原稿：
 
@@ -57,12 +58,20 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 | `CREATION_TEMPORAL_NAMESPACE` | 默认 `default`；自动启动要求历史保留期至少 24 小时 |
 | `CREATION_TEMPORAL_TLS` | 默认 `false`；非 loopback 地址必须为 `true` |
 | `CREATION_TASK_QUEUE` | 默认 `lanverse-creation-text`，首次接受后固定保存 |
+| `CREATION_PLATFORM_URL` | Worker 必填，Go 平台 origin；HTTPS，或 loopback HTTP；不接受任意路径、userinfo、query |
+| `CREATION_HARNESS_URL` | Worker 必填，独立受限 Harness origin；同上 |
+| `CREATION_HARNESS_SECRET` | Worker 必填，与 Harness 的 `AGENT_EXECUTION_SECRET` 对应，必须独立于平台交接密钥 |
+| `CREATION_TEXT_RELEASE_HASH` | Worker 必填，显式固定已发布文本 Skill 摘要；不能从可信镜像导入专业 Harness |
+| `CREATION_CALL_LIMIT` | Worker 调用总上限，默认 1000，范围 1–1000；运行首次使用时冻结，恢复不能重置 |
+| `CREATION_INVOCATION_TIMEOUT_SECONDS` | Worker 单次推理时限，默认 600 秒，范围 1–900；写入固定 TextTask，恢复时修改将发生输入冲突 |
 
 在 `agent/` 中安装已锁定的可信服务依赖：`uv sync --locked --extra dev --extra creation`。将上述变量注入可信服务进程，使用单独数据库及角色。迁移使用专用 schema owner；运行角色对 creation_commands 仅授予 SELECT/INSERT，对 creation_start_outbox 授予 SELECT/INSERT/UPDATE，对 creation_schema 仅授予 SELECT，并授予 schema USAGE；新增执行库表按职责授予权限：creation_executions、creation_steps 为 SELECT/INSERT/UPDATE，creation_drafts、creation_output_bindings、creation_result_outbox 为 SELECT/INSERT；不授予平台库业务写入权限。不得把可信进程环境传给候选生成进程。
 
 ```sh
 .venv/bin/python -m app.creation.migrate
 .venv/bin/uvicorn app.creation.api:create_configured_app --factory --host 127.0.0.1 --port 8788
+# 另一个可信应用进程，使用相同专属数据库与固定 Task Queue：
+.venv/bin/python -m app.creation.worker
 ```
 
 初次迁移要求空的独立数据库，重复迁移核对 checksum。应用启动只检查迁移，不执行 DDL。`/healthz` 是进程存活检查；`/readyz` 只证明持久接受能力就绪，不证明 Worker、模型或业务主链就绪。
@@ -80,7 +89,7 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 
 真实服务测试使用 `LANVERSE_TEST_CREATION_DATABASE_URL` 指向现有 PostgreSQL 实例中的独立临时库，并设置 `LANVERSE_TEST_TEMPORAL_ADDRESS`。`tests/creation` 会清空该测试库的 Creation 表，不能指向业务库。缺少这些条件时集成测试明确 skip。
 
-本机集成测试运行短生命周期 Agent HTTP 进程，使用真实 Go HTTP 客户端和现有 Temporal，退出后关闭测试进程并终止精确的合成 Workflow。Temporal 测试历史由既有保留策略清理；不改其他 Workflow 或 Namespace。没有注册占位创作 Worker，也不调用真实模型。
+本机集成测试运行短生命周期 Agent HTTP 进程，使用真实 Go HTTP 客户端和现有 Temporal，退出后关闭测试进程并终止精确的合成 Workflow。`tests/creation/test_workflow.py` 注册真实生产 Workflow 与 Activity，使用合成专业结果验证四道人工门、Worker 重启和草案复用；这些测试不调用真实模型。Temporal 测试历史由既有保留策略清理，不改其他 Workflow 或 Namespace。
 
 受限镜像继续使用 `Dockerfile` 和 `requirements.txt`；可信镜像使用 `Dockerfile.creation` 和 `requirements-creation.txt`，不含 Codex CLI、Skill 或 Harness 模块。可信依赖从唯一锁文件导出：
 
@@ -88,11 +97,28 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 uv export --locked --extra creation --no-dev --no-hashes --no-emit-project --output-file requirements-creation.txt
 ```
 
-## 持久执行存储（尚未接入生产 Workflow）
+## 文本生产 Workflow 与持久恢复
 
 `app.creation.execution.ExecutionStore` 冻结运行调用额度和 Skill release，持久保存步骤输入、尝试 fence、unknown 用量、草案、OutputBinding 与 result_ready Outbox。相同输入读取已保存结果；过期尝试不会自动重新调用模型。保存结果时在可信层重新检查来源、候选摘要及覆盖，草案和输出引用在同一事务提交。`app/text_contract` 为两种镜像共享的纯合同，不包含 Skill 或推理执行能力。
 
-`text-execution` 是追加迁移，不改写原 command-acceptance 的校验和。升级后须先显式执行迁移再启动可信服务；现有业务库未自动迁移。当前存储仅完成组件级接线与本机数据库测试，尚未暴露执行入口、投递结果事件或注册生产 Workflow，也不能替代 Go 的当前权限与四道审批门。
+`text-execution`、`text-workflow` 与 `text-resume` 是追加迁移，不改写先前校验和。升级后须先显式迁移再启动可信服务；现有业务库不自动迁移。可信镜像已包含 Worker，单独运行时将镜像 command 设置为 `python -m app.creation.worker`，不添加 Codex、Skill 或模型认证挂载。
+
+生产流程为冻结源 → 分集 → 平台人工门 → 全部分集解析 → 结构人工门 → 全稿设定 → 设定人工门 → 已选场文本分镜 → 分镜人工门。每次模型调用先从 Go 固定源桥重查权限、源版本与摘要，并检查前置正式采纳回执。结构门确定场范围，Worker 验证范围属于已采纳结构且剩余额度足够。Workflow History 仅携带范围标识与草案引用，完整源、任务和结果保存在 ExecutionStore。
+
+等待人工门时不占用模型进程。`review_changed` 信号只唤醒查询，只有 Go 中匹配运行、候选摘要、审阅决定和 Owner Effect 的回执才能通过。长时间等待会通过 Continue-as-New 收敛 History，仍复用原运行、草案和额度。重启 Worker 不改变步骤输入；已保存结果直接读回，未完成的未知调用不会自动重投。
+
+平台使用下列受签名保护的 GET 路由拉取执行状态与候选，签名继续绑定空正文、精确路径、method 和 `lanverse.creation.command` audience：
+
+- `/internal/creation/commands/{command_id}/execution`：`creation-execution-production`，含运行身份、冻结源、额度、步骤、输出引用、当前阶段、`can_resume` 与 `running/waiting_review/blocked/rejected/completed` 状态。
+- `/internal/creation/commands/{command_id}/drafts/{draft_id}`：`creation-draft-production`，固定 revision=1，含完整 TextTask/TextResult、步骤身份与结果/候选摘要；读取时重新验证存储摘要和专业合同。
+
+Go 的门查询可同步拉取候选并建立审阅任务；这不是 HTTPS 业务事件广播。草案事务仍写入 `creation_result_outbox`，Kafka 发布与消费尚未接通，不能作为已完成事件投递验收。`completed` 只表示四道文本正式采纳门完成，不代表媒体生产、成片或外部最终验收。
+
+源桥/平台的网络故障与临时 5xx、429、权限暂时失效会保存 `blocked`、具体安全 `last_error` 和 `can_resume=true`，原 Workflow 等待显式恢复。Go 重新核验原运行权限后，可签名 POST `/internal/creation/commands/{command_id}/resume`，正文严格为 `{ "payload_hash": "原命令摘要" }`。202 `creation-resume-production` 回执仅表示 `resume_requested`；Workflow 通过同业务身份 Continue-as-New 重新验证源、复用原草案与额度，不承诺立即成功。同正文已恢复至 running/waiting_review/completed 时是 202 幂等空操作，不再次发信号；rejected 或不可恢复 blocked 返回 409。
+
+`harness_response_unknown`、`harness_result_invalid` 或租约过期导致 `blocked`，调用额度保持已占用。排障先读快照、原步骤 task/input_hash、已存 draft 和 Temporal history；已提交草案可据原身份恢复执行，尚无可确认结果时保持 unknown。本轮没有把未知消费自动判为失败的按钮，也不通过新建运行重置预算绕过不确定结果；后续人工恢复必须先有明确的调用对账证据。平台撤权或回执不一致同样阻止继续推理。
+
+真实合成评测将每次调用前的占用写入输出目录 `evaluation-budget.json`，总上限 8。复用草案时重新执行完整合同校验；中断后的已知或未知调用均继续占用原额度，显式恢复时可用 `LANVERSE_TEXT_EVAL_PRIOR_CALLS` 补记中断前记录。该评测文件不替代生产 ExecutionStore 或未知调用对账。
 
 ## 执行尝试记录
 
@@ -103,3 +129,9 @@ uv export --locked --extra creation --no-dev --no-hashes --no-emit-project --out
 签名 GET `/internal/creation/commands/{command_id}/steps/{step_id}/attempts` 只接受空正文和无查询串的精确路径请求，返回 `creation-attempt-history-production`。响应含 `history_origin`、`current_attempt_id` 和按 attempt_no 排序的 `attempts`：每项包括 attempt_id、fence、input_hash、状态、时间、结果摘要、错误码及 unknown 用量。运行与步骤必须匹配；不会返回原稿、提示词或候选正文。它尚未接入 Go 公共 API 或画布。
 
 旧步骤返回 `history_origin=unavailable` 和空尝试列表；不会伪造曾经的执行或消费记录。新步骤为 recorded。`running` 且 `lease_expired=true` 表示已过租约但仍待对账，不能按可重试理解；下一次原身份恢复会将过期步骤和原尝试原子转为 unknown。本轮未开放人工重做或自动新增 Attempt 的接口，也未改变已发布的 execution/draft 响应字段。
+
+## 初始执行清单
+
+`ExecutionStore.freeze` 在首次模型调用前，将执行策略与初始 Manifest 同事务保存。清单包含四个文本阶段、必要审阅门、尚未展开的逐集/逐场集合，以及固定输入/配置/模板摘要。重复启动读取原清单，不用部署后的模板覆盖历史。
+
+签名 GET `/internal/creation/commands/{command_id}/manifest` 返回 `recorded`、`not_frozen` 或 `unavailable`；后两者的清单为空。接口不执行推理，不返回原稿或候选正文。新增独立 `text-manifest` 迁移，须通过既有显式迁移入口应用；旧执行不回填虚构清单。动态实例、多产物和 Go/画布消费不在此切片内。规范及验收见 [Spec](../docs/requirement/0015-Agent执行清单与尝试追踪需求规格.md) 与 [验收记录](../docs/acceptance/0015-Agent执行可追踪性验收记录.md)。
