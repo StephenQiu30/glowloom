@@ -84,10 +84,11 @@ jobs:
             curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -H 'Content-Type: application/json' -X "$method" "http://127.0.0.1:19200$path" "$@" >/dev/null
           }
           # Configure only this disposable CI environment; never migrate existing indices.
-          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @backend/observability/elasticsearch/ilm-policy.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @backend/observability/logstash/template/lanverse-logs-template.json
-          ci_elasticsearch PUT /lanverse-logs-application-write --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
-          ci_elasticsearch PUT /lanverse-logs-dead-letter-write --data-binary '{"settings":{"index.lifecycle.name":"lanverse-logs-application-30d","index.lifecycle.rollover_alias":"lanverse-logs-dead-letter","number_of_shards":1,"number_of_replicas":0},"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
+          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @deploy/observability/elasticsearch/ilm-policy.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @deploy/observability/logstash/template/lanverse-logs-template.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @deploy/observability/elasticsearch/dead-letter-template.json
+          ci_elasticsearch PUT /lanverse-logs-application-000001 --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
+          ci_elasticsearch PUT /lanverse-logs-dead-letter-000001 --data-binary '{"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
           curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
             http://127.0.0.1:15601/api/data_views/data_view \
             -H 'Content-Type: application/json' -H 'kbn-xsrf: ci-fixture' \
@@ -126,6 +127,19 @@ jobs:
           curl --fail --silent http://127.0.0.1:19200/_ilm/policy/lanverse-logs-application-30d >/dev/null
           curl --fail --silent http://127.0.0.1:19200/_index_template/lanverse-logs-application >/dev/null
           curl --fail --silent http://127.0.0.1:15601/api/data_views/data_view/lanverse-logs-application >/dev/null
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install native handoff test dependencies
+        run: python -m pip install -e './agent[dev,creation]'
+      - name: Verify native Agent and Go command handoff
+        working-directory: agent
+        env:
+          LANVERSE_TEST_CREATION_DATABASE_URL: postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_creation_ci
+          LANVERSE_TEST_TEMPORAL_ADDRESS: 127.0.0.1:7233
+        run: |
+          psql postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_ci -c 'CREATE DATABASE lanverse_creation_ci'
+          python -m pytest -q tests/creation/test_native_runtime.py
       - name: Check and test Go backend
         working-directory: backend
         env:
@@ -331,10 +345,11 @@ jobs:
               -X "$method" "http://localhost:9200$path" --data-binary @- >/dev/null
           }
           # Configure only this disposable CI environment; never migrate existing indices.
-          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @backend/observability/elasticsearch/ilm-policy.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @backend/observability/logstash/template/lanverse-logs-template.json
-          ci_elasticsearch PUT /lanverse-logs-application-write --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
-          ci_elasticsearch PUT /lanverse-logs-dead-letter-write --data-binary '{"settings":{"index.lifecycle.name":"lanverse-logs-application-30d","index.lifecycle.rollover_alias":"lanverse-logs-dead-letter","number_of_shards":1,"number_of_replicas":0},"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
+          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @deploy/observability/elasticsearch/ilm-policy.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @deploy/observability/logstash/template/lanverse-logs-template.json
+          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @deploy/observability/elasticsearch/dead-letter-template.json
+          ci_elasticsearch PUT /lanverse-logs-application-000001 --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
+          ci_elasticsearch PUT /lanverse-logs-dead-letter-000001 --data-binary '{"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
           curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
             http://127.0.0.1:5601/api/data_views/data_view \
             -H 'Content-Type: application/json' -H 'kbn-xsrf: ci-fixture' \

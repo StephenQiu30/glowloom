@@ -143,7 +143,7 @@ services:
       - environment
     volumes:
       - kafka-data:/var/lib/kafka/data
-      - ./backend/observability/kafka/healthcheck.sh:/usr/share/lanverse-observability/kafka-healthcheck.sh:ro
+      - ./deploy/observability/kafka/healthcheck.sh:/usr/share/lanverse-observability/kafka-healthcheck.sh:ro
     healthcheck:
       test: ["CMD", "/usr/share/lanverse-observability/kafka-healthcheck.sh"]
       interval: 5s
@@ -160,7 +160,7 @@ services:
     networks:
       - environment
     volumes:
-      - ./backend/observability/kafka/init.sh:/usr/share/lanverse-observability/kafka-init.sh:ro
+      - ./deploy/observability/kafka/init.sh:/usr/share/lanverse-observability/kafka-init.sh:ro
     depends_on:
       kafka:
         condition: service_healthy
@@ -202,8 +202,8 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
-      - ./backend/observability/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
-      - ./backend/observability/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./deploy/observability/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./deploy/observability/logstash/pipeline:/usr/share/logstash/pipeline:ro
       - logstash-data:/usr/share/logstash/data
     restart: unless-stopped
     healthcheck:

@@ -6,6 +6,8 @@ from pathlib import Path
 
 
 ALLOWED_TEST_SKIPS = {
+    # Executed with a real Python HTTP process by the preceding Backend CI step.
+    ("tests/production/creation", "TestNativeAgentCommandAcceptance"),
     ("tests/generation", "TestProviderTemporalRestartWorkerHelper"),
     ("tests/workflow", "TestFormalGenerationTemporalWorkerProcessHelper"),
     ("tests/workflow", "TestReferenceAssetTemporalWorkerProcessHelper"),
@@ -51,7 +53,7 @@ def main() -> int:
             print(f"unexpected skipped Go test: {package} {test}", file=sys.stderr)
         return 1
 
-    print(f"Go test skip gate passed: {len(allowed)} subprocess helper skip(s), 0 unexpected")
+    print(f"Go test skip gate passed: {len(allowed)} externally driven/helper skip(s), 0 unexpected")
     return 0
 
 
