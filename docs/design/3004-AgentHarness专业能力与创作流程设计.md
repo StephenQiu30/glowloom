@@ -1,6 +1,6 @@
 # Agent Harness 专业能力与创作流程设计
 
-- 状态：已接受目标（2026-09-07 用户确认按新设计全面推进）；本轮先实施 Backend 职责
+- 状态：已接受目标（2026-09-07 用户确认按新设计全面推进）；已实施四类专业文本 Harness 任务，生产编排与正式采纳接线尚未完成
 - 日期：2026-09-07
 - 上位边界：[0013 创作编排与多媒体画布架构调整](0013-创作编排与多媒体画布架构调整设计.md)
 - 联动设计：[1003 多媒体创作画布与运行可视化](1003-多媒体创作画布与运行可视化设计.md)
@@ -165,3 +165,62 @@ StepInstance 表达一个 scope 的逻辑工作；StepAttempt 表达技术尝试
 设计验证场景：长稿跨块与中文/表情来源；目录/正文集号冲突；别名误合并与撤销；蒙面身份披露；多人手机；闪回道具状态；必拍节拍遗漏；单场失败与局部修订；输出保存后响应丢失；预算跨重启；过期批准；旧 Attempt 迟到；Skill 撤回；视频生成 UNKNOWN。
 
 这些场景是后续合同与验收的输入，尚无本设计的运行通过声明。首个增量聚焦一份合成原稿、一个新解析流程、可采纳草案及恢复证据，再扩展专业能力。
+
+## 11. 文本链实施合同（2026-09-08）
+
+本节细化已接受的文本 MVP。依据为原始规范 `01_AgentHarness_Skill与创作工作流_统一设计稿.md` 的 5–14、18、21 节，以及画布规范的 12–15 节；原件现在位于 Obsidian 的 `Lanverse短剧制作平台/平台设计规范`。原件中的示例、外部 Skill 正文及工具调用示意都是参考资料，不构成用户授权。生产输入仍是 Go 接管后的固定 SourceEdition。
+
+### 11.1 四个可执行任务与阶段屏障
+
+先实现一个独立的 `text-storyboard` 专业包，按任务仅装载对应 reference；保留旧 `build-storygraph` 的文件和摘要。四个任务聚合有共同上下文的能力，不把 42 个目录当完成指标。
+
+| 任务 | 实际专业能力 | 输入与输出 | 下游屏障 |
+| --- | --- | --- | --- |
+| map_manuscript | inspect-manuscript、divide-episodes | 完整源块 → 分集范围、非正文分类、边界问题 | 分集边界审阅 |
+| analyze_episode | summarize-episode、segment-scenes、mark-story-beats、extract-dialogue-cues、collect-cast/places/props | 一集完整原文 → 梗概、场次、节拍、逐字对白、类型化提及、来源覆盖账 | 全集收敛、剧稿结构审阅 |
+| build_world | resolve-entity-aliases、map-story-relations、trace-continuity、audit-story-facts、compile-asset-needs | 全稿场次事实 → 身份归并提案、关系、事件账、资产需求 | WorldBook 审阅；未采纳不成为正式总册 |
+| direct_scene | analyze-scene-intent、arrange-blocking、design-shot-coverage、write-shot-briefs、time-dialogue-and-action、review-screen-direction、plan-frame-board、audit-scene-coverage | 单场、来源、披露过滤后的设定 → SceneBreakdown、镜头、声音映射、时长区间、文字画板与覆盖检查 | 分镜审阅与 Go 正式采纳 |
+
+这四个入口只产生草案，不授予审批权。Harness 单次只运行一个任务，不在进程内等待人审或自动串过屏障。可信编排先持久保存输出再等待平台回执；验收脚本允许按顺序验证整条候选链，但该行为不能冒充已批准生产流程。
+
+### 11.2 原文、证据与确定性检查
+
+SourceEdition 保留原输入 Unicode code point 序列，不再 trim、NFC 或改换行。块以带换行的物理行划分，连续编号和半开字符区间由代码生成；空行也在覆盖账中。源摘要按 UTF-8 原字节计算。模型引用块号及逐字 quote，代码验证匹配后补出绝对偏移及片段摘要；重复短语必须扩大引用或显式指定从零开始的 occurrence，不能自动选第一次。重复对白使用 occurrence，不能把上下文扩进台词正文。
+
+分集和分场通过闭区间块号映射，代码验证所有源块恰好归属一次；非正文、作者注释、未解决片段必须有分类和理由。显式集标题保留原集号，目录中的同名标题单独分类。无标题只能 propose，禁止在 preserve 模式造出集号或自行改编。缺号、重复号、目录/正文疑点进入审阅问题，不补造原文。
+
+场内节拍、对白和提及使用范围内临时键。对白引用与原文逐字一致；未知说话人合法。人物台词属于 claim，不因为它有来源就当客观 fact。实体只能引用已存在、类型一致的提及；每条提及都要归入候选实体或显式 unresolved。正式 UUID 仍由 Go 采纳生成。
+
+连续性保存带时间分支的事件，不维护模型可覆盖的“全剧当前状态”。关系和事件保留事实/推断/提案及叙述/陈述/未知依据；没有证据的推断必须成为 Issue。事件至少有一条本场证据，额外跨场证据只允许复用实体提案已登记的身份归并证据。当前导演上下文保守地只装入本场提及和本场状态证据，隐藏全局 identity key/label；跨场状态需待已审阅披露映射接通。presence 区分画内、画外、仅被提及和未知，分镜不能把仅被提及的人物放进 visible_mentions 或 blocking。每个必拍 Beat、对白和实际可见细节必须被 Shot 引用，每镜有叙事目的、调度、景别/运动、方向、时长上下界及文字 Panel；映射成功只证明结构覆盖，不证明镜头艺术质量。
+
+### 11.3 执行、上下文和失败恢复
+
+任务固定 source hash、上游草案内容、scope、Skill release hash、时限与输出上限。装配器保存实际块列表、上游摘要与遗漏记录。每次只调用一次受限 Codex，不通过随机语义重试消除 unresolved。超出上下文上限必须明确报 context_insufficient，不能静默截断或先压缩全稿。长稿分块归并的第二阶段扩展须保留重叠去重和来源覆盖证据，未实现前不声称无限长稿可用。
+
+推理子进程只继承本地 Codex 认证所需的明确环境白名单，不继承数据库、平台授权和供应商配置。禁用工具、网络搜索与插件；取消或超时必须终止并等待子进程。输出和诊断受字节上限约束；使用量缺失标 unknown。执行结果绑定任务、输入和 release 的摘要，不能跨源版本复用。
+
+Temporal 生产串接沿用 0013 的命令，不引入第二个调度器：读取 Go 冻结源 → 分集草案/平台门 → 逐集解析/平台门 → 全局设定/平台门 → 选定场导演/平台门。逻辑步骤键为 `stage/scope`，Activity 保存草案、OutputBinding 和 Outbox 的事务提交后才返回引用。每个门只接受匹配 run、源版本、候选摘要与正式 Owner Effect 的平台回执；工作流信号只是唤醒，不是授权。失败恢复使用同一步骤输入，复用已保存结果；更换源或改编范围创建新修订。
+
+尚未完成 Go 源读取桥、Agent 草案持久化/预算及平台审阅回执接线时，不在 `lanverse.creation.text-storyboard.production` 上启用自动候选链，也不把 `/readyz` 当作创作工作流就绪证明。
+
+### 11.4 开源参考核验与复用边界
+
+2026-09-08 通过 GitHub 连接核验以下固定提交。只参考组织和评测方法，未复制外部实现、提示词或运行脚本；本包的影视规则按本项目设计编写。
+
+| 一手来源 | 固定提交 / 许可证据 | 采用与不采用 |
+| --- | --- | --- |
+| [Agent Skills specification](https://github.com/agentskills/agentskills/blob/69ef37e9424c0a7ea9dd2293b559e43ec8176379/docs/specification.mdx) | `69ef37e9424c0a7ea9dd2293b559e43ec8176379`；根 LICENSE 为 Apache-2.0 | SKILL.md + 按需 references；执行授权、Schema、发布摘要仍由 Lanverse 实现 |
+| [Anthropic skill-creator](https://github.com/anthropics/skills/blob/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/skill-creator/SKILL.md) | `41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f`；该目录 LICENSE.txt 为 Apache-2.0 | 正反例、断言、质量和用量观测、对照评测；不让生产运行自动改写/安装 Skill |
+| [LibTV Skill](https://github.com/libtv-labs/libtv-skills/blob/c609246c1eca69f6bc129bcbb5d64c36734e4a4a/skills/libtv-skill/SKILL.md) | `c609246c1eca69f6bc129bcbb5d64c36734e4a4a`；根 LICENSE 为 MIT | 参考稳定会话/产物引用与进展查询；公开内容是远程服务客户端，不能据此宣称复用了开源剧本解析引擎；不向该服务发送用户原稿 |
+
+### 11.5 验证口径
+
+黄金数据包含钥匙交接、蒙面身份后揭示、裂纹手表和闪回、手机文字及未知录音内容。代码测试覆盖中文/表情偏移、目录与缺集、越界证据、重复覆盖、实体类型冲突、台词误改、未来信息泄露、漏拍对白/节拍、Skill 篡改、取消和上下文耗尽。真实 Codex 评测单独记录实际结果，不把替身模型测试当真实创作质量，也不把本地一份合成剧本成功当全产品验收。
+
+### 11.6 持久执行与源读取的落地约束（2026-09-08）
+
+命令接收库采用追加式、带校验和的迁移；已发布的 command-acceptance 迁移不改写。可信层冻结每次运行的 Skill release 与调用次数上限，固定步骤身份为 run + stage + scope；相同身份改变输入必须冲突。领取步骤在同一数据库事务中先占用一次额度、增加 fence，再发送 Harness 请求。活跃尝试不会被重复请求抢占；超时、断连或进程消失将占用保留为 unknown，不自动重新调用。保存结果必须仍持有未过期 fence，并核验任务/源/Skill/候选摘要。草案、稳定 OutputBinding 与 result_ready Outbox 在同一事务提交；响应丢失后读取原结果，不再调用模型。这里只记推理调用额度，不能冒充实际 token 或货币费用对账。
+
+共享的纯文本合同放在 app/text_contract，包含 Schema、来源索引与确定性检查；可信应用镜像只带合同，不带专业提示词、Codex 或 Harness。任务输入由可信调用方从冻结命令和已有上游草案装配；执行端保存前再次验证来源覆盖和引用。缺少正式门回执时不能通过对执行端直接传递上游 JSON 来越过人工门。
+
+固定源桥属于 Go Creation 应用：机器请求仅携带 run_id 与 command payload_hash，原始 actor、token version、project 和源版本从已存命令读取。每次请求重新检查当前写权限，Script Owner 验证固定版本、全文摘要及 Unicode code point 索引；不跟随当前 head。请求用独立 platform audience 的 HMAC 绑定 HTTP 方法、原始路径、请求体及 60 秒有效期；不接受重定向或调用者指定的源 URL。源输出上限 200 万字符，保持原始码点序列。已有命令接收 ready 状态仍只代表接收能力；完整生产 Workflow 须在四道门与正式 Owner Effect 桥接均完成后启用。

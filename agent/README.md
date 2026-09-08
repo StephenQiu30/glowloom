@@ -4,10 +4,29 @@
 
 | 进程 | 入口 | 当前职责 |
 | --- | --- | --- |
-| 受限候选生成 | `app.candidate_runtime.api:app` | 已有 StoryGraph/SceneAnalysis Stage、短时执行授权和 Codex Harness |
+| 受限候选生成 | `app.candidate_runtime.api:app` | StoryGraph/SceneAnalysis Stage，以及分集→分场解析→设定→文字分镜四类有来源的 Harness 任务 |
 | 可信命令接受 | `app.creation.api:create_configured_app --factory` | Go 命令鉴权、持久回执、启动 Outbox、Temporal 原身份对账 |
 
 新服务目前完成可靠接受和启动交接。`accepted` 表示数据库已提交，`started` 表示已核验 Temporal 执行身份；两者都不表示已生成或正式采纳文本。真实文本 Workflow/Worker、Python 草案及 Go 采纳桥接仍按实施计划推进。部署匹配的 Worker 前，保持 Go 的 `CREATION_AGENT_URL` 为空。
+
+## 文本与分镜 Harness
+
+`POST /internal/text-storyboard/invocations` 是新增的受限内部入口，挂载在现有候选进程；不会创建额外业务服务。四类 stage 为 `map_manuscript`、`analyze_episode`、`build_world`、`direct_scene`。专业包为 `agent/skills/text-storyboard`，与旧包独立冻结；发布摘要可从 `app.modules.text_storyboard.harness.RELEASE_HASH` 读取。包文件、输入/输出 Schema 和执行上限参与摘要。
+
+调用者使用 `TextTask` 固定 invocation_id、SourceEdition（源版本、完整原文及 UTF-8 SHA-256）、release_hash、当前 scope 和必要上游草案。`analyze_episode` 只读取选定集，`build_world` 拒绝未完成全稿解析的输入，`direct_scene` 只装载当前场与经过披露过滤的提及。原文不再规范化；含重复短语的 Evidence 必须显式定位 occurrence，代码补出 Unicode code point 偏移和片段 hash。人物/地点/道具提及含 presence，台词中仅被提及的人物不能直接入画。
+
+请求头 `X-Lanverse-Text-Authorization` 由可信调用者通过 `sign_task(task, AGENT_EXECUTION_SECRET, expires_at)` 生成，最多有效 60 秒，绑定完整任务、release 与 invocation；它与旧接口和 Creation 命令使用不同 audience。此短期授权不替代可信应用层的持久预算、租约和项目权限。Harness 没有幂等数据库；超时或断线后不能盲目重投并假定没有消耗推理额度。
+
+结果为 `TextResult`：候选及其 hash、来源证据、实际 ContextManifest、待审 Issue。所有成功结果都是 `needs_review`，model_calls=1，用量暂标 unknown；不会伪造正式采纳或可读取的持久资源引用。每次上下文最多 240,000 UTF-8 bytes（含规则），结果和各诊断流最多 2,000,000 bytes，deadline 不超过 900 秒。超限明确失败，不截断全稿。此受限接口尚未接通可信持久执行存储，不具备超长稿分块归并和审批恢复；跨场状态使用需要平台已审阅的披露映射。
+
+本机完整候选链评测使用设计中的合成三集剧本，不读取业务库或真实用户原稿：
+
+```sh
+LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboard-eval \
+  .venv/bin/python -m pytest -q -s tests/integration/test_text_storyboard_real_codex.py
+```
+
+它调用本机 Codex，依次检查全稿分集、逐集解析、WorldBook 和第一集文字分镜。目录保存已校验草案、模型原始候选及汇总；相同输入/发布摘要的已完成步骤可在评测中复用。此缓存只属于测试，不是生产恢复机制；评测串联草案不代表跳过生产审阅门，也不证明 Go 正式采纳已经接通。公开框架核验、合同与下一阶段生产接线见 [3004 第 11 节](../docs/design/3004-AgentHarness专业能力与创作流程设计.md#11-文本链实施合同2026-09-08)。
 
 ## 本机运行配置
 
@@ -22,7 +41,7 @@
 | `CREATION_TEMPORAL_TLS` | 默认 `false`；非 loopback 地址必须为 `true` |
 | `CREATION_TASK_QUEUE` | 默认 `lanverse-creation-text`，首次接受后固定保存 |
 
-在 `agent/` 中安装已锁定的可信服务依赖：`uv sync --locked --extra dev --extra creation`。将上述变量注入可信服务进程，使用单独数据库及角色。迁移使用专用 schema owner；运行角色对 creation_commands 仅授予 SELECT/INSERT，对 creation_start_outbox 授予 SELECT/INSERT/UPDATE，对 creation_schema 仅授予 SELECT，并授予 schema USAGE；不授予平台库业务写入权限。不得把可信进程环境传给候选生成进程。
+在 `agent/` 中安装已锁定的可信服务依赖：`uv sync --locked --extra dev --extra creation`。将上述变量注入可信服务进程，使用单独数据库及角色。迁移使用专用 schema owner；运行角色对 creation_commands 仅授予 SELECT/INSERT，对 creation_start_outbox 授予 SELECT/INSERT/UPDATE，对 creation_schema 仅授予 SELECT，并授予 schema USAGE；新增执行库表按职责授予权限：creation_executions、creation_steps 为 SELECT/INSERT/UPDATE，creation_drafts、creation_output_bindings、creation_result_outbox 为 SELECT/INSERT；不授予平台库业务写入权限。不得把可信进程环境传给候选生成进程。
 
 ```sh
 .venv/bin/python -m app.creation.migrate
@@ -51,3 +70,9 @@
 ```sh
 uv export --locked --extra creation --no-dev --no-hashes --no-emit-project --output-file requirements-creation.txt
 ```
+
+## 持久执行存储（尚未接入生产 Workflow）
+
+`app.creation.execution.ExecutionStore` 冻结运行调用额度和 Skill release，持久保存步骤输入、尝试 fence、unknown 用量、草案、OutputBinding 与 result_ready Outbox。相同输入读取已保存结果；过期尝试不会自动重新调用模型。保存结果时在可信层重新检查来源、候选摘要及覆盖，草案和输出引用在同一事务提交。`app/text_contract` 为两种镜像共享的纯合同，不包含 Skill 或推理执行能力。
+
+`text-execution` 是追加迁移，不改写原 command-acceptance 的校验和。升级后须先显式执行迁移再启动可信服务；现有业务库未自动迁移。当前存储仅完成组件级接线与本机数据库测试，尚未暴露执行入口、投递结果事件或注册生产 Workflow，也不能替代 Go 的当前权限与四道审批门。
