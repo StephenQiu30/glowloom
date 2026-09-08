@@ -30,6 +30,7 @@ from app.candidate_runtime.schemas import (
     StoryGraphStageInvocation,
     StoryGraphStageResult,
 )
+from app.candidate_runtime.text_storyboard_api import router as text_storyboard_router
 from app.modules.storygraph.bundle import BundleInvalid, StoryGraphBundle
 from app.modules.storygraph.harness import (
     CodexBudgetExceeded,
@@ -62,6 +63,7 @@ app = FastAPI(
     openapi_url=None,
     lifespan=lifespan,
 )
+app.include_router(text_storyboard_router)
 
 
 @app.get("/healthz")

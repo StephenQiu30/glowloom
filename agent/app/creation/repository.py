@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from app.creation.contract import Acceptance, Command
+from app.creation.execution_schema import EXECUTION_SCHEMA, EXECUTION_SCHEMA_HASH
 
 # This schema belongs exclusively to the Agent database. Migration is explicit.
 SCHEMA = """
@@ -78,6 +79,7 @@ class Repository:
             ).fetchone()
             if marker and marker["marker"]:
                 await self._check_schema(conn)
+                await self._migrate_execution(conn)
                 return
             existing = await (
                 await conn.execute(
@@ -95,6 +97,7 @@ class Repository:
             await conn.execute(
                 "INSERT INTO creation_schema VALUES (%s, %s)", ("command-acceptance", SCHEMA_HASH)
             )
+            await self._migrate_execution(conn)
 
     async def _check_schema(self, conn: AsyncConnection[dict[str, Any]]) -> None:
         row = await (
@@ -105,9 +108,44 @@ class Repository:
         if not row or row["checksum"] != SCHEMA_HASH:
             raise SchemaMismatch("creation database migration does not match this application")
 
+    async def _migrate_execution(self, conn: AsyncConnection[dict[str, Any]]) -> None:
+        row = await (
+            await conn.execute("SELECT checksum FROM creation_schema WHERE name = 'text-execution'")
+        ).fetchone()
+        if row:
+            if row["checksum"] != EXECUTION_SCHEMA_HASH:
+                raise SchemaMismatch("text execution migration checksum differs")
+            return
+        await conn.execute(EXECUTION_SCHEMA)
+        await conn.execute(
+            "INSERT INTO creation_schema VALUES (%s, %s)", ("text-execution", EXECUTION_SCHEMA_HASH)
+        )
+
     async def ready(self) -> None:
         async with await self.connect() as conn:
             await self._check_schema(conn)
+            row = await (
+                await conn.execute(
+                    "SELECT checksum FROM creation_schema WHERE name = 'text-execution'"
+                )
+            ).fetchone()
+            if not row or row["checksum"] != EXECUTION_SCHEMA_HASH:
+                raise SchemaMismatch("text execution migration is missing or differs")
+
+    async def command(self, command_id: str) -> Command | None:
+        async with await self.connect() as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT command, payload_hash FROM creation_commands WHERE command_id = %s",
+                    (command_id,),
+                )
+            ).fetchone()
+            if not row:
+                return None
+            command = Command.model_validate(row["command"])
+            if command.payload_hash != row["payload_hash"]:
+                raise CommandConflict("persisted creation command hash differs")
+            return command
 
     async def accept(self, command: Command, task_queue: str) -> Acceptance:
         async with await self.connect() as conn:

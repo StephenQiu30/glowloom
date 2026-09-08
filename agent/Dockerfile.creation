@@ -16,6 +16,7 @@ COPY --chown=lanverse:lanverse agent/app/__init__.py ./app/__init__.py
 COPY --chown=lanverse:lanverse agent/app/creation ./app/creation
 COPY --chown=lanverse:lanverse agent/app/candidate_runtime/__init__.py ./app/candidate_runtime/__init__.py
 COPY --chown=lanverse:lanverse agent/app/candidate_runtime/canonical.py ./app/candidate_runtime/canonical.py
+COPY --chown=lanverse:lanverse agent/app/text_contract ./app/text_contract
 USER lanverse
 EXPOSE 8788
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=12 \

@@ -34,6 +34,7 @@ COPY --chown=lanverse:lanverse agent/app/__init__.py agent/app/main.py ./app/
 COPY --chown=lanverse:lanverse agent/app/candidate_runtime ./app/candidate_runtime
 COPY --chown=lanverse:lanverse agent/app/modules ./app/modules
 
+COPY --chown=lanverse:lanverse agent/app/text_contract ./app/text_contract
 USER lanverse
 
 EXPOSE 8787
