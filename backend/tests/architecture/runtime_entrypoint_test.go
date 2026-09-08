@@ -121,6 +121,17 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 
 	compose := readArchitectureFile(t, filepath.Join(repositoryRoot, "docker-compose.yml"))
 	for _, required := range []string{
+		"container_name: lanverse-frontend",
+		"container_name: lanverse-backend",
+		"container_name: lanverse-agent-harness",
+		"container_name: lanverse-agent-creation-api",
+		"container_name: lanverse-agent-creation-worker",
+	} {
+		if !strings.Contains(compose, required) {
+			t.Errorf("service Compose is missing the stable single-instance container name %q", required)
+		}
+	}
+	for _, required := range []string{
 		"source: lanverse_media_provider_master_key",
 		"target: lanverse_media_provider_master_key_source",
 		"/run/secrets:rw,noexec,nosuid,nodev,mode=0711",

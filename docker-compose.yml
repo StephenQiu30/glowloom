@@ -27,6 +27,7 @@ x-creation-service: &creation-service
 services:
   frontend:
     <<: *application
+    container_name: lanverse-frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -43,6 +44,7 @@ services:
 
   backend:
     <<: *application
+    container_name: lanverse-backend
     build: ./backend
     image: lanverse/backend:development
     environment:
@@ -114,6 +116,7 @@ services:
 
   harness:
     <<: *application
+    container_name: lanverse-agent-harness
     build:
       context: .
       dockerfile: agent/Dockerfile
@@ -134,10 +137,12 @@ services:
 
   creation-api:
     <<: *creation-service
+    container_name: lanverse-agent-creation-api
     environment: *creation-environment
 
   creation-worker:
     <<: *creation-service
+    container_name: lanverse-agent-creation-worker
     command: ["python", "-m", "app.creation.worker"]
     environment:
       <<: *creation-environment

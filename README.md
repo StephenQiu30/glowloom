@@ -57,6 +57,8 @@ docker compose logs --tail=50 backend frontend
 
 默认只启动应用：Frontend、Backend，以及剧本解析必需的 Harness、Creation API 和 Creation Worker。Go API、Workflow、Event Runtime 共用一个 Backend 容器；Agent 保持 Docker 运行，私有端口不对宿主机发布。
 
+这些都是单实例服务，Docker Desktop 中显示为 `lanverse-frontend`、`lanverse-backend`、`lanverse-agent-harness`、`lanverse-agent-creation-api` 和 `lanverse-agent-creation-worker`，不使用 Compose 自动追加的 `-1` 实例序号。容器间仍使用职责服务名通信。
+
 PostgreSQL、MinIO、Temporal、Kafka、ES 和 Logstash 直接使用本机已启动的服务，容器通过 `host.docker.internal` 访问。填写真实地址和认证信息即可；本地启动不创建基础设施、初始化索引或清除历史数据。MinIO 的内部地址与浏览器访问地址分别使用 `MINIO_ENDPOINT` 和 `MINIO_PUBLIC_ENDPOINT`。
 
 Creation 使用已迁移的独立数据库、独立签名密钥和已审阅的冻结 SkillRelease 摘要。Harness 只读挂载已登录 Codex 的 `auth.json`；配置说明与恢复约束见 [部署设计](docs/design/0020-文本解析失败诊断与受控恢复设计.md)。媒体供应商配置需要另行填写本机 root-key 文件路径。
