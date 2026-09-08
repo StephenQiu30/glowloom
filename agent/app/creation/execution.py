@@ -25,6 +25,7 @@ class InvocationLease:
     command_id: str
     input_hash: str
     fence: int
+    attempt_id: str
 
 
 def step_key(task: TextTask) -> str:
@@ -103,6 +104,15 @@ class ExecutionStore:
                     raise ExecutionConflict("invocation_outcome_unknown")
                 if row["active"]:
                     raise ExecutionConflict("invocation_in_progress")
+                if row["current_attempt_id"] is not None:
+                    expired_attempt = await conn.execute(
+                        """UPDATE creation_attempts SET state = 'unknown',
+                           finished_at = clock_timestamp(), last_error = 'attempt_expired'
+                           WHERE id = %s AND step_id = %s AND fence = %s AND state = 'running'""",
+                        (row["current_attempt_id"], row["id"], row["fence"]),
+                    )
+                    if expired_attempt.rowcount != 1:
+                        raise ExecutionConflict("attempt_fence_lost")
                 await conn.execute(
                     """UPDATE creation_steps SET state = 'unknown', fence = fence + 1,
                        lease_until = NULL, last_error = 'attempt_expired',
@@ -115,6 +125,7 @@ class ExecutionStore:
                 if run["reserved_calls"] >= run["call_limit"]:
                     raise ExecutionConflict("invocation_budget_exhausted")
                 identity = str(uuid4())
+                attempt_id = str(uuid4())
                 await conn.execute(
                     """INSERT INTO creation_steps
                        (id, command_id, step_key, input_hash, task, state, fence, lease_until)
@@ -130,11 +141,24 @@ class ExecutionStore:
                     ),
                 )
                 await conn.execute(
+                    """INSERT INTO creation_attempts
+                       (id, step_id, attempt_no, fence, input_hash, state,
+                        started_at, execution_deadline, lease_expires_at)
+                       SELECT %s, id, 1, fence, input_hash, 'running', created_at,
+                              lease_until - interval '30 seconds', lease_until
+                       FROM creation_steps WHERE id = %s""",
+                    (attempt_id, identity),
+                )
+                await conn.execute(
+                    "UPDATE creation_steps SET current_attempt_id = %s WHERE id = %s",
+                    (attempt_id, identity),
+                )
+                await conn.execute(
                     "UPDATE creation_executions SET reserved_calls = reserved_calls + 1 "
                     "WHERE command_id = %s",
                     (command_id,),
                 )
-                return InvocationLease(identity, command_id, digest, 1)
+                return InvocationLease(identity, command_id, digest, 1, attempt_id)
         # Commit the unknown transition before reporting it; never roll it back with the exception.
         assert expired
         raise ExecutionConflict("invocation_outcome_unknown")
@@ -150,7 +174,12 @@ class ExecutionStore:
                     (lease.step_id, lease.command_id),
                 )
             ).fetchone()
-            if not row or row["input_hash"] != lease.input_hash or row["fence"] != lease.fence:
+            if (
+                not row
+                or row["input_hash"] != lease.input_hash
+                or row["fence"] != lease.fence
+                or str(row["current_attempt_id"]) != lease.attempt_id
+            ):
                 raise ExecutionConflict("attempt_fence_lost")
             result = validate_result(TextTask.model_validate(row["task"]), raw).model_dump(
                 mode="json"
@@ -168,11 +197,28 @@ class ExecutionStore:
                 raise ExecutionConflict("draft_result_conflict")
             if row["state"] != "running" or not row["active"]:
                 raise ExecutionConflict("attempt_fence_lost")
+            updated = await conn.execute(
+                """UPDATE creation_attempts SET state = 'succeeded',
+                   finished_at = clock_timestamp(), result_hash = %s
+                   WHERE id = %s AND step_id = %s AND fence = %s AND input_hash = %s
+                     AND state = 'running'""",
+                (result_hash, lease.attempt_id, lease.step_id, lease.fence, lease.input_hash),
+            )
+            if updated.rowcount != 1:
+                raise ExecutionConflict("attempt_fence_lost")
             draft_id = str(uuid4())
             await conn.execute(
-                """INSERT INTO creation_drafts (id, step_id, candidate_hash, result_hash, result)
-                   VALUES (%s, %s, %s, %s, %s)""",
-                (draft_id, lease.step_id, result["candidate_hash"], result_hash, Jsonb(result)),
+                """INSERT INTO creation_drafts
+                   (id, step_id, candidate_hash, result_hash, result, attempt_id)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (
+                    draft_id,
+                    lease.step_id,
+                    result["candidate_hash"],
+                    result_hash,
+                    Jsonb(result),
+                    lease.attempt_id,
+                ),
             )
             await conn.execute(
                 """INSERT INTO creation_output_bindings (step_id, output_role, item_key, draft_id)
@@ -180,9 +226,10 @@ class ExecutionStore:
                 (lease.step_id, draft_id),
             )
             await conn.execute(
-                """INSERT INTO creation_result_outbox (event_id, step_id, draft_id, event_type)
-                   VALUES (%s, %s, %s, 'result_ready')""",
-                (str(uuid4()), lease.step_id, draft_id),
+                """INSERT INTO creation_result_outbox
+                   (event_id, step_id, draft_id, event_type, attempt_id)
+                   VALUES (%s, %s, %s, 'result_ready', %s)""",
+                (str(uuid4()), lease.step_id, draft_id, lease.attempt_id),
             )
             await conn.execute(
                 """UPDATE creation_steps SET state = 'needs_review', lease_until = NULL,
@@ -199,10 +246,61 @@ class ExecutionStore:
                 """UPDATE creation_steps SET state = 'unknown', fence = fence + 1,
                    lease_until = NULL, last_error = %s, updated_at = clock_timestamp()
                    WHERE id = %s AND command_id = %s AND input_hash = %s AND fence = %s
+                     AND current_attempt_id = %s
                      AND state = 'running' AND lease_until > clock_timestamp()""",
-                (code, lease.step_id, lease.command_id, lease.input_hash, lease.fence),
+                (
+                    code,
+                    lease.step_id,
+                    lease.command_id,
+                    lease.input_hash,
+                    lease.fence,
+                    lease.attempt_id,
+                ),
             )
-            return result.rowcount == 1
+            if result.rowcount != 1:
+                return False
+            attempt = await conn.execute(
+                """UPDATE creation_attempts SET state = 'unknown',
+                   finished_at = clock_timestamp(), last_error = %s
+                   WHERE id = %s AND step_id = %s AND fence = %s AND input_hash = %s
+                     AND state = 'running'""",
+                (code, lease.attempt_id, lease.step_id, lease.fence, lease.input_hash),
+            )
+            if attempt.rowcount != 1:
+                raise ExecutionConflict("attempt_fence_lost")
+            return True
+
+    async def attempt_history(self, command_id: str, step_id: str) -> dict[str, Any] | None:
+        async with await self.repository.connect() as conn:
+            # One repeatable snapshot prevents combining an old step pointer with a new result.
+            await conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            step = await (
+                await conn.execute(
+                    "SELECT id::text, step_key, current_attempt_id::text "
+                    "FROM creation_steps WHERE command_id = %s AND id = %s",
+                    (command_id, step_id),
+                )
+            ).fetchone()
+            if step is None:
+                return None
+            attempts = await (
+                await conn.execute(
+                    """SELECT id::text AS attempt_id, attempt_no, fence, input_hash, state,
+                       started_at, execution_deadline, lease_expires_at, finished_at,
+                       result_hash, last_error, usage_status,
+                       (state = 'running' AND lease_expires_at <= transaction_timestamp())
+                           AS lease_expired
+                       FROM creation_attempts WHERE step_id = %s ORDER BY attempt_no""",
+                    (step_id,),
+                )
+            ).fetchall()
+            return {
+                "step_id": step["id"],
+                "step_key": step["step_key"],
+                "current_attempt_id": step["current_attempt_id"],
+                "history_origin": "recorded" if step["current_attempt_id"] else "unavailable",
+                "attempts": attempts,
+            }
 
     async def snapshot(self, command_id: str) -> dict[str, Any]:
         async with await self.repository.connect() as conn:

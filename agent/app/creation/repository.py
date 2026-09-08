@@ -10,6 +10,7 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.creation.attempt_schema import ATTEMPT_SCHEMA, ATTEMPT_SCHEMA_HASH
 from app.creation.contract import Acceptance, Command
 from app.creation.execution_schema import EXECUTION_SCHEMA, EXECUTION_SCHEMA_HASH
 
@@ -80,6 +81,7 @@ class Repository:
             if marker and marker["marker"]:
                 await self._check_schema(conn)
                 await self._migrate_execution(conn)
+                await self._migrate_attempts(conn)
                 return
             existing = await (
                 await conn.execute(
@@ -98,6 +100,20 @@ class Repository:
                 "INSERT INTO creation_schema VALUES (%s, %s)", ("command-acceptance", SCHEMA_HASH)
             )
             await self._migrate_execution(conn)
+            await self._migrate_attempts(conn)
+
+    async def _migrate_attempts(self, conn: AsyncConnection[dict[str, Any]]) -> None:
+        row = await (
+            await conn.execute("SELECT checksum FROM creation_schema WHERE name = 'text-attempts'")
+        ).fetchone()
+        if row:
+            if row["checksum"] != ATTEMPT_SCHEMA_HASH:
+                raise SchemaMismatch("text attempt migration checksum differs")
+            return
+        await conn.execute(ATTEMPT_SCHEMA)
+        await conn.execute(
+            "INSERT INTO creation_schema VALUES (%s, %s)", ("text-attempts", ATTEMPT_SCHEMA_HASH)
+        )
 
     async def _check_schema(self, conn: AsyncConnection[dict[str, Any]]) -> None:
         row = await (
@@ -124,6 +140,13 @@ class Repository:
     async def ready(self) -> None:
         async with await self.connect() as conn:
             await self._check_schema(conn)
+            attempt = await (
+                await conn.execute(
+                    "SELECT checksum FROM creation_schema WHERE name = 'text-attempts'"
+                )
+            ).fetchone()
+            if not attempt or attempt["checksum"] != ATTEMPT_SCHEMA_HASH:
+                raise SchemaMismatch("text attempt migration is missing or differs")
             row = await (
                 await conn.execute(
                     "SELECT checksum FROM creation_schema WHERE name = 'text-execution'"

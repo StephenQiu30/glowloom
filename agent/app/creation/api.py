@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from psycopg import Error as DatabaseError
 from temporalio.client import Client
 
+from app.creation.attempt_api import install_attempt_routes
 from app.creation.authorization import HEADER, InvalidAuthorization, verify_authorization
 from app.creation.config import Settings
 from app.creation.contract import Command, canonical_uuid, decode_object
@@ -79,6 +80,7 @@ def create_app(repository: Repository, secret: str, task_queue: str) -> FastAPI:
     app.add_api_route("/readyz", ready, methods=["GET"])
     app.add_exception_handler(DatabaseError, unavailable)
     app.add_exception_handler(SchemaMismatch, unavailable)
+    install_attempt_routes(app, repository, authorized_body)
     return app
 
 
