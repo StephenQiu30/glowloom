@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from app.candidate_runtime.canonical import production_canonical_hash
+from app.protocol.canonical import production_canonical_hash
 
 
 def test_creation_command_matches_go_canonical_fixture() -> None:

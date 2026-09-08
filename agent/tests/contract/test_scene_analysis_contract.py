@@ -12,7 +12,6 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.canonical import production_canonical_hash
 from app.candidate_runtime.scene_analysis_schemas import (
     SceneAnalysisAttemptResult,
     SceneAnalysisControlProof,
@@ -36,6 +35,7 @@ from app.modules.storygraph.scene_analysis_candidates import (
     SourceEvidenceSpan,
 )
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
+from app.protocol.canonical import production_canonical_hash
 
 ZERO = "0" * 64
 TWO = "2" * 64

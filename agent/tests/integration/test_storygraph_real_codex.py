@@ -10,7 +10,6 @@ from uuid import UUID
 import pytest
 from pydantic import BaseModel
 
-from app.candidate_runtime.canonical import canonical_hash
 from app.candidate_runtime.schemas import (
     EpisodeAnalysisStageInput,
     EpisodeReconciliationStageInput,
@@ -32,6 +31,7 @@ from app.modules.storygraph.candidate_schemas import (
     StoryReconciliationCandidate,
 )
 from app.modules.storygraph.harness import StoryGraphHarness
+from app.protocol.canonical import canonical_hash
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-stage-wire.json"

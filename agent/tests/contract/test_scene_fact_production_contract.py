@@ -8,12 +8,12 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.canonical import production_canonical_hash, production_canonical_json
 from app.candidate_runtime.scene_analysis_schemas import SceneAnalysisInvocation
 from app.modules.storygraph.scene_analysis_candidates import (
     SceneFactCandidate,
     ScriptSpanCandidate,
 )
+from app.protocol.canonical import production_canonical_hash, production_canonical_json
 
 FIXTURE = (
     Path(__file__).resolve().parents[3]

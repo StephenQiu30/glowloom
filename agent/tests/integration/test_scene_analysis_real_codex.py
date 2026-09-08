@@ -8,7 +8,6 @@ from uuid import UUID
 
 import pytest
 
-from app.candidate_runtime.canonical import production_canonical_hash
 from app.candidate_runtime.scene_analysis_schemas import (
     SceneAnalysisInvocation,
     SceneAnalysisPayload,
@@ -18,6 +17,7 @@ from app.modules.storygraph.scene_analysis_candidates import (
     ScriptSpanCandidate,
 )
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
+from app.protocol.canonical import production_canonical_hash
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 WIRE_FIXTURE = (

@@ -9,7 +9,6 @@ import pytest
 from anyio import Path as AsyncPath
 from pydantic import BaseModel
 
-from app.candidate_runtime.canonical import canonical_hash
 from app.modules.text_storyboard.harness import (
     RELEASE_HASH,
     TextHarness,
@@ -17,6 +16,7 @@ from app.modules.text_storyboard.harness import (
     TextTask,
     codex_reasoner,
 )
+from app.protocol.canonical import canonical_hash
 from app.text_contract.schemas import (
     EpisodeAnalysis,
     EpisodeMap,

@@ -14,10 +14,12 @@ from app.candidate_runtime.scene_analysis_schemas import (
     SceneAnalysisAttemptResult,
     SceneAnalysisInvocation,
 )
-from app.modules.storygraph.harness import CodexRuntimeUnavailable
 from app.modules.storygraph.scene_analysis_bundle import SCENE_ANALYSIS_SKILL_BUNDLE_HASH
 from app.modules.storygraph.scene_analysis_candidates import ScriptSpanCandidate
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
+from app.reasoning.codex import (
+    CodexRuntimeUnavailable,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 WIRE_FIXTURE = REPOSITORY_ROOT / "backend/tests/fixtures/agent/storygraph-scene-analysis-wire.json"

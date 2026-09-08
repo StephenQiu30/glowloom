@@ -8,7 +8,6 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from app.candidate_runtime.canonical import canonical_hash
 from app.modules.text_storyboard.harness import (
     RELEASE_HASH,
     ContextInsufficient,
@@ -18,6 +17,7 @@ from app.modules.text_storyboard.harness import (
     TextTask,
     directing_context,
 )
+from app.protocol.canonical import canonical_hash
 from app.text_contract.schemas import StateEvent
 from app.text_contract.validation import check_direction, check_episode, check_world
 from tests.unit.text_storyboard_samples import sample

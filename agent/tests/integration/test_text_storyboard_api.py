@@ -7,8 +7,8 @@ import pytest
 from pydantic import BaseModel
 
 from app.candidate_runtime.api import app
-from app.candidate_runtime.text_storyboard_api import sign_task
 from app.modules.text_storyboard.harness import RELEASE_HASH, TextHarness, TextResult, TextTask
+from app.text_contract.authorization import sign_task
 from tests.unit.text_storyboard_samples import sample
 
 SECRET = "synthetic-text-execution-secret-for-tests"

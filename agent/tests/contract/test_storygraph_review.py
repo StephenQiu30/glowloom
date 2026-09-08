@@ -6,7 +6,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.canonical import canonical_hash
 from app.candidate_runtime.schemas import (
     StoryGraphDeterministicGateResult,
     StoryGraphRepairStageInput,
@@ -17,6 +16,7 @@ from app.modules.storygraph.candidate_schemas import (
     CandidateRepairPatch,
     StoryGraphReviewCandidate,
 )
+from app.protocol.canonical import canonical_hash
 
 
 def _evidence() -> dict[str, object]:

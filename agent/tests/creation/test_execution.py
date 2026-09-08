@@ -3,10 +3,10 @@ from typing import Any
 
 import pytest
 
-from app.candidate_runtime.canonical import canonical_hash
 from app.creation.execution import ExecutionConflict, ExecutionStore, InvocationLease
 from app.creation.repository import Repository
 from app.modules.text_storyboard.harness import RELEASE_HASH, TextHarness
+from app.protocol.canonical import canonical_hash
 from app.text_contract.task import TextTask
 from tests.creation.test_repository import new_command
 from tests.unit.text_storyboard_samples import sample

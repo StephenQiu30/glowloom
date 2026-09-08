@@ -6,7 +6,6 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from app.candidate_runtime.canonical import canonical_hash
 from app.candidate_runtime.schemas import (
     EpisodeAnalysisStageInput,
     EpisodeReconciliationStageInput,
@@ -19,8 +18,11 @@ from app.modules.storygraph.candidate_schemas import (
     EpisodeReconciliationCandidate,
 )
 from app.modules.storygraph.harness import (
-    CodexSchemaInvalid,
     normalize_episode_candidate_evidence,
+)
+from app.protocol.canonical import canonical_hash
+from app.reasoning.codex import (
+    CodexSchemaInvalid,
 )
 
 
