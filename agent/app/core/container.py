@@ -55,7 +55,6 @@ class AgentRuntime:
                 self.settings.temporal_address,
                 namespace=self.settings.temporal_namespace,
                 tls=self.settings.temporal_tls,
-                lazy=True,
             )
         worker_settings = WorkerSettings.from_environment()
         self.dispatcher = Dispatcher(self.repository, TemporalStarter(self.temporal))
