@@ -370,6 +370,12 @@ InputSnapshot 的输入变化、用户要求新创意候选或改稿产生新 ge
 
 大产物先写不可变对象并确认可读，再提交数据库引用/Outbox；提交失败的孤儿对象按保留策略回收。不得先发布 ready 再上传媒体。
 
+2026-09-08 第二实施切片先落地可信调用 Attempt 账：新增独立追加迁移 `text-attempts`，每次新领取原子写入 attempt_id、attempt_no、原始 fence、输入 hash、开始/执行截止/租约截止时间，并与步骤当前尝试指针及调用额度一并提交。有效返回将尝试转为 succeeded，并在同一事务绑定草案和结果 Outbox；失联、取消或租约过期转为 unknown，保留已占用额度。过期只撤销步骤写入权，不改写原尝试 fence；终态和尝试身份不可重写。
+
+旧步骤不补造 Attempt，当前尝试指针保持空；查询明确返回 history_origin=unavailable。新记录为 recorded，租约截止已经过去但尚未对账时单列 lease_expired，不能把它当成允许重试。此切片不新增自动重试或已付费调用的重新领取权限，也不把 Attempt 账称为已完成 DispatchEnvelope、运行取消或完整 Manifest。
+
+新增签名 GET `/internal/creation/commands/{command_id}/steps/{step_id}/attempts`，沿用命令入口的精确 path/method/body 签名、空请求体和查询串拒绝规则；校验步骤所属运行。只返回尝试身份、状态、摘要、时间及结果引用，不返回原稿、提示词或候选正文。旧 execution/draft 响应保持原字段，Go 公共 API 与画布后续按独立合同接入。
+
 ### 8.3 动态展开与部分结果
 
 运行接受后先展示“分集确认→逐集解析集合→总册→逐场导演集合”等已知阶段。尚不知道集/场数时用动态占位，不预造正式 ID。收到合法采纳回执后，原子追加 StepInstances、集合计数和 PlanExpansion 事件。

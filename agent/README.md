@@ -93,3 +93,13 @@ uv export --locked --extra creation --no-dev --no-hashes --no-emit-project --out
 `app.creation.execution.ExecutionStore` 冻结运行调用额度和 Skill release，持久保存步骤输入、尝试 fence、unknown 用量、草案、OutputBinding 与 result_ready Outbox。相同输入读取已保存结果；过期尝试不会自动重新调用模型。保存结果时在可信层重新检查来源、候选摘要及覆盖，草案和输出引用在同一事务提交。`app/text_contract` 为两种镜像共享的纯合同，不包含 Skill 或推理执行能力。
 
 `text-execution` 是追加迁移，不改写原 command-acceptance 的校验和。升级后须先显式执行迁移再启动可信服务；现有业务库未自动迁移。当前存储仅完成组件级接线与本机数据库测试，尚未暴露执行入口、投递结果事件或注册生产 Workflow，也不能替代 Go 的当前权限与四道审批门。
+
+## 执行尝试记录
+
+可信执行层新增 `text-attempts` 追加迁移，发布前需显式执行 `python -m app.creation.migrate`，启动只检查迁移而不执行 DDL。运行角色对 `creation_attempts` 需要 SELECT/INSERT/UPDATE，不授予 DELETE；迁移由专用 schema owner 执行。已有迁移文本与 checksum 不变。
+
+每次新领取都会在同一事务保存尝试身份、原始 fence、输入摘要、开始/执行截止/租约截止时间、步骤指针和调用额度。成功时，尝试终态、草案、输出绑定和结果 Outbox 一并提交；数据库约束保证事件引用属于同一步骤和尝试的草案。失联/取消/过期记录为 unknown，保留已占用额度，不自动再次调用模型。终态和尝试身份不可重写。
+
+签名 GET `/internal/creation/commands/{command_id}/steps/{step_id}/attempts` 只接受空正文和无查询串的精确路径请求，返回 `creation-attempt-history-production`。响应含 `history_origin`、`current_attempt_id` 和按 attempt_no 排序的 `attempts`：每项包括 attempt_id、fence、input_hash、状态、时间、结果摘要、错误码及 unknown 用量。运行与步骤必须匹配；不会返回原稿、提示词或候选正文。它尚未接入 Go 公共 API 或画布。
+
+旧步骤返回 `history_origin=unavailable` 和空尝试列表；不会伪造曾经的执行或消费记录。新步骤为 recorded。`running` 且 `lease_expired=true` 表示已过租约但仍待对账，不能按可重试理解；下一次原身份恢复会将过期步骤和原尝试原子转为 unknown。本轮未开放人工重做或自动新增 Attempt 的接口，也未改变已发布的 execution/draft 响应字段。
