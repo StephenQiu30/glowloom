@@ -178,7 +178,7 @@ func Load() (Config, error) {
 			return Config{}, errors.New("CREATION_AGENT_URL must be a valid service origin")
 		}
 		parsed, _ := url.Parse(creationURL)
-		dockerPeer := creationDockerNetwork && creationURL == "http://creation-api:8788"
+		dockerPeer := creationDockerNetwork && creationURL == "http://agent:8787"
 		if !dockerPeer && parsed.Scheme != "https" && parsed.Hostname() != "localhost" && (net.ParseIP(parsed.Hostname()) == nil || !net.ParseIP(parsed.Hostname()).IsLoopback()) {
 			return Config{}, errors.New("creation agent requires HTTPS outside loopback")
 		}

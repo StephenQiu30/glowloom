@@ -40,7 +40,7 @@ func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t 
 		t.Fatal("service Compose is missing Backend")
 	}
 	backendBlock := base[backendStart:]
-	if backendEnd := strings.Index(backendBlock, "\n  harness:"); backendEnd > 0 {
+	if backendEnd := strings.Index(backendBlock, "\n  agent:"); backendEnd > 0 {
 		backendBlock = backendBlock[:backendEnd]
 	}
 	if strings.Contains(backendBlock, "depends_on:") {

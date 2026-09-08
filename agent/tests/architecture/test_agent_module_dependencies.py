@@ -13,7 +13,7 @@ def test_shared_contracts_and_reasoning_do_not_depend_on_runtime_layers() -> Non
         "protocol": ("app.candidate_runtime", "app.creation", "app.modules", "app.reasoning"),
         "text_contract": ("app.candidate_runtime", "app.creation", "app.modules", "app.reasoning"),
         "reasoning": ("app.candidate_runtime", "app.creation", "app.modules"),
-        "creation": ("app.candidate_runtime", "app.modules", "app.reasoning"),
+        "creation": ("app.modules", "app.reasoning"),
         "modules/text_storyboard": (
             "app.candidate_runtime",
             "app.creation",
@@ -35,16 +35,23 @@ def test_shared_contracts_and_reasoning_do_not_depend_on_runtime_layers() -> Non
                 ), (path, imports)
 
 
-def test_trusted_image_imports_with_only_its_declared_source_packages(tmp_path: Path) -> None:
+def test_agent_image_contains_trusted_and_candidate_source_packages(tmp_path: Path) -> None:
     import shutil
 
-    image = (ROOT / "Dockerfile.creation").read_text()
-    assert "agent/app/candidate_runtime" not in image
-    assert "agent/app/reasoning" not in image
+    image = (ROOT / "Dockerfile").read_text()
+    assert "agent/app/candidate_runtime" in image
+    assert "agent/app/reasoning" in image
     target = tmp_path / "app"
     target.mkdir()
     shutil.copyfile(ROOT / "app/__init__.py", target / "__init__.py")
-    for package in ("protocol", "text_contract", "creation"):
+    for package in (
+        "protocol",
+        "text_contract",
+        "creation",
+        "candidate_runtime",
+        "modules",
+        "reasoning",
+    ):
         assert f"agent/app/{package} ./app/{package}" in image
         shutil.copytree(
             ROOT / "app" / package, target / package, ignore=shutil.ignore_patterns("__pycache__")

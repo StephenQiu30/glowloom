@@ -11,6 +11,9 @@ from psycopg import Error as DatabaseError
 from temporalio.client import Client
 from temporalio.service import RPCError
 
+from app.candidate_runtime.api import healthz as candidate_healthz
+from app.candidate_runtime.api import router as candidate_router
+from app.candidate_runtime.api import verify_bundles
 from app.creation.attempt_api import install_attempt_routes
 from app.creation.authorization import HEADER, InvalidAuthorization, verify_authorization
 from app.creation.config import Settings
@@ -20,6 +23,7 @@ from app.creation.execution import ExecutionConflict, ExecutionStore
 from app.creation.manifest_api import install_manifest_routes
 from app.creation.repository import CommandConflict, Repository, SchemaMismatch
 from app.creation.temporal import TemporalStarter
+from app.creation.worker import run_worker
 
 MAX_COMMAND_BYTES = 16384
 
@@ -73,7 +77,9 @@ def create_app(
         return JSONResponse(receipt.model_dump(mode="json", by_alias=True))
 
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        response = await candidate_healthz()
+        response["service"] = "lanverse-agent"
+        return response
 
     async def execution_identity(command_id: str, request: Request) -> dict[str, str]:
         raw = await authorized_body(request)
@@ -217,6 +223,48 @@ def create_configured_app() -> FastAPI:
             task.cancel()
             with suppress(asyncio.CancelledError):
                 await task
+
+    app.router.lifespan_context = lifespan
+    return app
+
+
+def create_agent_app() -> FastAPI:
+    """Build the single Agent service from trusted orchestration and Harness routes."""
+
+    app = create_configured_app()
+    app.include_router(candidate_router)
+    creation_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
+        async with creation_lifespan(application):
+            verify_bundles()
+            stop = asyncio.Event()
+            worker_ready = asyncio.Event()
+            worker_task = asyncio.create_task(
+                run_worker(stop, worker_ready), name="agent-temporal-worker"
+            )
+            try:
+                ready_wait = asyncio.create_task(worker_ready.wait(), name="agent-worker-ready")
+                done, _ = await asyncio.wait(
+                    {ready_wait, worker_task}, timeout=30, return_when=asyncio.FIRST_COMPLETED
+                )
+                ready_wait.cancel()
+                with suppress(asyncio.CancelledError):
+                    await ready_wait
+                if worker_task in done:
+                    worker_task.result()
+                if not done:
+                    raise TimeoutError("Agent Temporal Worker did not become ready")
+                yield
+            finally:
+                stop.set()
+                try:
+                    await asyncio.wait_for(asyncio.shield(worker_task), timeout=30)
+                except TimeoutError:
+                    worker_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await worker_task
 
     app.router.lifespan_context = lifespan
     return app

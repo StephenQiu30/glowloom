@@ -123,9 +123,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	for _, required := range []string{
 		"container_name: lanverse-frontend",
 		"container_name: lanverse-backend",
-		"container_name: lanverse-agent-harness",
-		"container_name: lanverse-agent-creation-api",
-		"container_name: lanverse-agent-creation-worker",
+		"container_name: lanverse-agent",
 	} {
 		if !strings.Contains(compose, required) {
 			t.Errorf("service Compose is missing the stable single-instance container name %q", required)

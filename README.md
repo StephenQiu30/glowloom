@@ -12,7 +12,7 @@ Go lanverse Backend（唯一 Binary / 唯一业务 Writer）
         ├─────────→ MinIO（私有对象字节）
         ├─────────→ Temporal（内置 Workflow Runtime）
         ├─────────→ Kafka（内置 Event Runtime）→ Elasticsearch（业务检索投影）
-        └─────────→ Python Creation / Harness ──→ 容器内 Codex CLI
+        └─────────→ Python Agent 服务（编排 + Harness）─→ 容器内 Codex CLI
 
 JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 ```
@@ -20,7 +20,7 @@ JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 - `frontend/`：Next.js 创作工作台，只读取服务端事实并提交人工决议。
 - `backend/`：唯一公共业务 API 与唯一业务 Writer；认证、项目、剧本、制作圣经、分集、结构、分镜、正式镜头、导出和持久任务都在此实现。
 - `backend/cmd/main.go`：唯一 Go 启动入口；同一 `lanverse` 进程装配 API、Workflow 与 Event 三个职责运行时，不创建 Worker Binary 或 Compose 服务。
-- `agent/`：可信 Creation API/Worker 管理独立运行库与 Temporal 编排；私有 Harness 执行结构化 Codex 调用，不接收数据库或对象存储凭据。正式业务事实仍由 Go 写入。
+- `agent/`：一个 Python Agent 服务，内部包含 Creation 编排、运行库、失败恢复和受限 Harness 模块；正式业务事实仍由 Go 写入，模型子进程不会继承数据库或平台凭据。
 - `backend/internal/platform/database/model`：唯一 GORM Model Catalog 与表结构事实源。
 - `backend/api/openapi/lanverse-public-api.json`：唯一公共 REST 契约源。
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/candidate_runtime/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
@@ -52,16 +52,16 @@ docker compose ps
 访问前端 <http://127.0.0.1:8123>，后端 <http://127.0.0.1:8686>。查看应用日志：
 
 ```bash
-docker compose logs --tail=50 backend frontend
+docker compose logs --tail=50 backend frontend agent
 ```
 
-默认只启动应用：Frontend、Backend，以及剧本解析必需的 Harness、Creation API 和 Creation Worker。Go API、Workflow、Event Runtime 共用一个 Backend 容器；Agent 保持 Docker 运行，私有端口不对宿主机发布。
+默认只启动三个应用服务：Frontend、Backend 和 Agent。Go API、Workflow、Event Runtime 共用一个 Backend 容器；Agent 在同一容器内提供命令 API、Temporal 编排和 Harness 执行，私有端口不对宿主机发布。
 
-这些都是单实例服务，Docker Desktop 中显示为 `lanverse-frontend`、`lanverse-backend`、`lanverse-agent-harness`、`lanverse-agent-creation-api` 和 `lanverse-agent-creation-worker`，不使用 Compose 自动追加的 `-1` 实例序号。容器间仍使用职责服务名通信。
+这些都是单实例服务，Docker Desktop 中显示为 `lanverse-frontend`、`lanverse-backend` 和 `lanverse-agent`，不使用 Compose 自动追加的 `-1` 实例序号。Agent 内部模块不是额外容器，Backend 通过 `agent:8787` 访问统一入口。
 
 PostgreSQL、MinIO、Temporal、Kafka、ES 和 Logstash 直接使用本机已启动的服务，容器通过 `host.docker.internal` 访问。填写真实地址和认证信息即可；本地启动不创建基础设施、初始化索引或清除历史数据。MinIO 的内部地址与浏览器访问地址分别使用 `MINIO_ENDPOINT` 和 `MINIO_PUBLIC_ENDPOINT`。
 
-Creation 使用已迁移的独立数据库、独立签名密钥和已审阅的冻结 SkillRelease 摘要。Harness 只读挂载已登录 Codex 的 `auth.json`；配置说明与恢复约束见 [部署设计](docs/design/0020-文本解析失败诊断与受控恢复设计.md)。媒体供应商配置需要另行填写本机 root-key 文件路径。
+Agent 使用已迁移的独立数据库、独立签名密钥和已审阅的冻结 SkillRelease 摘要，只读挂载已登录 Codex 的 `auth.json`；配置说明与恢复约束见 [Agent 单服务设计](docs/design/0021-Agent单服务架构调整设计.md) 和 [部署设计](docs/design/0020-文本解析失败诊断与受控恢复设计.md)。媒体供应商配置需要另行填写本机 root-key 文件路径。
 
 CI 的一次性依赖与连接覆盖仅保存在 `deploy/ci/`，不会被本地启动加载。镜像部署覆盖位于 `deploy/compose.production.yml`，也不包含基础设施服务。
 

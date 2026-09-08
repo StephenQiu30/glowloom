@@ -36,17 +36,17 @@ func TestDockerCreationPeerRequiresExplicitLocalNetworkPolicy(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgresql://test:test@localhost/test")
 	t.Setenv("CREATION_AGENT_SECRET", strings.Repeat("x", 32))
 	t.Setenv("CREATION_DOCKER_NETWORK", "true")
-	t.Setenv("CREATION_AGENT_URL", "http://creation-api:8788")
+	t.Setenv("CREATION_AGENT_URL", "http://agent:8787")
 	if _, err := config.Load(); err != nil {
 		t.Fatal(err)
 	}
-	for _, endpoint := range []string{"http://remote.example:8788", "http://creation-api:1234", "http://creation-api.evil:8788"} {
+	for _, endpoint := range []string{"http://remote.example:8788", "http://agent:1234", "http://agent.evil:8787"} {
 		t.Setenv("CREATION_AGENT_URL", endpoint)
 		if _, err := config.Load(); err == nil {
 			t.Fatal("arbitrary plaintext endpoint accepted")
 		}
 	}
-	t.Setenv("CREATION_AGENT_URL", "http://creation-api:8788")
+	t.Setenv("CREATION_AGENT_URL", "http://agent:8787")
 	t.Setenv("CREATION_DOCKER_NETWORK", "false")
 	if _, err := config.Load(); err == nil {
 		t.Fatal("implicit Docker transport accepted")

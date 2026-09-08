@@ -14,6 +14,15 @@ services:
       LOGSTASH_ADDRESS: logstash:5000
     networks:
       - ci-dependencies
+  agent:
+    environment:
+      CREATION_DATABASE_URL: postgresql://postgres:lanverse-development-only@postgres:5432/lanverse_creation
+      CREATION_PLATFORM_URL: http://backend:8686
+      CREATION_HARNESS_URL: http://agent:8787
+      CREATION_TEMPORAL_ADDRESS: temporal:7233
+      CREATION_DOCKER_NETWORK: "true"
+    networks:
+      - ci-dependencies
 networks:
   ci-dependencies:
     external: true

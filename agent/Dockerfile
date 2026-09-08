@@ -30,8 +30,8 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && codex --version \
     && npm cache clean --force
 
-COPY agent/requirements.txt ./requirements.txt
-RUN python -m pip install --requirement requirements.txt
+COPY agent/requirements-creation.txt ./requirements-creation.txt
+RUN python -m pip install --requirement requirements-creation.txt
 
 COPY --chown=lanverse:lanverse agent/skills ./skills
 COPY --chown=lanverse:lanverse agent/app/__init__.py agent/app/main.py ./app/
@@ -39,6 +39,7 @@ COPY --chown=lanverse:lanverse agent/app/candidate_runtime ./app/candidate_runti
 COPY --chown=lanverse:lanverse agent/app/modules ./app/modules
 COPY --chown=lanverse:lanverse agent/app/reasoning ./app/reasoning
 COPY --chown=lanverse:lanverse agent/app/protocol ./app/protocol
+COPY --chown=lanverse:lanverse agent/app/creation ./app/creation
 
 COPY --chown=lanverse:lanverse agent/app/text_contract ./app/text_contract
 RUN mkdir -p /home/lanverse/.codex && chown lanverse:lanverse /home/lanverse/.codex
@@ -47,6 +48,6 @@ USER lanverse
 EXPOSE 8787
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=12 \
-    CMD curl --fail --silent http://127.0.0.1:8787/healthz >/dev/null || exit 1
+    CMD curl --fail --silent http://127.0.0.1:8787/readyz >/dev/null || exit 1
 
-CMD ["uvicorn", "app.candidate_runtime.api:app", "--host", "0.0.0.0", "--port", "8787"]
+CMD ["uvicorn", "app.creation.api:create_agent_app", "--factory", "--host", "0.0.0.0", "--port", "8787"]

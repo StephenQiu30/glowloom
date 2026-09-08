@@ -97,7 +97,7 @@ def test_docker_transport_is_explicit_and_limited_to_compose_peers(
     assert Settings.from_environment().temporal_address == "host.docker.internal:7233"
     for key, value in [
         ("CREATION_PLATFORM_URL", "http://backend:8686"),
-        ("CREATION_HARNESS_URL", "http://harness:8787"),
+        ("CREATION_HARNESS_URL", "http://agent:8787"),
     ]:
         monkeypatch.setenv(key, value)
         assert trusted_url(key) == value

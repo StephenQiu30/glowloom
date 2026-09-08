@@ -16,11 +16,13 @@ from app.creation.repository import Repository
 from app.creation.workflow import TextStoryboardWorkflow
 
 
-async def run_worker() -> None:
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for signum in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(signum, stop.set)
+async def run_worker(stop: asyncio.Event | None = None, ready: asyncio.Event | None = None) -> None:
+    if stop is None:
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(signum, stop.set)
+    assert stop is not None
     settings = WorkerSettings.from_environment()
     repository = Repository(settings.base.database_url)
     await repository.ready()
@@ -47,6 +49,8 @@ async def run_worker() -> None:
             graceful_shutdown_timeout=timedelta(seconds=settings.invocation_timeout_seconds + 20),
         )
         async with worker:
+            if ready is not None:
+                ready.set()
             await stop.wait()
 
 

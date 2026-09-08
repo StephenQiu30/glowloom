@@ -4,7 +4,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from app.main import app as candidate_app
+from app.candidate_runtime.api import app as candidate_app
 
 
 @pytest.fixture

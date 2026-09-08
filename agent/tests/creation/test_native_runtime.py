@@ -46,6 +46,11 @@ async def agent_process(repository: Repository, address: str, queue: str) -> Asy
         env.update(
             CREATION_DATABASE_URL=repository.dsn,
             CREATION_AGENT_SECRET=SECRET,
+            AGENT_EXECUTION_SECRET="native-agent-execution-secret-with-32-bytes",
+            CREATION_HARNESS_SECRET="native-agent-harness-secret-with-32-bytes",
+            CREATION_PLATFORM_URL="http://127.0.0.1:8686",
+            CREATION_HARNESS_URL="http://127.0.0.1:8787",
+            CREATION_TEXT_RELEASE_HASH="352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb",
             CREATION_TEMPORAL_ADDRESS=address,
             CREATION_TASK_QUEUE=queue,
         )
@@ -53,7 +58,7 @@ async def agent_process(repository: Repository, address: str, queue: str) -> Asy
             sys.executable,
             "-m",
             "uvicorn",
-            "app.creation.api:create_configured_app",
+            "app.creation.api:create_agent_app",
             "--factory",
             "--fd",
             str(listener.fileno()),

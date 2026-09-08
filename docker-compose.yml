@@ -5,24 +5,22 @@ x-application: &application
   restart: unless-stopped
   security_opt: ["no-new-privileges:true"]
 
-x-creation-environment: &creation-environment
+x-agent-environment: &agent-environment
+  AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:?Set the Harness authorization secret}
+  CODEX_HOME: /home/lanverse/.codex
   CREATION_DATABASE_URL: ${CREATION_DATABASE_URL:?Set the existing dedicated Creation database URL}
   CREATION_AGENT_SECRET: ${CREATION_AGENT_SECRET:?Set the independent Creation authorization secret}
+  CREATION_PLATFORM_URL: http://backend:8686
+  CREATION_HARNESS_URL: http://agent:8787
+  CREATION_HARNESS_SECRET: ${AGENT_EXECUTION_SECRET:?Set the Harness authorization secret}
+  CREATION_TEXT_RELEASE_HASH: ${CREATION_TEXT_RELEASE_HASH:?Set the reviewed frozen text release hash}
+  CREATION_CALL_LIMIT: ${CREATION_CALL_LIMIT:-1000}
+  CREATION_INVOCATION_TIMEOUT_SECONDS: ${CREATION_INVOCATION_TIMEOUT_SECONDS:-900}
   CREATION_TEMPORAL_ADDRESS: host.docker.internal:7233
   CREATION_TEMPORAL_NAMESPACE: ${CREATION_TEMPORAL_NAMESPACE:-default}
   CREATION_TASK_QUEUE: ${CREATION_TASK_QUEUE:-lanverse-creation-text}
   CREATION_TEMPORAL_TLS: "false"
   CREATION_DOCKER_NETWORK: "true"
-
-x-creation-service: &creation-service
-  <<: *application
-  build:
-    context: .
-    dockerfile: agent/Dockerfile.creation
-  image: lanverse/creation:local
-  networks: [runtime]
-  extra_hosts: ["host.docker.internal:host-gateway"]
-  stop_grace_period: 960s
 
 services:
   frontend:
@@ -66,11 +64,11 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Lanverse}
-      CREATION_AGENT_URL: http://creation-api:8788
+      CREATION_AGENT_URL: http://agent:8787
       CREATION_DOCKER_NETWORK: "true"
       CREATION_AGENT_RELOCATED_FROM: ${CREATION_AGENT_RELOCATED_FROM:-}
       CREATION_AGENT_SECRET: ${CREATION_AGENT_SECRET:-}
-      AGENT_URL: http://harness:8787
+      AGENT_URL: http://agent:8787
       AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:-development-only-agent-execution-secret}
       AGENT_RUNTIME_IMAGE_DIGEST: ${AGENT_RUNTIME_IMAGE_DIGEST:-sha256:352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb}
       AGENT_RUNTIME_ADDITIONAL_REVISIONS: ${AGENT_RUNTIME_ADDITIONAL_REVISIONS:-[]}
@@ -114,16 +112,14 @@ services:
       retries: 24
       start_period: 10s
 
-  harness:
+  agent:
     <<: *application
-    container_name: lanverse-agent-harness
+    container_name: lanverse-agent
     build:
       context: .
       dockerfile: agent/Dockerfile
-    image: lanverse/harness:local
-    environment:
-      AGENT_EXECUTION_SECRET: ${AGENT_EXECUTION_SECRET:?Set the Harness authorization secret}
-      CODEX_HOME: /home/lanverse/.codex
+    image: lanverse/agent:local
+    environment: *agent-environment
     volumes:
       - codex-state:/home/lanverse/.codex
       - type: bind
@@ -134,33 +130,6 @@ services:
           create_host_path: false
     networks: [runtime]
     stop_grace_period: 960s
-
-  creation-api:
-    <<: *creation-service
-    container_name: lanverse-agent-creation-api
-    environment: *creation-environment
-
-  creation-worker:
-    <<: *creation-service
-    container_name: lanverse-agent-creation-worker
-    command: ["python", "-m", "app.creation.worker"]
-    environment:
-      <<: *creation-environment
-      CREATION_PLATFORM_URL: http://backend:8686
-      CREATION_HARNESS_URL: http://harness:8787
-      CREATION_HARNESS_SECRET: ${AGENT_EXECUTION_SECRET:?Set the Harness authorization secret}
-      CREATION_TEXT_RELEASE_HASH: ${CREATION_TEXT_RELEASE_HASH:?Set the reviewed frozen text release hash}
-      CREATION_CALL_LIMIT: ${CREATION_CALL_LIMIT:-1000}
-      CREATION_INVOCATION_TIMEOUT_SECONDS: ${CREATION_INVOCATION_TIMEOUT_SECONDS:-900}
-    healthcheck:
-      disable: true
-    depends_on:
-      backend:
-        condition: service_healthy
-      creation-api:
-        condition: service_healthy
-      harness:
-        condition: service_healthy
 
 networks:
   edge:

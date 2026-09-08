@@ -67,7 +67,7 @@ def trusted_url(name: str) -> str:
     parsed = urlsplit(value)
     docker_origins = {
         "CREATION_PLATFORM_URL": "http://backend:8686",
-        "CREATION_HARNESS_URL": "http://harness:8787",
+        "CREATION_HARNESS_URL": "http://agent:8787",
     }
     docker_peer = docker_network() and value.rstrip("/") == docker_origins.get(name)
     if (

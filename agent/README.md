@@ -7,29 +7,29 @@
 | 目录 | 职责与依赖 |
 | --- | --- |
 | `app/protocol/` | 跨进程 canonical JSON/摘要，纯编码合同，不依赖运行层 |
-| `app/text_contract/` | 文本任务/结果、来源与专业检查、短期调用签名；两种进程共享 |
+| `app/text_contract/` | 文本任务/结果、来源与专业检查、短期调用签名；可信编排与受限执行共享 |
 | `app/reasoning/` | Codex 进程适配器：隔离、Schema、时间/字节预算、取消及退出等待；不依赖业务模块 |
 | `app/modules/` | StoryGraph、文本分镜等专业上下文与领域规则；文本模块不依赖旧 StoryGraph 执行器 |
-| `app/candidate_runtime/` | 受限 HTTP 边界与能力就绪检查，调用专业 Harness，不导入可信存储/编排 |
-| `app/creation/` | 可信命令、执行存储与 Temporal 启动交接；只通过 HTTP 调用受限进程 |
+| `app/candidate_runtime/` | 受限 HTTP 边界与能力就绪检查，调用专业 Harness |
+| `app/creation/` | 可信命令、执行存储、Temporal 编排、失败恢复和 Agent 服务组装 |
 
-可信镜像不包含 `candidate_runtime`、`reasoning` 或 `modules`。模块移动已同步内部导入和 Dockerfile，不保留旧路径转发；跨语言编码和专业发布摘要保持原合同。实施与检查见 [Agent 服务实施计划](../docs/plan/0015-Agent服务实施计划.md)。
+这些模块部署在一个 Agent 镜像和一个容器中；模块边界仍由导入、凭据白名单和 HTTP 合同维护，不把模块误拆成多个产品服务。跨语言编码和专业发布摘要保持原合同。实施与检查见 [Agent 单服务设计](../docs/design/0021-Agent单服务架构调整设计.md)。
 
 受限服务新增 `GET /readyz`：逐项返回 StoryGraph、SceneAnalysis、文本分镜的安装发布摘要，以及本地 Codex 可执行文件、内部签名配置是否就绪。任一项缺失/漂移返回 503 与明确错误码，不返回路径或密钥；检查不会运行模型。该接口只证明本地候选执行前置条件，不证明模型认证、真实推理、Temporal 或正式采纳可用。
 
 文本调用签名的唯一实现位于 `app.text_contract.authorization`，受限 HTTP 使用它，可信调用方从此处导入。Codex 同时发送提示词并读取 stdout/stderr，输出超限不会被堵塞的 stdin 拖到总超时；异常会终止进程组并等待退出。结构化结果按字节预算读取普通文件，拒绝符号链接、重复 JSON 键和非有限数字，不将不明确的输出作为有效候选。
 
-| 进程 | 入口 | 当前职责 |
+| 模块 | 入口 | 当前职责 |
 | --- | --- | --- |
-| 受限候选生成 | `app.candidate_runtime.api:app` | StoryGraph/SceneAnalysis Stage，以及分集→分场解析→设定→文字分镜四类有来源的 Harness 任务 |
-| 可信命令接受 | `app.creation.api:create_configured_app --factory` | Go 命令鉴权、持久回执、启动 Outbox、Temporal 原身份对账、运行与草案读取 |
-| 可信创作 Worker | `python -m app.creation.worker` | 冻结源读取、受限 Harness 调用、持久草案、四道人审门与恢复 |
+| Agent 服务 | `app.creation.api:create_agent_app --factory` | 统一 HTTP、命令鉴权、持久回执、Temporal 编排、运行与草案读取、Harness 调用 |
+| Candidate Runtime | `app.candidate_runtime` | 同一 Agent 内部的 StoryGraph/SceneAnalysis/Text Harness 路由和 Codex 执行 |
+| Creation Workflow | `app.creation.worker` | 同一 Agent 进程内的 Temporal Worker、冻结源读取、草案保存、人工门等待与恢复 |
 
-`accepted` 表示命令数据库已提交，`started` 表示已核验 Temporal 执行身份；两者都不表示已生成或正式采纳文本。可信 Worker 实际注册四阶段文本 Workflow，正式采纳由 Go 人工门与业务 Owner 决定。部署匹配 Worker、Harness 和平台采纳桥前，保持 Go 的 `CREATION_AGENT_URL` 为空。
+`accepted` 表示命令数据库已提交，`started` 表示已核验 Temporal 执行身份；两者都不表示已生成或正式采纳文本。Agent 实际注册四阶段文本 Workflow，正式采纳由 Go 人工门与业务 Owner 决定。`CREATION_AGENT_URL` 和 `AGENT_URL` 在 Docker 中都指向同一个 `agent:8787` origin。
 
 ## 文本与分镜 Harness
 
-`POST /internal/text-storyboard/invocations` 是新增的受限内部入口，挂载在现有候选进程；不会创建额外业务服务。四类 stage 为 `map_manuscript`、`analyze_episode`、`build_world`、`direct_scene`。专业包为 `agent/skills/text-storyboard`，与旧包独立冻结；发布摘要可从 `app.modules.text_storyboard.harness.RELEASE_HASH` 读取。包文件、输入/输出 Schema 和执行上限参与摘要。
+`POST /internal/text-storyboard/invocations` 是统一 Agent 内部的受限入口，不创建额外业务服务。四类 stage 为 `map_manuscript`、`analyze_episode`、`build_world`、`direct_scene`。专业包为 `agent/skills/text-storyboard`，与旧包独立冻结；发布摘要可从 `app.modules.text_storyboard.harness.RELEASE_HASH` 读取。包文件、输入/输出 Schema 和执行上限参与摘要。
 
 调用者使用 `TextTask` 固定 invocation_id、SourceEdition（源版本、完整原文及 UTF-8 SHA-256）、release_hash、当前 scope 和必要上游草案。`analyze_episode` 只读取选定集，`build_world` 拒绝未完成全稿解析的输入，`direct_scene` 只装载当前场与经过披露过滤的提及。原文不再规范化；含重复短语的 Evidence 必须显式定位 occurrence，代码补出 Unicode code point 偏移和片段 hash。人物/地点/道具提及含 presence，台词中仅被提及的人物不能直接入画。
 
@@ -59,7 +59,7 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 | `CREATION_TEMPORAL_TLS` | 默认 `false`；非 loopback 地址必须为 `true` |
 | `CREATION_TASK_QUEUE` | 默认 `lanverse-creation-text`，首次接受后固定保存 |
 | `CREATION_PLATFORM_URL` | Worker 必填，Go 平台 origin；HTTPS，或 loopback HTTP；不接受任意路径、userinfo、query |
-| `CREATION_HARNESS_URL` | Worker 必填，独立受限 Harness origin；同上 |
+| `CREATION_HARNESS_URL` | Worker 必填，统一 Agent 自身的受限 Harness origin；Docker 中为 `http://agent:8787` |
 | `CREATION_HARNESS_SECRET` | Worker 必填，与 Harness 的 `AGENT_EXECUTION_SECRET` 对应，必须独立于平台交接密钥 |
 | `CREATION_TEXT_RELEASE_HASH` | Worker 必填，显式固定已发布文本 Skill 摘要；不能从可信镜像导入专业 Harness |
 | `CREATION_CALL_LIMIT` | Worker 调用总上限，默认 1000，范围 1–1000；运行首次使用时冻结，恢复不能重置 |
@@ -69,9 +69,7 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 
 ```sh
 .venv/bin/python -m app.creation.migrate
-.venv/bin/uvicorn app.creation.api:create_configured_app --factory --host 127.0.0.1 --port 8788
-# 另一个可信应用进程，使用相同专属数据库与固定 Task Queue：
-.venv/bin/python -m app.creation.worker
+.venv/bin/uvicorn app.creation.api:create_agent_app --factory --host 127.0.0.1 --port 8787
 ```
 
 初次迁移要求空的独立数据库，重复迁移核对 checksum。应用启动只检查迁移，不执行 DDL。`/healthz` 是进程存活检查；`/readyz` 只证明持久接受能力就绪，不证明 Worker、模型或业务主链就绪。
@@ -91,7 +89,7 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 
 本机集成测试运行短生命周期 Agent HTTP 进程，使用真实 Go HTTP 客户端和现有 Temporal，退出后关闭测试进程并终止精确的合成 Workflow。`tests/creation/test_workflow.py` 注册真实生产 Workflow 与 Activity，使用合成专业结果验证四道人工门、Worker 重启和草案复用；这些测试不调用真实模型。Temporal 测试历史由既有保留策略清理，不改其他 Workflow 或 Namespace。
 
-受限镜像继续使用 `Dockerfile` 和 `requirements.txt`；可信镜像使用 `Dockerfile.creation` 和 `requirements-creation.txt`，不含 Codex CLI、Skill 或 Harness 模块。可信依赖从唯一锁文件导出：
+Agent 服务使用一个 `Dockerfile` 和一个 `requirements-creation.txt`，同一镜像包含可信编排、Temporal Worker、受限 Harness 和 Codex CLI。可信依赖从唯一锁文件导出：
 
 ```sh
 uv export --locked --extra creation --no-dev --no-hashes --no-emit-project --output-file requirements-creation.txt
@@ -99,9 +97,9 @@ uv export --locked --extra creation --no-dev --no-hashes --no-emit-project --out
 
 ## 文本生产 Workflow 与持久恢复
 
-`app.creation.execution.ExecutionStore` 冻结运行调用额度和 Skill release，持久保存步骤输入、尝试 fence、unknown 用量、草案、OutputBinding 与 result_ready Outbox。相同输入读取已保存结果；过期尝试不会自动重新调用模型。保存结果时在可信层重新检查来源、候选摘要及覆盖，草案和输出引用在同一事务提交。`app/text_contract` 为两种镜像共享的纯合同，不包含 Skill 或推理执行能力。
+`app.creation.execution.ExecutionStore` 冻结运行调用额度和 Skill release，持久保存步骤输入、尝试 fence、unknown 用量、草案、OutputBinding 与 result_ready Outbox。相同输入读取已保存结果；过期尝试不会自动重新调用模型。保存结果时在可信层重新检查来源、候选摘要及覆盖，草案和输出引用在同一事务提交。`app/text_contract` 是同一 Agent 镜像内共享的纯合同，不包含 Skill 或推理执行能力。
 
-`text-execution`、`text-workflow` 与 `text-resume` 是追加迁移，不改写先前校验和。升级后须先显式迁移再启动可信服务；现有业务库不自动迁移。可信镜像已包含 Worker，单独运行时将镜像 command 设置为 `python -m app.creation.worker`，不添加 Codex、Skill 或模型认证挂载。
+`text-execution`、`text-workflow` 与 `text-resume` 是追加迁移，不改写先前校验和。升级后须先显式迁移再启动可信服务；现有业务库不自动迁移。统一 Agent 镜像已经包含 Worker，应用启动时在同一进程内运行 API、Dispatcher、Temporal Worker 和 Harness 路由；不添加第二个 Worker 容器。模型子进程仍只继承显式白名单。
 
 生产流程为冻结源 → 分集 → 平台人工门 → 全部分集解析 → 结构人工门 → 全稿设定 → 设定人工门 → 已选场文本分镜 → 分镜人工门。每次模型调用先从 Go 固定源桥重查权限、源版本与摘要，并检查前置正式采纳回执。结构门确定场范围，Worker 验证范围属于已采纳结构且剩余额度足够。Workflow History 仅携带范围标识与草案引用，完整源、任务和结果保存在 ExecutionStore。
 

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import APIRouter, FastAPI, Header, HTTPException
 from pydantic import ValidationError
 
 from app.candidate_runtime.grants import (
@@ -52,25 +52,15 @@ from app.reasoning.codex import (
 )
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+def verify_bundles() -> None:
     StoryGraphBundle().verify_installed_bundle()
     SceneAnalysisBundle().verify_installed_bundle()
-    yield
 
 
-app = FastAPI(
-    title="Lanverse Candidate Runtime",
-    docs_url=None,
-    redoc_url=None,
-    openapi_url=None,
-    lifespan=lifespan,
-)
-app.include_router(text_storyboard_router)
-app.include_router(readiness_router)
+router = APIRouter()
 
 
-@app.get("/healthz")
+@router.get("/healthz")
 async def healthz() -> dict[str, str]:
     bundle_hash = StoryGraphBundle().verify_installed_bundle()
     scene_analysis_bundle_hash = SceneAnalysisBundle().verify_installed_bundle()
@@ -82,7 +72,7 @@ async def healthz() -> dict[str, str]:
     }
 
 
-@app.post("/internal/storygraph/invocations", response_model=StoryGraphStageResult)
+@router.post("/internal/storygraph/invocations", response_model=StoryGraphStageResult)
 async def invoke(
     invocation: StoryGraphStageInvocation,
     execution_grant: str = Header(alias="X-Lanverse-Execution-Grant"),
@@ -167,7 +157,7 @@ def _failure(
     )
 
 
-@app.post(
+@router.post(
     "/internal/storygraph/scene-analysis/invocations", response_model=SceneAnalysisAttemptResult
 )
 async def invoke_scene_analysis(
@@ -325,3 +315,21 @@ def _scene_analysis_failure(
         authorization.authorization_hash,
     )
     return result
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+    verify_bundles()
+    yield
+
+
+router.include_router(text_storyboard_router)
+app = FastAPI(
+    title="Lanverse Candidate Runtime",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    lifespan=lifespan,
+)
+app.include_router(router)
+app.include_router(readiness_router)
