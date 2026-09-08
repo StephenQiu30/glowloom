@@ -6,6 +6,8 @@
 
 | 目录 | 职责与依赖 |
 | --- | --- |
+| `app/api/` | FastAPI 应用工厂、生命周期和内部能力路由组合；不拥有业务事实 |
+| `app/skills/` | 当前镜像内置 Skill 的显式注册和发布摘要校验；不下载或修改 Skill |
 | `app/protocol/` | 跨进程 canonical JSON/摘要，纯编码合同，不依赖运行层 |
 | `app/text_contract/` | 文本任务/结果、来源与专业检查、短期调用签名；可信编排与受限执行共享 |
 | `app/reasoning/` | Codex 进程适配器：隔离、Schema、时间/字节预算、取消及退出等待；不依赖业务模块 |
@@ -15,13 +17,13 @@
 
 这些模块部署在一个 Agent 镜像和一个容器中；模块边界仍由导入、凭据白名单和 HTTP 合同维护，不把模块误拆成多个产品服务。跨语言编码和专业发布摘要保持原合同。实施与检查见 [Agent 单服务设计](../docs/design/0021-Agent单服务架构调整设计.md)。
 
-受限服务新增 `GET /readyz`：逐项返回 StoryGraph、SceneAnalysis、文本分镜的安装发布摘要，以及本地 Codex 可执行文件、内部签名配置是否就绪。任一项缺失/漂移返回 503 与明确错误码，不返回路径或密钥；检查不会运行模型。该接口只证明本地候选执行前置条件，不证明模型认证、真实推理、Temporal 或正式采纳可用。
+受限服务的 `GET /readyz`：在统一 `app/skills/catalog.py` 注册表上逐项校验 StoryGraph、SceneAnalysis、文本分镜的安装发布摘要，并检查本地 Codex 可执行文件和内部签名配置。Agent 正式入口会先检查 Creation 存储，再检查 Skill 注册表；任一项缺失/漂移返回 503 与明确错误码，不返回路径或密钥；检查不会运行模型。该接口只证明本地候选执行前置条件，不证明模型认证、真实推理、Temporal 或正式采纳可用。
 
 文本调用签名的唯一实现位于 `app.text_contract.authorization`，受限 HTTP 使用它，可信调用方从此处导入。Codex 同时发送提示词并读取 stdout/stderr，输出超限不会被堵塞的 stdin 拖到总超时；异常会终止进程组并等待退出。结构化结果按字节预算读取普通文件，拒绝符号链接、重复 JSON 键和非有限数字，不将不明确的输出作为有效候选。
 
 | 模块 | 入口 | 当前职责 |
 | --- | --- | --- |
-| Agent 服务 | `app.creation.api:create_agent_app --factory` | 统一 HTTP、命令鉴权、持久回执、Temporal 编排、运行与草案读取、Harness 调用 |
+| Agent 服务 | `app.main:create_agent_app --factory` | 统一 HTTP、命令鉴权、持久回执、Temporal 编排、运行与草案读取、Harness 调用 |
 | Candidate Runtime | `app.candidate_runtime` | 同一 Agent 内部的 StoryGraph/SceneAnalysis/Text Harness 路由和 Codex 执行 |
 | Creation Workflow | `app.creation.worker` | 同一 Agent 进程内的 Temporal Worker、冻结源读取、草案保存、人工门等待与恢复 |
 
@@ -69,10 +71,10 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 
 ```sh
 .venv/bin/python -m app.creation.migrate
-.venv/bin/uvicorn app.creation.api:create_agent_app --factory --host 127.0.0.1 --port 8787
+.venv/bin/uvicorn app.main:create_agent_app --factory --host 127.0.0.1 --port 8787
 ```
 
-初次迁移要求空的独立数据库，重复迁移核对 checksum。应用启动只检查迁移，不执行 DDL。`/healthz` 是进程存活检查；`/readyz` 只证明持久接受能力就绪，不证明 Worker、模型或业务主链就绪。
+初次迁移要求空的独立数据库，重复迁移核对 checksum。应用启动只检查迁移，不执行 DDL。`/healthz` 是进程存活检查；`/readyz` 证明 Creation 存储和候选执行前置条件就绪，但不证明 Worker 已完成业务任务、模型推理成功或正式业务主链就绪。
 
 服务的 POST/GET 内部合同见设计第 11–12 节。POST 正文最多 16 KiB；拒绝重复 JSON 键、未知字段、非规范身份和签名不匹配。启动未知时以原身份退避；类型、队列或 memo 冲突持久阻塞。接受 12 小时后仍查不到 Temporal 历史的命令停止自动启动，需要依据原记录排障，不能通过换 ID 绕过。
 

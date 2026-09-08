@@ -11,9 +11,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.modules.storygraph.bundle import BundleInvalid, StoryGraphBundle
-from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
-from app.modules.text_storyboard.harness import RELEASE_HASH, TextSkill
+from app.skills.catalog import SkillCatalog, SkillUnavailable
 
 router = APIRouter()
 
@@ -29,7 +27,7 @@ def release_capability(key: str, expected: str, verify: Callable[[], str]) -> Ca
     try:
         if verify() != expected:
             raise ValueError("release drift")
-    except (BundleInvalid, OSError, ValueError):
+    except (SkillUnavailable, OSError, ValueError):
         return Capability(
             key=key, status="blocked", release_hash=expected, reason="skill_release_unavailable"
         )
@@ -38,18 +36,33 @@ def release_capability(key: str, expected: str, verify: Callable[[], str]) -> Ca
 
 @router.get("/readyz")
 def readiness() -> JSONResponse:
-    storygraph = StoryGraphBundle()
-    scene_analysis = SceneAnalysisBundle()
+    capabilities = collect_capabilities()
+    ready = all(item.status == "ready" for item in capabilities)
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={
+            "status": "ready" if ready else "blocked",
+            "scope": "installed_candidate_capabilities",
+            "capabilities": [item.model_dump(exclude_none=True) for item in capabilities],
+        },
+    )
+
+
+def candidate_runtime_ready() -> bool:
+    """Return whether all local candidate execution prerequisites are installed."""
+
+    return all(item.status == "ready" for item in collect_capabilities())
+
+
+def collect_capabilities() -> list[Capability]:
+    catalog = SkillCatalog()
     capabilities = [
         release_capability(
-            "storygraph", storygraph.manifest.skill_bundle_hash, storygraph.verify_installed_bundle
-        ),
-        release_capability(
-            "scene_analysis",
-            scene_analysis.manifest.skill_bundle_hash,
-            scene_analysis.verify_installed_bundle,
-        ),
-        release_capability("text_storyboard", RELEASE_HASH, TextSkill().release_hash),
+            registration.key,
+            registration.expected_hash,
+            lambda registration=registration: catalog.verify(registration.key),
+        )
+        for registration in catalog.registrations()
     ]
     executable = shutil.which(os.getenv("CODEX_BIN", "").strip() or "codex")
     capabilities.append(
@@ -67,12 +80,4 @@ def readiness() -> JSONResponse:
             reason=None if authorized else "execution_secret_unconfigured",
         )
     )
-    ready = all(item.status == "ready" for item in capabilities)
-    return JSONResponse(
-        status_code=200 if ready else 503,
-        content={
-            "status": "ready" if ready else "blocked",
-            "scope": "installed_candidate_capabilities",
-            "capabilities": [item.model_dump(exclude_none=True) for item in capabilities],
-        },
-    )
+    return capabilities

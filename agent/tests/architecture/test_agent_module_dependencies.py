@@ -39,12 +39,16 @@ def test_agent_image_contains_trusted_and_candidate_source_packages(tmp_path: Pa
     import shutil
 
     image = (ROOT / "Dockerfile").read_text()
+    assert "agent/app/api" in image
+    assert "agent/app/skills" in image
     assert "agent/app/candidate_runtime" in image
     assert "agent/app/reasoning" in image
     target = tmp_path / "app"
     target.mkdir()
     shutil.copyfile(ROOT / "app/__init__.py", target / "__init__.py")
     for package in (
+        "api",
+        "skills",
         "protocol",
         "text_contract",
         "creation",

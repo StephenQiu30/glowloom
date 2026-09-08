@@ -38,6 +38,7 @@ from app.reasoning.codex import (
     CodexSchemaInvalid,
     run_codex_process,
 )
+from app.skills.catalog import SkillCatalog
 
 
 class InvocationPolicyInvalid(CodexExecutionError):
@@ -56,7 +57,10 @@ class StoryGraphHarness:
         repository_root: Path | None = None,
     ) -> None:
         self.invocation = invocation
-        self.bundle = StoryGraphBundle(repository_root)
+        self.bundle = cast(
+            StoryGraphBundle,
+            SkillCatalog(repository_root).load("storygraph"),
+        )
         self._validate_runtime_policy(invocation.execution_policy)
         try:
             self.bundle.verify_installed_bundle()

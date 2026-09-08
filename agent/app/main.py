@@ -1,4 +1,4 @@
-from app.creation.api import create_agent_app
+from app.api.application import create_agent_app
 
 app = create_agent_app()
 

@@ -6,6 +6,7 @@ import os
 import shutil
 import time
 from pathlib import Path
+from typing import cast
 
 from pydantic import BaseModel
 
@@ -31,6 +32,7 @@ from app.reasoning.codex import (
     CodexSchemaInvalid,
     run_codex_process,
 )
+from app.skills.catalog import SkillCatalog
 
 
 class SceneAnalysisHarness:
@@ -41,7 +43,10 @@ class SceneAnalysisHarness:
         repository_root: Path | None = None,
     ) -> None:
         self.invocation = invocation
-        self.bundle = SceneAnalysisBundle(repository_root)
+        self.bundle = cast(
+            SceneAnalysisBundle,
+            SkillCatalog(repository_root).load("scene_analysis"),
+        )
         self._validate_runtime_policy()
         try:
             self.bundle.verify_installed_bundle()

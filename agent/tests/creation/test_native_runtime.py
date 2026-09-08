@@ -58,7 +58,7 @@ async def agent_process(repository: Repository, address: str, queue: str) -> Asy
             sys.executable,
             "-m",
             "uvicorn",
-            "app.creation.api:create_agent_app",
+            "app.main:create_agent_app",
             "--factory",
             "--fd",
             str(listener.fileno()),

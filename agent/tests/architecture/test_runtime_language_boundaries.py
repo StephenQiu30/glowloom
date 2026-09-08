@@ -18,8 +18,8 @@ def test_backend_is_the_only_public_business_runtime() -> None:
 def test_agent_entrypoint_mounts_the_single_agent_service() -> None:
     entrypoint = (AGENT_ROOT / "app/main.py").read_text(encoding="utf-8")
     dockerfile = (AGENT_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "from app.creation.api import create_agent_app" in entrypoint
-    assert "app.creation.api:create_agent_app" in dockerfile
+    assert "from app.api.application import create_agent_app" in entrypoint
+    assert "app.main:create_agent_app" in dockerfile
     assert "agent/app/creation" in dockerfile
     assert "agent/app/candidate_runtime" in dockerfile
 

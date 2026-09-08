@@ -73,6 +73,18 @@ async def test_invalid_body_is_rejected_without_persisting(repository: Repositor
         assert await repository.claim() is None
 
 
+async def test_agent_runtime_readiness_gate_is_checked_after_creation_storage(
+    repository: Repository,
+) -> None:
+    app = create_app(repository, SECRET, "queue", runtime_ready=lambda: False)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/readyz")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "agent_runtime_unavailable"}
+
+
 async def test_unavailable_storage_does_not_return_acceptance() -> None:
     from unittest.mock import AsyncMock
 

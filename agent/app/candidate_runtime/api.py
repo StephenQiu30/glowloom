@@ -31,13 +31,12 @@ from app.candidate_runtime.schemas import (
     StoryGraphStageResult,
 )
 from app.candidate_runtime.text_storyboard_api import router as text_storyboard_router
-from app.modules.storygraph.bundle import BundleInvalid, StoryGraphBundle
+from app.modules.storygraph.bundle import BundleInvalid
 from app.modules.storygraph.harness import (
     InvocationPolicyInvalid,
     SkillBundleUnavailable,
     StoryGraphHarness,
 )
-from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
 from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 from app.modules.storygraph.skill_registry import stage_spec
@@ -50,11 +49,11 @@ from app.reasoning.codex import (
     CodexSchemaInvalid,
     CodexToolPolicyViolation,
 )
+from app.skills.catalog import SkillCatalog
 
 
 def verify_bundles() -> None:
-    StoryGraphBundle().verify_installed_bundle()
-    SceneAnalysisBundle().verify_installed_bundle()
+    SkillCatalog().verify_all()
 
 
 router = APIRouter()
@@ -62,13 +61,13 @@ router = APIRouter()
 
 @router.get("/healthz")
 async def healthz() -> dict[str, str]:
-    bundle_hash = StoryGraphBundle().verify_installed_bundle()
-    scene_analysis_bundle_hash = SceneAnalysisBundle().verify_installed_bundle()
+    verified = SkillCatalog().verify_all()
     return {
         "status": "ok",
         "service": "lanverse-agent-runtime",
-        "skill_bundle_hash": bundle_hash,
-        "scene_analysis_skill_bundle_hash": scene_analysis_bundle_hash,
+        "skill_bundle_hash": verified["storygraph"],
+        "scene_analysis_skill_bundle_hash": verified["scene_analysis"],
+        "text_storyboard_skill_bundle_hash": verified["text_storyboard"],
     }
 
 

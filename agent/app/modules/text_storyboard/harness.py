@@ -5,7 +5,7 @@ import os
 import shutil
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -172,9 +172,19 @@ async def codex_reasoner(
 
 
 class TextHarness:
-    def __init__(self, reasoner: Reasoner = codex_reasoner, skill: TextSkill | None = None) -> None:
+    def __init__(
+        self,
+        reasoner: Reasoner = codex_reasoner,
+        skill: TextSkill | None = None,
+        repository_root: Path | None = None,
+    ) -> None:
         self.reasoner = reasoner
-        self.skill = skill or TextSkill()
+        if skill is not None:
+            self.skill = skill
+        else:
+            from app.skills.catalog import SkillCatalog
+
+            self.skill = cast(TextSkill, SkillCatalog(repository_root).load("text_storyboard"))
 
     def prepare(self, task: TextTask) -> tuple[str, str, ContextManifest]:
         guidance = self.skill.guidance(task.stage, task.release_hash)

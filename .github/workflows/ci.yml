@@ -306,10 +306,10 @@ jobs:
             command -v codex >/dev/null
             codex --version | grep -q "0.149.1"
             test -d skills/build-storygraph
-            test "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
+            test "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 2
             test ! -e /srv/lanverse/.agents
             test -z "$(find skills -name openai.yaml -print -quit)"
-            python -c "from app.creation.api import create_agent_app; from app.candidate_runtime.api import app; from app.modules.storygraph.bundle import StoryGraphBundle; assert app.title == '\''Lanverse Candidate Runtime'\''; assert callable(create_agent_app); StoryGraphBundle().verify_installed_bundle()"
+            python -c "from app.main import create_agent_app; from app.candidate_runtime.api import app; from app.skills.catalog import SkillCatalog; assert app.title == '\''Lanverse Candidate Runtime'\''; assert callable(create_agent_app); SkillCatalog().verify_all()"
           '
       - name: Run deployment images against real dependencies
         env:
