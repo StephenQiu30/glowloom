@@ -60,7 +60,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 			t.Errorf("Backend image is missing non-root single-binary startup contract %q", required)
 		}
 	}
-	entrypoint := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "docker-entrypoint.sh"))
+	entrypoint := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "Dockerfile"))
 	for _, required := range []string{
 		"umask 077",
 		"[ -f \"$mounted_root_key\" ] && [ -s \"$mounted_root_key\" ]",
@@ -107,7 +107,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 
 	apiSource := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "internal", "bootstrap", "api_process.go"))
 	for _, required := range []string{
-		"generationapp.NewMediaFactoryRegistry(nil)",
+		"generationopenai.NewFactory(nil, objects, time.Now)",
 		"generationapp.NewProviderConfigurationService(",
 		"providersecret.OpenFixed()",
 	} {

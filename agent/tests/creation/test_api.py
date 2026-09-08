@@ -94,3 +94,65 @@ async def test_unavailable_storage_does_not_return_acceptance() -> None:
         assert response.status_code == 503
         assert response.json() == {"detail": "creation_storage_unavailable"}
         assert (await client.get("/readyz")).status_code == 503
+
+
+async def test_execution_and_full_draft_survive_reconnect_and_require_exact_signature(
+    repository: Repository,
+) -> None:
+    from app.creation.execution import InvocationLease
+    from tests.creation.test_execution import result_for, setup_execution
+
+    store, run, task = await setup_execution(repository)
+    lease = await store.reserve(run, task)
+    assert isinstance(lease, InvocationLease)
+    result = await store.finish(lease, await result_for(task))
+    await store.progress(run, "waiting_review", "map_manuscript")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(Repository(repository.dsn), SECRET, "queue")),
+        base_url="http://test",
+    ) as client:
+        endpoint = f"/internal/creation/commands/{run}/execution"
+
+        def headers(path: str) -> dict[str, str]:
+            return {
+                "X-Lanverse-Creation-Authorization": authorization(
+                    b"", path, "GET", int(time.time()) + 60
+                )
+            }
+
+        assert (await client.get(endpoint)).status_code == 401
+        snapshot = await client.get(endpoint, headers=headers(endpoint))
+        assert snapshot.status_code == 200
+        assert snapshot.json()["status"] == "waiting_review"
+        assert snapshot.json()["reserved_calls"] == 1
+        draft_id = snapshot.json()["outputs"][0]["draft_id"]
+        draft_endpoint = f"/internal/creation/commands/{run}/drafts/{draft_id}"
+        assert (await client.get(draft_endpoint, headers=headers(endpoint))).status_code == 401
+        draft = await client.get(draft_endpoint, headers=headers(draft_endpoint))
+        assert draft.status_code == 200
+        assert draft.json()["schema"] == "creation-draft-production"
+        assert draft.json()["revision"] == 1 and draft.json()["result"] == result
+        assert draft.json()["task"] == task.model_dump(mode="json")
+
+
+async def test_unknown_execution_cannot_request_resume(repository: Repository) -> None:
+    from tests.creation.test_execution import setup_execution
+
+    store, run, _ = await setup_execution(repository)
+    await store.progress(run, "blocked", "map_manuscript", "harness_response_unknown")
+    command = await repository.command(run)
+    assert command is not None
+    endpoint = f"/internal/creation/commands/{run}/resume"
+    body = json.dumps({"payload_hash": command.payload_hash}).encode()
+    headers = {
+        "X-Lanverse-Creation-Authorization": authorization(
+            body, endpoint, "POST", int(time.time()) + 60
+        )
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(repository, SECRET, "queue")),
+        base_url="http://test",
+    ) as http:
+        assert (await http.post(endpoint, content=body, headers=headers)).status_code == 409
+    snapshot = await store.snapshot(run)
+    assert not snapshot["can_resume"] and snapshot["reserved_calls"] == 0

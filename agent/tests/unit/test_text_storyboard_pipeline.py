@@ -82,7 +82,7 @@ async def test_all_four_tasks_form_a_source_bound_candidate_chain() -> None:
         for item in result.evidence:
             assert source.text[item.start : item.end] == item.quote
     assert not candidates
-    assert prompts[-1]["source"]["blocks"][0]["index"] == 1
+    assert prompts[-1]["source"]["blocks"][0][0] == 1
     assert "周野" not in json.dumps(prompts[-1], ensure_ascii=False)
     assert "hidden-zhouye" not in json.dumps(prompts[-1], ensure_ascii=False)
 
@@ -264,3 +264,31 @@ def test_large_source_fails_before_inference_without_truncation() -> None:
                 release_hash=RELEASE_HASH,
             )
         )
+
+
+def test_long_manuscript_context_preserves_every_source_block_within_budget() -> None:
+    import hashlib
+
+    from app.text_contract.source import SourceEdition, inspect_source
+
+    text = "前言😀\n" + "".join(
+        f"EPISODE {episode}\n" + "AURELIA: Keep every word and mark.\n\n" * 33
+        for episode in range(1, 61)
+    )
+    source = SourceEdition(
+        revision_id="11111111-1111-4111-8111-111111111111",
+        content_hash=hashlib.sha256(text.encode()).hexdigest(),
+        text=text,
+    )
+    task = TextTask(
+        invocation_id="long-source",
+        stage="map_manuscript",
+        source=source,
+        release_hash=RELEASE_HASH,
+    )
+    _, prompt, manifest = TextHarness().prepare(task)
+    rows = json.loads(prompt)["source"]["blocks"]
+    assert rows == [[block.index, block.text] for block in inspect_source(source)]
+    assert "".join(row[1] for row in rows) == text
+    assert manifest.block_indices == list(range(len(rows)))
+    assert manifest.prompt_bytes <= 240000

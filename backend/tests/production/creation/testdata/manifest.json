@@ -1,0 +1,56 @@
+{
+  "schema": "creation-manifest-production",
+  "command_id": "81000000-0000-4000-8000-000000000001",
+  "run_id": "81000000-0000-4000-8000-000000000001",
+  "availability": "recorded",
+  "manifest": {
+    "version": 1,
+    "command_id": "81000000-0000-4000-8000-000000000001",
+    "run_id": "81000000-0000-4000-8000-000000000001",
+    "payload_hash": "3a33c32aca8118992c4195676a1ed767cee4ab09ac80ca4ec737326570e49088",
+    "source_revision_id": "81000000-0000-4000-8000-000000000006",
+    "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "release_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "call_limit": 10,
+    "template": {
+      "version": 1,
+      "flow_type": "lanverse.creation.text-storyboard.production",
+      "stages": [
+        {
+          "step_key": "map_manuscript",
+          "title": "分集确认",
+          "scope": "run",
+          "review_required": true,
+          "review_key": "manuscript_review",
+          "instance_count": null
+        },
+        {
+          "step_key": "analyze_episode",
+          "title": "逐集解析",
+          "scope": "episode_collection",
+          "review_required": true,
+          "review_key": "episode_review",
+          "instance_count": null
+        },
+        {
+          "step_key": "build_world",
+          "title": "制作总册",
+          "scope": "run",
+          "review_required": true,
+          "review_key": "world_review",
+          "instance_count": null
+        },
+        {
+          "step_key": "direct_scene",
+          "title": "逐场导演",
+          "scope": "scene_collection",
+          "review_required": true,
+          "review_key": "scene_review",
+          "instance_count": null
+        }
+      ]
+    },
+    "template_hash": "1d6c0e4a3468551050025042bfde0c422b0c68dc3b18c46047260fa48ba2f5d9"
+  },
+  "manifest_hash": "8d2ecc16bc829313a769a61e1e743bc2af8a082b36a99a77eca45f0ce4c272af"
+}

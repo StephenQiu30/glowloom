@@ -1,6 +1,7 @@
 package observability_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,15 +9,55 @@ import (
 	"testing"
 )
 
+func TestDeadLetterTemplateDefinesFieldsBeforeFirstWriteAndRollover(t *testing.T) {
+	root := repositoryRoot(t)
+	var template struct {
+		Patterns []string `json:"index_patterns"`
+		Template struct {
+			Settings map[string]any `json:"settings"`
+			Mappings struct {
+				Dynamic    string `json:"dynamic"`
+				Properties map[string]struct {
+					Type string `json:"type"`
+				} `json:"properties"`
+			} `json:"mappings"`
+		} `json:"template"`
+	}
+	content := readText(t, filepath.Join(root, "deploy", "observability", "elasticsearch", "dead-letter-template.json"))
+	if err := json.Unmarshal([]byte(content), &template); err != nil {
+		t.Fatal(err)
+	}
+	if len(template.Patterns) != 1 || template.Patterns[0] != "lanverse-logs-dead-letter-*" || template.Template.Mappings.Dynamic != "strict" {
+		t.Fatal("dead-letter schema must cover initial and rolled-over indices")
+	}
+	for field, want := range map[string]string{"@timestamp": "date", "schema_version": "keyword", "error_code": "keyword", "raw_sha256": "keyword", "tags": "keyword"} {
+		if template.Template.Mappings.Properties[field].Type != want {
+			t.Errorf("mapping %s must be %s", field, want)
+		}
+	}
+	if len(template.Template.Mappings.Properties) != 5 || template.Template.Settings["index.lifecycle.rollover_alias"] != "lanverse-logs-dead-letter" {
+		t.Fatal("dead-letter fields and lifecycle must remain bounded")
+	}
+	ci := readText(t, filepath.Join(root, ".github", "workflows", "ci.yml"))
+	for _, alias := range []string{"lanverse-logs-application", "lanverse-logs-dead-letter"} {
+		if strings.Count(ci, "PUT /"+alias+"-000001 ") != 2 {
+			t.Errorf("%s initial indices must support numeric rollover", alias)
+		}
+	}
+	if strings.Count(ci, "PUT /_index_template/lanverse-logs-dead-letter --data-binary @deploy/observability/elasticsearch/dead-letter-template.json") != 2 {
+		t.Fatal("both CI environments must install the dead-letter template")
+	}
+}
+
 func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
 	base := readText(t, filepath.Join(root, "docker-compose.yml"))
 	environment := readText(t, filepath.Join(root, "docker-compose-env.yml"))
 	production := readText(t, filepath.Join(root, "docker-compose-prod.yml"))
-	kafkaInit := readText(t, filepath.Join(root, "backend", "observability", "kafka", "init.sh"))
-	logstash := readText(t, filepath.Join(root, "backend", "observability", "logstash", "pipeline", "lanverse.conf"))
-	template := readText(t, filepath.Join(root, "backend", "observability", "logstash", "template", "lanverse-logs-template.json"))
+	kafkaInit := readText(t, filepath.Join(root, "deploy", "observability", "kafka", "init.sh"))
+	logstash := readText(t, filepath.Join(root, "deploy", "observability", "logstash", "pipeline", "lanverse.conf"))
+	template := readText(t, filepath.Join(root, "deploy", "observability", "logstash", "template", "lanverse-logs-template.json"))
 	combined := base + environment + production + kafkaInit + logstash + template
 
 	for _, required := range []string{
@@ -121,7 +162,7 @@ func readText(t *testing.T, path string) string {
 func TestELKEnvironmentOwnsLogResourcesOutsideBackendStartup(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
-	for _, path := range []string{"backend/Dockerfile", "backend/docker-entrypoint.sh", "docker-compose.yml", "docker-compose-env.yml", "docker-compose-prod.yml"} {
+	for _, path := range []string{"backend/Dockerfile", "docker-compose.yml", "docker-compose-env.yml", "docker-compose-prod.yml"} {
 		source := readText(t, filepath.Join(root, path))
 		for _, forbidden := range []string{"elasticsearch-init", "kibana-init", "ELASTICSEARCH_INIT_", "KIBANA_USERNAME", "KIBANA_PASSWORD"} {
 			if strings.Contains(source, forbidden) {

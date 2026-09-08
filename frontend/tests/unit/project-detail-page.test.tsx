@@ -53,6 +53,12 @@ vi.mock("@/api/scriptDocuments", async () => ({
     apiMocks.previewScriptDocument,
 }));
 
+vi.mock("@/api/creation", async () => ({
+  ...(await vi.importActual<typeof import("@/api/creation")>("@/api/creation")),
+  listCreationRuns: vi.fn().mockResolvedValue({ data: [] }),
+  getCurrentScriptSource: vi.fn().mockResolvedValue({ data: null }),
+}));
+
 import { AppProviders } from "@/app/providers";
 import { ProjectWorkspace } from "@/features/project/project-workspace";
 import { setAccessToken } from "@/lib/auth-session";
@@ -447,15 +453,13 @@ describe("真实项目生产入口", () => {
       </AppProviders>,
     );
 
-    expect(await screen.findByText(documentAnalysis.document.title)).toBeInTheDocument();
+    const creation = await screen.findByRole("region", { name: "固定原稿与启动" });
+    expect(within(creation).getByText(documentAnalysis.document.title)).toBeInTheDocument();
     expect(apiMocks.getCurrentScriptDocument).toHaveBeenCalledWith({
       project_id: projectId,
     });
-    expect(screen.getByText("剧本解析已完成")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "项目制作圣经" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("region", { name: "分集计划与批量创建" }),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(within(creation).getByRole("button", { name: "固定原稿并开始创作" })).toBeEnabled());
+    expect(within(creation).getByText(documentAnalysis.revision.normalized_text, { normalizer: (text) => text })).toBeInTheDocument();
   });
 
   it("只接受 Markdown 或 DOCX，并在用户确认预览后才执行整剧解析", async () => {
@@ -533,7 +537,7 @@ describe("真实项目生产入口", () => {
     expect(preview).toHaveTextContent("场景1：控制室，夜");
 
     await user.click(
-      screen.getByRole("button", { name: "确认剧本并开始解析" }),
+      screen.getByRole("button", { name: "确认并固定原稿" }),
     );
     await waitFor(() => expect(apiMocks.importScriptDocument).toHaveBeenCalled());
     expect(apiMocks.importScriptDocument).toHaveBeenCalledWith(

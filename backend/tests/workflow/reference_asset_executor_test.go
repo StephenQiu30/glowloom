@@ -261,7 +261,7 @@ func TestReferenceAssetExecutorSelectsOneApprovedTargetAndPreparesItOncePerNode(
 	command.Attempt = 4
 	command.IdempotencyKey = "workflow-node-redelivery-4:" + nodeRunID
 	if _, err = executor.Execute(context.Background(), command); err == nil ||
-		!strings.Contains(err.Error(), "CandidateSet source has drifted") {
+		!strings.Contains(err.Error(), "candidate set source has drifted") {
 		t.Fatalf("reference asset Workflow node accepted a drifted materialized CandidateSet: %v", err)
 	}
 	if len(providers.submitCalls) != 1 || len(providers.reconcileCalls) != 1 {

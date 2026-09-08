@@ -519,6 +519,38 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 	if err != nil || resolved.Binding.ID != binding.Binding.ID || resolved.Credential.ID != connection.Credential.ID {
 		t.Fatalf("resolve Provider binding after restart: result=%#v err=%v", resolved, err)
 	}
+	submission := generationapp.ProviderSubmission{WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), BindingID: resolved.Binding.ID, BindingRevision: resolved.Binding.Revision, BindingContentHash: resolved.Binding.ContentHash, ConnectionVersionID: resolved.Connection.ID, CredentialVersionID: resolved.Credential.ID, ModelProfileVersionID: resolved.Profile.ID, ModelProfileRevision: resolved.Profile.Revision, ModelProfileContentHash: resolved.Profile.ContentHash, ProviderKey: resolved.Profile.ProviderKey, ExternalModelID: resolved.Profile.ExternalModelID, BillingMetric: resolved.Profile.BillingMetric}
+	frozenRuntime := generationapp.NewFrozenProviderRuntime(configurationStore, providersecret.Open(root))
+	var borrowed []byte
+	if err = frozenRuntime.WithRuntime(ctx, submission, func(value generationapp.ProviderRuntimeConfig) error {
+		borrowed = value.Credentials
+		if !bytes.Contains(borrowed, []byte("sk-provider-config-test")) {
+			t.Fatal("wrong frozen credential")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(borrowed, make([]byte, len(borrowed))) {
+		t.Fatal("runtime credential was retained")
+	}
+	badSubmission := submission
+	badSubmission.WorkspaceID = uuid.NewString()
+	if err = frozenRuntime.WithRuntime(ctx, badSubmission, func(generationapp.ProviderRuntimeConfig) error {
+		t.Fatal("cross-workspace runtime reached adapter")
+		return nil
+	}); err == nil {
+		t.Fatal("foreign workspace accepted")
+	}
+	badSubmission = submission
+	badSubmission.ModelProfileContentHash = strings.Repeat("f", 64)
+	if err = frozenRuntime.WithRuntime(ctx, badSubmission, func(generationapp.ProviderRuntimeConfig) error {
+		t.Fatal("drifted runtime reached adapter")
+		return nil
+	}); err == nil {
+		t.Fatal("profile drift accepted")
+	}
+
 	persistedCredential := mustProviderCredential(t, configurationStore, connection.Credential.ID)
 	credentialValues, err := decryptProviderCredential(providersecret.Open(root), persistedCredential)
 	if err != nil || credentialValues["api_key"] != "sk-provider-config-test" {
@@ -621,6 +653,15 @@ func TestProviderConfigurationVersionsAreOwnerOnlyImmutableRestartSafeAndSecretF
 	if _, err = configuration.ResolveProjectBinding(ctx, owner, projectID.String(), "reference_asset"); generationErrorCode(err) != "secret_store_unavailable" {
 		t.Fatalf("old Provider root key accepted the re-entered credential: %T %v", err, err)
 	}
+	if err = frozenRuntime.WithRuntime(ctx, submission, func(value generationapp.ProviderRuntimeConfig) error {
+		if value.Connection.ID != submission.ConnectionVersionID || !bytes.Contains(value.Credentials, []byte("sk-provider-config-test")) {
+			t.Fatal("old invocation switched to latest provider credential")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("read frozen runtime after rotation: %v", err)
+	}
+
 	resolvedRotatedBinding, err := wrongKeyService.ResolveProjectBinding(ctx, owner, projectID.String(), "reference_asset")
 	if err != nil || resolvedRotatedBinding.Binding.ID != rotatedBinding.Binding.ID || resolvedRotatedBinding.Credential.ID != rotated.Credential.ID {
 		t.Fatalf("resolve rotated Provider credential: result=%#v err=%v", resolvedRotatedBinding, err)

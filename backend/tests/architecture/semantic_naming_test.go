@@ -22,7 +22,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 
 	repositoryRoot := repositoryDirectory(t)
 	for _, relativeRoot := range []string{
-		"backend/api", "backend/cmd", "backend/internal", "backend/observability", "backend/tests",
+		"backend/api", "backend/cmd", "backend/internal", "deploy/observability", "backend/tests",
 		"agent/app", "agent/skills", "agent/tests", "frontend/src", "frontend/tests", ".github", "docs",
 		"frontend/scripts",
 	} {
@@ -56,7 +56,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 	for _, relativePath := range []string{
 		"README.md", "AGENTS.md", "AGENTS.local.md", "LICENSE",
 		"backend/Dockerfile", "agent/Dockerfile", "frontend/Dockerfile",
-		"backend/docker-entrypoint.sh", "agent/pyproject.toml", "agent/requirements.txt",
+		"agent/pyproject.toml", "agent/requirements.txt",
 		"frontend/components.json", "frontend/eslint.config.mjs", "frontend/next.config.ts",
 		"frontend/package.json", "frontend/playwright.config.ts", "frontend/postcss.config.mjs",
 		"frontend/tsconfig.json", "frontend/vitest.config.ts",
@@ -96,6 +96,8 @@ func TestSemanticNameInspectorDistinguishesProjectAndExternalNames(t *testing.T)
 		"NewStaticV4",
 		"multi_agent_" + "v" + "2",
 		"interactions-v1beta-image",
+		"https://api.openai.com/v1/images/generations",
+		"/v1/images/generations",
 	} {
 		if hasProjectNumericReleaseName(value) {
 			t.Errorf("不应拒绝第三方正式版本或标识：%s", value)
@@ -127,6 +129,7 @@ func hasProjectNumericReleaseName(line string) bool {
 	googleInteractionAPI := "interactions-" + "v" + "1beta-image"
 	minioCredentialConstructor := "NewStatic" + "V" + "4"
 	vitestCoveragePackage := "@vitest/coverage-" + "v" + "8"
+	line = strings.ReplaceAll(line, "/v1/images/generations", "/openai-images-generations")
 	line = strings.ReplaceAll(line, codexFeature, "codex-external-feature")
 	line = strings.ReplaceAll(line, googleInteractionAPI, "google-external-api")
 	line = strings.ReplaceAll(line, minioCredentialConstructor, "minio-external-constructor")

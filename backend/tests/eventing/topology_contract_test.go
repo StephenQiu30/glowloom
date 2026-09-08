@@ -23,7 +23,7 @@ func TestKafkaTopologyPinsKRaftBusinessDLQIsolationWithoutCommandTopics(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	kafkaInit, err := os.ReadFile(filepath.Join(repositoryRoot, "backend", "observability", "kafka", "init.sh"))
+	kafkaInit, err := os.ReadFile(filepath.Join(repositoryRoot, "deploy", "observability", "kafka", "init.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}

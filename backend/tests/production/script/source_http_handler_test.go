@@ -82,6 +82,22 @@ func TestScriptSourceHTTPRequiresExpectedHeadRevision(t *testing.T) {
 	}
 }
 
+func TestScriptSourceHTTPReadsCurrentHeadForAcceptanceCAS(t *testing.T) {
+	sources := &sourceHTTPService{accepted: acceptedHTTPSource()}
+	mux := http.NewServeMux()
+	scripthttp.New(sourceDocumentHTTPService{}, sources, sourceHTTPAuthenticator{}).Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/projects/"+sourceHTTPProjectID+"/current-script-source", nil))
+	if response.Code != http.StatusOK || sources.queriedProjectID != sourceHTTPProjectID || sources.actor.TokenVersion != 3 || !strings.Contains(response.Body.String(), `"head_revision":1`) {
+		t.Fatalf("current head response=%d %s", response.Code, response.Body.String())
+	}
+}
+
+func (service *sourceHTTPService) GetCurrent(_ context.Context, actor scriptapp.Actor, projectID string) (scriptdomain.AcceptedSource, error) {
+	service.actor, service.queriedProjectID = actor, projectID
+	return service.accepted, nil
+}
+
 type sourceHTTPAuthenticator struct{}
 
 func (sourceHTTPAuthenticator) Authenticate(*http.Request) (authentication.Claims, error) {

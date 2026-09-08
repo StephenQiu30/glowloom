@@ -78,6 +78,13 @@ func TestAcceptSourcePublishesIndexHeadAndReceiptsAtomically(t *testing.T) {
 	if err != nil || read != accepted {
 		t.Fatalf("exact Source query = %#v err=%v", read, err)
 	}
+	current, err := service.GetCurrent(ctx, actor, fixture.projectID.String())
+	if err != nil || current != accepted {
+		t.Fatalf("current accepted Source = %#v err=%v", current, err)
+	}
+	if _, err = service.GetCurrent(ctx, scriptapp.Actor{UserID: uuid.NewString(), TokenVersion: 1}, fixture.projectID.String()); err == nil {
+		t.Fatal("current Source must reject a foreign actor")
+	}
 
 	var indexCount, headCount, collectionReceiptCount int64
 	for _, count := range []struct {

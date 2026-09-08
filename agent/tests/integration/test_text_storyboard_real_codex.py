@@ -16,7 +16,7 @@ from app.modules.text_storyboard.harness import (
     TextTask,
     codex_reasoner,
 )
-from app.protocol.canonical import canonical_hash
+from app.text_contract.checks import validate_result
 from app.text_contract.schemas import (
     EpisodeAnalysis,
     EpisodeMap,
@@ -41,23 +41,47 @@ async def test_full_manuscript_to_selected_episode_storyboard(tmp_path: Path) ->
     )
     output = Path(os.getenv("LANVERSE_TEXT_EVAL_OUTPUT", str(tmp_path)))
     await AsyncPath(output).mkdir(parents=True, exist_ok=True)
+    call_limit = int(os.getenv("LANVERSE_TEXT_EVAL_CALL_LIMIT", "8"))
+    assert 1 <= call_limit <= 8, "real evaluation call limit must be between 1 and 8"
+    budget_path = output / "evaluation-budget.json"
+    prior = int(os.getenv("LANVERSE_TEXT_EVAL_PRIOR_CALLS", "0"))
+    if budget_path.exists():
+        prior = max(prior, int(json.loads(budget_path.read_text())["model_calls"]))
+    completed = len(
+        [
+            path
+            async for path in AsyncPath(output).glob("*.json")
+            if not path.name.startswith("raw-")
+            and path.name not in {"summary.json", "evaluation-budget.json"}
+        ]
+    )
+    model_calls = max(prior, completed)
+    assert 0 <= model_calls <= call_limit, "prior evaluation consumption exceeds the total budget"
 
     async def run(task: TextTask) -> TextResult:
         name = "-".join(part for part in [task.stage, task.episode_key, task.scene_key] if part)
         path = output / f"{name}.json"
         if path.exists():
-            saved = TextResult.model_validate_json(path.read_bytes())
-            if (
-                saved.input_hash == canonical_hash(task.model_dump(mode="json"))
-                and saved.candidate_hash == canonical_hash(saved.candidate)
-                and saved.release_hash == RELEASE_HASH
-            ):
-                print(f"reused {name}", flush=True)
-                return saved
+            saved = validate_result(task, json.loads(path.read_bytes()))
+            print(f"reused {name}", flush=True)
+            return saved
 
         async def reason(
             guidance: str, prompt: str, model: type[BaseModel], seconds: int
         ) -> BaseModel:
+            nonlocal model_calls
+            assert model_calls < call_limit, "real evaluation invocation budget exhausted"
+            model_calls += 1
+            await AsyncPath(budget_path).write_text(
+                json.dumps(
+                    {
+                        "model_calls": model_calls,
+                        "call_limit": call_limit,
+                        "last_reserved_stage": name,
+                        "unknown_attempts_are_counted": True,
+                    }
+                )
+            )
             candidate = await codex_reasoner(guidance, prompt, model, seconds)
             await AsyncPath(output / f"raw-{name}.json").write_text(
                 candidate.model_dump_json(indent=2)
@@ -124,6 +148,7 @@ async def test_full_manuscript_to_selected_episode_storyboard(tmp_path: Path) ->
     world = WorldBook.model_validate(world_result.candidate)
     check_world(source, analyses, world)
     selected = analyses[0]
+    assert len(selected.scenes) <= 3, "selected fixture episode exceeded the scene budget"
     shots = 0
     for scene in selected.scenes:
         result = await run(
@@ -151,6 +176,8 @@ async def test_full_manuscript_to_selected_episode_storyboard(tmp_path: Path) ->
         "episodes": len(analyses),
         "scenes": sum(len(item.scenes) for item in analyses),
         "selected_episode_shots": shots,
+        "model_calls": model_calls,
+        "model_call_limit": call_limit,
         "status": "draft_chain_evaluated",
         "platform_adoption": "not_exercised",
         "semantic_human_review": "pending",
