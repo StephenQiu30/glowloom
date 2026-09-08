@@ -52,13 +52,13 @@ type mediaPresetIdentity struct {
 
 var mediaPresetKeyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{2,119}$`)
 
-var ErrProviderPresetNotFound = errors.New("Media Provider preset not found")
+var ErrProviderPresetNotFound = errors.New("media Provider preset not found")
 
 func NewMediaFactoryRegistry(factories []MediaAdapterFactory) (*MediaFactoryRegistry, error) {
 	registry := &MediaFactoryRegistry{entries: make(map[string]registeredMediaFactory, len(factories))}
 	for _, factory := range factories {
 		if factory == nil {
-			return nil, errors.New("Media Provider factory is required")
+			return nil, errors.New("media Provider factory is required")
 		}
 		descriptor := factory.Descriptor()
 		descriptor.ProviderKey = strings.TrimSpace(descriptor.ProviderKey)
@@ -67,11 +67,11 @@ func NewMediaFactoryRegistry(factories []MediaAdapterFactory) (*MediaFactoryRegi
 		if !providerIdentifierPattern.MatchString(descriptor.ProviderKey) ||
 			(descriptor.Modality != domain.MediaModalityImage && descriptor.Modality != domain.MediaModalityVideo) ||
 			!providerIdentifierPattern.MatchString(descriptor.AdapterContractVersion) {
-			return nil, errors.New("Media Provider factory descriptor is invalid")
+			return nil, errors.New("media Provider factory descriptor is invalid")
 		}
 		key := mediaFactoryKey(descriptor.ProviderKey, descriptor.Modality, descriptor.AdapterContractVersion)
 		if _, exists := registry.entries[key]; exists {
-			return nil, errors.New("Media Provider factory descriptor is duplicated")
+			return nil, errors.New("media Provider factory descriptor is duplicated")
 		}
 		registry.entries[key] = registeredMediaFactory{descriptor: descriptor, factory: factory}
 	}
@@ -101,7 +101,7 @@ func (registry *MediaFactoryRegistry) Has(providerKey, modality, contractVersion
 
 func NewMediaPresetCatalog(presets domain.MediaPresets, registry *MediaFactoryRegistry) (*MediaPresetCatalog, error) {
 	if registry == nil {
-		return nil, errors.New("Media Provider factory registry is required")
+		return nil, errors.New("media Provider factory registry is required")
 	}
 	catalog := &MediaPresetCatalog{
 		connections: make(map[mediaPresetIdentity]domain.MediaConnectionPreset, len(presets.Connections)),
@@ -272,15 +272,15 @@ func validateConnectionPreset(preset domain.MediaConnectionPreset) error {
 	if !mediaPresetKeyPattern.MatchString(preset.PresetKey) || preset.PresetVersion < 1 ||
 		!providerIdentifierPattern.MatchString(preset.ProviderKey) || strings.TrimSpace(preset.DisplayName) == "" ||
 		!providerIdentifierPattern.MatchString(preset.AdapterContractVersion) || len(preset.SupportedFactoryModes) == 0 {
-		return fmt.Errorf("Media Provider connection preset %q is invalid", preset.PresetKey)
+		return fmt.Errorf("media Provider connection preset %q is invalid", preset.PresetKey)
 	}
 	for _, modality := range preset.SupportedFactoryModes {
 		if modality != domain.MediaModalityImage && modality != domain.MediaModalityVideo {
-			return fmt.Errorf("Media Provider connection preset %q has an invalid modality", preset.PresetKey)
+			return fmt.Errorf("media Provider connection preset %q has an invalid modality", preset.PresetKey)
 		}
 	}
 	if slices.ContainsFunc(preset.CredentialFields, func(field domain.MediaPresetField) bool { return !field.WriteOnly }) {
-		return fmt.Errorf("Media Provider connection preset %q has a readable credential field", preset.PresetKey)
+		return fmt.Errorf("media Provider connection preset %q has a readable credential field", preset.PresetKey)
 	}
 	return nil
 }
@@ -292,7 +292,7 @@ func validateModelPreset(preset domain.MediaModelPreset) error {
 		!providerIdentifierPattern.MatchString(preset.AdapterContractVersion) ||
 		!providerIdentifierPattern.MatchString(preset.AdapterTransportContract) ||
 		!providerIdentifierPattern.MatchString(preset.CapabilitySchemaVersion) {
-		return fmt.Errorf("Media Provider model preset %q is invalid", preset.PresetKey)
+		return fmt.Errorf("media Provider model preset %q is invalid", preset.PresetKey)
 	}
 	return nil
 }

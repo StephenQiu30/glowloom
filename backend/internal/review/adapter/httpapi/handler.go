@@ -120,7 +120,7 @@ func (handler *Handler) get(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	var coordination *workflowdomain.HumanGateCoordination
-	if detail.Decision != nil {
+	if detail.Decision != nil && detail.Task.SubjectType != "creation_text_proposal" {
 		status, statusErr := handler.coordinator.GetHumanGate(request.Context(), workflowActor, detail.Decision.ID)
 		if statusErr != nil {
 			handler.writeError(writer, request, statusErr, nil)
@@ -220,6 +220,12 @@ func (handler *Handler) decide(writer http.ResponseWriter, request *http.Request
 	})
 	if err != nil {
 		handler.writeError(writer, request, err, nil)
+		return
+	}
+	if result.Task.SubjectType == "creation_text_proposal" {
+		platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": map[string]any{
+			"task": presentTask(result.Task, false), "decision": presentDecision(result.Decision), "coordination": nil,
+		}})
 		return
 	}
 	coordination, resumeErr := handler.coordinator.ResumeHumanGate(request.Context(), workflowActor, result.Decision.ID)

@@ -489,7 +489,7 @@ func (repo *repository) CreateCandidateSet(
 	leaves := make([]contract.AggregateLeafCandidateRef, len(batches))
 	for index, batch := range batches {
 		if batch.CandidateRevisionID == nil || batch.CandidateRevisionHash == nil {
-			return "", "", errors.New("Storyboard Scene candidate revision is incomplete")
+			return "", "", errors.New("storyboard Scene candidate revision is incomplete")
 		}
 		revisionID, err := uuid.Parse(*batch.CandidateRevisionID)
 		if err != nil {
@@ -505,7 +505,7 @@ func (repo *repository) CreateCandidateSet(
 		}
 		if revision.CandidateRevisionHash != *batch.CandidateRevisionHash ||
 			head.CurrentRevisionID != revision.ID || head.CurrentCandidateRevisionHash != revision.CandidateRevisionHash {
-			return "", "", errors.New("Storyboard Scene candidate revision has drifted")
+			return "", "", errors.New("storyboard Scene candidate revision has drifted")
 		}
 		items[index] = storyboarddomain.CandidateSetItem{
 			SceneStoryNodeKey: batch.SceneStoryNodeKey, ShardKey: "scene:" + batch.SceneStoryNodeKey,

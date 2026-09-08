@@ -61,12 +61,12 @@ type snapshotMarker struct {
 func New(config Config) (*Index, error) {
 	if len(config.Addresses) == 0 || !indexNamePattern.MatchString(config.ScriptAlias) ||
 		!indexNamePattern.MatchString(config.StoryGraphAlias) || config.ScriptAlias == config.StoryGraphAlias {
-		return nil, errors.New("Elasticsearch search index configuration is invalid")
+		return nil, errors.New("elasticsearch search index configuration is invalid")
 	}
 	for _, address := range config.Addresses {
 		parsed, err := url.Parse(strings.TrimSpace(address))
 		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.Path != "" {
-			return nil, errors.New("Elasticsearch address is invalid")
+			return nil, errors.New("elasticsearch address is invalid")
 		}
 	}
 	options := []elasticsearch.Option{
@@ -90,7 +90,7 @@ func (index *Index) Ping(ctx context.Context) error {
 		return err
 	}
 	if status != http.StatusOK {
-		return fmt.Errorf("Elasticsearch ping returned status %d", status)
+		return fmt.Errorf("elasticsearch ping returned status %d", status)
 	}
 	return nil
 }
@@ -151,7 +151,7 @@ func (index *Index) Project(ctx context.Context, snapshot search.Snapshot, sourc
 func (index *Index) Search(ctx context.Context, query search.IndexQuery) (search.IndexResult, error) {
 	if (query.Kind != search.KindScript && query.Kind != search.KindStoryGraph) || strings.TrimSpace(query.Text) == "" ||
 		query.Limit < 1 || query.Limit > 50 {
-		return search.IndexResult{}, errors.New("Elasticsearch search query is invalid")
+		return search.IndexResult{}, errors.New("elasticsearch search query is invalid")
 	}
 	alias := index.alias(query.Kind)
 	backing, err := index.resolveAlias(ctx, alias)
@@ -224,10 +224,10 @@ func (index *Index) Search(ctx context.Context, query search.IndexQuery) (search
 
 func (index *Index) Rebuild(ctx context.Context, kind search.Kind, snapshots []search.Snapshot, source search.ProjectionSource, at time.Time) (result search.ReindexResult, returnErr error) {
 	if (kind != search.KindScript && kind != search.KindStoryGraph) || at.IsZero() {
-		return search.ReindexResult{}, errors.New("Elasticsearch reindex request is invalid")
+		return search.ReindexResult{}, errors.New("elasticsearch reindex request is invalid")
 	}
 	if err := source.Validate(); err != nil || source.Kind != search.SourceReindex {
-		return search.ReindexResult{}, errors.New("Elasticsearch reindex source is invalid")
+		return search.ReindexResult{}, errors.New("elasticsearch reindex source is invalid")
 	}
 	alias := index.alias(kind)
 	current, err := index.aliasIndices(ctx, alias)
@@ -235,7 +235,7 @@ func (index *Index) Rebuild(ctx context.Context, kind search.Kind, snapshots []s
 		return search.ReindexResult{}, err
 	}
 	if len(current) > 1 {
-		return search.ReindexResult{}, errors.New("Elasticsearch search alias must resolve to at most one backing index during reindex")
+		return search.ReindexResult{}, errors.New("elasticsearch search alias must resolve to at most one backing index during reindex")
 	}
 	backing := nextFormalBacking(alias, current)
 	if err = index.deleteInactiveBacking(ctx, backing); err != nil {
@@ -257,7 +257,7 @@ func (index *Index) Rebuild(ctx context.Context, kind search.Kind, snapshots []s
 	documents := 0
 	for _, snapshot := range sorted {
 		if snapshot.Kind != kind {
-			return search.ReindexResult{}, errors.New("Elasticsearch reindex snapshot kind is inconsistent")
+			return search.ReindexResult{}, errors.New("elasticsearch reindex snapshot kind is inconsistent")
 		}
 		if err := index.projectTo(ctx, backing, snapshot, source, at.UTC()); err != nil {
 			return search.ReindexResult{}, err
@@ -346,7 +346,7 @@ func (index *Index) projectTo(ctx context.Context, target string, snapshot searc
 			return fmt.Errorf("decode Elasticsearch bulk response: %w", err)
 		}
 		if response.Errors {
-			return errors.New("Elasticsearch bulk projection contained rejected documents")
+			return errors.New("elasticsearch bulk projection contained rejected documents")
 		}
 	}
 	marker := snapshotMarker{
@@ -433,7 +433,7 @@ func (index *Index) resolveAlias(ctx context.Context, alias string) (string, err
 		return "", err
 	}
 	if len(indices) != 1 {
-		return "", errors.New("Elasticsearch search alias must resolve to exactly one backing index")
+		return "", errors.New("elasticsearch search alias must resolve to exactly one backing index")
 	}
 	return indices[0], nil
 }
@@ -470,7 +470,7 @@ func (index *Index) alias(kind search.Kind) string {
 
 func (index *Index) perform(ctx context.Context, method, path string, body []byte) ([]byte, int, error) {
 	if index == nil || index.client == nil {
-		return nil, 0, errors.New("Elasticsearch client is not configured")
+		return nil, 0, errors.New("elasticsearch client is not configured")
 	}
 	var reader io.Reader
 	if body != nil {
@@ -497,7 +497,7 @@ func (index *Index) perform(ctx context.Context, method, path string, body []byt
 		return nil, 0, fmt.Errorf("read Elasticsearch response: %w", err)
 	}
 	if len(raw) > maximumResponseBytes {
-		return nil, 0, errors.New("Elasticsearch response exceeds size limit")
+		return nil, 0, errors.New("elasticsearch response exceeds size limit")
 	}
 	return raw, response.StatusCode, nil
 }

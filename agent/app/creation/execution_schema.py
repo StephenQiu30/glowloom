@@ -49,3 +49,17 @@ CREATE TABLE creation_result_outbox (
 );
 """
 EXECUTION_SCHEMA_HASH = hashlib.sha256(EXECUTION_SCHEMA.encode()).hexdigest()
+
+WORKFLOW_SCHEMA = """
+ALTER TABLE creation_executions
+    ADD COLUMN status text NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running','waiting_review','blocked','rejected','completed')),
+    ADD COLUMN stage text NOT NULL DEFAULT 'map_manuscript',
+    ADD COLUMN last_error text;
+"""
+WORKFLOW_SCHEMA_HASH = hashlib.sha256(WORKFLOW_SCHEMA.encode()).hexdigest()
+
+RESUME_SCHEMA = """
+ALTER TABLE creation_executions ADD COLUMN can_resume boolean NOT NULL DEFAULT false;
+"""
+RESUME_SCHEMA_HASH = hashlib.sha256(RESUME_SCHEMA.encode()).hexdigest()

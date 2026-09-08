@@ -52,7 +52,7 @@ func (runtime *Client) Close() {
 
 func (runtime *Client) Ping(ctx context.Context) error {
 	if runtime == nil || runtime.client == nil {
-		return errors.New("Temporal client is unavailable")
+		return errors.New("temporal client is unavailable")
 	}
 	_, err := runtime.client.CheckHealth(ctx, &temporalclient.CheckHealthRequest{})
 	return err
@@ -93,18 +93,18 @@ func (runtime *Client) describeInputHash(ctx context.Context, workflowID string)
 		return domain.StartObservation{}, err
 	}
 	if description == nil || description.WorkflowExecutionInfo == nil || description.WorkflowExecutionInfo.Memo == nil {
-		return domain.StartObservation{}, errors.New("Temporal workflow description has no input hash memo")
+		return domain.StartObservation{}, errors.New("temporal workflow description has no input hash memo")
 	}
 	payload, exists := description.WorkflowExecutionInfo.Memo.Fields[inputHashMemoKey]
 	if !exists {
-		return domain.StartObservation{}, errors.New("Temporal workflow input hash memo is missing")
+		return domain.StartObservation{}, errors.New("temporal workflow input hash memo is missing")
 	}
 	var inputHash string
 	if err = runtime.dataConverter.FromPayload(payload, &inputHash); err != nil {
 		return domain.StartObservation{}, fmt.Errorf("decode Temporal workflow input hash memo: %w", err)
 	}
 	if len(inputHash) != 64 {
-		return domain.StartObservation{}, errors.New("Temporal workflow input hash memo is invalid")
+		return domain.StartObservation{}, errors.New("temporal workflow input hash memo is invalid")
 	}
 	return domain.StartObservation{Outcome: domain.StartOutcomeAlreadyStarted, ObservedInputHash: inputHash}, nil
 }

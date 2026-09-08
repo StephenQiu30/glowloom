@@ -19,6 +19,7 @@ dev = [
     "ruff==0.16.0",
 ]
 creation = [
+    "httpx==0.28.1",
     "psycopg[binary]==3.3.5",
     "temporalio==1.32.0",
 ]

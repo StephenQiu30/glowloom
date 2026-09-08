@@ -44,38 +44,38 @@ func loadEpisodeSegmentationSeed(
 	}
 	var run model.WorkflowRun
 	if err := database.WithContext(ctx).First(&run, "id = ?", runID).Error; err != nil {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation requires an existing WorkflowRun")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation requires an existing WorkflowRun")
 	}
 	var node model.NodeRunProjection
 	if err := database.WithContext(ctx).First(&node, "id = ?", nodeID).Error; err != nil {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation requires an existing NodeRun")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation requires an existing NodeRun")
 	}
 	if run.WorkspaceID.String() != command.WorkspaceID || run.ProjectID.String() != command.ProjectID ||
 		node.WorkspaceID != run.WorkspaceID || node.WorkflowRunID != run.ID ||
 		node.Executor != "activity.episode_segmentation" ||
 		node.Status == "FAILED" || node.Status == "CANCELLED" || node.Status == "SKIPPED" || node.Status == "CACHED" {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation WorkflowRun or NodeRun has drifted")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation WorkflowRun or NodeRun has drifted")
 	}
 	var project model.Project
 	if err := database.WithContext(ctx).First(&project, "id = ?", run.ProjectID).Error; err != nil ||
 		project.WorkspaceID != run.WorkspaceID || project.TargetDurationMS < 1000 {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation Project has drifted")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation Project has drifted")
 	}
 	var revision model.DocumentRevision
 	if err := database.WithContext(ctx).First(&revision, "id = ?", documentRevisionID).Error; err != nil {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation DocumentRevision does not exist")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation DocumentRevision does not exist")
 	}
 	var document model.ScriptDocument
 	if err := database.WithContext(ctx).First(&document, "id = ?", revision.DocumentID).Error; err != nil ||
 		document.WorkspaceID != run.WorkspaceID || document.ProjectID != run.ProjectID ||
 		revision.WorkspaceID != run.WorkspaceID || revision.NormalizedHash != command.DocumentRevisionHash ||
 		revision.CodepointCount != len([]rune(revision.NormalizedText)) || revision.CodepointCount < 1 {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation DocumentRevision has drifted")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation DocumentRevision has drifted")
 	}
 
 	var aggregate model.StageCandidateRevision
 	if err := database.WithContext(ctx).First(&aggregate, "id = ?", aggregateID).Error; err != nil {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation Evidence aggregate does not exist")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation Evidence aggregate does not exist")
 	}
 	var aggregateHead model.StageCandidateHead
 	if err := database.WithContext(ctx).First(&aggregateHead, "stage_instance_key = ?", aggregate.StageInstanceKey).Error; err != nil ||
@@ -83,7 +83,7 @@ func loadEpisodeSegmentationSeed(
 		aggregate.CandidateRevisionHash != command.EvidenceCandidateRevisionHash ||
 		aggregateHead.CurrentRevisionID != aggregate.ID ||
 		aggregateHead.CurrentCandidateRevisionHash != aggregate.CandidateRevisionHash {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation Evidence aggregate is stale")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation Evidence aggregate is stale")
 	}
 	aggregateValue, err := domain.DecodeSourceEvidenceAggregate(json.RawMessage(aggregate.Candidate))
 	if err != nil {
@@ -100,18 +100,18 @@ func loadEpisodeSegmentationSeed(
 	sourceManifest, err := sourceEvidenceManifestDomain(sourceManifestRecord)
 	if err != nil || sourceManifest.ManifestHash != aggregateValue.ManifestHash ||
 		sourceManifest.CoverageHash != aggregateValue.CoverageHash || sourceManifest.RootInputHash != revision.NormalizedHash {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation source Evidence manifest has drifted")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation source Evidence manifest has drifted")
 	}
 
 	var version model.ProductionBibleVersion
 	if err = database.WithContext(ctx).First(&version, "id = ?", bibleVersionID).Error; err != nil ||
 		version.WorkspaceID != run.WorkspaceID || version.ProjectID != run.ProjectID ||
 		version.DocumentRevisionID != revision.ID || version.Version != command.BibleVersion {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation Production Bible Version has drifted")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation Production Bible Version has drifted")
 	}
 	actualMaterialization, err := loadExactMaterialization(ctx, database, run, version)
 	if err != nil || actualMaterialization.ContentHash != command.MaterializationHash {
-		return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation Production Bible materialization has drifted")
+		return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation Production Bible materialization has drifted")
 	}
 
 	seed := application.EpisodeSegmentationSeed{
@@ -142,7 +142,7 @@ func loadEpisodeSegmentationSeed(
 			leaf.SourceInvocationID == nil || leaf.SourceResultHash == nil ||
 			leaf.CandidateRevisionHash != fragment.CandidateRevisionHash || leafHead.CurrentRevisionID != leaf.ID ||
 			leafHead.CurrentCandidateRevisionHash != leaf.CandidateRevisionHash {
-			return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation Evidence leaf is stale")
+			return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation Evidence leaf is stale")
 		}
 		var invocation model.AgentInvocation
 		if err = database.WithContext(ctx).First(&invocation, "id = ?", *leaf.SourceInvocationID).Error; err != nil {
@@ -153,7 +153,7 @@ func loadEpisodeSegmentationSeed(
 			invocation.ResultHash == nil || *invocation.ResultHash != *leaf.SourceResultHash ||
 			len(request.Payload.SourceRefs) != 1 || request.Payload.SourceRefs[0].OwnerVersionID != revision.ID.String() ||
 			request.Payload.SourceRefs[0].ContentHash != revision.NormalizedHash || request.Payload.ShardKey != fragment.ShardKey {
-			return application.EpisodeSegmentationSeed{}, errors.New("Episode segmentation Evidence leaf provenance is incomplete")
+			return application.EpisodeSegmentationSeed{}, errors.New("episode segmentation Evidence leaf provenance is incomplete")
 		}
 		candidateJSON, marshalErr := json.Marshal(fragment.Candidate)
 		if marshalErr != nil {
@@ -210,7 +210,7 @@ func loadExactMaterialization(
 		UserID: run.CreatedBy.String(), TokenVersion: run.InitiatorTokenVersion,
 	}, version.ID.String(), false)
 	if err != nil || len(scope.Bindings) == 0 {
-		return domain.Materialization{}, errors.New("Production Bible Version is not materialized")
+		return domain.Materialization{}, errors.New("production Bible Version is not materialized")
 	}
 	assets := make([]domain.MaterializedAsset, 0, len(scope.Bindings))
 	specifications := make([]domain.MaterializedSpecification, 0, len(scope.Bindings))
@@ -240,7 +240,7 @@ func (store *Store) EnsureEpisodeSegmentation(
 		}
 		rootHash, err := application.EpisodeSegmentationRootInputHash(seed)
 		if err != nil || rootHash != preparation.Manifest.RootInputHash || seed.NodeRunID != preparation.Manifest.NodeRunID {
-			return errors.New("Episode segmentation sources changed before persistence")
+			return errors.New("episode segmentation sources changed before persistence")
 		}
 		var existing model.ShardManifest
 		err = transaction.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -249,7 +249,7 @@ func (store *Store) EnsureEpisodeSegmentation(
 		if err == nil {
 			manifest, decodeErr := episodeSegmentationManifestDomain(existing)
 			if decodeErr != nil || manifest.ManifestHash != preparation.Manifest.ManifestHash {
-				return errors.New("Episode segmentation manifest changed for the existing NodeRun")
+				return errors.New("episode segmentation manifest changed for the existing NodeRun")
 			}
 			state, err = episodeSegmentationState(transaction, manifest)
 			return err
@@ -267,7 +267,7 @@ func (store *Store) EnsureEpisodeSegmentation(
 		if preparation.Invocation.ManifestID != preparation.Manifest.ManifestID ||
 			preparation.Invocation.ManifestHash != preparation.Manifest.ManifestHash ||
 			preparation.Invocation.Stage != domain.EpisodeSegmentationStage {
-			return errors.New("Episode segmentation invocation does not belong to its manifest")
+			return errors.New("episode segmentation invocation does not belong to its manifest")
 		}
 		invocation, err := invocationRecord(preparation.Invocation)
 		if err != nil {
@@ -288,7 +288,7 @@ func (store *Store) ClaimNextEpisodeSegmentation(
 	leaseExpiresAt time.Time,
 ) (domain.Invocation, bool, error) {
 	if !leaseExpiresAt.After(now) {
-		return domain.Invocation{}, false, errors.New("Episode segmentation invocation lease must expire after claim time")
+		return domain.Invocation{}, false, errors.New("episode segmentation invocation lease must expire after claim time")
 	}
 	var result domain.Invocation
 	found := false
@@ -335,7 +335,7 @@ func (store *Store) ValidateEpisodeSegmentationInvocation(
 		return normalizeNotFound(err)
 	}
 	if !activeInvocationClaim(invocation, claimVersion, now) {
-		return errors.New("Episode segmentation invocation claim is stale")
+		return errors.New("episode segmentation invocation claim is stale")
 	}
 	_, _, _, err = loadEpisodeSegmentationInvocation(ctx, store.database, invocation)
 	return err
@@ -454,7 +454,7 @@ func loadEpisodeSegmentationInvocation(
 	}
 	manifest, err := episodeSegmentationManifestDomain(manifestRecord)
 	if err != nil || manifest.ManifestHash != invocation.ShardManifestHash || manifest.NodeRunID != invocation.NodeRunID.String() {
-		return agentcontract.StageInvocation{}, application.EpisodeSegmentationSeed{}, input, errors.New("Episode segmentation manifest has drifted")
+		return agentcontract.StageInvocation{}, application.EpisodeSegmentationSeed{}, input, errors.New("episode segmentation manifest has drifted")
 	}
 	seed, err := loadEpisodeSegmentationSeed(ctx, database, application.EpisodeSegmentationCommand{
 		WorkspaceID: request.Payload.WorkspaceID, ProjectID: request.Payload.ProjectID,
@@ -470,7 +470,7 @@ func loadEpisodeSegmentationInvocation(
 	}
 	rootHash, err := application.EpisodeSegmentationRootInputHash(seed)
 	if err != nil || rootHash != manifest.RootInputHash {
-		return agentcontract.StageInvocation{}, application.EpisodeSegmentationSeed{}, input, errors.New("Episode segmentation frozen inputs have drifted")
+		return agentcontract.StageInvocation{}, application.EpisodeSegmentationSeed{}, input, errors.New("episode segmentation frozen inputs have drifted")
 	}
 	return request, seed, input, nil
 }

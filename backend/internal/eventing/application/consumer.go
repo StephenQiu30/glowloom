@@ -123,7 +123,7 @@ func (consumer *Consumer) Handle(ctx context.Context, message IncomingMessage) (
 	envelope, err := eventing.DecodeEnvelope(message.Value)
 	if err != nil || (message.Key != "" && message.Key != envelope.EventID) {
 		if err == nil {
-			err = errors.New("Kafka record key does not match event id")
+			err = errors.New("kafka record key does not match event id")
 		}
 		return consumer.rejectInvalid(ctx, message, now, err)
 	}

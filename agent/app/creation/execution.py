@@ -8,6 +8,7 @@ from psycopg.types.json import Jsonb
 from pydantic import TypeAdapter
 
 from app.creation.contract import Command
+from app.creation.manifest import read_manifest, save_manifest
 from app.creation.repository import Repository
 from app.protocol.canonical import canonical_hash, canonical_json
 from app.text_contract.checks import validate_result
@@ -41,7 +42,7 @@ class ExecutionStore:
         if isinstance(call_limit, bool) or not 1 <= call_limit <= 1000:
             raise ValueError("invalid invocation call limit")
         async with await self.repository.connect() as conn:
-            await conn.execute(
+            inserted = await conn.execute(
                 """INSERT INTO creation_executions (command_id, release_hash, call_limit)
                    VALUES (%s, %s, %s) ON CONFLICT DO NOTHING""",
                 (command_id, release_hash, call_limit),
@@ -55,6 +56,11 @@ class ExecutionStore:
             ).fetchone()
             if row != {"release_hash": release_hash, "call_limit": call_limit}:
                 raise ExecutionConflict("execution_policy_conflict")
+            if inserted.rowcount == 1:
+                await save_manifest(conn, command_id, release_hash, call_limit)
+            else:
+                # Old executions without a plan stay explicitly unavailable.
+                await read_manifest(conn, command_id)
 
     async def reserve(self, command_id: str, task: TextTask) -> InvocationLease | dict[str, Any]:
         task = TextTask.model_validate_json(task.model_dump_json())
@@ -306,7 +312,9 @@ class ExecutionStore:
         async with await self.repository.connect() as conn:
             row = await (
                 await conn.execute(
-                    "SELECT release_hash, call_limit, reserved_calls FROM creation_executions "
+                    "SELECT release_hash, call_limit, reserved_calls, status, stage, last_error, "
+                    "can_resume "
+                    "FROM creation_executions "
                     "WHERE command_id = %s",
                     (command_id,),
                 )
@@ -331,6 +339,44 @@ class ExecutionStore:
                 )
             ).fetchall()
             return {**row, "steps": steps, "outputs": outputs}
+
+    async def progress(
+        self,
+        command_id: str,
+        status: str,
+        stage: str,
+        last_error: str | None = None,
+        *,
+        can_resume: bool = False,
+    ) -> None:
+        if status not in {"running", "waiting_review", "blocked", "rejected", "completed"}:
+            raise ValueError("invalid_execution_status")
+        if stage not in {"map_manuscript", "analyze_episode", "build_world", "direct_scene"}:
+            raise ValueError("invalid_execution_stage")
+        async with await self.repository.connect() as conn:
+            await conn.execute(
+                "UPDATE creation_executions SET status = %s, stage = %s, "
+                "last_error = %s, can_resume = %s WHERE command_id = %s",
+                (status, stage, last_error, can_resume, command_id),
+            )
+
+    async def draft_envelope(self, command_id: str, draft_id: str) -> dict[str, Any] | None:
+        async with await self.repository.connect() as conn:
+            row = await (
+                await conn.execute(
+                    """SELECT s.id::text AS step_id, s.step_key, s.task,
+                   d.id::text AS draft_id, d.candidate_hash, d.result_hash, d.result
+                   FROM creation_drafts d JOIN creation_steps s ON s.id = d.step_id
+                   WHERE s.command_id = %s AND d.id = %s""",
+                    (command_id, draft_id),
+                )
+            ).fetchone()
+            if row is None:
+                return None
+            if canonical_hash(row["result"]) != row["result_hash"]:
+                raise ExecutionConflict("persisted_draft_drift")
+            validate_result(TextTask.model_validate(row["task"]), row["result"])
+            return {**row, "revision": 1}
 
     async def draft(self, command_id: str, draft_id: str) -> dict[str, Any] | None:
         async with await self.repository.connect() as conn:

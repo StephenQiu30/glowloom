@@ -49,12 +49,12 @@ func (client *HTTP) InvokeSceneAnalysis(
 	request.Header.Set("X-Lanverse-Dispatch-Authorization", authorization.Value)
 	response, err := client.client.Do(request)
 	if err != nil {
-		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("Scene Analysis outcome unknown: %w", err)
+		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("scene Analysis outcome unknown: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("Scene Analysis returned HTTP %d", response.StatusCode)
+		return contract.SceneAnalysisAttemptResult{}, fmt.Errorf("scene Analysis returned HTTP %d", response.StatusCode)
 	}
 	encoded, err := io.ReadAll(io.LimitReader(response.Body, maxResultBytes+1))
 	if err != nil || len(encoded) > maxResultBytes {

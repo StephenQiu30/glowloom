@@ -204,7 +204,7 @@ func NewRuntimeCatalog(revisions []RuntimeRevision) (RuntimeCatalog, error) {
 		routes[revision.BundleHash] = revision
 	}
 	if len(routes) == 0 {
-		return RuntimeCatalog{}, errors.New("Agent runtime catalog is empty")
+		return RuntimeCatalog{}, errors.New("agent runtime catalog is empty")
 	}
 	return RuntimeCatalog{routes: routes}, nil
 }

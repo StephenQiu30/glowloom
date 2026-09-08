@@ -31,7 +31,7 @@ func (store *ProviderConfigurationStore) WithinProviderConfigurationTransaction(
 	operation func(application.ProviderConfigurationRepository) error,
 ) error {
 	if store == nil || store.database == nil || store.database.Config == nil || operation == nil {
-		return errors.New("Media Provider configuration transaction is not configured")
+		return errors.New("media Provider configuration transaction is not configured")
 	}
 	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		return operation(&providerConfigurationRepository{database: transaction})

@@ -83,7 +83,7 @@ func ValidateEpisodeSegmentationManifest(value EpisodeSegmentationManifest) erro
 	hashValue.ManifestHash = ""
 	encoded, err := json.Marshal(hashValue)
 	if err != nil || SourceTextHash(string(encoded)) != value.ManifestHash {
-		return errors.New("Episode segmentation manifest hash mismatch")
+		return errors.New("episode segmentation manifest hash mismatch")
 	}
 	return nil
 }
@@ -121,7 +121,7 @@ func DecodeEpisodeSegmentationCandidate(
 		return EpisodeSegmentationCandidate{}, errors.New("candidate does not match Episode segmentation schema")
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return EpisodeSegmentationCandidate{}, errors.New("Episode segmentation candidate contains multiple JSON values")
+		return EpisodeSegmentationCandidate{}, errors.New("episode segmentation candidate contains multiple JSON values")
 	}
 	if err := ValidateEpisodeSegmentationCandidate(value, normalizedText, allowedEvidence, markers); err != nil {
 		return EpisodeSegmentationCandidate{}, err
@@ -131,7 +131,7 @@ func DecodeEpisodeSegmentationCandidate(
 
 func ValidateEpisodeSegmentationEvidence(values []Evidence, normalizedText string) error {
 	if len(values) == 0 {
-		return errors.New("Episode segmentation requires bounded Evidence")
+		return errors.New("episode segmentation requires bounded Evidence")
 	}
 	return validateEvidence(values, normalizedText)
 }
@@ -144,7 +144,7 @@ func ValidateEpisodeSegmentationCandidate(
 ) error {
 	sourceLength := len([]rune(normalizedText))
 	if sourceLength == 0 || len(value.Boundaries) == 0 || len(value.Boundaries) > 1000 || value.ReviewIssues == nil {
-		return errors.New("Episode segmentation candidate is incomplete or exceeds limits")
+		return errors.New("episode segmentation candidate is incomplete or exceeds limits")
 	}
 	if err := ValidateEpisodeSegmentationEvidence(allowedEvidence, normalizedText); err != nil {
 		return err
@@ -175,34 +175,34 @@ func ValidateEpisodeSegmentationCandidate(
 		if !keyPattern.MatchString(boundary.BoundaryKey) || strings.TrimSpace(boundary.Title) == "" ||
 			boundary.EpisodeOrder != index+1 || boundary.AbsoluteStart < 0 || boundary.AbsoluteEnd <= boundary.AbsoluteStart ||
 			boundary.AbsoluteEnd > sourceLength || len(boundary.Evidence) == 0 {
-			return errors.New("Episode segmentation candidate contains an invalid boundary")
+			return errors.New("episode segmentation candidate contains an invalid boundary")
 		}
 		if index == 0 && boundary.AbsoluteStart != 0 || index > 0 && value.Boundaries[index-1].AbsoluteEnd != boundary.AbsoluteStart {
-			return errors.New("Episode segmentation boundaries must cover the source without gaps or overlaps")
+			return errors.New("episode segmentation boundaries must cover the source without gaps or overlaps")
 		}
 		if _, exists := boundaryKeys[boundary.BoundaryKey]; exists {
-			return errors.New("Episode segmentation boundary keys must be unique")
+			return errors.New("episode segmentation boundary keys must be unique")
 		}
 		boundaryKeys[boundary.BoundaryKey] = struct{}{}
 		boundaryByStart[boundary.AbsoluteStart] = boundary
 		for _, evidence := range boundary.Evidence {
 			if evidence.SourceStart < boundary.AbsoluteStart || evidence.SourceEnd > boundary.AbsoluteEnd {
-				return errors.New("Episode boundary Evidence is outside its source range")
+				return errors.New("episode boundary Evidence is outside its source range")
 			}
 			if _, exists := allowed[storyEvidenceKey(evidence)]; !exists {
-				return errors.New("Episode boundary Evidence is absent from exact upstream revisions")
+				return errors.New("episode boundary Evidence is absent from exact upstream revisions")
 			}
 		}
 	}
 	if value.Boundaries[len(value.Boundaries)-1].AbsoluteEnd != sourceLength {
-		return errors.New("Episode segmentation boundaries do not cover the immutable source")
+		return errors.New("episode segmentation boundaries do not cover the immutable source")
 	}
 	for start, marker := range markerByStart {
 		boundary, exists := boundaryByStart[start]
 		if !exists || !slices.ContainsFunc(boundary.Evidence, func(value Evidence) bool {
 			return storyEvidenceKey(value) == storyEvidenceKey(marker.Evidence)
 		}) {
-			return errors.New("Episode segmentation candidate overrode an explicit Episode marker")
+			return errors.New("episode segmentation candidate overrode an explicit Episode marker")
 		}
 	}
 	issueKeys := make(map[string]struct{}, len(value.ReviewIssues))
@@ -210,15 +210,15 @@ func ValidateEpisodeSegmentationCandidate(
 		if !keyPattern.MatchString(issue.IssueKey) || strings.TrimSpace(issue.Code) == "" ||
 			!oneOf(issue.Severity, "warning", "blocking") || strings.TrimSpace(issue.Scope) == "" ||
 			strings.TrimSpace(issue.Summary) == "" {
-			return errors.New("Episode segmentation candidate contains an invalid review issue")
+			return errors.New("episode segmentation candidate contains an invalid review issue")
 		}
 		if _, exists := issueKeys[issue.IssueKey]; exists {
-			return errors.New("Episode segmentation review issue keys must be unique")
+			return errors.New("episode segmentation review issue keys must be unique")
 		}
 		issueKeys[issue.IssueKey] = struct{}{}
 		for _, evidence := range issue.Evidence {
 			if _, exists := allowed[storyEvidenceKey(evidence)]; !exists {
-				return errors.New("Episode segmentation review Evidence is absent from exact upstream revisions")
+				return errors.New("episode segmentation review Evidence is absent from exact upstream revisions")
 			}
 		}
 	}

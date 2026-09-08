@@ -15,7 +15,7 @@ type NodeExecutor struct {
 
 func NewNodeExecutor(production, generation workflowapp.NodeExecutor) (*NodeExecutor, error) {
 	if production == nil || generation == nil {
-		return nil, errors.New("Workflow executor owners are required")
+		return nil, errors.New("workflow executor owners are required")
 	}
 	return &NodeExecutor{production: production, generation: generation}, nil
 }
@@ -25,7 +25,7 @@ func (executor *NodeExecutor) Execute(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor == nil || executor.production == nil || executor.generation == nil {
-		return domain.NodeExecutorResult{}, errors.New("Workflow executor owners are unavailable")
+		return domain.NodeExecutorResult{}, errors.New("workflow executor owners are unavailable")
 	}
 	switch command.Executor {
 	case "workflow.input.generation_candidate_set", "activity.reference_asset_generation":

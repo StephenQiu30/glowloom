@@ -271,7 +271,7 @@ func (service *ShotImageBindingService) bindSelectedImage(
 		bindingID := strings.TrimSpace(service.config.NewID())
 		receiptID := strings.TrimSpace(service.config.NewID())
 		if !validBindingUUID(bindingID) || !validBindingUUID(receiptID) {
-			return errors.New("Shot image binding identifier is invalid")
+			return errors.New("shot image binding identifier is invalid")
 		}
 		now := service.config.Now().UTC()
 		binding := domain.ShotImageBindingVersion{
@@ -418,7 +418,7 @@ func (service *ShotImageBindingService) RequireCurrentShotImage(
 			binding.EpisodeID != shot.EpisodeID || binding.ShotID != shot.ID ||
 			binding.ShotRevision != shot.Revision || binding.ShotContentHash != shot.ContentHash ||
 			validateShotImageBinding(binding) != nil {
-			return errors.New("Shot image binding has drifted")
+			return errors.New("shot image binding has drifted")
 		}
 		return nil
 	})
@@ -473,12 +473,12 @@ func shotImageBindingContentHash(
 func validateSelectedImage(value SelectedImageSnapshot, expectedID string) error {
 	for _, identifier := range []string{value.ID, value.WorkspaceID, value.ProjectID, value.CandidateID, value.ArtifactID} {
 		if !validBindingUUID(identifier) {
-			return errors.New("Generation selected image returned an invalid identifier")
+			return errors.New("generation selected image returned an invalid identifier")
 		}
 	}
 	if value.ID != expectedID || value.Revision != 1 || value.CandidateRevision < 1 || value.ArtifactRevision < 1 ||
 		!validBindingHash(value.ContentHash) || !validBindingHash(value.ArtifactSHA256) {
-		return errors.New("Generation selected image has drifted")
+		return errors.New("generation selected image has drifted")
 	}
 	return nil
 }
@@ -509,7 +509,7 @@ func validateShotImageBinding(value domain.ShotImageBindingVersion) error {
 		ArtifactSHA256: value.ArtifactSHA256,
 	}, value.Revision)
 	if err != nil || expectedHash != value.ContentHash {
-		return errors.New("Shot image binding content hash has drifted")
+		return errors.New("shot image binding content hash has drifted")
 	}
 	return nil
 }

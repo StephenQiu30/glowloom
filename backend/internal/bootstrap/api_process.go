@@ -31,6 +31,7 @@ import (
 	creationagent "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/agenthttp"
 	creationgorm "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/gormdb"
 	creationhttp "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/httpapi"
+	creationscriptreader "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/scriptreader"
 	creationapp "github.com/StephenQiu30/lanverse/backend/internal/production/creation/application"
 
 	costgorm "github.com/StephenQiu30/lanverse/backend/internal/cost/adapter/gormdb"
@@ -38,6 +39,7 @@ import (
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationopenai "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/openai"
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
 	providersecret "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/secretstore"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
@@ -165,13 +167,13 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	costStore := costgorm.New(database)
 	costConfig := costapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
 	costService := costapp.NewService(costStore, costConfig)
-	providerRegistry, err := generationapp.NewMediaFactoryRegistry(nil)
+	providerRegistry, err := generationapp.NewMediaFactoryRegistry([]generationapp.MediaAdapterFactory{generationopenai.NewFactory(nil, objects, time.Now)})
 	if err != nil {
-		return fmt.Errorf("Media Provider registry is invalid: %w", err)
+		return fmt.Errorf("media Provider registry is invalid: %w", err)
 	}
 	providerCatalog, err := generationapp.NewMediaPresetCatalog(generationapp.BuiltinMediaPresets(), providerRegistry)
 	if err != nil {
-		return fmt.Errorf("Media Provider preset catalog is invalid: %w", err)
+		return fmt.Errorf("media Provider preset catalog is invalid: %w", err)
 	}
 	providerSecrets := providersecret.OpenFixed()
 	providerConfigurationService := generationapp.NewProviderConfigurationService(
@@ -252,7 +254,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Scene Analysis service initialization failed: %w", err)
+		return fmt.Errorf("scene Analysis service initialization failed: %w", err)
 	}
 	sceneAnalysisHandler := agenthttp.New(sceneAnalysisService, projectService, tokenVerifier)
 	bibleStore := biblegorm.New(database)
@@ -295,17 +297,38 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	storyboardStore := storyboardgorm.New(database)
 	storyboardService := storyboardapp.NewService(storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 
+	textWorldHandler := biblehttp.NewTextWorldHandler(bibleapp.NewTextWorldQuery(bibleStore, projectService), tokenVerifier)
+	textIntentHandler := storyboardhttp.NewTextIntentHandler(storyboardapp.NewTextIntentQuery(storyboardStore, projectService), tokenVerifier)
 	creationStore := creationgorm.New(database)
 	creationService := creationapp.NewService(creationStore, creationapp.Config{Endpoint: configuration.CreationAgentURL, Now: time.Now, NewID: uuid.NewString})
 	creationHandler := creationhttp.New(creationService, tokenVerifier)
 	var creationDispatcher *creationapp.Dispatcher
+	var creationSourceHandler *creationhttp.SourceHandler
+	var creationProposalHandler *creationhttp.ProposalHandler
+	var creationTraceReader creationapp.TraceReader
 	if configuration.CreationAgentURL != "" {
 		creationClient, creationErr := creationagent.New(configuration.CreationAgentSecret, nil, time.Now)
 		if creationErr != nil {
 			return fmt.Errorf("creation agent configuration: %w", creationErr)
 		}
+		creationTraceReader = creationClient
 		creationDispatcher = creationapp.NewDispatcher(creationStore, creationClient, time.Now)
+		creationSourceHandler, creationErr = creationhttp.NewSourceHandler(
+			creationapp.NewSourceService(creationStore, creationscriptreader.New(scriptSourceService)),
+			configuration.CreationAgentSecret, time.Now,
+		)
+		if creationErr != nil {
+			return fmt.Errorf("creation source configuration: %w", creationErr)
+		}
+		creationProposalHandler, creationErr = creationhttp.NewProposalHandler(
+			creationapp.NewProposalService(creationStore, creationClient, creationapp.Config{Now: time.Now, NewID: uuid.NewString}),
+			tokenVerifier, configuration.CreationAgentSecret, time.Now,
+		)
+		if creationErr != nil {
+			return fmt.Errorf("creation proposal configuration: %w", creationErr)
+		}
 	}
+	creationTraceHandler := creationhttp.NewTraceHandler(creationapp.NewTraceService(creationStore, creationTraceReader), tokenVerifier)
 	storyboardHandler := storyboardhttp.New(storyboardService, tokenVerifier)
 	storyboardIntentHandler := storyboardhttp.NewIntentHandler(storyboardService, tokenVerifier)
 	storyboardWorker := storyboardapp.NewWorker(storyboardStore, agentRuntime, func() time.Time { return time.Now().UTC() }, configuration.AgentPollInterval, configuration.AgentClaimLease, logger)
@@ -400,9 +423,16 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				scriptHandler.Register(mux)
 				sceneAnalysisHandler.Register(mux)
 				bibleHandler.Register(mux)
+				textWorldHandler.Register(mux)
+				textIntentHandler.Register(mux)
 				storyAnalysisRecoveryHandler.Register(mux)
 				planningHandler.Register(mux)
 				creationHandler.Register(mux)
+				creationTraceHandler.Register(mux)
+				if creationSourceHandler != nil {
+					creationSourceHandler.Register(mux)
+					creationProposalHandler.Register(mux)
+				}
 				storyboardHandler.Register(mux)
 				storyboardIntentHandler.Register(mux)
 				storyGraphHandler.Register(mux)

@@ -19,8 +19,8 @@ import (
 const FixedRootKeyPath = "/run/secrets/lanverse_media_provider_master_key"
 
 var (
-	ErrUnavailable = errors.New("Provider secret store is unavailable")
-	ErrDecrypt     = errors.New("Provider secret cannot be decrypted")
+	ErrUnavailable = errors.New("provider secret store is unavailable")
+	ErrDecrypt     = errors.New("provider secret cannot be decrypted")
 )
 
 type Store struct {
@@ -169,7 +169,7 @@ func derive(root []byte, label string) [sha256.Size]byte {
 func encodeAssociatedData(value domain.ProviderSecretContext) ([]byte, error) {
 	if value.WorkspaceID == "" || value.ProviderKey == "" || value.CredentialID == "" ||
 		value.Revision < 1 || value.KeyID == "" {
-		return nil, errors.New("Provider secret context is invalid")
+		return nil, errors.New("provider secret context is invalid")
 	}
 	return json.Marshal(associatedData{
 		WorkspaceID:  value.WorkspaceID,

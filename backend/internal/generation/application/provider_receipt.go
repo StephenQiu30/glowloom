@@ -61,7 +61,7 @@ func (service *ProviderService) persistProviderCallReceipt(
 ) (domain.ProviderResultReceipt, error) {
 	receiptID := strings.TrimSpace(service.config.NewID())
 	if !validUUID(receiptID) {
-		return domain.ProviderResultReceipt{}, errors.New("Generation Provider result receipt identifier is invalid")
+		return domain.ProviderResultReceipt{}, errors.New("generation Provider result receipt identifier is invalid")
 	}
 	usageHash, err := platformcommand.InputHash(outcome.ProviderUsageObservation)
 	if err != nil {
@@ -318,7 +318,7 @@ func (service *ProviderService) storeProviderCommandReceipt(
 	}
 	receiptID := strings.TrimSpace(service.config.NewID())
 	if !validUUID(receiptID) {
-		return platformcommand.Receipt{}, errors.New("Generation Provider command receipt identifier is invalid")
+		return platformcommand.Receipt{}, errors.New("generation Provider command receipt identifier is invalid")
 	}
 	return repo.EnsureReceipt(ctx, platformcommand.Receipt{
 		ID: receiptID, WorkspaceID: result.Intent.WorkspaceID, Operation: invocation.operation,
@@ -350,7 +350,7 @@ func (service *ProviderService) storeProviderTerminalReceipt(
 	}
 	receiptID := strings.TrimSpace(service.config.NewID())
 	if !validUUID(receiptID) {
-		return platformcommand.Receipt{}, errors.New("Generation Provider terminal receipt identifier is invalid")
+		return platformcommand.Receipt{}, errors.New("generation Provider terminal receipt identifier is invalid")
 	}
 	receipt, err := repo.EnsureReceipt(ctx, platformcommand.Receipt{
 		ID: receiptID, WorkspaceID: intent.WorkspaceID, Operation: terminalProviderOperation,

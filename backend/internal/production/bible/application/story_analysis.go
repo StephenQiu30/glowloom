@@ -22,8 +22,8 @@ type StoryAnalysisCommand struct {
 }
 
 var (
-	ErrStoryAnalysisUpstreamStale = errors.New("Story analysis upstream Candidate Revision is stale")
-	ErrStoryAnalysisManifestStale = errors.New("Story analysis Shard Manifest is stale")
+	ErrStoryAnalysisUpstreamStale = errors.New("story analysis upstream Candidate Revision is stale")
+	ErrStoryAnalysisManifestStale = errors.New("story analysis Shard Manifest is stale")
 )
 
 type StoryAnalysisState struct {
@@ -107,7 +107,7 @@ func NewStoryAnalysisService(repository StoryAnalysisRepository, config StoryAna
 
 func (service *StoryAnalysisService) Ensure(ctx context.Context, command StoryAnalysisCommand) (StoryAnalysisState, error) {
 	if service == nil || service.repository == nil || service.config.Now == nil || service.config.NewID == nil {
-		return StoryAnalysisState{}, errors.New("Story analysis service is unavailable")
+		return StoryAnalysisState{}, errors.New("story analysis service is unavailable")
 	}
 	for _, identifier := range []string{
 		command.WorkspaceID, command.ProjectID, command.WorkflowRunID, command.NodeRunID,
@@ -170,7 +170,7 @@ func (service *StoryAnalysisService) Recover(
 	}
 	repository, supported := service.repository.(StoryAnalysisRecoveryRepository)
 	if !supported {
-		return StoryAnalysisRecovery{}, errors.New("Story analysis recovery service is unavailable")
+		return StoryAnalysisRecovery{}, errors.New("story analysis recovery service is unavailable")
 	}
 	inputHash, err := platformcommand.InputHash(command)
 	if err != nil {
@@ -207,7 +207,7 @@ func buildStoryAnalysisInvocations(
 		evidence, exists := byRevision[shard.UpstreamCandidateRevision]
 		if !exists || evidence.Fragment.ShardKey != shard.EvidenceShardKey ||
 			evidence.Fragment.CandidateRevisionHash != shard.UpstreamCandidateHash {
-			return nil, errors.New("Story analysis manifest lost its Evidence seed")
+			return nil, errors.New("story analysis manifest lost its Evidence seed")
 		}
 		candidate, err := domain.SliceSourceEvidenceCandidate(
 			evidence.Candidate, shard.CandidateItemStart, shard.CandidateItemEnd,
@@ -306,11 +306,11 @@ func (service *StoryAnalysisService) ReshardBudgetExceeded(
 	summary string,
 ) (bool, error) {
 	if service == nil || service.config.Now == nil || service.config.NewID == nil {
-		return false, errors.New("Story analysis reshard service is unavailable")
+		return false, errors.New("story analysis reshard service is unavailable")
 	}
 	repository, ok := service.repository.(StoryAnalysisReshardRepository)
 	if !ok {
-		return false, errors.New("Story analysis reshard service is unavailable")
+		return false, errors.New("story analysis reshard service is unavailable")
 	}
 	if _, err := uuid.Parse(invocationID); err != nil || claimVersion < 1 {
 		return false, errors.New("invalid Story analysis reshard identity")

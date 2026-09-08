@@ -221,7 +221,7 @@ func NewMaterialization(
 	})
 	slices.SortFunc(bindings, func(left, right MaterializedBinding) int { return strings.Compare(left.EntityKey, right.EntityKey) })
 	if len(assets) != len(bindings) || len(specifications) != len(bindings) {
-		return Materialization{}, errors.New("Production Bible materialization is incomplete")
+		return Materialization{}, errors.New("production Bible materialization is incomplete")
 	}
 	assetsByID := map[string]MaterializedAsset{}
 	assetIDsByKey := map[string]string{}
@@ -233,10 +233,10 @@ func NewMaterialization(
 		if _, err := uuid.Parse(asset.ID); err != nil || !keyPattern.MatchString(asset.IdentityKey) || asset.Revision != 1 ||
 			!oneOf(asset.Kind, assetdomain.AssetKindCharacter, assetdomain.AssetKindLocation, assetdomain.AssetKindProp) ||
 			!hashPattern.MatchString(asset.ContentHash) {
-			return Materialization{}, errors.New("Production Bible materialization contains an invalid Asset")
+			return Materialization{}, errors.New("production Bible materialization contains an invalid Asset")
 		}
 		if _, exists := assetsByID[asset.ID]; exists || assetIDsByKey[asset.IdentityKey] != "" {
-			return Materialization{}, errors.New("Production Bible materialization contains a duplicate Asset")
+			return Materialization{}, errors.New("production Bible materialization contains a duplicate Asset")
 		}
 		assetsByID[asset.ID] = asset
 		assetIDsByKey[asset.IdentityKey] = asset.ID
@@ -245,26 +245,26 @@ func NewMaterialization(
 		if _, err := uuid.Parse(specification.ID); err != nil || specification.Version < 1 ||
 			!keyPattern.MatchString(specification.EntityKey) ||
 			!hashPattern.MatchString(specification.ContentHash) {
-			return Materialization{}, errors.New("Production Bible materialization contains an invalid SpecificationVersion")
+			return Materialization{}, errors.New("production Bible materialization contains an invalid SpecificationVersion")
 		}
 		asset, assetExists := assetsByID[specification.AssetID]
 		if _, exists := specificationsByID[specification.ID]; exists || !assetExists ||
 			asset.IdentityKey != specification.EntityKey || asset.Kind != specification.Kind {
-			return Materialization{}, errors.New("Production Bible materialization SpecificationVersion has no exact Asset")
+			return Materialization{}, errors.New("production Bible materialization SpecificationVersion has no exact Asset")
 		}
 		specificationsByID[specification.ID] = specification
 	}
 	for _, state := range states {
 		if _, err := uuid.Parse(state.ID); err != nil || state.Revision < 1 ||
 			!statePattern.MatchString(state.StateKey) || !hashPattern.MatchString(state.ContentHash) {
-			return Materialization{}, errors.New("Production Bible materialization contains an invalid AssetState")
+			return Materialization{}, errors.New("production Bible materialization contains an invalid AssetState")
 		}
 		if _, assetExists := assetsByID[state.AssetID]; !assetExists {
-			return Materialization{}, errors.New("Production Bible materialization AssetState has no exact Asset")
+			return Materialization{}, errors.New("production Bible materialization AssetState has no exact Asset")
 		}
 		stateIdentity := state.AssetID + ":" + state.StateKey
 		if _, exists := stateKeys[stateIdentity]; exists {
-			return Materialization{}, errors.New("Production Bible materialization contains a duplicate AssetState")
+			return Materialization{}, errors.New("production Bible materialization contains a duplicate AssetState")
 		}
 		stateKeys[stateIdentity] = struct{}{}
 		stateCountByAsset[state.AssetID]++
@@ -272,24 +272,24 @@ func NewMaterialization(
 	for _, binding := range bindings {
 		if _, err := uuid.Parse(binding.ID); err != nil || binding.Revision != 1 ||
 			!hashPattern.MatchString(binding.ContentHash) {
-			return Materialization{}, errors.New("Production Bible materialization contains an invalid ProductionBinding")
+			return Materialization{}, errors.New("production Bible materialization contains an invalid ProductionBinding")
 		}
 		if _, exists := bindingIDs[binding.ID]; exists {
-			return Materialization{}, errors.New("Production Bible materialization contains duplicate binding identities")
+			return Materialization{}, errors.New("production Bible materialization contains duplicate binding identities")
 		}
 		bindingIDs[binding.ID] = struct{}{}
 		if _, exists := bindingKeys[binding.EntityKey]; exists || !keyPattern.MatchString(binding.EntityKey) {
-			return Materialization{}, errors.New("Production Bible materialization contains duplicate entity bindings")
+			return Materialization{}, errors.New("production Bible materialization contains duplicate entity bindings")
 		}
 		bindingKeys[binding.EntityKey] = struct{}{}
 		asset, assetExists := assetsByID[binding.AssetID]
 		if !assetExists || asset.IdentityKey != binding.EntityKey || stateCountByAsset[binding.AssetID] == 0 {
-			return Materialization{}, errors.New("Production Bible materialization binding has no Asset or State")
+			return Materialization{}, errors.New("production Bible materialization binding has no Asset or State")
 		}
 		specification, specificationExists := specificationsByID[binding.SpecificationVersionID]
 		if !specificationExists || specification.AssetID != binding.AssetID ||
 			specification.EntityKey != binding.EntityKey || specification.Kind != asset.Kind {
-			return Materialization{}, errors.New("Production Bible materialization binding has no SpecificationVersion")
+			return Materialization{}, errors.New("production Bible materialization binding has no SpecificationVersion")
 		}
 	}
 	value := Materialization{

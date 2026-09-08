@@ -4,6 +4,10 @@ import os
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
+from pydantic import TypeAdapter
+
+from app.text_contract.source import Digest
+
 
 def database_url() -> str:
     value = os.getenv("CREATION_DATABASE_URL", "")
@@ -46,3 +50,56 @@ class Settings:
         if not namespace.strip() or not queue.strip() or len(queue.encode()) > 255:
             raise ValueError("creation Temporal namespace and queue are required")
         return cls(database_url(), secret, address, namespace, queue, tls)
+
+
+def trusted_url(name: str) -> str:
+    value = os.getenv(name, "")
+    parsed = urlsplit(value)
+    if (
+        not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+        or parsed.scheme not in {"http", "https"}
+        or (parsed.scheme == "http" and parsed.hostname not in {"127.0.0.1", "localhost", "::1"})
+    ):
+        raise ValueError(f"{name} requires an HTTPS origin (HTTP is loopback-only)")
+    return value.rstrip("/")
+
+
+@dataclass(frozen=True)
+class WorkerSettings:
+    base: Settings
+    platform_url: str
+    harness_url: str
+    harness_secret: str = field(repr=False)
+    release_hash: str
+    call_limit: int
+    invocation_timeout_seconds: int
+
+    @classmethod
+    def from_environment(cls) -> WorkerSettings:
+        base = Settings.from_environment()
+        secret = os.getenv("CREATION_HARNESS_SECRET", "")
+        if len(secret.encode()) < 32 or secret == base.secret:
+            raise ValueError("CREATION_HARNESS_SECRET requires an independent 32-byte key")
+        release = TypeAdapter[str](Digest).validate_python(
+            os.getenv("CREATION_TEXT_RELEASE_HASH", "")
+        )
+        limit = int(os.getenv("CREATION_CALL_LIMIT", "1000"))
+        if not 1 <= limit <= 1000:
+            raise ValueError("CREATION_CALL_LIMIT must be between 1 and 1000")
+        deadline = int(os.getenv("CREATION_INVOCATION_TIMEOUT_SECONDS", "600"))
+        if not 1 <= deadline <= 900:
+            raise ValueError("CREATION_INVOCATION_TIMEOUT_SECONDS must be between 1 and 900")
+        return cls(
+            base,
+            trusted_url("CREATION_PLATFORM_URL"),
+            trusted_url("CREATION_HARNESS_URL"),
+            secret,
+            release,
+            limit,
+            deadline,
+        )

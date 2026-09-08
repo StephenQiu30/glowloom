@@ -46,17 +46,17 @@ func loadEpisodeAnalysisSeed(
 	}
 	var run model.WorkflowRun
 	if err = database.WithContext(ctx).First(&run, "id = ?", runID).Error; err != nil {
-		return application.EpisodeAnalysisSeed{}, errors.New("Episode analysis requires an existing WorkflowRun")
+		return application.EpisodeAnalysisSeed{}, errors.New("episode analysis requires an existing WorkflowRun")
 	}
 	var node model.NodeRunProjection
 	if err = database.WithContext(ctx).First(&node, "id = ?", nodeID).Error; err != nil {
-		return application.EpisodeAnalysisSeed{}, errors.New("Episode analysis requires an existing NodeRun")
+		return application.EpisodeAnalysisSeed{}, errors.New("episode analysis requires an existing NodeRun")
 	}
 	if run.WorkspaceID.String() != command.WorkspaceID || run.ProjectID.String() != command.ProjectID ||
 		node.WorkspaceID != run.WorkspaceID || node.WorkflowRunID != run.ID ||
 		node.Executor != "activity.episode_analysis" ||
 		node.Status == "FAILED" || node.Status == "CANCELLED" || node.Status == "SKIPPED" || node.Status == "CACHED" {
-		return application.EpisodeAnalysisSeed{}, errors.New("Episode analysis WorkflowRun or NodeRun has drifted")
+		return application.EpisodeAnalysisSeed{}, errors.New("episode analysis WorkflowRun or NodeRun has drifted")
 	}
 	setID, err := uuid.Parse(command.EpisodeSetID)
 	if err != nil {
@@ -64,11 +64,11 @@ func loadEpisodeAnalysisSeed(
 	}
 	var setReceipt model.CommandReceipt
 	if err = database.WithContext(ctx).First(&setReceipt, "id = ?", setID).Error; err != nil {
-		return application.EpisodeAnalysisSeed{}, errors.New("Episode analysis requires an Episode set receipt")
+		return application.EpisodeAnalysisSeed{}, errors.New("episode analysis requires an Episode set receipt")
 	}
 	var set application.EpisodeSetReference
 	if err = json.Unmarshal(setReceipt.Result, &set); err != nil {
-		return application.EpisodeAnalysisSeed{}, errors.New("Episode set receipt is invalid")
+		return application.EpisodeAnalysisSeed{}, errors.New("episode set receipt is invalid")
 	}
 	setHash, err := platformcommand.InputHash(set.Episodes)
 	if err != nil {
@@ -85,7 +85,7 @@ func loadEpisodeAnalysisSeed(
 	}
 	var bible model.ProductionBibleVersion
 	if err = database.WithContext(ctx).First(&bible, "id = ?", bibleID).Error; err != nil {
-		return application.EpisodeAnalysisSeed{}, errors.New("Episode analysis requires a Production Bible Version")
+		return application.EpisodeAnalysisSeed{}, errors.New("episode analysis requires a Production Bible Version")
 	}
 	if bible.WorkspaceID != run.WorkspaceID || bible.ProjectID != run.ProjectID || bible.Version != command.BibleVersion ||
 		bible.DocumentRevisionID.String() != set.DocumentRevisionID ||
@@ -96,13 +96,13 @@ func loadEpisodeAnalysisSeed(
 	if err = database.WithContext(ctx).
 		Where("workspace_id = ? AND operation = ? AND resource_id = ?", run.WorkspaceID, "production_bible.materialize_confirmed", bible.ID).
 		First(&materializationReceipt).Error; err != nil {
-		return application.EpisodeAnalysisSeed{}, errors.New("Episode analysis requires a Bible Materialization receipt")
+		return application.EpisodeAnalysisSeed{}, errors.New("episode analysis requires a Bible Materialization receipt")
 	}
 	var materializationResult struct {
 		Materialization bibledomain.Materialization `json:"materialization"`
 	}
 	if err = json.Unmarshal(materializationReceipt.Result, &materializationResult); err != nil {
-		return application.EpisodeAnalysisSeed{}, errors.New("Bible Materialization receipt is invalid")
+		return application.EpisodeAnalysisSeed{}, errors.New("bible Materialization receipt is invalid")
 	}
 	materialization := materializationResult.Materialization
 	verifiedMaterialization, err := bibledomain.NewMaterialization(
@@ -232,7 +232,7 @@ func episodeKnownIdentities(
 		asset, assetExists := assets[binding.AssetID]
 		specification, specificationExists := specifications[binding.SpecificationVersionID]
 		if !assetExists || !specificationExists || len(states[binding.AssetID]) == 0 {
-			return nil, errors.New("Bible Materialization identity index is incomplete")
+			return nil, errors.New("bible Materialization identity index is incomplete")
 		}
 		slices.SortFunc(states[binding.AssetID], func(left, right agentcontract.EpisodeKnownState) int {
 			return strings.Compare(left.StateKey, right.StateKey)
@@ -292,13 +292,13 @@ func (store *Store) EnsureEpisodeAnalysis(
 				return err
 			}
 			if len(preparation.Invocations) != len(preparation.AnalyzeManifest.Shards) {
-				return errors.New("Episode analysis preparation has incomplete map invocations")
+				return errors.New("episode analysis preparation has incomplete map invocations")
 			}
 			for _, invocation := range preparation.Invocations {
 				if invocation.ManifestID != preparation.AnalyzeManifest.ManifestID ||
 					invocation.ManifestHash != preparation.AnalyzeManifest.ManifestHash ||
 					invocation.Stage != domain.AnalyzeEpisodeStage {
-					return errors.New("Episode analysis invocation does not belong to its manifest")
+					return errors.New("episode analysis invocation does not belong to its manifest")
 				}
 				record, recordErr := episodeInvocationRecord(invocation)
 				if recordErr != nil {
@@ -310,17 +310,17 @@ func (store *Store) EnsureEpisodeAnalysis(
 			}
 		} else {
 			if len(existing) != 2 {
-				return errors.New("Episode analysis manifest pair is incomplete")
+				return errors.New("episode analysis manifest pair is incomplete")
 			}
 			for _, record := range existing {
 				switch record.Stage {
 				case domain.AnalyzeEpisodeStage:
 					if record.ManifestHash != preparation.AnalyzeManifest.ManifestHash {
-						return errors.New("Episode analysis manifest changed for the existing NodeRun")
+						return errors.New("episode analysis manifest changed for the existing NodeRun")
 					}
 				case domain.ReconcileEpisodeStage:
 					if record.ManifestHash != preparation.ReconcileManifest.ManifestHash {
-						return errors.New("Episode reconciliation manifest changed for the existing NodeRun")
+						return errors.New("episode reconciliation manifest changed for the existing NodeRun")
 					}
 				default:
 					return errors.New("unexpected Episode analysis manifest stage")
@@ -352,7 +352,7 @@ func (store *Store) ClaimNextEpisodeAnalysis(
 	leaseExpiresAt time.Time,
 ) (bibledomain.Invocation, bool, error) {
 	if !leaseExpiresAt.After(now) {
-		return bibledomain.Invocation{}, false, errors.New("Episode analysis invocation lease must expire after claim time")
+		return bibledomain.Invocation{}, false, errors.New("episode analysis invocation lease must expire after claim time")
 	}
 	var result bibledomain.Invocation
 	found := false
@@ -399,7 +399,7 @@ func (store *Store) ValidateEpisodeAnalysisInvocation(
 		return normalizeNotFound(err)
 	}
 	if !activeEpisodeInvocationClaim(invocation, claimVersion, now) {
-		return errors.New("Episode analysis invocation claim is stale")
+		return errors.New("episode analysis invocation claim is stale")
 	}
 	request, err := validateEpisodeInvocation(store.database.WithContext(ctx), invocation, false)
 	if err != nil {
@@ -474,7 +474,7 @@ func (store *Store) CompleteEpisodeAnalysisInvocation(
 			return err
 		}
 		if invocation.NodeRunID == nil {
-			return errors.New("Episode analysis invocation has no NodeRun")
+			return errors.New("episode analysis invocation has no NodeRun")
 		}
 		analyze, reconcile, err := loadEpisodeManifestPair(transaction, invocation.NodeRunID.String(), true)
 		if err != nil {
@@ -665,7 +665,7 @@ func validateEpisodeCandidateResult(
 	switch request.Payload.Stage {
 	case domain.AnalyzeEpisodeStage:
 		if result.CandidateType != "episode_analysis_candidate" {
-			return errors.New("Episode analysis returned the wrong candidate type")
+			return errors.New("episode analysis returned the wrong candidate type")
 		}
 		var input agentcontract.EpisodeAnalysisStageInput
 		if err := json.Unmarshal(request.Payload.StageInput, &input); err != nil {
@@ -675,7 +675,7 @@ func validateEpisodeCandidateResult(
 		return err
 	case domain.ReconcileEpisodeStage:
 		if result.CandidateType != "episode_reconciliation_candidate" {
-			return errors.New("Episode reconciliation returned the wrong candidate type")
+			return errors.New("episode reconciliation returned the wrong candidate type")
 		}
 		var input agentcontract.EpisodeReconciliationStageInput
 		if err := json.Unmarshal(request.Payload.StageInput, &input); err != nil {
@@ -870,7 +870,7 @@ func episodeReconcileInvocationRecord(
 	now time.Time,
 ) (model.AgentInvocation, error) {
 	if len(children) != len(shard.Children) || len(children) == 0 || len(children) > manifest.FanIn {
-		return model.AgentInvocation{}, errors.New("Episode reconcile children are incomplete")
+		return model.AgentInvocation{}, errors.New("episode reconcile children are incomplete")
 	}
 	candidateType := "episode_analysis_candidate"
 	if shard.Children[0].Stage == domain.ReconcileEpisodeStage {
@@ -883,7 +883,7 @@ func episodeReconcileInvocationRecord(
 		childSpec := shard.Children[index]
 		if child.Invocation.Stage != childSpec.Stage || child.Invocation.ShardKey != childSpec.ShardKey ||
 			child.Invocation.ResultHash == nil {
-			return model.AgentInvocation{}, errors.New("Episode reconcile child ordering has drifted")
+			return model.AgentInvocation{}, errors.New("episode reconcile child ordering has drifted")
 		}
 		var childFrozen agentcontract.EpisodeReconciliationStageInput
 		switch child.Invocation.Stage {
@@ -911,7 +911,7 @@ func episodeReconcileInvocationRecord(
 		if index == 0 {
 			frozen = childFrozen
 		} else if !sameEpisodeReconcileFrozenInput(frozen, childFrozen) {
-			return model.AgentInvocation{}, errors.New("Episode reconcile children do not share one frozen Episode")
+			return model.AgentInvocation{}, errors.New("episode reconcile children do not share one frozen Episode")
 		}
 		inputs[index] = agentcontract.EpisodeReconciliationInputCandidate{
 			ShardKey: child.Invocation.ShardKey, CandidateRevisionID: child.Revision.ID.String(),

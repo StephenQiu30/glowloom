@@ -22,7 +22,7 @@ func NewHumanGateOwnerRouter(
 	generation workflowapp.HumanGateOwnerApplier,
 ) (*HumanGateOwnerRouter, error) {
 	if production == nil || generation == nil {
-		return nil, errors.New("Workflow Human Gate owners are required")
+		return nil, errors.New("workflow Human Gate owners are required")
 	}
 	return &HumanGateOwnerRouter{production: production, generation: generation}, nil
 }
@@ -33,7 +33,7 @@ func (router *HumanGateOwnerRouter) ApplyHumanGateDecision(
 	application domain.HumanGateOwnerApplication,
 ) (domain.HumanGateOwnerResult, error) {
 	if router == nil || router.production == nil || router.generation == nil {
-		return domain.HumanGateOwnerResult{}, errors.New("Workflow Human Gate owners are unavailable")
+		return domain.HumanGateOwnerResult{}, errors.New("workflow Human Gate owners are unavailable")
 	}
 	var (
 		result domain.HumanGateOwnerResult

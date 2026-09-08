@@ -36,7 +36,7 @@ type Client struct {
 func New(config Config) (*Client, error) {
 	brokers, err := cleanValues(config.Brokers)
 	if err != nil || strings.TrimSpace(config.ClientID) == "" {
-		return nil, errors.New("Kafka client configuration is invalid")
+		return nil, errors.New("kafka client configuration is invalid")
 	}
 	options := []kgo.Opt{
 		kgo.SeedBrokers(brokers...), kgo.ClientID(strings.TrimSpace(config.ClientID)),
@@ -44,7 +44,7 @@ func New(config Config) (*Client, error) {
 	}
 	username := strings.TrimSpace(config.Username)
 	if (username == "") != (config.Password == "") {
-		return nil, errors.New("Kafka username and password must be configured together")
+		return nil, errors.New("kafka username and password must be configured together")
 	}
 	if username != "" {
 		options = append(options, kgo.SASL(plain.Auth{User: username, Pass: config.Password}.AsMechanism()))
@@ -53,7 +53,7 @@ func New(config Config) (*Client, error) {
 	if canConsume {
 		topics, topicErr := cleanValues(config.Topics)
 		if topicErr != nil || strings.TrimSpace(config.ConsumerGroup) == "" {
-			return nil, errors.New("Kafka consumer group and topics must be configured together")
+			return nil, errors.New("kafka consumer group and topics must be configured together")
 		}
 		options = append(options,
 			kgo.ConsumerGroup(strings.TrimSpace(config.ConsumerGroup)), kgo.ConsumeTopics(topics...),
@@ -69,12 +69,12 @@ func New(config Config) (*Client, error) {
 
 func (client *Client) Publish(ctx context.Context, message eventingapp.Message) error {
 	if client == nil || client.client == nil || strings.TrimSpace(message.Topic) == "" || message.Key == "" || len(message.Value) == 0 {
-		return errors.New("Kafka message is invalid")
+		return errors.New("kafka message is invalid")
 	}
 	record := &kgo.Record{Topic: message.Topic, Key: []byte(message.Key), Value: append([]byte(nil), message.Value...)}
 	for key, value := range message.Headers {
 		if strings.TrimSpace(key) == "" {
-			return errors.New("Kafka message header name is empty")
+			return errors.New("kafka message header name is empty")
 		}
 		record.Headers = append(record.Headers, kgo.RecordHeader{Key: key, Value: []byte(value)})
 	}
@@ -105,7 +105,7 @@ func (client *Client) pollOne(ctx context.Context) (*kgo.Record, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		return nil, errors.New("Kafka poll returned no record")
+		return nil, errors.New("kafka poll returned no record")
 	}
 	return records[0], nil
 }
@@ -119,7 +119,7 @@ func (client *Client) handleRecord(ctx context.Context, handler Handler, record 
 		return err
 	}
 	if !result.Ack {
-		return errors.New("Kafka record was not acknowledged")
+		return errors.New("kafka record was not acknowledged")
 	}
 	if err = client.client.CommitRecords(ctx, record); err != nil {
 		return fmt.Errorf("commit Kafka record: %w", err)
@@ -155,7 +155,7 @@ func (client *Client) Run(ctx context.Context, handler Handler, onRetry func(err
 
 func (client *Client) validateConsumer(handler Handler) error {
 	if client == nil || client.client == nil || !client.canConsume || handler == nil {
-		return errors.New("Kafka consumer is not configured")
+		return errors.New("kafka consumer is not configured")
 	}
 	return nil
 }
@@ -174,7 +174,7 @@ func waitForConsumerRetry(ctx context.Context, err error, onRetry func(error)) {
 
 func (client *Client) Ping(ctx context.Context) error {
 	if client == nil || client.client == nil {
-		return errors.New("Kafka client is not configured")
+		return errors.New("kafka client is not configured")
 	}
 	if err := client.client.Ping(ctx); err != nil {
 		return fmt.Errorf("ping Kafka broker: %w", err)

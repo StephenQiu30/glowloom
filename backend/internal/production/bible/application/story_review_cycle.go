@@ -87,7 +87,7 @@ func (service *StoryReviewService) EnsureStoryReview(
 ) (StoryReviewState, error) {
 	if service == nil || service.repository == nil || service.repairer == nil ||
 		service.config.Now == nil || service.config.NewID == nil {
-		return StoryReviewState{}, errors.New("Story review service is unavailable")
+		return StoryReviewState{}, errors.New("story review service is unavailable")
 	}
 	command.Actor.UserID = strings.TrimSpace(command.Actor.UserID)
 	for _, identifier := range []string{
@@ -146,7 +146,7 @@ func (service *StoryReviewService) EnsureStoryReview(
 		return StoryReviewState{Status: "pending"}, nil
 	}
 	if seed.Review == nil {
-		return StoryReviewState{}, errors.New("Story review manifest has no review invocation")
+		return StoryReviewState{}, errors.New("story review manifest has no review invocation")
 	}
 	switch seed.Review.Status {
 	case "queued", "running", "unknown":
@@ -155,7 +155,7 @@ func (service *StoryReviewService) EnsureStoryReview(
 		return needsStoryReview(seed.Review.FailureCode), nil
 	case "succeeded":
 	default:
-		return StoryReviewState{}, errors.New("Story review invocation returned an invalid status")
+		return StoryReviewState{}, errors.New("story review invocation returned an invalid status")
 	}
 
 	var reviewInput agentcontract.StoryGraphReviewStageInput
@@ -257,7 +257,7 @@ func (service *StoryReviewService) EnsureStoryReview(
 		}
 		return StoryReviewState{Status: "pending"}, nil
 	default:
-		return StoryReviewState{}, errors.New("Story repair invocation returned an invalid status")
+		return StoryReviewState{}, errors.New("story repair invocation returned an invalid status")
 	}
 }
 

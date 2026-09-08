@@ -268,7 +268,7 @@ func (service *ProviderService) createProviderExecution(
 	}
 	requestID, jobID := strings.TrimSpace(service.config.NewID()), strings.TrimSpace(service.config.NewID())
 	if !validUUID(requestID) || !validUUID(jobID) {
-		return domain.GenerationRequest{}, domain.ProviderJob{}, nil, errors.New("Generation Provider identifiers are invalid")
+		return domain.GenerationRequest{}, domain.ProviderJob{}, nil, errors.New("generation Provider identifiers are invalid")
 	}
 	request := domain.GenerationRequest{
 		ID: requestID, WorkspaceID: intent.WorkspaceID, ProjectID: intent.ProjectID, IntentID: intent.ID,
@@ -290,7 +290,7 @@ func (service *ProviderService) createProviderExecution(
 	for candidateIndex := 1; candidateIndex <= int(intent.EstimatedUnits); candidateIndex++ {
 		callID := strings.TrimSpace(service.config.NewID())
 		if !validUUID(callID) {
-			return domain.GenerationRequest{}, domain.ProviderJob{}, nil, errors.New("Generation Provider call identifier is invalid")
+			return domain.GenerationRequest{}, domain.ProviderJob{}, nil, errors.New("generation Provider call identifier is invalid")
 		}
 		requestHash, hashErr := providerCallRequestHash(request, candidateIndex)
 		if hashErr != nil {

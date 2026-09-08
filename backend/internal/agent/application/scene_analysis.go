@@ -15,7 +15,7 @@ import (
 	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 )
 
-var ErrNotFound = errors.New("Scene Analysis record not found")
+var ErrNotFound = errors.New("scene Analysis record not found")
 
 type Error struct {
 	Code    string
@@ -171,7 +171,7 @@ func NewSceneAnalysisService(
 ) (*SceneAnalysisService, error) {
 	if transactions == nil || runtime == nil || authorizer == nil ||
 		!strings.HasPrefix(config.AgentImageDigest, "sha256:") {
-		return nil, errors.New("Scene Analysis dependencies are required")
+		return nil, errors.New("scene Analysis dependencies are required")
 	}
 	if config.Now == nil {
 		config.Now = func() time.Time { return time.Now().UTC() }
@@ -185,7 +185,7 @@ func NewSceneAnalysisService(
 		}
 	}
 	if config.Budget.Validate() != nil {
-		return nil, errors.New("Scene Analysis execution budget is invalid")
+		return nil, errors.New("scene Analysis execution budget is invalid")
 	}
 	return &SceneAnalysisService{
 		transactions: transactions, runtime: runtime, authorizer: authorizer, config: config,

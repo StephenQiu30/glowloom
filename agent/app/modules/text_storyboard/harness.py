@@ -49,7 +49,7 @@ REFERENCES: dict[Stage, str] = {
     "direct_scene": "references/directing.md",
 }
 # This is an independently frozen release; it never changes the legacy StoryGraph bundle.
-RELEASE_HASH = "fde472421e82aeb5679b942c3d0fd53d6533d9ed1cc34b3b351af0d2763e3683"
+RELEASE_HASH = "63310724e287f09d5577bbe44410a480aefe7ad8f72956b2d78615c3ac05ecb3"
 
 
 class ContextInsufficient(ValueError):
@@ -235,9 +235,7 @@ class TextHarness:
         context["source"] = {
             "revision_id": task.source.revision_id,
             "content_hash": task.source.content_hash,
-            "blocks": [
-                block.model_dump(mode="json") for block in blocks if block.index in selected
-            ],
+            "blocks": [[block.index, block.text] for block in blocks if block.index in selected],
         }
         prompt = json.dumps(context, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         size = len(prompt.encode()) + len(guidance.encode())

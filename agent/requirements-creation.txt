@@ -6,9 +6,14 @@ annotated-types==0.8.0
     # via pydantic
 anyio==4.14.2
     # via
+    #   httpx
     #   lanverse-agent-runtime
     #   starlette
     #   watchfiles
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
 click==8.4.2
     # via uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
@@ -16,11 +21,19 @@ colorama==0.4.6 ; sys_platform == 'win32'
 fastapi==0.140.12
     # via lanverse-agent-runtime
 h11==0.16.0
-    # via uvicorn
+    # via
+    #   httpcore
+    #   uvicorn
+httpcore==1.0.9
+    # via httpx
 httptools==0.8.0
     # via uvicorn
+httpx==0.28.1
+    # via lanverse-agent-runtime
 idna==3.19
-    # via anyio
+    # via
+    #   anyio
+    #   httpx
 nexus-rpc==1.4.0
     # via temporalio
 protobuf==7.36.1

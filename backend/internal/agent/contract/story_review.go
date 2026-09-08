@@ -271,7 +271,7 @@ func ValidateCandidateRepairPatch(input StoryGraphRepairStageInput, value Candid
 	if value.TargetCandidateRevisionID != input.TargetCandidateRevisionID ||
 		value.TargetCandidateRevisionHash != input.TargetCandidateRevisionHash || value.Operations == nil ||
 		len(value.Operations) < 1 || len(value.Operations) > 64 || value.ReviewIssues == nil || len(value.ReviewIssues) > 1_000 {
-		return errors.New("Candidate repair Patch does not match its frozen target")
+		return errors.New("candidate repair Patch does not match its frozen target")
 	}
 	allowed := make(map[string]StoryGraphRepairAllowedTarget, len(input.AllowedTargets))
 	for _, target := range input.AllowedTargets {
@@ -282,16 +282,16 @@ func ValidateCandidateRepairPatch(input StoryGraphRepairStageInput, value Candid
 		target, exists := allowed[operation.TargetCandidateKey]
 		if !exists || operation.BaseFragmentHash != target.BaseFragmentHash ||
 			!slices.Contains(target.AllowedFields, operation.FieldName) {
-			return errors.New("Candidate repair Patch escaped its frozen allowlist or fragment")
+			return errors.New("candidate repair Patch escaped its frozen allowlist or fragment")
 		}
 		identity := operation.TargetCandidateKey + "\x00" + operation.FieldName
 		if _, exists = seen[identity]; exists {
-			return errors.New("Candidate repair Patch contains a duplicate operation")
+			return errors.New("candidate repair Patch contains a duplicate operation")
 		}
 		seen[identity] = struct{}{}
 		if replacementCount(operation.Replacement) != 1 ||
 			replacementKind(operation.Replacement) != bibleRepairFields[operation.FieldName] {
-			return errors.New("Candidate repair Patch replacement must contain one typed value")
+			return errors.New("candidate repair Patch replacement must contain one typed value")
 		}
 	}
 	allowedEvidence := make(map[string]struct{}, len(input.TargetIssue.Evidence))

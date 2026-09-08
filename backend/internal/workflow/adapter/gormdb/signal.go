@@ -428,11 +428,11 @@ func expectedHumanGateSubject(
 	}
 	candidateID, err := uuid.Parse(candidate.ReferenceID)
 	if err != nil {
-		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate Candidate identity is invalid")
+		return "", uuid.Nil, 0, "", errors.New("production Bible Human Gate Candidate identity is invalid")
 	}
 	candidateRevision, err := strconv.Atoi(candidate.ReferenceVersion)
 	if err != nil || candidateRevision < 1 {
-		return "", uuid.Nil, 0, "", errors.New("Production Bible Human Gate Candidate revision is invalid")
+		return "", uuid.Nil, 0, "", errors.New("production Bible Human Gate Candidate revision is invalid")
 	}
 	return subjectType, candidateID, candidateRevision, candidate.ContentHash, nil
 }
@@ -556,7 +556,7 @@ func validateHumanGateOwnerEvidence(
 		versionID, parseErr := uuid.Parse(binding.ReferenceID)
 		referenceVersion, versionErr := strconv.Atoi(binding.ReferenceVersion)
 		if parseErr != nil || versionErr != nil {
-			return errors.New("Production Bible Version output identity is invalid")
+			return errors.New("production Bible Version output identity is invalid")
 		}
 		var version model.ProductionBibleVersion
 		if err := transaction.First(&version, "id = ?", versionID).Error; err != nil {
@@ -567,7 +567,7 @@ func validateHumanGateOwnerEvidence(
 			version.CandidateRevisionHash != candidate.ContentHash || version.Version != referenceVersion ||
 			version.ContentHash != binding.ContentHash || version.ReviewDecisionID != decision.ID ||
 			receipt.ResourceID != version.ID {
-			return errors.New("Production Bible Version does not match the frozen Candidate and ReviewDecision")
+			return errors.New("production Bible Version does not match the frozen Candidate and ReviewDecision")
 		}
 	}
 	if episodePlanOwnerApply {
@@ -594,17 +594,17 @@ func validateHumanGateOwnerEvidence(
 			set.WorkspaceID != run.WorkspaceID.String() || set.ProjectID != run.ProjectID.String() ||
 			set.CandidateRevisionID != candidate.ReferenceID || set.CandidateRevisionHash != candidate.ContentHash ||
 			set.CandidateRevision != int64(task.SubjectRevision) || set.ContentHash != binding.ContentHash || len(set.Episodes) == 0 {
-			return errors.New("Episode set Receipt does not match the frozen Candidate")
+			return errors.New("episode set Receipt does not match the frozen Candidate")
 		}
 		setHash, hashErr := platformcommand.InputHash(set.Episodes)
 		if hashErr != nil || setHash != set.ContentHash {
-			return errors.New("Episode set Receipt content hash has drifted")
+			return errors.New("episode set Receipt content hash has drifted")
 		}
 		for _, item := range set.Episodes {
 			episodeID, episodeErr := uuid.Parse(item.EpisodeID)
 			versionID, versionErr := uuid.Parse(item.ScriptVersionID)
 			if episodeErr != nil || versionErr != nil {
-				return errors.New("Episode set Receipt contains an invalid owner identity")
+				return errors.New("episode set Receipt contains an invalid owner identity")
 			}
 			var episode model.Episode
 			if err := transaction.First(&episode, "id = ?", episodeID).Error; err != nil {
@@ -618,7 +618,7 @@ func validateHumanGateOwnerEvidence(
 				episode.CurrentScriptVersionID == nil || *episode.CurrentScriptVersionID != version.ID ||
 				version.EpisodeID != episode.ID || version.Status != "published" || version.SourceStart != item.SourceStart ||
 				version.SourceEnd != item.SourceEnd || version.ContentHash != item.ContentHash {
-				return errors.New("Episode set owner facts have drifted")
+				return errors.New("episode set owner facts have drifted")
 			}
 		}
 	}
@@ -629,19 +629,19 @@ func validateHumanGateOwnerEvidence(
 			set.CandidateRevisionID != candidate.ReferenceID || set.CandidateRevisionHash != candidate.ContentHash ||
 			set.CandidateRevision != int64(task.SubjectRevision) || set.ReviewDecisionID != decision.ID.String() ||
 			set.ContentHash != binding.ContentHash || len(set.Structures) == 0 {
-			return errors.New("Planning owner set Receipt does not match the frozen Candidate")
+			return errors.New("planning owner set Receipt does not match the frozen Candidate")
 		}
 		setHash, hashErr := platformcommand.InputHash(struct {
 			Schema     string                                   `json:"schema"`
 			Structures []planningapp.PlanningStructureReference `json:"structures"`
 		}{"planning-owner-set", set.Structures})
 		if hashErr != nil || setHash != set.ContentHash {
-			return errors.New("Planning owner set Receipt content hash has drifted")
+			return errors.New("planning owner set Receipt content hash has drifted")
 		}
 		for _, item := range set.Structures {
 			structureID, parseErr := uuid.Parse(item.StructureID)
 			if parseErr != nil {
-				return errors.New("Planning owner set contains an invalid Structure identity")
+				return errors.New("planning owner set contains an invalid Structure identity")
 			}
 			var structure model.EpisodeStructure
 			if err := transaction.First(&structure, "id = ?", structureID).Error; err != nil {
@@ -649,7 +649,7 @@ func validateHumanGateOwnerEvidence(
 			}
 			var scenes []planningdomain.Scene
 			if err := json.Unmarshal(structure.Scenes, &scenes); err != nil || len(scenes) == 0 {
-				return errors.New("Planning owner Structure scenes are invalid")
+				return errors.New("planning owner Structure scenes are invalid")
 			}
 			observedHash, hashErr := bibledomain.CanonicalStoryHash(struct {
 				Schema string                 `json:"schema"`
@@ -661,7 +661,7 @@ func validateHumanGateOwnerEvidence(
 				structure.Status != "confirmed" || structure.ResultHash != item.ResultHash ||
 				structure.Revision != item.Revision || structure.ConfirmedBy == nil || *structure.ConfirmedBy != apply.CreatedBy ||
 				!planningStructureContainsFragments(scenes, item.Fragments) {
-				return errors.New("Planning owner Structure has drifted")
+				return errors.New("planning owner Structure has drifted")
 			}
 		}
 	}
@@ -675,17 +675,17 @@ func validateHumanGateOwnerEvidence(
 			approved.CandidateRevision != int64(task.SubjectRevision) ||
 			approved.ReviewDecisionID != decision.ID.String() || approved.ContentHash != binding.ContentHash ||
 			len(approved.Scenes) == 0 || approved.DraftSetRevision < 1 || receipt.ResourceID.String() != approved.DraftSetID {
-			return errors.New("Storyboard Intent Receipt does not match the frozen Candidate")
+			return errors.New("storyboard Intent Receipt does not match the frozen Candidate")
 		}
 		visualHash, visualErr := storyboarddomain.ApprovedIntentVisualRequirementsHash(approved.Scenes)
 		contentHash, contentErr := storyboarddomain.ApprovedIntentSetContentHash(approved)
 		if visualErr != nil || contentErr != nil || visualHash != approved.VisualRequirementsHash ||
 			contentHash != approved.ContentHash {
-			return errors.New("Storyboard Intent Receipt content hash has drifted")
+			return errors.New("storyboard Intent Receipt content hash has drifted")
 		}
 		draftSetID, parseErr := uuid.Parse(approved.DraftSetID)
 		if parseErr != nil {
-			return errors.New("Storyboard Intent Receipt Draft Set identity is invalid")
+			return errors.New("storyboard Intent Receipt Draft Set identity is invalid")
 		}
 		var draftSet model.StoryboardDraftSet
 		if err := transaction.First(&draftSet, "id = ?", draftSetID).Error; err != nil {
@@ -700,12 +700,12 @@ func validateHumanGateOwnerEvidence(
 			draftSet.GraphVersionNo != approved.GraphVersionNo || draftSet.GraphContentHash != approved.GraphContentHash ||
 			draftSet.ManifestID.String() != approved.ManifestID || draftSet.ManifestVersion != approved.ManifestVersion ||
 			draftSet.ManifestHash != approved.ManifestHash {
-			return errors.New("Storyboard Intent Draft Set has drifted")
+			return errors.New("storyboard Intent Draft Set has drifted")
 		}
 		for _, scene := range approved.Scenes {
 			batchID, batchErr := uuid.Parse(scene.BatchID)
 			if batchErr != nil {
-				return errors.New("Storyboard Intent Receipt contains an invalid Batch identity")
+				return errors.New("storyboard Intent Receipt contains an invalid Batch identity")
 			}
 			var batch model.StoryboardDraftBatch
 			if err := transaction.First(&batch, "id = ?", batchID).Error; err != nil {
@@ -713,7 +713,7 @@ func validateHumanGateOwnerEvidence(
 			}
 			var persisted storyboarddomain.Candidate
 			if err := json.Unmarshal(batch.Candidate, &persisted); err != nil {
-				return errors.New("Storyboard Intent Batch Candidate is invalid")
+				return errors.New("storyboard Intent Batch Candidate is invalid")
 			}
 			expectedHash, expectedErr := platformcommand.InputHash(scene.ShotIntents)
 			observedHash, observedErr := platformcommand.InputHash(persisted.ShotIntents)
@@ -725,7 +725,7 @@ func validateHumanGateOwnerEvidence(
 				batch.CandidateRevisionHash == nil || *batch.CandidateRevisionHash != scene.CandidateRevisionHash ||
 				persisted.SceneStoryNodeKey != scene.SceneStoryNodeKey || persisted.AssetReadiness != scene.AssetReadiness ||
 				(batch.Status != "ready" && batch.Status != "needs_asset") || batch.Status != scene.AssetReadiness {
-				return errors.New("Storyboard Intent Batch has drifted")
+				return errors.New("storyboard Intent Batch has drifted")
 			}
 		}
 	}

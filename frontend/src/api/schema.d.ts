@@ -4,6 +4,125 @@
  */
 
 export interface paths {
+    "/api/creation-runs/{run_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 仅原创建者按当前写权限及运行revision请求恢复可恢复的blocked。保留原Workflow、输入、草案与预算；unknown/不可恢复/非blocked返回409。202只表示恢复请求已接受。 */
+        post: operations["resumeCreationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 按当前读权限和固定Agent路由查询持久执行状态；不产生提案或模型调用。 */
+        get: operations["getCreationExecution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}/sync-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 校验当前写权限后，按固定 Agent 路由读取并验证执行及草案，幂等同步人工审核对象；不触发模型重试。 */
+        post: operations["syncCreationProposals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 从 Go 持久化读取提案与正式采纳回执，不向 Agent 发请求。 */
+        get: operations["listCreationProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}/proposals/{proposal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 按固定提案版本和人工决定操作；采纳与正式 Owner 回执同事务。 */
+        get: operations["getCreationProposal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}/proposals/{proposal_id}/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 按固定提案版本和人工决定操作；采纳与正式 Owner 回执同事务。 */
+        post: operations["adoptCreationProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/current-script-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取已接受的当前原稿及 Head CAS 身份；导入新文档不会自动替换它。无已接受源返回404。 */
+        get: operations["getCurrentScriptSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/creation-runs": {
         parameters: {
             query?: never;
@@ -1440,10 +1559,595 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/creation-runs/{run_id}/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 当前用户与项目鉴权后的固定版本查询；GET 无请求体和查询参数；服务异常不会触发重跑。 */
+        get: operations["getCreationManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creation-runs/{run_id}/steps/{step_id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 当前用户与项目鉴权后的固定版本查询；GET 无请求体和查询参数；服务异常不会触发重跑。 */
+        get: operations["getCreationAttemptHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/text-world-versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 当前用户与项目鉴权后的固定版本查询；GET 无请求体和查询参数；服务异常不会触发重跑。 */
+        get: operations["getTextWorldVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/text-intent-versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 当前用户与项目鉴权后的固定版本查询；GET 无请求体和查询参数；服务异常不会触发重跑。 */
+        get: operations["getTextIntentVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CreationResumeResponse: {
+            /** Format: uuid */
+            run_id: string;
+            /** @constant */
+            status: "resume_requested";
+            /** @constant */
+            schema: "creation-resume-production";
+            /** Format: uuid */
+            command_id: string;
+        };
+        ResumeCreationRunRequest: {
+            expected_revision: number;
+        };
+        /** Episode */
+        CreationTextEpisode: {
+            /** First Block */
+            first_block: number;
+            /** Last Block */
+            last_block: number;
+            /** Key */
+            key: string;
+            /** Number */
+            number: number | null;
+            /** Title */
+            title: string;
+            /** Rationale */
+            rationale: string;
+        };
+        /** ExcludedBlock */
+        CreationTextExcludedBlock: {
+            /** First Block */
+            first_block: number;
+            /** Last Block */
+            last_block: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "heading" | "author_note" | "non_story" | "unresolved";
+            /** Reason */
+            reason: string;
+        };
+        /** Issue */
+        CreationTextIssue: {
+            /** Code */
+            code: string;
+            /** Scope */
+            scope: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "blocker";
+            /** Summary */
+            summary: string;
+        };
+        /** EpisodeMap */
+        CreationTextEpisodeMap: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "preserve" | "propose";
+            /** Episodes */
+            episodes: components["schemas"]["CreationTextEpisode"][];
+            /** Excluded */
+            excluded: components["schemas"]["CreationTextExcludedBlock"][];
+            /** Issues */
+            issues: components["schemas"]["CreationTextIssue"][];
+        };
+        /** Beat */
+        CreationTextBeat: {
+            /** Key */
+            key: string;
+            /** Action */
+            action: string;
+            /** Evidence */
+            evidence: components["schemas"]["CreationTextEvidence"][];
+            /** Required */
+            required: boolean;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "extracted" | "inferred" | "proposed";
+        };
+        /** Dialogue */
+        CreationTextDialogue: {
+            /** Key */
+            key: string;
+            /** Speaker Mention */
+            speaker_mention: string | null;
+            /** Text */
+            text: string;
+            evidence: components["schemas"]["CreationTextEvidence"];
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "onscreen" | "offscreen" | "phone" | "inner" | "group" | "unknown";
+        };
+        /** Evidence */
+        CreationTextEvidence: {
+            /** Block */
+            block: number;
+            /** Quote */
+            quote: string;
+            /**
+             * Occurrence
+             * @default null
+             */
+            occurrence: number | null;
+        };
+        /** Mention */
+        CreationTextMention: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cast" | "place" | "prop";
+            /** Name */
+            name: string;
+            /**
+             * Presence
+             * @default unknown
+             * @enum {string}
+             */
+            presence: "onscreen" | "offscreen" | "mentioned" | "unknown";
+            evidence: components["schemas"]["CreationTextEvidence"];
+            /** Visual Details */
+            visual_details: components["schemas"]["CreationTextEvidence"][];
+        };
+        /** Scene */
+        CreationTextScene: {
+            /** First Block */
+            first_block: number;
+            /** Last Block */
+            last_block: number;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Time Label */
+            time_label: string;
+            /** Time Branch */
+            time_branch: string;
+            /**
+             * Presentation
+             * @enum {string}
+             */
+            presentation: "present" | "flashback" | "dream" | "intercut" | "montage" | "unknown";
+            /** Beats */
+            beats: components["schemas"]["CreationTextBeat"][];
+            /** Dialogues */
+            dialogues: components["schemas"]["CreationTextDialogue"][];
+            /** Mentions */
+            mentions: components["schemas"]["CreationTextMention"][];
+            /** Issues */
+            issues: components["schemas"]["CreationTextIssue"][];
+        };
+        /** EpisodeAnalysis */
+        CreationTextEpisodeAnalysis: {
+            /** Episode Key */
+            episode_key: string;
+            /** Summary */
+            summary: string;
+            /** Conflict */
+            conflict: string;
+            /** Turning Point */
+            turning_point: string;
+            /** Ending Hook */
+            ending_hook: string;
+            /** Scenes */
+            scenes: components["schemas"]["CreationTextScene"][];
+            /** Excluded */
+            excluded: components["schemas"]["CreationTextExcludedBlock"][];
+            /** Issues */
+            issues: components["schemas"]["CreationTextIssue"][];
+        };
+        /** AssetNeed */
+        CreationTextAssetNeed: {
+            /** Entity Key */
+            entity_key: string;
+            /** Description */
+            description: string;
+            /** Evidence */
+            evidence: components["schemas"]["CreationTextEvidence"][];
+        };
+        /** EntityProposal */
+        CreationTextEntityProposal: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cast" | "place" | "prop";
+            /** Label */
+            label: string;
+            /** Mentions */
+            mentions: components["schemas"]["CreationTextMentionRef"][];
+            /**
+             * Identity Basis
+             * @enum {string}
+             */
+            identity_basis: "explicit" | "inferred" | "uncertain";
+            /** Evidence */
+            evidence: components["schemas"]["CreationTextEvidence"][];
+            /** Uncertainty */
+            uncertainty: string | null;
+        };
+        /** MentionRef */
+        CreationTextMentionRef: {
+            /** Episode Key */
+            episode_key: string;
+            /** Scene Key */
+            scene_key: string;
+            /** Mention Key */
+            mention_key: string;
+        };
+        /** Relation */
+        CreationTextRelation: {
+            /** Subject */
+            subject: string;
+            /** Predicate */
+            predicate: string;
+            /** Target */
+            target: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "extracted" | "inferred" | "proposed";
+            /**
+             * Basis
+             * @enum {string}
+             */
+            basis: "narration" | "claim" | "unknown";
+            /** Evidence */
+            evidence: components["schemas"]["CreationTextEvidence"][];
+        };
+        /** StateEvent */
+        CreationTextStateEvent: {
+            /** Entity Key */
+            entity_key: string;
+            /** Episode Key */
+            episode_key: string;
+            /** Scene Key */
+            scene_key: string;
+            /** Time Branch */
+            time_branch: string;
+            /** Story Time */
+            story_time: string;
+            /** Property */
+            property: string;
+            /** Before */
+            before: string | null;
+            /** After */
+            after: string | null;
+            /**
+             * Knowledge
+             * @enum {string}
+             */
+            knowledge: "known" | "unknown" | "conflicting";
+            /**
+             * Basis
+             * @enum {string}
+             */
+            basis: "narration" | "claim" | "unknown";
+            /** Evidence */
+            evidence: components["schemas"]["CreationTextEvidence"][];
+        };
+        /** WorldBook */
+        CreationTextWorldBook: {
+            /** Entities */
+            entities: components["schemas"]["CreationTextEntityProposal"][];
+            /** Unresolved Mentions */
+            unresolved_mentions: components["schemas"]["CreationTextMentionRef"][];
+            /** Relations */
+            relations: components["schemas"]["CreationTextRelation"][];
+            /** State Events */
+            state_events: components["schemas"]["CreationTextStateEvent"][];
+            /** Asset Needs */
+            asset_needs: components["schemas"]["CreationTextAssetNeed"][];
+            /** Issues */
+            issues: components["schemas"]["CreationTextIssue"][];
+        };
+        /** AudioCue */
+        CreationTextAudioCue: {
+            /** Dialogue Key */
+            dialogue_key: string;
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "onscreen" | "offscreen" | "phone" | "inner" | "group" | "unknown";
+        };
+        /** Blocking */
+        CreationTextBlocking: {
+            /** Mention Key */
+            mention_key: string;
+            /** Position */
+            position: string;
+            /** Facing */
+            facing: string;
+            /** Action */
+            action: string;
+        };
+        /** Shot */
+        CreationTextShot: {
+            /** Key */
+            key: string;
+            /** Purpose */
+            purpose: string;
+            /** Framing */
+            framing: string;
+            /** Camera Movement */
+            camera_movement: string;
+            /** Action */
+            action: string;
+            /** Beat Keys */
+            beat_keys: string[];
+            /** Audio */
+            audio: components["schemas"]["CreationTextAudioCue"][];
+            /** Visible Mentions */
+            visible_mentions: string[];
+            /** Detail Evidence */
+            detail_evidence: components["schemas"]["CreationTextEvidence"][];
+            /** Duration Min Ms */
+            duration_min_ms: number;
+            /** Duration Max Ms */
+            duration_max_ms: number;
+            /** Timing Basis */
+            timing_basis: string;
+            /** Screen Direction */
+            screen_direction: string;
+            /** Entry State */
+            entry_state: string;
+            /** Exit State */
+            exit_state: string;
+            /** Panel Caption */
+            panel_caption: string;
+        };
+        /** SceneDirection */
+        CreationTextSceneDirection: {
+            /** Episode Key */
+            episode_key: string;
+            /** Scene Key */
+            scene_key: string;
+            /** Dramatic Intent */
+            dramatic_intent: string;
+            /** Audience Knows */
+            audience_knows: string[];
+            /** Withhold */
+            withhold: string[];
+            /** Blocking */
+            blocking: components["schemas"]["CreationTextBlocking"][];
+            /** Shots */
+            shots: components["schemas"]["CreationTextShot"][];
+            /** Issues */
+            issues: components["schemas"]["CreationTextIssue"][];
+        };
+        /** ResolvedEvidence */
+        CreationTextResolvedEvidence: {
+            /** Revision Id */
+            revision_id: string;
+            /** Source Hash */
+            source_hash: string;
+            /** Block */
+            block: number;
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
+            /** Text Hash */
+            text_hash: string;
+            /** Quote */
+            quote: string;
+        };
+        CreationRiskResolution: {
+            code: string;
+            scope: string;
+            reason: string;
+        };
+        CreationFormalRef: {
+            owner: string;
+            type: string;
+            /** Format: uuid */
+            id: string;
+            revision: number;
+            content_hash: string;
+        };
+        CreationOwnerReceipt: {
+            /** Format: uuid */
+            id: string;
+            owner: string;
+            operation: string;
+        };
+        CreationAdoptionReceipt: {
+            /** @constant */
+            schema: "creation-adoption-production";
+            /** Format: uuid */
+            submission_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            proposal_id: string;
+            /** Format: uuid */
+            step_id: string;
+            /** @enum {string} */
+            gate: "map_manuscript" | "analyze_episode" | "build_world" | "direct_scene";
+            proposal_revision: number;
+            proposal_hash: string;
+            candidate_hash: string;
+            /** Format: uuid */
+            decision_id: string;
+            owner_receipts: components["schemas"]["CreationOwnerReceipt"][];
+            formal_refs: components["schemas"]["CreationFormalRef"][];
+            id_mapping: {
+                [key: string]: string;
+            };
+            risk_resolutions: components["schemas"]["CreationRiskResolution"][];
+            /** Format: date-time */
+            accepted_at: string;
+        };
+        CreationProposal: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            step_id: string;
+            /** @enum {string} */
+            stage: "map_manuscript" | "analyze_episode" | "build_world" | "direct_scene";
+            step_key: string;
+            revision: number;
+            result_hash: string;
+            candidate_hash: string;
+            /** Format: uuid */
+            source_revision_id: string;
+            source_hash: string;
+            invocation_id: string;
+            input_hash: string;
+            release_hash: string;
+            candidate: components["schemas"]["CreationTextEpisodeMap"] | components["schemas"]["CreationTextEpisodeAnalysis"] | components["schemas"]["CreationTextWorldBook"] | components["schemas"]["CreationTextSceneDirection"];
+            evidence: components["schemas"]["CreationTextResolvedEvidence"][];
+            issues: components["schemas"]["CreationTextIssue"][];
+            /** Format: uuid */
+            human_task_id: string;
+            /** @enum {string} */
+            status: "needs_review" | "accepted";
+            acceptance: components["schemas"]["CreationAdoptionReceipt"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CreationExecutionStep: {
+            /** Format: uuid */
+            id: string;
+            step_key: string;
+            input_hash: string;
+            /** @enum {string} */
+            state: "running" | "needs_review" | "unknown";
+            fence: number;
+            /** @constant */
+            usage_status: "unknown";
+            last_error: string | null;
+        };
+        CreationDraftRef: {
+            /** Format: uuid */
+            step_id: string;
+            /** Format: uuid */
+            draft_id: string;
+            result_hash: string;
+            candidate_hash: string;
+            step_key?: string;
+            output_role?: string;
+            item_key?: string;
+        };
+        /** @description queued 表示尚未冻结执行策略，此时 release_hash、stage 为空，调用额度为0。 */
+        CreationExecution: {
+            /** @constant */
+            schema: "creation-execution-production";
+            /** Format: uuid */
+            command_id: string;
+            /** Format: uuid */
+            run_id: string;
+            payload_hash: string;
+            /** Format: uuid */
+            source_revision_id: string;
+            release_hash: string | "";
+            call_limit: number;
+            reserved_calls: number;
+            /** @enum {string} */
+            status: "queued" | "running" | "waiting_review" | "blocked" | "rejected" | "completed";
+            /** @enum {string} */
+            stage: "" | "map_manuscript" | "analyze_episode" | "build_world" | "direct_scene";
+            last_error: string;
+            steps: components["schemas"]["CreationExecutionStep"][];
+            outputs: components["schemas"]["CreationDraftRef"][];
+            /** @description 只有可安全恢复的blocked为true，unknown不能通过此操作重复推理。 */
+            can_resume: boolean;
+        };
+        CreationSyncResult: {
+            execution: components["schemas"]["CreationExecution"];
+            proposals: components["schemas"]["CreationProposal"][];
+        };
+        AdoptCreationProposalRequest: {
+            expected_revision: number;
+            /** Format: uuid */
+            decision_id: string;
+            idempotency_key: string;
+            risk_resolutions: components["schemas"]["CreationRiskResolution"][];
+        };
         CreateCreationRunRequest: {
             /** Format: uuid */
             document_revision_id: string;
@@ -1501,9 +2205,9 @@ export interface components {
             expected_revision: number;
         };
         StoryboardEvidenceRef: {
-            document_revision_id: string;
-            absolute_start: number;
             absolute_end: number;
+            absolute_start: number;
+            document_revision_id: string;
             text_hash: string;
         };
         StoryboardFrameIntent: {
@@ -1784,7 +2488,7 @@ export interface components {
             data: {
                 task: components["schemas"]["HumanTaskResponse"];
                 decision: components["schemas"]["ReviewDecisionResponse"];
-                coordination: components["schemas"]["HumanGateCoordinationResponse"];
+                coordination: components["schemas"]["HumanGateCoordinationResponse"] | null;
             };
         };
         HumanGateResumeEnvelope: {
@@ -2181,17 +2885,11 @@ export interface components {
             user: components["schemas"]["UserResponse"];
             workspace: components["schemas"]["WorkspaceResponse"];
         };
-        /** BibleEvidence */
         BibleEvidence: {
-            /** Episode Number */
-            episode_number?: number | null;
-            /** Exact Anchor */
+            episode_number: number | null;
             exact_anchor: string;
-            /** Source End */
             source_end: number;
-            /** Source Start */
             source_start: number;
-            /** Text Hash */
             text_hash: string;
         };
         /** BibleReviewIssue */
@@ -3661,6 +4359,218 @@ export interface components {
             /** Name */
             name: string;
         };
+        BibleTextWorldAssetNeed: {
+            description: string;
+            entity_id: string;
+            evidence: components["schemas"]["BibleEvidence"][] | null;
+        };
+        BibleTextWorldEntity: {
+            evidence: components["schemas"]["BibleEvidence"][] | null;
+            id: string;
+            identity_basis: string;
+            key: string;
+            kind: string;
+            label: string;
+            mention_ids: string[] | null;
+            uncertainty: string | null;
+        };
+        BibleTextWorldIssue: {
+            code: string;
+            scope: string;
+            severity: string;
+            summary: string;
+        };
+        BibleTextWorldRelation: {
+            basis: string;
+            evidence: components["schemas"]["BibleEvidence"][] | null;
+            origin: string;
+            predicate: string;
+            subject_id: string;
+            target_id: string;
+        };
+        BibleTextWorldRiskResolution: {
+            code: string;
+            reason: string;
+            scope: string;
+        };
+        BibleTextWorldState: {
+            after: string | null;
+            basis: string;
+            before: string | null;
+            entity_id: string;
+            episode_id: string;
+            evidence: components["schemas"]["BibleEvidence"][] | null;
+            knowledge: string;
+            property: string;
+            scene_id: string;
+            story_time: string;
+            time_branch: string;
+        };
+        BibleTextWorldVersion: {
+            asset_needs: components["schemas"]["BibleTextWorldAssetNeed"][] | null;
+            content_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            decision_id: string;
+            entities: components["schemas"]["BibleTextWorldEntity"][] | null;
+            id: string;
+            id_mapping: {
+                [key: string]: string;
+            };
+            issues: components["schemas"]["BibleTextWorldIssue"][] | null;
+            project_id: string;
+            proposal_id: string;
+            relations: components["schemas"]["BibleTextWorldRelation"][] | null;
+            revision: number;
+            risk_resolutions: components["schemas"]["BibleTextWorldRiskResolution"][] | null;
+            run_id: string;
+            source_hash: string;
+            source_revision_id: string;
+            state_events: components["schemas"]["BibleTextWorldState"][] | null;
+            unresolved_mention_ids: string[] | null;
+            workspace_id: string;
+        };
+        CreationAttempt: {
+            attempt_id: string;
+            attempt_no: number;
+            /** Format: date-time */
+            execution_deadline: string;
+            fence: number;
+            finished_at: string | null;
+            input_hash: string;
+            last_error: string | null;
+            lease_expired: boolean;
+            /** Format: date-time */
+            lease_expires_at: string;
+            result_hash: string | null;
+            /** Format: date-time */
+            started_at: string;
+            state: string;
+            usage_status: string;
+        };
+        CreationAttemptHistory: {
+            attempts: components["schemas"]["CreationAttempt"][] | null;
+            command_id: string;
+            current_attempt_id: string | null;
+            history_origin: string;
+            run_id: string;
+            schema: string;
+            step_id: string;
+            step_key: string;
+        };
+        CreationManifest: {
+            call_limit: number;
+            command_id: string;
+            payload_hash: string;
+            release_hash: string;
+            run_id: string;
+            source_content_hash: string;
+            source_revision_id: string;
+            template: components["schemas"]["CreationPlanTemplate"];
+            template_hash: string;
+            version: number;
+        };
+        CreationManifestSnapshot: {
+            availability: string;
+            command_id: string;
+            manifest: components["schemas"]["CreationManifest"] | null;
+            manifest_hash: string | null;
+            run_id: string;
+            schema: string;
+        };
+        CreationPlanTemplate: {
+            flow_type: string;
+            stages: components["schemas"]["CreationStageDescriptor"][] | null;
+            version: number;
+        };
+        CreationStageDescriptor: {
+            instance_count: number | null;
+            review_key: string;
+            review_required: boolean;
+            scope: string;
+            step_key: string;
+            title: string;
+        };
+        StoryboardTextIntentAudio: {
+            channel: string;
+            dialogue_id: string;
+            speaker_mention_id?: string;
+            text: string;
+        };
+        StoryboardTextIntentBlocking: {
+            action: string;
+            facing: string;
+            mention_id: string;
+            position: string;
+        };
+        StoryboardTextIntentIssue: {
+            code: string;
+            scope: string;
+            severity: string;
+            summary: string;
+        };
+        StoryboardTextIntentRiskResolution: {
+            code: string;
+            reason: string;
+            scope: string;
+        };
+        StoryboardTextIntentShot: {
+            action: string;
+            asset_readiness: string;
+            audio: components["schemas"]["StoryboardTextIntentAudio"][] | null;
+            camera_movement: string;
+            detail_evidence: components["schemas"]["StoryboardEvidenceRef"][] | null;
+            duration_max_ms: number;
+            duration_min_ms: number;
+            entry_state: string;
+            exit_state: string;
+            framing: string;
+            id: string;
+            key: string;
+            narrative_unit_ids: string[] | null;
+            panel_caption: string;
+            position: number;
+            purpose: string;
+            screen_direction: string;
+            timing_basis: string;
+            visual_requirements: components["schemas"]["StoryboardTextIntentVisual"][] | null;
+        };
+        StoryboardTextIntentVersion: {
+            asset_readiness: string;
+            audience_knows: string[] | null;
+            blocking: components["schemas"]["StoryboardTextIntentBlocking"][] | null;
+            content_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            decision_id: string;
+            dramatic_intent: string;
+            episode_id: string;
+            id: string;
+            id_mapping: {
+                [key: string]: string;
+            };
+            issues: components["schemas"]["StoryboardTextIntentIssue"][] | null;
+            project_id: string;
+            proposal_id: string;
+            revision: number;
+            risk_resolutions: components["schemas"]["StoryboardTextIntentRiskResolution"][] | null;
+            run_id: string;
+            scene_id: string;
+            shots: components["schemas"]["StoryboardTextIntentShot"][] | null;
+            source_hash: string;
+            source_revision_id: string;
+            structure_id: string;
+            withhold: string[] | null;
+            workspace_id: string;
+            world_version_id: string;
+        };
+        StoryboardTextIntentVisual: {
+            asset_readiness: string;
+            entity_id?: string;
+            mention_id: string;
+        };
     };
     responses: {
         /** @description RFC 9457 风格错误信封 */
@@ -3712,6 +4622,239 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    resumeCreationRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumeCreationRunRequest"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationResumeResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getCreationExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationExecution"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    syncCreationProposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationSyncResult"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listCreationProposals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationProposal"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getCreationProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationProposal"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    adoptCreationProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdoptCreationProposalRequest"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationAdoptionReceipt"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getCurrentScriptSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AcceptedScriptSourceResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
     listCreationRuns: {
         parameters: {
             query?: {
@@ -6010,6 +7153,145 @@ export interface operations {
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getCreationManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 固定版本只读查询，当前权限核验，不产生业务副作用。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationManifestSnapshot"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
+        };
+    };
+    getCreationAttemptHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                step_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 固定版本只读查询，当前权限核验，不产生业务副作用。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CreationAttemptHistory"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
+        };
+    };
+    getTextWorldVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 固定版本只读查询，当前权限核验，不产生业务副作用。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BibleTextWorldVersion"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
+        };
+    };
+    getTextIntentVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 固定版本只读查询，当前权限核验，不产生业务副作用。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StoryboardTextIntentVersion"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+            504: components["responses"]["Problem"];
         };
     };
 }

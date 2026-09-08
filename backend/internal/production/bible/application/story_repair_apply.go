@@ -157,11 +157,11 @@ func ApplyStoryCandidateRepairPatch(
 	decoder := json.NewDecoder(bytes.NewReader(parent))
 	decoder.UseNumber()
 	if err := decoder.Decode(&candidate); err != nil || candidate == nil {
-		return nil, errors.New("Candidate repair parent must be one JSON object")
+		return nil, errors.New("candidate repair parent must be one JSON object")
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return nil, errors.New("Candidate repair parent contains trailing JSON")
+		return nil, errors.New("candidate repair parent contains trailing JSON")
 	}
 
 	targetKeys := make(map[string]struct{}, len(input.AllowedTargets))
@@ -176,7 +176,7 @@ func ApplyStoryCandidateRepairPatch(
 	for _, allowed := range input.AllowedTargets {
 		fragment, exists := indexed[allowed.CandidateKey]
 		if !exists {
-			return nil, errors.New("Candidate repair allowed target is absent from the parent revision")
+			return nil, errors.New("candidate repair allowed target is absent from the parent revision")
 		}
 		encoded, marshalErr := json.Marshal(fragment)
 		if marshalErr != nil {
@@ -184,7 +184,7 @@ func ApplyStoryCandidateRepairPatch(
 		}
 		actualHash, hashErr := agentcontract.StoryGraphCandidateFragmentHash(encoded)
 		if hashErr != nil || actualHash != allowed.BaseFragmentHash {
-			return nil, errors.New("Candidate repair allowed fragment does not match the parent revision")
+			return nil, errors.New("candidate repair allowed fragment does not match the parent revision")
 		}
 		targets[allowed.CandidateKey] = fragment
 	}
@@ -192,7 +192,7 @@ func ApplyStoryCandidateRepairPatch(
 	for _, operation := range patch.Operations {
 		target := targets[operation.TargetCandidateKey]
 		if _, exists := target[operation.FieldName]; !exists {
-			return nil, errors.New("Candidate repair field is absent from its frozen fragment")
+			return nil, errors.New("candidate repair field is absent from its frozen fragment")
 		}
 		switch {
 		case operation.Replacement.Text != nil:
@@ -204,7 +204,7 @@ func ApplyStoryCandidateRepairPatch(
 			}
 			target[operation.FieldName] = values
 		default:
-			return nil, errors.New("Candidate repair replacement type is unsupported for Bible candidates")
+			return nil, errors.New("candidate repair replacement type is unsupported for Bible candidates")
 		}
 	}
 
@@ -230,13 +230,13 @@ func StoryCandidateRepairAllowedTarget(
 	candidateKey string,
 ) (agentcontract.StoryGraphRepairAllowedTarget, error) {
 	if strings.TrimSpace(candidateKey) == "" {
-		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("Story candidate repair target key is required")
+		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("story candidate repair target key is required")
 	}
 	var value map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(candidate))
 	decoder.UseNumber()
 	if err := decoder.Decode(&value); err != nil || value == nil {
-		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("Story candidate repair parent must be one JSON object")
+		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("story candidate repair parent must be one JSON object")
 	}
 	indexed, err := indexCandidateRepairFragments(value, map[string]struct{}{candidateKey: {}})
 	if err != nil {
@@ -244,7 +244,7 @@ func StoryCandidateRepairAllowedTarget(
 	}
 	fragment, exists := indexed[candidateKey]
 	if !exists {
-		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("Story candidate repair target is absent from its frozen candidate")
+		return agentcontract.StoryGraphRepairAllowedTarget{}, errors.New("story candidate repair target is absent from its frozen candidate")
 	}
 	encoded, err := json.Marshal(fragment)
 	if err != nil {
@@ -401,7 +401,7 @@ func indexCandidateRepairFragments(
 					continue
 				}
 				if _, exists := result[identity]; exists {
-					return errors.New("Candidate repair parent contains a duplicate stable key")
+					return errors.New("candidate repair parent contains a duplicate stable key")
 				}
 				result[identity] = typed
 			}

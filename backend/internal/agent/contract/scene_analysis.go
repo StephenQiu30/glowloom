@@ -333,7 +333,7 @@ func (value SceneAnalysisInvocation) Validate() error {
 	}
 	computed, err := value.ComputeInputHash()
 	if err != nil || computed != value.InputHash {
-		return errors.New("Scene Analysis input hash mismatch")
+		return errors.New("scene Analysis input hash mismatch")
 	}
 	return nil
 }
@@ -509,11 +509,11 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 		value.Executor.RuntimeClass != "text" ||
 		value.Executor.RuntimeImageDigest != invocation.StageRelease.AgentImageDigest ||
 		value.Executor.HarnessVersion != "scene-analysis-harness" || strings.TrimSpace(value.Executor.Model) == "" {
-		return errors.New("Scene Analysis result identity does not match invocation")
+		return errors.New("scene Analysis result identity does not match invocation")
 	}
 	computedResultHash, err := value.ComputeResultHash()
 	if err != nil || !hashPattern.MatchString(value.ResultHash) || computedResultHash != value.ResultHash {
-		return errors.New("Scene Analysis result hash mismatch")
+		return errors.New("scene Analysis result hash mismatch")
 	}
 	diagnostics, err := json.Marshal(value.Diagnostics)
 	if err != nil {
@@ -521,7 +521,7 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 	}
 	diagnosticHash, err := ProductionCanonicalHash(diagnostics)
 	if err != nil || diagnosticHash != value.DiagnosticHash {
-		return errors.New("Scene Analysis diagnostic hash mismatch")
+		return errors.New("scene Analysis diagnostic hash mismatch")
 	}
 	switch value.Status {
 	case "accepted":
@@ -530,7 +530,7 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 		}
 		outputHash, hashErr := ProductionCanonicalHash(value.Candidate)
 		if hashErr != nil || outputHash != *value.OutputHash {
-			return errors.New("Scene Analysis output hash mismatch")
+			return errors.New("scene Analysis output hash mismatch")
 		}
 		switch invocation.Payload.Variant.StageKey {
 		case "propose_script_spans":
@@ -605,7 +605,7 @@ func (value SourceEvidenceSpan) Validate(text []rune) error {
 	}
 	anchor := string(text[value.SourceStart:value.SourceEnd])
 	if anchor != value.ExactAnchor || hashUTF8(anchor) != value.TextHash {
-		return errors.New("Scene Analysis Evidence does not match source")
+		return errors.New("scene Analysis Evidence does not match source")
 	}
 	return nil
 }

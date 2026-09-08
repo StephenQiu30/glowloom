@@ -167,7 +167,7 @@ func validateEventPayload(envelope Envelope) error {
 			!canonicalUUID(value.ScriptVersionID) || !canonicalUUID(value.EpisodeID) ||
 			!canonicalUUID(value.DocumentRevisionID) || value.VersionNo != envelope.AggregateRevision ||
 			!lowercaseHexHash.MatchString(value.ContentHash) || value.SourceStart < 0 || value.SourceEnd <= value.SourceStart {
-			return errors.New("Script event payload is incomplete")
+			return errors.New("script event payload is incomplete")
 		}
 		return nil
 	case StoryGraphVersionPublished:

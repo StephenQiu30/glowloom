@@ -99,12 +99,12 @@ func (applier *Applier) ApplyHumanGateDecision(
 			continue
 		}
 		if documentID != "" {
-			return domain.HumanGateOwnerResult{}, errors.New("Production Bible Human Gate has multiple script revisions")
+			return domain.HumanGateOwnerResult{}, errors.New("production Bible Human Gate has multiple script revisions")
 		}
 		documentID, documentHash = reference.ID, reference.Hash
 	}
 	if documentID == "" || len(documentHash) != 64 {
-		return domain.HumanGateOwnerResult{}, errors.New("Production Bible Human Gate has no frozen script revision")
+		return domain.HumanGateOwnerResult{}, errors.New("production Bible Human Gate has no frozen script revision")
 	}
 	result, err := applier.bibles.Confirm(ctx, bibleapp.Actor{
 		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
@@ -176,7 +176,7 @@ func (applier *Applier) freezeStoryboardIntents(
 		set.ResultHash == nil || *set.ResultHash != approved.ContentHash ||
 		result.Receipt.Operation != storyboardFreezeIntentSetOperation || result.Receipt.ResourceID != set.ID ||
 		result.Receipt.WorkspaceID != application.WorkspaceID || result.Receipt.CreatedBy != actor.UserID {
-		return domain.HumanGateOwnerResult{}, errors.New("Storyboard owner result does not match workflow gate")
+		return domain.HumanGateOwnerResult{}, errors.New("storyboard owner result does not match workflow gate")
 	}
 	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -226,12 +226,12 @@ func (applier *Applier) applyEpisodeStructures(
 		len(batch.Structures) == 0 || result.Receipt.Operation != episodeStructureBatchConfirmOperation ||
 		result.Receipt.ResourceID != batch.Commit.ID || result.Receipt.WorkspaceID != application.WorkspaceID ||
 		result.Receipt.CreatedBy != actor.UserID {
-		return domain.HumanGateOwnerResult{}, errors.New("Episode Structure owner result does not match workflow gate")
+		return domain.HumanGateOwnerResult{}, errors.New("episode Structure owner result does not match workflow gate")
 	}
 	for _, structure := range batch.Structures {
 		if structure.WorkspaceID != application.WorkspaceID || structure.ProjectID != application.ProjectID ||
 			structure.Status != "confirmed" || structure.ConfirmedBy == nil || *structure.ConfirmedBy != actor.UserID {
-			return domain.HumanGateOwnerResult{}, errors.New("Episode Structure owner result does not match workflow gate")
+			return domain.HumanGateOwnerResult{}, errors.New("episode Structure owner result does not match workflow gate")
 		}
 	}
 	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
@@ -283,7 +283,7 @@ func (applier *Applier) applyEpisodePlanning(
 		result.Receipt.Operation != episodePlanningApplyOperation ||
 		result.Receipt.ResourceID != application.Candidate.ReferenceID || result.Receipt.WorkspaceID != application.WorkspaceID ||
 		result.Receipt.CreatedBy != actor.UserID {
-		return domain.HumanGateOwnerResult{}, errors.New("Episode Planning owner result does not match workflow gate")
+		return domain.HumanGateOwnerResult{}, errors.New("episode Planning owner result does not match workflow gate")
 	}
 	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -374,7 +374,7 @@ func (applier *Applier) applyEpisodeSegmentation(
 		len(set.ContentHash) != 64 || len(set.Episodes) == 0 || result.Receipt.Operation != episodePlanApplyOperation ||
 		result.Receipt.ResourceID != application.Candidate.ReferenceID || result.Receipt.WorkspaceID != application.WorkspaceID ||
 		result.Receipt.CreatedBy != actor.UserID {
-		return domain.HumanGateOwnerResult{}, errors.New("Episode Plan owner result does not match workflow gate")
+		return domain.HumanGateOwnerResult{}, errors.New("episode Plan owner result does not match workflow gate")
 	}
 	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -453,7 +453,7 @@ func validateConfirmedEpisodePlan(
 		plan.WorkspaceID != application.WorkspaceID || plan.ProjectID != application.ProjectID ||
 		plan.InputHash != application.Candidate.ContentHash || operation != episodePlanConfirmOperation ||
 		resourceID != plan.ID || workspaceID != application.WorkspaceID || createdBy != actor.UserID {
-		return errors.New("Episode Plan owner result does not match workflow gate")
+		return errors.New("episode Plan owner result does not match workflow gate")
 	}
 	return nil
 }

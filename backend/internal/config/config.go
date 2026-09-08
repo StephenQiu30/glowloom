@@ -260,7 +260,7 @@ func Load() (Config, error) {
 	seenTopics := make(map[string]struct{}, len(topics))
 	for _, topic := range topics {
 		if _, exists := seenTopics[topic]; exists {
-			return Config{}, errors.New("Kafka business and DLQ topics must be isolated")
+			return Config{}, errors.New("kafka business and DLQ topics must be isolated")
 		}
 		seenTopics[topic] = struct{}{}
 	}
@@ -277,7 +277,7 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if scriptAlias == storyGraphAlias {
-		return Config{}, errors.New("Elasticsearch Script and StoryGraph aliases must be isolated")
+		return Config{}, errors.New("elasticsearch Script and StoryGraph aliases must be isolated")
 	}
 	return Config{
 		ListenAddress:                   net.JoinHostPort(host, strconv.Itoa(port)),

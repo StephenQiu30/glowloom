@@ -27,6 +27,7 @@ type Authenticator interface {
 
 type SourceService interface {
 	Accept(context.Context, application.Actor, application.AcceptSourceCommand) (domain.AcceptedSource, error)
+	GetCurrent(context.Context, application.Actor, string) (domain.AcceptedSource, error)
 	GetExact(context.Context, application.Actor, string, string) (domain.AcceptedSource, error)
 	ReadSpan(context.Context, application.Actor, application.SourceSpanQuery) (domain.SourceSpan, error)
 }
@@ -49,8 +50,22 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{project_id}/script-documents", handler.listDocuments)
 	mux.HandleFunc("GET /api/document-revisions/{revision_id}", handler.getRevision)
 	mux.HandleFunc("POST /api/projects/{project_id}/script-sources", handler.acceptSource)
+	mux.HandleFunc("GET /api/projects/{project_id}/current-script-source", handler.getCurrentSource)
 	mux.HandleFunc("GET /api/projects/{project_id}/script-sources/{revision_id}", handler.getSource)
 	mux.HandleFunc("GET /api/projects/{project_id}/script-sources/{revision_id}/spans", handler.getSourceSpan)
+}
+
+func (handler *Handler) getCurrentSource(writer http.ResponseWriter, request *http.Request) {
+	actor, ok := handler.actor(writer, request)
+	if !ok {
+		return
+	}
+	result, err := handler.sources.GetCurrent(request.Context(), actor, request.PathValue("project_id"))
+	if err != nil {
+		handler.writeError(writer, request, err)
+		return
+	}
+	platformhttp.WriteJSON(writer, http.StatusOK, map[string]any{"data": result})
 }
 
 func (handler *Handler) getSourceSpan(writer http.ResponseWriter, request *http.Request) {

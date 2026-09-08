@@ -111,7 +111,7 @@ func (service *EpisodePlanningService) GetPlanningOwnerSet(
 ) (AppliedPlanningOwnerSet, error) {
 	receiptID = strings.TrimSpace(receiptID)
 	if service == nil || service.transactions == nil {
-		return AppliedPlanningOwnerSet{}, errors.New("Episode Planning owner service is unavailable")
+		return AppliedPlanningOwnerSet{}, errors.New("episode Planning owner service is unavailable")
 	}
 	if _, err := uuid.Parse(receiptID); err != nil {
 		return AppliedPlanningOwnerSet{}, ErrNotFound
@@ -120,7 +120,7 @@ func (service *EpisodePlanningService) GetPlanningOwnerSet(
 	err := service.transactions.WithinEpisodePlanningTransaction(ctx, func(repo EpisodePlanningRepository) error {
 		reader, ok := repo.(EpisodePlanningOwnerSetReader)
 		if !ok {
-			return errors.New("Episode Planning owner reader is unavailable")
+			return errors.New("episode Planning owner reader is unavailable")
 		}
 		receipt, loadErr := reader.GetPlanningOwnerSetReceipt(ctx, receiptID)
 		if loadErr != nil {
@@ -171,7 +171,7 @@ func (service *EpisodePlanningService) ApplyEpisodePlanningCandidate(
 ) (ApplyEpisodePlanningCandidateResult, error) {
 	trimEpisodePlanningCommand(&command)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil {
-		return ApplyEpisodePlanningCandidateResult{}, errors.New("Episode Planning owner service is unavailable")
+		return ApplyEpisodePlanningCandidateResult{}, errors.New("episode Planning owner service is unavailable")
 	}
 	for _, identifier := range []string{
 		command.WorkspaceID, command.ProjectID, command.CandidateRevisionID,

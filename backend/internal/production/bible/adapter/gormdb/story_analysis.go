@@ -47,17 +47,17 @@ func loadStoryAnalysisSeed(
 	}
 	var run model.WorkflowRun
 	if err = database.WithContext(ctx).First(&run, "id = ?", runID).Error; err != nil {
-		return application.StoryAnalysisSeed{}, errors.New("Story analysis requires an existing WorkflowRun")
+		return application.StoryAnalysisSeed{}, errors.New("story analysis requires an existing WorkflowRun")
 	}
 	var node model.NodeRunProjection
 	if err = database.WithContext(ctx).First(&node, "id = ?", nodeID).Error; err != nil {
-		return application.StoryAnalysisSeed{}, errors.New("Story analysis requires an existing NodeRun")
+		return application.StoryAnalysisSeed{}, errors.New("story analysis requires an existing NodeRun")
 	}
 	if run.WorkspaceID.String() != command.WorkspaceID || run.ProjectID.String() != command.ProjectID ||
 		node.WorkspaceID != run.WorkspaceID || node.WorkflowRunID != run.ID || node.Executor != "activity.story_analysis" ||
 		node.Status == "FAILED" || node.Status == "CANCELLED" ||
 		node.Status == "SKIPPED" || node.Status == "CACHED" {
-		return application.StoryAnalysisSeed{}, errors.New("Story analysis WorkflowRun or NodeRun has drifted")
+		return application.StoryAnalysisSeed{}, errors.New("story analysis WorkflowRun or NodeRun has drifted")
 	}
 	aggregateID, err := uuid.Parse(command.EvidenceCandidateRevisionID)
 	if err != nil {
@@ -157,7 +157,7 @@ func (store *Store) EnsureStoryAnalysis(
 			return err
 		}
 		if seed.RootInputHash != preparation.AnalyzeManifest.RootInputHash || seed.NodeRunID != preparation.AnalyzeManifest.NodeRunID {
-			return errors.New("Story analysis source changed before persistence")
+			return errors.New("story analysis source changed before persistence")
 		}
 		var existing []model.ShardManifest
 		if err = transaction.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -182,13 +182,13 @@ func (store *Store) EnsureStoryAnalysis(
 				return err
 			}
 			if len(preparation.Invocations) != len(preparation.AnalyzeManifest.Shards) {
-				return errors.New("Story analysis preparation has incomplete map invocations")
+				return errors.New("story analysis preparation has incomplete map invocations")
 			}
 			for _, invocation := range preparation.Invocations {
 				if invocation.ManifestID != preparation.AnalyzeManifest.ManifestID ||
 					invocation.ManifestHash != preparation.AnalyzeManifest.ManifestHash ||
 					invocation.Stage != domain.AnalyzeStoryStage {
-					return errors.New("Story analysis invocation does not belong to its manifest")
+					return errors.New("story analysis invocation does not belong to its manifest")
 				}
 				record, recordErr := invocationRecord(invocation)
 				if recordErr != nil {
@@ -208,13 +208,13 @@ func (store *Store) EnsureStoryAnalysis(
 				case domain.AnalyzeStoryStage:
 					value, decodeErr := storyAnalysisManifestDomain(record)
 					if decodeErr != nil || value.ManifestHash != preparation.AnalyzeManifest.ManifestHash {
-						return errors.New("Story analysis manifest changed for the existing NodeRun")
+						return errors.New("story analysis manifest changed for the existing NodeRun")
 					}
 					foundAnalyze = true
 				case domain.ReconcileStoryStage:
 					value, decodeErr := storyReconcileManifestDomain(record)
 					if decodeErr != nil || value.ManifestHash != preparation.ReconcileManifest.ManifestHash {
-						return errors.New("Story reconcile manifest changed for the existing NodeRun")
+						return errors.New("story reconcile manifest changed for the existing NodeRun")
 					}
 					foundReconcile = true
 				default:
@@ -222,7 +222,7 @@ func (store *Store) EnsureStoryAnalysis(
 				}
 			}
 			if !foundAnalyze || !foundReconcile {
-				return errors.New("Story analysis initial manifest pair is incomplete")
+				return errors.New("story analysis initial manifest pair is incomplete")
 			}
 		}
 		persistedAnalyze, persisted, err := loadLatestStoryManifestPair(transaction, preparation.Command.NodeRunID, true)
@@ -420,7 +420,7 @@ func (store *Store) ClaimNextStoryAnalysis(
 	leaseExpiresAt time.Time,
 ) (domain.Invocation, bool, error) {
 	if !leaseExpiresAt.After(now) {
-		return domain.Invocation{}, false, errors.New("Story analysis invocation lease must expire after claim time")
+		return domain.Invocation{}, false, errors.New("story analysis invocation lease must expire after claim time")
 	}
 	var result domain.Invocation
 	found := false
@@ -470,7 +470,7 @@ func (store *Store) ValidateStoryAnalysisInvocation(
 		return normalizeNotFound(err)
 	}
 	if !activeInvocationClaim(invocation, claimVersion, now) {
-		return errors.New("Story analysis invocation claim is stale")
+		return errors.New("story analysis invocation claim is stale")
 	}
 	if err = validateCurrentStoryManifest(store.database.WithContext(ctx), invocation, false); err != nil {
 		return err
@@ -571,7 +571,7 @@ func (store *Store) CompleteStoryAnalysisInvocation(
 			return err
 		}
 		if invocation.NodeRunID == nil {
-			return errors.New("Story analysis invocation has no NodeRun")
+			return errors.New("story analysis invocation has no NodeRun")
 		}
 		manifest, err := loadStoryReconcileManifest(transaction, invocation.NodeRunID.String())
 		if err != nil {
@@ -603,10 +603,10 @@ func (store *Store) LoadStoryAnalysisReshardSeed(
 			return normalizeNotFound(err)
 		}
 		if !activeInvocationClaim(invocation, claimVersion, now) {
-			return errors.New("Story analysis reshard claim is stale")
+			return errors.New("story analysis reshard claim is stale")
 		}
 		if invocation.NodeRunID == nil || invocation.WorkflowRunID == nil {
-			return errors.New("Story analysis reshard invocation has no workflow owner")
+			return errors.New("story analysis reshard invocation has no workflow owner")
 		}
 		request, err := agentgorm.StageInvocation(invocation)
 		if err != nil {
@@ -729,20 +729,20 @@ func (store *Store) ApplyStoryAnalysisReshard(
 		}
 		if currentAnalyze.ManifestHash != preparation.PreviousAnalyzeManifestHash ||
 			currentReconcile.ManifestHash != preparation.PreviousReconcileManifestHash {
-			return errors.New("Story analysis reshard lineage has drifted")
+			return errors.New("story analysis reshard lineage has drifted")
 		}
 		nextAnalyze := currentAnalyze
 		if preparation.AnalyzeManifest != nil {
 			nextAnalyze = *preparation.AnalyzeManifest
 			if nextAnalyze.ManifestID != currentAnalyze.ManifestID || nextAnalyze.Version != currentAnalyze.Version+1 ||
 				nextAnalyze.ParentManifestHash == nil || *nextAnalyze.ParentManifestHash != currentAnalyze.ManifestHash {
-				return errors.New("Story analysis map reshard lineage has drifted")
+				return errors.New("story analysis map reshard lineage has drifted")
 			}
 		}
 		nextReconcile := preparation.ReconcileManifest
 		if nextReconcile.ManifestID != currentReconcile.ManifestID || nextReconcile.Version != currentReconcile.Version+1 ||
 			nextReconcile.ParentManifestHash == nil || *nextReconcile.ParentManifestHash != currentReconcile.ManifestHash {
-			return errors.New("Story reconcile reshard lineage has drifted")
+			return errors.New("story reconcile reshard lineage has drifted")
 		}
 		if err = domain.ValidateStoryAnalysisManifests(nextAnalyze, nextReconcile); err != nil {
 			return err
@@ -767,7 +767,7 @@ func (store *Store) ApplyStoryAnalysisReshard(
 			if preparation.AnalyzeManifest == nil || value.ManifestID != nextAnalyze.ManifestID ||
 				value.ManifestVersion != nextAnalyze.Version || value.ManifestHash != nextAnalyze.ManifestHash ||
 				value.Stage != domain.AnalyzeStoryStage {
-				return errors.New("Story analysis reshard invocation does not belong to the current map manifest")
+				return errors.New("story analysis reshard invocation does not belong to the current map manifest")
 			}
 			var succeeded model.AgentInvocation
 			lookupErr := transaction.Where("node_run_id = ? AND stage = ? AND shard_key = ? AND status = ?",
@@ -1027,7 +1027,7 @@ func scheduleStoryReconcile(database *gorm.DB, manifest domain.StoryReconcileMan
 			}
 			request, requestErr := agentgorm.StageInvocation(invocation)
 			if requestErr != nil || len(request.Payload.SourceRefs) != 1 {
-				return errors.New("Story reconcile child provenance is incomplete")
+				return errors.New("story reconcile child provenance is incomplete")
 			}
 			children = append(children, storyReconcileReadyChild{
 				Invocation: invocation, Revision: revision, SourceRef: request.Payload.SourceRefs[0],
@@ -1119,7 +1119,7 @@ func storyReconcileInvocationRecord(
 	now time.Time,
 ) (model.AgentInvocation, error) {
 	if len(children) != len(shard.Children) || len(children) == 0 || len(children) > manifest.FanIn {
-		return model.AgentInvocation{}, errors.New("Story reconcile children are incomplete")
+		return model.AgentInvocation{}, errors.New("story reconcile children are incomplete")
 	}
 	candidateType := "story_analysis_candidate"
 	if shard.Children[0].Stage == domain.ReconcileStoryStage {
@@ -1132,12 +1132,12 @@ func storyReconcileInvocationRecord(
 		childSpec := shard.Children[index]
 		if childSpec.Stage != child.Invocation.Stage || childSpec.ShardKey != child.Invocation.ShardKey ||
 			child.SourceRef != sourceRef || child.ProjectID != children[0].ProjectID || child.Invocation.ResultHash == nil {
-			return model.AgentInvocation{}, errors.New("Story reconcile child ordering or source has drifted")
+			return model.AgentInvocation{}, errors.New("story reconcile child ordering or source has drifted")
 		}
 		candidateJSON := json.RawMessage(child.Revision.Candidate)
 		if childSpec.CandidateItemStart != nil || childSpec.CandidateItemEnd != nil {
 			if childSpec.CandidateItemStart == nil || childSpec.CandidateItemEnd == nil {
-				return model.AgentInvocation{}, errors.New("Story reconcile child candidate range is incomplete")
+				return model.AgentInvocation{}, errors.New("story reconcile child candidate range is incomplete")
 			}
 			switch candidateType {
 			case "story_analysis_candidate":
@@ -1354,7 +1354,7 @@ func storyReconcileManifestDomain(record model.ShardManifest) (domain.StoryRecon
 		}
 		if _, exists := referenced[shard.Key]; !exists {
 			if root != "" {
-				return domain.StoryReconcileManifest{}, errors.New("Story reconcile manifest has multiple active roots")
+				return domain.StoryReconcileManifest{}, errors.New("story reconcile manifest has multiple active roots")
 			}
 			root = shard.Key
 		}

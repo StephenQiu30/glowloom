@@ -18,6 +18,12 @@ type Source struct {
 	SpanIndexID string `json:"span_index_id"`
 }
 
+type FrozenSource struct {
+	RevisionID  string `json:"revision_id"`
+	ContentHash string `json:"content_hash"`
+	Text        string `json:"text"`
+}
+
 type Command struct {
 	Schema      string `json:"schema"`
 	CommandID   string `json:"command_id"`

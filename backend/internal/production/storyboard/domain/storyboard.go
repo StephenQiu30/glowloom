@@ -526,7 +526,7 @@ func BuildDraftManifest(input StoryGraphDraftInput) (DraftManifest, error) {
 		}
 	}
 	if input.GraphVersionNo < 1 || len(input.GraphContentHash) != 64 || len(input.Scenes) == 0 {
-		return DraftManifest{}, errors.New("Storyboard Draft requires an exact non-empty StoryGraph")
+		return DraftManifest{}, errors.New("storyboard Draft requires an exact non-empty StoryGraph")
 	}
 	rootInputHash, err := agentcontract.CanonicalHash(mustJSON(struct {
 		GraphVersionID string                                     `json:"graph_version_id"`
@@ -553,7 +553,7 @@ func BuildDraftManifest(input StoryGraphDraftInput) (DraftManifest, error) {
 	for index, scene := range scenes {
 		key := "scene:" + scene.StageInput.Scene.StoryNodeKey
 		if _, duplicate := seen[key]; duplicate {
-			return DraftManifest{}, errors.New("Storyboard Draft Scene shards must be unique")
+			return DraftManifest{}, errors.New("storyboard Draft Scene shards must be unique")
 		}
 		seen[key] = struct{}{}
 		inputHash, hashErr := agentcontract.CanonicalHash(mustJSON(scene.StageInput))
@@ -598,7 +598,7 @@ func BuildCandidateSet(
 	ordered := append([]CandidateSetItem(nil), items...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].SceneStoryNodeKey < ordered[j].SceneStoryNodeKey })
 	if len(ordered) == 0 {
-		return CandidateSet{}, nil, "", "", errors.New("Storyboard Candidate Set has no Scene candidates")
+		return CandidateSet{}, nil, "", "", errors.New("storyboard Candidate Set has no Scene candidates")
 	}
 	for index, item := range ordered {
 		if strings.TrimSpace(item.SceneStoryNodeKey) == "" || strings.TrimSpace(item.ShardKey) == "" ||
@@ -654,12 +654,12 @@ func BuildApprovedIntentSet(
 		}
 	}
 	if set.CandidateRevisionID == nil || set.CandidateRevisionHash == nil {
-		return ApprovedIntentSet{}, errors.New("Storyboard Draft Set has no Candidate Revision")
+		return ApprovedIntentSet{}, errors.New("storyboard Draft Set has no Candidate Revision")
 	}
 	if _, err := uuid.Parse(*set.CandidateRevisionID); err != nil || len(*set.CandidateRevisionHash) != 64 ||
 		set.Revision < 1 || candidateRevision < 1 || set.GraphVersionNo < 1 || len(set.GraphContentHash) != 64 ||
 		set.ManifestVersion < 1 || len(set.ManifestHash) != 64 || len(set.Batches) == 0 || len(batches) != len(set.Batches) {
-		return ApprovedIntentSet{}, errors.New("Storyboard Draft Set is incomplete")
+		return ApprovedIntentSet{}, errors.New("storyboard Draft Set is incomplete")
 	}
 	byBatch := make(map[string]Batch, len(batches))
 	for _, batch := range batches {
@@ -685,7 +685,7 @@ func BuildApprovedIntentSet(
 			batch.Candidate.SceneStoryNodeKey != reference.SceneStoryNodeKey ||
 			(batch.Status != "ready" && batch.Status != "needs_asset") ||
 			batch.Candidate.AssetReadiness != batch.Status || len(batch.Candidate.ShotIntents) == 0 {
-			return ApprovedIntentSet{}, errors.New("Storyboard Draft Batch changed before Intent freeze")
+			return ApprovedIntentSet{}, errors.New("storyboard Draft Batch changed before Intent freeze")
 		}
 		intents := append([]ShotIntent(nil), batch.Candidate.ShotIntents...)
 		sort.Slice(intents, func(left, right int) bool {
@@ -696,7 +696,7 @@ func BuildApprovedIntentSet(
 		})
 		for intentIndex := range intents {
 			if intents[intentIndex].IntentOrder != intentIndex+1 || strings.TrimSpace(intents[intentIndex].ShotKey) == "" {
-				return ApprovedIntentSet{}, errors.New("Storyboard Shot Intent order changed before freeze")
+				return ApprovedIntentSet{}, errors.New("storyboard Shot Intent order changed before freeze")
 			}
 			intents[intentIndex].VisualRequirements = append([]VisualRequirement(nil), intents[intentIndex].VisualRequirements...)
 			sort.Slice(intents[intentIndex].VisualRequirements, func(left, right int) bool {

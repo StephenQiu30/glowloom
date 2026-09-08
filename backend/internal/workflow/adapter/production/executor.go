@@ -237,7 +237,7 @@ func (executor *NodeExecutor) executeStoryReview(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.storyReviews == nil {
-		return domain.NodeExecutorResult{}, errors.New("Story review workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("story review workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
@@ -257,7 +257,7 @@ func (executor *NodeExecutor) executeStoryReview(
 	if binding.Port != "candidate" || binding.ValueType != "story_reconciliation_candidate" ||
 		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "candidate" ||
 		strings.TrimSpace(binding.SourceNodeID) == "" {
-		return domain.NodeExecutorResult{}, errors.New("Story review Candidate input has drifted")
+		return domain.NodeExecutorResult{}, errors.New("story review Candidate input has drifted")
 	}
 	state, err := executor.storyReviews.EnsureStoryReview(ctx, bibleapp.StoryReviewCommand{
 		Actor:       bibleapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion},
@@ -277,10 +277,10 @@ func (executor *NodeExecutor) executeStoryReview(
 	case "ready":
 		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
 			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
-			return domain.NodeExecutorResult{}, errors.New("Story review candidate is incomplete")
+			return domain.NodeExecutorResult{}, errors.New("story review candidate is incomplete")
 		}
 	default:
-		return domain.NodeExecutorResult{}, errors.New("Story review returned an invalid status")
+		return domain.NodeExecutorResult{}, errors.New("story review returned an invalid status")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -374,7 +374,7 @@ func (executor *NodeExecutor) executeStoryAnalysis(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.stories == nil {
-		return domain.NodeExecutorResult{}, errors.New("Story analysis workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("story analysis workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
@@ -390,7 +390,7 @@ func (executor *NodeExecutor) executeStoryAnalysis(
 	if binding.Port != "evidence" || binding.ValueType != "source_evidence_candidate" ||
 		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "evidence" ||
 		strings.TrimSpace(binding.SourceNodeID) == "" {
-		return domain.NodeExecutorResult{}, errors.New("Story analysis Evidence input has drifted")
+		return domain.NodeExecutorResult{}, errors.New("story analysis Evidence input has drifted")
 	}
 	state, err := executor.stories.Ensure(ctx, bibleapp.StoryAnalysisCommand{
 		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
@@ -409,10 +409,10 @@ func (executor *NodeExecutor) executeStoryAnalysis(
 	case "ready":
 		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
 			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
-			return domain.NodeExecutorResult{}, errors.New("Story reconciliation candidate is incomplete")
+			return domain.NodeExecutorResult{}, errors.New("story reconciliation candidate is incomplete")
 		}
 	default:
-		return domain.NodeExecutorResult{}, errors.New("Story analysis returned an invalid status")
+		return domain.NodeExecutorResult{}, errors.New("story analysis returned an invalid status")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -434,7 +434,7 @@ func (executor *NodeExecutor) executeProductionShotInput(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.bindings == nil {
-		return domain.NodeExecutorResult{}, errors.New("Production Shot workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("production Shot workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 0 ||
@@ -462,14 +462,14 @@ func (executor *NodeExecutor) executeProductionShotInput(
 		shot.ID, shot.WorkspaceID, shot.ProjectID, shot.EpisodeID, shot.BatchID, shot.CreatedBy,
 	} {
 		if _, parseErr := uuid.Parse(identifier); parseErr != nil {
-			return domain.NodeExecutorResult{}, errors.New("Production Shot source returned an invalid identifier")
+			return domain.NodeExecutorResult{}, errors.New("production Shot source returned an invalid identifier")
 		}
 	}
 	if shot.ID != shotID || shot.WorkspaceID != command.WorkspaceID || shot.ProjectID != command.ProjectID ||
 		shot.Status != "active" || shot.Position < 1 || shot.Revision < 1 ||
 		strings.TrimSpace(shot.ProposalKey) == "" || strings.TrimSpace(shot.Title) == "" ||
 		!workflowContentHashPattern.MatchString(shot.ContentHash) || shot.CreatedAt.IsZero() {
-		return domain.NodeExecutorResult{}, errors.New("Production Shot source has drifted")
+		return domain.NodeExecutorResult{}, errors.New("production Shot source has drifted")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -489,7 +489,7 @@ func (executor *NodeExecutor) executeProductionShotBindingTarget(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.bindings == nil {
-		return domain.NodeExecutorResult{}, errors.New("Production Shot workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("production Shot workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 0 || len(command.OutputPorts) != 2 {
@@ -530,7 +530,7 @@ func (executor *NodeExecutor) executeProductionShotBindingTarget(
 		shot.ID, shot.WorkspaceID, shot.ProjectID, shot.EpisodeID, shot.BatchID, shot.CreatedBy,
 	} {
 		if _, parseErr := uuid.Parse(identifier); parseErr != nil {
-			return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source returned an invalid identifier")
+			return domain.NodeExecutorResult{}, errors.New("production Shot binding target source returned an invalid identifier")
 		}
 	}
 	if shot.ID != shotID || shot.WorkspaceID != command.WorkspaceID || shot.ProjectID != command.ProjectID ||
@@ -538,15 +538,15 @@ func (executor *NodeExecutor) executeProductionShotBindingTarget(
 		strings.TrimSpace(shot.ProposalKey) == "" || strings.TrimSpace(shot.Title) == "" ||
 		!workflowContentHashPattern.MatchString(shot.ContentHash) || shot.CreatedAt.IsZero() ||
 		target.ExpectedCurrentRevision < 0 || !workflowContentHashPattern.MatchString(target.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source has drifted")
+		return domain.NodeExecutorResult{}, errors.New("production Shot binding target source has drifted")
 	}
 	if target.ExpectedCurrentRevision == 0 {
 		if target.CurrentBindingID != "" || target.CurrentBindingContentHash != "" {
-			return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source has drifted")
+			return domain.NodeExecutorResult{}, errors.New("production Shot binding target source has drifted")
 		}
 	} else if _, parseErr := uuid.Parse(target.CurrentBindingID); parseErr != nil ||
 		!workflowContentHashPattern.MatchString(target.CurrentBindingContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Production Shot binding target source has drifted")
+		return domain.NodeExecutorResult{}, errors.New("production Shot binding target source has drifted")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -572,7 +572,7 @@ func (executor *NodeExecutor) executeShotImageBinding(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.bindings == nil {
-		return domain.NodeExecutorResult{}, errors.New("Shot image binding workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("shot image binding workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
@@ -598,7 +598,7 @@ func (executor *NodeExecutor) executeShotImageBinding(
 		shot.SourceKind != domain.NodeInputSourceNodeOutput || selection.SourceKind != domain.NodeInputSourceNodeOutput ||
 		shot.SourceNodeID == "" || shot.SourcePort == "" || selection.SourceNodeID == "" || selection.SourcePort == "" ||
 		len(shot.ContentHash) != 64 || len(selection.ContentHash) != 64 {
-		return domain.NodeExecutorResult{}, errors.New("Shot image binding inputs have drifted")
+		return domain.NodeExecutorResult{}, errors.New("shot image binding inputs have drifted")
 	}
 	result, err := executor.bindings.BindSelectedImage(ctx, storyboardapp.Actor{
 		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
@@ -619,7 +619,7 @@ func (executor *NodeExecutor) executeShotImageBinding(
 		len(binding.ContentHash) != 64 || binding.CreatedBy != command.InitiatorUserID ||
 		result.Receipt.Operation != "storyboard.shot.bind_selected_image" ||
 		result.Receipt.ResourceID != binding.ID || result.Receipt.CreatedBy != command.InitiatorUserID {
-		return domain.NodeExecutorResult{}, errors.New("Shot image binding does not match workflow input")
+		return domain.NodeExecutorResult{}, errors.New("shot image binding does not match workflow input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -639,7 +639,7 @@ func (executor *NodeExecutor) executeShotImageBindingAtTarget(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.bindings == nil {
-		return domain.NodeExecutorResult{}, errors.New("Shot image binding workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("shot image binding workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 3 ||
@@ -670,7 +670,7 @@ func (executor *NodeExecutor) executeShotImageBindingAtTarget(
 		!workflowContentHashPattern.MatchString(shot.ContentHash) ||
 		!workflowContentHashPattern.MatchString(selection.ContentHash) ||
 		!workflowContentHashPattern.MatchString(target.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Shot image binding target inputs have drifted")
+		return domain.NodeExecutorResult{}, errors.New("shot image binding target inputs have drifted")
 	}
 	result, err := executor.bindings.BindSelectedImageAtTarget(ctx, storyboardapp.Actor{
 		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
@@ -692,7 +692,7 @@ func (executor *NodeExecutor) executeShotImageBindingAtTarget(
 		!workflowContentHashPattern.MatchString(binding.ContentHash) || binding.CreatedBy != command.InitiatorUserID ||
 		result.Receipt.Operation != "storyboard.shot.bind_selected_image" ||
 		result.Receipt.ResourceID != binding.ID || result.Receipt.CreatedBy != command.InitiatorUserID {
-		return domain.NodeExecutorResult{}, errors.New("Shot image binding does not match frozen target input")
+		return domain.NodeExecutorResult{}, errors.New("shot image binding does not match frozen target input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -744,7 +744,7 @@ func (executor *NodeExecutor) executeStoryboardExport(
 		exportSet.DraftSetID != binding.ReferenceID || exportSet.DraftSetRevision != expectedRevision ||
 		exportSet.Status != "succeeded" || exportSet.Revision != 1 || len(exportSet.Exports) == 0 ||
 		len(exportSet.ContentHash) != 64 || exportSet.CreatedBy != command.InitiatorUserID {
-		return domain.NodeExecutorResult{}, errors.New("Storyboard Export Set does not match workflow input")
+		return domain.NodeExecutorResult{}, errors.New("storyboard Export Set does not match workflow input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -781,7 +781,7 @@ func (executor *NodeExecutor) executeStoryGraphCompile(
 		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "structures" ||
 		strings.TrimSpace(binding.SourceNodeID) == "" || binding.ReferenceVersion != "1" ||
 		!workflowContentHashPattern.MatchString(binding.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Planning owner set input has drifted")
+		return domain.NodeExecutorResult{}, errors.New("planning owner set input has drifted")
 	}
 	actor := planningapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
 	owners, err := executor.planningOwners.GetPlanningOwnerSet(ctx, actor, binding.ReferenceID)
@@ -792,12 +792,12 @@ func (executor *NodeExecutor) executeStoryGraphCompile(
 		owners.Set.ProjectID != command.ProjectID || owners.Set.ContentHash != binding.ContentHash ||
 		len(owners.Set.Structures) == 0 || len(owners.Set.Structures) != len(owners.Structures) ||
 		!workflowContentHashPattern.MatchString(owners.Set.BibleContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Planning owner set does not match workflow input")
+		return domain.NodeExecutorResult{}, errors.New("planning owner set does not match workflow input")
 	}
 	required := make([]storygraph.OwnerHeadRef, len(owners.Set.Structures))
 	for index, reference := range owners.Set.Structures {
 		if reference.Revision < 1 || !workflowContentHashPattern.MatchString(reference.ResultHash) {
-			return domain.NodeExecutorResult{}, errors.New("Planning owner set contains an invalid Structure")
+			return domain.NodeExecutorResult{}, errors.New("planning owner set contains an invalid Structure")
 		}
 		required[index] = storygraph.OwnerHeadRef{
 			OwnerKind: "production/planning", OwnerLogicalID: reference.EpisodeID,
@@ -855,7 +855,7 @@ func (executor *NodeExecutor) executeStoryboardDraft(
 	if err != nil || expectedVersion < 1 || binding.Port != "storygraph" || binding.ValueType != "storygraph_version" ||
 		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "storygraph" ||
 		strings.TrimSpace(binding.SourceNodeID) == "" || !workflowContentHashPattern.MatchString(binding.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Storyboard Draft StoryGraph input has drifted")
+		return domain.NodeExecutorResult{}, errors.New("storyboard Draft StoryGraph input has drifted")
 	}
 	set, err := executor.storyboards.CreateSet(ctx, storyboardapp.Actor{
 		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
@@ -1196,7 +1196,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 	stageKey string,
 ) (domain.NodeExecutorResult, error) {
 	if executor.scripts == nil || executor.scriptSources == nil || executor.sceneAnalysis == nil {
-		return domain.NodeExecutorResult{}, errors.New("Scene Analysis workflow owners are unavailable")
+		return domain.NodeExecutorResult{}, errors.New("scene Analysis workflow owners are unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	expectedBindings := 1
@@ -1228,13 +1228,13 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 			copy := binding
 			candidateBinding = &copy
 		default:
-			return domain.NodeExecutorResult{}, errors.New("Scene Analysis input binding has drifted")
+			return domain.NodeExecutorResult{}, errors.New("scene Analysis input binding has drifted")
 		}
 	}
 	if sourceBinding.ReferenceID == "" || sourceBinding.ReferenceVersion == "" ||
 		!workflowContentHashPattern.MatchString(sourceBinding.ContentHash) ||
 		(stageKey == "extract_scene_facts") != (candidateBinding != nil) {
-		return domain.NodeExecutorResult{}, errors.New("Scene Analysis input set is incomplete")
+		return domain.NodeExecutorResult{}, errors.New("scene Analysis input set is incomplete")
 	}
 	actor := scriptapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
 	accepted, err := executor.scriptSources.GetExact(ctx, actor, command.ProjectID, sourceBinding.ReferenceID)
@@ -1250,7 +1250,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		strconv.FormatInt(accepted.Identity.Revision, 10) != sourceBinding.ReferenceVersion ||
 		accepted.Identity.VersionID != analysis.Revision.ID || accepted.Identity.LogicalID != analysis.Document.ID ||
 		accepted.CodepointCount != analysis.Revision.CodepointCount {
-		return domain.NodeExecutorResult{}, errors.New("Scene Analysis Source identity has drifted")
+		return domain.NodeExecutorResult{}, errors.New("scene Analysis Source identity has drifted")
 	}
 	source := agentapp.SourceInput{
 		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
@@ -1268,7 +1268,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		}
 		if strconv.FormatInt(value.Revision, 10) != candidateBinding.ReferenceVersion ||
 			value.CandidateRevisionHash != candidateBinding.ContentHash || value.CandidateType != "script_span_candidate" {
-			return domain.NodeExecutorResult{}, errors.New("Scene Analysis upstream Candidate identity has drifted")
+			return domain.NodeExecutorResult{}, errors.New("scene Analysis upstream Candidate identity has drifted")
 		}
 		upstream = &value
 	}
@@ -1283,7 +1283,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		candidate.StageKey != stageKey || candidate.ProfileKey != "default" ||
 		candidate.CandidateType != expectedOutputType || candidate.Revision < 1 ||
 		!workflowContentHashPattern.MatchString(candidate.CandidateRevisionHash) {
-		return domain.NodeExecutorResult{}, errors.New("Scene Analysis Candidate does not match workflow input")
+		return domain.NodeExecutorResult{}, errors.New("scene Analysis Candidate does not match workflow input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -1360,7 +1360,7 @@ func (executor *NodeExecutor) executeBibleMaterialization(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.bibles == nil {
-		return domain.NodeExecutorResult{}, errors.New("Production Bible materialization owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("production Bible materialization owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
@@ -1377,7 +1377,7 @@ func (executor *NodeExecutor) executeBibleMaterialization(
 	if parseErr != nil || version < 1 || binding.Port != "bible" || binding.ValueType != "production_bible_version" ||
 		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "bible" ||
 		strings.TrimSpace(binding.SourceNodeID) == "" || !workflowContentHashPattern.MatchString(binding.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Production Bible Version input has drifted")
+		return domain.NodeExecutorResult{}, errors.New("production Bible Version input has drifted")
 	}
 	result, err := executor.bibles.MaterializeConfirmedBible(ctx, bibleapp.Actor{
 		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
@@ -1392,7 +1392,7 @@ func (executor *NodeExecutor) executeBibleMaterialization(
 		result.Materialization.BibleVersionHash != binding.ContentHash ||
 		!workflowContentHashPattern.MatchString(result.Materialization.ContentHash) ||
 		result.Receipt.ResourceID != binding.ReferenceID || result.Receipt.Operation != "production_bible.materialize_confirmed" {
-		return domain.NodeExecutorResult{}, errors.New("Production Bible materialization result does not match workflow input")
+		return domain.NodeExecutorResult{}, errors.New("production Bible materialization result does not match workflow input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -1413,7 +1413,7 @@ func (executor *NodeExecutor) executeEpisodeSegmentation(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.segments == nil {
-		return domain.NodeExecutorResult{}, errors.New("Episode segmentation workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("episode segmentation workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
@@ -1439,20 +1439,20 @@ func (executor *NodeExecutor) executeEpisodeSegmentation(
 		materialization.SourcePort != "materialization" || strings.TrimSpace(materialization.SourceNodeID) == "" ||
 		!workflowContentHashPattern.MatchString(evidence.ContentHash) ||
 		!workflowContentHashPattern.MatchString(materialization.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Episode segmentation exact inputs have drifted")
+		return domain.NodeExecutorResult{}, errors.New("episode segmentation exact inputs have drifted")
 	}
 	var scriptID, scriptHash string
 	foundScript := false
 	for _, reference := range input.FrozenInputs {
 		if reference.Kind == "script_revision" {
 			if foundScript {
-				return domain.NodeExecutorResult{}, errors.New("Episode segmentation has multiple frozen scripts")
+				return domain.NodeExecutorResult{}, errors.New("episode segmentation has multiple frozen scripts")
 			}
 			scriptID, scriptHash, foundScript = reference.ID, reference.Hash, true
 		}
 	}
 	if !foundScript || !workflowContentHashPattern.MatchString(scriptHash) {
-		return domain.NodeExecutorResult{}, errors.New("Episode segmentation frozen script is missing")
+		return domain.NodeExecutorResult{}, errors.New("episode segmentation frozen script is missing")
 	}
 	state, err := executor.segments.Ensure(ctx, bibleapp.EpisodeSegmentationCommand{
 		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
@@ -1470,14 +1470,14 @@ func (executor *NodeExecutor) executeEpisodeSegmentation(
 	case "pending":
 		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
 	case "failed":
-		return domain.NodeExecutorResult{}, errors.New("Episode segmentation candidate generation failed")
+		return domain.NodeExecutorResult{}, errors.New("episode segmentation candidate generation failed")
 	case "ready":
 		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
 			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
-			return domain.NodeExecutorResult{}, errors.New("Episode segmentation candidate is incomplete")
+			return domain.NodeExecutorResult{}, errors.New("episode segmentation candidate is incomplete")
 		}
 	default:
-		return domain.NodeExecutorResult{}, errors.New("Episode segmentation returned an invalid status")
+		return domain.NodeExecutorResult{}, errors.New("episode segmentation returned an invalid status")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
@@ -1498,7 +1498,7 @@ func (executor *NodeExecutor) executeEpisodeAnalysis(
 	command domain.NodeExecutorCommand,
 ) (domain.NodeExecutorResult, error) {
 	if executor.episodes == nil {
-		return domain.NodeExecutorResult{}, errors.New("Episode analysis workflow owner is unavailable")
+		return domain.NodeExecutorResult{}, errors.New("episode analysis workflow owner is unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
@@ -1525,7 +1525,7 @@ func (executor *NodeExecutor) executeEpisodeAnalysis(
 		strings.TrimSpace(materialization.SourceNodeID) == "" ||
 		!workflowContentHashPattern.MatchString(episodes.ContentHash) ||
 		!workflowContentHashPattern.MatchString(materialization.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Episode analysis exact inputs have drifted")
+		return domain.NodeExecutorResult{}, errors.New("episode analysis exact inputs have drifted")
 	}
 	state, err := executor.episodes.Ensure(ctx, planningapp.EpisodeAnalysisCommand{
 		WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
@@ -1541,14 +1541,14 @@ func (executor *NodeExecutor) executeEpisodeAnalysis(
 	case "pending":
 		return domain.NodeExecutorResult{Status: "RETRYING"}, nil
 	case "failed":
-		return domain.NodeExecutorResult{}, errors.New("Episode analysis candidate generation failed")
+		return domain.NodeExecutorResult{}, errors.New("episode analysis candidate generation failed")
 	case "ready":
 		if _, parseErr := uuid.Parse(state.CandidateRevisionID); parseErr != nil ||
 			state.CandidateRevisionNo < 1 || !workflowContentHashPattern.MatchString(state.CandidateRevisionHash) {
-			return domain.NodeExecutorResult{}, errors.New("Episode analysis candidate set is incomplete")
+			return domain.NodeExecutorResult{}, errors.New("episode analysis candidate set is incomplete")
 		}
 	default:
-		return domain.NodeExecutorResult{}, errors.New("Episode analysis returned an invalid status")
+		return domain.NodeExecutorResult{}, errors.New("episode analysis returned an invalid status")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,

@@ -218,7 +218,7 @@ func (repo *repository) GetEpisodeSegmentationSource(
 	}
 	contentHash, err := agentcontract.CanonicalHash(json.RawMessage(candidate.Candidate))
 	if err != nil || contentHash != candidate.CandidateContentHash {
-		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate content hash has drifted")
+		return application.EpisodeSegmentationSource{}, errors.New("episode segmentation Candidate content hash has drifted")
 	}
 	var invocation model.AgentInvocation
 	if err = repo.database.WithContext(ctx).First(&invocation, "id = ?", *candidate.SourceInvocationID).Error; err != nil {
@@ -229,14 +229,14 @@ func (repo *repository) GetEpisodeSegmentationSource(
 		invocation.WorkspaceID != candidate.WorkspaceID || invocation.Stage != bibledomain.EpisodeSegmentationStage ||
 		invocation.Status != "succeeded" || invocation.ResultHash == nil || *invocation.ResultHash != candidate.CandidateContentHash ||
 		invocation.CandidateType == nil || *invocation.CandidateType != "episode_segmentation_candidate" {
-		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate invocation has drifted")
+		return application.EpisodeSegmentationSource{}, errors.New("episode segmentation Candidate invocation has drifted")
 	}
 	if persistedHash, hashErr := agentcontract.CanonicalHash(json.RawMessage(invocation.Candidate)); hashErr != nil || persistedHash != candidate.CandidateContentHash {
-		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate invocation result has drifted")
+		return application.EpisodeSegmentationSource{}, errors.New("episode segmentation Candidate invocation result has drifted")
 	}
 	projectID, err := uuid.Parse(request.Payload.ProjectID)
 	if err != nil || request.Payload.WorkspaceID != candidate.WorkspaceID.String() {
-		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation Candidate owner has drifted")
+		return application.EpisodeSegmentationSource{}, errors.New("episode segmentation Candidate owner has drifted")
 	}
 	if err = authorizeProject(ctx, repo.database, actor, projectID, forUpdate); err != nil {
 		return application.EpisodeSegmentationSource{}, err
@@ -247,7 +247,7 @@ func (repo *repository) GetEpisodeSegmentationSource(
 	}
 	documentRevisionID, err := uuid.Parse(input.DocumentRevisionID)
 	if err != nil {
-		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation source revision is invalid")
+		return application.EpisodeSegmentationSource{}, errors.New("episode segmentation source revision is invalid")
 	}
 	var revision model.DocumentRevision
 	if err = repo.database.WithContext(ctx).First(&revision, "id = ?", documentRevisionID).Error; err != nil {
@@ -255,7 +255,7 @@ func (repo *repository) GetEpisodeSegmentationSource(
 	}
 	if revision.WorkspaceID != candidate.WorkspaceID || revision.NormalizedHash != input.NormalizedHash ||
 		revision.CodepointCount != input.SourceCodePoints || revision.CodepointCount != len([]rune(revision.NormalizedText)) {
-		return application.EpisodeSegmentationSource{}, errors.New("Episode segmentation source revision has drifted")
+		return application.EpisodeSegmentationSource{}, errors.New("episode segmentation source revision has drifted")
 	}
 	allowed := make([]bibledomain.Evidence, 0, len(input.EvidenceIndex)+len(input.MarkerHints))
 	for _, item := range input.EvidenceIndex {
@@ -343,7 +343,7 @@ func (repo *repository) ApplyEpisodeSet(
 	events []domain.OutboxEvent,
 ) error {
 	if len(episodes) == 0 || len(episodes) != len(versions) || len(episodes) != len(events) {
-		return errors.New("Episode set batch is incomplete")
+		return errors.New("episode set batch is incomplete")
 	}
 	projectID, err := uuid.Parse(episodes[0].ProjectID)
 	if err != nil {
@@ -363,7 +363,7 @@ func (repo *repository) ApplyEpisodeSet(
 	episodeRecords := make([]model.Episode, len(episodes))
 	for index, value := range episodes {
 		if value.ProjectID != episodes[0].ProjectID || value.WorkspaceID != episodes[0].WorkspaceID {
-			return errors.New("Episode set owner changed within the batch")
+			return errors.New("episode set owner changed within the batch")
 		}
 		episodeRecords[index], err = episodeRecord(value)
 		if err != nil {

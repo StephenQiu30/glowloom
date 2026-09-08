@@ -90,7 +90,9 @@ func (repo *repository) CreateUpload(ctx context.Context, upload domain.UploadSe
 	if err != nil {
 		return err
 	}
-	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error
+	return repo.database.WithContext(ctx).Omit(clause.Associations).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "workspace_id"}, {Name: "idempotency_key"}}, DoNothing: true,
+	}).Create(&record).Error
 }
 
 func (repo *repository) SaveUpload(ctx context.Context, upload domain.UploadSession) error {

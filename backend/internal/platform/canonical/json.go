@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"sort"
 
 	"golang.org/x/text/unicode/norm"
@@ -16,17 +15,8 @@ import (
 // domains and Agent wires. Object keys and string values are NFC normalized;
 // numbers are restricted to integers so cross-language hashes remain stable.
 func JSON(raw json.RawMessage) ([]byte, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return nil, errors.New("production canonical JSON contains multiple values")
-		}
+	value, err := uniqueValue(raw)
+	if err != nil {
 		return nil, err
 	}
 	normalized, err := normalize(value)

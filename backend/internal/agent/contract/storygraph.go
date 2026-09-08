@@ -476,7 +476,7 @@ func validateStoryboardDraftStageInput(payload StageInvocationPayload) error {
 	for _, beat := range input.Beats {
 		if !storyboardStoryNodePattern.MatchString(beat.StoryNodeKey) || previous >= beat.StoryNodeKey ||
 			strings.TrimSpace(beat.Summary) == "" || len(beat.Evidence) == 0 {
-			return errors.New("Storyboard Draft Beats must be exact, unique, and sorted")
+			return errors.New("storyboard Draft Beats must be exact, unique, and sorted")
 		}
 		if err := validateStoryboardEvidence(beat.Evidence); err != nil {
 			return err
@@ -487,7 +487,7 @@ func validateStoryboardDraftStageInput(payload StageInvocationPayload) error {
 	for _, dialogue := range input.Dialogues {
 		if !storyboardStoryNodePattern.MatchString(dialogue.StoryNodeKey) || previous >= dialogue.StoryNodeKey ||
 			strings.TrimSpace(dialogue.Speaker) == "" || strings.TrimSpace(dialogue.Text) == "" || len(dialogue.Evidence) == 0 {
-			return errors.New("Storyboard Draft Dialogues must be exact, unique, and sorted")
+			return errors.New("storyboard Draft Dialogues must be exact, unique, and sorted")
 		}
 		if err := validateStoryboardEvidence(dialogue.Evidence); err != nil {
 			return err
@@ -502,14 +502,14 @@ func validateStoryboardDraftStageInput(payload StageInvocationPayload) error {
 			!storyboardStoryNodePattern.MatchString(occurrence.SpecificationStoryNodeKey) ||
 			!storyboardStoryNodePattern.MatchString(occurrence.AssetStateStoryNodeKey) ||
 			strings.TrimSpace(occurrence.Summary) == "" || len(occurrence.Evidence) == 0 {
-			return errors.New("Storyboard Draft Occurrences must be exact, unique, and sorted")
+			return errors.New("storyboard Draft Occurrences must be exact, unique, and sorted")
 		}
 		if _, ok := allowedKinds[occurrence.AssetKind]; !ok {
-			return errors.New("Storyboard Draft Occurrence has an invalid Asset kind")
+			return errors.New("storyboard Draft Occurrence has an invalid Asset kind")
 		}
 		for _, identifier := range []string{occurrence.AssetID, occurrence.SpecificationVersionID, occurrence.AssetStateID} {
 			if _, err := uuid.Parse(identifier); err != nil {
-				return errors.New("Storyboard Draft Occurrence has an invalid formal reference")
+				return errors.New("storyboard Draft Occurrence has an invalid formal reference")
 			}
 		}
 		if err := validateStoryboardEvidence(occurrence.Evidence); err != nil {
@@ -523,11 +523,11 @@ func validateStoryboardDraftStageInput(payload StageInvocationPayload) error {
 		if previous >= key || version.Revision < 1 || version.Status != "READY" ||
 			!hashPattern.MatchString(version.ContentHash) || !hashPattern.MatchString(version.LineageHash) ||
 			!hashPattern.MatchString(version.StyleSnapshotHash) || len(version.ViewRoles) == 0 {
-			return errors.New("Storyboard Draft AssetVersions must be exact, READY, unique, and sorted")
+			return errors.New("storyboard Draft AssetVersions must be exact, READY, unique, and sorted")
 		}
 		for _, identifier := range []string{version.AssetID, version.AssetStateID, version.AssetVersionID} {
 			if _, err := uuid.Parse(identifier); err != nil {
-				return errors.New("Storyboard Draft AssetVersion has an invalid formal reference")
+				return errors.New("storyboard Draft AssetVersion has an invalid formal reference")
 			}
 		}
 		previous = key
@@ -614,15 +614,15 @@ func validateEpisodeAnalysisStageInput(payload StageInvocationPayload) error {
 	relativeStart := input.LogicalStart - input.ContextStart
 	relativeEnd := input.LogicalEnd - input.ContextStart
 	if sourceTextHash(string(contextRunes[relativeStart:relativeEnd])) != input.LogicalTextHash {
-		return errors.New("Episode analysis logical text hash mismatch")
+		return errors.New("episode analysis logical text hash mismatch")
 	}
 	if input.ContextStart == input.EpisodeSourceStart && input.ContextEnd == input.EpisodeSourceEnd &&
 		sourceTextHash(input.ContextText) != input.ScriptContentHash {
-		return errors.New("Episode script content hash mismatch")
+		return errors.New("episode script content hash mismatch")
 	}
 	snapshotHash, err := CanonicalHash(input.BibleSnapshot)
 	if err != nil || snapshotHash != input.BibleSnapshotHash {
-		return errors.New("Episode Bible snapshot hash mismatch")
+		return errors.New("episode Bible snapshot hash mismatch")
 	}
 	previousMarkerStart := -1
 	for _, marker := range input.SceneMarkerHints {
@@ -630,7 +630,7 @@ func validateEpisodeAnalysisStageInput(payload StageInvocationPayload) error {
 			marker.AbsoluteStart < input.ContextStart || marker.AbsoluteEnd <= marker.AbsoluteStart ||
 			marker.AbsoluteEnd > input.ContextEnd ||
 			string(contextRunes[marker.AbsoluteStart-input.ContextStart:marker.AbsoluteEnd-input.ContextStart]) != marker.Label {
-			return errors.New("Episode scene marker does not match its frozen context")
+			return errors.New("episode scene marker does not match its frozen context")
 		}
 		previousMarkerStart = marker.AbsoluteStart
 	}
@@ -737,14 +737,14 @@ func validateEpisodeReconciliationStageInput(payload StageInvocationPayload) err
 		}
 		if err := json.Unmarshal(candidate.Candidate, &identity); err != nil ||
 			identity.EpisodeID != input.EpisodeID || identity.ScriptVersionID != input.ScriptVersionID {
-			return errors.New("Episode reconciliation child belongs to another Episode")
+			return errors.New("episode reconciliation child belongs to another Episode")
 		}
 		start, end := identity.LogicalStart, identity.LogicalEnd
 		if input.CandidateType == "episode_reconciliation_candidate" {
 			start, end = identity.SourceStart, identity.SourceEnd
 		}
 		if start == nil || end == nil || *start < input.EpisodeSourceStart || *end <= *start || *end > input.EpisodeSourceEnd {
-			return errors.New("Episode reconciliation child escaped its frozen Episode")
+			return errors.New("episode reconciliation child escaped its frozen Episode")
 		}
 		key := episodeSegmentationLeafKey(candidate.ShardKey, candidate.CandidateRevisionID, candidate.CandidateRevisionHash)
 		expectedChildren[key] = struct{}{}
@@ -753,15 +753,15 @@ func validateEpisodeReconciliationStageInput(payload StageInvocationPayload) err
 	for _, upstream := range payload.UpstreamCandidates {
 		key := episodeSegmentationLeafKey(upstream.ShardKey, upstream.CandidateRevisionID, upstream.CandidateRevisionHash)
 		if upstream.Stage != expectedStage {
-			return errors.New("Episode reconciliation child stage has drifted")
+			return errors.New("episode reconciliation child stage has drifted")
 		}
 		if _, exists := expectedChildren[key]; !exists {
-			return errors.New("Episode reconciliation input does not match exact child revisions")
+			return errors.New("episode reconciliation input does not match exact child revisions")
 		}
 		delete(expectedChildren, key)
 	}
 	if len(expectedChildren) != 0 {
-		return errors.New("Episode reconciliation input is missing exact child revisions")
+		return errors.New("episode reconciliation input is missing exact child revisions")
 	}
 	expectedSources := []StageSourceRef{
 		{OwnerKind: "production/episode-script", OwnerLogicalID: input.EpisodeID, OwnerVersionID: input.ScriptVersionID, Revision: int64(input.ScriptVersionNo), ContentHash: input.ScriptContentHash},
@@ -779,7 +779,7 @@ func validateEpisodeKnownIdentities(values []EpisodeKnownIdentity) error {
 	for _, identity := range values {
 		if strings.TrimSpace(identity.EntityKey) == "" || previousEntity >= identity.EntityKey ||
 			!hashPattern.MatchString(identity.SpecificationHash) {
-			return errors.New("Episode known identities must be unique and sorted")
+			return errors.New("episode known identities must be unique and sorted")
 		}
 		if _, ok := allowedKinds[identity.Kind]; !ok {
 			return errors.New("invalid Episode known identity kind")
@@ -793,7 +793,7 @@ func validateEpisodeKnownIdentities(values []EpisodeKnownIdentity) error {
 		for _, state := range identity.States {
 			if strings.TrimSpace(state.StateKey) == "" || previousState >= state.StateKey ||
 				!hashPattern.MatchString(state.ContentHash) {
-				return errors.New("Episode known states must be unique and sorted")
+				return errors.New("episode known states must be unique and sorted")
 			}
 			if _, err := uuid.Parse(state.AssetStateID); err != nil {
 				return errors.New("invalid Episode known state revision")
@@ -882,11 +882,11 @@ func validateEpisodeSegmentationStageInput(payload StageInvocationPayload) error
 			ref.OwnerVersionID == input.BibleVersionID && ref.Revision == int64(input.BibleVersion) && ref.ContentHash == input.MaterializationHash:
 			materializationMatches = true
 		default:
-			return errors.New("Episode segmentation source reference has drifted")
+			return errors.New("episode segmentation source reference has drifted")
 		}
 	}
 	if !scriptMatches || !materializationMatches {
-		return errors.New("Episode segmentation exact sources are incomplete")
+		return errors.New("episode segmentation exact sources are incomplete")
 	}
 	leaves := make(map[string]EpisodeSegmentationEvidenceLeaf, len(input.EvidenceLeaves))
 	previousShard := ""
@@ -905,16 +905,16 @@ func validateEpisodeSegmentationStageInput(payload StageInvocationPayload) error
 	upstreams := make(map[string]struct{}, len(payload.UpstreamCandidates))
 	for _, upstream := range payload.UpstreamCandidates {
 		if upstream.Stage != "extract_source_evidence" {
-			return errors.New("Episode segmentation has a non-Evidence upstream candidate")
+			return errors.New("episode segmentation has a non-Evidence upstream candidate")
 		}
 		key := episodeSegmentationLeafKey(upstream.ShardKey, upstream.CandidateRevisionID, upstream.CandidateRevisionHash)
 		if _, exists := leaves[key]; !exists {
-			return errors.New("Episode segmentation upstream revision has drifted")
+			return errors.New("episode segmentation upstream revision has drifted")
 		}
 		upstreams[key] = struct{}{}
 	}
 	if len(upstreams) != len(leaves) {
-		return errors.New("Episode segmentation exact Evidence leaves are incomplete")
+		return errors.New("episode segmentation exact Evidence leaves are incomplete")
 	}
 	indexKeys := make(map[string]struct{}, len(input.EvidenceIndex))
 	markerEvidence := make(map[string]struct{}, len(input.MarkerHints))
@@ -925,10 +925,10 @@ func validateEpisodeSegmentationStageInput(payload StageInvocationPayload) error
 			return errors.New("invalid Episode segmentation Evidence index item")
 		}
 		if _, exists := leaves[leafKey]; !exists {
-			return errors.New("Episode segmentation Evidence index has no exact leaf")
+			return errors.New("episode segmentation Evidence index has no exact leaf")
 		}
 		if _, exists := indexKeys[item.IndexKey]; exists {
-			return errors.New("Episode segmentation Evidence index keys must be unique")
+			return errors.New("episode segmentation Evidence index keys must be unique")
 		}
 		indexKeys[item.IndexKey] = struct{}{}
 		if item.Kind == "marker" {
@@ -943,10 +943,10 @@ func validateEpisodeSegmentationStageInput(payload StageInvocationPayload) error
 			return errors.New("invalid Episode segmentation marker hint")
 		}
 		if _, exists := markerStarts[marker.Evidence.SourceStart]; exists {
-			return errors.New("Episode segmentation marker starts must be unique")
+			return errors.New("episode segmentation marker starts must be unique")
 		}
 		if _, exists := markerEvidence[episodeSegmentationEvidenceKey(marker.Evidence)]; !exists {
-			return errors.New("Episode segmentation marker is absent from its bounded Evidence index")
+			return errors.New("episode segmentation marker is absent from its bounded Evidence index")
 		}
 		markerStarts[marker.Evidence.SourceStart] = struct{}{}
 	}
@@ -1051,7 +1051,7 @@ func validateSourceEvidenceStageInput(payload StageInvocationPayload) error {
 	if ref.OwnerKind != "production/script" || ref.OwnerVersionID != input.DocumentRevisionID ||
 		ref.ContentHash != input.NormalizedHash || !hashPattern.MatchString(input.NormalizedHash) ||
 		!hashPattern.MatchString(input.LogicalSourceHash) {
-		return errors.New("Source Evidence stage input does not match its source revision")
+		return errors.New("source Evidence stage input does not match its source revision")
 	}
 	if _, err := uuid.Parse(input.DocumentRevisionID); err != nil {
 		return errors.New("invalid Source Evidence document revision")
@@ -1067,7 +1067,7 @@ func validateSourceEvidenceStageInput(payload StageInvocationPayload) error {
 	logicalEnd := input.LogicalEnd - input.ContextStart
 	logicalHash := sha256.Sum256([]byte(string(contextRunes[logicalStart:logicalEnd])))
 	if hex.EncodeToString(logicalHash[:]) != input.LogicalSourceHash {
-		return errors.New("Source Evidence logical source hash mismatch")
+		return errors.New("source Evidence logical source hash mismatch")
 	}
 	for _, marker := range input.EpisodeMarkerHints {
 		if marker.EpisodeNumber < 1 || strings.TrimSpace(marker.Label) == "" ||
@@ -1101,7 +1101,7 @@ func validateStoryAnalysisStageInput(payload StageInvocationPayload) error {
 	if upstream.Stage != "extract_source_evidence" || upstream.ShardKey != input.EvidenceShardKey ||
 		upstream.CandidateRevisionID != input.EvidenceCandidateRevisionID ||
 		upstream.CandidateRevisionHash != input.EvidenceCandidateRevisionHash {
-		return errors.New("Story analysis input does not match its exact Evidence revision")
+		return errors.New("story analysis input does not match its exact Evidence revision")
 	}
 	return nil
 }
@@ -1149,15 +1149,15 @@ func validateStoryReconciliationStageInput(payload StageInvocationPayload) error
 	for _, upstream := range payload.UpstreamCandidates {
 		key := strings.Join([]string{upstream.ShardKey, upstream.CandidateRevisionID, upstream.CandidateRevisionHash}, "\x00")
 		if upstream.Stage != expectedStage {
-			return errors.New("Story reconciliation child stage has drifted")
+			return errors.New("story reconciliation child stage has drifted")
 		}
 		if _, exists := expected[key]; !exists {
-			return errors.New("Story reconciliation input does not match exact child revisions")
+			return errors.New("story reconciliation input does not match exact child revisions")
 		}
 		delete(expected, key)
 	}
 	if len(expected) != 0 {
-		return errors.New("Story reconciliation input is missing exact child revisions")
+		return errors.New("story reconciliation input is missing exact child revisions")
 	}
 	return nil
 }

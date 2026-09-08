@@ -16,6 +16,11 @@ const errorMessages: Record<string, string> = {
   validation_failed: "提交内容与服务端契约不一致，请刷新后重试。",
   unauthenticated: "邮箱或密码不正确，请重新输入。",
   verification_expired: "验证码或注册凭证已失效，请重新发送验证码。",
+  creation_unavailable: "文本创作服务尚未配置，请联系管理员启用。",
+  head_conflict: "正式原稿已被更新，请刷新确认后重新操作。",
+  source_hash_drift: "原稿内容与固定版本不一致，已停止创作。",
+  revision_conflict: "当前版本已变化，请刷新后重新审阅。",
+  proposal_has_unresolved_blockers: "请逐项处理待确认问题并填写理由。",
 };
 
 export function appApiErrorMessage(error: unknown): string {
@@ -63,6 +68,7 @@ export const appApi = createApi({
     "EpisodePlans",
     "HumanTasks",
     "WorkflowRuns",
+    "CreationRuns",
   ],
   endpoints: () => ({}),
 });

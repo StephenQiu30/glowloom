@@ -2,6 +2,11 @@ package domain
 
 import "time"
 
+type SourceText struct {
+	Accepted AcceptedSource
+	Text     string
+}
+
 type SourceSpan struct {
 	Identity           SourceVersionIdentity `json:"identity"`
 	SpanIndexID        string                `json:"span_index_id"`

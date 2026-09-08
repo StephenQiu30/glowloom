@@ -69,7 +69,7 @@ func NewProductionBibleVersion(input ProductionBibleVersionInput) (ProductionBib
 	canonical, err := json.Marshal(candidate)
 	canonicalHash, hashErr := canonicalSnapshotHash(canonical)
 	if err != nil || hashErr != nil || canonicalHash != input.CandidateContentHash {
-		return ProductionBibleVersion{}, errors.New("Production Bible Version snapshot hash has drifted")
+		return ProductionBibleVersion{}, errors.New("production Bible Version snapshot hash has drifted")
 	}
 	if !bytes.Equal(bytes.TrimSpace(input.Snapshot), canonical) {
 		input.Snapshot = canonical

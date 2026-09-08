@@ -61,6 +61,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             <PageHeader
               actions={(
                 <div className="flex flex-wrap gap-2">
+                  <Button asChild><Link href={`/projects/${project.id}/creation`}>文本创作<ArrowRight aria-hidden="true" /></Link></Button>
                   <Button asChild variant="outline">
                     <Link href={`/projects/${project.id}/reviews`}>
                       <ClipboardCheck aria-hidden="true" />
@@ -76,7 +77,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
               )}
               badges={[{ label: project.aspect_ratio }, { label: project.visual_style ?? "未设视觉风格" }]}
               breadcrumbs={[{ label: "项目", href: "/projects" }, { label: project.name }]}
-              description={project.description || "从不可变原稿开始，依次确认制作圣经、分集、场景任务和分镜。"}
+              description={project.description || "从不可变原稿开始，依次审阅分集、场景、人物设定和分镜。"}
               note="当前页面只呈现这条 MVP 主链所需的服务端事实。"
               title={project.name}
             />
@@ -86,7 +87,6 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
               currentAnalysis={currentScriptQuery.data}
               language={project.language}
               projectId={project.id}
-              targetDurationMs={project.target_duration_ms}
               workspaceId={project.workspace_id}
             />
 
@@ -96,7 +96,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 <Badge variant="outline">{episodes.length} 集</Badge>
               </div>
               {episodes.length === 0 ? (
-                <div className="grid min-h-40 place-items-center p-8 text-center text-sm text-muted-foreground">确认制作圣经和分集计划后，剧集会出现在这里。</div>
+                <div className="grid min-h-40 place-items-center p-8 text-center text-sm text-muted-foreground">分集提案审阅并采纳后，每集正文会出现在这里。</div>
               ) : (
                 <div className="divide-y">
                   {episodes.map((episode) => (

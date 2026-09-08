@@ -77,7 +77,7 @@ type EpisodeSegmentationService struct {
 	config     EpisodeSegmentationConfig
 }
 
-var ErrEpisodeSegmentationCandidateInvalid = errors.New("Episode segmentation candidate is invalid")
+var ErrEpisodeSegmentationCandidateInvalid = errors.New("episode segmentation candidate is invalid")
 
 func NewEpisodeSegmentationService(
 	repository EpisodeSegmentationRepository,
@@ -91,7 +91,7 @@ func (service *EpisodeSegmentationService) Ensure(
 	command EpisodeSegmentationCommand,
 ) (EpisodeSegmentationState, error) {
 	if service == nil || service.repository == nil || service.config.Now == nil || service.config.NewID == nil {
-		return EpisodeSegmentationState{}, errors.New("Episode segmentation service is unavailable")
+		return EpisodeSegmentationState{}, errors.New("episode segmentation service is unavailable")
 	}
 	for _, identifier := range []string{
 		command.WorkspaceID, command.ProjectID, command.WorkflowRunID, command.NodeRunID,
@@ -306,7 +306,7 @@ func buildEpisodeSegmentationEvidenceIndex(
 		}
 	}
 	if len(index) == 0 {
-		return nil, nil, errors.New("Episode segmentation has no bounded Evidence index")
+		return nil, nil, errors.New("episode segmentation has no bounded Evidence index")
 	}
 	return markers, index, nil
 }

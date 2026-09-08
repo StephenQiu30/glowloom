@@ -45,16 +45,16 @@ func loadStoryReview(
 	}
 	var run model.WorkflowRun
 	if err = database.WithContext(ctx).First(&run, "id = ?", runID).Error; err != nil {
-		return application.StoryReviewSeed{}, errors.New("Story review requires an existing WorkflowRun")
+		return application.StoryReviewSeed{}, errors.New("story review requires an existing WorkflowRun")
 	}
 	var node model.NodeRunProjection
 	if err = database.WithContext(ctx).First(&node, "id = ?", nodeID).Error; err != nil {
-		return application.StoryReviewSeed{}, errors.New("Story review requires an existing NodeRun")
+		return application.StoryReviewSeed{}, errors.New("story review requires an existing NodeRun")
 	}
 	if run.WorkspaceID.String() != command.WorkspaceID || run.ProjectID.String() != command.ProjectID ||
 		node.WorkspaceID != run.WorkspaceID || node.WorkflowRunID != run.ID || node.Executor != "activity.story_review" ||
 		node.Status == "FAILED" || node.Status == "CANCELLED" || node.Status == "SKIPPED" || node.Status == "CACHED" {
-		return application.StoryReviewSeed{}, errors.New("Story review WorkflowRun or NodeRun has drifted")
+		return application.StoryReviewSeed{}, errors.New("story review WorkflowRun or NodeRun has drifted")
 	}
 	if err = authorizeProject(ctx, database, command.Actor, run.ProjectID, true); err != nil {
 		return application.StoryReviewSeed{}, err
@@ -65,7 +65,7 @@ func loadStoryReview(
 		return application.StoryReviewSeed{}, normalizeNotFound(err)
 	}
 	if root.WorkspaceID != run.WorkspaceID || root.CandidateRevisionHash != command.CandidateRevisionHash {
-		return application.StoryReviewSeed{}, errors.New("Story review root Candidate Revision has drifted")
+		return application.StoryReviewSeed{}, errors.New("story review root Candidate Revision has drifted")
 	}
 	var head model.StageCandidateHead
 	if err = database.WithContext(ctx).First(&head, "stage_instance_key = ?", root.StageInstanceKey).Error; err != nil {
@@ -77,12 +77,12 @@ func loadStoryReview(
 	}
 	if current.WorkspaceID != run.WorkspaceID || current.StageInstanceKey != root.StageInstanceKey ||
 		current.CandidateRevisionHash != head.CurrentCandidateRevisionHash || current.RevisionNo != head.Revision {
-		return application.StoryReviewSeed{}, errors.New("Story review Candidate Head has drifted")
+		return application.StoryReviewSeed{}, errors.New("story review Candidate Head has drifted")
 	}
 	ancestor := current
 	for ancestor.ID != root.ID {
 		if ancestor.ParentCandidateRevisionID == nil {
-			return application.StoryReviewSeed{}, errors.New("Story review Candidate Head is outside the frozen root lineage")
+			return application.StoryReviewSeed{}, errors.New("story review Candidate Head is outside the frozen root lineage")
 		}
 		var parent model.StageCandidateRevision
 		if err = database.WithContext(ctx).First(&parent, "id = ?", *ancestor.ParentCandidateRevisionID).Error; err != nil {
@@ -94,10 +94,10 @@ func loadStoryReview(
 	var candidate domain.StoryReconciliationCandidate
 	if err = json.Unmarshal(current.Candidate, &candidate); err != nil ||
 		domain.ValidateStoryReconciliationCandidate(candidate, domain.StoryReconciliationCandidateEvidence(candidate)) != nil {
-		return application.StoryReviewSeed{}, errors.New("Story review current Candidate is invalid")
+		return application.StoryReviewSeed{}, errors.New("story review current Candidate is invalid")
 	}
 	if root.SourceInvocationID == nil || root.SourceResultHash == nil {
-		return application.StoryReviewSeed{}, errors.New("Story review root Candidate provenance is incomplete")
+		return application.StoryReviewSeed{}, errors.New("story review root Candidate provenance is incomplete")
 	}
 	var rootInvocation model.AgentInvocation
 	if err = database.WithContext(ctx).First(&rootInvocation, "id = ?", *root.SourceInvocationID).Error; err != nil {
@@ -107,7 +107,7 @@ func loadStoryReview(
 	if err != nil || rootInvocation.Stage != domain.ReconcileStoryStage || rootInvocation.Status != "succeeded" ||
 		rootInvocation.ResultHash == nil || *rootInvocation.ResultHash != *root.SourceResultHash ||
 		len(rootRequest.Payload.SourceRefs) != 1 {
-		return application.StoryReviewSeed{}, errors.New("Story review root Candidate provenance has drifted")
+		return application.StoryReviewSeed{}, errors.New("story review root Candidate provenance has drifted")
 	}
 	provenanceInvocation, provenanceHash, err := storyReviewCandidateProvenance(database.WithContext(ctx), current)
 	if err != nil {
@@ -152,12 +152,12 @@ func loadStoryReview(
 				switch invocation.Stage {
 				case domain.ReviewStoryGraphStage:
 					if seed.Review != nil {
-						return application.StoryReviewSeed{}, errors.New("Story review manifest has duplicate review invocations")
+						return application.StoryReviewSeed{}, errors.New("story review manifest has duplicate review invocations")
 					}
 					seed.Review = &state
 				case "repair_candidate":
 					if seed.Repair != nil {
-						return application.StoryReviewSeed{}, errors.New("Story review manifest has duplicate repair invocations")
+						return application.StoryReviewSeed{}, errors.New("story review manifest has duplicate repair invocations")
 					}
 					seed.Repair = &state
 				}
@@ -197,12 +197,12 @@ func (store *Store) EnsureStoryReviewInvocation(
 		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			if preparation.Manifest.Version != 1 || preparation.Manifest.ParentManifestHash != nil {
-				return errors.New("Story review initial manifest lineage has drifted")
+				return errors.New("story review initial manifest lineage has drifted")
 			}
 		} else if preparation.Manifest.ManifestID != latest.ID.String() ||
 			preparation.Manifest.Version != latest.Version+1 || preparation.Manifest.ParentManifestHash == nil ||
 			*preparation.Manifest.ParentManifestHash != latest.ManifestHash {
-			return errors.New("Story review manifest lineage has drifted")
+			return errors.New("story review manifest lineage has drifted")
 		}
 		if preparation.Manifest.RootInputHash != seed.CurrentCandidateRevisionHash ||
 			preparation.Manifest.WorkspaceID != preparation.Command.WorkspaceID ||
@@ -210,7 +210,7 @@ func (store *Store) EnsureStoryReviewInvocation(
 			preparation.Manifest.NodeRunID != preparation.Command.NodeRunID ||
 			preparation.Invocation.Stage != domain.ReviewStoryGraphStage ||
 			preparation.Invocation.ManifestHash != preparation.Manifest.ManifestHash {
-			return errors.New("Story review preparation has drifted")
+			return errors.New("story review preparation has drifted")
 		}
 		record, err := storyReviewManifestRecord(preparation.Manifest, preparation.CreatedAt)
 		if err != nil {
@@ -239,14 +239,14 @@ func (store *Store) EnsureStoryRepairInvocation(
 		if seed.LatestManifest == nil || seed.LatestManifest.ManifestHash != preparation.Manifest.ManifestHash ||
 			seed.LatestManifest.RootInputHash != seed.CurrentCandidateRevisionHash || seed.Review == nil ||
 			seed.Review.Status != "succeeded" {
-			return errors.New("Story repair prerequisites have drifted")
+			return errors.New("story repair prerequisites have drifted")
 		}
 		if seed.Repair != nil {
 			return nil
 		}
 		if seed.RepairsUsed >= preparation.Command.MaxRepairRounds || preparation.Invocation.Stage != "repair_candidate" ||
 			preparation.Invocation.ManifestHash != preparation.Manifest.ManifestHash {
-			return errors.New("Story repair budget or manifest has drifted")
+			return errors.New("story repair budget or manifest has drifted")
 		}
 		record, err := invocationRecord(preparation.Invocation)
 		if err != nil {
@@ -265,13 +265,13 @@ func storyReviewCandidateProvenance(
 	switch revision.OriginKind {
 	case "invocation":
 		if revision.SourceInvocationID == nil || revision.SourceResultHash == nil {
-			return uuid.Nil, "", errors.New("Story review Candidate invocation provenance is incomplete")
+			return uuid.Nil, "", errors.New("story review Candidate invocation provenance is incomplete")
 		}
 		invocationID, resultHash = *revision.SourceInvocationID, *revision.SourceResultHash
 	case "repair":
 		var origin agentcontract.RepairCandidateOrigin
 		if json.Unmarshal(revision.RepairOrigin, &origin) != nil {
-			return uuid.Nil, "", errors.New("Story review Candidate repair provenance is invalid")
+			return uuid.Nil, "", errors.New("story review Candidate repair provenance is invalid")
 		}
 		var err error
 		invocationID, err = uuid.Parse(origin.RepairInvocationID)
@@ -280,14 +280,14 @@ func storyReviewCandidateProvenance(
 		}
 		resultHash = origin.RepairResultHash
 	default:
-		return uuid.Nil, "", errors.New("Story review Candidate origin is unsupported")
+		return uuid.Nil, "", errors.New("story review Candidate origin is unsupported")
 	}
 	var invocation model.AgentInvocation
 	if err := database.First(&invocation, "id = ?", invocationID).Error; err != nil {
 		return uuid.Nil, "", err
 	}
 	if invocation.Status != "succeeded" || invocation.ResultHash == nil || *invocation.ResultHash != resultHash {
-		return uuid.Nil, "", errors.New("Story review Candidate provenance has drifted")
+		return uuid.Nil, "", errors.New("story review Candidate provenance has drifted")
 	}
 	return invocationID, resultHash, nil
 }
@@ -304,7 +304,7 @@ func storyReviewInvocationState(
 			Code string `json:"code"`
 		}
 		if json.Unmarshal(invocation.Error, &failure) != nil {
-			return application.StoryReviewInvocationState{}, errors.New("Story review Invocation error has drifted")
+			return application.StoryReviewInvocationState{}, errors.New("story review Invocation error has drifted")
 		}
 		state.FailureCode = failure.Code
 	}
@@ -312,14 +312,14 @@ func storyReviewInvocationState(
 		return state, nil
 	}
 	if invocation.ResultHash == nil {
-		return application.StoryReviewInvocationState{}, errors.New("Story review successful Invocation has no Result hash")
+		return application.StoryReviewInvocationState{}, errors.New("story review successful Invocation has no Result hash")
 	}
 	var revision model.StageCandidateRevision
 	if err := database.Where("source_invocation_id = ?", invocation.ID).First(&revision).Error; err != nil {
 		return application.StoryReviewInvocationState{}, err
 	}
 	if revision.SourceResultHash == nil || *revision.SourceResultHash != *invocation.ResultHash {
-		return application.StoryReviewInvocationState{}, errors.New("Story review Candidate Revision provenance has drifted")
+		return application.StoryReviewInvocationState{}, errors.New("story review Candidate Revision provenance has drifted")
 	}
 	state.ResultHash = *invocation.ResultHash
 	state.CandidateRevisionID = revision.ID.String()
@@ -359,7 +359,7 @@ func (store *Store) ClaimNextStoryReview(
 	leaseExpiresAt time.Time,
 ) (domain.Invocation, bool, error) {
 	if !leaseExpiresAt.After(now) {
-		return domain.Invocation{}, false, errors.New("Story review invocation lease must expire after claim time")
+		return domain.Invocation{}, false, errors.New("story review invocation lease must expire after claim time")
 	}
 	var result domain.Invocation
 	found := false
@@ -409,14 +409,14 @@ func (store *Store) ValidateStoryReviewInvocation(
 		return normalizeNotFound(err)
 	}
 	if !activeInvocationClaim(invocation, claimVersion, now) {
-		return errors.New("Story review invocation claim is stale")
+		return errors.New("story review invocation claim is stale")
 	}
 	return validateStoryReviewInvocation(store.database.WithContext(ctx), invocation, false)
 }
 
 func validateStoryReviewInvocation(database *gorm.DB, invocation model.AgentInvocation, lock bool) error {
 	if invocation.NodeRunID == nil || invocation.ShardManifestID == nil || invocation.ShardManifestVersion == nil {
-		return errors.New("Story review invocation has no workflow owner")
+		return errors.New("story review invocation has no workflow owner")
 	}
 	query := database
 	if lock {
@@ -429,7 +429,7 @@ func validateStoryReviewInvocation(database *gorm.DB, invocation model.AgentInvo
 	}
 	if manifest.ID != *invocation.ShardManifestID || manifest.Version != *invocation.ShardManifestVersion ||
 		manifest.ManifestHash != invocation.ShardManifestHash {
-		return errors.New("Story review manifest was superseded")
+		return errors.New("story review manifest was superseded")
 	}
 	request, err := agentgorm.StageInvocation(invocation)
 	if err != nil {
@@ -439,13 +439,13 @@ func validateStoryReviewInvocation(database *gorm.DB, invocation model.AgentInvo
 	case domain.ReviewStoryGraphStage:
 		var input agentcontract.StoryGraphReviewStageInput
 		if json.Unmarshal(request.Payload.StageInput, &input) != nil || input.Validate() != nil {
-			return errors.New("Story review Invocation input is invalid")
+			return errors.New("story review Invocation input is invalid")
 		}
 		return validateStoryReviewTarget(database, input.TargetCandidateRevisionID, input.TargetCandidateRevisionHash, true)
 	case "repair_candidate":
 		var input agentcontract.StoryGraphRepairStageInput
 		if json.Unmarshal(request.Payload.StageInput, &input) != nil || input.Validate() != nil {
-			return errors.New("Story repair Invocation input is invalid")
+			return errors.New("story repair Invocation input is invalid")
 		}
 		if err = validateStoryReviewTarget(database, input.TargetCandidateRevisionID, input.TargetCandidateRevisionHash, true); err != nil {
 			return err
@@ -466,7 +466,7 @@ func validateStoryReviewTarget(database *gorm.DB, revisionID, revisionHash strin
 		return err
 	}
 	if revision.CandidateRevisionHash != revisionHash {
-		return errors.New("Story review Candidate Revision has drifted")
+		return errors.New("story review Candidate Revision has drifted")
 	}
 	if requireHead {
 		var head model.StageCandidateHead
@@ -474,7 +474,7 @@ func validateStoryReviewTarget(database *gorm.DB, revisionID, revisionHash strin
 			return err
 		}
 		if head.CurrentRevisionID != revision.ID || head.CurrentCandidateRevisionHash != revision.CandidateRevisionHash {
-			return errors.New("Story review Candidate Head has changed")
+			return errors.New("story review Candidate Head has changed")
 		}
 	}
 	return nil
@@ -509,26 +509,26 @@ func (store *Store) CompleteStoryReviewInvocation(
 		}
 		request, err := agentgorm.StageInvocation(invocation)
 		if err != nil || result.ValidateFor(request) != nil || result.Status != "succeeded" {
-			return errors.New("Story review Agent result is invalid")
+			return errors.New("story review Agent result is invalid")
 		}
 		switch invocation.Stage {
 		case domain.ReviewStoryGraphStage:
 			var input agentcontract.StoryGraphReviewStageInput
 			if json.Unmarshal(request.Payload.StageInput, &input) != nil {
-				return errors.New("Story review input is invalid")
+				return errors.New("story review input is invalid")
 			}
 			candidate, decodeErr := agentcontract.DecodeStoryGraphReviewCandidate(result.Candidate)
 			if decodeErr != nil || agentcontract.ValidateStoryGraphReviewCandidate(input, candidate) != nil {
-				return errors.New("Story review Candidate is invalid")
+				return errors.New("story review Candidate is invalid")
 			}
 		case "repair_candidate":
 			var input agentcontract.StoryGraphRepairStageInput
 			if json.Unmarshal(request.Payload.StageInput, &input) != nil {
-				return errors.New("Story repair input is invalid")
+				return errors.New("story repair input is invalid")
 			}
 			patch, decodeErr := agentcontract.DecodeCandidateRepairPatch(result.Candidate)
 			if decodeErr != nil || agentcontract.ValidateCandidateRepairPatch(input, patch) != nil {
-				return errors.New("Story repair Patch is invalid")
+				return errors.New("story repair Patch is invalid")
 			}
 		}
 		if _, err = agentgorm.AcceptInvocationCandidate(transaction, invocation, request, result, now); err != nil {

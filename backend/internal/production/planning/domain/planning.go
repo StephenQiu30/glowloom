@@ -77,17 +77,21 @@ type ImportCommit struct {
 }
 
 type Dialogue struct {
-	ID              string                     `json:"id"`
-	TemporaryKey    string                     `json:"temporary_key,omitempty"`
-	Speaker         string                     `json:"speaker"`
-	SpeakerIdentity *PlanningIdentityReference `json:"speaker_identity,omitempty"`
-	Text            string                     `json:"text"`
-	SourceStart     int                        `json:"source_start"`
-	SourceEnd       int                        `json:"source_end"`
-	Evidence        []bibledomain.Evidence     `json:"evidence,omitempty"`
+	Channel          string                     `json:"channel,omitempty"`
+	SpeakerMentionID string                     `json:"speaker_mention_id,omitempty"`
+	ID               string                     `json:"id"`
+	TemporaryKey     string                     `json:"temporary_key,omitempty"`
+	Speaker          string                     `json:"speaker"`
+	SpeakerIdentity  *PlanningIdentityReference `json:"speaker_identity,omitempty"`
+	Text             string                     `json:"text"`
+	SourceStart      int                        `json:"source_start"`
+	SourceEnd        int                        `json:"source_end"`
+	Evidence         []bibledomain.Evidence     `json:"evidence,omitempty"`
 }
 
 type NarrativeUnit struct {
+	Required     *bool                       `json:"required,omitempty"`
+	Origin       string                      `json:"origin,omitempty"`
 	ID           string                      `json:"id"`
 	TemporaryKey string                      `json:"temporary_key,omitempty"`
 	Kind         string                      `json:"kind"`
@@ -161,6 +165,7 @@ type ProductionTask struct {
 }
 
 type Scene struct {
+	TextFacts        *TextSceneFacts            `json:"text_facts,omitempty"`
 	ID               string                     `json:"id"`
 	TemporaryKey     string                     `json:"temporary_key,omitempty"`
 	Heading          string                     `json:"heading"`
@@ -175,6 +180,23 @@ type Scene struct {
 	Occurrences      []Occurrence               `json:"occurrences,omitempty"`
 	Claims           []PlanningClaim            `json:"claims,omitempty"`
 	Tasks            []ProductionTask           `json:"tasks"`
+}
+
+type TextMention struct {
+	ID            string                 `json:"id"`
+	TemporaryKey  string                 `json:"temporary_key"`
+	Kind          string                 `json:"kind"`
+	Name          string                 `json:"name"`
+	Presence      string                 `json:"presence"`
+	Evidence      bibledomain.Evidence   `json:"evidence"`
+	VisualDetails []bibledomain.Evidence `json:"visual_details"`
+}
+type TextSceneFacts struct {
+	Summary      string        `json:"summary"`
+	TimeLabel    string        `json:"time_label"`
+	TimeBranch   string        `json:"time_branch"`
+	Presentation string        `json:"presentation"`
+	Mentions     []TextMention `json:"mentions"`
 }
 
 type Structure struct {

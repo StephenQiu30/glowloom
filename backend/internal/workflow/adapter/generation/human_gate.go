@@ -63,7 +63,7 @@ func (applier *HumanGateApplier) ApplyHumanGateDecision(
 		result.Receipt.ID == "" || result.Receipt.WorkspaceID != application.WorkspaceID ||
 		result.Receipt.Operation != generationSelectionOperation || result.Receipt.ResourceID != selection.ID ||
 		result.Receipt.CreatedBy != actor.UserID {
-		return domain.HumanGateOwnerResult{}, errors.New("Generation selection owner result does not match Workflow Human Gate")
+		return domain.HumanGateOwnerResult{}, errors.New("generation selection owner result does not match Workflow Human Gate")
 	}
 	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,

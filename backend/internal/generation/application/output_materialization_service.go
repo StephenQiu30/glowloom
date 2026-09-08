@@ -294,7 +294,7 @@ func validateMaterializedArtifact(
 ) error {
 	for _, identifier := range []string{artifact.ID, artifact.WorkspaceID, artifact.ProjectID, artifact.SourceID} {
 		if _, err := uuid.Parse(identifier); err != nil {
-			return errors.New("Asset Owner returned an invalid Provider output identifier")
+			return errors.New("asset Owner returned an invalid Provider output identifier")
 		}
 	}
 	if artifact.WorkspaceID != execution.Intent.WorkspaceID || artifact.ProjectID != execution.Intent.ProjectID ||

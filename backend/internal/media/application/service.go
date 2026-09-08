@@ -39,6 +39,7 @@ type Repository interface {
 	Authorize(context.Context, Actor, string, bool) error
 	FindUploadByKey(context.Context, string, string, bool) (domain.UploadSession, error)
 	GetUpload(context.Context, string, bool) (domain.UploadSession, error)
+	// CreateUpload inserts unless the workspace and idempotency key already exist.
 	CreateUpload(context.Context, domain.UploadSession) error
 	SaveUpload(context.Context, domain.UploadSession) error
 	CreateCompletion(context.Context, domain.MediaObject, domain.MediaVersion, domain.Task) error
@@ -108,22 +109,26 @@ func (service *Service) Initialize(ctx context.Context, actor Actor, command Ini
 			return err
 		}
 		existing, findErr := repo.FindUploadByKey(ctx, command.WorkspaceID, command.IdempotencyKey, true)
-		if findErr == nil {
-			if !sameDeclaration(existing, command) {
-				return &Error{Code: "idempotency_conflict", Message: "Idempotency key was already used with different input", Status: 409}
+		if errors.Is(findErr, ErrNotFound) {
+			session = domain.UploadSession{ID: service.config.NewID(), WorkspaceID: command.WorkspaceID, Status: "pending", Kind: command.Kind, Filename: command.Filename, SizeBytes: command.SizeBytes, MIMEType: command.MIMEType, SHA256: command.SHA256, IdempotencyKey: command.IdempotencyKey, ExpiresAt: now.Add(uploadTTL), CreatedAt: now, UpdatedAt: now}
+			session.ObjectKey = fmt.Sprintf("uploads/%s/%s/%s", session.WorkspaceID, session.ID, session.Filename)
+			if err := repo.CreateUpload(ctx, session); err != nil {
+				return err
 			}
-			if existing.Status != "pending" || !existing.ExpiresAt.After(now) {
-				return &Error{Code: "state_conflict", Message: "Upload session is no longer pending", Status: 409, NextAction: "start_new_upload"}
-			}
-			session = existing
-			return nil
+			// A concurrent insert may own this key; always use the persisted session.
+			existing, findErr = repo.FindUploadByKey(ctx, command.WorkspaceID, command.IdempotencyKey, true)
 		}
-		if !errors.Is(findErr, ErrNotFound) {
+		if findErr != nil {
 			return findErr
 		}
-		session = domain.UploadSession{ID: service.config.NewID(), WorkspaceID: command.WorkspaceID, Status: "pending", Kind: command.Kind, Filename: command.Filename, SizeBytes: command.SizeBytes, MIMEType: command.MIMEType, SHA256: command.SHA256, IdempotencyKey: command.IdempotencyKey, ExpiresAt: now.Add(uploadTTL), CreatedAt: now, UpdatedAt: now}
-		session.ObjectKey = fmt.Sprintf("uploads/%s/%s/%s", session.WorkspaceID, session.ID, session.Filename)
-		return repo.CreateUpload(ctx, session)
+		if !sameDeclaration(existing, command) {
+			return &Error{Code: "idempotency_conflict", Message: "Idempotency key was already used with different input", Status: 409}
+		}
+		if existing.Status != "pending" || !existing.ExpiresAt.After(service.config.Now().UTC()) {
+			return &Error{Code: "state_conflict", Message: "Upload session is no longer pending", Status: 409, NextAction: "start_new_upload"}
+		}
+		session = existing
+		return nil
 	})
 	if err != nil {
 		return Initialization{}, err
@@ -176,6 +181,9 @@ func (service *Service) Complete(ctx context.Context, actor Actor, uploadID stri
 		return Completion{}, err
 	}
 	if _, err = service.objects.ReadVerified(ctx, session.ObjectKey, session.SizeBytes, session.SHA256, maxDocumentBytes); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return Completion{}, err
+		}
 		return Completion{}, &Error{Code: "invalid_request", Message: "Uploaded object does not match its declaration", Status: 422, NextAction: "upload_again"}
 	}
 
@@ -185,6 +193,10 @@ func (service *Service) Complete(ctx context.Context, actor Actor, uploadID stri
 		if lockErr != nil {
 			return lockErr
 		}
+		if lockErr = repo.Authorize(ctx, actor, locked.WorkspaceID, true); lockErr != nil {
+			return lockErr
+		}
+		now = service.config.Now().UTC()
 		if locked.Status == "completed" {
 			completion.Object, completion.Version, completion.Task, lockErr = repo.Completion(ctx, locked)
 			return lockErr

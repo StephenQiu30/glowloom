@@ -60,19 +60,19 @@ func (opener *Opener) OpenHumanTask(ctx context.Context, binding domain.HumanGat
 		if set.ID != binding.CandidateSet.ReferenceID || set.WorkspaceID != binding.WorkspaceID ||
 			set.ProjectID != binding.ProjectID || set.Revision != 1 || set.ContentHash != binding.CandidateSet.ContentHash ||
 			len(set.Candidates) == 0 || len(set.Candidates) > 100 {
-			return errors.New("Generation CandidateSet has drifted before HumanTask open")
+			return errors.New("generation CandidateSet has drifted before HumanTask open")
 		}
 		command.SubjectType = "generation_candidate_selection"
 		command.CandidateIDs = make([]string, len(set.Candidates))
 		for index, candidate := range set.Candidates {
 			if !validUUID(candidate.ID) {
-				return errors.New("Generation CandidateSet has an invalid candidate")
+				return errors.New("generation CandidateSet has an invalid candidate")
 			}
 			command.CandidateIDs[index] = candidate.ID
 		}
 		slices.Sort(command.CandidateIDs)
 		if len(slices.Compact(append([]string(nil), command.CandidateIDs...))) != len(command.CandidateIDs) {
-			return errors.New("Generation CandidateSet has duplicate candidates")
+			return errors.New("generation CandidateSet has duplicate candidates")
 		}
 	}
 	_, err := opener.service.Open(ctx, command)

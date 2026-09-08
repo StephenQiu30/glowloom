@@ -20,6 +20,7 @@ import (
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationopenai "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/openai"
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
 	providersecret "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/secretstore"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
@@ -151,7 +152,7 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	candidateService := generationapp.NewService(
 		generationgorm.New(database), generationasset.NewReadiness(assetService), generationapp.Config{},
 	)
-	providerRegistry, err := generationapp.NewMediaFactoryRegistry(nil)
+	providerRegistry, err := generationapp.NewMediaFactoryRegistry([]generationapp.MediaAdapterFactory{generationopenai.NewFactory(nil, objects, time.Now)})
 	if err != nil {
 		return fmt.Errorf("workflow Media Provider registry is invalid: %w", err)
 	}
@@ -165,7 +166,8 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 		generationapp.ProviderConfigurationConfig{Now: now, NewID: uuid.NewString},
 	)
 	providerService := generationapp.NewProviderService(
-		generationgorm.NewProviderStore(database, costConfig, quotaConfig), nil,
+		generationgorm.NewProviderStore(database, costConfig, quotaConfig), generationapp.NewRuntimeGateway(
+			generationapp.NewFrozenProviderRuntime(generationgorm.NewProviderConfigurationStore(database), providerSecrets), providerRegistry),
 		generationapp.ProviderConfig{Now: now, NewID: uuid.NewString},
 	)
 	logger.Info("workflow Media Provider configuration ready", "secret_store_available", providerSecrets.Available(),

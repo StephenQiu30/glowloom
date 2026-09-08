@@ -17,7 +17,7 @@ const (
 	ReconcileStoryStage = "reconcile_story"
 )
 
-var ErrStoryCandidateCannotSplit = errors.New("Story candidate shard cannot be split further")
+var ErrStoryCandidateCannotSplit = errors.New("story candidate shard cannot be split further")
 
 type StoryAnalysisEvidenceFragment struct {
 	ShardKey              string `json:"evidence_shard_key"`
@@ -349,17 +349,17 @@ func ReshardStoryReconcile(
 	for index, child := range target.Children {
 		count, exists := counts[child.Stage+"\x00"+child.ShardKey]
 		if !exists {
-			return StoryReconcileManifest{}, errors.New("Story reconcile candidate size is incomplete")
+			return StoryReconcileManifest{}, errors.New("story reconcile candidate size is incomplete")
 		}
 		start, end := 0, count
 		if child.CandidateItemStart != nil || child.CandidateItemEnd != nil {
 			if child.CandidateItemStart == nil || child.CandidateItemEnd == nil {
-				return StoryReconcileManifest{}, errors.New("Story reconcile candidate range is incomplete")
+				return StoryReconcileManifest{}, errors.New("story reconcile candidate range is incomplete")
 			}
 			start, end = *child.CandidateItemStart, *child.CandidateItemEnd
 		}
 		if start < 0 || end <= start || end > count {
-			return StoryReconcileManifest{}, errors.New("Story reconcile candidate range has drifted")
+			return StoryReconcileManifest{}, errors.New("story reconcile candidate range has drifted")
 		}
 		ranged[index] = rangedChild{child: child, start: start, end: end}
 		total += end - start
@@ -391,7 +391,7 @@ func ReshardStoryReconcile(
 		}
 	}
 	if len(groups[0]) == 0 || len(groups[1]) == 0 {
-		return StoryReconcileManifest{}, errors.New("Story reconcile reshard did not produce two candidate partitions")
+		return StoryReconcileManifest{}, errors.New("story reconcile reshard did not produce two candidate partitions")
 	}
 	shards := append([]StoryReconcileShard(nil), current.Shards...)
 	shards[targetIndex].Status = "superseded"
@@ -435,13 +435,13 @@ func storyCandidatePartitionHash(stage, shardKey, sourceHash string, start, end 
 
 func buildStoryReconcileShard(key, treePath string, level int, children []StoryReconcileChild) (StoryReconcileShard, error) {
 	if len(children) == 0 || len(children) > 2 {
-		return StoryReconcileShard{}, errors.New("Story reconcile shard exceeds fixed fan-in")
+		return StoryReconcileShard{}, errors.New("story reconcile shard exceeds fixed fan-in")
 	}
 	stage := children[0].Stage
 	sourceHashes := make([]string, len(children))
 	for index, child := range children {
 		if child.Stage != stage {
-			return StoryReconcileShard{}, errors.New("Story reconcile shard mixed candidate layers")
+			return StoryReconcileShard{}, errors.New("story reconcile shard mixed candidate layers")
 		}
 		sourceHashes[index] = child.SourceHash
 	}
@@ -580,7 +580,7 @@ func replaceStoryReconcileChildPath(
 	recomputeStoryReconcileParents(next.Shards, next.RootShardKey)
 	root, exists := storyReconcileShardByKey(next.Shards, next.RootShardKey)
 	if !exists || root.Status != "active" {
-		return StoryReconcileManifest{}, errors.New("Story reconcile reshard lost its root")
+		return StoryReconcileManifest{}, errors.New("story reconcile reshard lost its root")
 	}
 	coverageHash, err := storyReconcileCoverageHash(root.Key, root.SubtreeHash)
 	if err != nil {
@@ -697,14 +697,14 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 			parent.UpstreamCandidateRevision != shard.UpstreamCandidateRevision ||
 			parent.UpstreamCandidateHash != shard.UpstreamCandidateHash ||
 			shard.CandidateItemStart < parent.CandidateItemStart || shard.CandidateItemEnd > parent.CandidateItemEnd {
-			return errors.New("Story analysis map shard lineage has drifted")
+			return errors.New("story analysis map shard lineage has drifted")
 		}
 	}
 	slices.SortFunc(roots, func(left, right StoryAnalysisShard) int { return left.LogicalStart - right.LogicalStart })
 	position := 0
 	for _, root := range roots {
 		if root.LogicalStart != position {
-			return errors.New("Story analysis Evidence coverage contains a gap or overlap")
+			return errors.New("story analysis Evidence coverage contains a gap or overlap")
 		}
 		position = root.LogicalEnd
 		leaves := make([]StoryAnalysisShard, 0)
@@ -720,18 +720,18 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 		itemPosition := root.CandidateItemStart
 		for _, leaf := range leaves {
 			if leaf.CandidateItemStart != itemPosition {
-				return errors.New("Story analysis candidate coverage contains a gap or overlap")
+				return errors.New("story analysis candidate coverage contains a gap or overlap")
 			}
 			itemPosition = leaf.CandidateItemEnd
 		}
 		if len(leaves) == 0 || itemPosition != root.CandidateItemEnd {
-			return errors.New("Story analysis candidate coverage is incomplete")
+			return errors.New("story analysis candidate coverage is incomplete")
 		}
 	}
 	for parentKey, children := range childrenByParent {
 		parent := analyzeKeys[parentKey]
 		if parent.Status != "superseded" || len(children) < 2 {
-			return errors.New("Story analysis reshard parent is not superseded")
+			return errors.New("story analysis reshard parent is not superseded")
 		}
 	}
 	reconcileKeys := make(map[string]StoryReconcileShard, len(reconcile.Shards))
@@ -756,7 +756,7 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 		}
 		expected, err := storyReconcileSubtreeHash(shard.Level, shard.Children)
 		if err != nil || expected != shard.SubtreeHash {
-			return errors.New("Story reconcile subtree hash mismatch")
+			return errors.New("story reconcile subtree hash mismatch")
 		}
 		if _, exists := reconcileKeys[shard.Key]; exists {
 			return errors.New("duplicate Story reconcile shard")
@@ -765,7 +765,7 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 	}
 	root, exists := reconcileKeys[reconcile.RootShardKey]
 	if !exists || root.Status != "active" {
-		return errors.New("Story reconcile root key mismatch")
+		return errors.New("story reconcile root key mismatch")
 	}
 	reachableReduce := make(map[string]struct{})
 	reachableAnalyze := make(map[string]struct{})
@@ -776,25 +776,25 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 			return nil
 		}
 		if _, cycle := visiting[key]; cycle {
-			return errors.New("Story reconcile graph contains a cycle")
+			return errors.New("story reconcile graph contains a cycle")
 		}
 		shard, exists := reconcileKeys[key]
 		if !exists || shard.Status != "active" {
-			return errors.New("Story reconcile active path references a stale shard")
+			return errors.New("story reconcile active path references a stale shard")
 		}
 		visiting[key] = struct{}{}
 		for _, child := range shard.Children {
 			if child.Stage == AnalyzeStoryStage {
 				value, exists := activeAnalyze[child.ShardKey]
 				if !exists || value.SourceHashes[0] != child.SourceHash {
-					return errors.New("Story reconcile map child has drifted")
+					return errors.New("story reconcile map child has drifted")
 				}
 				reachableAnalyze[child.ShardKey] = struct{}{}
 				continue
 			}
 			value, exists := reconcileKeys[child.ShardKey]
 			if !exists || value.Status != "active" || value.SubtreeHash != child.SourceHash || value.Level >= shard.Level {
-				return errors.New("Story reconcile tree child has drifted")
+				return errors.New("story reconcile tree child has drifted")
 			}
 			if err := visit(child.ShardKey); err != nil {
 				return err
@@ -810,22 +810,22 @@ func ValidateStoryAnalysisManifests(analyze StoryAnalysisManifest, reconcile Sto
 	for _, shard := range reconcile.Shards {
 		if shard.Status == "active" {
 			if _, exists := reachableReduce[shard.Key]; !exists {
-				return errors.New("Story reconcile manifest contains an unreachable active shard")
+				return errors.New("story reconcile manifest contains an unreachable active shard")
 			}
 		}
 	}
 	if len(reachableAnalyze) != len(activeAnalyze) {
-		return errors.New("Story reconcile manifest omitted an active map shard")
+		return errors.New("story reconcile manifest omitted an active map shard")
 	}
 	expectedCoverage, err := storyReconcileCoverageHash(root.Key, root.SubtreeHash)
 	if err != nil || expectedCoverage != reconcile.CoverageHash {
-		return errors.New("Story reconcile coverage hash mismatch")
+		return errors.New("story reconcile coverage hash mismatch")
 	}
 	if expected, err := storyAnalysisManifestHash(analyze); err != nil || expected != analyze.ManifestHash {
-		return errors.New("Story analysis manifest hash mismatch")
+		return errors.New("story analysis manifest hash mismatch")
 	}
 	if expected, err := storyReconcileManifestHash(reconcile); err != nil || expected != reconcile.ManifestHash {
-		return errors.New("Story reconcile manifest hash mismatch")
+		return errors.New("story reconcile manifest hash mismatch")
 	}
 	return nil
 }
@@ -1085,7 +1085,7 @@ func decodeStoryCandidate(raw json.RawMessage, target any) error {
 		return errors.New("candidate does not match Story analysis schema")
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return errors.New("Story analysis candidate contains multiple JSON values")
+		return errors.New("story analysis candidate contains multiple JSON values")
 	}
 	return nil
 }
@@ -1104,7 +1104,7 @@ func ValidateStoryReconciliationConservation(
 	reconciliationSources []StoryReconciliationCandidate,
 ) error {
 	if (len(analysisSources) == 0) == (len(reconciliationSources) == 0) {
-		return errors.New("Story reconciliation requires one exact upstream candidate type")
+		return errors.New("story reconciliation requires one exact upstream candidate type")
 	}
 	expected := newStoryCandidateKeys()
 	for _, source := range analysisSources {
@@ -1115,10 +1115,10 @@ func ValidateStoryReconciliationConservation(
 	}
 	actual := newStoryCandidateKeys()
 	if !actual.addUnique(value.CanonicalEntities, value.CanonicalWorldEntries, value.MergedClaims, value.MergedArcs) {
-		return errors.New("Story reconciliation contains duplicate candidate keys")
+		return errors.New("story reconciliation contains duplicate candidate keys")
 	}
 	if !sameStoryCandidateKeys(expected, actual) {
-		return errors.New("Story reconciliation changed exact candidate keys without an explicit reviewed identity link")
+		return errors.New("story reconciliation changed exact candidate keys without an explicit reviewed identity link")
 	}
 	return nil
 }
@@ -1230,7 +1230,7 @@ func validateStoryCandidate(
 ) error {
 	if entities == nil || world == nil || claims == nil || arcs == nil || issues == nil ||
 		len(entities)+len(world)+len(claims)+len(arcs)+len(issues)+len(conflicts) > 10_000 {
-		return errors.New("Story candidate is incomplete or exceeds limits")
+		return errors.New("story candidate is incomplete or exceeds limits")
 	}
 	allowedEvidence := make(map[string]struct{}, len(allowed))
 	for _, evidence := range allowed {
@@ -1238,11 +1238,11 @@ func validateStoryCandidate(
 	}
 	checkEvidence := func(values []Evidence, required bool) error {
 		if required && len(values) == 0 {
-			return errors.New("Story candidate fact has no Evidence")
+			return errors.New("story candidate fact has no Evidence")
 		}
 		for _, evidence := range values {
 			if _, ok := allowedEvidence[storyEvidenceKey(evidence)]; !ok {
-				return errors.New("Story candidate Evidence is absent from exact upstream revisions")
+				return errors.New("story candidate Evidence is absent from exact upstream revisions")
 			}
 		}
 		return nil
@@ -1253,10 +1253,10 @@ func validateStoryCandidate(
 			strings.TrimSpace(entity.CanonicalName) == "" || strings.TrimSpace(entity.NormalizedName) == "" ||
 			entity.Aliases == nil || entity.EpisodeNumbers == nil || entity.States == nil || entity.Ambiguities == nil ||
 			!validAssetSpec(entity.StableSpec) {
-			return errors.New("Story candidate contains an invalid entity")
+			return errors.New("story candidate contains an invalid entity")
 		}
 		if _, exists := entityKeys[entity.EntityKey]; exists {
-			return errors.New("Story candidate entity keys must be unique")
+			return errors.New("story candidate entity keys must be unique")
 		}
 		entityKeys[entity.EntityKey] = struct{}{}
 		if err := checkEvidence(entity.Evidence, true); err != nil {
@@ -1266,10 +1266,10 @@ func validateStoryCandidate(
 		for _, state := range entity.States {
 			if !statePattern.MatchString(state.StateKey) || strings.TrimSpace(state.Label) == "" ||
 				state.EpisodeNumbers == nil || state.Ambiguities == nil || !validAssetSpec(state.StateSpec) {
-				return errors.New("Story candidate contains an invalid entity state")
+				return errors.New("story candidate contains an invalid entity state")
 			}
 			if _, exists := stateKeys[state.StateKey]; exists {
-				return errors.New("Story candidate state keys must be unique per entity")
+				return errors.New("story candidate state keys must be unique per entity")
 			}
 			stateKeys[state.StateKey] = struct{}{}
 			if err := checkEvidence(state.Evidence, true); err != nil {
@@ -1282,10 +1282,10 @@ func validateStoryCandidate(
 		if !keyPattern.MatchString(entry.EntryKey) || strings.TrimSpace(entry.Category) == "" ||
 			strings.TrimSpace(entry.Title) == "" || entry.Facts == nil || entry.Rules == nil ||
 			entry.EntityKeys == nil || entry.EpisodeNumbers == nil || entry.Ambiguities == nil {
-			return errors.New("Story candidate contains an invalid world entry")
+			return errors.New("story candidate contains an invalid world entry")
 		}
 		if _, exists := worldKeys[entry.EntryKey]; exists {
-			return errors.New("Story candidate world entry keys must be unique")
+			return errors.New("story candidate world entry keys must be unique")
 		}
 		worldKeys[entry.EntryKey] = struct{}{}
 		if err := checkEvidence(entry.Evidence, true); err != nil {
@@ -1298,10 +1298,10 @@ func validateStoryCandidate(
 			len(claim.ParticipantKeys) == 0 || len(claim.AnchorKeys) == 0 || strings.TrimSpace(claim.Scope) == "" ||
 			!oneOf(claim.Polarity, "positive", "negative", "mixed", "unknown") ||
 			!oneOf(claim.Status, "proposed", "ambiguous", "conflicted") {
-			return errors.New("Story candidate contains an invalid claim")
+			return errors.New("story candidate contains an invalid claim")
 		}
 		if _, exists := claimKeys[claim.ClaimKey]; exists {
-			return errors.New("Story candidate claim keys must be unique")
+			return errors.New("story candidate claim keys must be unique")
 		}
 		claimKeys[claim.ClaimKey] = struct{}{}
 		if err := checkEvidence(claim.Evidence, true); err != nil {
@@ -1311,10 +1311,10 @@ func validateStoryCandidate(
 	arcKeys := map[string]struct{}{}
 	for _, arc := range arcs {
 		if !keyPattern.MatchString(arc.ArcKey) || strings.TrimSpace(arc.Title) == "" || strings.TrimSpace(arc.Summary) == "" {
-			return errors.New("Story candidate contains an invalid arc")
+			return errors.New("story candidate contains an invalid arc")
 		}
 		if _, exists := arcKeys[arc.ArcKey]; exists {
-			return errors.New("Story candidate arc keys must be unique")
+			return errors.New("story candidate arc keys must be unique")
 		}
 		arcKeys[arc.ArcKey] = struct{}{}
 		if err := checkEvidence(arc.Evidence, true); err != nil {
@@ -1326,10 +1326,10 @@ func validateStoryCandidate(
 		if !keyPattern.MatchString(issue.IssueKey) || strings.TrimSpace(issue.Code) == "" ||
 			!oneOf(issue.Severity, "warning", "blocking") || strings.TrimSpace(issue.Scope) == "" ||
 			strings.TrimSpace(issue.Summary) == "" {
-			return errors.New("Story candidate contains an invalid issue")
+			return errors.New("story candidate contains an invalid issue")
 		}
 		if _, exists := issueKeys[issue.IssueKey]; exists {
-			return errors.New("Story candidate issue keys must be unique")
+			return errors.New("story candidate issue keys must be unique")
 		}
 		issueKeys[issue.IssueKey] = struct{}{}
 		if err := checkEvidence(issue.Evidence, false); err != nil {

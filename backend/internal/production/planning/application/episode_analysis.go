@@ -74,8 +74,8 @@ type EpisodeAnalysisService struct {
 }
 
 var (
-	ErrEpisodeAnalysisUpstreamStale = errors.New("Episode analysis upstream reference is stale")
-	ErrEpisodeAnalysisManifestStale = errors.New("Episode analysis Shard Manifest is stale")
+	ErrEpisodeAnalysisUpstreamStale = errors.New("episode analysis upstream reference is stale")
+	ErrEpisodeAnalysisManifestStale = errors.New("episode analysis Shard Manifest is stale")
 	episodeAnalysisHashPattern      = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
@@ -103,7 +103,7 @@ func (service *EpisodeAnalysisService) Ensure(
 	command EpisodeAnalysisCommand,
 ) (EpisodeAnalysisState, error) {
 	if service == nil || service.repository == nil || service.config.Now == nil || service.config.NewID == nil {
-		return EpisodeAnalysisState{}, errors.New("Episode analysis service is unavailable")
+		return EpisodeAnalysisState{}, errors.New("episode analysis service is unavailable")
 	}
 	for _, identifier := range []string{
 		command.WorkspaceID, command.ProjectID, command.WorkflowRunID, command.NodeRunID,
@@ -225,7 +225,7 @@ func buildEpisodeAnalysisInvocations(
 	for _, shard := range manifest.Shards {
 		index, exists := byEpisode[shard.EpisodeID]
 		if !exists || shard.Status != "active" {
-			return nil, errors.New("Episode analysis manifest lost its published Episode")
+			return nil, errors.New("episode analysis manifest lost its published Episode")
 		}
 		episode := episodes[index]
 		content := []rune(episode.Source.Content)

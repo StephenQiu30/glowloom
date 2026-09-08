@@ -69,7 +69,7 @@ func (store *Store) ApplyStoryCandidateRepair(
 		}
 		preparedCandidateHash, hashErr := agentcontract.CanonicalHash(preparation.Candidate)
 		if hashErr != nil || preparedCandidateHash != expectedCandidateHash {
-			return errors.New("Story candidate repair preparation has drifted")
+			return errors.New("story candidate repair preparation has drifted")
 		}
 
 		var head model.StageCandidateHead
@@ -101,7 +101,7 @@ func (store *Store) ApplyStoryCandidateRepair(
 				return replayErr
 			}
 			if replayed.ReceiptID != receipt.ID || replayed.CandidateRevisionID != receipt.ResourceID {
-				return errors.New("Story candidate repair Receipt has drifted")
+				return errors.New("story candidate repair Receipt has drifted")
 			}
 			result = replayed
 			return nil
@@ -225,7 +225,7 @@ func loadStoryCandidateRepair(
 		invocation.WorkspaceID != workspaceID ||
 		invocation.Status != "succeeded" || invocation.ResultHash == nil || invocation.CandidateType == nil ||
 		*invocation.CandidateType != "candidate_repair_patch" {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate repair requires one successful Patch Invocation")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate repair requires one successful Patch Invocation")
 	}
 	projectID, err := uuid.Parse(request.Payload.ProjectID)
 	if err != nil {
@@ -235,7 +235,7 @@ func loadStoryCandidateRepair(
 		return application.StoryCandidateRepairSeed{}, err
 	}
 	if request.Payload.WorkspaceID != command.WorkspaceID {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate repair workspace has drifted")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate repair workspace has drifted")
 	}
 
 	var revision model.StageCandidateRevision
@@ -249,14 +249,14 @@ func loadStoryCandidateRepair(
 	}
 	parentContentHash, err := agentcontract.CanonicalHash(json.RawMessage(revision.Candidate))
 	if err != nil || parentContentHash != revision.CandidateContentHash {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate parent content hash has drifted")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate parent content hash has drifted")
 	}
 
 	var repairInput agentcontract.StoryGraphRepairStageInput
 	if err = json.Unmarshal(request.Payload.StageInput, &repairInput); err != nil || repairInput.Validate() != nil ||
 		repairInput.TargetCandidateRevisionID != command.ExpectedRevisionID ||
 		repairInput.TargetCandidateRevisionHash != command.ExpectedCandidateRevisionHash {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate repair input does not bind the expected parent")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate repair input does not bind the expected parent")
 	}
 	reviewRevisionID, err := uuid.Parse(repairInput.ReviewCandidateRevisionID)
 	if err != nil {
@@ -269,12 +269,12 @@ func loadStoryCandidateRepair(
 	if reviewRevision.WorkspaceID != workspaceID ||
 		reviewRevision.CandidateRevisionHash != repairInput.ReviewCandidateRevisionHash ||
 		reviewRevision.SourceInvocationID == nil || reviewRevision.SourceResultHash == nil {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate Review revision has drifted")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate Review revision has drifted")
 	}
 	reviewContentHash, err := agentcontract.CanonicalHash(json.RawMessage(reviewRevision.Candidate))
 	if err != nil || reviewContentHash != reviewRevision.CandidateContentHash ||
 		reviewContentHash != *reviewRevision.SourceResultHash {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate Review content hash has drifted")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate Review content hash has drifted")
 	}
 	reviewBound := false
 	for _, upstream := range request.Payload.UpstreamCandidates {
@@ -287,15 +287,15 @@ func loadStoryCandidateRepair(
 		}
 	}
 	if !reviewBound {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate repair lost its exact Review revision")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate repair lost its exact Review revision")
 	}
 	repairPatch, err := agentcontract.DecodeCandidateRepairPatch(invocation.Candidate)
 	if err != nil || agentcontract.ValidateCandidateRepairPatch(repairInput, repairPatch) != nil {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate repair Patch is invalid")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate repair Patch is invalid")
 	}
 	resultHash, err := agentcontract.CanonicalHash(json.RawMessage(invocation.Candidate))
 	if err != nil || resultHash != *invocation.ResultHash {
-		return application.StoryCandidateRepairSeed{}, errors.New("Story candidate repair Result hash has drifted")
+		return application.StoryCandidateRepairSeed{}, errors.New("story candidate repair Result hash has drifted")
 	}
 	return application.StoryCandidateRepairSeed{
 		ParentCandidate: append(json.RawMessage(nil), revision.Candidate...),
@@ -351,7 +351,7 @@ func storyCandidateStaleClosure(
 			continue
 		}
 		if _, exists := dependencyStages[revision.StageInstanceKey]; exists {
-			return nil, errors.New("Candidate aggregate stage conflicts with an Invocation dependency")
+			return nil, errors.New("candidate aggregate stage conflicts with an Invocation dependency")
 		}
 		var origin agentcontract.AggregateCandidateOrigin
 		if err := json.Unmarshal(revision.AggregateOrigin, &origin); err != nil {

@@ -89,7 +89,7 @@ func (service *SourceService) Accept(ctx context.Context, actor Actor, command A
 				return sourceError("idempotency_conflict", "Idempotency key was used with different input", 409)
 			}
 			if json.Unmarshal(receipt.Result, &replay) != nil {
-				return errors.New("Script Source command receipt is invalid")
+				return errors.New("script Source command receipt is invalid")
 			}
 			accepted = replay.Accepted
 			return nil
@@ -246,6 +246,24 @@ func (service *SourceService) GetExact(ctx context.Context, actor Actor, project
 		var queryErr error
 		accepted, queryErr = repo.GetAcceptedSource(ctx, projectID, revisionID)
 		return queryErr
+	})
+	return accepted, err
+}
+
+// GetCurrent returns the accepted head and its CAS identity; importing a document
+// alone does not advance this head.
+func (service *SourceService) GetCurrent(ctx context.Context, actor Actor, projectID string) (domain.AcceptedSource, error) {
+	var accepted domain.AcceptedSource
+	err := service.transactions.WithinSourceTransaction(ctx, func(repo SourceRepository) error {
+		if _, err := repo.ProjectWorkspace(ctx, actor, projectID, false); err != nil {
+			return err
+		}
+		head, err := repo.LockSourceHead(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		accepted, err = repo.GetAcceptedSource(ctx, projectID, head.DocumentRevisionID)
+		return err
 	})
 	return accepted, err
 }

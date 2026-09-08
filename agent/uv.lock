@@ -162,6 +162,7 @@ dependencies = [
 
 [package.optional-dependencies]
 creation = [
+    { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "temporalio" },
 ]
@@ -177,6 +178,7 @@ dev = [
 requires-dist = [
     { name = "anyio", specifier = "==4.14.2" },
     { name = "fastapi", specifier = "==0.140.12" },
+    { name = "httpx", marker = "extra == 'creation'", specifier = "==0.28.1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = "==0.28.1" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'creation'", specifier = "==3.3.5" },
     { name = "pydantic", specifier = "==2.13.4" },

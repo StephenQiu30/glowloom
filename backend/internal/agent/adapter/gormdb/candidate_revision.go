@@ -42,7 +42,7 @@ func AdvanceCandidateHeadWithRepair(
 	}
 	var candidateObject map[string]any
 	if err := json.Unmarshal(advance.Candidate, &candidateObject); err != nil || candidateObject == nil {
-		return model.StageCandidateRevision{}, errors.New("Candidate repair output must be an object")
+		return model.StageCandidateRevision{}, errors.New("candidate repair output must be an object")
 	}
 	candidateContentHash, err := contract.CanonicalHash(advance.Candidate)
 	if err != nil {
@@ -88,11 +88,11 @@ func AdvanceCandidateHeadWithRepair(
 			repairInvocation.Stage != "repair_candidate" || repairInvocation.Status != "succeeded" ||
 			repairInvocation.ResultHash == nil || *repairInvocation.ResultHash != advance.RepairResultHash ||
 			repairInvocation.CandidateType == nil || *repairInvocation.CandidateType != "candidate_repair_patch" {
-			return errors.New("Candidate repair Invocation is not an accepted successful result")
+			return errors.New("candidate repair Invocation is not an accepted successful result")
 		}
 		persistedRepairHash, hashErr := contract.CanonicalHash(json.RawMessage(repairInvocation.Candidate))
 		if hashErr != nil || persistedRepairHash != advance.RepairResultHash {
-			return errors.New("Candidate repair Result hash has drifted")
+			return errors.New("candidate repair Result hash has drifted")
 		}
 
 		parentHash := parent.CandidateRevisionHash
@@ -176,7 +176,7 @@ func AcceptInvocationCandidate(
 	}
 	stageInstanceKey, err := request.StageInstanceKey()
 	if err != nil || invocation.StageInstanceKey != stageInstanceKey || invocation.ID.String() != request.InvocationID {
-		return model.StageCandidateRevision{}, errors.New("Agent invocation identity does not match the persisted stage")
+		return model.StageCandidateRevision{}, errors.New("agent invocation identity does not match the persisted stage")
 	}
 
 	var existing model.StageCandidateRevision

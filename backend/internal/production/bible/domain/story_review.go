@@ -96,7 +96,7 @@ func ValidateStoryReviewManifest(value StoryReviewManifest) error {
 	}
 	expected, err := storyReviewManifestHash(value)
 	if err != nil || expected != value.ManifestHash {
-		return errors.New("Story review manifest hash has drifted")
+		return errors.New("story review manifest hash has drifted")
 	}
 	return nil
 }

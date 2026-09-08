@@ -12,7 +12,15 @@ from psycopg.types.json import Jsonb
 
 from app.creation.attempt_schema import ATTEMPT_SCHEMA, ATTEMPT_SCHEMA_HASH
 from app.creation.contract import Acceptance, Command
-from app.creation.execution_schema import EXECUTION_SCHEMA, EXECUTION_SCHEMA_HASH
+from app.creation.execution_schema import (
+    EXECUTION_SCHEMA,
+    EXECUTION_SCHEMA_HASH,
+    RESUME_SCHEMA,
+    RESUME_SCHEMA_HASH,
+    WORKFLOW_SCHEMA,
+    WORKFLOW_SCHEMA_HASH,
+)
+from app.creation.manifest_schema import MANIFEST_SCHEMA, MANIFEST_SCHEMA_HASH
 
 # This schema belongs exclusively to the Agent database. Migration is explicit.
 SCHEMA = """
@@ -81,7 +89,10 @@ class Repository:
             if marker and marker["marker"]:
                 await self._check_schema(conn)
                 await self._migrate_execution(conn)
+                await self._migrate_workflow(conn)
+                await self._migrate_resume(conn)
                 await self._migrate_attempts(conn)
+                await self._migrate_manifest(conn)
                 return
             existing = await (
                 await conn.execute(
@@ -100,7 +111,23 @@ class Repository:
                 "INSERT INTO creation_schema VALUES (%s, %s)", ("command-acceptance", SCHEMA_HASH)
             )
             await self._migrate_execution(conn)
+            await self._migrate_workflow(conn)
+            await self._migrate_resume(conn)
             await self._migrate_attempts(conn)
+            await self._migrate_manifest(conn)
+
+    async def _migrate_manifest(self, conn: AsyncConnection[dict[str, Any]]) -> None:
+        row = await (
+            await conn.execute("SELECT checksum FROM creation_schema WHERE name = 'text-manifest'")
+        ).fetchone()
+        if row:
+            if row["checksum"] != MANIFEST_SCHEMA_HASH:
+                raise SchemaMismatch("text manifest migration checksum differs")
+            return
+        await conn.execute(MANIFEST_SCHEMA)
+        await conn.execute(
+            "INSERT INTO creation_schema VALUES (%s, %s)", ("text-manifest", MANIFEST_SCHEMA_HASH)
+        )
 
     async def _migrate_attempts(self, conn: AsyncConnection[dict[str, Any]]) -> None:
         row = await (
@@ -113,6 +140,32 @@ class Repository:
         await conn.execute(ATTEMPT_SCHEMA)
         await conn.execute(
             "INSERT INTO creation_schema VALUES (%s, %s)", ("text-attempts", ATTEMPT_SCHEMA_HASH)
+        )
+
+    async def _migrate_resume(self, conn: AsyncConnection[dict[str, Any]]) -> None:
+        row = await (
+            await conn.execute("SELECT checksum FROM creation_schema WHERE name = 'text-resume'")
+        ).fetchone()
+        if row:
+            if row["checksum"] != RESUME_SCHEMA_HASH:
+                raise SchemaMismatch("text resume migration checksum differs")
+            return
+        await conn.execute(RESUME_SCHEMA)
+        await conn.execute(
+            "INSERT INTO creation_schema VALUES (%s, %s)", ("text-resume", RESUME_SCHEMA_HASH)
+        )
+
+    async def _migrate_workflow(self, conn: AsyncConnection[dict[str, Any]]) -> None:
+        row = await (
+            await conn.execute("SELECT checksum FROM creation_schema WHERE name = 'text-workflow'")
+        ).fetchone()
+        if row:
+            if row["checksum"] != WORKFLOW_SCHEMA_HASH:
+                raise SchemaMismatch("text workflow migration checksum differs")
+            return
+        await conn.execute(WORKFLOW_SCHEMA)
+        await conn.execute(
+            "INSERT INTO creation_schema VALUES (%s, %s)", ("text-workflow", WORKFLOW_SCHEMA_HASH)
         )
 
     async def _check_schema(self, conn: AsyncConnection[dict[str, Any]]) -> None:
@@ -140,6 +193,13 @@ class Repository:
     async def ready(self) -> None:
         async with await self.connect() as conn:
             await self._check_schema(conn)
+            manifest = await (
+                await conn.execute(
+                    "SELECT checksum FROM creation_schema WHERE name = 'text-manifest'"
+                )
+            ).fetchone()
+            if not manifest or manifest["checksum"] != MANIFEST_SCHEMA_HASH:
+                raise SchemaMismatch("text manifest migration is missing or differs")
             attempt = await (
                 await conn.execute(
                     "SELECT checksum FROM creation_schema WHERE name = 'text-attempts'"
@@ -154,6 +214,20 @@ class Repository:
             ).fetchone()
             if not row or row["checksum"] != EXECUTION_SCHEMA_HASH:
                 raise SchemaMismatch("text execution migration is missing or differs")
+            row = await (
+                await conn.execute(
+                    "SELECT checksum FROM creation_schema WHERE name = 'text-workflow'"
+                )
+            ).fetchone()
+            if not row or row["checksum"] != WORKFLOW_SCHEMA_HASH:
+                raise SchemaMismatch("text workflow migration is missing or differs")
+            row = await (
+                await conn.execute(
+                    "SELECT checksum FROM creation_schema WHERE name = 'text-resume'"
+                )
+            ).fetchone()
+            if not row or row["checksum"] != RESUME_SCHEMA_HASH:
+                raise SchemaMismatch("text resume migration is missing or differs")
 
     async def command(self, command_id: str) -> Command | None:
         async with await self.connect() as conn:

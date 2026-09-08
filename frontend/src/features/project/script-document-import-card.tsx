@@ -42,8 +42,7 @@ import {
   usePreviewScriptDocumentMutation,
 } from "@/features/script/endpoints";
 
-import { EpisodePlanWorkspace } from "@/features/planning/episode-plan-workspace";
-import { ProductionBibleWorkspace } from "@/features/production-bible/production-bible-workspace";
+import { TextCreationWorkspace } from "@/features/creation/text-creation-workspace";
 
 const RIGHTS_DECLARATION = "我确认拥有该剧本用于本项目制作与分析的权利";
 const DOCX_MIME_TYPE =
@@ -76,7 +75,7 @@ const nextActionLabels: Record<string, string> = {
   remove_utf8_bom: "下一步：移除 BOM 后重新导入",
   reorder_episode_markers: "下一步：按顺序调整集标记",
   renumber_episode_markers: "下一步：修正集号后重新导入",
-  resolve_preamble: "下一步：决定前言归属或删除前言",
+  resolve_preamble: "下一步：在 AI 分集提案中审阅前言归属",
 };
 
 async function sha256(value: ArrayBuffer): Promise<string> {
@@ -117,14 +116,12 @@ export function ScriptDocumentImportCard({
   currentAnalysis,
   language,
   projectId,
-  targetDurationMs,
   workspaceId,
 }: {
   canWrite: boolean;
   currentAnalysis?: API.ScriptDocumentAnalysisResponse;
   language: string;
   projectId: string;
-  targetDurationMs: number;
   workspaceId: string;
 }) {
   const [initializeUpload, initializeState] = useInitializeMediaUploadMutation();
@@ -278,7 +275,7 @@ export function ScriptDocumentImportCard({
         },
       }).unwrap();
       setImportedAnalysis(result);
-      setNotice("剧本已固定为不可变修订，格式解析结果已生成。");
+      setNotice("原稿已固定。请在下方开始 AI 创作，依次审阅分集、场景和人物设定。");
     } catch (error: unknown) {
       const apiError = error as { code?: string };
       setActionError(
@@ -356,8 +353,8 @@ export function ScriptDocumentImportCard({
                 </Item>
                 <Alert className="border-0 bg-muted/50" role="status">
                   <CheckCircle2 aria-hidden="true" />
-                  <AlertTitle>剧本解析已完成</AlertTitle>
-                  <AlertDescription>已从服务端恢复当前不可变原稿，可以继续制作圣经与分集。</AlertDescription>
+                  <AlertTitle>原稿已固定</AlertTitle>
+                  <AlertDescription>已恢复当前原稿版本，可在下方查看或启动 AI 分集、场景与人物分析。</AlertDescription>
                 </Alert>
               </>
             ) : null}
@@ -372,7 +369,7 @@ export function ScriptDocumentImportCard({
             {notice ? (
               <Alert className="border-0 bg-muted/50" role="status">
                 <CheckCircle2 aria-hidden="true" />
-                <AlertTitle>{analysis ? "格式解析已完成" : "预览已就绪"}</AlertTitle>
+                <AlertTitle>{analysis ? "原稿已固定" : "预览已就绪"}</AlertTitle>
                 <AlertDescription>{notice}</AlertDescription>
               </Alert>
             ) : null}
@@ -424,7 +421,7 @@ export function ScriptDocumentImportCard({
                     ) : (
                       <CheckCircle2 aria-hidden="true" />
                     )}
-                    {analysis ? "剧本解析已完成" : "确认剧本并开始解析"}
+                    {analysis ? "原稿已固定" : "确认并固定原稿"}
                   </Button>
                 </div>
               </section>
@@ -435,7 +432,7 @@ export function ScriptDocumentImportCard({
             <aside className="grid content-start gap-5">
               <div className="bg-muted/45 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-medium">最近一次格式解析</p>
+                  <p className="font-medium">基础格式检查</p>
                   <Badge
                     variant={
                       analysis.revision.analysis_status === "rejected"
@@ -483,18 +480,12 @@ export function ScriptDocumentImportCard({
         </CardContent>
       </Card>
       {analysis ? (
-        <>
-          <ProductionBibleWorkspace
-            analysis={analysis}
-            canWrite={canWrite}
-            projectId={projectId}
-          />
-          <EpisodePlanWorkspace
-            analysis={analysis}
-            canWrite={canWrite}
-            targetDurationMs={targetDurationMs}
-          />
-        </>
+        <TextCreationWorkspace projectId={projectId} canWrite={canWrite} source={{
+          revisionId: analysis.revision.id,
+          contentHash: analysis.revision.normalized_hash,
+          title: analysis.document.title,
+          text: analysis.revision.normalized_text,
+        }} />
       ) : null}
     </>
   );

@@ -142,7 +142,7 @@ func (executor *NodeExecutor) executeCandidateSet(
 		shot.SourceKind != domain.NodeInputSourceNodeOutput || strings.TrimSpace(shot.SourceNodeID) == "" ||
 		shot.SourcePort != "shot" || revisionErr != nil || shotRevision < 1 ||
 		!validCandidateSetUUID(shot.ReferenceID) || !candidateSetHashPattern.MatchString(shot.ContentHash) {
-		return domain.NodeExecutorResult{}, errors.New("Generation CandidateSet Shot input has drifted")
+		return domain.NodeExecutorResult{}, errors.New("generation candidate set shot input has drifted")
 	}
 	var config map[string]json.RawMessage
 	var providerJobID string
@@ -158,7 +158,7 @@ func (executor *NodeExecutor) executeCandidateSet(
 		return domain.NodeExecutorResult{}, err
 	}
 	if set.ID != providerJobID {
-		return domain.NodeExecutorResult{}, errors.New("Generation CandidateSet source has drifted")
+		return domain.NodeExecutorResult{}, errors.New("generation candidate set source has drifted")
 	}
 	output, err := candidateSetNodeOutput(set, command.WorkspaceID, command.ProjectID)
 	if err != nil {
@@ -356,7 +356,7 @@ func candidateSetNodeOutput(
 		set.Revision != 1 || !validCandidateSetUUID(set.ID) ||
 		!candidateSetHashPattern.MatchString(set.ProviderReceiptSetHash) ||
 		!candidateSetHashPattern.MatchString(set.ContentHash) || len(set.Candidates) == 0 || len(set.Candidates) > 100 {
-		return domain.NodeOutputSnapshot{}, errors.New("Generation CandidateSet source has drifted")
+		return domain.NodeOutputSnapshot{}, errors.New("generation candidate set source has drifted")
 	}
 	seenCandidates := make(map[string]struct{}, len(set.Candidates))
 	for _, candidate := range set.Candidates {
@@ -364,10 +364,10 @@ func candidateSetNodeOutput(
 			candidate.Revision < 1 || candidate.ArtifactRevision < 1 ||
 			!candidateSetHashPattern.MatchString(candidate.ArtifactSHA256) ||
 			!candidateSetHashPattern.MatchString(candidate.QCReportHash) {
-			return domain.NodeOutputSnapshot{}, errors.New("Generation CandidateSet contains an invalid candidate")
+			return domain.NodeOutputSnapshot{}, errors.New("generation CandidateSet contains an invalid candidate")
 		}
 		if _, exists := seenCandidates[candidate.ID]; exists {
-			return domain.NodeOutputSnapshot{}, errors.New("Generation CandidateSet contains duplicate candidates")
+			return domain.NodeOutputSnapshot{}, errors.New("generation CandidateSet contains duplicate candidates")
 		}
 		seenCandidates[candidate.ID] = struct{}{}
 	}

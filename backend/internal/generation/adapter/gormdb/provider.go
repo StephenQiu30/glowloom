@@ -38,10 +38,10 @@ func (store *ProviderStore) WithinProviderTransaction(
 	operation func(application.ProviderRepository, application.CostProviderOwner, application.QuotaProviderOwner) error,
 ) error {
 	if store == nil || store.database == nil || store.database.Config == nil || operation == nil {
-		return errors.New("Generation Provider transaction is not configured")
+		return errors.New("generation Provider transaction is not configured")
 	}
 	if store.database.DisableNestedTransaction {
-		return errors.New("Generation Provider transaction requires GORM nested transaction savepoints")
+		return errors.New("generation Provider transaction requires GORM nested transaction savepoints")
 	}
 	return platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
 		repo := &providerRepository{preparationRepository: &preparationRepository{database: transaction}}
@@ -154,7 +154,7 @@ func (repo *providerRepository) EnsureRequestJobAndCalls(
 		return domain.GenerationRequest{}, domain.ProviderJob{}, nil, fmt.Errorf("create Generation Provider job: %w", err)
 	}
 	if len(callRecords) == 0 {
-		return domain.GenerationRequest{}, domain.ProviderJob{}, nil, errors.New("Generation Provider job requires Calls")
+		return domain.GenerationRequest{}, domain.ProviderJob{}, nil, errors.New("generation Provider job requires Calls")
 	}
 	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&callRecords).Error; err != nil {
 		return domain.GenerationRequest{}, domain.ProviderJob{}, nil, fmt.Errorf("create Generation Provider Calls: %w", err)

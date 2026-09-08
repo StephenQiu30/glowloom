@@ -25,7 +25,7 @@ func (source *SelectedImageSource) RequireSelectedImage(
 	selectionID string,
 ) (storyboardapp.SelectedImageSnapshot, error) {
 	if source == nil || source.selections == nil {
-		return storyboardapp.SelectedImageSnapshot{}, errors.New("Generation selection source is unavailable")
+		return storyboardapp.SelectedImageSnapshot{}, errors.New("generation selection source is unavailable")
 	}
 	selection, err := source.selections.RequireSelected(ctx, generationapp.Actor{
 		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
@@ -37,14 +37,14 @@ func (source *SelectedImageSource) RequireSelectedImage(
 	for _, candidate := range selection.Candidates {
 		if candidate.ID == selection.SelectedCandidateID {
 			if selected.ID != "" {
-				return storyboardapp.SelectedImageSnapshot{}, errors.New("Generation selection has duplicate selected candidates")
+				return storyboardapp.SelectedImageSnapshot{}, errors.New("generation selection has duplicate selected candidates")
 			}
 			selected = candidate
 		}
 	}
 	if selected.ID == "" || selected.ArtifactID != selection.SelectedArtifactID ||
 		selected.ArtifactSHA256 != selection.SelectedArtifactSHA256 {
-		return storyboardapp.SelectedImageSnapshot{}, errors.New("Generation selection artifact snapshot has drifted")
+		return storyboardapp.SelectedImageSnapshot{}, errors.New("generation selection artifact snapshot has drifted")
 	}
 	return storyboardapp.SelectedImageSnapshot{
 		ID: selection.ID, WorkspaceID: selection.WorkspaceID, ProjectID: selection.ProjectID,

@@ -22,10 +22,10 @@ const (
 )
 
 var (
-	ErrProviderConnectionNotFound     = errors.New("Media Provider connection not found")
-	ErrProviderCredentialNotFound     = errors.New("Media Provider credential not found")
-	ErrProviderProfileNotFound        = errors.New("Media Provider model profile not found")
-	ErrProjectProviderBindingNotFound = errors.New("Project Media Provider binding not found")
+	ErrProviderConnectionNotFound     = errors.New("media Provider connection not found")
+	ErrProviderCredentialNotFound     = errors.New("media Provider credential not found")
+	ErrProviderProfileNotFound        = errors.New("media Provider model profile not found")
+	ErrProjectProviderBindingNotFound = errors.New("project Media Provider binding not found")
 	providerConfigurationKeyPattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,79}$`)
 )
 
@@ -251,7 +251,7 @@ func (service *ProviderConfigurationService) CreateConnection(
 			return secretStoreUnavailable()
 		}
 		if encrypted.Fingerprint != credentialFingerprint {
-			return errors.New("Media Provider credential fingerprint is inconsistent")
+			return errors.New("media Provider credential fingerprint is inconsistent")
 		}
 		credential := domain.ProviderCredentialVersion{
 			ID: credentialID, WorkspaceID: command.WorkspaceID, ConnectionKey: command.ConnectionKey,
@@ -377,7 +377,7 @@ func (service *ProviderConfigurationService) RotateCredential(
 			return secretStoreUnavailable()
 		}
 		if encrypted.Fingerprint != credentialFingerprint {
-			return errors.New("Media Provider credential fingerprint is inconsistent")
+			return errors.New("media Provider credential fingerprint is inconsistent")
 		}
 		credential := domain.ProviderCredentialVersion{
 			ID: credentialID, WorkspaceID: command.WorkspaceID, ConnectionKey: command.ConnectionKey,
@@ -458,7 +458,7 @@ func (service *ProviderConfigurationService) SetConnectionState(
 		}
 		connectionID := strings.TrimSpace(service.config.NewID())
 		if !validUUID(connectionID) {
-			return errors.New("Media Provider connection identifier is invalid")
+			return errors.New("media Provider connection identifier is invalid")
 		}
 		connection := latest
 		connection.ID, connection.Revision, connection.State = connectionID, latest.Revision+1, command.State
@@ -556,7 +556,7 @@ func (service *ProviderConfigurationService) CreateModelProfile(
 		}
 		profileID := strings.TrimSpace(service.config.NewID())
 		if !validUUID(profileID) {
-			return errors.New("Media Provider model profile identifier is invalid")
+			return errors.New("media Provider model profile identifier is invalid")
 		}
 		presetHash, hashErr := platformcommand.InputHash(preset)
 		if hashErr != nil {
@@ -636,7 +636,7 @@ func (service *ProviderConfigurationService) SetModelProfileState(
 		}
 		profileID := strings.TrimSpace(service.config.NewID())
 		if !validUUID(profileID) {
-			return errors.New("Media Provider model profile identifier is invalid")
+			return errors.New("media Provider model profile identifier is invalid")
 		}
 		profile := latest
 		profile.ID, profile.Revision, profile.State = profileID, latest.Revision+1, command.State
@@ -811,7 +811,7 @@ func (service *ProviderConfigurationService) PublishProjectBinding(
 		}
 		bindingID := strings.TrimSpace(service.config.NewID())
 		if !validUUID(bindingID) {
-			return errors.New("Project Media Provider binding identifier is invalid")
+			return errors.New("project Media Provider binding identifier is invalid")
 		}
 		now := service.config.Now().UTC().Truncate(time.Microsecond)
 		binding := domain.ProjectProviderBindingVersion{
@@ -907,7 +907,7 @@ func (service *ProviderConfigurationService) valid() bool {
 func (service *ProviderConfigurationService) newIDs() (string, string, error) {
 	first, second := strings.TrimSpace(service.config.NewID()), strings.TrimSpace(service.config.NewID())
 	if !validUUID(first) || !validUUID(second) {
-		return "", "", errors.New("Media Provider configuration identifiers are invalid")
+		return "", "", errors.New("media Provider configuration identifiers are invalid")
 	}
 	return first, second, nil
 }
@@ -925,7 +925,7 @@ func (service *ProviderConfigurationService) ensureConfigurationReceipt(
 	}
 	receiptID := strings.TrimSpace(service.config.NewID())
 	if !validUUID(receiptID) {
-		return platformcommand.Receipt{}, errors.New("Media Provider command receipt identifier is invalid")
+		return platformcommand.Receipt{}, errors.New("media Provider command receipt identifier is invalid")
 	}
 	return repo.EnsureReceipt(ctx, platformcommand.Receipt{
 		ID: receiptID, WorkspaceID: workspaceID, Operation: operation, IdempotencyKey: key,
