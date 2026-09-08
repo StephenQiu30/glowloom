@@ -49,7 +49,7 @@ async def test_signed_http_accept_lookup_conflict_and_authentication(
         assert (
             await client.post(endpoint, content=changed_body, headers=headers)
         ).status_code == 409
-        assert (await client.get("/readyz")).status_code == 200
+        assert (await client.get("/healthz")).status_code == 200
 
 
 async def test_invalid_body_is_rejected_without_persisting(repository: Repository) -> None:

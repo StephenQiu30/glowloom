@@ -68,19 +68,25 @@ async def agent_process(repository: Repository, address: str, queue: str) -> Asy
             cwd=AGENT_ROOT,
             env=env,
             pass_fds=(listener.fileno(),),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
     url = f"http://127.0.0.1:{port}"
     try:
-        async with httpx.AsyncClient(timeout=1) as client:
+        async with httpx.AsyncClient(timeout=1, trust_env=False) as client:
             async with asyncio.timeout(15):
                 while True:
-                    assert process.returncode is None, (
-                        "creation test process exited before readiness"
-                    )
+                    if process.returncode is not None:
+                        output, _ = await process.communicate()
+                        pytest.fail(
+                            "creation test process exited before readiness:\n"
+                            + output.decode(errors="replace")
+                        )
                     try:
-                        if (await client.get(url + "/readyz")).status_code == 200:
+                        # Uvicorn serves only after the repository, dispatcher, and Temporal
+                        # worker lifespan has started. Harness readiness additionally requires
+                        # Codex, which this command-handoff job intentionally does not install.
+                        if (await client.get(url + "/healthz")).status_code == 200:
                             break
                     except httpx.HTTPError:
                         pass
@@ -91,10 +97,10 @@ async def agent_process(repository: Repository, address: str, queue: str) -> Asy
             process.terminate()
             try:
                 async with asyncio.timeout(10):
-                    await process.wait()
+                    await process.communicate()
             except TimeoutError:
                 process.kill()
-                await process.wait()
+                await process.communicate()
 
 
 def headers(command: Command, *, lookup: bool = False) -> dict[str, str]:
@@ -125,7 +131,7 @@ async def test_real_agent_process_restart_preserves_receipt_and_temporal_identit
     try:
         async with (
             agent_process(repository, address, queue) as url,
-            httpx.AsyncClient(timeout=5) as http,
+            httpx.AsyncClient(timeout=5, trust_env=False) as http,
         ):
             go_env = {
                 key: value
@@ -185,7 +191,7 @@ async def test_real_agent_process_restart_preserves_receipt_and_temporal_identit
             assert description.task_queue == queue
         async with (
             agent_process(repository, address, queue) as url,
-            httpx.AsyncClient(timeout=5) as http,
+            httpx.AsyncClient(timeout=5, trust_env=False) as http,
         ):
             lookup = await http.get(
                 url + "/internal/creation/commands/" + command.command_id,
