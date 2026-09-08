@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.candidate_runtime.canonical import production_canonical_hash
+from app.protocol.canonical import production_canonical_hash
 
 SceneAnalysisStageKey = Literal["propose_script_spans", "extract_scene_facts"]
 

@@ -33,6 +33,8 @@ COPY --chown=lanverse:lanverse agent/skills ./skills
 COPY --chown=lanverse:lanverse agent/app/__init__.py agent/app/main.py ./app/
 COPY --chown=lanverse:lanverse agent/app/candidate_runtime ./app/candidate_runtime
 COPY --chown=lanverse:lanverse agent/app/modules ./app/modules
+COPY --chown=lanverse:lanverse agent/app/reasoning ./app/reasoning
+COPY --chown=lanverse:lanverse agent/app/protocol ./app/protocol
 
 COPY --chown=lanverse:lanverse agent/app/text_contract ./app/text_contract
 USER lanverse

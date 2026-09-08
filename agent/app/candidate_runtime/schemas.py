@@ -7,7 +7,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.candidate_runtime.canonical import canonical_hash
 from app.modules.storygraph.candidate_schemas import (
     BIBLE_DETERMINISTIC_GATE_CODES,
     BIBLE_REPAIR_FIELD_TYPES,
@@ -19,6 +18,7 @@ from app.modules.storygraph.candidate_schemas import (
     StoryAnalysisCandidate,
     StoryReconciliationCandidate,
 )
+from app.protocol.canonical import canonical_hash
 
 StoryGraphStage = Literal[
     "extract_source_evidence",

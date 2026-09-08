@@ -9,7 +9,6 @@ from typing import Literal
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import ValidationError
 
-from app.candidate_runtime.canonical import canonical_hash, production_canonical_hash
 from app.candidate_runtime.grants import (
     InvalidExecutionGrant,
     InvalidSceneAnalysisDispatchAuthorization,
@@ -17,6 +16,7 @@ from app.candidate_runtime.grants import (
     verify_execution_grant,
     verify_scene_analysis_dispatch_authorization,
 )
+from app.candidate_runtime.readiness import router as readiness_router
 from app.candidate_runtime.scene_analysis_schemas import (
     SceneAnalysisAttemptResult,
     SceneAnalysisDiagnostic,
@@ -33,12 +33,6 @@ from app.candidate_runtime.schemas import (
 from app.candidate_runtime.text_storyboard_api import router as text_storyboard_router
 from app.modules.storygraph.bundle import BundleInvalid, StoryGraphBundle
 from app.modules.storygraph.harness import (
-    CodexBudgetExceeded,
-    CodexDeadlineExceeded,
-    CodexExecutionError,
-    CodexRuntimeUnavailable,
-    CodexSchemaInvalid,
-    CodexToolPolicyViolation,
     InvocationPolicyInvalid,
     SkillBundleUnavailable,
     StoryGraphHarness,
@@ -47,6 +41,15 @@ from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
 from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 from app.modules.storygraph.skill_registry import stage_spec
+from app.protocol.canonical import canonical_hash, production_canonical_hash
+from app.reasoning.codex import (
+    CodexBudgetExceeded,
+    CodexDeadlineExceeded,
+    CodexExecutionError,
+    CodexRuntimeUnavailable,
+    CodexSchemaInvalid,
+    CodexToolPolicyViolation,
+)
 
 
 @asynccontextmanager
@@ -64,6 +67,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(text_storyboard_router)
+app.include_router(readiness_router)
 
 
 @app.get("/healthz")

@@ -16,11 +16,8 @@ from app.candidate_runtime.scene_analysis_schemas import (
 )
 from app.modules.storygraph.bundle import BundleInvalid
 from app.modules.storygraph.harness import (
-    CodexBudgetExceeded,
-    CodexSchemaInvalid,
     InvocationPolicyInvalid,
     SkillBundleUnavailable,
-    run_codex_process,
 )
 from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_candidates import (
@@ -29,6 +26,11 @@ from app.modules.storygraph.scene_analysis_candidates import (
     SourceEvidenceSpan,
 )
 from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
+from app.reasoning.codex import (
+    CodexBudgetExceeded,
+    CodexSchemaInvalid,
+    run_codex_process,
+)
 
 
 class SceneAnalysisHarness:

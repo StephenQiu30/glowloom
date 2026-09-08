@@ -9,8 +9,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.candidate_runtime.canonical import canonical_hash, canonical_json
-from app.modules.storygraph.harness import codex_output_schema, run_codex_process
+from app.protocol.canonical import canonical_hash, canonical_json
+from app.reasoning.codex import (
+    codex_output_schema,
+    run_codex_process,
+)
 from app.text_contract.schemas import (
     EpisodeAnalysis,
     EpisodeMap,

@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from app.candidate_runtime.canonical import production_canonical_hash
+from app.protocol.canonical import production_canonical_hash
 
 FLOW_TYPE = "lanverse.creation.text-storyboard.production"
 

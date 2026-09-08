@@ -14,8 +14,7 @@ COPY agent/requirements-creation.txt ./requirements-creation.txt
 RUN python -m pip install --requirement requirements-creation.txt
 COPY --chown=lanverse:lanverse agent/app/__init__.py ./app/__init__.py
 COPY --chown=lanverse:lanverse agent/app/creation ./app/creation
-COPY --chown=lanverse:lanverse agent/app/candidate_runtime/__init__.py ./app/candidate_runtime/__init__.py
-COPY --chown=lanverse:lanverse agent/app/candidate_runtime/canonical.py ./app/candidate_runtime/canonical.py
+COPY --chown=lanverse:lanverse agent/app/protocol ./app/protocol
 COPY --chown=lanverse:lanverse agent/app/text_contract ./app/text_contract
 USER lanverse
 EXPOSE 8788

@@ -7,9 +7,9 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 from pydantic import TypeAdapter
 
-from app.candidate_runtime.canonical import canonical_hash, canonical_json
 from app.creation.contract import Command
 from app.creation.repository import Repository
+from app.protocol.canonical import canonical_hash, canonical_json
 from app.text_contract.checks import validate_result
 from app.text_contract.source import Digest
 from app.text_contract.task import TextTask

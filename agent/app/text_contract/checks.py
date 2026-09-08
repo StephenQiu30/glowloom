@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.candidate_runtime.canonical import canonical_hash
+from app.protocol.canonical import canonical_hash
 from app.text_contract.schemas import (
     EpisodeAnalysis,
     EpisodeMap,
