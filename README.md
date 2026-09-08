@@ -42,6 +42,8 @@ StoryGraph 已完成到 `SG-I20` 的通用媒体 Provider 配置事实，当前�
 
 ## 本机启动
 
+当前工作机已按用户要求采用固定发布副本和 macOS `launchd`，复用本机既有基础设施。实际管理入口、搜索重建结果和剩余阻断见 [本机既有环境运行验收](docs/acceptance/0019-本机既有环境运行验收记录.md)；下文 Compose 命令是另一种部署方式，不能与当前监听相同端口的应用服务同时启动。
+
 先按 `.env.example` 准备根目录 `.env`。私有 Agent 需要本机可用且已登录的 Codex CLI：
 
 ```bash
