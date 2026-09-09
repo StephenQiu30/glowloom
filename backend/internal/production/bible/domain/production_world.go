@@ -79,10 +79,12 @@ type ProductionWorldBibleVersion struct {
 }
 
 type ProductionWorldBibleHead struct {
-	WorkspaceID, ProjectID, CurrentVersionID string
-	HeadRevision                             int64
-	VersionContentHash, HeadContentHash      string
-	UpdatedAt                                time.Time
+	WorkspaceID, ProjectID, CurrentVersionID, ScopeKey string
+	ScopeRevision, HeadRevision                        int64
+	MemberCount                                        int
+	VersionContentHash, ScopeContentHash               string
+	MembersHash, CollectionRootHash, HeadContentHash   string
+	UpdatedAt                                          time.Time
 }
 
 func NewProductionWorldEvidence(id, workspaceID, projectID, subjectKey string, revision int, basis json.RawMessage, createdBy string, createdAt time.Time) (ProductionWorldEvidence, error) {
@@ -198,12 +200,44 @@ func NewProductionWorldBibleHead(workspaceID, projectID string, revision int64, 
 	if !validProductionWorldIDs(workspaceID, projectID) || version.WorkspaceID != workspaceID || version.ProjectID != projectID || version.Revision != revision || revision < 1 || !hashPattern.MatchString(version.ContentHash) || updatedAt.IsZero() {
 		return ProductionWorldBibleHead{}, errors.New("invalid Production World Bible Head input")
 	}
-	value := ProductionWorldBibleHead{WorkspaceID: workspaceID, ProjectID: projectID, CurrentVersionID: version.ID, HeadRevision: revision, VersionContentHash: version.ContentHash, UpdatedAt: updatedAt.UTC()}
-	var err error
+	member := ProductionWorldOwnerRef{OwnerKind: "production/bible", LogicalID: projectID, VersionID: version.ID, Revision: version.Revision, ContentHash: version.ContentHash}
+	scopeKey := "project:" + projectID
+	scopeHash, err := CanonicalStoryHash(struct {
+		Schema, OwnerKind, Family, ScopeKey string
+		ScopeRevision                       int64
+		RootRefs                            []ProductionWorldOwnerRef
+	}{"production-world-bible-scope", "production/bible", BibleProductionWorldFamily, scopeKey, revision, []ProductionWorldOwnerRef{member}})
+	if err != nil {
+		return ProductionWorldBibleHead{}, err
+	}
+	membersHash, err := CanonicalStoryHash(struct {
+		Schema  string
+		Members []ProductionWorldOwnerRef
+	}{"production-world-bible-members", []ProductionWorldOwnerRef{member}})
+	if err != nil {
+		return ProductionWorldBibleHead{}, err
+	}
+	collectionRootHash, err := CanonicalStoryHash(struct {
+		Schema, Family, ScopeKey, ScopeContentHash, MembersHash string
+		ScopeRevision                                           int64
+		MemberCount                                             int
+	}{"production-world-bible-collection", BibleProductionWorldFamily, scopeKey, scopeHash, membersHash, revision, 1})
+	if err != nil {
+		return ProductionWorldBibleHead{}, err
+	}
+	value := ProductionWorldBibleHead{
+		WorkspaceID: workspaceID, ProjectID: projectID, CurrentVersionID: version.ID, ScopeKey: scopeKey,
+		ScopeRevision: revision, HeadRevision: revision, MemberCount: 1,
+		VersionContentHash: version.ContentHash, ScopeContentHash: scopeHash,
+		MembersHash: membersHash, CollectionRootHash: collectionRootHash, UpdatedAt: updatedAt.UTC(),
+	}
 	value.HeadContentHash, err = CanonicalStoryHash(struct {
-		Schema, WorkspaceID, ProjectID, CurrentVersionID, VersionContentHash string
-		HeadRevision                                                         int64
-	}{"production-world-bible-head", workspaceID, projectID, version.ID, version.ContentHash, revision})
+		Schema, WorkspaceID, ProjectID, CurrentVersionID, ScopeKey, VersionContentHash string
+		ScopeContentHash, MembersHash, CollectionRootHash                              string
+		ScopeRevision, HeadRevision                                                    int64
+		MemberCount                                                                    int
+	}{"production-world-bible-head", workspaceID, projectID, version.ID, scopeKey, version.ContentHash,
+		scopeHash, membersHash, collectionRootHash, revision, revision, 1})
 	return value, err
 }
 

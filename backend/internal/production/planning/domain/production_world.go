@@ -94,12 +94,13 @@ type ProductionWorldPlanningMember struct {
 }
 
 type ProductionWorldPlanningEpisodeHead struct {
-	WorkspaceID, ProjectID, EpisodeID, ScopeKey      string
-	ScopeRevision, HeadRevision                      int64
-	Members                                          []ProductionWorldPlanningMember
-	MemberCount                                      int
-	MembersHash, CollectionRootHash, HeadContentHash string
-	UpdatedAt                                        time.Time
+	WorkspaceID, ProjectID, EpisodeID, ScopeKey string
+	ScopeRevision, HeadRevision                 int64
+	Members                                     []ProductionWorldPlanningMember
+	MemberCount                                 int
+	ScopeContentHash, MembersHash               string
+	CollectionRootHash, HeadContentHash         string
+	UpdatedAt                                   time.Time
 }
 
 func NewProductionWorldPlanningFact(id, workspaceID, projectID, episodeID, kind, businessKey string, revision int, payload json.RawMessage, createdBy string, createdAt time.Time) (ProductionWorldPlanningFact, error) {
@@ -181,21 +182,31 @@ func NewProductionWorldPlanningEpisodeHead(workspaceID, projectID, episodeID str
 		Members []ProductionWorldPlanningMember
 	}{"production-world-planning-members", members})
 	scopeKey := "episode:" + episodeID
+	rootRefs := make([]ProductionWorldPlanningFactRef, len(members))
+	for index, member := range members {
+		rootRefs[index] = member.Fact
+	}
+	scopeHash := planningHash(struct {
+		Schema, OwnerKind, Family, ScopeKey string
+		ScopeRevision                       int64
+		RootRefs                            []ProductionWorldPlanningFactRef
+	}{"production-world-planning-scope", "production/planning", PlanningSceneCollectionFamily, scopeKey, revision, rootRefs})
 	rootHash := planningHash(struct {
-		Schema, Family, ScopeKey, MembersHash string
-		ScopeRevision                         int64
-		MemberCount                           int
-	}{"production-world-planning-collection", PlanningSceneCollectionFamily, scopeKey, membersHash, revision, len(members)})
+		Schema, Family, ScopeKey, ScopeContentHash, MembersHash string
+		ScopeRevision                                           int64
+		MemberCount                                             int
+	}{"production-world-planning-collection", PlanningSceneCollectionFamily, scopeKey, scopeHash, membersHash, revision, len(members)})
 	value := ProductionWorldPlanningEpisodeHead{
 		WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID,
 		ScopeKey: scopeKey, ScopeRevision: revision, HeadRevision: revision,
-		Members: members, MemberCount: len(members), MembersHash: membersHash,
+		Members: members, MemberCount: len(members), ScopeContentHash: scopeHash, MembersHash: membersHash,
 		CollectionRootHash: rootHash, UpdatedAt: updatedAt.UTC(),
 	}
 	value.HeadContentHash = planningHash(struct {
-		Schema, WorkspaceID, ProjectID, EpisodeID, ScopeKey, CollectionRootHash string
-		HeadRevision                                                            int64
-	}{"production-world-planning-head", workspaceID, projectID, episodeID, scopeKey, rootHash, revision})
+		Schema, WorkspaceID, ProjectID, EpisodeID, ScopeKey, ScopeContentHash, MembersHash, CollectionRootHash string
+		ScopeRevision, HeadRevision                                                                            int64
+		MemberCount                                                                                            int
+	}{"production-world-planning-head", workspaceID, projectID, episodeID, scopeKey, scopeHash, membersHash, rootHash, revision, revision, len(members)})
 	return value, nil
 }
 

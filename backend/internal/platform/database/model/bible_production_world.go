@@ -175,15 +175,19 @@ func (*ProductionWorldBibleVersion) BeforeDelete(*gorm.DB) error {
 }
 
 type ProductionWorldBibleScopeHead struct {
-	ProjectID                           uuid.UUID                   `gorm:"type:uuid;primaryKey"`
-	WorkspaceID                         uuid.UUID                   `gorm:"type:uuid;not null"`
-	CurrentVersionID                    uuid.UUID                   `gorm:"type:uuid;not null;uniqueIndex"`
-	HeadRevision                        int64                       `gorm:"not null;check:ck_scr_world_bible_head_revision,head_revision >= 1"`
-	VersionContentHash, HeadContentHash string                      `gorm:"type:char(64);not null"`
-	UpdatedAt                           time.Time                   `gorm:"type:timestamptz;not null"`
-	Workspace                           Workspace                   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Project                             Project                     `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	CurrentVersion                      ProductionWorldBibleVersion `gorm:"foreignKey:CurrentVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ProjectID                                        uuid.UUID                   `gorm:"type:uuid;primaryKey"`
+	WorkspaceID                                      uuid.UUID                   `gorm:"type:uuid;not null"`
+	CurrentVersionID                                 uuid.UUID                   `gorm:"type:uuid;not null;uniqueIndex"`
+	ScopeRevision                                    int64                       `gorm:"not null;check:ck_scr_world_bible_scope_revision,scope_revision >= 1"`
+	HeadRevision                                     int64                       `gorm:"not null;check:ck_scr_world_bible_head_revision,head_revision >= 1"`
+	MemberCount                                      int                         `gorm:"not null;check:ck_scr_world_bible_member_count,member_count = 1"`
+	VersionContentHash, ScopeContentHash             string                      `gorm:"type:char(64);not null"`
+	MembersHash, CollectionRootHash, HeadContentHash string                      `gorm:"type:char(64);not null"`
+	CurrentRootRefs                                  datatypes.JSON              `gorm:"type:jsonb;not null;check:ck_scr_world_bible_root_refs,jsonb_typeof(current_root_refs) = 'array'"`
+	UpdatedAt                                        time.Time                   `gorm:"type:timestamptz;not null"`
+	Workspace                                        Workspace                   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project                                          Project                     `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	CurrentVersion                                   ProductionWorldBibleVersion `gorm:"foreignKey:CurrentVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (ProductionWorldBibleScopeHead) TableName() string {

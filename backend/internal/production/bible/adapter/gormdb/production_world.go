@@ -53,7 +53,18 @@ func (repo *repository) GetProductionWorldBibleHead(ctx context.Context, workspa
 		return domain.ProductionWorldBibleHead{}, domain.ProductionWorldBibleVersion{}, err
 	}
 	head, err := domain.NewProductionWorldBibleHead(workspaceID, projectID, headRecord.HeadRevision, version, headRecord.UpdatedAt)
-	if err != nil || head.CurrentVersionID != headRecord.CurrentVersionID.String() || head.VersionContentHash != headRecord.VersionContentHash || head.HeadContentHash != headRecord.HeadContentHash {
+	var rootRefs []domain.ProductionWorldOwnerRef
+	rootRefErr := json.Unmarshal(headRecord.CurrentRootRefs, &rootRefs)
+	expectedRootRefs := []domain.ProductionWorldOwnerRef{{
+		OwnerKind: "production/bible", LogicalID: projectID, VersionID: version.ID,
+		Revision: version.Revision, ContentHash: version.ContentHash,
+	}}
+	if err != nil || head.CurrentVersionID != headRecord.CurrentVersionID.String() ||
+		rootRefErr != nil || !reflect.DeepEqual(rootRefs, expectedRootRefs) ||
+		head.ScopeRevision != headRecord.ScopeRevision || head.MemberCount != headRecord.MemberCount ||
+		head.VersionContentHash != headRecord.VersionContentHash || head.ScopeContentHash != headRecord.ScopeContentHash ||
+		head.MembersHash != headRecord.MembersHash || head.CollectionRootHash != headRecord.CollectionRootHash ||
+		head.HeadContentHash != headRecord.HeadContentHash {
 		return domain.ProductionWorldBibleHead{}, domain.ProductionWorldBibleVersion{}, errors.New("Production World Bible Head has drifted")
 	}
 	return head, version, nil
@@ -247,7 +258,7 @@ func (repo *repository) SaveProductionWorldBibleHead(ctx context.Context, value 
 		}
 		return nil
 	}
-	updated := repo.database.WithContext(ctx).Model(&model.ProductionWorldBibleScopeHead{}).Where("project_id = ? AND workspace_id = ? AND head_revision = ? AND head_content_hash = ?", record.ProjectID, record.WorkspaceID, expectedRevision, expectedHash).Select("current_version_id", "head_revision", "version_content_hash", "head_content_hash", "updated_at").Updates(&record)
+	updated := repo.database.WithContext(ctx).Model(&model.ProductionWorldBibleScopeHead{}).Where("project_id = ? AND workspace_id = ? AND head_revision = ? AND head_content_hash = ?", record.ProjectID, record.WorkspaceID, expectedRevision, expectedHash).Select("current_version_id", "scope_revision", "head_revision", "member_count", "version_content_hash", "scope_content_hash", "members_hash", "collection_root_hash", "current_root_refs", "head_content_hash", "updated_at").Updates(&record)
 	if updated.Error != nil {
 		return updated.Error
 	}
@@ -389,7 +400,20 @@ func productionWorldBibleHeadRecord(value domain.ProductionWorldBibleHead) (mode
 	if err != nil {
 		return model.ProductionWorldBibleScopeHead{}, err
 	}
-	return model.ProductionWorldBibleScopeHead{ProjectID: ids[0], WorkspaceID: ids[1], CurrentVersionID: ids[2], HeadRevision: value.HeadRevision, VersionContentHash: value.VersionContentHash, HeadContentHash: value.HeadContentHash, UpdatedAt: value.UpdatedAt}, nil
+	rootRefs, err := json.Marshal([]domain.ProductionWorldOwnerRef{{
+		OwnerKind: "production/bible", LogicalID: value.ProjectID, VersionID: value.CurrentVersionID,
+		Revision: value.ScopeRevision, ContentHash: value.VersionContentHash,
+	}})
+	if err != nil {
+		return model.ProductionWorldBibleScopeHead{}, err
+	}
+	return model.ProductionWorldBibleScopeHead{
+		ProjectID: ids[0], WorkspaceID: ids[1], CurrentVersionID: ids[2],
+		ScopeRevision: value.ScopeRevision, HeadRevision: value.HeadRevision, MemberCount: value.MemberCount,
+		VersionContentHash: value.VersionContentHash, ScopeContentHash: value.ScopeContentHash,
+		MembersHash: value.MembersHash, CollectionRootHash: value.CollectionRootHash,
+		CurrentRootRefs: datatypes.JSON(rootRefs), HeadContentHash: value.HeadContentHash, UpdatedAt: value.UpdatedAt,
+	}, nil
 }
 func productionWorldIDs(values ...string) ([]uuid.UUID, error) {
 	result := make([]uuid.UUID, len(values))

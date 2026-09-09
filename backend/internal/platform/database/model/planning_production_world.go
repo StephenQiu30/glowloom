@@ -171,15 +171,16 @@ func (*ProductionWorldPlanningMembership) BeforeDelete(*gorm.DB) error {
 }
 
 type ProductionWorldPlanningEpisodeHead struct {
-	EpisodeID                                        uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	WorkspaceID, ProjectID                           uuid.UUID      `gorm:"type:uuid;not null"`
-	ScopeRevision                                    int64          `gorm:"not null;check:ck_pln_head_scope_revision,scope_revision >= 1"`
-	HeadRevision                                     int64          `gorm:"not null;check:ck_pln_head_revision,head_revision >= 1"`
-	MemberCount                                      int            `gorm:"not null;check:ck_pln_head_members,member_count >= 1"`
-	MembersHash, CollectionRootHash, HeadContentHash string         `gorm:"type:char(64);not null"`
-	CurrentRootRefs                                  datatypes.JSON `gorm:"type:jsonb;not null;check:ck_pln_head_refs,jsonb_typeof(current_root_refs) = 'array'"`
-	UpdatedAt                                        time.Time      `gorm:"type:timestamptz;not null"`
-	Episode                                          Episode        `gorm:"foreignKey:EpisodeID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	EpisodeID                           uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	WorkspaceID, ProjectID              uuid.UUID      `gorm:"type:uuid;not null"`
+	ScopeRevision                       int64          `gorm:"not null;check:ck_pln_head_scope_revision,scope_revision >= 1"`
+	HeadRevision                        int64          `gorm:"not null;check:ck_pln_head_revision,head_revision >= 1"`
+	MemberCount                         int            `gorm:"not null;check:ck_pln_head_members,member_count >= 1"`
+	ScopeContentHash, MembersHash       string         `gorm:"type:char(64);not null"`
+	CollectionRootHash, HeadContentHash string         `gorm:"type:char(64);not null"`
+	CurrentRootRefs                     datatypes.JSON `gorm:"type:jsonb;not null;check:ck_pln_head_refs,jsonb_typeof(current_root_refs) = 'array'"`
+	UpdatedAt                           time.Time      `gorm:"type:timestamptz;not null"`
+	Episode                             Episode        `gorm:"foreignKey:EpisodeID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (ProductionWorldPlanningEpisodeHead) TableName() string {

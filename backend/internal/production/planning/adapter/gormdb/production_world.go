@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -76,8 +77,15 @@ func (repo *repository) GetProductionWorldPlanningHead(
 	head, err := domain.NewProductionWorldPlanningEpisodeHead(
 		workspaceID, projectID, episodeID, record.ScopeRevision, facts, record.UpdatedAt,
 	)
+	var rootRefs []domain.ProductionWorldPlanningFactRef
+	rootRefErr := json.Unmarshal(record.CurrentRootRefs, &rootRefs)
+	expectedRootRefs := make([]domain.ProductionWorldPlanningFactRef, len(head.Members))
+	for index, member := range head.Members {
+		expectedRootRefs[index] = member.Fact
+	}
 	if err != nil || head.HeadRevision != record.HeadRevision || head.MemberCount != record.MemberCount ||
-		head.MembersHash != record.MembersHash || head.CollectionRootHash != record.CollectionRootHash ||
+		rootRefErr != nil || !reflect.DeepEqual(rootRefs, expectedRootRefs) ||
+		head.ScopeContentHash != record.ScopeContentHash || head.MembersHash != record.MembersHash || head.CollectionRootHash != record.CollectionRootHash ||
 		head.HeadContentHash != record.HeadContentHash {
 		return domain.ProductionWorldPlanningEpisodeHead{}, errors.New("Production World Planning Head has drifted")
 	}
@@ -188,13 +196,17 @@ func (repo *repository) SaveProductionWorldPlanningHead(ctx context.Context, hea
 	if err != nil {
 		return err
 	}
-	refs, err := json.Marshal(head.Members)
+	rootRefs := make([]domain.ProductionWorldPlanningFactRef, len(head.Members))
+	for index, member := range head.Members {
+		rootRefs[index] = member.Fact
+	}
+	refs, err := json.Marshal(rootRefs)
 	if err != nil {
 		return err
 	}
 	record := model.ProductionWorldPlanningEpisodeHead{
 		EpisodeID: ids[2], WorkspaceID: ids[0], ProjectID: ids[1], ScopeRevision: head.ScopeRevision,
-		HeadRevision: head.HeadRevision, MemberCount: head.MemberCount, MembersHash: head.MembersHash,
+		HeadRevision: head.HeadRevision, MemberCount: head.MemberCount, ScopeContentHash: head.ScopeContentHash, MembersHash: head.MembersHash,
 		CollectionRootHash: head.CollectionRootHash, HeadContentHash: head.HeadContentHash,
 		CurrentRootRefs: datatypes.JSON(refs), UpdatedAt: head.UpdatedAt,
 	}
@@ -209,7 +221,7 @@ func (repo *repository) SaveProductionWorldPlanningHead(ctx context.Context, hea
 	}
 	updated := repo.database.WithContext(ctx).Model(&model.ProductionWorldPlanningEpisodeHead{}).
 		Where("episode_id = ? AND workspace_id = ? AND project_id = ? AND head_revision = ? AND head_content_hash = ?", ids[2], ids[0], ids[1], expectedRevision, expectedHash).
-		Select("scope_revision", "head_revision", "member_count", "members_hash", "collection_root_hash", "head_content_hash", "current_root_refs", "updated_at").Updates(&record)
+		Select("scope_revision", "head_revision", "member_count", "scope_content_hash", "members_hash", "collection_root_hash", "head_content_hash", "current_root_refs", "updated_at").Updates(&record)
 	if updated.Error != nil {
 		return updated.Error
 	}

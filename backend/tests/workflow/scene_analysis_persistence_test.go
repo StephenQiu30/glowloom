@@ -832,7 +832,10 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		Specifications: bibleSpecifications, Claims: bibleClaims, Assets: assetResult.Assets, States: assetResult.States,
 	}
 	bibleResult, err := bibleOwner.ApplyProductionWorldBible(ctx, biblegorm.NewProductionWorldRepository(database), bibleCommand)
-	if err != nil || bibleResult.Head.HeadRevision != 1 || len(bibleResult.Specifications) != len(bibleSpecifications) ||
+	if err != nil || bibleResult.Head.HeadRevision != 1 || bibleResult.Head.ScopeRevision != 1 ||
+		bibleResult.Head.ScopeKey != "project:"+fixture.projectID.String() || bibleResult.Head.MemberCount != 1 ||
+		bibleResult.Head.ScopeContentHash == "" || bibleResult.Head.MembersHash == "" || bibleResult.Head.CollectionRootHash == "" ||
+		len(bibleResult.Specifications) != len(bibleSpecifications) ||
 		len(bibleResult.Bindings) != len(assetResult.Assets) || bibleResult.Version.StructureIdentitySet.VersionID != structureVersion.ID.String() {
 		t.Fatalf("apply Production World Bible owner: result=%#v err=%v", bibleResult, err)
 	}
@@ -874,7 +877,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		t.Fatalf("apply Production World Planning owner: result=%#v err=%v", planningResult, err)
 	}
 	for _, head := range planningResult.Heads {
-		if head.HeadRevision != 1 || head.MemberCount == 0 || head.ScopeKey != "episode:"+head.EpisodeID {
+		if head.HeadRevision != 1 || head.MemberCount == 0 || head.ScopeKey != "episode:"+head.EpisodeID ||
+			head.ScopeContentHash == "" || head.MembersHash == "" || head.CollectionRootHash == "" {
 			t.Fatalf("Production World Planning Head = %#v", head)
 		}
 	}
