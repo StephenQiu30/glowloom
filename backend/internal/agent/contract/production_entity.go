@@ -69,6 +69,7 @@ type FrozenStructureIdentity struct {
 
 type FrozenStructureIdentityMentionMapping struct {
 	Kind             string  `json:"kind"`
+	OccurrenceRole   string  `json:"occurrence_role"`
 	TemporarySceneID string  `json:"temporary_scene_id"`
 	SourceStart      int     `json:"source_start"`
 	SourceEnd        int     `json:"source_end"`
@@ -229,6 +230,7 @@ func (value FrozenStructureIdentitySet) Validate() error {
 		_, sceneFound := scenes[mapping.TemporarySceneID]
 		resolved := mapping.Resolution == "resolved"
 		if !sceneFound || (mapping.Kind != "character" && mapping.Kind != "location" && mapping.Kind != "prop") ||
+			!validOccurrenceRole(mapping.OccurrenceRole) || (mapping.Kind == "location" && mapping.OccurrenceRole != "actual") ||
 			mapping.SourceStart < 0 || mapping.SourceEnd <= mapping.SourceStart || !hashPattern.MatchString(mapping.TextHash) ||
 			strings.TrimSpace(mapping.ExactAnchor) == "" || resolved != (mapping.IdentityKey != nil) ||
 			(!resolved && mapping.Resolution != "unresolved") {

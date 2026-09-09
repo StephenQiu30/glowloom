@@ -36,6 +36,7 @@ func (executor *NodeExecutor) Execute(
 		"activity.scene_fact_extraction",
 		"activity.identity_resolution",
 		"activity.production_entity_derivation",
+		"activity.scene_occurrence_binding",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

@@ -36,6 +36,7 @@ const (
 	identityResolutionExecutor         = "activity.identity_resolution"
 	structureIdentityReviewExecutor    = "activity.structure_identity_review"
 	productionEntityDerivationExecutor = "activity.production_entity_derivation"
+	sceneOccurrenceBindingExecutor     = "activity.scene_occurrence_binding"
 	sourceEvidenceExecutor             = "activity.source_evidence"
 	storyAnalysisExecutor              = "activity.story_analysis"
 	storyReviewExecutor                = "activity.story_review"
@@ -212,6 +213,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeSceneAnalysis(ctx, command, "review_candidate")
 	case productionEntityDerivationExecutor:
 		return executor.executeSceneAnalysis(ctx, command, "derive_production_entities")
+	case sceneOccurrenceBindingExecutor:
+		return executor.executeSceneAnalysis(ctx, command, "bind_scene_occurrences")
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -1248,6 +1251,13 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 			outputType: "production_entity_fragment_candidate", expectedProfile: "default", formalIdentities: true,
 			upstreams: []struct{ port, valueType, stageKey string }{
 				{"facts", "scene_fact_candidate", "extract_scene_facts"},
+			},
+		},
+		"bind_scene_occurrences": {
+			outputType: "scene_binding_fragment_candidate", expectedProfile: "default", formalIdentities: true,
+			upstreams: []struct{ port, valueType, stageKey string }{
+				{"facts", "scene_fact_candidate", "extract_scene_facts"},
+				{"entities", "production_entity_fragment_candidate", "derive_production_entities"},
 			},
 		},
 	}[stageKey]

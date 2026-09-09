@@ -110,6 +110,7 @@ def _input() -> ProductionEntityDerivationInput:
                 "mention_mappings": [
                     {
                         "kind": kind,
+                        "occurrence_role": "actual",
                         "temporary_scene_id": scene,
                         "source_start": start,
                         "source_end": end,

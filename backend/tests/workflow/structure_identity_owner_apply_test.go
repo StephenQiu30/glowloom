@@ -39,7 +39,8 @@ func TestStructureIdentityOwnerAppliesProjectBeforeBible(t *testing.T) {
 		}},
 	}
 	mention := agentcontract.IdentityMentionRef{
-		Kind: "character", TemporarySceneID: "scene_001", SourceStart: 2, SourceEnd: 4,
+		Kind: "character", OccurrenceRole: "actual",
+		TemporarySceneID: "scene_001", SourceStart: 2, SourceEnd: 4,
 		TextHash: strings.Repeat("2", 64), ExactAnchor: "阿青",
 	}
 	facts := agentcontract.SceneFactCandidate{

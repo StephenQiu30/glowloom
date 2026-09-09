@@ -383,6 +383,8 @@ func validateStructureIdentityCommand(command ConfirmStructureIdentitySetCommand
 	for index, mention := range command.MentionMappings {
 		bounds, sceneExists := sceneBounds[mention.TemporarySceneID]
 		if (mention.Kind != "character" && mention.Kind != "location" && mention.Kind != "prop") ||
+			(mention.OccurrenceRole != "actual" && mention.OccurrenceRole != "mentioned_only") ||
+			(mention.Kind == "location" && mention.OccurrenceRole != "actual") ||
 			mention.SourceStart < 0 || mention.SourceEnd <= mention.SourceStart || !validStructureIdentityHash(mention.TextHash) ||
 			strings.TrimSpace(mention.ExactAnchor) == "" || strings.TrimSpace(mention.TemporarySceneID) == "" ||
 			!sceneExists || mention.SourceStart < bounds[0] || mention.SourceEnd > bounds[1] ||
@@ -545,6 +547,9 @@ func compareStructureIdentityMention(left, right domain.StructureIdentityMention
 		return left.SourceEnd - right.SourceEnd
 	}
 	if compared := strings.Compare(left.Kind, right.Kind); compared != 0 {
+		return compared
+	}
+	if compared := strings.Compare(left.OccurrenceRole, right.OccurrenceRole); compared != 0 {
 		return compared
 	}
 	return strings.Compare(left.TemporarySceneID, right.TemporarySceneID)

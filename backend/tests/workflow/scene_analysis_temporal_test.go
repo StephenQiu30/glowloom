@@ -416,6 +416,32 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		t.Fatalf("validate Temporal Production Entity Candidate: input=%#v candidate=%#v err=%v",
 			productionEntityInput, productionEntityCandidate, err)
 	}
+	var sceneBindingInvocation model.SceneAnalysisInvocationRecord
+	if err = database.Where(
+		"workflow_run_id = ? AND stage_key = ?", repairRun.ID, "bind_scene_occurrences",
+	).First(&sceneBindingInvocation).Error; err != nil {
+		t.Fatalf("query Temporal Scene binding invocation: %v", err)
+	}
+	var sceneBindingCandidate model.SceneAnalysisCandidateRevision
+	if err = database.First(
+		&sceneBindingCandidate, "source_invocation_id = ?", sceneBindingInvocation.ID,
+	).Error; err != nil {
+		t.Fatalf("query Temporal Scene binding Candidate: %v", err)
+	}
+	var sceneBindingPayload contract.SceneAnalysisPayload
+	var sceneBindingInput contract.SceneOccurrenceBindingInput
+	if err = json.Unmarshal(sceneBindingInvocation.Payload, &sceneBindingPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(sceneBindingPayload.StageInput, &sceneBindingInput); err != nil ||
+		sceneBindingCandidate.CandidateType != "scene_binding_fragment_candidate" ||
+		sceneBindingInput.ProductionEntityCandidateRevisionID != productionEntityCandidate.ID.String() ||
+		contract.ValidateSceneBindingFragmentCandidate(
+			json.RawMessage(sceneBindingCandidate.Candidate), sceneBindingInput,
+		) != nil {
+		t.Fatalf("validate Temporal Scene binding Candidate: input=%#v candidate=%#v err=%v",
+			sceneBindingInput, sceneBindingCandidate, err)
+	}
 }
 
 func waitForStructureIdentityTemporalFact(

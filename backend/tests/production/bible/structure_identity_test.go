@@ -250,8 +250,8 @@ func structureIdentityCommand(
 		scenes[index].ScopeKey = "scene:" + scenes[index].SceneOwnerLogicalID
 	}
 	mentions := []bibledomain.StructureIdentityMentionMapping{
-		{Kind: "location", TemporarySceneID: "scene_001", SourceStart: 0, SourceEnd: 1, TextHash: structureIdentityHash("第"), ExactAnchor: "第", Resolution: "unresolved"},
-		{Kind: "character", TemporarySceneID: "scene_002", SourceStart: firstEnd, SourceEnd: firstEnd + 1, TextHash: structureIdentityHash("第"), ExactAnchor: "第", Resolution: "resolved", IdentityKey: &identityKey},
+		{Kind: "location", OccurrenceRole: "actual", TemporarySceneID: "scene_001", SourceStart: 0, SourceEnd: 1, TextHash: structureIdentityHash("第"), ExactAnchor: "第", Resolution: "unresolved"},
+		{Kind: "character", OccurrenceRole: "actual", TemporarySceneID: "scene_002", SourceStart: firstEnd, SourceEnd: firstEnd + 1, TextHash: structureIdentityHash("第"), ExactAnchor: "第", Resolution: "resolved", IdentityKey: &identityKey},
 	}
 	mentionHash, err := platformcommand.InputHash(mentions)
 	if err != nil {

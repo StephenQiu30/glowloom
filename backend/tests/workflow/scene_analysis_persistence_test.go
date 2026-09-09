@@ -131,13 +131,14 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 7 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 8 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
 		plan.Nodes[4].Executor != "activity.structure_identity_review" ||
 		plan.Nodes[5].Executor != "gate.structure_identity_review" ||
-		plan.Nodes[6].Executor != "activity.production_entity_derivation" {
+		plan.Nodes[6].Executor != "activity.production_entity_derivation" ||
+		plan.Nodes[7].Executor != "activity.scene_occurrence_binding" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -429,6 +430,43 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		Order("position ASC").Find(&productionEntityReads).Error; err != nil || len(productionEntityReads) != 1 ||
 		productionEntityReads[0].CandidateRevisionID.String() != factOutput.Output.Bindings[0].ReferenceID {
 		t.Fatalf("Production Entity exact SceneFact read set: reads=%#v err=%v", productionEntityReads, err)
+	}
+	sceneBindingResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[7].NodeRunID, NodeID: plan.Nodes[7].NodeID,
+		Executor: plan.Nodes[7].Executor, Attempt: 1,
+	})
+	if err != nil || sceneBindingResult.Status != "SUCCEEDED" ||
+		len(sceneBindingResult.Output.Bindings) != 1 ||
+		sceneBindingResult.Output.Bindings[0].ValueType != "scene_binding_fragment_candidate" {
+		t.Fatalf("bind Scene occurrences: result=%#v err=%v", sceneBindingResult, err)
+	}
+	sceneBindingCandidate, err := sceneService.GetCandidate(
+		ctx, fixture.projectID.String(), sceneBindingResult.Output.Bindings[0].ReferenceID,
+	)
+	if err != nil {
+		t.Fatalf("query persisted Scene binding Candidate: %v", err)
+	}
+	var sceneBindingInvocation model.SceneAnalysisInvocationRecord
+	if err = database.First(&sceneBindingInvocation, "id = ?", sceneBindingCandidate.SourceInvocationID).Error; err != nil {
+		t.Fatalf("query Scene binding invocation: %v", err)
+	}
+	var sceneBindingPayload contract.SceneAnalysisPayload
+	var sceneBindingInput contract.SceneOccurrenceBindingInput
+	if err = json.Unmarshal(sceneBindingInvocation.Payload, &sceneBindingPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(sceneBindingPayload.StageInput, &sceneBindingInput); err != nil ||
+		sceneBindingInput.StructureIdentitySetVersionID != ownerOutput.Bindings[0].ReferenceID ||
+		sceneBindingInput.ProductionEntityCandidateRevisionID != productionEntityCandidate.ID ||
+		contract.ValidateSceneBindingFragmentCandidate(sceneBindingCandidate.Candidate, sceneBindingInput) != nil {
+		t.Fatalf("validate persisted Scene binding Candidate: input=%#v err=%v", sceneBindingInput, err)
+	}
+	var sceneBindingReads []model.SceneAnalysisInvocationRead
+	if err = database.Where("invocation_id = ?", sceneBindingInvocation.ID).
+		Order("position ASC").Find(&sceneBindingReads).Error; err != nil || len(sceneBindingReads) != 2 ||
+		sceneBindingReads[0].StageKey != "extract_scene_facts" ||
+		sceneBindingReads[1].StageKey != "derive_production_entities" {
+		t.Fatalf("Scene binding exact read set: reads=%#v err=%v", sceneBindingReads, err)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -913,6 +951,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "review", DefinitionKey: "agent.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "structure-identity-gate", DefinitionKey: "human.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "production-entities", DefinitionKey: "agent.production_entity_derivation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "scene-bindings", DefinitionKey: "agent.scene_occurrence_binding", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -932,6 +971,10 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "source-production-entities", FromNodeID: "source", FromPort: "source", ToNodeID: "production-entities", ToPort: "source"},
 			{ID: "facts-production-entities", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "production-entities", ToPort: "facts"},
 			{ID: "identities-production-entities", FromNodeID: "structure-identity-gate", FromPort: "identities", ToNodeID: "production-entities", ToPort: "identities"},
+			{ID: "source-scene-bindings", FromNodeID: "source", FromPort: "source", ToNodeID: "scene-bindings", ToPort: "source"},
+			{ID: "facts-scene-bindings", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "scene-bindings", ToPort: "facts"},
+			{ID: "identities-scene-bindings", FromNodeID: "structure-identity-gate", FromPort: "identities", ToNodeID: "scene-bindings", ToPort: "identities"},
+			{ID: "entities-scene-bindings", FromNodeID: "production-entities", FromPort: "candidate", ToNodeID: "scene-bindings", ToPort: "entities"},
 		},
 	}
 }
@@ -1064,6 +1107,12 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
 		candidate = buildProductionEntityCandidate(input)
+	} else if invocation.Payload.Variant.StageKey == "bind_scene_occurrences" {
+		var input contract.SceneOccurrenceBindingInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return contract.SceneAnalysisAttemptResult{}, err
+		}
+		candidate = buildSceneBindingCandidate(input)
 	} else {
 		var input contract.StructureIdentityReviewInput
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
@@ -1091,6 +1140,7 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			"resolve_identities":         "identity_resolution_candidate",
 			"review_candidate":           "structure_identity_review_candidate",
 			"derive_production_entities": "production_entity_fragment_candidate",
+			"bind_scene_occurrences":     "scene_binding_fragment_candidate",
 		}[invocation.Payload.Variant.StageKey],
 		Candidate: candidate, InputHash: invocation.InputHash, OutputHash: &outputHash,
 		Diagnostics: []contract.SceneAnalysisDiagnostic{}, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now,
@@ -1214,6 +1264,81 @@ func buildProductionEntityCandidate(input contract.ProductionEntityDerivationInp
 	})
 }
 
+func buildSceneBindingCandidate(input contract.SceneOccurrenceBindingInput) json.RawMessage {
+	var facts contract.SceneFactCandidate
+	var production contract.ProductionEntityFragmentCandidate
+	_ = json.Unmarshal(input.SceneFactCandidate, &facts)
+	_ = json.Unmarshal(input.ProductionEntityCandidate, &production)
+	factByScene := make(map[string]contract.SceneFact, len(facts.Scenes))
+	for _, fact := range facts.Scenes {
+		factByScene[fact.TemporarySceneID] = fact
+	}
+	stateByIdentity := make(map[string]string, len(production.Entities))
+	for _, entity := range production.Entities {
+		stateByIdentity[entity.IdentityKey] = entity.States[0].StateKey
+	}
+	mappingsByScene := make(map[string][]contract.FrozenStructureIdentityMentionMapping)
+	for _, mapping := range input.StructureIdentitySet.MentionMappings {
+		if mapping.Resolution == "resolved" {
+			mappingsByScene[mapping.TemporarySceneID] = append(
+				mappingsByScene[mapping.TemporarySceneID], mapping,
+			)
+		}
+	}
+	for sceneID := range mappingsByScene {
+		slices.SortFunc(mappingsByScene[sceneID], func(left, right contract.FrozenStructureIdentityMentionMapping) int {
+			return strings.Compare(sceneBindingMappingTestKey(left), sceneBindingMappingTestKey(right))
+		})
+	}
+	scenes := make([]contract.SceneBindingFragment, 0, len(input.StructureIdentitySet.SceneRefs))
+	for _, formal := range input.StructureIdentitySet.SceneRefs {
+		fact := factByScene[formal.TemporarySceneID]
+		beats := make([]contract.SceneBeatFragment, len(fact.Actions))
+		for index, action := range fact.Actions {
+			beats[index] = contract.SceneBeatFragment{
+				BeatKey: fmt.Sprintf("beat_%s_%04d", formal.TemporarySceneID, index+1),
+				Order:   index + 1, Text: action.Text, Evidence: action.Evidence,
+			}
+		}
+		dialogues := make([]contract.SceneDialogueFragment, len(fact.Dialogues))
+		for index, dialogue := range fact.Dialogues {
+			dialogues[index] = contract.SceneDialogueFragment{
+				DialogueKey: fmt.Sprintf("dialogue_%s_%04d", formal.TemporarySceneID, index+1),
+				Order:       index + 1, Text: dialogue.Text, Evidence: dialogue.Evidence,
+			}
+		}
+		mappings := mappingsByScene[formal.TemporarySceneID]
+		occurrences := make([]contract.SceneOccurrenceFragment, len(mappings))
+		for index, mapping := range mappings {
+			occurrences[index] = contract.SceneOccurrenceFragment{
+				OccurrenceKey: fmt.Sprintf("occurrence_%s_%04d", formal.TemporarySceneID, index+1),
+				Order:         index + 1, SubjectKind: mapping.Kind, IdentityKey: *mapping.IdentityKey,
+				StateKey: stateByIdentity[*mapping.IdentityKey], OccurrenceRole: mapping.OccurrenceRole,
+				Evidence: contract.SourceEvidenceSpan{
+					SourceStart: mapping.SourceStart, SourceEnd: mapping.SourceEnd,
+					TextHash: mapping.TextHash, ExactAnchor: mapping.ExactAnchor,
+				},
+			}
+		}
+		scenes = append(scenes, contract.SceneBindingFragment{
+			SceneScopeKey: formal.ScopeKey, SceneOwnerLogicalID: formal.SceneOwnerLogicalID,
+			TemporarySceneID: formal.TemporarySceneID,
+			SourceStart:      formal.SourceStart, SourceEnd: formal.SourceEnd,
+			Dialogues: dialogues, Beats: beats, Occurrences: occurrences,
+		})
+	}
+	return mustSceneJSON(contract.SceneBindingFragmentCandidate{
+		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
+		StructureIdentitySetVersionID:         input.StructureIdentitySetVersionID,
+		StructureIdentitySetVersionHash:       input.StructureIdentitySetVersionHash,
+		SceneFactCandidateRevisionID:          input.SceneFactCandidateRevisionID,
+		SceneFactCandidateRevisionHash:        input.SceneFactCandidateRevisionHash,
+		ProductionEntityCandidateRevisionID:   input.ProductionEntityCandidateRevisionID,
+		ProductionEntityCandidateRevisionHash: input.ProductionEntityCandidateRevisionHash,
+		Scenes:                                scenes, ReviewIssues: []contract.CandidateReviewIssue{},
+	})
+}
+
 func buildSpanCandidate(input contract.ScriptSpanProposalInput) json.RawMessage {
 	text := []rune(input.NormalizedText)
 	second := runeIndex(input.NormalizedText, "第二场")
@@ -1239,21 +1364,33 @@ func buildSceneFactCandidate(input contract.SceneFactExtractionInput) json.RawMe
 	_ = json.Unmarshal(input.SpanCandidate, &spans)
 	scenes := make([]any, len(spans.Spans))
 	for index, span := range spans.Spans {
-		timeText, locationText := "夜", "内"
+		timeText, locationText, actionText := "夜", "内", "林舟握住门把。"
 		if index == 1 {
-			timeText, locationText = "日", "外"
+			timeText, locationText, actionText = "日", "外", "林舟离开。"
 		}
 		timeStart := runeIndexFrom(input.NormalizedText, timeText, span.CodepointStart)
 		locationStart := runeIndexFrom(input.NormalizedText, locationText, timeStart+1)
 		nameStart := runeIndexFrom(input.NormalizedText, "林舟", span.CodepointStart)
+		actionStart := runeIndexFrom(input.NormalizedText, actionText, span.CodepointStart)
+		rawProps := []any{}
+		if index == 0 {
+			propStart := runeIndexFrom(input.NormalizedText, "门把", actionStart)
+			rawProps = []any{map[string]any{
+				"text": "门把", "occurrence_role": "actual",
+				"evidence": sceneEvidence(input.NormalizedText, propStart, propStart+2),
+			}}
+		}
 		scenes[index] = map[string]any{
 			"temporary_scene_id": fmt.Sprintf("scene_%04d", index+1), "span_id": span.TemporarySpanID,
 			"source_start": span.CodepointStart, "source_end": span.CodepointEnd,
 			"location": map[string]any{"text": locationText, "evidence": sceneEvidence(input.NormalizedText, locationStart, locationStart+1)},
 			"time":     map[string]any{"text": timeText, "evidence": sceneEvidence(input.NormalizedText, timeStart, timeStart+1)},
-			"actions":  []any{}, "dialogues": []any{},
-			"raw_character_mentions": []any{map[string]any{"text": "林舟", "evidence": sceneEvidence(input.NormalizedText, nameStart, nameStart+2)}},
-			"raw_prop_mentions":      []any{},
+			"actions": []any{map[string]any{
+				"text":     actionText,
+				"evidence": sceneEvidence(input.NormalizedText, actionStart, actionStart+len([]rune(actionText))),
+			}}, "dialogues": []any{},
+			"raw_character_mentions": []any{map[string]any{"text": "林舟", "occurrence_role": "actual", "evidence": sceneEvidence(input.NormalizedText, nameStart, nameStart+2)}},
+			"raw_prop_mentions":      rawProps,
 		}
 	}
 	return mustSceneJSON(map[string]any{
@@ -1270,12 +1407,14 @@ func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) js
 	characterRefs := make([]contract.IdentityMentionRef, 0, len(facts.Scenes))
 	characterEvidence := make([]contract.SourceEvidenceSpan, 0, len(facts.Scenes))
 	locationClusters := make([]contract.IdentityCluster, 0, len(facts.Scenes))
-	universe := make([]contract.IdentityMentionRef, 0, len(facts.Scenes)*2)
+	propClusters := make([]contract.IdentityCluster, 0)
+	universe := make([]contract.IdentityMentionRef, 0, len(facts.Scenes)*3)
 	for _, scene := range facts.Scenes {
 		for _, mention := range scene.RawCharacterMentions {
 			ref := contract.IdentityMentionRef{
-				Kind: "character", TemporarySceneID: scene.TemporarySceneID,
-				SourceStart: mention.Evidence.SourceStart, SourceEnd: mention.Evidence.SourceEnd,
+				Kind: "character", OccurrenceRole: mention.OccurrenceRole,
+				TemporarySceneID: scene.TemporarySceneID,
+				SourceStart:      mention.Evidence.SourceStart, SourceEnd: mention.Evidence.SourceEnd,
 				TextHash: mention.Evidence.TextHash, ExactAnchor: mention.Evidence.ExactAnchor,
 			}
 			characterRefs = append(characterRefs, ref)
@@ -1284,7 +1423,7 @@ func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) js
 		}
 		if scene.Location != nil {
 			ref := contract.IdentityMentionRef{
-				Kind: "location", TemporarySceneID: scene.TemporarySceneID,
+				Kind: "location", OccurrenceRole: "actual", TemporarySceneID: scene.TemporarySceneID,
 				SourceStart: scene.Location.Evidence.SourceStart, SourceEnd: scene.Location.Evidence.SourceEnd,
 				TextHash: scene.Location.Evidence.TextHash, ExactAnchor: scene.Location.Evidence.ExactAnchor,
 			}
@@ -1296,6 +1435,23 @@ func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) js
 				SupportingEvidence:    []contract.SourceEvidenceSpan{scene.Location.Evidence},
 				ContradictingEvidence: []contract.SourceEvidenceSpan{}, ConfidenceBasisPoints: 10000,
 				Rationale: "地点属性来自当前场景的精确原文证据。",
+			})
+		}
+		for _, mention := range scene.RawPropMentions {
+			ref := contract.IdentityMentionRef{
+				Kind: "prop", OccurrenceRole: mention.OccurrenceRole,
+				TemporarySceneID: scene.TemporarySceneID,
+				SourceStart:      mention.Evidence.SourceStart, SourceEnd: mention.Evidence.SourceEnd,
+				TextHash: mention.Evidence.TextHash, ExactAnchor: mention.Evidence.ExactAnchor,
+			}
+			universe = append(universe, ref)
+			propClusters = append(propClusters, contract.IdentityCluster{
+				TemporaryIdentityKey: "identity_prop_door_handle", Kind: "prop", Resolution: "new",
+				CanonicalName: mention.Text, Aliases: []string{mention.Text},
+				MentionRefs:           []contract.IdentityMentionRef{ref},
+				SupportingEvidence:    []contract.SourceEvidenceSpan{mention.Evidence},
+				ContradictingEvidence: []contract.SourceEvidenceSpan{}, ConfidenceBasisPoints: 10000,
+				Rationale: "道具提及来自当前场景的精确原文证据。",
 			})
 		}
 	}
@@ -1310,6 +1466,7 @@ func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) js
 		ConfidenceBasisPoints: 9800, Rationale: "两个场景中的同名角色提及没有相互矛盾的证据。",
 	}}
 	clusters = append(clusters, locationClusters...)
+	clusters = append(clusters, propClusters...)
 	return mustSceneJSON(contract.IdentityResolutionCandidate{
 		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
 		SceneFactCandidateRevisionID:   input.SceneFactCandidateRevisionID,
@@ -1326,8 +1483,16 @@ func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) js
 }
 
 func identityMentionTestKey(value contract.IdentityMentionRef) string {
-	return fmt.Sprintf("%s\x00%s\x00%020d\x00%020d\x00%s\x00%s", value.Kind, value.TemporarySceneID,
+	return fmt.Sprintf("%s\x00%s\x00%s\x00%020d\x00%020d\x00%s\x00%s", value.Kind, value.OccurrenceRole, value.TemporarySceneID,
 		value.SourceStart, value.SourceEnd, value.TextHash, value.ExactAnchor)
+}
+
+func sceneBindingMappingTestKey(value contract.FrozenStructureIdentityMentionMapping) string {
+	identityKey := ""
+	if value.IdentityKey != nil {
+		identityKey = *value.IdentityKey
+	}
+	return fmt.Sprintf("%020d\x00%020d\x00%s\x00%s", value.SourceStart, value.SourceEnd, value.Kind, identityKey)
 }
 
 func sceneEvidence(text string, start, end int) map[string]any {

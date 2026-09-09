@@ -11,7 +11,7 @@
       "skill_release_id": "66666666-6666-4666-8666-666666666666",
       "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
       "stage_release_hash": "3333333333333333333333333333333333333333333333333333333333333333",
-      "bundle_content_hash": "7efbeaaa5660f447b3eafee319f6ee3b70250006f0e364108a9b20e85a25df49",
+      "bundle_content_hash": "2870bd21483c3de5f381a5a24bfbb16e4c3e3aaf9e337b6429ef86c8afaf6c4f",
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     },
     "control": {
@@ -68,7 +68,7 @@
         "newline_normalization": "lf"
       }
     },
-    "input_hash": "34535df6002fba88e75730cd20b783f7877babbbf8fade140c96059db6d628f2"
+    "input_hash": "2f8211e23d03e7e2ad1e483c51b094d173f9460cdc1980ce28ec3cebc9ed9470"
   },
   "valid_script_span_candidate": {
     "source_version_id": "33333333-3333-4333-8333-333333333333",
@@ -138,8 +138,8 @@
         "time": {"text":"夜","evidence":{"source_start":4,"source_end":5,"text_hash":"a519542a5fb4163581e0630644fb105b0f0b53e4e0c5c3a176155465fe6592a9","exact_anchor":"夜"}},
         "actions": [{"text":"林舟握住门把。","evidence":{"source_start":8,"source_end":15,"text_hash":"f2ffbd1d3cb0f5e0d95b211b12a0bdee451dd82d38bf673915e42420f7ed9ff1","exact_anchor":"林舟握住门把。"}}],
         "dialogues": [],
-        "raw_character_mentions": [{"text":"林舟","evidence":{"source_start":8,"source_end":10,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
-        "raw_prop_mentions": [{"text":"门把","evidence":{"source_start":12,"source_end":14,"text_hash":"3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9","exact_anchor":"门把"}}]
+        "raw_character_mentions": [{"text":"林舟","occurrence_role":"actual","evidence":{"source_start":8,"source_end":10,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
+        "raw_prop_mentions": [{"text":"门把","occurrence_role":"actual","evidence":{"source_start":12,"source_end":14,"text_hash":"3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9","exact_anchor":"门把"}}]
       },
       {
         "temporary_scene_id": "scene_0002",
@@ -150,15 +150,15 @@
         "time": {"text":"日","evidence":{"source_start":20,"source_end":21,"text_hash":"85217f7aff77841438439fb3e7cf37bb3062fb026453c7692247d3a5641a0115","exact_anchor":"日"}},
         "actions": [{"text":"林舟离开。","evidence":{"source_start":24,"source_end":29,"text_hash":"d6e8609481cb01d70f08f80f286f4c2e752f1e471b55c96ca1cc5879036445c4","exact_anchor":"林舟离开。"}}],
         "dialogues": [],
-        "raw_character_mentions": [{"text":"林舟","evidence":{"source_start":24,"source_end":26,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
+        "raw_character_mentions": [{"text":"林舟","occurrence_role":"actual","evidence":{"source_start":24,"source_end":26,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
         "raw_prop_mentions": []
       }
     ],
     "review_issues": []
   },
-  "expected_input_hash": "34535df6002fba88e75730cd20b783f7877babbbf8fade140c96059db6d628f2",
-  "expected_stage_instance_key": "6a89aeedb2205bdccd27997bca0b055306fffb5121e2ed930de449cc1536fd8a",
-  "expected_result_hash": "86da5e34e497b3e2686bab251defa4f797bf531d17f88d32308bec7f61e95591",
+  "expected_input_hash": "2f8211e23d03e7e2ad1e483c51b094d173f9460cdc1980ce28ec3cebc9ed9470",
+  "expected_stage_instance_key": "b410fa66c738117ddce0418f6b5e625c1e68520ed5f35a45da011c7a560b8660",
+  "expected_result_hash": "3edb800e5454396a342494cda59a31791b1a42f609649e660d80cecfe4c75013",
   "reject_mutations": [
     {"name": "missing_attempt_id", "operation": "remove", "path": "attempt_id"},
     {"name": "unknown_style_field", "operation": "add_stage_input", "path": "visual_style", "value": "赛博朋克"},

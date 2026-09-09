@@ -15,6 +15,7 @@ from app.harness.scene_analysis_schemas import (
     ProductionEntityDerivationInput,
     SceneAnalysisInvocation,
     SceneFactExtractionInput,
+    SceneOccurrenceBindingInput,
     ScriptSpanProposalInput,
     StructureIdentityReviewInput,
 )
@@ -28,6 +29,7 @@ from app.modules.storygraph.scene_analysis_candidates import (
     IdentityMentionRef,
     IdentityResolutionCandidate,
     ProductionEntityFragmentCandidate,
+    SceneBindingFragmentCandidate,
     SceneFactCandidate,
     ScriptSpanCandidate,
     SourceEvidenceSpan,
@@ -136,6 +138,12 @@ class SceneAnalysisHarness:
             )
             _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for(source)
+        elif stage == "bind_scene_occurrences":
+            if not isinstance(candidate, SceneBindingFragmentCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong Scene binding schema")
+            source = SceneOccurrenceBindingInput.model_validate(self.invocation.payload.stage_input)
+            _materialize_evidence_hashes(candidate, source.normalized_text)
+            candidate.validate_for_input(source)
         else:
             if not isinstance(candidate, StructureIdentityReviewCandidate):
                 raise CodexSchemaInvalid(
@@ -187,6 +195,7 @@ def _materialize_evidence_hashes(
         | IdentityResolutionCandidate
         | StructureIdentityReviewCandidate
         | ProductionEntityFragmentCandidate
+        | SceneBindingFragmentCandidate
     ),
     normalized_text: str,
 ) -> None:
@@ -217,7 +226,7 @@ def _materialize_evidence_hashes(
         for issue in candidate.review_issues:
             evidence.extend(issue.evidence)
         return _fill_evidence_hashes(evidence, normalized_text)
-    else:
+    elif isinstance(candidate, ProductionEntityFragmentCandidate):
         for entity in candidate.entities:
             evidence.extend(entity.basis.evidence)
             for state in entity.states:
@@ -226,6 +235,16 @@ def _materialize_evidence_hashes(
             evidence.extend(claim.basis.evidence)
         for gap in candidate.design_gaps:
             evidence.extend(gap.source_constraints)
+    else:
+        for scene in candidate.scenes:
+            evidence.extend(value.evidence for value in scene.dialogues)
+            evidence.extend(
+                value.speaker_evidence
+                for value in scene.dialogues
+                if value.speaker_evidence is not None
+            )
+            evidence.extend(value.evidence for value in scene.beats)
+            evidence.extend(value.evidence for value in scene.occurrences)
     for issue in candidate.review_issues:
         evidence.extend(issue.evidence)
     _fill_evidence_hashes(evidence, normalized_text)

@@ -6,6 +6,7 @@ Extract only text-grounded, style-blind scene facts inside the supplied approved
 - Count Unicode code points and use zero-based, half-open ranges. Every Evidence range must stay within its owning span.
 - `exact_anchor` must equal `normalized_text[source_start:source_end]`. Set `text_hash` to 64 lowercase zeroes; after verifying the range and exact anchor, the deterministic Harness replaces this placeholder with the lowercase SHA-256 hex digest of the anchor encoded as UTF-8.
 - Evidence must cover only the exact grounded phrase. Do not attach an entire scene or script when the fact is a heading token, character mention, prop mention, action, or line of dialogue.
+- For every raw character and prop mention, set `occurrence_role` to `actual` only when the subject is physically present or directly participating in that Scene. Use `mentioned_only` when the text merely names, recalls, discusses, displays, or otherwise refers to the subject without establishing an actual occurrence. Do not promote uncertainty to `actual`.
 - If a location or time is not explicit, return `null`. Empty fact lists are valid; invented facts are not.
 
 Keep names as raw mentions, do not merge identities, design appearances, infer visual style, select a preset, or create formal Owner records.

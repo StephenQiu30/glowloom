@@ -304,6 +304,7 @@ def test_scene_analysis_scene_fact_is_style_blind_and_bound_to_script_spans() ->
                     "raw_character_mentions": [
                         {
                             "text": "林舟",
+                            "occurrence_role": "actual",
                             "evidence": {
                                 "source_start": 8,
                                 "source_end": 10,
@@ -315,6 +316,7 @@ def test_scene_analysis_scene_fact_is_style_blind_and_bound_to_script_spans() ->
                     "raw_prop_mentions": [
                         {
                             "text": "门把",
+                            "occurrence_role": "actual",
                             "evidence": {
                                 "source_start": 12,
                                 "source_end": 14,

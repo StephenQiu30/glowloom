@@ -380,6 +380,7 @@ func outcomeUnknownResult(
 			"resolve_identities":         "identity_resolution_candidate",
 			"review_candidate":           "structure_identity_review_candidate",
 			"derive_production_entities": "production_entity_fragment_candidate",
+			"bind_scene_occurrences":     "scene_binding_fragment_candidate",
 		}[invocation.Payload.Variant.StageKey],
 		InputHash: invocation.InputHash, Diagnostics: diagnostics, DiagnosticHash: diagnosticHash,
 		CompletedAt: completedAt,
@@ -470,6 +471,44 @@ func validateExecuteCommand(command ExecuteCommand) error {
 		}
 		return nil
 	}
+	if command.StageKey == "bind_scene_occurrences" {
+		if len(command.Upstreams) != 2 {
+			return &Error{Code: "invalid_upstream_candidate", Message: "Scene binding stage requires exact SceneFact and Production Entity candidates"}
+		}
+		byStage := make(map[string]Candidate, len(command.Upstreams))
+		for _, upstream := range command.Upstreams {
+			if upstream.ProjectID != command.Source.ProjectID {
+				return &Error{Code: "invalid_upstream_candidate", Message: "Scene binding candidate project drifted"}
+			}
+			byStage[upstream.StageKey] = upstream
+		}
+		facts, factsFound := byStage["extract_scene_facts"]
+		entities, entitiesFound := byStage["derive_production_entities"]
+		if !factsFound || !entitiesFound || facts.CandidateType != "scene_fact_candidate" ||
+			entities.CandidateType != "production_entity_fragment_candidate" {
+			return &Error{Code: "invalid_upstream_candidate", Message: "Scene binding Candidate set drifted"}
+		}
+		identities, decodeErr := contract.DecodeFrozenStructureIdentitySet(command.StructureIdentitySet)
+		input := contract.SceneOccurrenceBindingInput{
+			ProductionEntityDerivationInput: contract.ProductionEntityDerivationInput{
+				SourceVersionID: command.Source.VersionID, SourceHash: command.Source.ContentHash,
+				NormalizedText:                  command.Source.NormalizedText,
+				StructureIdentitySetVersionID:   command.StructureIdentitySetVersionID,
+				StructureIdentitySetVersionHash: command.StructureIdentitySetVersionHash,
+				StructureIdentitySet:            identities,
+				SceneFactCandidateRevisionID:    facts.ID,
+				SceneFactCandidateRevisionHash:  facts.CandidateRevisionHash,
+				SceneFactCandidate:              facts.Candidate,
+			},
+			ProductionEntityCandidateRevisionID:   entities.ID,
+			ProductionEntityCandidateRevisionHash: entities.CandidateRevisionHash,
+			ProductionEntityCandidate:             entities.Candidate,
+		}
+		if decodeErr != nil || input.Validate() != nil {
+			return &Error{Code: "invalid_formal_scene_binding_input", Message: "Scene binding frozen input is invalid"}
+		}
+		return nil
+	}
 	if command.StageKey != "review_candidate" || len(command.Upstreams) != 3 ||
 		command.DeterministicIssues == nil {
 		return &Error{Code: "invalid_upstream_candidate", Message: "StructureIdentityReview stage requires three exact candidates"}
@@ -499,6 +538,7 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 		"resolve_identities":         contract.IdentityResolutionCandidateSchemaVersion,
 		"review_candidate":           contract.StructureIdentityReviewCandidateSchemaVersion,
 		"derive_production_entities": contract.ProductionEntityFragmentCandidateSchemaVersion,
+		"bind_scene_occurrences":     contract.SceneBindingFragmentCandidateSchemaVersion,
 	}[stageKey]
 	profileKey := "default"
 	if stageKey == "review_candidate" {
@@ -522,6 +562,7 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 			contract.ScriptSpanCandidateSchemaVersion,
 			contract.StructureIdentityReviewCandidateSchemaVersion,
 			contract.ProductionEntityFragmentCandidateSchemaVersion,
+			contract.SceneBindingFragmentCandidateSchemaVersion,
 		},
 	})
 	skillHash, err := platformcanonical.Hash(skillMaterial)
@@ -555,6 +596,7 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 		"resolve_identities":         "references/entity-reconciliation.md",
 		"review_candidate":           "references/structure-identity-review.md",
 		"derive_production_entities": "references/production-entities.md",
+		"bind_scene_occurrences":     "references/scene-occurrences.md",
 	}[stageKey]
 	return ReleaseRecord{
 		ID: releaseID,
@@ -587,7 +629,7 @@ func buildManifest(command ExecuteCommand, now time.Time) (ManifestRecord, error
 			return ManifestRecord{}, hashErr
 		}
 	}
-	if command.StageKey == "derive_production_entities" {
+	if command.StageKey == "derive_production_entities" || command.StageKey == "bind_scene_occurrences" {
 		encoded, marshalErr := json.Marshal(struct {
 			SceneFactHash, StructureIdentitySetHash string
 		}{rootInputHash, command.StructureIdentitySetVersionHash})
@@ -717,6 +759,37 @@ func buildInvocation(
 			SceneFactCandidateRevisionID:    upstream.ID,
 			SceneFactCandidateRevisionHash:  upstream.CandidateRevisionHash,
 			SceneFactCandidate:              upstream.Candidate,
+		})
+	} else if command.StageKey == "bind_scene_occurrences" {
+		byStage := make(map[string]Candidate, len(command.Upstreams))
+		payload.UpstreamCandidates = make([]contract.SceneAnalysisCandidateRevisionIdentity, 0, len(command.Upstreams))
+		for _, upstream := range command.Upstreams {
+			byStage[upstream.StageKey] = upstream
+			payload.UpstreamCandidates = append(payload.UpstreamCandidates, contract.SceneAnalysisCandidateRevisionIdentity{
+				StageKey: upstream.StageKey, ShardKey: "script:full",
+				CandidateRevisionID: upstream.ID, CandidateRevisionHash: upstream.CandidateRevisionHash,
+				SourceInvocationID: upstream.SourceInvocationID, SourceResultHash: upstream.SourceResultHash,
+			})
+		}
+		facts, entities := byStage["extract_scene_facts"], byStage["derive_production_entities"]
+		identities, err := contract.DecodeFrozenStructureIdentitySet(command.StructureIdentitySet)
+		if err != nil {
+			return contract.SceneAnalysisInvocation{}, err
+		}
+		payload.StageInput, _ = json.Marshal(contract.SceneOccurrenceBindingInput{
+			ProductionEntityDerivationInput: contract.ProductionEntityDerivationInput{
+				SourceVersionID: command.Source.VersionID, SourceHash: command.Source.ContentHash,
+				NormalizedText:                  text,
+				StructureIdentitySetVersionID:   command.StructureIdentitySetVersionID,
+				StructureIdentitySetVersionHash: command.StructureIdentitySetVersionHash,
+				StructureIdentitySet:            identities,
+				SceneFactCandidateRevisionID:    facts.ID,
+				SceneFactCandidateRevisionHash:  facts.CandidateRevisionHash,
+				SceneFactCandidate:              facts.Candidate,
+			},
+			ProductionEntityCandidateRevisionID:   entities.ID,
+			ProductionEntityCandidateRevisionHash: entities.CandidateRevisionHash,
+			ProductionEntityCandidate:             entities.Candidate,
 		})
 	} else {
 		byStage := make(map[string]Candidate, len(command.Upstreams))

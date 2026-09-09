@@ -20,6 +20,7 @@ SceneAnalysisStageKey = Literal[
     "resolve_identities",
     "review_candidate",
     "derive_production_entities",
+    "bind_scene_occurrences",
 ]
 
 
@@ -37,6 +38,7 @@ class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
         "identity-resolution-candidate-production",
         "structure-identity-review-candidate-production",
         "production-entity-fragment-candidate-production",
+        "scene-binding-fragment-candidate-production",
     ]
 
     @model_validator(mode="after")
@@ -53,6 +55,10 @@ class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
                 "derive_production_entities",
                 "default",
             ): "production-entity-fragment-candidate-production",
+            (
+                "bind_scene_occurrences",
+                "default",
+            ): "scene-binding-fragment-candidate-production",
         }.get((self.stage_key, self.profile_key))
         if self.output_schema_version != expected:
             raise ValueError("Scene Analysis output schema does not match its stage")
@@ -75,6 +81,7 @@ class SceneAnalysisCandidateRevisionIdentity(StrictSceneAnalysisModel):
         "resolve_identities",
         "review_candidate",
         "derive_production_entities",
+        "bind_scene_occurrences",
     ]
     shard_key: str = Field(min_length=1)
     candidate_revision_id: UUID
@@ -391,6 +398,7 @@ class FrozenStructureIdentity(StrictSceneAnalysisModel):
 
 class FrozenStructureIdentityMentionMapping(StrictSceneAnalysisModel):
     kind: Literal["character", "location", "prop"]
+    occurrence_role: Literal["actual", "mentioned_only"]
     temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
@@ -451,6 +459,8 @@ class FrozenStructureIdentitySet(StrictSceneAnalysisModel):
                 and identity_kinds.get(value.identity_key) != value.kind
             ):
                 raise ValueError("frozen identity mention references a different identity kind")
+            if value.kind == "location" and value.occurrence_role != "actual":
+                raise ValueError("formal Scene location must be an actual occurrence")
         if (
             self.coverage.scene_count != len(self.scene_refs)
             or self.coverage.identity_count != len(self.identities)
@@ -524,6 +534,24 @@ class ProductionEntityDerivationInput(StrictSceneAnalysisModel):
         }
 
 
+class SceneOccurrenceBindingInput(ProductionEntityDerivationInput):
+    production_entity_candidate_revision_id: UUID
+    production_entity_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    production_entity_candidate: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_production_entities(self) -> SceneOccurrenceBindingInput:
+        from app.modules.storygraph.scene_analysis_candidates import (
+            ProductionEntityFragmentCandidate,
+        )
+
+        candidate = ProductionEntityFragmentCandidate.model_validate(
+            self.production_entity_candidate
+        )
+        candidate.validate_for(self)
+        return self
+
+
 class SceneAnalysisPayload(StrictSceneAnalysisModel):
     variant: SceneAnalysisStageVariant
     scope: SceneAnalysisScope
@@ -593,6 +621,33 @@ class SceneAnalysisPayload(StrictSceneAnalysisModel):
                 raise ValueError(
                     "production entity input does not match its frozen formal identities"
                 )
+        elif self.variant.stage_key == "bind_scene_occurrences":
+            value = SceneOccurrenceBindingInput.model_validate(self.stage_input)
+            expected = {
+                "extract_scene_facts": (
+                    value.scene_fact_candidate_revision_id,
+                    value.scene_fact_candidate_revision_hash,
+                ),
+                "derive_production_entities": (
+                    value.production_entity_candidate_revision_id,
+                    value.production_entity_candidate_revision_hash,
+                ),
+            }
+            supplied = {
+                item.stage_key: (item.candidate_revision_id, item.candidate_revision_hash)
+                for item in self.upstream_candidates
+            }
+            if (
+                len(self.upstream_candidates) != 2
+                or supplied != expected
+                or source.version_id != value.source_version_id
+                or source.content_hash != value.source_hash
+                or self.scope.workspace_id != value.structure_identity_set.workspace_id
+                or self.scope.project_id != value.structure_identity_set.project_id
+                or self.shard.codepoint_start != 0
+                or self.shard.codepoint_end != len(value.normalized_text)
+            ):
+                raise ValueError("Scene binding input does not match its frozen production graph")
         else:
             value = StructureIdentityReviewInput.model_validate(self.stage_input)
             expected = {

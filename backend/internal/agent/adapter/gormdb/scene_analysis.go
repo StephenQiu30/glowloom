@@ -325,6 +325,9 @@ func (repo *sceneAnalysisRepository) validateUpstreamReadSet(
 			"propose_script_spans": {}, "extract_scene_facts": {}, "resolve_identities": {},
 		},
 		"derive_production_entities": {"extract_scene_facts": {}},
+		"bind_scene_occurrences": {
+			"extract_scene_facts": {}, "derive_production_entities": {},
+		},
 	}[invocation.StageKey]
 	expectedTypes := map[string]string{
 		"propose_script_spans":       "script_span_candidate",

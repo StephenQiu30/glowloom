@@ -104,8 +104,10 @@ func productionEntityContractFixture(
 		Scenes: []contract.SceneFact{{
 			TemporarySceneID: "scene_0001", SpanID: "span_0001", SourceStart: 0, SourceEnd: 2,
 			Actions: []contract.GroundedAction{}, Dialogues: []contract.GroundedDialogue{},
-			RawCharacterMentions: []contract.RawEntityMention{{Text: text, Evidence: evidence}},
-			RawPropMentions:      []contract.RawEntityMention{},
+			RawCharacterMentions: []contract.RawEntityMention{{
+				Text: text, OccurrenceRole: "actual", Evidence: evidence,
+			}},
+			RawPropMentions: []contract.RawEntityMention{},
 		}},
 		ReviewIssues: []contract.CandidateReviewIssue{},
 	}
@@ -141,7 +143,8 @@ func productionEntityContractFixture(
 				Kind: "character", Resolution: "new", CanonicalName: text, Aliases: []string{text},
 			}},
 			MentionMappings: []contract.FrozenStructureIdentityMentionMapping{{
-				Kind: "character", TemporarySceneID: "scene_0001", SourceStart: 0, SourceEnd: 2,
+				Kind: "character", OccurrenceRole: "actual",
+				TemporarySceneID: "scene_0001", SourceStart: 0, SourceEnd: 2,
 				TextHash: sourceHash, ExactAnchor: text, Resolution: "resolved",
 				IdentityKey: stringPointer("character:linzhou"),
 			}},

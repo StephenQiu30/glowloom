@@ -47,6 +47,7 @@ type StructureIdentity struct {
 
 type StructureIdentityMentionMapping struct {
 	Kind             string  `json:"kind"`
+	OccurrenceRole   string  `json:"occurrence_role"`
 	TemporarySceneID string  `json:"temporary_scene_id"`
 	SourceStart      int     `json:"source_start"`
 	SourceEnd        int     `json:"source_end"`

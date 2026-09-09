@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.protocol.canonical import production_canonical_hash
+
+if TYPE_CHECKING:
+    from app.harness.scene_analysis_schemas import FrozenStructureIdentityMentionMapping
 
 
 class StrictSceneAnalysisModel(BaseModel):
@@ -212,6 +215,7 @@ class GroundedDialogue(StrictSceneAnalysisModel):
 
 class RawEntityMention(StrictSceneAnalysisModel):
     text: str = Field(min_length=1)
+    occurrence_role: Literal["actual", "mentioned_only"]
     evidence: SourceEvidenceSpan
 
 
@@ -292,6 +296,7 @@ class SceneFactCandidate(StrictSceneAnalysisModel):
 
 class IdentityMentionRef(StrictSceneAnalysisModel):
     kind: Literal["character", "location", "prop"]
+    occurrence_role: Literal["actual", "mentioned_only"]
     temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
@@ -400,6 +405,7 @@ class IdentityResolutionCandidate(StrictSceneAnalysisModel):
                 location = scene.location.evidence
                 ref = IdentityMentionRef(
                     kind="location",
+                    occurrence_role="actual",
                     temporary_scene_id=scene.temporary_scene_id,
                     source_start=location.source_start,
                     source_end=location.source_end,
@@ -417,6 +423,7 @@ class IdentityResolutionCandidate(StrictSceneAnalysisModel):
                 for mention in mentions:
                     ref = IdentityMentionRef(
                         kind=cast(Literal["character", "location", "prop"], kind),
+                        occurrence_role=mention.occurrence_role,
                         temporary_scene_id=scene.temporary_scene_id,
                         source_start=mention.evidence.source_start,
                         source_end=mention.evidence.source_end,
@@ -774,6 +781,7 @@ class ProductionEntityFragmentCandidate(StrictSceneAnalysisModel):
 def _identity_mention_key(value: IdentityMentionRef) -> tuple[object, ...]:
     return (
         value.kind,
+        value.occurrence_role,
         value.temporary_scene_id,
         value.source_start,
         value.source_end,
@@ -784,3 +792,209 @@ def _identity_mention_key(value: IdentityMentionRef) -> tuple[object, ...]:
 
 def _source_evidence_key(value: SourceEvidenceSpan) -> tuple[object, ...]:
     return (value.source_start, value.source_end, value.text_hash, value.exact_anchor)
+
+
+class SceneDialogueFragment(StrictSceneAnalysisModel):
+    dialogue_key: str = Field(pattern=r"^dialogue_[a-z0-9_]{1,120}$")
+    order: int = Field(ge=1)
+    speaker_identity_key: str | None
+    speaker_evidence: SourceEvidenceSpan | None
+    text: str = Field(min_length=1)
+    evidence: SourceEvidenceSpan
+
+    @model_validator(mode="after")
+    def validate_speaker(self) -> SceneDialogueFragment:
+        if (self.speaker_identity_key is None) != (self.speaker_evidence is None):
+            raise ValueError("dialogue speaker identity and Evidence must be supplied together")
+        return self
+
+
+class SceneBeatFragment(StrictSceneAnalysisModel):
+    beat_key: str = Field(pattern=r"^beat_[a-z0-9_]{1,120}$")
+    order: int = Field(ge=1)
+    text: str = Field(min_length=1)
+    evidence: SourceEvidenceSpan
+
+
+class SceneOccurrenceFragment(StrictSceneAnalysisModel):
+    occurrence_key: str = Field(pattern=r"^occurrence_[a-z0-9_]{1,120}$")
+    order: int = Field(ge=1)
+    subject_kind: Literal["character", "location", "prop"]
+    identity_key: str = Field(min_length=1)
+    state_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
+    occurrence_role: Literal["actual", "mentioned_only"]
+    evidence: SourceEvidenceSpan
+
+
+class SceneBindingFragment(StrictSceneAnalysisModel):
+    scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    scene_owner_logical_id: UUID
+    temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
+    dialogues: list[SceneDialogueFragment]
+    beats: list[SceneBeatFragment]
+    occurrences: list[SceneOccurrenceFragment]
+
+    @model_validator(mode="after")
+    def validate_ordering(self) -> SceneBindingFragment:
+        if self.source_end <= self.source_start:
+            raise ValueError("Scene binding range must be increasing")
+        ordered_keys = (
+            [(value.order, value.dialogue_key) for value in self.dialogues],
+            [(value.order, value.beat_key) for value in self.beats],
+            [(value.order, value.occurrence_key) for value in self.occurrences],
+        )
+        for values in ordered_keys:
+            if [order for order, _ in values] != list(range(1, len(values) + 1)):
+                raise ValueError("Scene binding order must be contiguous")
+            keys = [key for _, key in values]
+            if len(keys) != len(set(keys)):
+                raise ValueError("Scene binding keys must be unique")
+        if [value.evidence.source_start for value in self.occurrences] != sorted(
+            value.evidence.source_start for value in self.occurrences
+        ):
+            raise ValueError("Scene occurrences must follow source order")
+        return self
+
+
+class SceneBindingFragmentCandidate(StrictSceneAnalysisModel):
+    source_version_id: UUID
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    structure_identity_set_version_id: UUID
+    structure_identity_set_version_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_fact_candidate_revision_id: UUID
+    scene_fact_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    production_entity_candidate_revision_id: UUID
+    production_entity_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scenes: list[SceneBindingFragment] = Field(min_length=1)
+    review_issues: list[CandidateReviewIssue]
+
+    def validate_for_input(self, value: object) -> None:
+        from app.harness.scene_analysis_schemas import SceneOccurrenceBindingInput
+
+        if not isinstance(value, SceneOccurrenceBindingInput):
+            raise ValueError("Scene occurrence binding input is invalid")
+        if (
+            self.source_version_id != value.source_version_id
+            or self.source_hash != value.source_hash
+            or self.structure_identity_set_version_id != value.structure_identity_set_version_id
+            or self.structure_identity_set_version_hash != value.structure_identity_set_version_hash
+            or self.scene_fact_candidate_revision_id != value.scene_fact_candidate_revision_id
+            or self.scene_fact_candidate_revision_hash != value.scene_fact_candidate_revision_hash
+            or self.production_entity_candidate_revision_id
+            != value.production_entity_candidate_revision_id
+            or self.production_entity_candidate_revision_hash
+            != value.production_entity_candidate_revision_hash
+        ):
+            raise ValueError("Scene binding lineage drifted")
+
+        facts = SceneFactCandidate.model_validate(value.scene_fact_candidate)
+        production = ProductionEntityFragmentCandidate.model_validate(
+            value.production_entity_candidate
+        )
+        formal_scenes = value.structure_identity_set.scene_refs
+        if len(self.scenes) != len(formal_scenes):
+            raise ValueError("Scene binding must cover every formal Scene")
+        fact_by_key = {scene.temporary_scene_id: scene for scene in facts.scenes}
+        entity_by_key = {entity.identity_key: entity for entity in production.entities}
+        mappings_by_scene: dict[str, list[FrozenStructureIdentityMentionMapping]] = {}
+        for mapping in value.structure_identity_set.mention_mappings:
+            if mapping.resolution == "resolved":
+                mappings_by_scene.setdefault(mapping.temporary_scene_id, []).append(mapping)
+
+        for supplied, formal in zip(self.scenes, formal_scenes, strict=True):
+            if (
+                supplied.scene_scope_key != formal.scope_key
+                or str(supplied.scene_owner_logical_id) != str(formal.scene_owner_logical_id)
+                or supplied.temporary_scene_id != formal.temporary_scene_id
+                or supplied.source_start != formal.source_start
+                or supplied.source_end != formal.source_end
+            ):
+                raise ValueError("Scene binding does not match its formal Scene")
+            fact = fact_by_key[formal.temporary_scene_id]
+            if len(supplied.beats) != len(fact.actions) or len(supplied.dialogues) != len(
+                fact.dialogues
+            ):
+                raise ValueError("Scene binding changed the frozen Beat or Dialogue set")
+            for beat, action in zip(supplied.beats, fact.actions, strict=True):
+                if beat.text != action.text or beat.evidence != action.evidence:
+                    raise ValueError("Scene Beat does not match frozen SceneFacts")
+            formal_character_mappings = {
+                (
+                    mapping.identity_key,
+                    mapping.source_start,
+                    mapping.source_end,
+                    mapping.text_hash,
+                    mapping.exact_anchor,
+                )
+                for mapping in mappings_by_scene.get(formal.temporary_scene_id, [])
+                if mapping.kind == "character"
+            }
+            for dialogue, fact_dialogue in zip(supplied.dialogues, fact.dialogues, strict=True):
+                if (
+                    dialogue.text != fact_dialogue.text
+                    or dialogue.evidence != fact_dialogue.evidence
+                ):
+                    raise ValueError("Scene Dialogue does not match frozen SceneFacts")
+                if dialogue.speaker_identity_key is not None:
+                    assert dialogue.speaker_evidence is not None
+                    speaker = (
+                        dialogue.speaker_identity_key,
+                        dialogue.speaker_evidence.source_start,
+                        dialogue.speaker_evidence.source_end,
+                        dialogue.speaker_evidence.text_hash,
+                        dialogue.speaker_evidence.exact_anchor,
+                    )
+                    if (
+                        speaker not in formal_character_mappings
+                        or dialogue.speaker_evidence.exact_anchor != fact_dialogue.speaker_mention
+                    ):
+                        raise ValueError("Dialogue speaker is not an exact formal identity mapping")
+
+            expected_mappings = sorted(
+                mappings_by_scene.get(formal.temporary_scene_id, []),
+                key=lambda item: (
+                    item.source_start,
+                    item.source_end,
+                    item.kind,
+                    "" if item.identity_key is None else item.identity_key,
+                ),
+            )
+            if len(supplied.occurrences) != len(expected_mappings):
+                raise ValueError("Scene occurrences do not cover the resolved mention partition")
+            for occurrence, mapping in zip(supplied.occurrences, expected_mappings, strict=True):
+                entity = entity_by_key.get(occurrence.identity_key)
+                evidence = occurrence.evidence
+                if (
+                    mapping.identity_key is None
+                    or occurrence.subject_kind != mapping.kind
+                    or occurrence.identity_key != mapping.identity_key
+                    or occurrence.occurrence_role != mapping.occurrence_role
+                    or (
+                        evidence.source_start,
+                        evidence.source_end,
+                        evidence.text_hash,
+                        evidence.exact_anchor,
+                    )
+                    != (
+                        mapping.source_start,
+                        mapping.source_end,
+                        mapping.text_hash,
+                        mapping.exact_anchor,
+                    )
+                    or entity is None
+                    or not any(
+                        state.state_key == occurrence.state_key
+                        and formal.scope_key in state.applicable_scene_scope_keys
+                        for state in entity.states
+                    )
+                ):
+                    raise ValueError(
+                        "Scene occurrence is not an exact formal identity/state binding"
+                    )
+        for issue in self.review_issues:
+            for evidence in issue.evidence:
+                evidence.validate_for_text(value.normalized_text)
+                if _source_evidence_key(evidence) not in value.scene_fact_evidence_universe():
+                    raise ValueError("Scene binding review Evidence is outside frozen SceneFacts")

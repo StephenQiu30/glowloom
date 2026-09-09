@@ -23,7 +23,7 @@ const (
 	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
 	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
-	SceneAnalysisSkillBundleHash                  = "7efbeaaa5660f447b3eafee319f6ee3b70250006f0e364108a9b20e85a25df49"
+	SceneAnalysisSkillBundleHash                  = "2870bd21483c3de5f381a5a24bfbb16e4c3e3aaf9e337b6429ef86c8afaf6c4f"
 )
 
 var structureIdentityRepairIssuePattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)
@@ -42,6 +42,7 @@ func (value SceneAnalysisStageVariant) Validate() error {
 		"resolve_identities\x00default":          IdentityResolutionCandidateSchemaVersion,
 		"review_candidate\x00structure_identity": StructureIdentityReviewCandidateSchemaVersion,
 		"derive_production_entities\x00default":  ProductionEntityFragmentCandidateSchemaVersion,
+		"bind_scene_occurrences\x00default":      SceneBindingFragmentCandidateSchemaVersion,
 	}[value.StageKey+"\x00"+value.ProfileKey]
 	if value.LaneKey != "primary" ||
 		expectedSchema == "" || value.OutputSchemaVersion != expectedSchema {
@@ -82,7 +83,7 @@ type SceneAnalysisCandidateRevisionIdentity struct {
 func (value SceneAnalysisCandidateRevisionIdentity) Validate() error {
 	if (value.StageKey != "propose_script_spans" && value.StageKey != "extract_scene_facts" &&
 		value.StageKey != "resolve_identities" && value.StageKey != "review_candidate" &&
-		value.StageKey != "derive_production_entities") ||
+		value.StageKey != "derive_production_entities" && value.StageKey != "bind_scene_occurrences") ||
 		strings.TrimSpace(value.ShardKey) == "" ||
 		!hashPattern.MatchString(value.CandidateRevisionHash) ||
 		!hashPattern.MatchString(value.SourceResultHash) {
@@ -513,6 +514,31 @@ func (value SceneAnalysisPayload) Validate() error {
 			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
 			return errors.New("production entity input does not match its frozen formal identities")
 		}
+	case "bind_scene_occurrences":
+		var input SceneOccurrenceBindingInput
+		if decodeStrict(value.StageInput, &input) != nil || input.Validate() != nil ||
+			len(value.UpstreamCandidates) != 2 || source.VersionID != input.SourceVersionID ||
+			source.ContentHash != input.SourceHash || value.Scope.WorkspaceID != input.StructureIdentitySet.WorkspaceID ||
+			value.Scope.ProjectID != input.StructureIdentitySet.ProjectID || value.Shard.CodepointStart != 0 ||
+			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
+			return errors.New("Scene binding input does not match its frozen production graph")
+		}
+		expected := map[string][2]string{
+			"extract_scene_facts":        {input.SceneFactCandidateRevisionID, input.SceneFactCandidateRevisionHash},
+			"derive_production_entities": {input.ProductionEntityCandidateRevisionID, input.ProductionEntityCandidateRevisionHash},
+		}
+		for _, upstream := range value.UpstreamCandidates {
+			identity, exists := expected[upstream.StageKey]
+			if !exists || upstream.Validate() != nil || identity != [2]string{
+				upstream.CandidateRevisionID, upstream.CandidateRevisionHash,
+			} {
+				return errors.New("Scene binding upstream Candidate identity drifted")
+			}
+			delete(expected, upstream.StageKey)
+		}
+		if len(expected) != 0 {
+			return errors.New("Scene binding upstream Candidate set is incomplete")
+		}
 	default:
 		return errors.New("unsupported Scene Analysis stage")
 	}
@@ -746,6 +772,7 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 		"resolve_identities":         "identity_resolution_candidate",
 		"review_candidate":           "structure_identity_review_candidate",
 		"derive_production_entities": "production_entity_fragment_candidate",
+		"bind_scene_occurrences":     "scene_binding_fragment_candidate",
 	}
 	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
 		value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
@@ -840,6 +867,12 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil ||
 				ValidateProductionEntityFragmentCandidate(value.Candidate, input) != nil {
 				return errors.New("invalid accepted Production Entity candidate")
+			}
+		case "bind_scene_occurrences":
+			var input SceneOccurrenceBindingInput
+			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil ||
+				ValidateSceneBindingFragmentCandidate(value.Candidate, input) != nil {
+				return errors.New("invalid accepted Scene binding candidate")
 			}
 		}
 	case "rejected", "outcome_unknown":
@@ -1032,8 +1065,9 @@ type GroundedDialogue struct {
 }
 
 type RawEntityMention struct {
-	Text     string             `json:"text"`
-	Evidence SourceEvidenceSpan `json:"evidence"`
+	Text           string             `json:"text"`
+	OccurrenceRole string             `json:"occurrence_role"`
+	Evidence       SourceEvidenceSpan `json:"evidence"`
 }
 
 type GroundedSceneAttribute struct {
@@ -1112,9 +1146,15 @@ func ValidateSceneFactCandidate(raw json.RawMessage, text string, spanRaw json.R
 			evidence = append(evidence, item.Evidence)
 		}
 		for _, item := range scene.RawCharacterMentions {
+			if strings.TrimSpace(item.Text) == "" || !validOccurrenceRole(item.OccurrenceRole) {
+				return errors.New("invalid SceneFact character mention")
+			}
 			evidence = append(evidence, item.Evidence)
 		}
 		for _, item := range scene.RawPropMentions {
+			if strings.TrimSpace(item.Text) == "" || !validOccurrenceRole(item.OccurrenceRole) {
+				return errors.New("invalid SceneFact prop mention")
+			}
 			evidence = append(evidence, item.Evidence)
 		}
 		for _, item := range evidence {
@@ -1135,6 +1175,7 @@ var temporaryIdentityKeyPattern = regexp.MustCompile(`^identity_(character|locat
 
 type IdentityMentionRef struct {
 	Kind             string `json:"kind"`
+	OccurrenceRole   string `json:"occurrence_role"`
 	TemporarySceneID string `json:"temporary_scene_id"`
 	SourceStart      int    `json:"source_start"`
 	SourceEnd        int    `json:"source_end"`
@@ -1234,7 +1275,7 @@ func ValidateIdentityResolutionCandidate(
 		}
 		if scene.Location != nil {
 			ref := IdentityMentionRef{
-				Kind: "location", TemporarySceneID: scene.TemporarySceneID,
+				Kind: "location", OccurrenceRole: "actual", TemporarySceneID: scene.TemporarySceneID,
 				SourceStart: scene.Location.Evidence.SourceStart, SourceEnd: scene.Location.Evidence.SourceEnd,
 				TextHash: scene.Location.Evidence.TextHash, ExactAnchor: scene.Location.Evidence.ExactAnchor,
 			}
@@ -1250,7 +1291,7 @@ func ValidateIdentityResolutionCandidate(
 		}{{"character", scene.RawCharacterMentions}, {"prop", scene.RawPropMentions}} {
 			for _, mention := range group.mentions {
 				ref := IdentityMentionRef{
-					Kind: group.kind, TemporarySceneID: scene.TemporarySceneID,
+					Kind: group.kind, OccurrenceRole: mention.OccurrenceRole, TemporarySceneID: scene.TemporarySceneID,
 					SourceStart: mention.Evidence.SourceStart, SourceEnd: mention.Evidence.SourceEnd,
 					TextHash: mention.Evidence.TextHash, ExactAnchor: mention.Evidence.ExactAnchor,
 				}
@@ -1521,10 +1562,14 @@ func validateCandidateReviewIssue(
 
 func identityMentionKey(value IdentityMentionRef) string {
 	return fmt.Sprintf(
-		"%s\x00%s\x00%020d\x00%020d\x00%s\x00%s",
-		value.Kind, value.TemporarySceneID, value.SourceStart, value.SourceEnd,
+		"%s\x00%s\x00%s\x00%020d\x00%020d\x00%s\x00%s",
+		value.Kind, value.OccurrenceRole, value.TemporarySceneID, value.SourceStart, value.SourceEnd,
 		value.TextHash, value.ExactAnchor,
 	)
+}
+
+func validOccurrenceRole(value string) bool {
+	return value == "actual" || value == "mentioned_only"
 }
 
 func sourceEvidenceKey(value SourceEvidenceSpan) string {

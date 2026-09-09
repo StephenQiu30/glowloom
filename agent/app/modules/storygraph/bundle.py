@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.modules.storygraph.skill_registry import RegistryError, stage_spec
 
-SKILL_BUNDLE_HASH = "28ee0856ef8748ee7d7ff83b388bfd209c8092bd7614e3036cca18f92af62904"
+SKILL_BUNDLE_HASH = "c9384723a9cfb3117c68f13683451e88d9379fbe9dc54e5d41d67cc8a4da2d13"
 
 
 class BundleInvalid(ValueError):
@@ -47,6 +47,7 @@ class StoryGraphBundle:
         "references/script-spans.md",
         "references/structure-identity-review.md",
         "references/production-entities.md",
+        "references/scene-occurrences.md",
     )
 
     def __init__(self, repository_root: Path | None = None) -> None:

@@ -402,7 +402,7 @@ func structureIdentityMentionMapping(
 	identityKey *string,
 ) bibledomain.StructureIdentityMentionMapping {
 	return bibledomain.StructureIdentityMentionMapping{
-		Kind: mention.Kind, TemporarySceneID: mention.TemporarySceneID,
+		Kind: mention.Kind, OccurrenceRole: mention.OccurrenceRole, TemporarySceneID: mention.TemporarySceneID,
 		SourceStart: mention.SourceStart, SourceEnd: mention.SourceEnd,
 		TextHash: mention.TextHash, ExactAnchor: mention.ExactAnchor,
 		Resolution: resolution, IdentityKey: identityKey,
