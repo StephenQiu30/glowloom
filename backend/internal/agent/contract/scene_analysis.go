@@ -23,7 +23,7 @@ const (
 	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
 	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
-	SceneAnalysisSkillBundleHash                  = "1b3f6e3dd5a2d60cdf622f525ed6a4b06bf9d67c83e01f2c5cabde9dc5e17ece"
+	SceneAnalysisSkillBundleHash                  = "7efbeaaa5660f447b3eafee319f6ee3b70250006f0e364108a9b20e85a25df49"
 )
 
 var structureIdentityRepairIssuePattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)
@@ -41,6 +41,7 @@ func (value SceneAnalysisStageVariant) Validate() error {
 		"extract_scene_facts\x00default":         SceneFactCandidateSchemaVersion,
 		"resolve_identities\x00default":          IdentityResolutionCandidateSchemaVersion,
 		"review_candidate\x00structure_identity": StructureIdentityReviewCandidateSchemaVersion,
+		"derive_production_entities\x00default":  ProductionEntityFragmentCandidateSchemaVersion,
 	}[value.StageKey+"\x00"+value.ProfileKey]
 	if value.LaneKey != "primary" ||
 		expectedSchema == "" || value.OutputSchemaVersion != expectedSchema {
@@ -80,7 +81,8 @@ type SceneAnalysisCandidateRevisionIdentity struct {
 
 func (value SceneAnalysisCandidateRevisionIdentity) Validate() error {
 	if (value.StageKey != "propose_script_spans" && value.StageKey != "extract_scene_facts" &&
-		value.StageKey != "resolve_identities" && value.StageKey != "review_candidate") ||
+		value.StageKey != "resolve_identities" && value.StageKey != "review_candidate" &&
+		value.StageKey != "derive_production_entities") ||
 		strings.TrimSpace(value.ShardKey) == "" ||
 		!hashPattern.MatchString(value.CandidateRevisionHash) ||
 		!hashPattern.MatchString(value.SourceResultHash) {
@@ -497,6 +499,20 @@ func (value SceneAnalysisPayload) Validate() error {
 		if len(expected) != 0 {
 			return errors.New("review upstream Candidate set is incomplete")
 		}
+	case "derive_production_entities":
+		var input ProductionEntityDerivationInput
+		if decodeStrict(value.StageInput, &input) != nil || input.Validate() != nil ||
+			len(value.UpstreamCandidates) != 1 || value.UpstreamCandidates[0].Validate() != nil ||
+			value.UpstreamCandidates[0].StageKey != "extract_scene_facts" ||
+			source.VersionID != input.SourceVersionID || source.ContentHash != input.SourceHash ||
+			value.Scope.WorkspaceID != input.StructureIdentitySet.WorkspaceID ||
+			value.Scope.ProjectID != input.StructureIdentitySet.ProjectID ||
+			value.UpstreamCandidates[0].CandidateRevisionID != input.SceneFactCandidateRevisionID ||
+			value.UpstreamCandidates[0].CandidateRevisionHash != input.SceneFactCandidateRevisionHash ||
+			value.Shard.CodepointStart != 0 ||
+			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
+			return errors.New("production entity input does not match its frozen formal identities")
+		}
 	default:
 		return errors.New("unsupported Scene Analysis stage")
 	}
@@ -725,10 +741,11 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 	dispatchAuthorizationHash string,
 ) error {
 	expectedCandidateType := map[string]string{
-		"propose_script_spans": "script_span_candidate",
-		"extract_scene_facts":  "scene_fact_candidate",
-		"resolve_identities":   "identity_resolution_candidate",
-		"review_candidate":     "structure_identity_review_candidate",
+		"propose_script_spans":       "script_span_candidate",
+		"extract_scene_facts":        "scene_fact_candidate",
+		"resolve_identities":         "identity_resolution_candidate",
+		"review_candidate":           "structure_identity_review_candidate",
+		"derive_production_entities": "production_entity_fragment_candidate",
 	}
 	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
 		value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
@@ -817,6 +834,12 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil ||
 				ValidateStructureIdentityReviewCandidate(value.Candidate, input) != nil {
 				return errors.New("invalid accepted structure identity review candidate")
+			}
+		case "derive_production_entities":
+			var input ProductionEntityDerivationInput
+			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil ||
+				ValidateProductionEntityFragmentCandidate(value.Candidate, input) != nil {
+				return errors.New("invalid accepted Production Entity candidate")
 			}
 		}
 	case "rejected", "outcome_unknown":

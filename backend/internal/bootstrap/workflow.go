@@ -54,7 +54,7 @@ func NewWorkflowRuntime(
 		return nil, errors.New("workflow runtime dependencies are required")
 	}
 	if len(sceneAnalysis) > 1 || (len(sceneAnalysis) == 1 &&
-		(sceneAnalysis[0].Sources == nil || sceneAnalysis[0].Candidates == nil)) {
+		(sceneAnalysis[0].Sources == nil || sceneAnalysis[0].Candidates == nil || sceneAnalysis[0].StructureIdentities == nil)) {
 		return nil, errors.New("scene Analysis workflow dependencies must be configured together")
 	}
 	now := func() time.Time { return time.Now().UTC() }

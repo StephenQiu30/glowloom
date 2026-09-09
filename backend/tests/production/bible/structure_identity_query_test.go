@@ -45,6 +45,40 @@ func (store *structureIdentityQueryStore) ReadCurrentStructureIdentity(
 	return store.value, store.receipt, store.commandReceiptID, store.err
 }
 
+func (store *structureIdentityQueryStore) ReadExactStructureIdentity(
+	_ context.Context,
+	_, _, versionID string,
+) (domain.StructureIdentitySetVersion, error) {
+	store.calls++
+	if store.err != nil {
+		return domain.StructureIdentitySetVersion{}, store.err
+	}
+	if store.value.ID != versionID {
+		return domain.StructureIdentitySetVersion{}, app.ErrNotFound
+	}
+	return store.value, nil
+}
+
+func TestStructureIdentityQueryReadsOnlyRequestedFormalVersion(t *testing.T) {
+	workspaceID, projectID, versionID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	store := &structureIdentityQueryStore{value: domain.StructureIdentitySetVersion{
+		SchemaVersion: domain.StructureIdentitySetSchemaVersion,
+		ID:            versionID, WorkspaceID: workspaceID, ProjectID: projectID, Version: 3,
+		ContentHash: structureIdentityHash("formal-version"), CreatedAt: time.Now().UTC(),
+	}}
+	query := app.NewStructureIdentityQuery(
+		store,
+		textQueryProject{value: projectdomain.Project{ID: projectID, WorkspaceID: workspaceID}},
+	)
+	got, err := query.GetExact(context.Background(), app.Actor{}, projectID, versionID)
+	if err != nil || got.ID != versionID || store.calls != 1 {
+		t.Fatalf("exact Structure Identity=%#v calls=%d err=%v", got, store.calls, err)
+	}
+	if _, err = query.GetExact(context.Background(), app.Actor{}, projectID, uuid.NewString()); err == nil {
+		t.Fatal("missing exact Structure Identity version reported as success")
+	}
+}
+
 func TestStructureIdentityQueryRequiresCurrentAccessAndExactReceipt(t *testing.T) {
 	workspaceID, projectID, versionID, decisionID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
 	value := domain.StructureIdentitySetVersion{

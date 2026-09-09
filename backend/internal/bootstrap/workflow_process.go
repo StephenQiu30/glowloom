@@ -196,7 +196,10 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
 		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations, providerService,
 		episodeSegmentationService, episodeAnalysisService,
-		workflowproduction.SceneAnalysisDependencies{Sources: scriptSourceService, Candidates: sceneAnalysisService},
+		workflowproduction.SceneAnalysisDependencies{
+			Sources: scriptSourceService, Candidates: sceneAnalysisService,
+			StructureIdentities: bibleapp.NewStructureIdentityQuery(bibleStore, projectService),
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("workflow runtime composition failed: %w", err)

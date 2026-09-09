@@ -228,7 +228,7 @@
 - [ ] `VPA-P0-001`（`VP-I01`）：ScriptSpanCandidate 用 code-point start/end、source_hash、临时 span_id 和 coverage proof；范围越界、重叠或缺口拒绝。 最低证据：Unicode/property。
 - [ ] `VPA-P0-002`（`VP-I01`）：SceneFactCandidate 是 style-blind，保留 raw_character_mentions、raw_prop_mentions、地点、时间、动作、对白和逐字段 evidence spans。 最低证据：Golden + Injection。
 - [ ] `VPA-P0-003`（`VP-I02`）：IdentityResolutionCandidate 对 raw mention 做 resolved/ambiguous/rejected 精确分区，输出 confidence、rationale 和 evidence，不产生正式 Character。 最低证据：Partition。
-- [ ] `VPA-P0-004`（`VP-I03`）：ProductionWorldCandidate 严格区分 Character、CharacterAppearance、Location、Prop、PropState，并为每项给出 Evidence XOR CreatorDecision 提案。 最低证据：Schema。
+- [x] `VPA-P0-004`（`VP-I03`）：ProductionWorldCandidate 严格区分 Character、CharacterAppearance、Location、Prop、PropState，并为每项给出 Evidence XOR CreatorDecision 提案。 最低证据：Schema。已由 `production_entity_fragment_candidate` strict schema 覆盖；正式发布仍由后续 Gate 2 Owner Apply 完成。
 - [ ] `VPA-P0-005`（`VP-I03`）：SceneOccurrenceCandidate 对 scene/subject/appearance_or_state/evidence/ordering 精确绑定，不以名称或 fuzzy search 代替身份。 最低证据：Contract。
 - [ ] `VPA-P0-006`（`VP-I03`）：InteractionContinuityCandidate 同时输出人物—道具几何、持有/接触、相对尺度/朝向与跨场 appearance/prop state ledger。 最低证据：Journey。
 - [ ] `VPA-P0-007`（`VP-I03`）：P0 Candidate 中的所有临时 ID 只能在同一 Candidate graph 内引用；Backend Apply 负责机械分配与返回正式 identity map。 最低证据：Integration。
@@ -355,13 +355,13 @@
 
 ### `VP-I03` — 制作世界、人物多形象、道具交互与 Gate 2
 
-- 状态：未开始
-- Git 基线/提交：待记录
-- Red 命令与失败：待记录
-- Green/定向验证：待记录
-- 全量 CI：待记录
-- 真实输入/产物/事实对账：待记录
-- 未覆盖条件与残余风险：待记录
+- 状态：进行中；`derive_production_entities` 的 strict Candidate、Backend 工作流节点和真实 Temporal 纵向闭环已完成，SceneOccurrence、Interaction/Continuity 与 Gate 2 尚未实现。
+- Git 基线/提交：基线 `b7e5b67e`；本阶段证据随本记录所在的独立功能提交交付。
+- Red 命令与失败：`agent/.venv/bin/pytest -q tests/contract/test_production_entity_derivation_contract.py` 首次因阶段与 schema 未注册失败；`go test ./tests/agent -run ProductionEntity -count=1` 首次因 Production Entity contract 尚不存在而编译失败。
+- Green/定向验证：Agent Production Entity 与既有 Scene Analysis 四组契约 `28 passed`；Backend Agent/Authoring/StructureIdentity Query 定向包通过；固定 `lanverse_test` 的 `TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays` 通过。
+- 全量 CI：`gofmt` 与 `go vet ./...` 通过；同一本机 PostgreSQL 上从唯一 GORM Catalog 建立的隔离验收库执行 `LANVERSE_TEST_DATABASE_URL=... LANVERSE_TEST_TEMPORAL_ADDRESS=127.0.0.1:7233 go test -p 1 ./... -count=1` 全部通过；Agent 全量 `160 passed, 60 skipped`，Ruff 与 Pyright 通过。此处是提交前质量门禁，不代表 VP-I03 全部完成。
+- 真实输入/产物/事实对账：真实 PostgreSQL + Homebrew Temporal 运行 `TestStructureIdentityGateResumesRealTemporalWorkflow` 通过；局部修复运行经 Gate 1 批准后读取精确 `StructureIdentitySetVersion` 与内容定址 `SceneFactCandidate`，持久化 `production_entity_fragment_candidate`，最终 WorkflowRun 为 `SUCCEEDED`。Agent 只写候选，正式身份仍由 Backend Owner 持有。
+- 未覆盖条件与残余风险：尚未执行真实 Codex CLI 语义质量验证；当前确定性旅程只覆盖单角色初始形象和两处地点状态。固定 `lanverse_test` 仍残留非 GORM Catalog 表 `agt_scene_analysis_invocation_upstreams`，其单一事实源校验会失败；本次未删除用户现有数据库对象。最终浏览器验收按约定待全部开发完成后执行。
 
 ### `VP-I04` — storygraph-production 制作投影与可追溯 Query
 

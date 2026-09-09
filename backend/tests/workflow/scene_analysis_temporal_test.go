@@ -14,6 +14,7 @@ import (
 
 	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
 	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
@@ -129,10 +130,15 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bibleStore := biblegorm.New(database)
+	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString)
+	structureIdentityQuery := bibleapp.NewStructureIdentityQuery(bibleStore, projectService)
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		workflowproduction.SceneAnalysisDependencies{Sources: sourceService, Candidates: sceneService},
+		workflowproduction.SceneAnalysisDependencies{
+			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
+		},
 	)
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString, ClaimLease: 15 * time.Minute,
@@ -256,10 +262,9 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		t.Fatalf("request bounded Structure Identity repair: %v", err)
 	}
 
-	bibleService := bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
+	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 	})
-	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString)
 	signalService := workflowapp.NewSignalService(workflowStore, temporalRuntime, workflowapp.SignalConfig{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil),
@@ -360,6 +365,56 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		signalIntentCount != 1 || signalReceiptCount != 1 || repairRunCount != 1 {
 		t.Fatalf("Structure Identity Temporal repair facts: repair=%d apply=%d intent=%d receipt=%d",
 			repairRunCount, applyCount, signalIntentCount, signalReceiptCount)
+	}
+	repairClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: repairTask.ID.String(), ExpectedRevision: repairTask.Revision,
+		IdempotencyKey: "structure-identity-temporal-repair-claim:" + repairTask.ID.String(),
+	})
+	if err != nil {
+		t.Fatalf("claim repaired Structure Identity review: %v", err)
+	}
+	repairApproval, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: repairTask.ID.String(), ClaimToken: repairClaim.ClaimToken, Decision: "approved",
+		ExpectedTaskRevision: repairClaim.Task.Revision, ExpectedSubjectRevision: repairClaim.Task.SubjectRevision,
+		ExpectedSubjectHash: repairClaim.Task.SubjectHash,
+		IdempotencyKey:      "structure-identity-temporal-repair-approval:" + repairTask.ID.String(),
+	})
+	if err != nil {
+		t.Fatalf("approve repaired Structure Identity review: %v", err)
+	}
+	approvalCoordination, err := coordinator.ResumeHumanGate(ctx, workflowActor, repairApproval.Decision.ID)
+	if err != nil || approvalCoordination.WorkflowResumeStatus != "completed" {
+		t.Fatalf("resume approved Structure Identity repair: coordination=%#v err=%v", approvalCoordination, err)
+	}
+	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
+		var current model.WorkflowRun
+		if loadErr := database.First(&current, "id = ?", repairRun.ID).Error; loadErr != nil {
+			return false, loadErr
+		}
+		return current.Status == "SUCCEEDED", nil
+	})
+	var productionEntityInvocation model.SceneAnalysisInvocationRecord
+	if err = database.Where(
+		"workflow_run_id = ? AND stage_key = ?", repairRun.ID, "derive_production_entities",
+	).First(&productionEntityInvocation).Error; err != nil {
+		t.Fatalf("query Temporal Production Entity invocation: %v", err)
+	}
+	var productionEntityCandidate model.SceneAnalysisCandidateRevision
+	if err = database.First(
+		&productionEntityCandidate, "source_invocation_id = ?", productionEntityInvocation.ID,
+	).Error; err != nil {
+		t.Fatalf("query Temporal Production Entity Candidate: %v", err)
+	}
+	var productionEntityPayload contract.SceneAnalysisPayload
+	var productionEntityInput contract.ProductionEntityDerivationInput
+	if err = json.Unmarshal(productionEntityInvocation.Payload, &productionEntityPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(productionEntityPayload.StageInput, &productionEntityInput); err != nil ||
+		productionEntityCandidate.CandidateType != "production_entity_fragment_candidate" ||
+		contract.ValidateProductionEntityFragmentCandidate(json.RawMessage(productionEntityCandidate.Candidate), productionEntityInput) != nil {
+		t.Fatalf("validate Temporal Production Entity Candidate: input=%#v candidate=%#v err=%v",
+			productionEntityInput, productionEntityCandidate, err)
 	}
 }
 

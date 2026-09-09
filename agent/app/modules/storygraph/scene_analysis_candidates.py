@@ -165,9 +165,7 @@ class ScriptSpanCandidate(StrictSceneAnalysisModel):
 
         previous_end = 0
         keys: set[str] = set()
-        supplied_scene_keys: dict[str, list[str]] = {
-            key: [] for key in expected_scene_keys
-        }
+        supplied_scene_keys: dict[str, list[str]] = {key: [] for key in expected_scene_keys}
         for span in self.spans:
             bounds = episode_bounds.get(span.episode_span_id)
             if (
@@ -524,8 +522,7 @@ class StructureIdentityReviewCandidate(StrictSceneAnalysisModel):
             raise ValueError("structure identity review target drifted")
         supplied_by_key = {issue.issue_key: issue for issue in self.review_issues}
         if any(
-            supplied_by_key.get(issue.issue_key) != issue
-            for issue in value.deterministic_issues
+            supplied_by_key.get(issue.issue_key) != issue for issue in value.deterministic_issues
         ):
             raise ValueError("structure identity review changed a deterministic issue")
         deterministic_keys = {issue.issue_key for issue in value.deterministic_issues}
@@ -534,6 +531,244 @@ class StructureIdentityReviewCandidate(StrictSceneAnalysisModel):
                 evidence.validate_for_text(value.normalized_text)
             if issue.issue_key not in deterministic_keys and not issue.evidence:
                 raise ValueError("semantic review issue must carry source evidence")
+
+
+class CreatorDecisionProposal(StrictSceneAnalysisModel):
+    decision_key: str = Field(pattern=r"^decision_[a-z0-9_]{1,100}$")
+    rationale: str = Field(min_length=1)
+
+
+class ProductionSourceBasis(StrictSceneAnalysisModel):
+    provenance: Literal["source_explicit", "inferred", "user_supplied"]
+    evidence: list[SourceEvidenceSpan]
+    creator_decision_proposal: CreatorDecisionProposal | None
+
+    @model_validator(mode="after")
+    def validate_exactly_one_source(self) -> ProductionSourceBasis:
+        if bool(self.evidence) == (self.creator_decision_proposal is not None):
+            raise ValueError("production entity source must be Evidence XOR CreatorDecision")
+        if self.provenance == "user_supplied" and self.creator_decision_proposal is None:
+            raise ValueError("user-supplied production entity data requires a decision proposal")
+        if self.provenance != "user_supplied" and self.creator_decision_proposal is not None:
+            raise ValueError("creator decisions must be marked user_supplied")
+        return self
+
+
+class ProductionSemanticSlot(StrictSceneAnalysisModel):
+    slot_key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,80}$")
+    resolution: Literal["known", "unspecified_design_gap", "not_applicable"]
+    value: str | None
+    design_gap_key: str | None
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> ProductionSemanticSlot:
+        if self.resolution == "known":
+            if self.value is None or not self.value.strip() or self.design_gap_key is not None:
+                raise ValueError("known production slot requires only a value")
+        elif self.resolution == "unspecified_design_gap":
+            if self.value is not None or self.design_gap_key is None:
+                raise ValueError("unspecified production slot requires only a DesignGap")
+        elif self.value is not None or self.design_gap_key is not None:
+            raise ValueError("not-applicable production slot cannot carry a value or DesignGap")
+        return self
+
+
+class ProductionStateFragment(StrictSceneAnalysisModel):
+    state_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
+    state_kind: Literal["character_appearance", "location_state", "prop_state"]
+    complete_slots: list[ProductionSemanticSlot] = Field(min_length=1)
+    applicable_scene_scope_keys: list[str] = Field(min_length=1)
+    entry_reason: str = Field(min_length=1)
+    exit_reason: str = Field(min_length=1)
+    previous_state_key: str | None
+    next_state_key: str | None
+    basis: ProductionSourceBasis
+
+    @model_validator(mode="after")
+    def validate_state(self) -> ProductionStateFragment:
+        slot_keys = [value.slot_key for value in self.complete_slots]
+        if slot_keys != sorted(set(slot_keys)):
+            raise ValueError("production state slots must be sorted and unique")
+        if self.applicable_scene_scope_keys != sorted(set(self.applicable_scene_scope_keys)):
+            raise ValueError("production state scopes must be sorted and unique")
+        if any(not value.startswith("scene:") for value in self.applicable_scene_scope_keys):
+            raise ValueError("production state scope must reference a formal Scene")
+        return self
+
+
+class ProductionEntityFragment(StrictSceneAnalysisModel):
+    identity_key: str = Field(min_length=1)
+    kind: Literal["character", "location", "prop"]
+    specification_key: str = Field(pattern=r"^specification_[a-z0-9_]{1,120}$")
+    specification_slots: list[ProductionSemanticSlot] = Field(min_length=1)
+    basis: ProductionSourceBasis
+    states: list[ProductionStateFragment] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_fragment(self) -> ProductionEntityFragment:
+        slot_keys = [value.slot_key for value in self.specification_slots]
+        state_keys = [value.state_key for value in self.states]
+        expected_state_kind = {
+            "character": "character_appearance",
+            "location": "location_state",
+            "prop": "prop_state",
+        }[self.kind]
+        if slot_keys != sorted(set(slot_keys)):
+            raise ValueError("production specification slots must be sorted and unique")
+        if state_keys != sorted(set(state_keys)) or any(
+            value.state_kind != expected_state_kind for value in self.states
+        ):
+            raise ValueError("production states must be typed, sorted, and unique")
+        for index, state in enumerate(self.states):
+            previous_key = None if index == 0 else self.states[index - 1].state_key
+            next_key = None if index == len(self.states) - 1 else self.states[index + 1].state_key
+            if state.previous_state_key != previous_key or state.next_state_key != next_key:
+                raise ValueError("production state lineage must be a complete ordered chain")
+        return self
+
+
+class ProductionWorldClaimFragment(StrictSceneAnalysisModel):
+    claim_key: str = Field(pattern=r"^claim_[a-z0-9_]{1,120}$")
+    claim_type: Literal["world_rule", "relationship", "story_arc", "plot_thread"]
+    subject_identity_keys: list[str] = Field(min_length=1)
+    statement: str = Field(min_length=1)
+    basis: ProductionSourceBasis
+
+    @model_validator(mode="after")
+    def validate_subjects(self) -> ProductionWorldClaimFragment:
+        if self.subject_identity_keys != sorted(set(self.subject_identity_keys)):
+            raise ValueError("production world claim subjects must be sorted and unique")
+        return self
+
+
+class ProductionDesignGap(StrictSceneAnalysisModel):
+    gap_key: str = Field(pattern=r"^gap_[a-z0-9_]{1,120}$")
+    subject_key: str = Field(min_length=1)
+    field_key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,80}$")
+    missing_reason: str = Field(min_length=1)
+    source_constraints: list[SourceEvidenceSpan]
+    mutually_exclusive_options: list[str]
+    impacted_scene_scope_keys: list[str] = Field(min_length=1)
+    allowed_resolution_sources: list[Literal["creator_decision", "visual_foundation"]] = Field(
+        min_length=1
+    )
+
+    @model_validator(mode="after")
+    def validate_gap(self) -> ProductionDesignGap:
+        if self.mutually_exclusive_options != sorted(set(self.mutually_exclusive_options)):
+            raise ValueError("DesignGap options must be sorted and unique")
+        if self.impacted_scene_scope_keys != sorted(set(self.impacted_scene_scope_keys)):
+            raise ValueError("DesignGap scopes must be sorted and unique")
+        if self.allowed_resolution_sources != sorted(set(self.allowed_resolution_sources)):
+            raise ValueError("DesignGap resolution sources must be sorted and unique")
+        return self
+
+
+class ProductionEntityFragmentCandidate(StrictSceneAnalysisModel):
+    source_version_id: UUID
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    structure_identity_set_version_id: UUID
+    structure_identity_set_version_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_fact_candidate_revision_id: UUID
+    scene_fact_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    entities: list[ProductionEntityFragment] = Field(min_length=1)
+    world_claims: list[ProductionWorldClaimFragment]
+    design_gaps: list[ProductionDesignGap]
+    review_issues: list[CandidateReviewIssue]
+
+    @model_validator(mode="after")
+    def validate_ordering(self) -> ProductionEntityFragmentCandidate:
+        entity_keys = [value.identity_key for value in self.entities]
+        claim_keys = [value.claim_key for value in self.world_claims]
+        gap_keys = [value.gap_key for value in self.design_gaps]
+        issue_keys = [value.issue_key for value in self.review_issues]
+        if entity_keys != sorted(set(entity_keys)):
+            raise ValueError("production entities must be sorted and unique")
+        if claim_keys != sorted(set(claim_keys)):
+            raise ValueError("production world claims must be sorted and unique")
+        if gap_keys != sorted(set(gap_keys)):
+            raise ValueError("production DesignGaps must be sorted and unique")
+        if issue_keys != sorted(set(issue_keys)):
+            raise ValueError("production entity review issues must be sorted and unique")
+        return self
+
+    def validate_for(self, value: object) -> None:
+        from app.harness.scene_analysis_schemas import ProductionEntityDerivationInput
+
+        if not isinstance(value, ProductionEntityDerivationInput):
+            raise ValueError("production entity derivation input is invalid")
+        if (
+            self.source_version_id != value.source_version_id
+            or self.source_hash != value.source_hash
+            or self.structure_identity_set_version_id != value.structure_identity_set_version_id
+            or self.structure_identity_set_version_hash != value.structure_identity_set_version_hash
+            or self.scene_fact_candidate_revision_id != value.scene_fact_candidate_revision_id
+            or self.scene_fact_candidate_revision_hash != value.scene_fact_candidate_revision_hash
+        ):
+            raise ValueError("production entity lineage drifted")
+
+        expected_identities = {
+            item.identity_key: item.kind for item in value.structure_identity_set.identities
+        }
+        supplied_identities = {item.identity_key: item.kind for item in self.entities}
+        if supplied_identities != expected_identities:
+            raise ValueError(
+                "production entity candidate must cover every formal identity exactly once"
+            )
+        allowed_scopes = {item.scope_key for item in value.structure_identity_set.scene_refs}
+        evidence_universe = value.scene_fact_evidence_universe()
+        subject_keys = set(expected_identities)
+        gap_keys = {gap.gap_key for gap in self.design_gaps}
+
+        for entity in self.entities:
+            subject_keys.add(entity.specification_key)
+            self._validate_basis(entity.basis, value.normalized_text, evidence_universe)
+            for slot in entity.specification_slots:
+                if slot.design_gap_key is not None and slot.design_gap_key not in gap_keys:
+                    raise ValueError("production specification references an unknown DesignGap")
+            for state in entity.states:
+                subject_keys.add(state.state_key)
+                if not set(state.applicable_scene_scope_keys).issubset(allowed_scopes):
+                    raise ValueError("production state references an unknown formal Scene")
+                self._validate_basis(state.basis, value.normalized_text, evidence_universe)
+                for slot in state.complete_slots:
+                    if slot.design_gap_key is not None and slot.design_gap_key not in gap_keys:
+                        raise ValueError("production state references an unknown DesignGap")
+        for claim in self.world_claims:
+            if not set(claim.subject_identity_keys).issubset(expected_identities):
+                raise ValueError("production world claim references an unknown formal identity")
+            self._validate_basis(claim.basis, value.normalized_text, evidence_universe)
+        for gap in self.design_gaps:
+            if gap.subject_key not in subject_keys or not set(
+                gap.impacted_scene_scope_keys
+            ).issubset(allowed_scopes):
+                raise ValueError("production DesignGap references an unknown subject or Scene")
+            for evidence in gap.source_constraints:
+                self._validate_evidence(evidence, value.normalized_text, evidence_universe)
+        for issue in self.review_issues:
+            for evidence in issue.evidence:
+                self._validate_evidence(evidence, value.normalized_text, evidence_universe)
+
+    @staticmethod
+    def _validate_basis(
+        basis: ProductionSourceBasis,
+        normalized_text: str,
+        evidence_universe: set[tuple[object, ...]],
+    ) -> None:
+        for evidence in basis.evidence:
+            ProductionEntityFragmentCandidate._validate_evidence(
+                evidence, normalized_text, evidence_universe
+            )
+
+    @staticmethod
+    def _validate_evidence(
+        evidence: SourceEvidenceSpan,
+        normalized_text: str,
+        evidence_universe: set[tuple[object, ...]],
+    ) -> None:
+        evidence.validate_for_text(normalized_text)
+        if _source_evidence_key(evidence) not in evidence_universe:
+            raise ValueError("production entity Evidence is outside the frozen SceneFacts")
 
 
 def _identity_mention_key(value: IdentityMentionRef) -> tuple[object, ...]:

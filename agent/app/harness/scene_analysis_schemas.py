@@ -8,7 +8,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.modules.storygraph.scene_analysis_candidates import CandidateReviewIssue
+from app.modules.storygraph.scene_analysis_candidates import (
+    CandidateReviewIssue,
+    SourceEvidenceSpan,
+)
 from app.protocol.canonical import production_canonical_hash
 
 SceneAnalysisStageKey = Literal[
@@ -16,6 +19,7 @@ SceneAnalysisStageKey = Literal[
     "extract_scene_facts",
     "resolve_identities",
     "review_candidate",
+    "derive_production_entities",
 ]
 
 
@@ -32,6 +36,7 @@ class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
         "scene-fact-candidate-production",
         "identity-resolution-candidate-production",
         "structure-identity-review-candidate-production",
+        "production-entity-fragment-candidate-production",
     ]
 
     @model_validator(mode="after")
@@ -44,6 +49,10 @@ class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
                 "review_candidate",
                 "structure_identity",
             ): "structure-identity-review-candidate-production",
+            (
+                "derive_production_entities",
+                "default",
+            ): "production-entity-fragment-candidate-production",
         }.get((self.stage_key, self.profile_key))
         if self.output_schema_version != expected:
             raise ValueError("Scene Analysis output schema does not match its stage")
@@ -61,7 +70,11 @@ class ScriptSourceVersionIdentity(StrictSceneAnalysisModel):
 
 class SceneAnalysisCandidateRevisionIdentity(StrictSceneAnalysisModel):
     stage_key: Literal[
-        "propose_script_spans", "extract_scene_facts", "resolve_identities", "review_candidate"
+        "propose_script_spans",
+        "extract_scene_facts",
+        "resolve_identities",
+        "review_candidate",
+        "derive_production_entities",
     ]
     shard_key: str = Field(min_length=1)
     candidate_revision_id: UUID
@@ -326,6 +339,191 @@ class StructureIdentityReviewInput(StrictSceneAnalysisModel):
         return self
 
 
+class FrozenStructureIdentityCandidateRef(StrictSceneAnalysisModel):
+    stage_key: str = Field(min_length=1)
+    shard_key: str = Field(min_length=1)
+    candidate_revision_id: UUID
+    candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_invocation_id: UUID
+    source_result_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    skill_release_id: UUID
+    skill_release_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    stage_release_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bundle_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    agent_image_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class FrozenEpisodeRef(StrictSceneAnalysisModel):
+    temporary_episode_id: str = Field(pattern=r"^episode_[a-z0-9_]{1,80}$")
+    episode_id: UUID
+    episode_revision: int = Field(ge=1)
+    position: int = Field(ge=1)
+    script_version_id: UUID
+    script_version: int = Field(ge=1)
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class FrozenStructureIdentitySceneRef(StrictSceneAnalysisModel):
+    temporary_episode_id: str = Field(pattern=r"^episode_[a-z0-9_]{1,80}$")
+    episode_id: UUID
+    temporary_span_id: str = Field(pattern=r"^span_[a-z0-9_]{1,80}$")
+    temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
+    scene_owner_logical_id: UUID
+    scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
+    evidence_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class FrozenStructureIdentity(StrictSceneAnalysisModel):
+    temporary_identity_key: str = Field(
+        pattern=r"^identity_(character|location|prop)_[a-z0-9_]{1,80}$"
+    )
+    identity_key: str = Field(min_length=1)
+    kind: Literal["character", "location", "prop"]
+    resolution: Literal["new", "reuse"]
+    reuse_identity_key: str | None
+    canonical_name: str = Field(min_length=1)
+    aliases: list[str] = Field(min_length=1)
+
+
+class FrozenStructureIdentityMentionMapping(StrictSceneAnalysisModel):
+    kind: Literal["character", "location", "prop"]
+    temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
+    text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    exact_anchor: str = Field(min_length=1)
+    resolution: Literal["resolved", "unresolved"]
+    identity_key: str | None
+
+
+class FrozenStructureIdentityCoverage(StrictSceneAnalysisModel):
+    scene_count: int = Field(ge=1)
+    identity_count: int = Field(ge=1)
+    mention_count: int = Field(ge=0)
+    resolved_count: int = Field(ge=0)
+    unresolved_count: int = Field(ge=0)
+    mention_universe_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scope_set_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class FrozenStructureIdentitySet(StrictSceneAnalysisModel):
+    schema_version: Literal["structure-identity-set-production"]
+    id: UUID
+    workspace_id: UUID
+    project_id: UUID
+    version: int = Field(ge=1)
+    parent_version_id: UUID | None
+    gate_input_id: UUID
+    gate_input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_decision_id: UUID
+    project_episode_receipt_id: UUID
+    document_revision_id: UUID
+    span_index_id: UUID
+    candidate_refs: list[FrozenStructureIdentityCandidateRef]
+    episode_refs: list[FrozenEpisodeRef] = Field(min_length=1)
+    scene_refs: list[FrozenStructureIdentitySceneRef] = Field(min_length=1)
+    identities: list[FrozenStructureIdentity] = Field(min_length=1)
+    mention_mappings: list[FrozenStructureIdentityMentionMapping]
+    coverage: FrozenStructureIdentityCoverage
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    created_by: UUID
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def validate_identity_set(self) -> FrozenStructureIdentitySet:
+        identity_keys = [value.identity_key for value in self.identities]
+        scene_keys = [value.scope_key for value in self.scene_refs]
+        if len(identity_keys) != len(set(identity_keys)) or len(scene_keys) != len(set(scene_keys)):
+            raise ValueError("frozen StructureIdentitySet contains duplicate identities or Scenes")
+        identity_kinds = {value.identity_key: value.kind for value in self.identities}
+        scene_ids = {value.temporary_scene_id for value in self.scene_refs}
+        for value in self.mention_mappings:
+            if value.temporary_scene_id not in scene_ids:
+                raise ValueError("frozen identity mention references an unknown Scene")
+            if (value.resolution == "resolved") != (value.identity_key is not None):
+                raise ValueError("frozen identity mention resolution is inconsistent")
+            if (
+                value.identity_key is not None
+                and identity_kinds.get(value.identity_key) != value.kind
+            ):
+                raise ValueError("frozen identity mention references a different identity kind")
+        if (
+            self.coverage.scene_count != len(self.scene_refs)
+            or self.coverage.identity_count != len(self.identities)
+            or self.coverage.mention_count != len(self.mention_mappings)
+            or self.coverage.resolved_count + self.coverage.unresolved_count
+            != self.coverage.mention_count
+        ):
+            raise ValueError("frozen StructureIdentitySet coverage is invalid")
+        return self
+
+
+class ProductionEntityDerivationInput(StrictSceneAnalysisModel):
+    source_version_id: UUID
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    normalized_text: str = Field(min_length=1)
+    structure_identity_set_version_id: UUID
+    structure_identity_set_version_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    structure_identity_set: FrozenStructureIdentitySet
+    scene_fact_candidate_revision_id: UUID
+    scene_fact_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_fact_candidate: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_frozen_inputs(self) -> ProductionEntityDerivationInput:
+        from app.modules.storygraph.scene_analysis_candidates import SceneFactCandidate
+
+        facts = SceneFactCandidate.model_validate(self.scene_fact_candidate)
+        if (
+            hashlib.sha256(self.normalized_text.encode("utf-8")).hexdigest() != self.source_hash
+            or facts.source_version_id != self.source_version_id
+            or facts.source_hash != self.source_hash
+            or self.structure_identity_set.id != self.structure_identity_set_version_id
+            or self.structure_identity_set.content_hash != self.structure_identity_set_version_hash
+            or self.structure_identity_set.document_revision_id != self.source_version_id
+        ):
+            raise ValueError("production entity frozen input lineage drifted")
+        expected_scenes = {
+            scene.temporary_scene_id: (scene.source_start, scene.source_end)
+            for scene in facts.scenes
+        }
+        supplied_scenes = {
+            scene.temporary_scene_id: (scene.source_start, scene.source_end)
+            for scene in self.structure_identity_set.scene_refs
+        }
+        if supplied_scenes != expected_scenes:
+            raise ValueError("formal StructureIdentitySet does not cover the frozen SceneFacts")
+        for evidence in self.scene_fact_evidence():
+            evidence.validate_for_text(self.normalized_text)
+        return self
+
+    def scene_fact_evidence(self) -> list[SourceEvidenceSpan]:
+        from app.modules.storygraph.scene_analysis_candidates import SceneFactCandidate
+
+        facts = SceneFactCandidate.model_validate(self.scene_fact_candidate)
+        evidence: list[SourceEvidenceSpan] = []
+        for scene in facts.scenes:
+            if scene.location is not None:
+                evidence.append(scene.location.evidence)
+            if scene.time is not None:
+                evidence.append(scene.time.evidence)
+            evidence.extend(value.evidence for value in scene.actions)
+            evidence.extend(value.evidence for value in scene.dialogues)
+            evidence.extend(value.evidence for value in scene.raw_character_mentions)
+            evidence.extend(value.evidence for value in scene.raw_prop_mentions)
+        return evidence
+
+    def scene_fact_evidence_universe(self) -> set[tuple[object, ...]]:
+        return {
+            (item.source_start, item.source_end, item.text_hash, item.exact_anchor)
+            for item in self.scene_fact_evidence()
+        }
+
+
 class SceneAnalysisPayload(StrictSceneAnalysisModel):
     variant: SceneAnalysisStageVariant
     scope: SceneAnalysisScope
@@ -376,6 +574,25 @@ class SceneAnalysisPayload(StrictSceneAnalysisModel):
                 or self.shard.codepoint_end != len(value.normalized_text)
             ):
                 raise ValueError("identity input does not match its frozen SceneFacts")
+        elif self.variant.stage_key == "derive_production_entities":
+            value = ProductionEntityDerivationInput.model_validate(self.stage_input)
+            if (
+                len(self.upstream_candidates) != 1
+                or self.upstream_candidates[0].stage_key != "extract_scene_facts"
+                or source.version_id != value.source_version_id
+                or source.content_hash != value.source_hash
+                or self.upstream_candidates[0].candidate_revision_id
+                != value.scene_fact_candidate_revision_id
+                or self.upstream_candidates[0].candidate_revision_hash
+                != value.scene_fact_candidate_revision_hash
+                or self.scope.workspace_id != value.structure_identity_set.workspace_id
+                or self.scope.project_id != value.structure_identity_set.project_id
+                or self.shard.codepoint_start != 0
+                or self.shard.codepoint_end != len(value.normalized_text)
+            ):
+                raise ValueError(
+                    "production entity input does not match its frozen formal identities"
+                )
         else:
             value = StructureIdentityReviewInput.model_validate(self.stage_input)
             expected = {
@@ -549,6 +766,7 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
         "scene_fact_candidate",
         "identity_resolution_candidate",
         "structure_identity_review_candidate",
+        "production_entity_fragment_candidate",
     ]
     candidate: dict[str, Any] | None
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")

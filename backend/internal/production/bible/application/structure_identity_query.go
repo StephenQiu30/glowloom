@@ -18,6 +18,12 @@ type StructureIdentityReader interface {
 		string,
 		string,
 	) (domain.StructureIdentitySetVersion, domain.StructureIdentityCollectionReceipt, string, error)
+	ReadExactStructureIdentity(
+		context.Context,
+		string,
+		string,
+		string,
+	) (domain.StructureIdentitySetVersion, error)
 }
 
 type StructureIdentityProjectReader interface {
@@ -96,4 +102,51 @@ func (query *StructureIdentityQuery) GetCurrent(
 	return StructureIdentitySnapshot{
 		Version: version, Receipt: receipt, CommandReceiptID: commandReceiptID,
 	}, nil
+}
+
+func (query *StructureIdentityQuery) GetExact(
+	ctx context.Context,
+	actor Actor,
+	projectID, versionID string,
+) (domain.StructureIdentitySetVersion, error) {
+	if _, err := uuid.Parse(projectID); err != nil {
+		return domain.StructureIdentitySetVersion{}, &Error{
+			Code: "validation_failed", Message: "Invalid Project identity", Status: 422,
+		}
+	}
+	if _, err := uuid.Parse(versionID); err != nil {
+		return domain.StructureIdentitySetVersion{}, &Error{
+			Code: "validation_failed", Message: "Invalid Structure Identity identity", Status: 422,
+		}
+	}
+	project, err := query.projects.Get(
+		ctx,
+		projectapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion},
+		projectID,
+	)
+	if err != nil {
+		return domain.StructureIdentitySetVersion{}, err
+	}
+	version, err := query.versions.ReadExactStructureIdentity(
+		ctx,
+		project.WorkspaceID,
+		projectID,
+		versionID,
+	)
+	if errors.Is(err, ErrNotFound) {
+		return domain.StructureIdentitySetVersion{}, &Error{
+			Code: "not_found", Message: "Structure Identity result not found", Status: 404,
+		}
+	}
+	if err != nil {
+		return domain.StructureIdentitySetVersion{}, err
+	}
+	if version.SchemaVersion != domain.StructureIdentitySetSchemaVersion || version.ID != versionID ||
+		version.WorkspaceID != project.WorkspaceID || version.ProjectID != projectID || version.Version < 1 ||
+		!validStructureIdentityHash(version.ContentHash) || version.CreatedAt.IsZero() {
+		return domain.StructureIdentitySetVersion{}, &Error{
+			Code: "formal_version_drift", Message: "Stored Structure Identity result has drifted", Status: 409,
+		}
+	}
+	return version, nil
 }

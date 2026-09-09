@@ -66,13 +66,16 @@ type Candidate struct {
 }
 
 type ExecuteCommand struct {
-	WorkflowRunID       string
-	NodeRunID           string
-	StageKey            string
-	Source              SourceInput
-	Upstreams           []Candidate
-	DeterministicIssues []contract.CandidateReviewIssue
-	Repair              *contract.StructureIdentityRepairDirective
+	WorkflowRunID                   string
+	NodeRunID                       string
+	StageKey                        string
+	Source                          SourceInput
+	Upstreams                       []Candidate
+	DeterministicIssues             []contract.CandidateReviewIssue
+	Repair                          *contract.StructureIdentityRepairDirective
+	StructureIdentitySetVersionID   string
+	StructureIdentitySetVersionHash string
+	StructureIdentitySet            json.RawMessage
 }
 
 type ReleaseRecord struct {
@@ -372,10 +375,11 @@ func outcomeUnknownResult(
 		ClaimVersion: authorization.ClaimVersion, DispatchAuthorizationHash: authorization.Hash,
 		Status: "outcome_unknown",
 		CandidateType: map[string]string{
-			"propose_script_spans": "script_span_candidate",
-			"extract_scene_facts":  "scene_fact_candidate",
-			"resolve_identities":   "identity_resolution_candidate",
-			"review_candidate":     "structure_identity_review_candidate",
+			"propose_script_spans":       "script_span_candidate",
+			"extract_scene_facts":        "scene_fact_candidate",
+			"resolve_identities":         "identity_resolution_candidate",
+			"review_candidate":           "structure_identity_review_candidate",
+			"derive_production_entities": "production_entity_fragment_candidate",
 		}[invocation.Payload.Variant.StageKey],
 		InputHash: invocation.InputHash, Diagnostics: diagnostics, DiagnosticHash: diagnosticHash,
 		CompletedAt: completedAt,
@@ -444,6 +448,28 @@ func validateExecuteCommand(command ExecuteCommand) error {
 		}
 		return nil
 	}
+	if command.StageKey == "derive_production_entities" {
+		if len(command.Upstreams) != 1 || command.Upstreams[0].ProjectID != command.Source.ProjectID ||
+			command.Upstreams[0].CandidateType != "scene_fact_candidate" ||
+			command.Upstreams[0].StageKey != "extract_scene_facts" {
+			return &Error{Code: "invalid_upstream_candidate", Message: "Production Entity stage requires one exact SceneFact candidate"}
+		}
+		input := contract.ProductionEntityDerivationInput{
+			SourceVersionID: command.Source.VersionID, SourceHash: command.Source.ContentHash,
+			NormalizedText:                  command.Source.NormalizedText,
+			StructureIdentitySetVersionID:   command.StructureIdentitySetVersionID,
+			StructureIdentitySetVersionHash: command.StructureIdentitySetVersionHash,
+			SceneFactCandidateRevisionID:    command.Upstreams[0].ID,
+			SceneFactCandidateRevisionHash:  command.Upstreams[0].CandidateRevisionHash,
+			SceneFactCandidate:              command.Upstreams[0].Candidate,
+		}
+		var decodeErr error
+		input.StructureIdentitySet, decodeErr = contract.DecodeFrozenStructureIdentitySet(command.StructureIdentitySet)
+		if decodeErr != nil || input.Validate() != nil {
+			return &Error{Code: "invalid_formal_identity_input", Message: "Production Entity formal identity input is invalid"}
+		}
+		return nil
+	}
 	if command.StageKey != "review_candidate" || len(command.Upstreams) != 3 ||
 		command.DeterministicIssues == nil {
 		return &Error{Code: "invalid_upstream_candidate", Message: "StructureIdentityReview stage requires three exact candidates"}
@@ -468,10 +494,11 @@ func validateExecuteCommand(command ExecuteCommand) error {
 
 func (service *SceneAnalysisService) release(stageKey string, now time.Time) (ReleaseRecord, error) {
 	outputSchemaVersion := map[string]string{
-		"propose_script_spans": contract.ScriptSpanCandidateSchemaVersion,
-		"extract_scene_facts":  contract.SceneFactCandidateSchemaVersion,
-		"resolve_identities":   contract.IdentityResolutionCandidateSchemaVersion,
-		"review_candidate":     contract.StructureIdentityReviewCandidateSchemaVersion,
+		"propose_script_spans":       contract.ScriptSpanCandidateSchemaVersion,
+		"extract_scene_facts":        contract.SceneFactCandidateSchemaVersion,
+		"resolve_identities":         contract.IdentityResolutionCandidateSchemaVersion,
+		"review_candidate":           contract.StructureIdentityReviewCandidateSchemaVersion,
+		"derive_production_entities": contract.ProductionEntityFragmentCandidateSchemaVersion,
 	}[stageKey]
 	profileKey := "default"
 	if stageKey == "review_candidate" {
@@ -494,6 +521,7 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 			contract.SceneFactCandidateSchemaVersion,
 			contract.ScriptSpanCandidateSchemaVersion,
 			contract.StructureIdentityReviewCandidateSchemaVersion,
+			contract.ProductionEntityFragmentCandidateSchemaVersion,
 		},
 	})
 	skillHash, err := platformcanonical.Hash(skillMaterial)
@@ -522,10 +550,11 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 		return ReleaseRecord{}, err
 	}
 	resource := map[string]string{
-		"propose_script_spans": "references/script-spans.md",
-		"extract_scene_facts":  "references/scene-facts.md",
-		"resolve_identities":   "references/entity-reconciliation.md",
-		"review_candidate":     "references/structure-identity-review.md",
+		"propose_script_spans":       "references/script-spans.md",
+		"extract_scene_facts":        "references/scene-facts.md",
+		"resolve_identities":         "references/entity-reconciliation.md",
+		"review_candidate":           "references/structure-identity-review.md",
+		"derive_production_entities": "references/production-entities.md",
 	}[stageKey]
 	return ReleaseRecord{
 		ID: releaseID,
@@ -552,6 +581,19 @@ func buildManifest(command ExecuteCommand, now time.Time) (ManifestRecord, error
 		}
 		slices.Sort(roots)
 		encoded, _ := json.Marshal(roots)
+		var hashErr error
+		rootInputHash, hashErr = platformcanonical.Hash(encoded)
+		if hashErr != nil {
+			return ManifestRecord{}, hashErr
+		}
+	}
+	if command.StageKey == "derive_production_entities" {
+		encoded, marshalErr := json.Marshal(struct {
+			SceneFactHash, StructureIdentitySetHash string
+		}{rootInputHash, command.StructureIdentitySetVersionHash})
+		if marshalErr != nil {
+			return ManifestRecord{}, marshalErr
+		}
 		var hashErr error
 		rootInputHash, hashErr = platformcanonical.Hash(encoded)
 		if hashErr != nil {
@@ -654,6 +696,27 @@ func buildInvocation(
 			SceneFactCandidateRevisionHash: upstream.CandidateRevisionHash,
 			SceneFactCandidate:             upstream.Candidate, AllowedReuseIdentityKeys: []string{},
 			Repair: command.Repair,
+		})
+	} else if command.StageKey == "derive_production_entities" {
+		upstream := command.Upstreams[0]
+		payload.UpstreamCandidates = []contract.SceneAnalysisCandidateRevisionIdentity{{
+			StageKey: upstream.StageKey, ShardKey: "script:full",
+			CandidateRevisionID: upstream.ID, CandidateRevisionHash: upstream.CandidateRevisionHash,
+			SourceInvocationID: upstream.SourceInvocationID, SourceResultHash: upstream.SourceResultHash,
+		}}
+		identities, err := contract.DecodeFrozenStructureIdentitySet(command.StructureIdentitySet)
+		if err != nil {
+			return contract.SceneAnalysisInvocation{}, err
+		}
+		payload.StageInput, _ = json.Marshal(contract.ProductionEntityDerivationInput{
+			SourceVersionID: command.Source.VersionID, SourceHash: command.Source.ContentHash,
+			NormalizedText:                  text,
+			StructureIdentitySetVersionID:   command.StructureIdentitySetVersionID,
+			StructureIdentitySetVersionHash: command.StructureIdentitySetVersionHash,
+			StructureIdentitySet:            identities,
+			SceneFactCandidateRevisionID:    upstream.ID,
+			SceneFactCandidateRevisionHash:  upstream.CandidateRevisionHash,
+			SceneFactCandidate:              upstream.Candidate,
 		})
 	} else {
 		byStage := make(map[string]Candidate, len(command.Upstreams))

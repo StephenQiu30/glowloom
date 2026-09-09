@@ -131,12 +131,13 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 6 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 7 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
 		plan.Nodes[4].Executor != "activity.structure_identity_review" ||
-		plan.Nodes[5].Executor != "gate.structure_identity_review" {
+		plan.Nodes[5].Executor != "gate.structure_identity_review" ||
+		plan.Nodes[6].Executor != "activity.production_entity_derivation" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -158,10 +159,15 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	bibleStore := biblegorm.New(database)
+	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString)
+	structureIdentityQuery := bibleapp.NewStructureIdentityQuery(bibleStore, projectService)
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		workflowproduction.SceneAnalysisDependencies{Sources: sourceService, Candidates: sceneService},
+		workflowproduction.SceneAnalysisDependencies{
+			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
+		},
 	)
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString, ClaimLease: 15 * time.Minute,
@@ -319,10 +325,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if gateInputCount != 1 || humanTaskCount != 1 {
 		t.Fatalf("Gate replay facts: inputs=%d tasks=%d", gateInputCount, humanTaskCount)
 	}
-	bibleService := bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
+	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 	})
-	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString)
 	signalService := workflowapp.NewSignalService(
 		workflowStore, &acceptingStructureIdentitySignaler{}, workflowapp.SignalConfig{
 			Now: func() time.Time { return now }, NewID: uuid.NewString,
@@ -377,6 +382,53 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		projectReceipt != 1 || collectionReceipt != 1 || outboxCount != 1 {
 		t.Fatalf("Structure Identity SOP facts: version=%#v project_receipts=%d collection_receipts=%d outbox=%d",
 			structureVersion, projectReceipt, collectionReceipt, outboxCount)
+	}
+	if applyReceipt.OwnerReceiptID == nil || applyReceipt.OutputHash == nil {
+		t.Fatalf("Structure Identity apply receipt has no owner evidence: %#v", applyReceipt)
+	}
+	if err = runtimeService.ApplyHumanGate(ctx, workflow.ApplyHumanGateCommand{
+		WorkflowRunID: started.ID, NodeRunID: gate.NodeRunID, NodeID: gate.NodeID,
+		SignalIntentID: signalIntent.ID, Decision: "APPROVED",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+		OwnerReceiptID:      applyReceipt.OwnerReceiptID.String(), Output: ownerOutput, OutputHash: *applyReceipt.OutputHash,
+	}); err != nil {
+		t.Fatalf("apply Structure Identity Gate output: %v", err)
+	}
+	productionEntityResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[6].NodeRunID, NodeID: plan.Nodes[6].NodeID,
+		Executor: plan.Nodes[6].Executor, Attempt: 1,
+	})
+	if err != nil || productionEntityResult.Status != "SUCCEEDED" ||
+		len(productionEntityResult.Output.Bindings) != 1 ||
+		productionEntityResult.Output.Bindings[0].ValueType != "production_entity_fragment_candidate" {
+		t.Fatalf("derive Production Entity Candidate: result=%#v err=%v", productionEntityResult, err)
+	}
+	productionEntityCandidate, err := sceneService.GetCandidate(
+		ctx, fixture.projectID.String(), productionEntityResult.Output.Bindings[0].ReferenceID,
+	)
+	if err != nil {
+		t.Fatalf("query persisted Production Entity Candidate: %v", err)
+	}
+	var productionEntityInvocation model.SceneAnalysisInvocationRecord
+	if err = database.First(&productionEntityInvocation, "id = ?", productionEntityCandidate.SourceInvocationID).Error; err != nil {
+		t.Fatalf("query Production Entity invocation: %v", err)
+	}
+	var productionEntityPayload contract.SceneAnalysisPayload
+	var productionEntityInput contract.ProductionEntityDerivationInput
+	if err = json.Unmarshal(productionEntityInvocation.Payload, &productionEntityPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(productionEntityPayload.StageInput, &productionEntityInput); err != nil ||
+		productionEntityInput.StructureIdentitySetVersionID != ownerOutput.Bindings[0].ReferenceID ||
+		productionEntityInput.StructureIdentitySetVersionHash != ownerOutput.Bindings[0].ContentHash ||
+		contract.ValidateProductionEntityFragmentCandidate(productionEntityCandidate.Candidate, productionEntityInput) != nil {
+		t.Fatalf("validate persisted Production Entity Candidate: input=%#v err=%v", productionEntityInput, err)
+	}
+	var productionEntityReads []model.SceneAnalysisInvocationRead
+	if err = database.Where("invocation_id = ?", productionEntityInvocation.ID).
+		Order("position ASC").Find(&productionEntityReads).Error; err != nil || len(productionEntityReads) != 1 ||
+		productionEntityReads[0].CandidateRevisionID.String() != factOutput.Output.Bindings[0].ReferenceID {
+		t.Fatalf("Production Entity exact SceneFact read set: reads=%#v err=%v", productionEntityReads, err)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -860,6 +912,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "identities", DefinitionKey: "agent.identity_resolution", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "review", DefinitionKey: "agent.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "structure-identity-gate", DefinitionKey: "human.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "production-entities", DefinitionKey: "agent.production_entity_derivation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -876,6 +929,9 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "facts-structure-identity-gate", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "structure-identity-gate", ToPort: "facts"},
 			{ID: "identities-structure-identity-gate", FromNodeID: "identities", FromPort: "candidate", ToNodeID: "structure-identity-gate", ToPort: "identities"},
 			{ID: "review-structure-identity-gate", FromNodeID: "review", FromPort: "candidate", ToNodeID: "structure-identity-gate", ToPort: "review"},
+			{ID: "source-production-entities", FromNodeID: "source", FromPort: "source", ToNodeID: "production-entities", ToPort: "source"},
+			{ID: "facts-production-entities", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "production-entities", ToPort: "facts"},
+			{ID: "identities-production-entities", FromNodeID: "structure-identity-gate", FromPort: "identities", ToNodeID: "production-entities", ToPort: "identities"},
 		},
 	}
 }
@@ -1002,6 +1058,12 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			runtime.repairStage = invocation.Payload.Variant.StageKey
 			runtime.repairHasNote = jsonContainsKey(invocation.Payload.StageInput, "user_note")
 		}
+	} else if invocation.Payload.Variant.StageKey == "derive_production_entities" {
+		var input contract.ProductionEntityDerivationInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return contract.SceneAnalysisAttemptResult{}, err
+		}
+		candidate = buildProductionEntityCandidate(input)
 	} else {
 		var input contract.StructureIdentityReviewInput
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
@@ -1024,10 +1086,11 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		ClaimVersion: authorization.ClaimVersion, DispatchAuthorizationHash: authorization.Hash,
 		Status: "accepted",
 		CandidateType: map[string]string{
-			"propose_script_spans": "script_span_candidate",
-			"extract_scene_facts":  "scene_fact_candidate",
-			"resolve_identities":   "identity_resolution_candidate",
-			"review_candidate":     "structure_identity_review_candidate",
+			"propose_script_spans":       "script_span_candidate",
+			"extract_scene_facts":        "scene_fact_candidate",
+			"resolve_identities":         "identity_resolution_candidate",
+			"review_candidate":           "structure_identity_review_candidate",
+			"derive_production_entities": "production_entity_fragment_candidate",
 		}[invocation.Payload.Variant.StageKey],
 		Candidate: candidate, InputHash: invocation.InputHash, OutputHash: &outputHash,
 		Diagnostics: []contract.SceneAnalysisDiagnostic{}, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now,
@@ -1076,6 +1139,78 @@ func buildStructureIdentityReviewCandidate(input contract.StructureIdentityRevie
 		"identity_candidate_revision_id":     input.IdentityCandidateRevisionID,
 		"identity_candidate_revision_hash":   input.IdentityCandidateRevisionHash,
 		"review_issues":                      issues, "suggestions": suggestions,
+	})
+}
+
+func buildProductionEntityCandidate(input contract.ProductionEntityDerivationInput) json.RawMessage {
+	type identityMaterial struct {
+		kind, canonicalName string
+		evidence            []contract.SourceEvidenceSpan
+		scopes              []string
+	}
+	scenes := make(map[string]string, len(input.StructureIdentitySet.SceneRefs))
+	for _, scene := range input.StructureIdentitySet.SceneRefs {
+		scenes[scene.TemporarySceneID] = scene.ScopeKey
+	}
+	materials := make(map[string]*identityMaterial, len(input.StructureIdentitySet.Identities))
+	for _, identity := range input.StructureIdentitySet.Identities {
+		materials[identity.IdentityKey] = &identityMaterial{kind: identity.Kind, canonicalName: identity.CanonicalName}
+	}
+	for _, mapping := range input.StructureIdentitySet.MentionMappings {
+		if mapping.IdentityKey == nil {
+			continue
+		}
+		material := materials[*mapping.IdentityKey]
+		material.evidence = append(material.evidence, contract.SourceEvidenceSpan{
+			SourceStart: mapping.SourceStart, SourceEnd: mapping.SourceEnd,
+			TextHash: mapping.TextHash, ExactAnchor: mapping.ExactAnchor,
+		})
+		material.scopes = append(material.scopes, scenes[mapping.TemporarySceneID])
+	}
+	identityKeys := make([]string, 0, len(materials))
+	for identityKey := range materials {
+		identityKeys = append(identityKeys, identityKey)
+	}
+	slices.Sort(identityKeys)
+	entities := make([]contract.ProductionEntityFragment, 0, len(identityKeys))
+	for _, identityKey := range identityKeys {
+		material := materials[identityKey]
+		slices.Sort(material.scopes)
+		material.scopes = slices.Compact(material.scopes)
+		basis := contract.ProductionSourceBasis{
+			Provenance: "source_explicit", Evidence: material.evidence,
+		}
+		value := material.canonicalName
+		entities = append(entities, contract.ProductionEntityFragment{
+			IdentityKey: identityKey, Kind: material.kind,
+			SpecificationKey: "specification_" + strings.ReplaceAll(identityKey, "-", "_"),
+			SpecificationSlots: []contract.ProductionSemanticSlot{{
+				SlotKey: "canonical_name", Resolution: "known", Value: &value,
+			}},
+			Basis: basis,
+			States: []contract.ProductionStateFragment{{
+				StateKey: "state_" + strings.ReplaceAll(identityKey, "-", "_") + "_initial",
+				StateKind: map[string]string{
+					"character": "character_appearance", "location": "location_state", "prop": "prop_state",
+				}[material.kind],
+				CompleteSlots: []contract.ProductionSemanticSlot{{
+					SlotKey: "canonical_name", Resolution: "known", Value: &value,
+				}},
+				ApplicableSceneScopeKeys: material.scopes,
+				EntryReason:              "该实体首次出现在冻结场景事实中。",
+				ExitReason:               "当前冻结场景范围结束。",
+				Basis:                    basis,
+			}},
+		})
+	}
+	return mustSceneJSON(contract.ProductionEntityFragmentCandidate{
+		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
+		StructureIdentitySetVersionID:   input.StructureIdentitySetVersionID,
+		StructureIdentitySetVersionHash: input.StructureIdentitySetVersionHash,
+		SceneFactCandidateRevisionID:    input.SceneFactCandidateRevisionID,
+		SceneFactCandidateRevisionHash:  input.SceneFactCandidateRevisionHash,
+		Entities:                        entities, WorldClaims: []contract.ProductionWorldClaimFragment{},
+		DesignGaps: []contract.ProductionDesignGap{}, ReviewIssues: []contract.CandidateReviewIssue{},
 	})
 }
 

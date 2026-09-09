@@ -29,28 +29,29 @@ import (
 )
 
 const (
-	scriptRevisionExecutor          = "workflow.input.script_revision"
-	scriptSourceExecutor            = "workflow.input.script_source"
-	scriptSpanProposalExecutor      = "activity.script_span_proposal"
-	sceneFactExtractionExecutor     = "activity.scene_fact_extraction"
-	identityResolutionExecutor      = "activity.identity_resolution"
-	structureIdentityReviewExecutor = "activity.structure_identity_review"
-	sourceEvidenceExecutor          = "activity.source_evidence"
-	storyAnalysisExecutor           = "activity.story_analysis"
-	storyReviewExecutor             = "activity.story_review"
-	productionBibleExecutor         = "activity.production_bible"
-	bibleMaterializationExecutor    = "activity.production_bible_materialization"
-	episodeSegmentationExecutor     = "activity.episode_segmentation"
-	episodeAnalysisExecutor         = "activity.episode_analysis"
-	episodePlanExecutor             = "activity.episode_plan"
-	episodeStructureExecutor        = "activity.episode_structure"
-	storyGraphCompileExecutor       = "activity.storygraph_compile"
-	storyboardDraftExecutor         = "activity.storyboard_draft"
-	storyboardExportExecutor        = "activity.storyboard_export"
-	productionShotInputExecutor     = "workflow.input.production_shot"
-	shotImageBindingExecutor        = "activity.production_shot_image_binding"
-	productionShotTargetExecutor    = "workflow.input.production_shot_binding_target"
-	shotImageBindingTargetExecutor  = "activity.production_shot_image_binding_at_target"
+	scriptRevisionExecutor             = "workflow.input.script_revision"
+	scriptSourceExecutor               = "workflow.input.script_source"
+	scriptSpanProposalExecutor         = "activity.script_span_proposal"
+	sceneFactExtractionExecutor        = "activity.scene_fact_extraction"
+	identityResolutionExecutor         = "activity.identity_resolution"
+	structureIdentityReviewExecutor    = "activity.structure_identity_review"
+	productionEntityDerivationExecutor = "activity.production_entity_derivation"
+	sourceEvidenceExecutor             = "activity.source_evidence"
+	storyAnalysisExecutor              = "activity.story_analysis"
+	storyReviewExecutor                = "activity.story_review"
+	productionBibleExecutor            = "activity.production_bible"
+	bibleMaterializationExecutor       = "activity.production_bible_materialization"
+	episodeSegmentationExecutor        = "activity.episode_segmentation"
+	episodeAnalysisExecutor            = "activity.episode_analysis"
+	episodePlanExecutor                = "activity.episode_plan"
+	episodeStructureExecutor           = "activity.episode_structure"
+	storyGraphCompileExecutor          = "activity.storygraph_compile"
+	storyboardDraftExecutor            = "activity.storyboard_draft"
+	storyboardExportExecutor           = "activity.storyboard_export"
+	productionShotInputExecutor        = "workflow.input.production_shot"
+	shotImageBindingExecutor           = "activity.production_shot_image_binding"
+	productionShotTargetExecutor       = "workflow.input.production_shot_binding_target"
+	shotImageBindingTargetExecutor     = "activity.production_shot_image_binding_at_target"
 )
 
 var workflowContentHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -69,8 +70,13 @@ type SceneAnalysisOwner interface {
 }
 
 type SceneAnalysisDependencies struct {
-	Sources    AcceptedScriptSource
-	Candidates SceneAnalysisOwner
+	Sources             AcceptedScriptSource
+	Candidates          SceneAnalysisOwner
+	StructureIdentities FormalStructureIdentitySource
+}
+
+type FormalStructureIdentitySource interface {
+	GetExact(context.Context, bibleapp.Actor, string, string) (bibledomain.StructureIdentitySetVersion, error)
 }
 
 type BibleCandidateOwner interface {
@@ -135,21 +141,22 @@ type ShotImageWorkflowOwner interface {
 }
 
 type NodeExecutor struct {
-	scripts        ScriptSource
-	scriptSources  AcceptedScriptSource
-	sceneAnalysis  SceneAnalysisOwner
-	evidence       SourceEvidenceOwner
-	stories        StoryAnalysisOwner
-	storyReviews   StoryReviewOwner
-	bibles         BibleCandidateOwner
-	projects       ProjectSource
-	plans          EpisodePlanOwner
-	planningOwners PlanningOwnerSetSource
-	storygraphs    StoryGraphCompiler
-	storyboards    StoryboardWorkflowOwner
-	bindings       ShotImageWorkflowOwner
-	segments       EpisodeSegmentationOwner
-	episodes       EpisodeAnalysisOwner
+	scripts             ScriptSource
+	scriptSources       AcceptedScriptSource
+	sceneAnalysis       SceneAnalysisOwner
+	structureIdentities FormalStructureIdentitySource
+	evidence            SourceEvidenceOwner
+	stories             StoryAnalysisOwner
+	storyReviews        StoryReviewOwner
+	bibles              BibleCandidateOwner
+	projects            ProjectSource
+	plans               EpisodePlanOwner
+	planningOwners      PlanningOwnerSetSource
+	storygraphs         StoryGraphCompiler
+	storyboards         StoryboardWorkflowOwner
+	bindings            ShotImageWorkflowOwner
+	segments            EpisodeSegmentationOwner
+	episodes            EpisodeAnalysisOwner
 }
 
 func NewNodeExecutor(
@@ -176,6 +183,7 @@ func NewNodeExecutor(
 	if len(sceneAnalysis) == 1 {
 		executor.scriptSources = sceneAnalysis[0].Sources
 		executor.sceneAnalysis = sceneAnalysis[0].Candidates
+		executor.structureIdentities = sceneAnalysis[0].StructureIdentities
 	}
 	return executor
 }
@@ -202,6 +210,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeSceneAnalysis(ctx, command, "resolve_identities")
 	case structureIdentityReviewExecutor:
 		return executor.executeSceneAnalysis(ctx, command, "review_candidate")
+	case productionEntityDerivationExecutor:
+		return executor.executeSceneAnalysis(ctx, command, "derive_production_entities")
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -1207,9 +1217,10 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
 	type stageContract struct {
-		outputType      string
-		expectedProfile string
-		upstreams       []struct{ port, valueType, stageKey string }
+		outputType       string
+		expectedProfile  string
+		formalIdentities bool
+		upstreams        []struct{ port, valueType, stageKey string }
 	}
 	stage, exists := map[string]stageContract{
 		"propose_script_spans": {outputType: "script_span_candidate", expectedProfile: "default"},
@@ -1233,11 +1244,21 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 				{"identities", "identity_resolution_candidate", "resolve_identities"},
 			},
 		},
+		"derive_production_entities": {
+			outputType: "production_entity_fragment_candidate", expectedProfile: "default", formalIdentities: true,
+			upstreams: []struct{ port, valueType, stageKey string }{
+				{"facts", "scene_fact_candidate", "extract_scene_facts"},
+			},
+		},
 	}[stageKey]
 	if !exists {
 		return domain.NodeExecutorResult{}, errors.New("unsupported Scene Analysis stage")
 	}
-	if err != nil || inputHash != command.InputHash || len(input.Bindings) != len(stage.upstreams)+1 ||
+	expectedBindingCount := len(stage.upstreams) + 1
+	if stage.formalIdentities {
+		expectedBindingCount++
+	}
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != expectedBindingCount ||
 		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
 		command.OutputPorts[0].ValueType != stage.outputType || !command.OutputPorts[0].Required {
 		return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis node contract")
@@ -1255,6 +1276,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		}
 	}
 	var sourceBinding domain.NodeInputBinding
+	var structureIdentityBinding domain.NodeInputBinding
 	candidateBindings := make(map[string]domain.NodeInputBinding, len(stage.upstreams))
 	for index := range input.Bindings {
 		binding := input.Bindings[index]
@@ -1262,6 +1284,9 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		case binding.Port == "source" && binding.ValueType == "script_source_version" &&
 			binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.SourcePort == "source":
 			sourceBinding = binding
+		case stage.formalIdentities && binding.Port == "identities" && binding.ValueType == "structure_identity_set_version" &&
+			binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.SourcePort == "identities":
+			structureIdentityBinding = binding
 		default:
 			matched := false
 			for _, upstream := range stage.upstreams {
@@ -1281,6 +1306,11 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		!workflowContentHashPattern.MatchString(sourceBinding.ContentHash) ||
 		len(candidateBindings) != len(stage.upstreams) {
 		return domain.NodeExecutorResult{}, errors.New("scene Analysis input set is incomplete")
+	}
+	if stage.formalIdentities && (structureIdentityBinding.ReferenceID == "" ||
+		structureIdentityBinding.ReferenceVersion == "" ||
+		!workflowContentHashPattern.MatchString(structureIdentityBinding.ContentHash)) {
+		return domain.NodeExecutorResult{}, errors.New("scene Analysis formal identity input is incomplete")
 	}
 	actor := scriptapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
 	accepted, err := executor.scriptSources.GetExact(ctx, actor, command.ProjectID, sourceBinding.ReferenceID)
@@ -1320,11 +1350,47 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		}
 		upstreams = append(upstreams, value)
 	}
+	var structureIdentitySet json.RawMessage
+	if stage.formalIdentities {
+		if executor.structureIdentities == nil {
+			return domain.NodeExecutorResult{}, errors.New("formal Structure Identity source is unavailable")
+		}
+		version, queryErr := executor.structureIdentities.GetExact(
+			ctx,
+			bibleapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion},
+			command.ProjectID,
+			structureIdentityBinding.ReferenceID,
+		)
+		if queryErr != nil {
+			return domain.NodeExecutorResult{}, queryErr
+		}
+		if version.WorkspaceID != command.WorkspaceID || version.ProjectID != command.ProjectID ||
+			strconv.Itoa(version.Version) != structureIdentityBinding.ReferenceVersion ||
+			version.ContentHash != structureIdentityBinding.ContentHash ||
+			version.DocumentRevisionID != sourceBinding.ReferenceID {
+			return domain.NodeExecutorResult{}, errors.New("formal Structure Identity input has drifted")
+		}
+		encoded, marshalErr := json.Marshal(version)
+		if marshalErr != nil {
+			return domain.NodeExecutorResult{}, marshalErr
+		}
+		frozen, decodeErr := agentcontract.DecodeFrozenStructureIdentitySet(encoded)
+		if decodeErr != nil {
+			return domain.NodeExecutorResult{}, errors.New("formal Structure Identity input is invalid")
+		}
+		structureIdentitySet, marshalErr = json.Marshal(frozen)
+		if marshalErr != nil {
+			return domain.NodeExecutorResult{}, marshalErr
+		}
+	}
 	candidate, err := executor.sceneAnalysis.Execute(ctx, agentapp.ExecuteCommand{
 		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
 		StageKey: stageKey, Source: source, Upstreams: upstreams,
-		DeterministicIssues: []agentcontract.CandidateReviewIssue{},
-		Repair:              repair,
+		DeterministicIssues:             []agentcontract.CandidateReviewIssue{},
+		Repair:                          repair,
+		StructureIdentitySetVersionID:   structureIdentityBinding.ReferenceID,
+		StructureIdentitySetVersionHash: structureIdentityBinding.ContentHash,
+		StructureIdentitySet:            structureIdentitySet,
 	})
 	if err != nil {
 		return domain.NodeExecutorResult{}, err

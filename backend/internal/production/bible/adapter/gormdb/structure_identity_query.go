@@ -171,6 +171,61 @@ func (store *Store) ReadCurrentStructureIdentity(
 	return version, receipt, commandReceiptID, err
 }
 
+func (store *Store) ReadExactStructureIdentity(
+	ctx context.Context,
+	workspaceID, projectID, versionID string,
+) (domain.StructureIdentitySetVersion, error) {
+	workspace, workspaceErr := uuid.Parse(workspaceID)
+	project, projectErr := uuid.Parse(projectID)
+	versionIdentity, versionErr := uuid.Parse(versionID)
+	if workspaceErr != nil || projectErr != nil || versionErr != nil {
+		return domain.StructureIdentitySetVersion{}, application.ErrNotFound
+	}
+	var version domain.StructureIdentitySetVersion
+	err := store.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
+		var record model.StructureIdentitySetVersion
+		if loadErr := transaction.First(
+			&record,
+			"id = ? AND workspace_id = ? AND project_id = ?",
+			versionIdentity,
+			workspace,
+			project,
+		).Error; loadErr != nil {
+			return normalizeNotFound(loadErr)
+		}
+		var decodeErr error
+		version, decodeErr = structureIdentityVersionDomain(record)
+		if decodeErr != nil {
+			return decodeErr
+		}
+		repository := &repository{database: transaction}
+		source, loadErr := repository.GetStructureIdentitySource(ctx, projectID, version.DocumentRevisionID, false)
+		if loadErr != nil {
+			return loadErr
+		}
+		episodes, loadErr := repository.GetEpisodeLifecycleReceipt(
+			ctx,
+			version.ProjectEpisodeReceiptID,
+			workspaceID,
+			projectID,
+		)
+		if loadErr != nil {
+			return loadErr
+		}
+		expectedHash, hashErr := application.HashStructureIdentityVersionContent(
+			version,
+			source.DocumentRevisionHash,
+			source.SpanIndexHash,
+			episodes.CollectionRootHash,
+		)
+		if hashErr != nil || expectedHash != version.ContentHash {
+			return structureIdentityQueryDrift("Structure Identity version content has drifted")
+		}
+		return nil
+	})
+	return version, err
+}
+
 func structureIdentityQueryDrift(message string) error {
 	return &application.Error{Code: "formal_version_drift", Message: message, Status: 409}
 }

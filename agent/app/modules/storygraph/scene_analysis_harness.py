@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.harness.scene_analysis_schemas import (
     IdentityResolutionInput,
+    ProductionEntityDerivationInput,
     SceneAnalysisInvocation,
     SceneFactExtractionInput,
     ScriptSpanProposalInput,
@@ -26,6 +27,7 @@ from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_candidates import (
     IdentityMentionRef,
     IdentityResolutionCandidate,
+    ProductionEntityFragmentCandidate,
     SceneFactCandidate,
     ScriptSpanCandidate,
     SourceEvidenceSpan,
@@ -126,6 +128,14 @@ class SceneAnalysisHarness:
                 scene_facts,
                 allowed_reuse_identity_keys=set(source.allowed_reuse_identity_keys),
             )
+        elif stage == "derive_production_entities":
+            if not isinstance(candidate, ProductionEntityFragmentCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong production entity schema")
+            source = ProductionEntityDerivationInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            _materialize_evidence_hashes(candidate, source.normalized_text)
+            candidate.validate_for(source)
         else:
             if not isinstance(candidate, StructureIdentityReviewCandidate):
                 raise CodexSchemaInvalid(
@@ -176,6 +186,7 @@ def _materialize_evidence_hashes(
         | SceneFactCandidate
         | IdentityResolutionCandidate
         | StructureIdentityReviewCandidate
+        | ProductionEntityFragmentCandidate
     ),
     normalized_text: str,
 ) -> None:
@@ -202,10 +213,19 @@ def _materialize_evidence_hashes(
             evidence.extend(cluster.contradicting_evidence)
         evidence.extend(value.mention_ref for value in candidate.ambiguous_mentions)
         evidence.extend(value.mention_ref for value in candidate.rejected_mentions)
-    else:
+    elif isinstance(candidate, StructureIdentityReviewCandidate):
         for issue in candidate.review_issues:
             evidence.extend(issue.evidence)
         return _fill_evidence_hashes(evidence, normalized_text)
+    else:
+        for entity in candidate.entities:
+            evidence.extend(entity.basis.evidence)
+            for state in entity.states:
+                evidence.extend(state.basis.evidence)
+        for claim in candidate.world_claims:
+            evidence.extend(claim.basis.evidence)
+        for gap in candidate.design_gaps:
+            evidence.extend(gap.source_constraints)
     for issue in candidate.review_issues:
         evidence.extend(issue.evidence)
     _fill_evidence_hashes(evidence, normalized_text)
