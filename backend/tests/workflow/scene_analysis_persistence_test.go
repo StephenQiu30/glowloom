@@ -20,6 +20,8 @@ import (
 	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
+	assetgorm "github.com/StephenQiu30/lanverse/backend/internal/asset/adapter/gormdb"
+	assetapp "github.com/StephenQiu30/lanverse/backend/internal/asset/application"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
@@ -28,6 +30,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
@@ -770,6 +773,84 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			"Production World owner material = %#v application=%#v resolve_err=%v decode_err=%v",
 			productionWorldOwnerMaterial, productionWorldOwnerApplication, err, materialErr,
 		)
+	}
+	assetInputs := make([]assetapp.ProductionWorldAssetIdentityInput, len(productionWorld.Asset.Identities))
+	for identityIndex, identity := range productionWorld.Asset.Identities {
+		states := make([]assetapp.ProductionWorldAssetStateInput, len(identity.States))
+		for stateIndex, state := range identity.States {
+			snapshot, marshalErr := json.Marshal(state)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			states[stateIndex] = assetapp.ProductionWorldAssetStateInput{StateKey: state.StateKey, Snapshot: snapshot}
+		}
+		assetInputs[identityIndex] = assetapp.ProductionWorldAssetIdentityInput{
+			IdentityKey: identity.IdentityKey, Kind: identity.Kind, States: states,
+		}
+	}
+	assetOwner := assetapp.NewProductionWorldAssetOwner(func() time.Time { return now }, uuid.NewString)
+	assetResult, err := assetOwner.ApplyProductionWorldAssets(ctx, assetgorm.NewProductionWorldRepository(database), assetapp.ApplyProductionWorldAssetsCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), ActorID: fixture.userID.String(),
+		ExpectedBusinessKeyRoot: productionWorldBusinessKeyRoot(t, productionWorld, "asset"), Identities: assetInputs,
+	})
+	if err != nil || len(assetResult.Assets) != len(productionWorld.Asset.Identities) || len(assetResult.States) == 0 {
+		t.Fatalf("apply Production World Asset owner: result=%#v err=%v", assetResult, err)
+	}
+	bibleSpecifications := make([]bibleapp.ProductionWorldSpecificationInput, len(productionWorld.Bible.Specifications))
+	for index, specification := range productionWorld.Bible.Specifications {
+		bibleSpecifications[index] = bibleapp.ProductionWorldSpecificationInput{
+			SpecificationKey: specification.SpecificationKey, IdentityKey: specification.IdentityKey,
+			Kind: specification.Kind, Slots: specification.SpecificationSlots, Basis: specification.Basis,
+		}
+	}
+	bibleClaims := make([]bibleapp.ProductionWorldClaimInput, len(productionWorld.Bible.WorldClaims))
+	for index, claim := range productionWorld.Bible.WorldClaims {
+		bibleClaims[index] = bibleapp.ProductionWorldClaimInput{
+			ClaimKey: claim.ClaimKey, ClaimType: claim.ClaimType, Statement: claim.Statement,
+			SubjectIdentityKeys: claim.SubjectIdentityKeys, Basis: claim.Basis,
+		}
+	}
+	bibleOwner := bibleapp.NewProductionWorldBibleOwner(func() time.Time { return now }, uuid.NewString)
+	bibleCommand := bibleapp.ApplyProductionWorldBibleCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), ActorID: fixture.userID.String(),
+		ReviewDecisionID: productionWorldDecisionID.String(), ExpectedBusinessKeyRoot: productionWorldBusinessKeyRoot(t, productionWorld, "bible"),
+		PartitionHash: productionWorld.PartitionRoots.Bible,
+		StructureIdentitySet: bibledomain.ProductionWorldOwnerRef{
+			OwnerKind: productionWorld.StructureIdentitySetVersion.OwnerKind, LogicalID: productionWorld.StructureIdentitySetVersion.LogicalID,
+			VersionID: productionWorld.StructureIdentitySetVersion.VersionID, Revision: productionWorld.StructureIdentitySetVersion.Revision,
+			ContentHash: productionWorld.StructureIdentitySetVersion.ContentHash,
+		},
+		Candidate: bibledomain.ProductionWorldOwnerRef{
+			OwnerKind: "agent", LogicalID: fixture.projectID.String(), VersionID: productionWorldRevision.ID.String(),
+			Revision: productionWorldRevision.RevisionNo, ContentHash: productionWorldRevision.CandidateRevisionHash,
+		},
+		Specifications: bibleSpecifications, Claims: bibleClaims, Assets: assetResult.Assets, States: assetResult.States,
+	}
+	bibleResult, err := bibleOwner.ApplyProductionWorldBible(ctx, biblegorm.NewProductionWorldRepository(database), bibleCommand)
+	if err != nil || bibleResult.Head.HeadRevision != 1 || len(bibleResult.Specifications) != len(bibleSpecifications) ||
+		len(bibleResult.Bindings) != len(assetResult.Assets) || bibleResult.Version.StructureIdentitySet.VersionID != structureVersion.ID.String() {
+		t.Fatalf("apply Production World Bible owner: result=%#v err=%v", bibleResult, err)
+	}
+	if _, staleErr := bibleOwner.ApplyProductionWorldBible(ctx, biblegorm.NewProductionWorldRepository(database), bibleCommand); !errors.Is(staleErr, bibleapp.ErrProductionWorldBibleConflict) {
+		t.Fatalf("stale Production World Bible Head error = %v", staleErr)
+	}
+	bibleCommand.ExpectedHeadRevision = bibleResult.Head.HeadRevision
+	bibleCommand.ExpectedHeadHash = bibleResult.Head.HeadContentHash
+	replayedBible, err := bibleOwner.ApplyProductionWorldBible(ctx, biblegorm.NewProductionWorldRepository(database), bibleCommand)
+	if err != nil || replayedBible.Version.ID != bibleResult.Version.ID || replayedBible.Head.HeadContentHash != bibleResult.Head.HeadContentHash {
+		t.Fatalf("replay Production World Bible owner: result=%#v err=%v", replayedBible, err)
+	}
+	for record, expected := range map[any]int64{
+		&model.ProductionWorldBibleVersion{}: 1, &model.ProductionWorldBibleScopeHead{}: 1,
+		&model.ProductionWorldEvidence{}:      int64(len(bibleSpecifications) + len(bibleClaims)),
+		&model.ProductionWorldSpecification{}: int64(len(bibleSpecifications)),
+		&model.ProductionWorldClaim{}:         int64(len(bibleClaims)),
+		&model.ProductionWorldBinding{}:       int64(len(assetResult.Assets)),
+	} {
+		var count int64
+		if countErr := database.Model(record).Where("project_id = ?", fixture.projectID).Count(&count).Error; countErr != nil || count != expected {
+			t.Fatalf("Production World Bible %T count=%d want=%d err=%v", record, count, expected, countErr)
+		}
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -1593,13 +1674,21 @@ func buildProductionEntityCandidate(input contract.ProductionEntityDerivationInp
 			}},
 		})
 	}
+	worldClaims := []contract.ProductionWorldClaimFragment{}
+	if len(entities) > 0 {
+		worldClaims = append(worldClaims, contract.ProductionWorldClaimFragment{
+			ClaimKey: "claim_primary_identity_exists", ClaimType: "world_rule",
+			SubjectIdentityKeys: []string{entities[0].IdentityKey}, Statement: "主要叙事身份存在于当前制作世界。",
+			Basis: entities[0].Basis,
+		})
+	}
 	return mustSceneJSON(contract.ProductionEntityFragmentCandidate{
 		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
 		StructureIdentitySetVersionID:   input.StructureIdentitySetVersionID,
 		StructureIdentitySetVersionHash: input.StructureIdentitySetVersionHash,
 		SceneFactCandidateRevisionID:    input.SceneFactCandidateRevisionID,
 		SceneFactCandidateRevisionHash:  input.SceneFactCandidateRevisionHash,
-		Entities:                        entities, WorldClaims: []contract.ProductionWorldClaimFragment{},
+		Entities:                        entities, WorldClaims: worldClaims,
 		DesignGaps: []contract.ProductionDesignGap{}, ReviewIssues: []contract.CandidateReviewIssue{},
 	})
 }
@@ -1916,6 +2005,17 @@ func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) js
 		},
 		ReviewIssues: []contract.CandidateReviewIssue{},
 	})
+}
+
+func productionWorldBusinessKeyRoot(t *testing.T, value worlddomain.ProductionWorldCandidate, partition string) string {
+	t.Helper()
+	for _, root := range value.SharedProof.ExpectedBusinessKeyRoots {
+		if root.Partition == partition {
+			return root.Root
+		}
+	}
+	t.Fatalf("Production World business key root %q not found", partition)
+	return ""
 }
 
 func identityMentionTestKey(value contract.IdentityMentionRef) string {
