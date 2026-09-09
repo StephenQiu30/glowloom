@@ -82,6 +82,12 @@ func TestPublicHumanTaskHandlerPresentsProductionWorldSixViews(t *testing.T) {
 			"proof":"1111111111111111111111111111111111111111111111111111111111111111"
 		},
 		"allowed_decisions":["approved","rejected"],
+		"repair_targets":[
+			{"operation":"revise_production_entity","target_keys":[]},
+			{"operation":"rebind_scene_occurrence","target_keys":[]},
+			{"operation":"revise_interaction","target_keys":[]},
+			{"operation":"revise_continuity","target_keys":[]}
+		],
 		"views":{
 			"character_appearances":[],"locations":[],"prop_states":[],
 			"scene_occurrences":[],"interactions":[],"continuity":{"claims":[],"ledger":[]}

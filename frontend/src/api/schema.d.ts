@@ -2804,6 +2804,11 @@ export interface components {
             source_stage: string;
             issue: components["schemas"]["ProductionWorldCandidateReviewIssueResponse"];
         };
+        ProductionWorldRepairTargetSetResponse: {
+            /** @enum {string} */
+            operation: "revise_production_entity" | "rebind_scene_occurrence" | "revise_interaction" | "revise_continuity";
+            target_keys: string[];
+        };
         ProductionWorldReviewSubjectResponse: {
             /** @constant */
             schema_version: "production-world-review-detail-production";
@@ -2816,6 +2821,7 @@ export interface components {
                 "approved",
                 "rejected"
             ];
+            repair_targets: components["schemas"]["ProductionWorldRepairTargetSetResponse"][];
             views: components["schemas"]["ProductionWorldReviewViewsResponse"];
             world_claims: components["schemas"]["ProductionWorldClaimResponse"][];
             design_gaps: components["schemas"]["ProductionWorldDesignGapResponse"][];

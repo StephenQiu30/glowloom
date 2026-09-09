@@ -7187,12 +7187,33 @@
           "issue": { "$ref": "#/components/schemas/ProductionWorldCandidateReviewIssueResponse" }
         }
       },
+      "ProductionWorldRepairTargetSetResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operation", "target_keys"],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "revise_production_entity",
+              "rebind_scene_occurrence",
+              "revise_interaction",
+              "revise_continuity"
+            ]
+          },
+          "target_keys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
       "ProductionWorldReviewSubjectResponse": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "schema_version", "gate_key", "input_hash", "candidate_revision", "partition_roots",
-          "allowed_decisions", "views", "world_claims", "design_gaps", "review_issues"
+          "allowed_decisions", "repair_targets", "views", "world_claims", "design_gaps", "review_issues"
         ],
         "properties": {
           "schema_version": { "type": "string", "const": "production-world-review-detail-production" },
@@ -7205,6 +7226,12 @@
             "prefixItems": [{ "const": "approved" }, { "const": "rejected" }],
             "minItems": 2,
             "maxItems": 2
+          },
+          "repair_targets": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": { "$ref": "#/components/schemas/ProductionWorldRepairTargetSetResponse" }
           },
           "views": { "$ref": "#/components/schemas/ProductionWorldReviewViewsResponse" },
           "world_claims": {

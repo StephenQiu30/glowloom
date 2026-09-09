@@ -61,6 +61,7 @@ type ProductionWorldGateSubject struct {
 	ExpectedBusinessKeyRoots    []ProductionWorldBusinessKeyRoot                     `json:"expected_business_key_roots"`
 	PlanningEpisodeScopes       []worlddomain.ProductionWorldPlanningEpisodeScope    `json:"planning_episode_scopes"`
 	ScopeClosureRoot            string                                               `json:"scope_closure_root"`
+	RepairTargets               []ProductionWorldRepairTargetSet                     `json:"repair_targets"`
 	ExpectedHeads               []ProductionWorldExpectedHead                        `json:"expected_heads"`
 	ReadSetRoot                 string                                               `json:"read_set_root"`
 }
@@ -120,6 +121,14 @@ func NewProductionWorldGateInput(
 		CandidateRevisionID: draft.CandidateRevisionID, CandidateRevision: draft.CandidateRevision,
 		CandidateRevisionHash: draft.CandidateRevisionHash, CandidateContentHash: candidate.ContentHash,
 	}
+	views, err := productionWorldReviewViews(candidate)
+	if err != nil {
+		return ProductionWorldGateInput{}, nil, err
+	}
+	repairTargets, err := productionWorldRepairTargetSets(views)
+	if err != nil {
+		return ProductionWorldGateInput{}, nil, err
+	}
 	value := ProductionWorldGateInput{
 		SchemaVersion: ProductionWorldGateInputSchemaVersion, GateKey: ProductionWorldGateKey,
 		WorkspaceID: draft.WorkspaceID, ProjectID: draft.ProjectID,
@@ -141,6 +150,7 @@ func NewProductionWorldGateInput(
 			ExpectedBusinessKeyRoots: productionWorldBusinessKeyRoots(candidate.SharedProof.ExpectedBusinessKeyRoots),
 			PlanningEpisodeScopes:    append([]worlddomain.ProductionWorldPlanningEpisodeScope(nil), candidate.SharedProof.PlanningEpisodeScopes...),
 			ScopeClosureRoot:         candidate.SharedProof.ScopeClosureRoot,
+			RepairTargets:            repairTargets,
 			ExpectedHeads:            append([]ProductionWorldExpectedHead(nil), draft.ExpectedHeads...),
 		},
 		AllowedDecisions: append([]string(nil), draft.AllowedDecisions...),
@@ -195,6 +205,7 @@ func completeProductionWorldGateInput(value *ProductionWorldGateInput, verify bo
 		validateProductionWorldProjection(value.Subject.ContinuityCandidate, "continuity") != nil ||
 		value.Subject.InteractionCandidate.Candidate != value.Subject.ContinuityCandidate.Candidate ||
 		!nodeOutputContentHashPattern.MatchString(value.Subject.ScopeClosureRoot) ||
+		validateProductionWorldRepairTargetSets(value.Subject.RepairTargets) != nil ||
 		len(value.Subject.ExpectedBusinessKeyRoots) != 3 ||
 		validateProductionWorldPlanningEpisodeScopes(value.Subject.PlanningEpisodeScopes, value.Subject.ScopeClosureRoot) != nil {
 		return errors.New("invalid Gate 2 Subject")
@@ -360,12 +371,27 @@ func productionWorldReadSetMaterial(value ProductionWorldGateSubject) any {
 		ExpectedBusinessKeyRoots    []ProductionWorldBusinessKeyRoot                     `json:"expected_business_key_roots"`
 		PlanningEpisodeScopes       []worlddomain.ProductionWorldPlanningEpisodeScope    `json:"planning_episode_scopes"`
 		ScopeClosureRoot            string                                               `json:"scope_closure_root"`
+		RepairTargets               []ProductionWorldRepairTargetSet                     `json:"repair_targets"`
 		ExpectedHeads               []ProductionWorldExpectedHead                        `json:"expected_heads"`
 	}{
-		value.SourceVersion, value.StructureIdentitySetVersion, value.ProductionWorldCandidate,
-		value.SceneOccurrenceCandidate, value.InteractionCandidate, value.ContinuityCandidate,
-		value.ExpectedBusinessKeyRoots, value.PlanningEpisodeScopes, value.ScopeClosureRoot, value.ExpectedHeads,
+		SourceVersion: value.SourceVersion, StructureIdentitySetVersion: value.StructureIdentitySetVersion,
+		ProductionWorldCandidate: value.ProductionWorldCandidate, SceneOccurrenceCandidate: value.SceneOccurrenceCandidate,
+		InteractionCandidate: value.InteractionCandidate, ContinuityCandidate: value.ContinuityCandidate,
+		ExpectedBusinessKeyRoots: value.ExpectedBusinessKeyRoots, PlanningEpisodeScopes: value.PlanningEpisodeScopes,
+		ScopeClosureRoot: value.ScopeClosureRoot, RepairTargets: value.RepairTargets, ExpectedHeads: value.ExpectedHeads,
 	}
+}
+
+func cloneProductionWorldRepairTargetSets(values []ProductionWorldRepairTargetSet) []ProductionWorldRepairTargetSet {
+	result := make([]ProductionWorldRepairTargetSet, len(values))
+	for index, value := range values {
+		targets := make([]string, len(value.TargetKeys))
+		copy(targets, value.TargetKeys)
+		result[index] = ProductionWorldRepairTargetSet{
+			Operation: value.Operation, TargetKeys: targets,
+		}
+	}
+	return result
 }
 
 func productionWorldBusinessKeyRoots(

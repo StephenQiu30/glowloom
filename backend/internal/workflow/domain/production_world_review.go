@@ -55,6 +55,7 @@ type ProductionWorldReviewDetail struct {
 	CandidateRevision ProductionWorldCandidateRevisionRef          `json:"candidate_revision"`
 	PartitionRoots    worlddomain.ProductionWorldPartitionRoots    `json:"partition_roots"`
 	AllowedDecisions  []string                                     `json:"allowed_decisions"`
+	RepairTargets     []ProductionWorldRepairTargetSet             `json:"repair_targets"`
 	Views             ProductionWorldReviewViews                   `json:"views"`
 	WorldClaims       []agentcontract.ProductionWorldClaimFragment `json:"world_claims"`
 	DesignGaps        []agentcontract.ProductionDesignGap          `json:"design_gaps"`
@@ -73,11 +74,7 @@ func NewProductionWorldReviewDetail(
 	if err != nil || !productionWorldReviewCandidateMatchesGate(canonicalGate, canonicalCandidate) {
 		return ProductionWorldReviewDetail{}, nil, errors.New("Production World review Candidate is outside the frozen Gate")
 	}
-	entities, err := productionWorldReviewEntities(canonicalCandidate)
-	if err != nil {
-		return ProductionWorldReviewDetail{}, nil, err
-	}
-	scenes, err := productionWorldReviewScenes(canonicalCandidate)
+	views, err := productionWorldReviewViews(canonicalCandidate)
 	if err != nil {
 		return ProductionWorldReviewDetail{}, nil, err
 	}
@@ -87,24 +84,39 @@ func NewProductionWorldReviewDetail(
 		CandidateRevision: canonicalGate.Subject.ProductionWorldCandidate,
 		PartitionRoots:    canonicalCandidate.PartitionRoots,
 		AllowedDecisions:  append([]string{}, canonicalGate.AllowedDecisions...),
-		Views: ProductionWorldReviewViews{
-			CharacterAppearances: entities["character"], Locations: entities["location"],
-			PropStates: entities["prop"], SceneOccurrences: scenes,
-			Interactions: append([]agentcontract.InteractionFragment{}, canonicalCandidate.Planning.Interactions...),
-			Continuity: ProductionWorldContinuityReviewView{
-				Claims: append([]agentcontract.ContinuityFragment{}, canonicalCandidate.Planning.Continuity...),
-				Ledger: append([]agentcontract.ContinuityLedgerEntry{}, canonicalCandidate.SharedProof.ContinuityLedger...),
-			},
-		},
-		WorldClaims:  append([]agentcontract.ProductionWorldClaimFragment{}, canonicalCandidate.Bible.WorldClaims...),
-		DesignGaps:   append([]agentcontract.ProductionDesignGap{}, canonicalCandidate.SharedProof.DesignGaps...),
-		ReviewIssues: append([]worlddomain.ProductionWorldReviewIssue{}, canonicalCandidate.SharedProof.ReviewIssues...),
+		RepairTargets:     cloneProductionWorldRepairTargetSets(canonicalGate.Subject.RepairTargets),
+		Views:             views,
+		WorldClaims:       append([]agentcontract.ProductionWorldClaimFragment{}, canonicalCandidate.Bible.WorldClaims...),
+		DesignGaps:        append([]agentcontract.ProductionDesignGap{}, canonicalCandidate.SharedProof.DesignGaps...),
+		ReviewIssues:      append([]worlddomain.ProductionWorldReviewIssue{}, canonicalCandidate.SharedProof.ReviewIssues...),
 	}
 	encoded, err := json.Marshal(detail)
 	if err != nil {
 		return ProductionWorldReviewDetail{}, nil, err
 	}
 	return detail, encoded, nil
+}
+
+func productionWorldReviewViews(
+	candidate worlddomain.ProductionWorldCandidate,
+) (ProductionWorldReviewViews, error) {
+	entities, err := productionWorldReviewEntities(candidate)
+	if err != nil {
+		return ProductionWorldReviewViews{}, err
+	}
+	scenes, err := productionWorldReviewScenes(candidate)
+	if err != nil {
+		return ProductionWorldReviewViews{}, err
+	}
+	return ProductionWorldReviewViews{
+		CharacterAppearances: entities["character"], Locations: entities["location"],
+		PropStates: entities["prop"], SceneOccurrences: scenes,
+		Interactions: append([]agentcontract.InteractionFragment{}, candidate.Planning.Interactions...),
+		Continuity: ProductionWorldContinuityReviewView{
+			Claims: append([]agentcontract.ContinuityFragment{}, candidate.Planning.Continuity...),
+			Ledger: append([]agentcontract.ContinuityLedgerEntry{}, candidate.SharedProof.ContinuityLedger...),
+		},
+	}, nil
 }
 
 func DecodeProductionWorldReviewDetail(
@@ -230,6 +242,7 @@ func validateProductionWorldReviewDetail(value ProductionWorldReviewDetail) erro
 		!nodeOutputContentHashPattern.MatchString(value.PartitionRoots.Asset) ||
 		!nodeOutputContentHashPattern.MatchString(value.PartitionRoots.Proof) ||
 		!slices.Equal(value.AllowedDecisions, []string{"approved", "rejected"}) ||
+		validateProductionWorldRepairTargetSets(value.RepairTargets) != nil ||
 		value.Views.CharacterAppearances == nil || value.Views.Locations == nil || value.Views.PropStates == nil ||
 		value.Views.SceneOccurrences == nil || value.Views.Interactions == nil || value.Views.Continuity.Claims == nil ||
 		value.Views.Continuity.Ledger == nil || value.WorldClaims == nil || value.DesignGaps == nil || value.ReviewIssues == nil {

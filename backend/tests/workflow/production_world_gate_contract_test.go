@@ -77,8 +77,15 @@ func TestProductionWorldGateInputBindsAggregateAndSeparatePlanningProjections(t 
 		value.Subject.InteractionCandidate.Candidate != candidate.UpstreamCandidates.InteractionContinuity ||
 		value.Subject.ContinuityCandidate.Candidate != candidate.UpstreamCandidates.InteractionContinuity ||
 		value.Subject.StructureIdentitySetVersion.VersionID != candidate.StructureIdentitySetVersion.VersionID ||
-		len(value.Subject.ExpectedHeads) != 4 {
+		len(value.Subject.ExpectedHeads) != 4 || len(value.Subject.RepairTargets) != 4 {
 		t.Fatalf("Gate 2 Subject is incomplete: %#v", value.Subject)
+	}
+	if !slices.Equal(value.Subject.RepairTargets[0].TargetKeys, []string{
+		"character:linzhou", "state_character_linzhou_initial",
+	}) || !slices.Equal(value.Subject.RepairTargets[1].TargetKeys, []string{
+		"occurrence_scene_0001_0001", candidate.Planning.Scenes[0].SceneScopeKey,
+	}) || value.Subject.RepairTargets[2].TargetKeys == nil || value.Subject.RepairTargets[3].TargetKeys == nil {
+		t.Fatalf("Gate 2 repair target inventory is incomplete: %#v", value.Subject.RepairTargets)
 	}
 	if !slices.Equal(value.EffectPlan.AtomicStep.OwnerKinds, []string{"asset", "production/bible", "production/planning"}) ||
 		value.EffectPlan.AtomicStep.OwnerCommand != "confirm_production_world" ||
@@ -128,6 +135,22 @@ func TestProductionWorldContractsRejectUpstreamAndHashDrift(t *testing.T) {
 	}
 	if _, _, err = workflow.DecodeProductionWorldGateInput(drifted); err == nil {
 		t.Fatal("Gate 2 accepted a drifted Interaction projection")
+	}
+
+	_, encoded, err = workflow.NewProductionWorldGateInput(gateDraft)
+	if err != nil || json.Unmarshal(encoded, &raw) != nil {
+		t.Fatal(err)
+	}
+	subject = raw["subject"].(map[string]any)
+	repairTargets := subject["repair_targets"].([]any)
+	firstTarget := repairTargets[0].(map[string]any)
+	firstTarget["target_keys"] = append(firstTarget["target_keys"].([]any), "character:outside_frozen_candidate")
+	drifted, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = workflow.DecodeProductionWorldGateInput(drifted); err == nil {
+		t.Fatal("Gate 2 accepted a repair target outside the frozen Candidate")
 	}
 }
 

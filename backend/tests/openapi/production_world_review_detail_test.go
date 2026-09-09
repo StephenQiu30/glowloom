@@ -9,6 +9,7 @@ import (
 )
 
 type productionWorldOpenAPISchema struct {
+	Type       any                                     `json:"type"`
 	Ref        string                                  `json:"$ref"`
 	Required   []string                                `json:"required"`
 	Properties map[string]productionWorldOpenAPISchema `json:"properties"`
@@ -31,11 +32,20 @@ func TestProductionWorldReviewDetailExposesSixTypedViews(t *testing.T) {
 	}
 	wantRequired := []string{
 		"schema_version", "gate_key", "input_hash", "candidate_revision", "partition_roots",
-		"allowed_decisions", "views", "world_claims", "design_gaps", "review_issues",
+		"allowed_decisions", "repair_targets", "views", "world_claims", "design_gaps", "review_issues",
 	}
 	if !slices.Equal(detail.Required, wantRequired) ||
 		detail.Properties["views"].Ref != "#/components/schemas/ProductionWorldReviewViewsResponse" {
 		t.Fatalf("Production World review detail schema = %#v", detail)
+	}
+	if detail.Properties["repair_targets"].Type != "array" || detail.Properties["repair_targets"].Items == nil ||
+		detail.Properties["repair_targets"].Items.Ref != "#/components/schemas/ProductionWorldRepairTargetSetResponse" {
+		t.Fatalf("Production World repair target inventory is not typed: %#v", detail.Properties["repair_targets"])
+	}
+	repairTarget, ok := document.Components.Schemas["ProductionWorldRepairTargetSetResponse"]
+	if !ok || repairTarget.Type != "object" || repairTarget.Properties["operation"].Type != "string" ||
+		repairTarget.Properties["target_keys"].Type != "array" {
+		t.Fatalf("Production World repair target schema is incomplete: %#v", repairTarget)
 	}
 	views, ok := document.Components.Schemas["ProductionWorldReviewViewsResponse"]
 	if !ok || !slices.Equal(views.Required, []string{

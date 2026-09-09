@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -34,7 +35,10 @@ func TestProductionWorldReviewDetailHasSixTypedViews(t *testing.T) {
 	}
 	if detail.SchemaVersion != workflow.ProductionWorldReviewDetailSchemaVersion ||
 		detail.GateKey != workflow.ProductionWorldGateKey || detail.InputHash != gate.InputHash ||
-		detail.CandidateRevision != gate.Subject.ProductionWorldCandidate {
+		detail.CandidateRevision != gate.Subject.ProductionWorldCandidate ||
+		!slices.EqualFunc(detail.RepairTargets, gate.Subject.RepairTargets, func(left, right workflow.ProductionWorldRepairTargetSet) bool {
+			return left.Operation == right.Operation && slices.Equal(left.TargetKeys, right.TargetKeys)
+		}) {
 		t.Fatalf("review detail identity drifted: %#v", detail)
 	}
 	if len(detail.Views.CharacterAppearances) != 1 ||

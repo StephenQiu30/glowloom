@@ -20,6 +20,11 @@ type ProductionWorldRepairSelection struct {
 	TargetKeys []string `json:"target_keys"`
 }
 
+type ProductionWorldRepairTargetSet struct {
+	Operation  string   `json:"operation"`
+	TargetKeys []string `json:"target_keys"`
+}
+
 type ProductionWorldRepairClosure struct {
 	Operation       string   `json:"operation"`
 	TargetKeys      []string `json:"target_keys"`
@@ -65,6 +70,65 @@ type stringSet map[string]struct{}
 
 type productionWorldRepairSets struct {
 	scenes, entities, states, occurrences, interactions, continuity, ledger stringSet
+}
+
+func productionWorldRepairTargetSets(views ProductionWorldReviewViews) ([]ProductionWorldRepairTargetSet, error) {
+	index, err := newProductionWorldRepairIndex(views)
+	if err != nil {
+		return nil, err
+	}
+	entityTargets := make(stringSet)
+	for key := range index.entities {
+		entityTargets.add(key)
+	}
+	for key := range index.stateOwners {
+		entityTargets.add(key)
+	}
+	occurrenceTargets := make(stringSet)
+	for key := range index.scenes {
+		occurrenceTargets.add(key)
+	}
+	for key := range index.occurrences {
+		occurrenceTargets.add(key)
+	}
+	interactionTargets := make(stringSet)
+	for key := range index.interactions {
+		interactionTargets.add(key)
+	}
+	continuityTargets := make(stringSet)
+	for key := range index.continuity {
+		continuityTargets.add(key)
+	}
+	return []ProductionWorldRepairTargetSet{
+		{Operation: ProductionWorldRepairReviseEntity, TargetKeys: sortedSet(entityTargets)},
+		{Operation: ProductionWorldRepairRebindOccurrence, TargetKeys: sortedSet(occurrenceTargets)},
+		{Operation: ProductionWorldRepairReviseInteraction, TargetKeys: sortedSet(interactionTargets)},
+		{Operation: ProductionWorldRepairReviseContinuity, TargetKeys: sortedSet(continuityTargets)},
+	}, nil
+}
+
+func validateProductionWorldRepairTargetSets(values []ProductionWorldRepairTargetSet) error {
+	expectedOperations := []string{
+		ProductionWorldRepairReviseEntity,
+		ProductionWorldRepairRebindOccurrence,
+		ProductionWorldRepairReviseInteraction,
+		ProductionWorldRepairReviseContinuity,
+	}
+	if len(values) != len(expectedOperations) {
+		return errors.New("Production World repair target inventory is incomplete")
+	}
+	for index, value := range values {
+		if value.Operation != expectedOperations[index] || value.TargetKeys == nil || !slices.IsSorted(value.TargetKeys) {
+			return errors.New("Production World repair target inventory is invalid")
+		}
+		for targetIndex, target := range value.TargetKeys {
+			if target == "" || target != strings.TrimSpace(target) ||
+				(targetIndex > 0 && value.TargetKeys[targetIndex-1] == target) {
+				return errors.New("Production World repair target inventory is invalid")
+			}
+		}
+	}
+	return nil
 }
 
 func NewProductionWorldRepairClosure(

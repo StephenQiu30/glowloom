@@ -125,6 +125,7 @@ declare global {
     type ProductionWorldOccurrenceResponse = components["schemas"]["ProductionWorldOccurrenceResponse"];
     type ProductionWorldPartitionRootsResponse = components["schemas"]["ProductionWorldPartitionRootsResponse"];
     type ProductionWorldPositiveRationalResponse = components["schemas"]["ProductionWorldPositiveRationalResponse"];
+    type ProductionWorldRepairTargetSetResponse = components["schemas"]["ProductionWorldRepairTargetSetResponse"];
     type ProductionWorldReviewIssueResponse = components["schemas"]["ProductionWorldReviewIssueResponse"];
     type ProductionWorldReviewSubjectResponse = components["schemas"]["ProductionWorldReviewSubjectResponse"];
     type ProductionWorldReviewViewsResponse = components["schemas"]["ProductionWorldReviewViewsResponse"];
