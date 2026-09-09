@@ -93,6 +93,37 @@ func StructureIdentityRepairRootNode(
 	return rootNodeID, nil
 }
 
+func ProductionWorldRepairRootNode(
+	source []NodeRunProjection,
+	request ProductionWorldChangeRequest,
+) (string, error) {
+	executor := ""
+	switch request.ChangeSpec.Operation {
+	case ProductionWorldRepairReviseEntity:
+		executor = "activity.production_entity_derivation"
+	case ProductionWorldRepairRebindOccurrence:
+		executor = "activity.scene_occurrence_binding"
+	case ProductionWorldRepairReviseInteraction, ProductionWorldRepairReviseContinuity:
+		executor = "activity.interaction_continuity_reconciliation"
+	default:
+		return "", errors.New("unsupported Production World repair operation")
+	}
+	rootNodeID := ""
+	for _, projection := range source {
+		if projection.Executor != executor {
+			continue
+		}
+		if rootNodeID != "" {
+			return "", errors.New("Production World repair root is ambiguous")
+		}
+		rootNodeID = projection.NodeID
+	}
+	if rootNodeID == "" {
+		return "", errors.New("Production World repair root is missing")
+	}
+	return rootNodeID, nil
+}
+
 func rerunExecutions(definition WorkflowDefinitionVersion) (map[string]NodeExecution, []string, error) {
 	if len(definition.NodeExecutions) == 0 || len(definition.ExecutionOrder) != len(definition.NodeExecutions) {
 		return nil, nil, errors.New("workflow definition execution set is invalid")

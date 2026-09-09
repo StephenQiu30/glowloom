@@ -99,7 +99,8 @@
 - [ ] 实现 Gate 2 typed changes_requested 受影响闭包。
   - [x] 固定四类语义操作，并由 Backend 对冻结六视图计算确定性的七类直接依赖闭包；无关的下一跳场景不得进入 Scene/Occurrence/Continuity/Ledger 集合。
   - [x] 从 ProductionWorldCandidate 派生四组有序 target inventory，冻结到 Gate Input 并通过 Review Detail/OpenAPI 公开；repair 未接通前不提前开放 `changes_requested`。
-  - [ ] 重新计算并验证 `changes_requested` payload 的完整闭包，启动对应的有界 repair Run 后再开放决议。
+  - [x] 固定 Gate 2 ChangeRequest 的 operation/reason/evidence/issue/closure 合同，并机械映射唯一 Workflow root；该内部合同不单独开放决议。
+  - [ ] 在 Review 持久化时重算合同，向受影响生产阶段注入有界 repair directive，启动 repair Run 后再开放决议。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I04 — storygraph-production 制作投影与可追溯 Query

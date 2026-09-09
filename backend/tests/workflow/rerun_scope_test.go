@@ -74,6 +74,32 @@ func TestStructureIdentityRepairRootFollowsTheFrozenOperation(t *testing.T) {
 	}
 }
 
+func TestProductionWorldRepairRootFollowsTheTypedOperation(t *testing.T) {
+	source := []workflow.NodeRunProjection{
+		{NodeID: "entities", Executor: "activity.production_entity_derivation"},
+		{NodeID: "occurrences", Executor: "activity.scene_occurrence_binding"},
+		{NodeID: "continuity", Executor: "activity.interaction_continuity_reconciliation"},
+	}
+	for _, test := range []struct{ operation, root string }{
+		{workflow.ProductionWorldRepairReviseEntity, "entities"},
+		{workflow.ProductionWorldRepairRebindOccurrence, "occurrences"},
+		{workflow.ProductionWorldRepairReviseInteraction, "continuity"},
+		{workflow.ProductionWorldRepairReviseContinuity, "continuity"},
+	} {
+		root, err := workflow.ProductionWorldRepairRootNode(source, workflow.ProductionWorldChangeRequest{
+			ChangeSpec: workflow.ProductionWorldRepairChange{Operation: test.operation},
+		})
+		if err != nil || root != test.root {
+			t.Fatalf("operation %s root=%s err=%v", test.operation, root, err)
+		}
+	}
+	if _, err := workflow.ProductionWorldRepairRootNode(source, workflow.ProductionWorldChangeRequest{
+		ChangeSpec: workflow.ProductionWorldRepairChange{Operation: "rewrite_everything"},
+	}); err == nil {
+		t.Fatal("accepted unsupported Production World repair operation")
+	}
+}
+
 func rerunDefinitionFixture() workflow.WorkflowDefinitionVersion {
 	port := func(key string) authoring.PortDefinition {
 		return authoring.PortDefinition{Key: key, ValueType: "fact", Required: true}

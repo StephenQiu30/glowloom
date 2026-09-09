@@ -2,9 +2,13 @@ package workflow_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
@@ -44,6 +48,72 @@ func TestProductionWorldRepairClosureStopsAfterDirectContinuityNeighbour(t *test
 	} {
 		if slices.Contains(closure.AllKeys(), forbidden) {
 			t.Fatalf("direct closure leaked into the next continuity edge: %s in %#v", forbidden, closure)
+		}
+	}
+}
+
+func TestProductionWorldChangeRequestMatchesFrozenTargetEvidenceAndClosure(t *testing.T) {
+	draft := productionWorldCandidateDraft(t)
+	candidate, _, err := worlddomain.NewProductionWorldCandidate(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate, _, err := workflow.NewProductionWorldGateInput(workflow.ProductionWorldGateInputDraft{
+		WorkspaceID: draft.WorkspaceID, ProjectID: draft.ProjectID,
+		WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
+		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
+		CandidateRevisionHash: strings.Repeat("a", 64), Candidate: candidate,
+		AllowedDecisions: []string{"approved", "rejected"}, ExpectedHeads: productionWorldExpectedHeads(candidate, 0, 0),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, _, err := workflow.NewProductionWorldReviewDetail(gate, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selection := workflow.ProductionWorldRepairSelection{
+		Operation:  workflow.ProductionWorldRepairRebindOccurrence,
+		TargetKeys: []string{detail.Views.SceneOccurrences[0].Occurrences[0].OccurrenceKey},
+	}
+	closure, err := workflow.NewProductionWorldRepairClosure(detail.Views, selection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := detail.Views.SceneOccurrences[0].Occurrences[0].Evidence
+	request := workflow.ProductionWorldChangeRequest{
+		IssueRefs: []string{},
+		EvidenceRefs: []workflow.HumanGateEvidenceRef{{
+			SourceVersionID: gate.Subject.SourceVersion.VersionID,
+			SourceStart:     evidence.SourceStart, SourceEnd: evidence.SourceEnd, TextHash: evidence.TextHash,
+		}},
+		ChangeSpec: workflow.ProductionWorldRepairChange{
+			Operation: selection.Operation, TargetKeys: selection.TargetKeys, AffectedScopeKeys: closure.AllKeys(),
+		},
+		ReasonCode: "scene_occurrence_incorrect",
+	}
+	if err = workflow.ValidateProductionWorldChangeRequest(gate, detail, request); err != nil {
+		t.Fatal(err)
+	}
+
+	mutations := []func(*workflow.ProductionWorldChangeRequest){
+		func(value *workflow.ProductionWorldChangeRequest) {
+			value.ChangeSpec.AffectedScopeKeys = append(value.ChangeSpec.AffectedScopeKeys, "scene:outside_frozen_closure")
+		},
+		func(value *workflow.ProductionWorldChangeRequest) { value.ReasonCode = "rewrite_everything" },
+		func(value *workflow.ProductionWorldChangeRequest) { value.EvidenceRefs[0].SourceStart++ },
+		func(value *workflow.ProductionWorldChangeRequest) {
+			value.ChangeSpec.TargetKeys[0] = "occurrence_missing"
+		},
+		func(value *workflow.ProductionWorldChangeRequest) {
+			value.EvidenceRefs, value.IssueRefs, value.UserNote = []workflow.HumanGateEvidenceRef{}, []string{}, nil
+		},
+	}
+	for index, mutate := range mutations {
+		changed := request.Clone()
+		mutate(&changed)
+		if err = workflow.ValidateProductionWorldChangeRequest(gate, detail, changed); err == nil {
+			t.Fatalf("accepted Production World change request mutation %d: %#v", index, changed)
 		}
 	}
 }

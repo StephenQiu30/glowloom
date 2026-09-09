@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 )
 
 const (
@@ -23,6 +24,33 @@ type ProductionWorldRepairSelection struct {
 type ProductionWorldRepairTargetSet struct {
 	Operation  string   `json:"operation"`
 	TargetKeys []string `json:"target_keys"`
+}
+
+type ProductionWorldRepairChange struct {
+	Operation         string   `json:"operation"`
+	TargetKeys        []string `json:"target_keys"`
+	AffectedScopeKeys []string `json:"affected_scope_keys"`
+}
+
+type ProductionWorldChangeRequest struct {
+	IssueRefs    []string                    `json:"issue_refs"`
+	EvidenceRefs []HumanGateEvidenceRef      `json:"evidence_refs"`
+	ChangeSpec   ProductionWorldRepairChange `json:"change_spec"`
+	ReasonCode   string                      `json:"reason_code"`
+	UserNote     *string                     `json:"user_note,omitempty"`
+}
+
+func (value ProductionWorldChangeRequest) Clone() ProductionWorldChangeRequest {
+	result := value
+	result.IssueRefs = append(make([]string, 0, len(value.IssueRefs)), value.IssueRefs...)
+	result.EvidenceRefs = append(make([]HumanGateEvidenceRef, 0, len(value.EvidenceRefs)), value.EvidenceRefs...)
+	result.ChangeSpec.TargetKeys = append(make([]string, 0, len(value.ChangeSpec.TargetKeys)), value.ChangeSpec.TargetKeys...)
+	result.ChangeSpec.AffectedScopeKeys = append(make([]string, 0, len(value.ChangeSpec.AffectedScopeKeys)), value.ChangeSpec.AffectedScopeKeys...)
+	if value.UserNote != nil {
+		note := *value.UserNote
+		result.UserNote = &note
+	}
+	return result
 }
 
 type ProductionWorldRepairClosure struct {
@@ -242,6 +270,199 @@ func NewProductionWorldRepairClosure(
 	}
 
 	return productionWorldRepairClosureFromSets(selection, sets), nil
+}
+
+func ValidateProductionWorldChangeRequest(
+	gate ProductionWorldGateInput,
+	detail ProductionWorldReviewDetail,
+	request ProductionWorldChangeRequest,
+) error {
+	if detail.InputHash != gate.InputHash || detail.CandidateRevision != gate.Subject.ProductionWorldCandidate ||
+		!sameProductionWorldRepairTargetSets(detail.RepairTargets, gate.Subject.RepairTargets) {
+		return errors.New("Production World change request review binding has drifted")
+	}
+	if !validOptionalProductionWorldIssueRefs(request.IssueRefs) ||
+		!validProductionWorldRepairEvidenceRefs(request.EvidenceRefs) ||
+		!validProductionWorldRepairReason(request.ChangeSpec.Operation, request.ReasonCode) {
+		return errors.New("invalid Production World change request")
+	}
+	if request.UserNote != nil {
+		note := strings.TrimSpace(*request.UserNote)
+		if note == "" || note != *request.UserNote || len([]rune(note)) > 1000 {
+			return errors.New("invalid Production World change request note")
+		}
+	}
+	if len(request.IssueRefs) == 0 && len(request.EvidenceRefs) == 0 && request.UserNote == nil {
+		return errors.New("Production World change request has no review basis")
+	}
+	selection := ProductionWorldRepairSelection{
+		Operation: request.ChangeSpec.Operation, TargetKeys: append([]string(nil), request.ChangeSpec.TargetKeys...),
+	}
+	if !productionWorldSelectionWithinTargets(selection, gate.Subject.RepairTargets) {
+		return errors.New("Production World change request is outside the frozen repair targets")
+	}
+	closure, err := NewProductionWorldRepairClosure(detail.Views, selection)
+	if err != nil || !slices.Equal(request.ChangeSpec.AffectedScopeKeys, closure.AllKeys()) {
+		return errors.New("Production World change request closure has drifted")
+	}
+	if !productionWorldIssueRefsWithinDetail(request.IssueRefs, detail.ReviewIssues) {
+		return errors.New("Production World change request issue has drifted")
+	}
+	allowedEvidence := productionWorldRepairEvidence(detail.Views, closure, gate.Subject.SourceVersion.VersionID)
+	for _, evidence := range request.EvidenceRefs {
+		if _, exists := allowedEvidence[evidence]; !exists {
+			return errors.New("Production World change request evidence is outside the affected closure")
+		}
+	}
+	return nil
+}
+
+func sameProductionWorldRepairTargetSets(left, right []ProductionWorldRepairTargetSet) bool {
+	return slices.EqualFunc(left, right, func(left, right ProductionWorldRepairTargetSet) bool {
+		return left.Operation == right.Operation && slices.Equal(left.TargetKeys, right.TargetKeys)
+	})
+}
+
+func validOptionalProductionWorldIssueRefs(values []string) bool {
+	if values == nil || !slices.IsSorted(values) {
+		return false
+	}
+	for index, value := range values {
+		if value == "" || value != strings.TrimSpace(value) || (index > 0 && values[index-1] == value) {
+			return false
+		}
+	}
+	return true
+}
+
+func validProductionWorldRepairEvidenceRefs(values []HumanGateEvidenceRef) bool {
+	if values == nil || !slices.IsSortedFunc(values, compareHumanGateEvidenceRef) {
+		return false
+	}
+	for index, value := range values {
+		if value.SourceVersionID == "" || value.SourceStart < 0 || value.SourceEnd <= value.SourceStart ||
+			!nodeOutputContentHashPattern.MatchString(value.TextHash) ||
+			(index > 0 && compareHumanGateEvidenceRef(values[index-1], value) == 0) {
+			return false
+		}
+	}
+	return true
+}
+
+func validProductionWorldRepairReason(operation, reason string) bool {
+	expected := map[string]string{
+		ProductionWorldRepairReviseEntity:      "production_entity_incorrect",
+		ProductionWorldRepairRebindOccurrence:  "scene_occurrence_incorrect",
+		ProductionWorldRepairReviseInteraction: "interaction_incorrect",
+		ProductionWorldRepairReviseContinuity:  "continuity_incorrect",
+	}
+	return reason == expected[operation]
+}
+
+func productionWorldSelectionWithinTargets(
+	selection ProductionWorldRepairSelection,
+	values []ProductionWorldRepairTargetSet,
+) bool {
+	if !validProductionWorldRepairSelection(selection) {
+		return false
+	}
+	for _, value := range values {
+		if value.Operation != selection.Operation {
+			continue
+		}
+		for _, target := range selection.TargetKeys {
+			if !slices.Contains(value.TargetKeys, target) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func productionWorldIssueRefsWithinDetail(
+	values []string,
+	issues []worlddomain.ProductionWorldReviewIssue,
+) bool {
+	available := make(map[string]struct{}, len(issues))
+	for _, issue := range issues {
+		available[issue.SourceStage+"/"+issue.Issue.IssueKey] = struct{}{}
+	}
+	for _, value := range values {
+		if _, exists := available[value]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func productionWorldRepairEvidence(
+	views ProductionWorldReviewViews,
+	closure ProductionWorldRepairClosure,
+	sourceVersionID string,
+) map[HumanGateEvidenceRef]struct{} {
+	result := make(map[HumanGateEvidenceRef]struct{})
+	add := func(value agentcontract.SourceEvidenceSpan) {
+		result[HumanGateEvidenceRef{
+			SourceVersionID: sourceVersionID, SourceStart: value.SourceStart,
+			SourceEnd: value.SourceEnd, TextHash: value.TextHash,
+		}] = struct{}{}
+	}
+	for _, collection := range [][]ProductionWorldEntityReviewItem{views.CharacterAppearances, views.Locations, views.PropStates} {
+		for _, entity := range collection {
+			if !slices.Contains(closure.EntityKeys, entity.IdentityKey) {
+				continue
+			}
+			for _, evidence := range entity.Basis.Evidence {
+				add(evidence)
+			}
+			for _, state := range entity.States {
+				if !slices.Contains(closure.StateKeys, state.StateKey) {
+					continue
+				}
+				for _, evidence := range state.Basis.Evidence {
+					add(evidence)
+				}
+			}
+		}
+	}
+	for _, scene := range views.SceneOccurrences {
+		for _, occurrence := range scene.Occurrences {
+			if slices.Contains(closure.OccurrenceKeys, occurrence.OccurrenceKey) {
+				add(occurrence.Evidence)
+			}
+		}
+	}
+	for _, interaction := range views.Interactions {
+		if !slices.Contains(closure.InteractionKeys, interaction.InteractionKey) {
+			continue
+		}
+		add(interaction.Evidence)
+		for _, evidence := range []*agentcontract.SourceEvidenceSpan{
+			interaction.GeometryEvidence.Hand, interaction.GeometryEvidence.GripType,
+			interaction.GeometryEvidence.ContactPoint, interaction.GeometryEvidence.Direction,
+			interaction.GeometryEvidence.RelativeScale,
+		} {
+			if evidence != nil {
+				add(*evidence)
+			}
+		}
+	}
+	for _, claim := range views.Continuity.Claims {
+		if slices.Contains(closure.ContinuityKeys, claim.ContinuityKey) {
+			for _, evidence := range claim.Evidence {
+				add(evidence)
+			}
+		}
+	}
+	for _, entry := range views.Continuity.Ledger {
+		if slices.Contains(closure.LedgerKeys, entry.LedgerKey) {
+			for _, evidence := range entry.Evidence {
+				add(evidence)
+			}
+		}
+	}
+	return result
 }
 
 func validProductionWorldRepairSelection(value ProductionWorldRepairSelection) bool {

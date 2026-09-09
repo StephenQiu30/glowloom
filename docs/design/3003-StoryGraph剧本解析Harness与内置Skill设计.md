@@ -638,6 +638,8 @@ Backend aggregate 不伪造 Agent Stage Variant，只使用自己的 aggregate c
 
 Gate 2 的 MVP 不引入通用 Patch DSL，只接受四个语义操作：`revise_production_entity`、`rebind_scene_occurrence`、`revise_interaction`、`revise_continuity`。Gate Input 必须从同一冻结 Candidate 派生四组有序 `repair_targets`，Review Detail 只复制这份不可变 inventory，不能由前端或 Agent 补写。Backend 再从冻结的六视图机械计算并排序去重 `scene/entity/state/occurrence/interaction/continuity/ledger` 七类闭包；Scene、Occurrence、Interaction 或 Continuity 修复只扩展到直接 Interaction 和一跳 Continuity 邻接，不再从新增邻场递归扩散；Production Entity 修复覆盖该 Entity/State 的完整 shard。不存在的 key、操作与 key 类型不匹配、重复或未排序 target 一律拒绝。该闭包只是后续 repair Run 的授权输入，不直接写 Owner，也不允许 Agent 自报影响范围。在 repair Run 接通以前，Gate 2 仍只公开 `approved|rejected`，不得先暴露无法恢复的 `changes_requested` 死路。
 
+Gate 2 `ChangeRequest` 的原因码与操作一一对应为 `production_entity_incorrect|scene_occurrence_incorrect|interaction_incorrect|continuity_incorrect`。`affected_scope_keys` 必须逐项等于 Backend 对所选 target 重算的完整闭包；引用的 Evidence 必须来自该闭包内冻结事实，引用 Candidate issue 时使用 `<source_stage>/<issue_key>`。Evidence/Issue 可以为空以容纳 CreatorDecision 修正，但此时必须提供非空 `user_note`；自由文本只解释原因，不参与 root 或闭包计算。Workflow root 机械映射为 `derive_production_entities|bind_scene_occurrences|reconcile_interaction_continuity`，不能由客户端指定。
+
 文本 `review_candidate` 模型只返回 Issue，不拥有整体 `pass` 或 Gate 状态。`review_reference_artifact` 可以按每个 Rubric 项输出 `pass|warn|fail|not_assessable`，但该项级判定不等于整体 Gate pass，更不是 CandidateSelection。Mechanical gate blocker 不能被模型降级；Human Decision 也不能绕过 Schema/Evidence/Owner reference 的 fail-closed 条件。
 
 ## 14. Invocation、Attempt 与 unknown 恢复
