@@ -2434,6 +2434,25 @@ export interface components {
         HumanTaskResponse: components["schemas"]["HumanTaskBaseResponse"] & {
             claim: components["schemas"]["HumanTaskClaimDetail"] | null;
         };
+        HumanGateChangeEvidenceRef: {
+            /** Format: uuid */
+            source_version_id: string;
+            source_start: number;
+            source_end: number;
+            text_hash: string;
+        };
+        HumanGateChangeSpec: {
+            operation: string;
+            target_keys: string[];
+            affected_scope_keys: string[];
+        };
+        HumanGateChangeRequest: {
+            issue_refs: string[];
+            evidence_refs: components["schemas"]["HumanGateChangeEvidenceRef"][];
+            change_spec: components["schemas"]["HumanGateChangeSpec"];
+            reason_code: string;
+            user_note?: string;
+        };
         ReviewDecisionResponse: {
             /** Format: uuid */
             id: string;
@@ -2445,6 +2464,7 @@ export interface components {
             subject_hash: string;
             /** Format: uuid */
             selected_candidate_id: string | null;
+            change_request: components["schemas"]["HumanGateChangeRequest"] | null;
             /** Format: uuid */
             created_by: string;
             /** Format: date-time */
@@ -2516,6 +2536,7 @@ export interface components {
             decision: "approved" | "rejected" | "changes_requested" | "selected";
             /** Format: uuid */
             selected_candidate_id: string | null;
+            change_request?: components["schemas"]["HumanGateChangeRequest"] | null;
             idempotency_key: string;
         };
         StoryGraphVersionEnvelope: {

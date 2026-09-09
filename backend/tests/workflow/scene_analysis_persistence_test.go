@@ -889,6 +889,7 @@ func (starter *immediateSceneAnalysisStarter) Start(_ context.Context, request w
 type deterministicSceneAnalysisRuntime struct {
 	now           time.Time
 	calls         int
+	reviewIssue   bool
 	spanCandidate json.RawMessage
 	factCandidate json.RawMessage
 }
@@ -990,7 +991,7 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
-		candidate = buildStructureIdentityReviewCandidate(input)
+		candidate = buildStructureIdentityReviewCandidate(input, runtime.reviewIssue)
 	}
 	outputHash, err := contract.ProductionCanonicalHash(candidate)
 	if err != nil {
@@ -1026,7 +1027,25 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
 }
 
-func buildStructureIdentityReviewCandidate(input contract.StructureIdentityReviewInput) json.RawMessage {
+func buildStructureIdentityReviewCandidate(input contract.StructureIdentityReviewInput, withReviewIssue bool) json.RawMessage {
+	issues := any(input.DeterministicIssues)
+	suggestions := any([]any{})
+	if withReviewIssue {
+		text := []rune(input.NormalizedText)
+		anchor := string(text[0:1])
+		issues = []any{map[string]any{
+			"issue_key": "issue_source_interpretation_0001", "code": "source_interpretation_needs_confirmation",
+			"severity": "warning", "scope": "script_source", "summary": "首段原文语义需要人工确认",
+			"evidence": []any{map[string]any{
+				"source_start": 0, "source_end": 1,
+				"text_hash": fmt.Sprintf("%x", sha256.Sum256([]byte(anchor))), "exact_anchor": anchor,
+			}},
+		}}
+		suggestions = []any{map[string]any{
+			"issue_key": "issue_source_interpretation_0001", "action": "inspect_source",
+			"target_keys": []string{"script_source"}, "rationale": "重新核对首段原文。",
+		}}
+	}
 	return mustSceneJSON(map[string]any{
 		"profile_key":       "structure_identity",
 		"source_version_id": input.SourceVersionID, "source_hash": input.SourceHash,
@@ -1036,7 +1055,7 @@ func buildStructureIdentityReviewCandidate(input contract.StructureIdentityRevie
 		"scene_fact_candidate_revision_hash": input.SceneFactCandidateRevisionHash,
 		"identity_candidate_revision_id":     input.IdentityCandidateRevisionID,
 		"identity_candidate_revision_hash":   input.IdentityCandidateRevisionHash,
-		"review_issues":                      input.DeterministicIssues, "suggestions": []any{},
+		"review_issues":                      issues, "suggestions": suggestions,
 	})
 }
 

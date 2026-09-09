@@ -3,6 +3,7 @@ package workflow_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +29,7 @@ import (
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	reviewdomain "github.com/StephenQiu30/lanverse/backend/internal/review/domain"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
@@ -117,7 +119,7 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	sceneService, err := agentapp.NewSceneAnalysisService(
-		agentgorm.NewSceneAnalysisStore(database), &deterministicSceneAnalysisRuntime{now: now}, dispatchSigner,
+		agentgorm.NewSceneAnalysisStore(database), &deterministicSceneAnalysisRuntime{now: now, reviewIssue: true}, dispatchSigner,
 		agentapp.SceneAnalysisConfig{
 			Now: func() time.Time { return now }, NewID: uuid.NewString,
 			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 8),
@@ -190,6 +192,43 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("claim Structure Identity review: %v", err)
+	}
+	var gateInput model.WorkflowHumanGateInput
+	if err = database.First(&gateInput, "id = ?", task.SubjectID).Error; err != nil {
+		t.Fatal(err)
+	}
+	gateContract, _, err := workflow.DecodeStructureIdentityGateInput(json.RawMessage(gateInput.Input))
+	if err != nil || len(gateContract.RepairOptions) != 1 || len(gateContract.RepairOptions[0].AllowedChanges) != 1 {
+		t.Fatalf("load Structure Identity repair option: gate=%#v err=%v", gateContract, err)
+	}
+	option := gateContract.RepairOptions[0]
+	change := option.AllowedChanges[0]
+	invalidChange := &reviewdomain.ChangeRequest{
+		IssueRefs: []string{option.IssueKey},
+		EvidenceRefs: []reviewdomain.ChangeEvidenceRef{{
+			SourceVersionID: option.EvidenceRefs[0].SourceVersionID,
+			SourceStart:     option.EvidenceRefs[0].SourceStart, SourceEnd: option.EvidenceRefs[0].SourceEnd,
+			TextHash: option.EvidenceRefs[0].TextHash,
+		}},
+		ChangeSpec: reviewdomain.ChangeSpec{
+			Operation: change.Operation, TargetKeys: append([]string(nil), change.TargetKeys...),
+			AffectedScopeKeys: append(append([]string(nil), change.AffectedScopeKeys...),
+				"scene:"+uuid.NewString()),
+		},
+		ReasonCode: "source_interpretation_incorrect",
+	}
+	if _, decisionErr := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: task.ID.String(), ClaimToken: claim.ClaimToken, Decision: "changes_requested",
+		ExpectedTaskRevision: claim.Task.Revision, ExpectedSubjectRevision: claim.Task.SubjectRevision,
+		ExpectedSubjectHash: claim.Task.SubjectHash, ChangeRequest: invalidChange,
+		IdempotencyKey: "structure-identity-temporal-invalid-change:" + task.ID.String(),
+	}); decisionErr == nil {
+		t.Fatal("expanded Structure Identity repair scope was accepted")
+	} else {
+		var validationError *reviewapp.Error
+		if !errors.As(decisionErr, &validationError) || validationError.Status != 422 {
+			t.Fatalf("expanded Structure Identity repair scope error=%v", decisionErr)
+		}
 	}
 	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
 		TaskID: task.ID.String(), ClaimToken: claim.ClaimToken, Decision: "approved",

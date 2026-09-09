@@ -73,13 +73,14 @@ type claimTokenRequest struct {
 }
 
 type decisionRequest struct {
-	ClaimToken              string  `json:"claim_token" validate:"required,uuid"`
-	ExpectedTaskRevision    int     `json:"expected_task_revision" validate:"gte=1"`
-	ExpectedSubjectRevision int     `json:"expected_subject_revision" validate:"gte=1"`
-	ExpectedSubjectHash     string  `json:"expected_subject_hash" validate:"required,len=64,hexadecimal"`
-	Decision                string  `json:"decision" validate:"required,oneof=approved rejected changes_requested selected"`
-	SelectedCandidateID     *string `json:"selected_candidate_id"`
-	IdempotencyKey          string  `json:"idempotency_key" validate:"required,max=200"`
+	ClaimToken              string                      `json:"claim_token" validate:"required,uuid"`
+	ExpectedTaskRevision    int                         `json:"expected_task_revision" validate:"gte=1"`
+	ExpectedSubjectRevision int                         `json:"expected_subject_revision" validate:"gte=1"`
+	ExpectedSubjectHash     string                      `json:"expected_subject_hash" validate:"required,len=64,hexadecimal"`
+	Decision                string                      `json:"decision" validate:"required,oneof=approved rejected changes_requested selected"`
+	SelectedCandidateID     *string                     `json:"selected_candidate_id"`
+	ChangeRequest           *reviewdomain.ChangeRequest `json:"change_request"`
+	IdempotencyKey          string                      `json:"idempotency_key" validate:"required,max=200"`
 }
 
 func (handler *Handler) list(writer http.ResponseWriter, request *http.Request) {
@@ -216,7 +217,7 @@ func (handler *Handler) decide(writer http.ResponseWriter, request *http.Request
 		TaskID: request.PathValue("human_task_id"), ClaimToken: payload.ClaimToken,
 		ExpectedTaskRevision: payload.ExpectedTaskRevision, ExpectedSubjectRevision: payload.ExpectedSubjectRevision,
 		ExpectedSubjectHash: payload.ExpectedSubjectHash, Decision: payload.Decision,
-		SelectedCandidateID: selected, IdempotencyKey: payload.IdempotencyKey,
+		SelectedCandidateID: selected, ChangeRequest: payload.ChangeRequest, IdempotencyKey: payload.IdempotencyKey,
 	})
 	if err != nil {
 		handler.writeError(writer, request, err, nil)
@@ -404,6 +405,7 @@ func presentDecision(decision reviewdomain.ReviewDecision) map[string]any {
 		"id": decision.ID, "human_task_id": decision.HumanTaskID, "decision": decision.Decision,
 		"subject_revision": decision.SubjectRevision, "subject_hash": decision.SubjectHash,
 		"selected_candidate_id": nullableString(decision.SelectedCandidateID),
+		"change_request":        decision.ChangeRequest,
 		"created_by":            decision.CreatedBy, "created_at": decision.CreatedAt,
 	}
 }

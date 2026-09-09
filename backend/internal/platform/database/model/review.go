@@ -35,18 +35,19 @@ type HumanTask struct {
 func (HumanTask) TableName() string { return "rev_human_tasks" }
 
 type ReviewDecision struct {
-	ID                  uuid.UUID   `gorm:"type:uuid;primaryKey"`
-	WorkspaceID         uuid.UUID   `gorm:"type:uuid;not null;index:ix_rev_decisions_workspace_created,priority:1"`
-	HumanTaskID         uuid.UUID   `gorm:"type:uuid;not null;uniqueIndex:uq_rev_decision_task"`
-	Decision            string      `gorm:"type:varchar(30);not null;check:ck_rev_decision_value,decision IN ('approved','rejected','changes_requested','selected')"`
-	SubjectRevision     int         `gorm:"not null;check:ck_rev_decision_subject_revision,subject_revision >= 1"`
-	SubjectHash         string      `gorm:"type:char(64);not null;check:ck_rev_decision_subject_hash,char_length(subject_hash) = 64"`
-	SelectedCandidateID *uuid.UUID  `gorm:"type:uuid"`
-	CreatedBy           uuid.UUID   `gorm:"type:uuid;not null"`
-	CreatedAt           time.Time   `gorm:"type:timestamptz;not null;index:ix_rev_decisions_workspace_created,priority:2,sort:desc"`
-	Workspace           Workspace   `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	HumanTask           HumanTask   `gorm:"foreignKey:HumanTaskID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	Creator             UserAccount `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ID                  uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	WorkspaceID         uuid.UUID      `gorm:"type:uuid;not null;index:ix_rev_decisions_workspace_created,priority:1"`
+	HumanTaskID         uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_rev_decision_task"`
+	Decision            string         `gorm:"type:varchar(30);not null;check:ck_rev_decision_value,decision IN ('approved','rejected','changes_requested','selected')"`
+	SubjectRevision     int            `gorm:"not null;check:ck_rev_decision_subject_revision,subject_revision >= 1"`
+	SubjectHash         string         `gorm:"type:char(64);not null;check:ck_rev_decision_subject_hash,char_length(subject_hash) = 64"`
+	SelectedCandidateID *uuid.UUID     `gorm:"type:uuid"`
+	DecisionPayload     datatypes.JSON `gorm:"type:jsonb;not null;default:'{}';check:ck_rev_decision_payload,jsonb_typeof(decision_payload) = 'object'"`
+	CreatedBy           uuid.UUID      `gorm:"type:uuid;not null"`
+	CreatedAt           time.Time      `gorm:"type:timestamptz;not null;index:ix_rev_decisions_workspace_created,priority:2,sort:desc"`
+	Workspace           Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	HumanTask           HumanTask      `gorm:"foreignKey:HumanTaskID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator             UserAccount    `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (ReviewDecision) TableName() string { return "rev_review_decisions" }

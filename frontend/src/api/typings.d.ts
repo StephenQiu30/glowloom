@@ -75,6 +75,9 @@ declare global {
     type EpisodeSegmentOriginResponse = components["schemas"]["EpisodeSegmentOriginResponse"];
     type FormatIssueResponse = components["schemas"]["FormatIssueResponse"];
     type FreezeStoryboardIntentsRequest = components["schemas"]["FreezeStoryboardIntentsRequest"];
+    type HumanGateChangeEvidenceRef = components["schemas"]["HumanGateChangeEvidenceRef"];
+    type HumanGateChangeRequest = components["schemas"]["HumanGateChangeRequest"];
+    type HumanGateChangeSpec = components["schemas"]["HumanGateChangeSpec"];
     type HumanGateCoordinationResponse = components["schemas"]["HumanGateCoordinationResponse"];
     type HumanGateDecisionEnvelope = components["schemas"]["HumanGateDecisionEnvelope"];
     type HumanGateResumeEnvelope = components["schemas"]["HumanGateResumeEnvelope"];

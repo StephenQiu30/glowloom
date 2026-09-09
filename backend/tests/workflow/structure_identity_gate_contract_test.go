@@ -167,6 +167,57 @@ func TestStructureIdentityGateInputRejectsDriftAndUnknownFields(t *testing.T) {
 	}
 }
 
+func TestStructureIdentityGateChangeRequestMatchesOneFrozenRepairOption(t *testing.T) {
+	gate, _, err := workflow.NewStructureIdentityGateInput(structureIdentityGateInputDraft())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := workflow.StructureIdentityChangeRequest{
+		IssueRefs:    []string{"issue_identity_alias_0001"},
+		EvidenceRefs: append([]workflow.HumanGateEvidenceRef(nil), gate.RepairOptions[0].EvidenceRefs...),
+		ChangeSpec:   gate.RepairOptions[0].AllowedChanges[0],
+		ReasonCode:   "identity_resolution_incorrect",
+	}
+	if err = workflow.ValidateStructureIdentityChangeRequest(gate, request); err != nil {
+		t.Fatalf("validate frozen change request: %v", err)
+	}
+
+	tests := map[string]func(*workflow.StructureIdentityChangeRequest){
+		"unknown issue": func(value *workflow.StructureIdentityChangeRequest) {
+			value.IssueRefs[0] = "issue_unknown"
+		},
+		"changed evidence": func(value *workflow.StructureIdentityChangeRequest) {
+			value.EvidenceRefs[0].SourceEnd++
+		},
+		"changed operation": func(value *workflow.StructureIdentityChangeRequest) {
+			value.ChangeSpec.Operation = "separate_identity"
+		},
+		"changed target": func(value *workflow.StructureIdentityChangeRequest) {
+			value.ChangeSpec.TargetKeys[0] = "identity_other"
+		},
+		"expanded scope": func(value *workflow.StructureIdentityChangeRequest) {
+			value.ChangeSpec.AffectedScopeKeys = append(value.ChangeSpec.AffectedScopeKeys,
+				"scene:90000000-0000-0000-0000-000000000002")
+		},
+		"free form reason": func(value *workflow.StructureIdentityChangeRequest) {
+			value.ReasonCode = "do what the note says"
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			changed := request
+			changed.IssueRefs = append([]string(nil), request.IssueRefs...)
+			changed.EvidenceRefs = append([]workflow.HumanGateEvidenceRef(nil), request.EvidenceRefs...)
+			changed.ChangeSpec.TargetKeys = append([]string(nil), request.ChangeSpec.TargetKeys...)
+			changed.ChangeSpec.AffectedScopeKeys = append([]string(nil), request.ChangeSpec.AffectedScopeKeys...)
+			mutate(&changed)
+			if err := workflow.ValidateStructureIdentityChangeRequest(gate, changed); err == nil {
+				t.Fatal("invalid change request was accepted")
+			}
+		})
+	}
+}
+
 func structureIdentityGateInputDraft() workflow.StructureIdentityGateInputDraft {
 	createdAt := time.Date(2026, time.September, 9, 8, 0, 0, 0, time.UTC)
 	return workflow.StructureIdentityGateInputDraft{

@@ -125,6 +125,48 @@ func TestPublicHumanTaskHandlerRejectsMalformedSelectedCandidateOnce(t *testing.
 	}
 }
 
+func TestPublicHumanTaskHandlerCarriesTypedStructureIdentityChangeRequest(t *testing.T) {
+	now := time.Date(2026, time.September, 9, 12, 0, 0, 0, time.UTC)
+	change := &reviewdomain.ChangeRequest{
+		IssueRefs: []string{"issue_identity_alias_0001"},
+		EvidenceRefs: []reviewdomain.ChangeEvidenceRef{{
+			SourceVersionID: "00000000-0000-0000-0000-000000000106",
+			SourceStart:     8, SourceEnd: 10, TextHash: strings.Repeat("a", 64),
+		}},
+		ChangeSpec: reviewdomain.ChangeSpec{
+			Operation: "merge_identity", TargetKeys: []string{"identity_character_linzhou"},
+			AffectedScopeKeys: []string{"scene:00000000-0000-0000-0000-000000000107"},
+		},
+		ReasonCode: "identity_resolution_incorrect",
+	}
+	decision := reviewdomain.ReviewDecision{
+		ID: publicDecisionID, HumanTaskID: publicTaskID, Decision: "changes_requested",
+		SubjectRevision: 1, SubjectHash: publicSubjectHash, ChangeRequest: change, CreatedAt: now,
+	}
+	reviews := &publicReviewStub{decision: reviewdomain.DecisionResult{
+		Task: reviewdomain.HumanTask{ID: publicTaskID}, Decision: decision,
+	}}
+	mux := http.NewServeMux()
+	reviewhttp.New(reviews, &publicCoordinatorStub{}, publicAuthenticator{
+		userID: "00000000-0000-0000-0000-000000000105",
+	}).Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/human-tasks/"+publicTaskID+"/decisions",
+		strings.NewReader(`{"claim_token":"`+publicClaimToken+`","expected_task_revision":2,`+
+			`"expected_subject_revision":1,"expected_subject_hash":"`+publicSubjectHash+`",`+
+			`"decision":"changes_requested","selected_candidate_id":null,"change_request":{`+
+			`"issue_refs":["issue_identity_alias_0001"],"evidence_refs":[{`+
+			`"source_version_id":"00000000-0000-0000-0000-000000000106","source_start":8,"source_end":10,`+
+			`"text_hash":"`+strings.Repeat("a", 64)+`"}],"change_spec":{"operation":"merge_identity",`+
+			`"target_keys":["identity_character_linzhou"],"affected_scope_keys":["scene:00000000-0000-0000-0000-000000000107"]},`+
+			`"reason_code":"identity_resolution_incorrect"},"idempotency_key":"typed-change"}`)))
+	if response.Code != http.StatusAccepted || reviews.decideCommand.ChangeRequest == nil ||
+		reviews.decideCommand.ChangeRequest.ChangeSpec.Operation != "merge_identity" ||
+		!strings.Contains(response.Body.String(), `"change_request"`) {
+		t.Fatalf("typed change response=%d %s command=%#v", response.Code, response.Body.String(), reviews.decideCommand)
+	}
+}
+
 func TestPublicHumanTaskHandlerCarriesCommittedDecisionWhenOwnerApplyConflicts(t *testing.T) {
 	decision := reviewdomain.ReviewDecision{ID: publicDecisionID, HumanTaskID: publicTaskID, Decision: "approved", SubjectRevision: 1, SubjectHash: publicSubjectHash}
 	reviews := &publicReviewStub{decision: reviewdomain.DecisionResult{

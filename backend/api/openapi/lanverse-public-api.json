@@ -6446,6 +6446,108 @@
           }
         ]
       },
+      "HumanGateChangeEvidenceRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_version_id",
+          "source_start",
+          "source_end",
+          "text_hash"
+        ],
+        "properties": {
+          "source_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_start": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source_end": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "text_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "HumanGateChangeSpec": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operation",
+          "target_keys",
+          "affected_scope_keys"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_keys": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "affected_scope_keys": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "HumanGateChangeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "issue_refs",
+          "evidence_refs",
+          "change_spec",
+          "reason_code"
+        ],
+        "properties": {
+          "issue_refs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/HumanGateChangeEvidenceRef"
+            }
+          },
+          "change_spec": {
+            "$ref": "#/components/schemas/HumanGateChangeSpec"
+          },
+          "reason_code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "user_note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      },
       "ReviewDecisionResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -6456,6 +6558,7 @@
           "subject_revision",
           "subject_hash",
           "selected_candidate_id",
+          "change_request",
           "created_by",
           "created_at"
         ],
@@ -6491,6 +6594,16 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "change_request": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/HumanGateChangeRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_by": {
             "type": "string",
@@ -6803,6 +6916,16 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "change_request": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/HumanGateChangeRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "idempotency_key": {
             "type": "string",

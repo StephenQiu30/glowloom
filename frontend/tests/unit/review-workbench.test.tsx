@@ -113,6 +113,7 @@ function decision(): API.ReviewDecisionResponse {
     subject_revision: 2,
     subject_hash: "a".repeat(64),
     selected_candidate_id: null,
+    change_request: null,
     created_by: userId,
     created_at: "2026-08-27T02:05:00Z",
   };

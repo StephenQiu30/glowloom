@@ -62,6 +62,14 @@ type StructureIdentityRepairOption struct {
 	AllowedChanges []StructureIdentityAllowedChange `json:"allowed_changes"`
 }
 
+type StructureIdentityChangeRequest struct {
+	IssueRefs    []string                       `json:"issue_refs"`
+	EvidenceRefs []HumanGateEvidenceRef         `json:"evidence_refs"`
+	ChangeSpec   StructureIdentityAllowedChange `json:"change_spec"`
+	ReasonCode   string                         `json:"reason_code"`
+	UserNote     *string                        `json:"user_note,omitempty"`
+}
+
 type HumanGateExpectedHead struct {
 	OwnerKind   string `json:"owner_kind"`
 	LogicalID   string `json:"logical_id"`
@@ -389,6 +397,76 @@ func validStructureIdentityRepairOperation(value string) bool {
 		"inspect_source", "adjust_episode_boundary", "adjust_scene_boundary", "separate_identity",
 		"merge_identity", "resolve_mention", "reject_mention",
 	}, value)
+}
+
+func ValidateStructureIdentityChangeRequest(
+	gate StructureIdentityGateInput,
+	request StructureIdentityChangeRequest,
+) error {
+	if len(request.IssueRefs) == 0 || !slices.IsSorted(request.IssueRefs) ||
+		!validUniqueNonemptyStrings(request.IssueRefs) || len(request.EvidenceRefs) == 0 ||
+		!slices.IsSortedFunc(request.EvidenceRefs, compareHumanGateEvidenceRef) {
+		return errors.New("invalid structure identity change request")
+	}
+	for index, evidence := range request.EvidenceRefs {
+		if index > 0 && compareHumanGateEvidenceRef(request.EvidenceRefs[index-1], evidence) == 0 {
+			return errors.New("invalid structure identity change request evidence")
+		}
+	}
+	if !validStructureIdentityRepairOperation(request.ChangeSpec.Operation) ||
+		!slices.IsSorted(request.ChangeSpec.TargetKeys) ||
+		!validUniqueNonemptyStrings(request.ChangeSpec.TargetKeys) ||
+		!slices.IsSorted(request.ChangeSpec.AffectedScopeKeys) ||
+		!validUniqueNonemptyStrings(request.ChangeSpec.AffectedScopeKeys) ||
+		!validStructureIdentityReason(request.ChangeSpec.Operation, request.ReasonCode) {
+		return errors.New("invalid structure identity change spec")
+	}
+	if request.UserNote != nil {
+		note := strings.TrimSpace(*request.UserNote)
+		if note == "" || note != *request.UserNote || len([]rune(note)) > 1000 {
+			return errors.New("invalid structure identity change request note")
+		}
+	}
+
+	options := make(map[string]StructureIdentityRepairOption, len(gate.RepairOptions))
+	for _, option := range gate.RepairOptions {
+		options[option.IssueKey] = option
+	}
+	expectedEvidence := make(map[HumanGateEvidenceRef]struct{})
+	for _, issueRef := range request.IssueRefs {
+		option, exists := options[issueRef]
+		if !exists || !slices.ContainsFunc(option.AllowedChanges, func(change StructureIdentityAllowedChange) bool {
+			return compareStructureIdentityAllowedChange(change, request.ChangeSpec) == 0
+		}) {
+			return errors.New("structure identity change request is outside the frozen repair options")
+		}
+		for _, evidence := range option.EvidenceRefs {
+			expectedEvidence[evidence] = struct{}{}
+		}
+	}
+	if len(expectedEvidence) != len(request.EvidenceRefs) {
+		return errors.New("structure identity change request evidence has drifted")
+	}
+	for _, evidence := range request.EvidenceRefs {
+		if _, exists := expectedEvidence[evidence]; !exists {
+			return errors.New("structure identity change request evidence has drifted")
+		}
+	}
+	return nil
+}
+
+func validStructureIdentityReason(operation, reason string) bool {
+	reason = strings.TrimSpace(reason)
+	switch operation {
+	case "inspect_source":
+		return reason == "source_interpretation_incorrect" || reason == "insufficient_evidence"
+	case "adjust_episode_boundary", "adjust_scene_boundary":
+		return reason == "structure_boundary_incorrect"
+	case "separate_identity", "merge_identity", "resolve_mention", "reject_mention":
+		return reason == "identity_resolution_incorrect"
+	default:
+		return false
+	}
 }
 
 func validUniqueNonemptyStrings(values []string) bool {

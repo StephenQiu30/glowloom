@@ -1,6 +1,7 @@
 package application
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -87,6 +88,7 @@ type DecideCommand struct {
 	TaskID, ClaimToken, Decision, SelectedCandidateID, IdempotencyKey string
 	ExpectedSubjectHash                                               string
 	ExpectedTaskRevision, ExpectedSubjectRevision                     int
+	ChangeRequest                                                     *domain.ChangeRequest
 }
 
 func NewService(repository Repository, config Config) *Service {
@@ -207,10 +209,12 @@ func (service *Service) Decide(ctx context.Context, actor Actor, command DecideC
 	command.SelectedCandidateID = strings.TrimSpace(command.SelectedCandidateID)
 	command.ExpectedSubjectHash = strings.ToLower(strings.TrimSpace(command.ExpectedSubjectHash))
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	command.ChangeRequest = normalizeChangeRequest(command.ChangeRequest)
 	if service == nil || service.repository == nil || service.config.Now == nil || service.config.NewID == nil ||
 		actor.UserID == "" || command.TaskID == "" || command.ClaimToken == "" || command.ExpectedTaskRevision < 1 ||
 		command.ExpectedSubjectRevision < 1 || !validDecision(command.Decision, command.SelectedCandidateID) ||
 		!validHash(command.ExpectedSubjectHash) ||
+		!validChangeRequestForDecision(command.Decision, command.ChangeRequest) ||
 		command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
 		return domain.DecisionResult{}, invalid("Invalid review decision")
 	}
@@ -228,7 +232,96 @@ func (service *Service) Decide(ctx context.Context, actor Actor, command DecideC
 	if command.SelectedCandidateID != "" {
 		decision.SelectedCandidateID = &command.SelectedCandidateID
 	}
+	decision.ChangeRequest = cloneChangeRequest(command.ChangeRequest)
 	return service.repository.Decide(ctx, actor, command, decision, now)
+}
+
+func normalizeChangeRequest(value *domain.ChangeRequest) *domain.ChangeRequest {
+	result := cloneChangeRequest(value)
+	if result == nil {
+		return nil
+	}
+	for index := range result.IssueRefs {
+		result.IssueRefs[index] = strings.TrimSpace(result.IssueRefs[index])
+	}
+	slices.Sort(result.IssueRefs)
+	result.IssueRefs = slices.Compact(result.IssueRefs)
+	slices.SortFunc(result.EvidenceRefs, func(left, right domain.ChangeEvidenceRef) int {
+		if ordered := cmp.Compare(left.SourceVersionID, right.SourceVersionID); ordered != 0 {
+			return ordered
+		}
+		if ordered := cmp.Compare(left.SourceStart, right.SourceStart); ordered != 0 {
+			return ordered
+		}
+		if ordered := cmp.Compare(left.SourceEnd, right.SourceEnd); ordered != 0 {
+			return ordered
+		}
+		return cmp.Compare(left.TextHash, right.TextHash)
+	})
+	result.ChangeSpec.Operation = strings.TrimSpace(result.ChangeSpec.Operation)
+	for index := range result.ChangeSpec.TargetKeys {
+		result.ChangeSpec.TargetKeys[index] = strings.TrimSpace(result.ChangeSpec.TargetKeys[index])
+	}
+	slices.Sort(result.ChangeSpec.TargetKeys)
+	result.ChangeSpec.TargetKeys = slices.Compact(result.ChangeSpec.TargetKeys)
+	for index := range result.ChangeSpec.AffectedScopeKeys {
+		result.ChangeSpec.AffectedScopeKeys[index] = strings.TrimSpace(result.ChangeSpec.AffectedScopeKeys[index])
+	}
+	slices.Sort(result.ChangeSpec.AffectedScopeKeys)
+	result.ChangeSpec.AffectedScopeKeys = slices.Compact(result.ChangeSpec.AffectedScopeKeys)
+	result.ReasonCode = strings.TrimSpace(result.ReasonCode)
+	if result.UserNote != nil {
+		note := strings.TrimSpace(*result.UserNote)
+		if note == "" {
+			result.UserNote = nil
+		} else {
+			result.UserNote = &note
+		}
+	}
+	return result
+}
+
+func cloneChangeRequest(value *domain.ChangeRequest) *domain.ChangeRequest {
+	if value == nil {
+		return nil
+	}
+	result := *value
+	result.IssueRefs = append([]string(nil), value.IssueRefs...)
+	result.EvidenceRefs = append([]domain.ChangeEvidenceRef(nil), value.EvidenceRefs...)
+	result.ChangeSpec.TargetKeys = append([]string(nil), value.ChangeSpec.TargetKeys...)
+	result.ChangeSpec.AffectedScopeKeys = append([]string(nil), value.ChangeSpec.AffectedScopeKeys...)
+	if value.UserNote != nil {
+		note := *value.UserNote
+		result.UserNote = &note
+	}
+	return &result
+}
+
+func validChangeRequestForDecision(decision string, value *domain.ChangeRequest) bool {
+	if decision != "changes_requested" {
+		return value == nil
+	}
+	if value == nil {
+		return true
+	}
+	if len(value.IssueRefs) == 0 || len(value.EvidenceRefs) == 0 || value.ChangeSpec.Operation == "" ||
+		len(value.ChangeSpec.TargetKeys) == 0 || len(value.ChangeSpec.AffectedScopeKeys) == 0 ||
+		value.ReasonCode == "" || (value.UserNote != nil && len([]rune(*value.UserNote)) > 1000) {
+		return false
+	}
+	for _, issue := range value.IssueRefs {
+		if issue == "" {
+			return false
+		}
+	}
+	for _, evidence := range value.EvidenceRefs {
+		if evidence.SourceVersionID == "" || evidence.SourceStart < 0 || evidence.SourceEnd <= evidence.SourceStart ||
+			!validHash(evidence.TextHash) {
+			return false
+		}
+	}
+	return !slices.Contains(value.ChangeSpec.TargetKeys, "") &&
+		!slices.Contains(value.ChangeSpec.AffectedScopeKeys, "")
 }
 
 func (service *Service) GetDecision(ctx context.Context, actor Actor, decisionID string) (domain.DecisionResult, error) {

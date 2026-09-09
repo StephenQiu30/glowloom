@@ -26,8 +26,30 @@ type ReviewDecision struct {
 	SubjectRevision              int
 	SubjectHash                  string
 	SelectedCandidateID          *string
+	ChangeRequest                *ChangeRequest
 	CreatedBy                    string
 	CreatedAt                    time.Time
+}
+
+type ChangeEvidenceRef struct {
+	SourceVersionID string `json:"source_version_id"`
+	SourceStart     int    `json:"source_start"`
+	SourceEnd       int    `json:"source_end"`
+	TextHash        string `json:"text_hash"`
+}
+
+type ChangeSpec struct {
+	Operation         string   `json:"operation"`
+	TargetKeys        []string `json:"target_keys"`
+	AffectedScopeKeys []string `json:"affected_scope_keys"`
+}
+
+type ChangeRequest struct {
+	IssueRefs    []string            `json:"issue_refs"`
+	EvidenceRefs []ChangeEvidenceRef `json:"evidence_refs"`
+	ChangeSpec   ChangeSpec          `json:"change_spec"`
+	ReasonCode   string              `json:"reason_code"`
+	UserNote     *string             `json:"user_note,omitempty"`
 }
 
 type ClaimResult struct {

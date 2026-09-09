@@ -18,6 +18,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/review/domain"
+	workflowdomain "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
 const (
@@ -145,7 +146,10 @@ func (store *Store) GetTask(
 		if loadErr != nil {
 			return loadErr
 		}
-		mappedDecision := decisionDomain(decision)
+		mappedDecision, mapDecisionErr := decisionDomain(decision)
+		if mapDecisionErr != nil {
+			return mapDecisionErr
+		}
 		detail.Decision = &mappedDecision
 		return nil
 	})
@@ -178,7 +182,10 @@ func (store *Store) GetDecision(ctx context.Context, actor application.Actor, de
 		if mapErr != nil {
 			return mapErr
 		}
-		persistedDecision := decisionDomain(decision)
+		persistedDecision, mapDecisionErr := decisionDomain(decision)
+		if mapDecisionErr != nil {
+			return mapDecisionErr
+		}
 		if validationErr := validateDecisionResult(persistedTask, persistedDecision); validationErr != nil {
 			return validationErr
 		}
@@ -501,10 +508,14 @@ func (store *Store) Decide(
 		if !containsDecision(task.AllowedDecisions, command.Decision) {
 			return conflict("Decision is not allowed by the frozen human task rubric")
 		}
+		decisionPayload, payloadErr := validateAndEncodeDecisionPayload(transaction, task, desired)
+		if payloadErr != nil {
+			return payloadErr
+		}
 		decision := model.ReviewDecision{
 			ID: decisionID, WorkspaceID: task.WorkspaceID, HumanTaskID: task.ID, Decision: desired.Decision,
 			SubjectRevision: desired.SubjectRevision, SubjectHash: desired.SubjectHash,
-			CreatedBy: actorID, CreatedAt: now.UTC(),
+			DecisionPayload: decisionPayload, CreatedBy: actorID, CreatedAt: now.UTC(),
 		}
 		if command.SelectedCandidateID != "" {
 			selected, parseErr := uuid.Parse(command.SelectedCandidateID)
@@ -529,7 +540,11 @@ func (store *Store) Decide(
 		if mapErr != nil {
 			return mapErr
 		}
-		result = domain.DecisionResult{Task: persistedTask, Decision: decisionDomain(decision)}
+		persistedDecision, mapDecisionErr := decisionDomain(decision)
+		if mapDecisionErr != nil {
+			return mapDecisionErr
+		}
+		result = domain.DecisionResult{Task: persistedTask, Decision: persistedDecision}
 		return storeResultReceipt(ctx, transaction, task.WorkspaceID, decideOperation, command.IdempotencyKey, inputHash, task.ID, actorID, result, now)
 	})
 	if err == nil && stale {
@@ -645,18 +660,83 @@ func taskDomain(value model.HumanTask) (domain.HumanTask, error) {
 	}, nil
 }
 
-func decisionDomain(value model.ReviewDecision) domain.ReviewDecision {
+func decisionDomain(value model.ReviewDecision) (domain.ReviewDecision, error) {
 	var selected *string
 	if value.SelectedCandidateID != nil {
 		text := value.SelectedCandidateID.String()
 		selected = &text
 	}
+	var payload struct {
+		ChangeRequest *domain.ChangeRequest `json:"change_request,omitempty"`
+	}
+	if len(value.DecisionPayload) == 0 || json.Unmarshal(value.DecisionPayload, &payload) != nil {
+		return domain.ReviewDecision{}, errors.New("review decision payload has drifted")
+	}
 	return domain.ReviewDecision{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), HumanTaskID: value.HumanTaskID.String(),
 		Decision: value.Decision, SubjectRevision: value.SubjectRevision, SubjectHash: value.SubjectHash,
-		SelectedCandidateID: selected,
-		CreatedBy:           value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+		SelectedCandidateID: selected, ChangeRequest: payload.ChangeRequest,
+		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+	}, nil
+}
+
+func validateAndEncodeDecisionPayload(
+	transaction *gorm.DB,
+	task model.HumanTask,
+	decision domain.ReviewDecision,
+) (datatypes.JSON, error) {
+	if task.SubjectType != "structure_identity_gate_input" {
+		if decision.ChangeRequest != nil {
+			return nil, invalid("Change request is not supported by this human task")
+		}
+		return datatypes.JSON([]byte(`{}`)), nil
 	}
+	if decision.Decision != "changes_requested" {
+		if decision.ChangeRequest != nil {
+			return nil, invalid("Only changes requested may include a change request")
+		}
+		return datatypes.JSON([]byte(`{}`)), nil
+	}
+	if decision.ChangeRequest == nil {
+		return nil, invalid("Structure identity changes require a typed change request")
+	}
+	var record model.WorkflowHumanGateInput
+	if err := transaction.First(&record, "id = ?", task.SubjectID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	gate, _, err := workflowdomain.DecodeStructureIdentityGateInput(json.RawMessage(record.Input))
+	if err != nil || record.WorkspaceID != task.WorkspaceID || record.ProjectID != task.ProjectID ||
+		record.WorkflowRunID != task.WorkflowRunID || record.NodeRunID != task.NodeRunID ||
+		record.InputHash != task.SubjectHash || gate.InputHash != task.SubjectHash || task.SubjectRevision != 1 {
+		return nil, conflict("Structure identity Gate input changed before decision")
+	}
+	change := workflowdomain.StructureIdentityChangeRequest{
+		IssueRefs: append([]string(nil), decision.ChangeRequest.IssueRefs...),
+		ChangeSpec: workflowdomain.StructureIdentityAllowedChange{
+			Operation:         decision.ChangeRequest.ChangeSpec.Operation,
+			TargetKeys:        append([]string(nil), decision.ChangeRequest.ChangeSpec.TargetKeys...),
+			AffectedScopeKeys: append([]string(nil), decision.ChangeRequest.ChangeSpec.AffectedScopeKeys...),
+		},
+		ReasonCode: decision.ChangeRequest.ReasonCode,
+		UserNote:   decision.ChangeRequest.UserNote,
+	}
+	change.EvidenceRefs = make([]workflowdomain.HumanGateEvidenceRef, len(decision.ChangeRequest.EvidenceRefs))
+	for index, evidence := range decision.ChangeRequest.EvidenceRefs {
+		change.EvidenceRefs[index] = workflowdomain.HumanGateEvidenceRef{
+			SourceVersionID: evidence.SourceVersionID, SourceStart: evidence.SourceStart,
+			SourceEnd: evidence.SourceEnd, TextHash: evidence.TextHash,
+		}
+	}
+	if err = workflowdomain.ValidateStructureIdentityChangeRequest(gate, change); err != nil {
+		return nil, invalid("Change request is outside the frozen structure identity repair options")
+	}
+	payload, err := json.Marshal(struct {
+		ChangeRequest *domain.ChangeRequest `json:"change_request"`
+	}{ChangeRequest: decision.ChangeRequest})
+	if err != nil {
+		return nil, err
+	}
+	return datatypes.JSON(payload), nil
 }
 
 func validateDecisionResult(task domain.HumanTask, decision domain.ReviewDecision) error {
@@ -677,13 +757,21 @@ func validateDecisionResult(task domain.HumanTask, decision domain.ReviewDecisio
 		return errors.New("review task candidate binding has drifted")
 	}
 	if decision.Decision == "selected" {
-		if decision.SelectedCandidateID == nil || !slices.Contains(task.CandidateIDs, *decision.SelectedCandidateID) {
+		if decision.SelectedCandidateID == nil || decision.ChangeRequest != nil ||
+			!slices.Contains(task.CandidateIDs, *decision.SelectedCandidateID) {
 			return errors.New("review selected candidate binding has drifted")
 		}
 		return nil
 	}
 	if decision.SelectedCandidateID != nil || !slices.Contains([]string{"approved", "rejected", "changes_requested"}, decision.Decision) {
 		return errors.New("review decision value has drifted")
+	}
+	if task.SubjectType == "structure_identity_gate_input" &&
+		(decision.Decision == "changes_requested") != (decision.ChangeRequest != nil) {
+		return errors.New("structure identity review change payload has drifted")
+	}
+	if decision.Decision != "changes_requested" && decision.ChangeRequest != nil {
+		return errors.New("review decision change payload has drifted")
 	}
 	return nil
 }
@@ -783,6 +871,10 @@ func normalizeNotFound(err error) error {
 
 func conflict(message string) error {
 	return &application.Error{Code: "resource_conflict", Message: message, Status: 409}
+}
+
+func invalid(message string) error {
+	return &application.Error{Code: "validation_failed", Message: message, Status: 422}
 }
 
 var _ application.Repository = (*Store)(nil)
