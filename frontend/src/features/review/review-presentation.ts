@@ -30,6 +30,7 @@ export const decisionLabels: Record<DecisionValue, string> = {
 export const knownSubjectTypes = new Set([
   "workflow_node_output",
   "generation_candidate_selection",
+  "structure_identity_gate_input",
 ]);
 
 export function subjectLabel(value: string): string {
@@ -38,6 +39,8 @@ export function subjectLabel(value: string): string {
       return "工作流节点输出";
     case "generation_candidate_selection":
       return "生成候选选择";
+    case "structure_identity_gate_input":
+      return "结构与身份审核输入";
     default:
       return value;
   }

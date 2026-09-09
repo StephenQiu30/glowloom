@@ -57,6 +57,8 @@ const decisionId = "019ffa00-a000-7000-8000-000000000007";
 const claimToken = "019ffa00-a000-7000-8000-000000000008";
 const candidateOne = "019ffa00-a000-7000-8000-000000000009";
 const candidateTwo = "019ffa00-a000-7000-8000-000000000010";
+const candidateThree = "019ffa00-a000-7000-8000-000000000016";
+const candidateFour = "019ffa00-a000-7000-8000-000000000017";
 
 const project: API.ProjectResponse = {
   id: projectId,
@@ -241,6 +243,26 @@ describe("公共审核工作台", () => {
     expect(apiMocks.resumeDecision).toHaveBeenCalledWith({
       review_decision_id: decisionId,
     });
+  });
+
+  it("把结构身份 Gate 作为可领取的冻结审核任务", async () => {
+    currentDetail = {
+      task: task({
+        subject_type: "structure_identity_gate_input",
+        candidate_ids: [candidateOne, candidateTwo, candidateThree, candidateFour],
+        rubric_version: "gate.structure_identity_review@1.0.0",
+      }),
+      decision: null,
+      coordination: null,
+    };
+    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+
+    expect(await screen.findAllByText("结构与身份审核输入")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "领取审核" })).toBeEnabled();
+    expect(screen.getByText(candidateOne)).toBeInTheDocument();
+    expect(screen.getByText(candidateTwo)).toBeInTheDocument();
+    expect(screen.getByText(candidateThree)).toBeInTheDocument();
+    expect(screen.getByText(candidateFour)).toBeInTheDocument();
   });
 
   it("从详情恢复 Claim Token，并只提交冻结候选与服务端 revision", async () => {
