@@ -1037,12 +1037,13 @@ func (store *Store) ApplyHumanGate(
 		case "changes_requested":
 			progressStage, nextAction = "human_gate:changes_requested", "revise_node_output"
 		}
-		candidateRevisionSubject :=
-			node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0" ||
+		subjectRevisionIndependentOfNode :=
+			node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0" ||
+				node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
-		if node.Status == targetNodeStatus && (candidateRevisionSubject || node.Revision == apply.SubjectRevision+1) {
+		if node.Status == targetNodeStatus && (subjectRevisionIndependentOfNode || node.Revision == apply.SubjectRevision+1) {
 			if targetNodeStatus != "SUCCEEDED" {
 				return nil
 			}
@@ -1053,7 +1054,7 @@ func (store *Store) ApplyHumanGate(
 			}
 			return errors.New("completed workflow human gate output has drifted")
 		}
-		if node.Status != "WAITING_HUMAN" || !candidateRevisionSubject && node.Revision != apply.SubjectRevision || run.Status != "WAITING_HUMAN" {
+		if node.Status != "WAITING_HUMAN" || !subjectRevisionIndependentOfNode && node.Revision != apply.SubjectRevision || run.Status != "WAITING_HUMAN" {
 			return &application.Error{Code: "resource_conflict", Message: "Workflow human gate changed before decision application", Status: 409}
 		}
 		node.Status = targetNodeStatus

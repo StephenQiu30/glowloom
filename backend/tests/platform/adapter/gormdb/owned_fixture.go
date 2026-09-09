@@ -189,7 +189,19 @@ func deleteOwnedScope(transaction *gorm.DB, userIDs []string, workspaceID string
 			return err
 		}
 		query, identifier := "", any(nil)
+		sceneInvocations := transaction.Model(&model.SceneAnalysisInvocationRecord{}).
+			Select("id").Where("project_id IN ?", projectIDs)
+		sceneAttempts := transaction.Model(&model.SceneAnalysisAttempt{}).
+			Select("id").Where("invocation_id IN (?)", sceneInvocations)
 		switch {
+		case statement.Schema.Table == (model.SceneAnalysisInvocationRead{}).TableName() && len(projectIDs) > 0:
+			query, identifier = "invocation_id IN (?)", sceneInvocations
+		case statement.Schema.Table == (model.SceneAnalysisDispatchAuthorization{}).TableName() && len(projectIDs) > 0:
+			query, identifier = "attempt_id IN (?)", sceneAttempts
+		case statement.Schema.Table == (model.SceneAnalysisResult{}).TableName() && len(projectIDs) > 0:
+			query, identifier = "attempt_id IN (?)", sceneAttempts
+		case statement.Schema.Table == (model.SceneAnalysisAttempt{}).TableName() && len(projectIDs) > 0:
+			query, identifier = "invocation_id IN (?)", sceneInvocations
 		case statement.Schema.LookUpField("ProjectID") != nil && len(projectIDs) > 0:
 			query, identifier = "project_id IN ?", projectIDs
 		case statement.Schema.LookUpField("WorkspaceID") != nil:
