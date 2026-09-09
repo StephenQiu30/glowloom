@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -45,6 +46,22 @@ type HumanGateImpactSummary struct {
 	InvalidatedFamilies []string `json:"invalidated_families"`
 }
 
+type StructureIdentityAllowedChange struct {
+	Operation         string   `json:"operation"`
+	TargetKeys        []string `json:"target_keys"`
+	AffectedScopeKeys []string `json:"affected_scope_keys"`
+}
+
+type StructureIdentityRepairOption struct {
+	IssueKey       string                           `json:"issue_key"`
+	Code           string                           `json:"code"`
+	Severity       string                           `json:"severity"`
+	Scope          string                           `json:"scope"`
+	Summary        string                           `json:"summary"`
+	EvidenceRefs   []HumanGateEvidenceRef           `json:"evidence_refs"`
+	AllowedChanges []StructureIdentityAllowedChange `json:"allowed_changes"`
+}
+
 type HumanGateExpectedHead struct {
 	OwnerKind   string `json:"owner_kind"`
 	LogicalID   string `json:"logical_id"`
@@ -73,27 +90,29 @@ type StructureIdentityGateInputDraft struct {
 	Subject                                          StructureIdentityGateSubject
 	EvidenceRefs                                     []HumanGateEvidenceRef
 	Impact                                           HumanGateImpactSummary
+	RepairOptions                                    []StructureIdentityRepairOption
 	AllowedDecisions                                 []string
 	ExpectedProjectHead, ExpectedBibleHead           HumanGateExpectedHead
 }
 
 type StructureIdentityGateInput struct {
-	SchemaVersion    string                       `json:"schema_version"`
-	GateKey          string                       `json:"gate_key"`
-	GateInstanceKey  string                       `json:"gate_instance_key"`
-	WorkspaceID      string                       `json:"workspace_id"`
-	ProjectID        string                       `json:"project_id"`
-	WorkflowRunID    string                       `json:"workflow_run_id"`
-	NodeRunID        string                       `json:"node_run_id"`
-	SubjectType      string                       `json:"subject_type"`
-	Subject          StructureIdentityGateSubject `json:"subject"`
-	SubjectHash      string                       `json:"subject_hash"`
-	EvidenceRefs     []HumanGateEvidenceRef       `json:"evidence_refs"`
-	Impact           HumanGateImpactSummary       `json:"impact_summary"`
-	AllowedDecisions []string                     `json:"allowed_decisions"`
-	EffectPlan       StructureIdentityEffectPlan  `json:"effect_plan"`
-	EffectPlanHash   string                       `json:"effect_plan_hash"`
-	InputHash        string                       `json:"input_hash"`
+	SchemaVersion    string                          `json:"schema_version"`
+	GateKey          string                          `json:"gate_key"`
+	GateInstanceKey  string                          `json:"gate_instance_key"`
+	WorkspaceID      string                          `json:"workspace_id"`
+	ProjectID        string                          `json:"project_id"`
+	WorkflowRunID    string                          `json:"workflow_run_id"`
+	NodeRunID        string                          `json:"node_run_id"`
+	SubjectType      string                          `json:"subject_type"`
+	Subject          StructureIdentityGateSubject    `json:"subject"`
+	SubjectHash      string                          `json:"subject_hash"`
+	EvidenceRefs     []HumanGateEvidenceRef          `json:"evidence_refs"`
+	Impact           HumanGateImpactSummary          `json:"impact_summary"`
+	RepairOptions    []StructureIdentityRepairOption `json:"repair_options"`
+	AllowedDecisions []string                        `json:"allowed_decisions"`
+	EffectPlan       StructureIdentityEffectPlan     `json:"effect_plan"`
+	EffectPlanHash   string                          `json:"effect_plan_hash"`
+	InputHash        string                          `json:"input_hash"`
 }
 
 func NewStructureIdentityGateInput(
@@ -114,6 +133,7 @@ func NewStructureIdentityGateInput(
 			PreservedFamilies:   append([]string(nil), draft.Impact.PreservedFamilies...),
 			InvalidatedFamilies: append([]string(nil), draft.Impact.InvalidatedFamilies...),
 		},
+		RepairOptions:    cloneStructureIdentityRepairOptions(draft.RepairOptions),
 		AllowedDecisions: append([]string(nil), draft.AllowedDecisions...),
 	}
 	value.Subject.SourceVersion.CreatedAt = value.Subject.SourceVersion.CreatedAt.UTC()
@@ -210,6 +230,9 @@ func normalizeStructureIdentityGateInput(value *StructureIdentityGateInput) erro
 	if !validStructureIdentityDecisions(value.AllowedDecisions) {
 		return errors.New("invalid structure identity Gate decisions")
 	}
+	if err := normalizeStructureIdentityRepairOptions(value); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -294,8 +317,7 @@ func normalizeHumanGateImpact(value *HumanGateImpactSummary) error {
 }
 
 func validStructureIdentityDecisions(values []string) bool {
-	if len(values) < 2 || len(values) > 3 || !slices.Contains(values, "changes_requested") ||
-		!slices.Contains(values, "rejected") {
+	if len(values) < 1 || len(values) > 3 || !slices.Contains(values, "rejected") {
 		return false
 	}
 	for index, value := range values {
@@ -305,6 +327,116 @@ func validStructureIdentityDecisions(values []string) bool {
 		}
 	}
 	return true
+}
+
+var structureIdentityIssueKeyPattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)
+var structureIdentityIssueCodePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,80}$`)
+
+func normalizeStructureIdentityRepairOptions(value *StructureIdentityGateInput) error {
+	slices.SortFunc(value.RepairOptions, func(left, right StructureIdentityRepairOption) int {
+		return cmp.Compare(left.IssueKey, right.IssueKey)
+	})
+	for index := range value.RepairOptions {
+		option := &value.RepairOptions[index]
+		option.Scope = strings.TrimSpace(option.Scope)
+		option.Summary = strings.TrimSpace(option.Summary)
+		slices.SortFunc(option.EvidenceRefs, compareHumanGateEvidenceRef)
+		if !structureIdentityIssueKeyPattern.MatchString(option.IssueKey) ||
+			!structureIdentityIssueCodePattern.MatchString(option.Code) ||
+			(option.Severity != "warning" && option.Severity != "blocking") ||
+			option.Scope == "" || option.Summary == "" || len(option.EvidenceRefs) == 0 ||
+			len(option.AllowedChanges) == 0 ||
+			(index > 0 && value.RepairOptions[index-1].IssueKey == option.IssueKey) {
+			return errors.New("invalid structure identity Gate repair option")
+		}
+		for evidenceIndex, evidence := range option.EvidenceRefs {
+			if !slices.Contains(value.EvidenceRefs, evidence) ||
+				(evidenceIndex > 0 && compareHumanGateEvidenceRef(option.EvidenceRefs[evidenceIndex-1], evidence) == 0) {
+				return errors.New("structure identity Gate repair evidence is outside the frozen evidence")
+			}
+		}
+		for changeIndex := range option.AllowedChanges {
+			change := &option.AllowedChanges[changeIndex]
+			change.Operation = strings.TrimSpace(change.Operation)
+			for targetIndex := range change.TargetKeys {
+				change.TargetKeys[targetIndex] = strings.TrimSpace(change.TargetKeys[targetIndex])
+			}
+			for scopeIndex := range change.AffectedScopeKeys {
+				change.AffectedScopeKeys[scopeIndex] = strings.TrimSpace(change.AffectedScopeKeys[scopeIndex])
+			}
+			slices.Sort(change.TargetKeys)
+			slices.Sort(change.AffectedScopeKeys)
+		}
+		slices.SortFunc(option.AllowedChanges, compareStructureIdentityAllowedChange)
+		for changeIndex := range option.AllowedChanges {
+			change := &option.AllowedChanges[changeIndex]
+			if !validStructureIdentityRepairOperation(change.Operation) ||
+				!validUniqueNonemptyStrings(change.TargetKeys) || !validUniqueNonemptyStrings(change.AffectedScopeKeys) ||
+				!allStringsContained(value.Impact.AffectedScopeKeys, change.AffectedScopeKeys) ||
+				(changeIndex > 0 && compareStructureIdentityAllowedChange(option.AllowedChanges[changeIndex-1], *change) == 0) {
+				return errors.New("invalid structure identity Gate allowed change")
+			}
+		}
+	}
+	if slices.Contains(value.AllowedDecisions, "changes_requested") != (len(value.RepairOptions) > 0) {
+		return errors.New("structure identity Gate changes decision does not match repair options")
+	}
+	return nil
+}
+
+func validStructureIdentityRepairOperation(value string) bool {
+	return slices.Contains([]string{
+		"inspect_source", "adjust_episode_boundary", "adjust_scene_boundary", "separate_identity",
+		"merge_identity", "resolve_mention", "reject_mention",
+	}, value)
+}
+
+func validUniqueNonemptyStrings(values []string) bool {
+	if len(values) == 0 {
+		return false
+	}
+	for index, value := range values {
+		if value == "" || (index > 0 && values[index-1] == value) {
+			return false
+		}
+	}
+	return true
+}
+
+func allStringsContained(universe, values []string) bool {
+	for _, value := range values {
+		if !slices.Contains(universe, value) {
+			return false
+		}
+	}
+	return true
+}
+
+func compareStructureIdentityAllowedChange(left, right StructureIdentityAllowedChange) int {
+	if result := cmp.Compare(left.Operation, right.Operation); result != 0 {
+		return result
+	}
+	if result := cmp.Compare(strings.Join(left.TargetKeys, "\x00"), strings.Join(right.TargetKeys, "\x00")); result != 0 {
+		return result
+	}
+	return cmp.Compare(strings.Join(left.AffectedScopeKeys, "\x00"), strings.Join(right.AffectedScopeKeys, "\x00"))
+}
+
+func cloneStructureIdentityRepairOptions(values []StructureIdentityRepairOption) []StructureIdentityRepairOption {
+	result := make([]StructureIdentityRepairOption, len(values))
+	for index, option := range values {
+		result[index] = option
+		result[index].EvidenceRefs = append([]HumanGateEvidenceRef(nil), option.EvidenceRefs...)
+		result[index].AllowedChanges = make([]StructureIdentityAllowedChange, len(option.AllowedChanges))
+		for changeIndex, change := range option.AllowedChanges {
+			result[index].AllowedChanges[changeIndex] = StructureIdentityAllowedChange{
+				Operation:         change.Operation,
+				TargetKeys:        append([]string(nil), change.TargetKeys...),
+				AffectedScopeKeys: append([]string(nil), change.AffectedScopeKeys...),
+			}
+		}
+	}
+	return result
 }
 
 func newStructureIdentityEffectPlan(
@@ -389,25 +521,26 @@ func hashStructureIdentityGateMaterial(value any) string {
 
 func structureIdentityGateInputHashMaterial(value StructureIdentityGateInput) any {
 	return struct {
-		SchemaVersion    string                       `json:"schema_version"`
-		GateKey          string                       `json:"gate_key"`
-		GateInstanceKey  string                       `json:"gate_instance_key"`
-		WorkspaceID      string                       `json:"workspace_id"`
-		ProjectID        string                       `json:"project_id"`
-		WorkflowRunID    string                       `json:"workflow_run_id"`
-		NodeRunID        string                       `json:"node_run_id"`
-		SubjectType      string                       `json:"subject_type"`
-		Subject          StructureIdentityGateSubject `json:"subject"`
-		SubjectHash      string                       `json:"subject_hash"`
-		EvidenceRefs     []HumanGateEvidenceRef       `json:"evidence_refs"`
-		Impact           HumanGateImpactSummary       `json:"impact_summary"`
-		AllowedDecisions []string                     `json:"allowed_decisions"`
-		EffectPlan       StructureIdentityEffectPlan  `json:"effect_plan"`
-		EffectPlanHash   string                       `json:"effect_plan_hash"`
+		SchemaVersion    string                          `json:"schema_version"`
+		GateKey          string                          `json:"gate_key"`
+		GateInstanceKey  string                          `json:"gate_instance_key"`
+		WorkspaceID      string                          `json:"workspace_id"`
+		ProjectID        string                          `json:"project_id"`
+		WorkflowRunID    string                          `json:"workflow_run_id"`
+		NodeRunID        string                          `json:"node_run_id"`
+		SubjectType      string                          `json:"subject_type"`
+		Subject          StructureIdentityGateSubject    `json:"subject"`
+		SubjectHash      string                          `json:"subject_hash"`
+		EvidenceRefs     []HumanGateEvidenceRef          `json:"evidence_refs"`
+		Impact           HumanGateImpactSummary          `json:"impact_summary"`
+		RepairOptions    []StructureIdentityRepairOption `json:"repair_options"`
+		AllowedDecisions []string                        `json:"allowed_decisions"`
+		EffectPlan       StructureIdentityEffectPlan     `json:"effect_plan"`
+		EffectPlanHash   string                          `json:"effect_plan_hash"`
 	}{
 		value.SchemaVersion, value.GateKey, value.GateInstanceKey,
 		value.WorkspaceID, value.ProjectID, value.WorkflowRunID, value.NodeRunID,
 		value.SubjectType, value.Subject, value.SubjectHash, value.EvidenceRefs,
-		value.Impact, value.AllowedDecisions, value.EffectPlan, value.EffectPlanHash,
+		value.Impact, value.RepairOptions, value.AllowedDecisions, value.EffectPlan, value.EffectPlanHash,
 	}
 }

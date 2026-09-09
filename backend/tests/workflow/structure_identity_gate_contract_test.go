@@ -28,6 +28,15 @@ func TestStructureIdentityGateInputFreezesExactSubjectAndEffectPlan(t *testing.T
 	if !slices.Equal(value.AllowedDecisions, []string{"approved", "changes_requested", "rejected"}) {
 		t.Fatalf("allowed decisions = %#v", value.AllowedDecisions)
 	}
+	if len(value.RepairOptions) != 1 || value.RepairOptions[0].IssueKey != "issue_identity_alias_0001" ||
+		value.RepairOptions[0].Code != "identity_alias_needs_confirmation" ||
+		len(value.RepairOptions[0].EvidenceRefs) != 1 ||
+		len(value.RepairOptions[0].AllowedChanges) != 1 ||
+		value.RepairOptions[0].AllowedChanges[0].Operation != "merge_identity" ||
+		!slices.Equal(value.RepairOptions[0].AllowedChanges[0].TargetKeys, []string{"identity_character_linzhou"}) ||
+		!slices.Equal(value.RepairOptions[0].AllowedChanges[0].AffectedScopeKeys, []string{"scene:90000000-0000-0000-0000-000000000001"}) {
+		t.Fatalf("repair options = %#v", value.RepairOptions)
+	}
 	if len(value.EffectPlan.Steps) != 2 ||
 		value.EffectPlan.Steps[0].StepKey != "confirm_project_episode_lifecycle" ||
 		value.EffectPlan.Steps[0].OwnerKind != "production/project" ||
@@ -51,6 +60,11 @@ func TestStructureIdentityGateInputCanonicalizesEvidenceImpactAndDecisions(t *te
 	slices.Reverse(right.Impact.PreservedFamilies)
 	slices.Reverse(right.Impact.InvalidatedFamilies)
 	slices.Reverse(right.AllowedDecisions)
+	slices.Reverse(right.RepairOptions)
+	slices.Reverse(right.RepairOptions[0].EvidenceRefs)
+	slices.Reverse(right.RepairOptions[0].AllowedChanges)
+	slices.Reverse(right.RepairOptions[0].AllowedChanges[0].TargetKeys)
+	slices.Reverse(right.RepairOptions[0].AllowedChanges[0].AffectedScopeKeys)
 
 	leftValue, leftJSON, err := workflow.NewStructureIdentityGateInput(left)
 	if err != nil {
@@ -105,6 +119,18 @@ func TestStructureIdentityGateInputRejectsDriftAndUnknownFields(t *testing.T) {
 		},
 		"unknown impact family": func(value *workflow.StructureIdentityGateInputDraft) {
 			value.Impact.InvalidatedFamilies[0] = "everything"
+		},
+		"free form repair operation": func(value *workflow.StructureIdentityGateInputDraft) {
+			value.RepairOptions[0].AllowedChanges[0].Operation = "rewrite_everything"
+		},
+		"repair evidence outside frozen evidence": func(value *workflow.StructureIdentityGateInputDraft) {
+			value.RepairOptions[0].EvidenceRefs[0].SourceStart = 13
+		},
+		"repair target is empty": func(value *workflow.StructureIdentityGateInputDraft) {
+			value.RepairOptions[0].AllowedChanges[0].TargetKeys[0] = ""
+		},
+		"repair scope outside impact": func(value *workflow.StructureIdentityGateInputDraft) {
+			value.RepairOptions[0].AllowedChanges[0].AffectedScopeKeys[0] = "scene:90000000-0000-0000-0000-000000000099"
 		},
 	}
 	for name, mutate := range tests {
@@ -179,6 +205,18 @@ func structureIdentityGateInputDraft() workflow.StructureIdentityGateInputDraft 
 			PreservedFamilies:   []string{"script_source", "scene_facts"},
 			InvalidatedFamilies: []string{"storyboard", "production_world"},
 		},
+		RepairOptions: []workflow.StructureIdentityRepairOption{{
+			IssueKey: "issue_identity_alias_0001", Code: "identity_alias_needs_confirmation",
+			Severity: "warning", Scope: "identity_character_linzhou", Summary: "林舟的称谓归一需要人工确认",
+			EvidenceRefs: []workflow.HumanGateEvidenceRef{{
+				SourceVersionID: "60000000-0000-0000-0000-000000000001",
+				SourceStart:     0, SourceEnd: 8, TextHash: strings.Repeat("1", 64),
+			}},
+			AllowedChanges: []workflow.StructureIdentityAllowedChange{{
+				Operation: "merge_identity", TargetKeys: []string{"identity_character_linzhou"},
+				AffectedScopeKeys: []string{"scene:90000000-0000-0000-0000-000000000001"},
+			}},
+		}},
 		AllowedDecisions: []string{"rejected", "approved", "changes_requested"},
 		ExpectedProjectHead: workflow.HumanGateExpectedHead{
 			OwnerKind: "production/project", LogicalID: "20000000-0000-0000-0000-000000000001",

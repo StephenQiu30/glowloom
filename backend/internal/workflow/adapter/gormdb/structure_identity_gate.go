@@ -95,6 +95,9 @@ func prepareStructureIdentityGateInput(
 		sceneID := uuid.NewSHA1(run.ProjectID, []byte("lanverse:scene:"+span.TemporarySpanID))
 		affectedScopes[index] = "scene:" + sceneID.String()
 	}
+	repairOptions := structureIdentityRepairOptions(
+		source.VersionID, run.ProjectID, spans, reviewCandidate,
+	)
 
 	projectHead, err := structureIdentityProjectHead(database, run.ProjectID)
 	if err != nil {
@@ -104,7 +107,10 @@ func prepareStructureIdentityGateInput(
 	if err != nil {
 		return model.WorkflowHumanGateInput{}, domain.StructureIdentityGateInput{}, err
 	}
-	allowedDecisions := []string{"changes_requested", "rejected"}
+	allowedDecisions := []string{"rejected"}
+	if len(repairOptions) > 0 {
+		allowedDecisions = append(allowedDecisions, "changes_requested")
+	}
 	if !structureIdentityReviewBlocksApproval(reviewCandidate) {
 		allowedDecisions = append(allowedDecisions, "approved")
 	}
@@ -125,6 +131,7 @@ func prepareStructureIdentityGateInput(
 				"production_world", "visual_foundation", "reference_selection", "storyboard",
 			},
 		},
+		RepairOptions:       repairOptions,
 		AllowedDecisions:    allowedDecisions,
 		ExpectedProjectHead: projectHead,
 		ExpectedBibleHead:   bibleHead,
@@ -336,6 +343,56 @@ func structureIdentityReviewBlocksApproval(value agentcontract.StructureIdentity
 	return slices.ContainsFunc(value.ReviewIssues, func(issue agentcontract.CandidateReviewIssue) bool {
 		return issue.Severity == "blocking"
 	})
+}
+
+func structureIdentityRepairOptions(
+	sourceVersionID string,
+	projectID uuid.UUID,
+	spans agentcontract.ScriptSpanCandidate,
+	review agentcontract.StructureIdentityReviewCandidate,
+) []domain.StructureIdentityRepairOption {
+	issues := make(map[string]agentcontract.CandidateReviewIssue, len(review.ReviewIssues))
+	for _, issue := range review.ReviewIssues {
+		issues[issue.IssueKey] = issue
+	}
+	result := make([]domain.StructureIdentityRepairOption, 0, len(review.Suggestions))
+	for _, suggestion := range review.Suggestions {
+		issue, exists := issues[suggestion.IssueKey]
+		if !exists || len(issue.Evidence) == 0 {
+			continue
+		}
+		evidence := make([]domain.HumanGateEvidenceRef, len(issue.Evidence))
+		affected := make(map[string]struct{})
+		for evidenceIndex, item := range issue.Evidence {
+			evidence[evidenceIndex] = domain.HumanGateEvidenceRef{
+				SourceVersionID: sourceVersionID, SourceStart: item.SourceStart,
+				SourceEnd: item.SourceEnd, TextHash: item.TextHash,
+			}
+			for _, span := range spans.Spans {
+				if item.SourceStart < span.CodepointEnd && item.SourceEnd > span.CodepointStart {
+					sceneID := uuid.NewSHA1(projectID, []byte("lanverse:scene:"+span.TemporarySpanID))
+					affected["scene:"+sceneID.String()] = struct{}{}
+				}
+			}
+		}
+		affectedScopes := make([]string, 0, len(affected))
+		for scope := range affected {
+			affectedScopes = append(affectedScopes, scope)
+		}
+		slices.Sort(affectedScopes)
+		if len(affectedScopes) == 0 {
+			continue
+		}
+		result = append(result, domain.StructureIdentityRepairOption{
+			IssueKey: issue.IssueKey, Code: issue.Code, Severity: issue.Severity,
+			Scope: issue.Scope, Summary: issue.Summary, EvidenceRefs: evidence,
+			AllowedChanges: []domain.StructureIdentityAllowedChange{{
+				Operation:  suggestion.Action,
+				TargetKeys: append([]string(nil), suggestion.TargetKeys...), AffectedScopeKeys: affectedScopes,
+			}},
+		})
+	}
+	return result
 }
 
 func structureIdentityProjectHead(database *gorm.DB, projectID uuid.UUID) (domain.HumanGateExpectedHead, error) {
