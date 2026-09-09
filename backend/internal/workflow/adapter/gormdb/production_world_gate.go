@@ -249,6 +249,66 @@ func sameProductionWorldGateInput(left, right model.WorkflowHumanGateInput) bool
 		left.InputHash == right.InputHash && equalJSON(left.Input, right.Input)
 }
 
+func resolveProductionWorldOwnerMaterial(
+	database *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+	task model.HumanTask,
+	input domain.NodeInputSnapshot,
+) (json.RawMessage, error) {
+	var record model.WorkflowHumanGateInput
+	if err := database.First(&record, "node_run_id = ?", node.ID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	gate, _, err := domain.DecodeProductionWorldGateInput(json.RawMessage(record.Input))
+	if err != nil || record.WorkspaceID != run.WorkspaceID || record.ProjectID != run.ProjectID ||
+		record.WorkflowRunID != run.ID || record.NodeRunID != node.ID || gate.InputHash != record.InputHash ||
+		task.SubjectType != "production_world_gate_input" || task.SubjectID != record.ID ||
+		task.SubjectRevision != 1 || task.SubjectHash != record.InputHash {
+		return nil, errors.New("Production World owner Gate input has drifted")
+	}
+	binding, err := productionWorldGateBinding(input)
+	if err != nil {
+		return nil, err
+	}
+	revision, candidate, err := loadProductionWorldGateCandidate(database, run, binding)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateProductionWorldFormalReadSet(database, run, candidate); err != nil {
+		return nil, err
+	}
+	frozen := gate.Subject.ProductionWorldCandidate
+	if frozen.CandidateRevisionID != revision.ID.String() || frozen.CandidateRevision != revision.RevisionNo ||
+		frozen.CandidateRevisionHash != revision.CandidateRevisionHash ||
+		frozen.CandidateContentHash != revision.CandidateContentHash {
+		return nil, errors.New("Production World owner Candidate revision has drifted")
+	}
+	actualCandidateIDs, err := humanTaskCandidateIDs(task.CandidateIDs)
+	if err != nil {
+		return nil, errors.New("Production World owner Candidate set is invalid")
+	}
+	wantCandidateIDs := productionWorldCandidateIDs(gate, candidate)
+	slices.Sort(actualCandidateIDs)
+	if !slices.Equal(actualCandidateIDs, wantCandidateIDs) {
+		return nil, errors.New("Production World owner Candidate set has drifted")
+	}
+	material := domain.ProductionWorldOwnerMaterial{
+		SchemaVersion: domain.ProductionWorldOwnerMaterialSchema,
+		GateInputID:   record.ID.String(),
+		GateInput:     gate,
+		Candidate:     candidate,
+	}
+	encoded, err := json.Marshal(material)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = domain.DecodeProductionWorldOwnerMaterial(encoded); err != nil {
+		return nil, err
+	}
+	return encoded, nil
+}
+
 func productionWorldCandidateIDs(
 	value domain.ProductionWorldGateInput,
 	candidate domain.ProductionWorldCandidate,

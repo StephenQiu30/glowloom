@@ -127,6 +127,19 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 					break
 				}
 			}
+		} else if node.Executor == "gate.production_world_review" {
+			ownerMaterial, resolveErr = resolveProductionWorldOwnerMaterial(transaction, run, node, task, resolved.Input)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			for _, binding := range resolved.Input.Bindings {
+				if binding.Port == "candidate" && binding.ValueType == "production_world_candidate" &&
+					binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+					humanTaskContainsCandidateString(task.CandidateIDs, binding.ReferenceID) {
+					candidate, candidateFound = binding, true
+					break
+				}
+			}
 		} else {
 			candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
 			if candidateErr != nil {
@@ -441,16 +454,21 @@ func expectedHumanGateSubject(
 	episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
 	storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 	structureIdentityOwnerApply := node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0"
-	if structureIdentityOwnerApply {
+	productionWorldReview := node.Executor == "gate.production_world_review" && node.DefinitionVersion == "1.0.0"
+	if structureIdentityOwnerApply || productionWorldReview {
 		var gateInput model.WorkflowHumanGateInput
 		if err = transaction.First(&gateInput, "node_run_id = ?", node.ID).Error; err != nil {
 			return "", uuid.Nil, 0, "", normalizeNotFound(err)
 		}
 		if gateInput.WorkspaceID != run.WorkspaceID || gateInput.ProjectID != run.ProjectID ||
 			gateInput.WorkflowRunID != run.ID || gateInput.InputHash == "" {
-			return "", uuid.Nil, 0, "", errors.New("Structure Identity Human Gate input has drifted")
+			return "", uuid.Nil, 0, "", errors.New("Workflow Human Gate input has drifted")
 		}
-		return "structure_identity_gate_input", gateInput.ID, 1, gateInput.InputHash, nil
+		subjectType := "structure_identity_gate_input"
+		if productionWorldReview {
+			subjectType = "production_world_gate_input"
+		}
+		return subjectType, gateInput.ID, 1, gateInput.InputHash, nil
 	}
 	if !productionBibleOwnerApply && !episodePlanOwnerApply && !episodePlanningOwnerApply && !storyboardIntentOwnerApply {
 		return humanGateSubjectType(node.Executor), node.ID, node.Revision, resolved.InputHash, nil

@@ -735,6 +735,41 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if productionWorldGateInputCount != 1 || productionWorldTaskCount != 1 {
 		t.Fatalf("Production World Gate replay facts: inputs=%d tasks=%d", productionWorldGateInputCount, productionWorldTaskCount)
 	}
+	productionWorldDecisionID := uuid.New()
+	if err = database.Model(&model.HumanTask{}).Where("id = ?", productionWorldTask.ID).Updates(map[string]any{
+		"status": "COMPLETED", "revision": productionWorldTask.Revision + 1, "updated_at": now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Create(&model.ReviewDecision{
+		ID: productionWorldDecisionID, WorkspaceID: fixture.workspaceID, HumanTaskID: productionWorldTask.ID,
+		Decision: "approved", SubjectRevision: productionWorldTask.SubjectRevision,
+		SubjectHash: productionWorldTask.SubjectHash, DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+		CreatedBy: fixture.userID, CreatedAt: now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	productionWorldOwnerApplication, err := workflowStore.ResolveHumanGateOwnerApplication(ctx, workflow.HumanGateDecisionRequest{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: productionWorldGate.NodeRunID,
+		HumanTaskID: productionWorldTask.ID.String(), ReviewDecisionID: productionWorldDecisionID.String(),
+		SubjectRevision: productionWorldTask.SubjectRevision, Decision: "approved",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+	})
+	productionWorldOwnerMaterial, materialErr := workflow.DecodeProductionWorldOwnerMaterial(
+		productionWorldOwnerApplication.OwnerMaterial,
+	)
+	if err != nil || materialErr != nil ||
+		productionWorldOwnerApplication.Candidate.ReferenceID != productionWorldRevision.ID.String() ||
+		productionWorldOwnerApplication.OutputPort != "world" ||
+		productionWorldOwnerApplication.OutputValueType != "production_world_owner_set" ||
+		productionWorldOwnerMaterial.GateInputID != productionWorldGateInput.ID.String() ||
+		productionWorldOwnerMaterial.GateInput.InputHash != productionWorldGateInput.InputHash ||
+		productionWorldOwnerMaterial.Candidate.ContentHash != productionWorld.ContentHash {
+		t.Fatalf(
+			"Production World owner material = %#v application=%#v resolve_err=%v decode_err=%v",
+			productionWorldOwnerMaterial, productionWorldOwnerApplication, err, materialErr,
+		)
+	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
 		ID: dispatchFailureNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: uuid.MustParse(started.ID),
