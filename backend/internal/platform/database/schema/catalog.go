@@ -95,6 +95,8 @@ func Catalog() []any {
 		&model.StructureIdentityCollectionReceipt{},
 		&model.Asset{},
 		&model.AssetState{},
+		&model.AssetIdentityStateMembership{},
+		&model.AssetIdentityStateScopeHead{},
 		&model.ProductionBibleSpecificationVersion{},
 		&model.ProductionBinding{},
 		&model.ProductionBindingState{},
