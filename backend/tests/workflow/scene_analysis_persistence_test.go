@@ -131,7 +131,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 10 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 11 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
@@ -140,7 +140,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		plan.Nodes[6].Executor != "activity.production_entity_derivation" ||
 		plan.Nodes[7].Executor != "activity.scene_occurrence_binding" ||
 		plan.Nodes[8].Executor != "activity.interaction_continuity_reconciliation" ||
-		plan.Nodes[9].Executor != "activity.production_world_assembly" {
+		plan.Nodes[9].Executor != "activity.production_world_assembly" ||
+		plan.Nodes[10].Executor != "gate.production_world_review" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -646,6 +647,94 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if productionWorldRevisionCount != 1 || productionWorldManifestCount != 1 {
 		t.Fatalf("Production World replay facts: revisions=%d manifests=%d", productionWorldRevisionCount, productionWorldManifestCount)
 	}
+	productionWorldGate := plan.Nodes[10]
+	productionWorldGateCommand := workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: productionWorldGate.NodeRunID, NodeID: productionWorldGate.NodeID,
+		Executor: productionWorldGate.Executor, Attempt: 1,
+	}
+	if err = database.Model(&model.StructureIdentityScopeHead{}).
+		Where("project_id = ?", fixture.projectID).
+		Update("head_hash", strings.Repeat("f", 64)).Error; err != nil {
+		t.Fatalf("drift StructureIdentity Head before Gate 2: %v", err)
+	}
+	staleGateErr := runtimeService.OpenHumanGate(ctx, productionWorldGateCommand)
+	if err = database.Model(&model.StructureIdentityScopeHead{}).
+		Where("project_id = ?", fixture.projectID).
+		Update("head_hash", structureVersion.ContentHash).Error; err != nil {
+		t.Fatalf("restore StructureIdentity Head before Gate 2: %v", err)
+	}
+	if staleGateErr == nil || !strings.Contains(staleGateErr.Error(), "StructureIdentitySet Head has drifted") {
+		t.Fatalf("Gate 2 stale formal read set error = %v", staleGateErr)
+	}
+	var staleGateInputCount, staleGateTaskCount int64
+	if err = database.Model(&model.WorkflowHumanGateInput{}).
+		Where("node_run_id = ?", productionWorldGate.NodeRunID).Count(&staleGateInputCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.HumanTask{}).
+		Where("node_run_id = ?", productionWorldGate.NodeRunID).Count(&staleGateTaskCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if staleGateInputCount != 0 || staleGateTaskCount != 0 {
+		t.Fatalf("Gate 2 stale read persisted inputs=%d tasks=%d", staleGateInputCount, staleGateTaskCount)
+	}
+	if err = runtimeService.OpenHumanGate(ctx, productionWorldGateCommand); err != nil {
+		t.Fatalf("open Production World HumanTask: %v", err)
+	}
+	var productionWorldGateInput model.WorkflowHumanGateInput
+	if err = database.First(&productionWorldGateInput, "node_run_id = ?", productionWorldGate.NodeRunID).Error; err != nil {
+		t.Fatalf("query Production World Gate input: %v", err)
+	}
+	decodedProductionWorldGate, _, gateDecodeErr := workflow.DecodeProductionWorldGateInput(json.RawMessage(productionWorldGateInput.Input))
+	if gateDecodeErr != nil || decodedProductionWorldGate.InputHash != productionWorldGateInput.InputHash ||
+		decodedProductionWorldGate.Subject.ProductionWorldCandidate.CandidateRevisionID != productionWorldRevision.ID.String() ||
+		decodedProductionWorldGate.Subject.SceneOccurrenceCandidate.CandidateRevisionID != sceneBindingCandidate.ID ||
+		decodedProductionWorldGate.Subject.InteractionCandidate.Candidate.CandidateRevisionID != continuityCandidate.ID ||
+		decodedProductionWorldGate.Subject.ContinuityCandidate.Candidate.CandidateRevisionID != continuityCandidate.ID ||
+		decodedProductionWorldGate.Subject.InteractionCandidate.ProjectionHash == decodedProductionWorldGate.Subject.ContinuityCandidate.ProjectionHash ||
+		len(decodedProductionWorldGate.Subject.ExpectedHeads) != 3 {
+		t.Fatalf("persisted Production World Gate input = %#v err=%v", decodedProductionWorldGate, gateDecodeErr)
+	}
+	for _, expectedHead := range decodedProductionWorldGate.Subject.ExpectedHeads {
+		if expectedHead.Revision != 0 || expectedHead.ContentHash != "" {
+			t.Fatalf("initial Production World expected Head = %#v", expectedHead)
+		}
+	}
+	var productionWorldTask model.HumanTask
+	if err = database.First(&productionWorldTask, "node_run_id = ?", productionWorldGate.NodeRunID).Error; err != nil {
+		t.Fatalf("query Production World HumanTask: %v", err)
+	}
+	var productionWorldCandidateIDs []string
+	wantProductionWorldCandidateIDs := []string{
+		productionWorldRevision.ID.String(),
+		productionEntityCandidate.ID,
+		sceneBindingCandidate.ID,
+		continuityCandidate.ID,
+	}
+	slices.Sort(wantProductionWorldCandidateIDs)
+	if err = json.Unmarshal(productionWorldTask.CandidateIDs, &productionWorldCandidateIDs); err != nil ||
+		!slices.Equal(productionWorldCandidateIDs, wantProductionWorldCandidateIDs) ||
+		productionWorldTask.SubjectType != "production_world_gate_input" ||
+		productionWorldTask.SubjectID != productionWorldGateInput.ID ||
+		productionWorldTask.SubjectRevision != 1 ||
+		productionWorldTask.SubjectHash != productionWorldGateInput.InputHash {
+		t.Fatalf("Production World HumanTask = %#v candidates=%v err=%v", productionWorldTask, productionWorldCandidateIDs, err)
+	}
+	if err = runtimeService.OpenHumanGate(ctx, productionWorldGateCommand); err != nil {
+		t.Fatalf("replay Production World HumanTask open: %v", err)
+	}
+	var productionWorldGateInputCount, productionWorldTaskCount int64
+	if err = database.Model(&model.WorkflowHumanGateInput{}).
+		Where("node_run_id = ?", productionWorldGate.NodeRunID).Count(&productionWorldGateInputCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.HumanTask{}).
+		Where("node_run_id = ?", productionWorldGate.NodeRunID).Count(&productionWorldTaskCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if productionWorldGateInputCount != 1 || productionWorldTaskCount != 1 {
+		t.Fatalf("Production World Gate replay facts: inputs=%d tasks=%d", productionWorldGateInputCount, productionWorldTaskCount)
+	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
 		ID: dispatchFailureNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: uuid.MustParse(started.ID),
@@ -1147,6 +1236,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "scene-bindings", DefinitionKey: "agent.scene_occurrence_binding", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "interaction-continuity", DefinitionKey: "agent.interaction_continuity_reconciliation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "production-world", DefinitionKey: "production.production_world_assembly", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "production-world-gate", DefinitionKey: "human.production_world_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -1181,6 +1271,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "entities-production-world", FromNodeID: "production-entities", FromPort: "candidate", ToNodeID: "production-world", ToPort: "entities"},
 			{ID: "bindings-production-world", FromNodeID: "scene-bindings", FromPort: "candidate", ToNodeID: "production-world", ToPort: "bindings"},
 			{ID: "continuity-production-world", FromNodeID: "interaction-continuity", FromPort: "candidate", ToNodeID: "production-world", ToPort: "continuity"},
+			{ID: "production-world-gate-input", FromNodeID: "production-world", FromPort: "candidate", ToNodeID: "production-world-gate", ToPort: "candidate"},
 		},
 	}
 }

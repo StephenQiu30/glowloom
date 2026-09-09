@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "23.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "24.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -40,6 +40,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"human.episode_structure_review@2.0.0",
 		"human.production_bible_review@1.0.0",
 		"human.production_bible_review@2.0.0",
+		"human.production_world_review@1.0.0",
 		"human.storyboard_review@2.0.0",
 		"human.structure_identity_review@1.0.0",
 		"input.script_revision@1.0.0",
@@ -96,6 +97,30 @@ func TestProductionWorldAssemblyIsDeterministicBackendWork(t *testing.T) {
 		return
 	}
 	t.Fatal("Production World assembly is absent from the system catalog")
+}
+
+func TestProductionWorldReviewFreezesAggregateBeforeOwnerWrites(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "human.production_world_review" {
+			continue
+		}
+		if definition.Version != "1.0.0" || definition.Executor != "gate.production_world_review" ||
+			definition.Category != "human" || definition.CachePolicy != "never" || definition.RiskLevel != "human_gate" ||
+			len(definition.InputPorts) != 1 || len(definition.OutputPorts) != 1 ||
+			definition.InputPorts[0].Key != "candidate" ||
+			definition.InputPorts[0].ValueType != "production_world_candidate" ||
+			!definition.InputPorts[0].Required || definition.OutputPorts[0].Key != "world" ||
+			definition.OutputPorts[0].ValueType != "production_world_owner_set" ||
+			!definition.OutputPorts[0].Required {
+			t.Fatalf("Production World review contract = %#v", definition)
+		}
+		return
+	}
+	t.Fatal("Production World review is absent from the system catalog")
 }
 
 func TestReferenceAssetGenerationConsumesApprovedIntentsBeforeReturningCandidates(t *testing.T) {

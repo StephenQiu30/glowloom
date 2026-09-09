@@ -145,6 +145,8 @@ func refreshEvolvingConstraints(ctx context.Context, database *gorm.DB) error {
 		{model: &model.SceneAnalysisInvocationRecord{}, name: "ck_agt_scene_invocation_stage"},
 		{model: &model.SceneAnalysisInvocationRecord{}, name: "ck_agt_scene_invocation_profile"},
 		{model: &model.SceneAnalysisCandidateRevision{}, name: "ck_agt_scene_candidate_type"},
+		{model: &model.WorkflowHumanGateInput{}, name: "ck_wrk_human_gate_input_key"},
+		{model: &model.WorkflowHumanGateInput{}, name: "ck_wrk_human_gate_input_subject"},
 	}
 	return database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		for _, constraint := range constraints {
