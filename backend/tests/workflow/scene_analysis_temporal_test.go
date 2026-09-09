@@ -436,6 +436,11 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 		loadErr := query.First(&productionWorldTask).Error
 		return loadErr == nil && productionWorldTask.Status == "OPEN", loadErr
 	})
+	assertNoPostProductionWorldFacts(t, func(record any) (int64, error) {
+		var count int64
+		err := database.Model(record).Where("project_id = ?", fixture.projectID).Count(&count).Error
+		return count, err
+	})
 	productionWorldClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
 		TaskID: productionWorldTask.ID.String(), ExpectedRevision: productionWorldTask.Revision,
 		IdempotencyKey: "production-world-temporal-claim:" + productionWorldTask.ID.String(),
@@ -670,6 +675,30 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 		t.Fatalf("validate Temporal Production Entity Candidate: input=%#v candidate=%#v err=%v",
 			productionEntityInput, productionEntityCandidate, err)
 	}
+	var productionEntityFacts contract.ProductionEntityFragmentCandidate
+	if err = json.Unmarshal(productionEntityCandidate.Candidate, &productionEntityFacts); err != nil {
+		t.Fatal(err)
+	}
+	for _, entity := range productionEntityFacts.Entities {
+		if _, parseErr := uuid.Parse(entity.IdentityKey); parseErr != nil {
+			t.Fatalf("Production Entity used a label instead of the formal identity key %q", entity.IdentityKey)
+		}
+		var asset model.Asset
+		if err = database.Where(
+			"project_id = ? AND identity_key = ?", fixture.projectID, entity.IdentityKey,
+		).First(&asset).Error; err != nil || asset.Revision != 1 || asset.ID.String() == entity.IdentityKey {
+			t.Fatalf("formal Production Asset identity drifted: entity=%#v asset=%#v err=%v", entity, asset, err)
+		}
+		for _, state := range entity.States {
+			var persistedState model.AssetState
+			if err = database.Where(
+				"asset_id = ? AND state_key = ?", asset.ID, state.StateKey,
+			).Order("revision DESC").First(&persistedState).Error; err != nil ||
+				persistedState.Revision < 1 || persistedState.ID == asset.ID {
+				t.Fatalf("formal Production Asset state drifted: state=%#v persisted=%#v err=%v", state, persistedState, err)
+			}
+		}
+	}
 	var sceneBindingInvocation model.SceneAnalysisInvocationRecord
 	if err = database.Where(
 		"workflow_run_id = ? AND stage_key = ?", repairRun.ID, "bind_scene_occurrences",
@@ -795,6 +824,33 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 			productionWorldTask,
 			repairedProductionWorldTask,
 		)
+	}
+}
+
+func assertNoPostProductionWorldFacts(t *testing.T, countProjectFacts func(any) (int64, error)) {
+	t.Helper()
+	for _, fact := range []struct {
+		name  string
+		model any
+	}{
+		{name: "reference target", model: &model.GenerationTarget{}},
+		{name: "generation intent", model: &model.GenerationIntent{}},
+		{name: "generated media candidate", model: &model.GenerationCandidate{}},
+		{name: "generated media selection", model: &model.GenerationCandidateSelection{}},
+		{name: "media artifact", model: &model.Artifact{}},
+		{name: "StoryGraph version", model: &model.StoryGraphVersion{}},
+		{name: "StoryGraph head", model: &model.StoryGraphHead{}},
+		{name: "Storyboard draft set", model: &model.StoryboardDraftSet{}},
+		{name: "Storyboard batch", model: &model.StoryboardDraftBatch{}},
+		{name: "Storyboard shot", model: &model.StoryboardShot{}},
+	} {
+		count, err := countProjectFacts(fact.model)
+		if err != nil {
+			t.Fatalf("count pre-Gate 2 %s facts: %v", fact.name, err)
+		}
+		if count != 0 {
+			t.Fatalf("pre-Gate 2 %s fact count = %d, want 0", fact.name, count)
+		}
 	}
 }
 

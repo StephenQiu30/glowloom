@@ -37,6 +37,52 @@ func TestProductionEntityDerivationRequiresFormalIdentityAndTypedState(t *testin
 	}
 }
 
+func TestProductionEntityDerivationAcceptsExactlyOneAuditableSourceBasis(t *testing.T) {
+	input, candidate := productionEntityContractFixture(t)
+	candidate.Entities[0].Basis = contract.ProductionSourceBasis{
+		Provenance: "user_supplied",
+		Evidence:   []contract.SourceEvidenceSpan{},
+		CreatorDecisionProposal: &contract.CreatorDecisionProposal{
+			DecisionKey: "decision_character_linzhou", Rationale: "创作者明确补充人物制作设定",
+		},
+	}
+	raw, err := json.Marshal(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = contract.ValidateProductionEntityFragmentCandidate(raw, input); err != nil {
+		t.Fatalf("valid CreatorDecision-only Production Entity basis rejected: %v", err)
+	}
+
+	for name, basis := range map[string]contract.ProductionSourceBasis{
+		"neither source": {
+			Provenance: "source_explicit", Evidence: []contract.SourceEvidenceSpan{},
+		},
+		"decision with source provenance": {
+			Provenance: "source_explicit", Evidence: []contract.SourceEvidenceSpan{},
+			CreatorDecisionProposal: &contract.CreatorDecisionProposal{
+				DecisionKey: "decision_character_linzhou", Rationale: "补充人物制作设定",
+			},
+		},
+		"evidence with creator provenance": {
+			Provenance: "user_supplied", Evidence: candidate.Entities[0].States[0].Basis.Evidence,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := candidate
+			invalid.Entities = append([]contract.ProductionEntityFragment(nil), candidate.Entities...)
+			invalid.Entities[0].Basis = basis
+			encoded, marshalErr := json.Marshal(invalid)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			if validationErr := contract.ValidateProductionEntityFragmentCandidate(encoded, input); validationErr == nil {
+				t.Fatalf("Production Entity Candidate accepted %s", name)
+			}
+		})
+	}
+}
+
 func TestProductionEntityDerivationStageRejectsFormalIdentityDrift(t *testing.T) {
 	input, _ := productionEntityContractFixture(t)
 	encoded, err := json.Marshal(input)

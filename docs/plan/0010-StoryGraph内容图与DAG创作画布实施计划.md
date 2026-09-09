@@ -88,7 +88,7 @@
 
 - [x] Red：未知 Occurrence/State/视觉字段、非法 carry/use/release、Scene 数组顺序冒充 story-time、同一 Prop 同时点重复转换。
 - [x] Red：同一角色两形象、同一道具两状态、give/receive 正向交接、无原因瞬移和人物持道具几何 Evidence。
-- [ ] Red：证据/创作者决议互斥和 changes_requested 局部闭包。
+- [x] Red：证据/创作者决议互斥和 changes_requested 局部闭包。
 - [x] 实现 derive_production_entities、bind_scene_occurrences、reconcile_interaction_continuity 三阶段 strict Candidate。
 - [x] Backend 确定性组装 ProductionWorld 三分区、expected business key/cross-ref/scope roots；作为正式 Workflow 节点持久化 aggregate Manifest、不可变 Candidate Revision 与 Head，并拒绝过期 Agent Candidate read set。
 - [x] 冻结 Gate 2 的 ProductionWorld、Occurrence、Interaction、Continuity、正式身份版本与预期 Head read set。

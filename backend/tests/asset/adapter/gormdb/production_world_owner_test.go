@@ -76,6 +76,11 @@ func TestProductionWorldAssetOwnerPublishesOneIdentityWithMultipleStatesInCaller
 		result.Head.HeadRevision != 1 || len(result.Head.CollectionRootHash) != 64 {
 		t.Fatalf("Production World Asset result = %#v", result)
 	}
+	initialAssetID := result.Assets[0].ID
+	initialStateIDs := map[string]string{}
+	for _, state := range result.States {
+		initialStateIDs[state.StateKey] = state.ID
+	}
 	assertProductionWorldAssetCounts(t, database, projectID, 1, 2, 2, 1)
 
 	stale := command
@@ -121,8 +126,15 @@ func TestProductionWorldAssetOwnerPublishesOneIdentityWithMultipleStatesInCaller
 		return applyErr
 	})
 	if err != nil || advancedResult.Head.HeadRevision != 2 || advancedResult.Head.MemberCount != 3 ||
-		len(advancedResult.Assets) != 1 || len(advancedResult.States) != 3 {
+		len(advancedResult.Assets) != 1 || len(advancedResult.States) != 3 ||
+		advancedResult.Assets[0].ID != initialAssetID {
 		t.Fatalf("advance Production World Assets: result=%#v err=%v", advancedResult, err)
+	}
+	for _, state := range advancedResult.States {
+		if originalID, exists := initialStateIDs[state.StateKey]; exists &&
+			(state.ID != originalID || state.Revision != 1) {
+			t.Fatalf("unchanged Production Asset state lost its stable identity: %#v", state)
+		}
 	}
 	assertProductionWorldAssetCounts(t, database, projectID, 1, 3, 5, 1)
 

@@ -305,7 +305,9 @@ def test_production_entity_candidate_covers_each_formal_identity_with_typed_stat
     }
 
 
-@pytest.mark.parametrize("mutation", ["missing_identity", "kind_drift", "double_source", "preset"])
+@pytest.mark.parametrize(
+    "mutation", ["missing_identity", "kind_drift", "double_source", "missing_source", "preset"]
+)
 def test_production_entity_candidate_rejects_identity_source_and_visual_drift(
     mutation: str,
 ) -> None:
@@ -321,12 +323,31 @@ def test_production_entity_candidate_rejects_identity_source_and_visual_drift(
             "decision_key": "decision_character_linzhou",
             "rationale": "补充人物设计",
         }
+    elif mutation == "missing_source":
+        entities[0]["basis"]["evidence"] = []
     else:
         raw["preset"] = "cinematic"
 
     with pytest.raises((ValidationError, ValueError)):
         candidate = ProductionEntityFragmentCandidate.model_validate(raw)
         candidate.validate_for(stage_input)
+
+
+def test_production_entity_candidate_accepts_creator_decision_without_source_evidence() -> None:
+    stage_input = _input()
+    raw = _candidate()
+    entity = cast(list[dict[str, Any]], raw["entities"])[0]
+    entity["basis"] = {
+        "provenance": "user_supplied",
+        "evidence": [],
+        "creator_decision_proposal": {
+            "decision_key": "decision_character_linzhou",
+            "rationale": "创作者明确补充人物制作设定",
+        },
+    }
+
+    candidate = ProductionEntityFragmentCandidate.model_validate(raw)
+    candidate.validate_for(stage_input)
 
 
 def test_production_entity_stage_has_its_own_schema_and_skill_resource() -> None:
