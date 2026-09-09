@@ -19,6 +19,7 @@ const (
 	CommittedEnvelopeSchema       = "lanverse.event.committed"
 	ScriptVersionPublished        = "ScriptVersionPublished"
 	StructureIdentitySetPublished = "StructureIdentitySetPublished"
+	ProductionWorldConfirmed      = "ProductionWorldConfirmed"
 	StoryGraphVersionPublished    = "StoryGraphVersionPublished"
 	maximumEnvelopeBytes          = 64 << 10
 	maximumPayloadNestingDepth    = 16
@@ -221,6 +222,62 @@ func validateEventPayload(envelope Envelope) error {
 			!canonicalUUID(value.CollectionReceiptID) || !lowercaseHexHash.MatchString(value.ContentHash) ||
 			!lowercaseHexHash.MatchString(value.CollectionRootHash) {
 			return errors.New("Structure Identity event payload is incomplete")
+		}
+		return nil
+	case ProductionWorldConfirmed:
+		var value struct {
+			BusinessPayload    json.RawMessage `json:"business_payload"`
+			CommandReceiptID   string          `json:"command_receipt_id"`
+			CommandReceiptHash string          `json:"command_receipt_hash"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&value); err != nil {
+			return fmt.Errorf("decode Production World event payload: %w", err)
+		}
+		if err := requireJSONEnd(decoder); err != nil {
+			return err
+		}
+		var business struct {
+			Schema               string `json:"schema"`
+			CommandID            string `json:"command_id"`
+			CandidateRevisionID  string `json:"candidate_revision_id"`
+			CandidateRevision    int64  `json:"candidate_revision"`
+			CandidateContentHash string `json:"candidate_content_hash"`
+			CollectionReceipts   []struct {
+				ID                 string `json:"collection_receipt_id"`
+				OwnerKind          string `json:"owner_kind"`
+				VersionFamily      string `json:"version_family"`
+				ScopeKind          string `json:"scope_kind"`
+				ScopeKey           string `json:"scope_key"`
+				CollectionRootHash string `json:"collection_root_hash"`
+				ReceiptContentHash string `json:"receipt_content_hash"`
+			} `json:"collection_receipts"`
+		}
+		businessDecoder := json.NewDecoder(bytes.NewReader(value.BusinessPayload))
+		businessDecoder.DisallowUnknownFields()
+		if err := businessDecoder.Decode(&business); err != nil {
+			return fmt.Errorf("decode Production World business payload: %w", err)
+		}
+		if err := requireJSONEnd(businessDecoder); err != nil {
+			return err
+		}
+		if envelope.EventVersion != 1 || envelope.AggregateKind != "production_world" ||
+			envelope.AggregateID != business.CommandID || envelope.SourceReceiptID != value.CommandReceiptID ||
+			envelope.AggregateRevision != business.CandidateRevision ||
+			business.Schema != "production-world-confirmed-production" || !canonicalUUID(business.CommandID) ||
+			!canonicalUUID(business.CandidateRevisionID) || !canonicalUUID(value.CommandReceiptID) ||
+			!lowercaseHexHash.MatchString(business.CandidateContentHash) ||
+			!lowercaseHexHash.MatchString(value.CommandReceiptHash) || len(business.CollectionReceipts) < 3 {
+			return errors.New("Production World event payload is incomplete")
+		}
+		for _, receipt := range business.CollectionReceipts {
+			if !canonicalUUID(receipt.ID) || receipt.OwnerKind == "" || receipt.VersionFamily == "" ||
+				receipt.ScopeKind == "" || receipt.ScopeKey == "" ||
+				!lowercaseHexHash.MatchString(receipt.CollectionRootHash) ||
+				!lowercaseHexHash.MatchString(receipt.ReceiptContentHash) {
+				return errors.New("Production World event collection receipt is invalid")
+			}
 		}
 		return nil
 	default:

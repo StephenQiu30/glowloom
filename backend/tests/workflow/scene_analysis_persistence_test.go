@@ -27,6 +27,7 @@ import (
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+	eventingdomain "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
@@ -40,6 +41,8 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
+	worldgorm "github.com/StephenQiu30/lanverse/backend/internal/production/world/adapter/gormdb"
+	worldapp "github.com/StephenQiu30/lanverse/backend/internal/production/world/application"
 	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
@@ -779,6 +782,101 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			productionWorldOwnerMaterial, productionWorldOwnerApplication, err, materialErr,
 		)
 	}
+	expectedProductionWorldHeads := make([]worldapp.ExpectedHead, len(productionWorldOwnerMaterial.GateInput.Subject.ExpectedHeads))
+	for index, head := range productionWorldOwnerMaterial.GateInput.Subject.ExpectedHeads {
+		expectedProductionWorldHeads[index] = worldapp.ExpectedHead{
+			OwnerKind: head.OwnerKind, VersionFamily: head.VersionFamily, ScopeKind: head.ScopeKind,
+			ScopeKey: head.ScopeKey, Revision: head.Revision, ContentHash: head.ContentHash,
+		}
+	}
+	confirmationCommand := worldapp.ConfirmProductionWorldCommand{
+		CommandID: uuid.NewString(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		ActorID: fixture.userID.String(), GateInputID: productionWorldOwnerMaterial.GateInputID,
+		GateInputHash:    productionWorldOwnerMaterial.GateInput.InputHash,
+		ReviewDecisionID: productionWorldDecisionID.String(), CandidateRevisionID: productionWorldRevision.ID.String(),
+		CandidateRevision: productionWorldRevision.RevisionNo, CandidateRevisionHash: productionWorldRevision.CandidateRevisionHash,
+		IdempotencyKey: "confirm-production-world:" + productionWorldDecisionID.String(),
+		ExpectedHeads:  expectedProductionWorldHeads, Candidate: productionWorld,
+	}
+	failedCommand := confirmationCommand
+	failedCommand.CommandID = uuid.NewString()
+	failedCommand.IdempotencyKey = "confirm-production-world-rollback:" + productionWorldDecisionID.String()
+	fixedID := uuid.NewString()
+	failedService := worldapp.NewConfirmationService(
+		worldgorm.NewStore(database), func() time.Time { return now }, func() string { return fixedID },
+	)
+	if _, rollbackErr := failedService.ConfirmProductionWorld(ctx, failedCommand); rollbackErr == nil {
+		t.Fatal("Production World confirmation with colliding immutable IDs unexpectedly succeeded")
+	}
+	rollbackChecks := []struct {
+		model any
+		query string
+		args  []any
+	}{
+		{&model.ProductionWorldCommandDedup{}, "command_id = ?", []any{failedCommand.CommandID}},
+		{&model.Asset{}, "project_id = ?", []any{fixture.projectID}},
+		{&model.ProductionWorldBibleVersion{}, "project_id = ?", []any{fixture.projectID}},
+		{&model.ProductionWorldPlanningEpisodeHead{}, "project_id = ?", []any{fixture.projectID}},
+		{&model.ProductionWorldCollectionReceipt{}, "command_id = ?", []any{failedCommand.CommandID}},
+		{&model.OutboxEvent{}, "aggregate_id = ?", []any{failedCommand.CommandID}},
+	}
+	for _, check := range rollbackChecks {
+		var count int64
+		if countErr := database.Model(check.model).Where(check.query, check.args...).Count(&count).Error; countErr != nil || count != 0 {
+			t.Fatalf("Production World rollback %T count=%d err=%v", check.model, count, countErr)
+		}
+	}
+	confirmationService := worldapp.NewConfirmationService(
+		worldgorm.NewStore(database), func() time.Time { return now }, uuid.NewString,
+	)
+	confirmedWorld, err := confirmationService.ConfirmProductionWorld(ctx, confirmationCommand)
+	if err != nil || confirmedWorld.CommandID != confirmationCommand.CommandID ||
+		confirmedWorld.CommandContractID != worlddomain.ConfirmProductionWorldContract ||
+		confirmedWorld.CommandReceiptID == "" || confirmedWorld.ReceiptContentHash == "" ||
+		len(confirmedWorld.OrderedCollectionReceiptRefs) != 2+len(productionWorld.SharedProof.PlanningEpisodeScopes) {
+		t.Fatalf("confirm Production World atomically: result=%#v err=%v", confirmedWorld, err)
+	}
+	replayedWorld, err := confirmationService.ConfirmProductionWorld(ctx, confirmationCommand)
+	if err != nil || !reflect.DeepEqual(replayedWorld, confirmedWorld) {
+		t.Fatalf("replay Production World confirmation: got=%#v want=%#v err=%v", replayedWorld, confirmedWorld, err)
+	}
+	driftedConfirmation := confirmationCommand
+	driftedConfirmation.CommandID = uuid.NewString()
+	if _, conflictErr := confirmationService.ConfirmProductionWorld(ctx, driftedConfirmation); !errors.Is(conflictErr, worldapp.ErrProductionWorldConfirmationConflict) {
+		t.Fatalf("Production World idempotency drift error = %v", conflictErr)
+	}
+	var collectionReceiptCount, commandReceiptCount, confirmationOutboxCount, rebaseHeadCount int64
+	checks := []struct {
+		model any
+		query string
+		args  []any
+		want  int64
+	}{
+		{&model.ProductionWorldCollectionReceipt{}, "command_id = ?", []any{confirmationCommand.CommandID}, int64(len(confirmedWorld.OrderedCollectionReceiptRefs))},
+		{&model.CommandReceipt{}, "id = ? AND operation = ?", []any{confirmedWorld.CommandReceiptID, worlddomain.ConfirmProductionWorldOperation}, 1},
+		{&model.OutboxEvent{}, "source_receipt_id = ? AND event_type = ?", []any{confirmedWorld.CommandReceiptID, worlddomain.ProductionWorldConfirmedEvent}, 1},
+		{&model.ProductionWorldPlanningRebaseHead{}, "project_id = ? AND member_count = 0", []any{fixture.projectID}, 1},
+	}
+	counts := []*int64{&collectionReceiptCount, &commandReceiptCount, &confirmationOutboxCount, &rebaseHeadCount}
+	for index, check := range checks {
+		if countErr := database.Model(check.model).Where(check.query, check.args...).Count(counts[index]).Error; countErr != nil || *counts[index] != check.want {
+			t.Fatalf("Production World confirmation %T count=%d want=%d err=%v", check.model, *counts[index], check.want, countErr)
+		}
+	}
+	var confirmationOutbox model.OutboxEvent
+	if err = database.First(&confirmationOutbox, "source_receipt_id = ?", confirmedWorld.CommandReceiptID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, envelopeErr := eventingdomain.NewEnvelope(eventingdomain.OutboxEvent{
+		ID: confirmationOutbox.ID.String(), EventType: confirmationOutbox.EventType,
+		EventVersion: confirmationOutbox.EventVersion, WorkspaceID: confirmationOutbox.WorkspaceID.String(),
+		ProjectID: confirmationOutbox.ProjectID.String(), AggregateKind: confirmationOutbox.AggregateKind,
+		AggregateID: confirmationOutbox.AggregateID, AggregateRevision: confirmationOutbox.AggregateRevision,
+		SourceReceiptID: confirmationOutbox.SourceReceiptID.String(), Payload: json.RawMessage(confirmationOutbox.Payload),
+		PayloadHash: confirmationOutbox.PayloadHash, OccurredAt: confirmationOutbox.OccurredAt,
+	}, eventingdomain.TraceContext{RequestID: uuid.NewString()}); envelopeErr != nil {
+		t.Fatalf("Production World confirmation outbox envelope: %v", envelopeErr)
+	}
 	assetInputs := make([]assetapp.ProductionWorldAssetIdentityInput, len(productionWorld.Asset.Identities))
 	for identityIndex, identity := range productionWorld.Asset.Identities {
 		states := make([]assetapp.ProductionWorldAssetStateInput, len(identity.States))
@@ -794,8 +892,16 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		}
 	}
 	assetOwner := assetapp.NewProductionWorldAssetOwner(func() time.Time { return now }, uuid.NewString)
-	assetResult, err := assetOwner.ApplyProductionWorldAssets(ctx, assetgorm.NewProductionWorldRepository(database), assetapp.ApplyProductionWorldAssetsCommand{
+	assetRepository := assetgorm.NewProductionWorldRepository(database)
+	currentAssetHead, err := assetRepository.GetIdentityStateHead(
+		ctx, fixture.workspaceID.String(), fixture.projectID.String(), false,
+	)
+	if err != nil {
+		t.Fatalf("load confirmed Production World Asset Head: %v", err)
+	}
+	assetResult, err := assetOwner.ApplyProductionWorldAssets(ctx, assetRepository, assetapp.ApplyProductionWorldAssetsCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), ActorID: fixture.userID.String(),
+		ExpectedHeadRevision: currentAssetHead.HeadRevision, ExpectedHeadHash: currentAssetHead.HeadContentHash,
 		ExpectedBusinessKeyRoot: productionWorldBusinessKeyRoot(t, productionWorld, "asset"), Identities: assetInputs,
 	})
 	if err != nil || len(assetResult.Assets) != len(productionWorld.Asset.Identities) || len(assetResult.States) == 0 {
@@ -816,9 +922,17 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		}
 	}
 	bibleOwner := bibleapp.NewProductionWorldBibleOwner(func() time.Time { return now }, uuid.NewString)
+	bibleRepository := biblegorm.NewProductionWorldRepository(database)
+	currentBibleHead, _, err := bibleRepository.GetProductionWorldBibleHead(
+		ctx, fixture.workspaceID.String(), fixture.projectID.String(), false,
+	)
+	if err != nil {
+		t.Fatalf("load confirmed Production World Bible Head: %v", err)
+	}
 	bibleCommand := bibleapp.ApplyProductionWorldBibleCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), ActorID: fixture.userID.String(),
 		ReviewDecisionID: productionWorldDecisionID.String(), ExpectedBusinessKeyRoot: productionWorldBusinessKeyRoot(t, productionWorld, "bible"),
+		ExpectedHeadRevision: currentBibleHead.HeadRevision, ExpectedHeadHash: currentBibleHead.HeadContentHash,
 		PartitionHash: productionWorld.PartitionRoots.Bible,
 		StructureIdentitySet: bibledomain.ProductionWorldOwnerRef{
 			OwnerKind: productionWorld.StructureIdentitySetVersion.OwnerKind, LogicalID: productionWorld.StructureIdentitySetVersion.LogicalID,
@@ -831,7 +945,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		},
 		Specifications: bibleSpecifications, Claims: bibleClaims, Assets: assetResult.Assets, States: assetResult.States,
 	}
-	bibleResult, err := bibleOwner.ApplyProductionWorldBible(ctx, biblegorm.NewProductionWorldRepository(database), bibleCommand)
+	bibleResult, err := bibleOwner.ApplyProductionWorldBible(ctx, bibleRepository, bibleCommand)
 	if err != nil || bibleResult.Head.HeadRevision != 1 || bibleResult.Head.ScopeRevision != 1 ||
 		bibleResult.Head.ScopeKey != "project:"+fixture.projectID.String() || bibleResult.Head.MemberCount != 1 ||
 		bibleResult.Head.ScopeContentHash == "" || bibleResult.Head.MembersHash == "" || bibleResult.Head.CollectionRootHash == "" ||
@@ -839,12 +953,14 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		len(bibleResult.Bindings) != len(assetResult.Assets) || bibleResult.Version.StructureIdentitySet.VersionID != structureVersion.ID.String() {
 		t.Fatalf("apply Production World Bible owner: result=%#v err=%v", bibleResult, err)
 	}
-	if _, staleErr := bibleOwner.ApplyProductionWorldBible(ctx, biblegorm.NewProductionWorldRepository(database), bibleCommand); !errors.Is(staleErr, bibleapp.ErrProductionWorldBibleConflict) {
+	staleBibleCommand := bibleCommand
+	staleBibleCommand.ExpectedHeadRevision, staleBibleCommand.ExpectedHeadHash = 0, ""
+	if _, staleErr := bibleOwner.ApplyProductionWorldBible(ctx, bibleRepository, staleBibleCommand); !errors.Is(staleErr, bibleapp.ErrProductionWorldBibleConflict) {
 		t.Fatalf("stale Production World Bible Head error = %v", staleErr)
 	}
 	bibleCommand.ExpectedHeadRevision = bibleResult.Head.HeadRevision
 	bibleCommand.ExpectedHeadHash = bibleResult.Head.HeadContentHash
-	replayedBible, err := bibleOwner.ApplyProductionWorldBible(ctx, biblegorm.NewProductionWorldRepository(database), bibleCommand)
+	replayedBible, err := bibleOwner.ApplyProductionWorldBible(ctx, bibleRepository, bibleCommand)
 	if err != nil || replayedBible.Version.ID != bibleResult.Version.ID || replayedBible.Head.HeadContentHash != bibleResult.Head.HeadContentHash {
 		t.Fatalf("replay Production World Bible owner: result=%#v err=%v", replayedBible, err)
 	}
@@ -861,8 +977,17 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		}
 	}
 	planningHeads := make([]planningapp.ExpectedProductionWorldPlanningHead, len(productionWorld.SharedProof.PlanningEpisodeScopes))
+	planningRepository := planninggorm.NewProductionWorldRepository(database)
 	for index, episodeScope := range productionWorld.SharedProof.PlanningEpisodeScopes {
-		planningHeads[index] = planningapp.ExpectedProductionWorldPlanningHead{EpisodeID: episodeScope.EpisodeID}
+		currentHead, loadErr := planningRepository.GetProductionWorldPlanningHead(
+			ctx, fixture.workspaceID.String(), fixture.projectID.String(), episodeScope.EpisodeID, false,
+		)
+		if loadErr != nil {
+			t.Fatalf("load confirmed Production World Planning Head: %v", loadErr)
+		}
+		planningHeads[index] = planningapp.ExpectedProductionWorldPlanningHead{
+			EpisodeID: episodeScope.EpisodeID, Revision: currentHead.HeadRevision, ContentHash: currentHead.HeadContentHash,
+		}
 	}
 	planningOwner := planningapp.NewProductionWorldPlanningOwner(func() time.Time { return now }, uuid.NewString)
 	planningCommand := planningapp.ApplyProductionWorldPlanningCommand{
@@ -872,7 +997,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		Planning: productionWorld.Planning, Assets: assetResult.Assets, States: assetResult.States,
 		Specifications: bibleResult.Specifications, Bindings: bibleResult.Bindings,
 	}
-	planningResult, err := planningOwner.ApplyProductionWorldPlanning(ctx, planninggorm.NewProductionWorldRepository(database), planningCommand)
+	planningResult, err := planningOwner.ApplyProductionWorldPlanning(ctx, planningRepository, planningCommand)
 	if err != nil || len(planningResult.Heads) != len(productionWorld.SharedProof.PlanningEpisodeScopes) || len(planningResult.Facts) == 0 {
 		t.Fatalf("apply Production World Planning owner: result=%#v err=%v", planningResult, err)
 	}
@@ -882,21 +1007,26 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			t.Fatalf("Production World Planning Head = %#v", head)
 		}
 	}
-	if _, staleErr := planningOwner.ApplyProductionWorldPlanning(ctx, planninggorm.NewProductionWorldRepository(database), planningCommand); !errors.Is(staleErr, planningapp.ErrProductionWorldPlanningConflict) {
+	stalePlanningCommand := planningCommand
+	stalePlanningCommand.ExpectedHeads = make([]planningapp.ExpectedProductionWorldPlanningHead, len(planningCommand.ExpectedHeads))
+	for index, head := range planningCommand.ExpectedHeads {
+		stalePlanningCommand.ExpectedHeads[index].EpisodeID = head.EpisodeID
+	}
+	if _, staleErr := planningOwner.ApplyProductionWorldPlanning(ctx, planningRepository, stalePlanningCommand); !errors.Is(staleErr, planningapp.ErrProductionWorldPlanningConflict) {
 		t.Fatalf("stale Production World Planning Head error = %v", staleErr)
 	}
 	for index, head := range planningResult.Heads {
 		planningCommand.ExpectedHeads[index] = planningapp.ExpectedProductionWorldPlanningHead{
 			EpisodeID: head.EpisodeID, Revision: head.HeadRevision, ContentHash: head.HeadContentHash,
 		}
-		reloadedHead, reloadErr := planninggorm.NewProductionWorldRepository(database).GetProductionWorldPlanningHead(
+		reloadedHead, reloadErr := planningRepository.GetProductionWorldPlanningHead(
 			ctx, fixture.workspaceID.String(), fixture.projectID.String(), head.EpisodeID, false,
 		)
 		if reloadErr != nil || !reflect.DeepEqual(reloadedHead, head) {
 			t.Fatalf("reload Production World Planning Head: got=%#v want=%#v err=%v", reloadedHead, head, reloadErr)
 		}
 	}
-	replayedPlanning, err := planningOwner.ApplyProductionWorldPlanning(ctx, planninggorm.NewProductionWorldRepository(database), planningCommand)
+	replayedPlanning, err := planningOwner.ApplyProductionWorldPlanning(ctx, planningRepository, planningCommand)
 	if err != nil || !reflect.DeepEqual(replayedPlanning.Heads, planningResult.Heads) || len(replayedPlanning.Facts) != len(planningResult.Facts) {
 		t.Fatalf("replay Production World Planning owner: result=%#v err=%v", replayedPlanning, err)
 	}
