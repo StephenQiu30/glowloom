@@ -71,7 +71,7 @@ func (projection *productionProjection) addSource() error {
 	if !ok {
 		return errors.New("Script Source Owner Version is missing")
 	}
-	node, err := newNode(storygraph.NodeTypeSourceRevision, productionOwnerRef(owner, "", ""), "", nil, nil, projectionPayload("source_revision", owner.ContentHash, nil))
+	node, err := newNode(storygraph.NodeTypeSourceRevision, productionOwnerRef(owner, "", ""), "", nil, nil, projectionPayload("storygraph-production/source_revision-ref-payload-contract", owner.ContentHash, nil))
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (projection *productionProjection) addEpisodes() error {
 		}
 		node, err := newNode(storygraph.NodeTypeEpisode, productionOwnerRef(owner, "", ""), episode.Name,
 			mustProjectionJSON(map[string]any{"position": reference.Position}), []storygraph.EvidenceRef{evidence},
-			projectionPayload("episode", owner.ContentHash, nil))
+			projectionPayload("storygraph-production/episode-ref-payload-contract", owner.ContentHash, nil))
 		if err != nil {
 			return err
 		}
@@ -116,7 +116,7 @@ func (projection *productionProjection) addAssets() error {
 			return errors.New("AssetIdentity Owner Version is missing")
 		}
 		node, err := newNode(storygraph.NodeTypeAssetIdentity, productionOwnerRef(owner, "", ""), asset.IdentityKey, nil, nil,
-			projectionPayload("asset_identity", owner.ContentHash, map[string]any{"asset_kind": asset.Kind}))
+			projectionPayload("storygraph-production/asset-identity-payload-contract", owner.ContentHash, map[string]any{"asset_kind": asset.Kind, "creator_decision_ref": nil}))
 		if err != nil {
 			return err
 		}
@@ -141,7 +141,9 @@ func (projection *productionProjection) addAssets() error {
 			return err
 		}
 		node, err := newNode(storygraph.NodeTypeAssetState, productionOwnerRef(owner, "", ""), state.Label, nil, evidence,
-			projectionPayload("asset_state", owner.ContentHash, map[string]any{"asset_kind": asset.Kind, "state_key": state.StateKey}))
+			projectionPayload("storygraph-production/asset-state-payload-contract", owner.ContentHash, map[string]any{
+				"asset_kind": asset.Kind, "state_key": state.StateKey, "story_time_range": nil, "creator_decision_ref": nil,
+			}))
 		if err != nil {
 			return err
 		}
@@ -174,11 +176,12 @@ func (projection *productionProjection) addBibleFacts() error {
 		}
 		nodeType := map[string]storygraph.NodeType{"character": storygraph.NodeTypeCharacterSpecification, "location": storygraph.NodeTypeLocationSpecification, "prop": storygraph.NodeTypePropSpecification}[specification.Kind]
 		node, err := newNode(nodeType, productionOwnerRef(projection.bibleOwner, "specification:"+specification.ID.String(), specification.ContentHash), specification.SpecificationKey, nil, evidence,
-			projectionPayload("specification", specification.ContentHash, map[string]any{"asset_kind": specification.Kind}))
+			projectionPayload("storygraph-production/specification-payload-contract", specification.ContentHash, map[string]any{"asset_kind": specification.Kind, "creator_decision_ref": nil}))
 		if err != nil {
 			return err
 		}
 		projection.addNode("specification:"+specification.ID.String(), node)
+		projection.attachEvidence("asset:"+specification.AssetID.String(), evidence)
 		if err = projection.addEdge(storygraph.EdgeTypeDescribesIdentity, projection.nodeKeys["asset:"+specification.AssetID.String()], node.StoryNodeKey, storygraph.EdgeQualifier{}); err != nil {
 			return err
 		}
@@ -197,7 +200,7 @@ func (projection *productionProjection) addBibleFacts() error {
 	}
 	for _, binding := range projection.material.bindings {
 		node, err := newNode(storygraph.NodeTypeProductionBinding, productionOwnerRef(projection.bibleOwner, "binding:"+binding.ID.String(), binding.ContentHash), binding.IdentityKey, nil, nil,
-			projectionPayload("production_binding", binding.ContentHash, nil))
+			projectionPayload("storygraph-production/production-binding-payload-contract", binding.ContentHash, nil))
 		if err != nil {
 			return err
 		}
@@ -240,8 +243,12 @@ func (projection *productionProjection) addBibleClaim(claim model.ProductionWorl
 		"world_rule": storygraph.NodeTypeWorldRule, "relationship": storygraph.NodeTypeRelationshipClaim,
 		"story_arc": storygraph.NodeTypeStoryArc, "plot_thread": storygraph.NodeTypePlotThread,
 	}[claim.ClaimType]
+	contractID := "storygraph-production/auditable-bible-fact-payload-contract"
+	if nodeType == storygraph.NodeTypeRelationshipClaim || nodeType == storygraph.NodeTypeForeshadowingClaim || nodeType == storygraph.NodeTypePayoffClaim {
+		contractID = "storygraph-production/narrative-claim-payload-contract"
+	}
 	node, err := newNode(nodeType, productionOwnerRef(projection.bibleOwner, "claim:"+claim.ID.String(), claim.ContentHash), claim.Statement, nil, evidence,
-		projectionPayload("bible_claim", claim.ContentHash, map[string]any{"claim_type": claim.ClaimType}))
+		projectionPayload(contractID, claim.ContentHash, map[string]any{"claim_type": claim.ClaimType, "creator_decision_ref": nil}))
 	if err != nil {
 		return err
 	}
@@ -297,7 +304,7 @@ func (projection *productionProjection) addPlanningFact(fact planningdomain.Prod
 		if err != nil {
 			return err
 		}
-		node, err := newNode(storygraph.NodeTypeScene, productionOwnerRef(owner, "", ""), payload.SceneOwnerLogicalID, mustProjectionJSON(map[string]any{"story_time_key": payload.StoryTimeKey}), []storygraph.EvidenceRef{evidence}, projectionPayload("scene", owner.ContentHash, nil))
+		node, err := newNode(storygraph.NodeTypeScene, productionOwnerRef(owner, "", ""), payload.SceneOwnerLogicalID, mustProjectionJSON(map[string]any{"story_time_key": payload.StoryTimeKey}), []storygraph.EvidenceRef{evidence}, projectionPayload("storygraph-production/scene-ref-payload-contract", owner.ContentHash, nil))
 		if err != nil {
 			return err
 		}
@@ -313,14 +320,14 @@ func (projection *productionProjection) addPlanningFact(fact planningdomain.Prod
 		if json.Unmarshal(fact.Payload, &payload) != nil || json.Unmarshal(payload.Fragment, &fragment) != nil {
 			return errors.New("Planning Dialogue payload has drifted")
 		}
-		return projection.addOrderedSceneFact(fact, owner, payload.Scene.ID, payload.SequenceKey, fragment.Text, fragment.Evidence, storygraph.NodeTypeDialogue, "dialogue")
+		return projection.addOrderedSceneFact(fact, owner, payload.Scene.ID, payload.SequenceKey, fragment.Text, fragment.Evidence, storygraph.NodeTypeDialogue, "storygraph-production/dialogue-ref-payload-contract")
 	case "narrative_beat":
 		var payload planningdomain.NarrativeBeatFactPayload
 		var fragment agentcontract.SceneBeatFragment
 		if json.Unmarshal(fact.Payload, &payload) != nil || json.Unmarshal(payload.Fragment, &fragment) != nil {
 			return errors.New("Planning Beat payload has drifted")
 		}
-		return projection.addOrderedSceneFact(fact, owner, payload.Scene.ID, payload.SequenceKey, fragment.Text, fragment.Evidence, storygraph.NodeTypeNarrativeBeat, "beat")
+		return projection.addOrderedSceneFact(fact, owner, payload.Scene.ID, payload.SequenceKey, fragment.Text, fragment.Evidence, storygraph.NodeTypeNarrativeBeat, "storygraph-production/narrative_beat-ref-payload-contract")
 	case "occurrence":
 		return projection.addOccurrence(fact, owner)
 	case "continuity_claim":
@@ -338,13 +345,13 @@ func (projection *productionProjection) addOrderedSceneFact(
 	label string,
 	span agentcontract.SourceEvidenceSpan,
 	nodeType storygraph.NodeType,
-	contract string,
+	payloadContractID string,
 ) error {
 	evidence, evidenceKey, err := projection.ensureEvidence(span)
 	if err != nil {
 		return err
 	}
-	node, err := newNode(nodeType, productionOwnerRef(owner, "", ""), label, mustProjectionJSON(map[string]any{"sequence_key": sequence}), []storygraph.EvidenceRef{evidence}, projectionPayload(contract, owner.ContentHash, nil))
+	node, err := newNode(nodeType, productionOwnerRef(owner, "", ""), label, mustProjectionJSON(map[string]any{"sequence_key": sequence}), []storygraph.EvidenceRef{evidence}, projectionPayload(payloadContractID, owner.ContentHash, nil))
 	if err != nil {
 		return err
 	}
@@ -365,7 +372,7 @@ func (projection *productionProjection) addOccurrence(fact planningdomain.Produc
 	if err != nil {
 		return err
 	}
-	node, err := newNode(storygraph.NodeTypeOccurrence, productionOwnerRef(owner, "", ""), fragment.OccurrenceKey, mustProjectionJSON(map[string]any{"sequence_key": payload.SequenceKey}), []storygraph.EvidenceRef{evidence}, projectionPayload("occurrence", owner.ContentHash, nil))
+	node, err := newNode(storygraph.NodeTypeOccurrence, productionOwnerRef(owner, "", ""), fragment.OccurrenceKey, mustProjectionJSON(map[string]any{"sequence_key": payload.SequenceKey}), []storygraph.EvidenceRef{evidence}, projectionPayload("storygraph-production/occurrence-payload-contract", owner.ContentHash, map[string]any{"creator_decision_ref": nil}))
 	if err != nil {
 		return err
 	}
@@ -410,7 +417,11 @@ func (projection *productionProjection) addPlanningClaim(fact planningdomain.Pro
 			evidence, evidenceKeys = append(evidence, value), append(evidenceKeys, key)
 		}
 	}
-	node, err := newNode(storygraph.NodeTypeContinuityClaim, productionOwnerRef(owner, "", ""), fact.BusinessKey, mustProjectionJSON(map[string]any{"story_time_key": payload.StoryTimeKey}), evidence, projectionPayload("continuity_claim", owner.ContentHash, map[string]any{"claim_type": payload.ClaimType}))
+	contractID, contractErr := storygraph.ProductionPayloadContract(storygraph.NodeTypeContinuityClaim, payload.ClaimType)
+	if contractErr != nil {
+		return contractErr
+	}
+	node, err := newNode(storygraph.NodeTypeContinuityClaim, productionOwnerRef(owner, "", ""), fact.BusinessKey, mustProjectionJSON(map[string]any{"story_time_key": payload.StoryTimeKey}), evidence, projectionPayload(contractID, owner.ContentHash, map[string]any{"claim_type": payload.ClaimType, "creator_decision_ref": nil}))
 	if err != nil {
 		return err
 	}
@@ -481,7 +492,7 @@ func (projection *productionProjection) ensureEvidenceRange(start, end int) (sto
 		return evidence, key, nil
 	}
 	owner := productionOwnerRef(projection.bibleOwner, "source-range:"+identity, evidence.TextHash)
-	node, err := newNode(storygraph.NodeTypeSourceEvidence, owner, "", nil, nil, projectionPayload("source_evidence", evidence.TextHash, nil))
+	node, err := newNode(storygraph.NodeTypeSourceEvidence, owner, "", nil, nil, projectionPayload("storygraph-production/source_evidence-ref-payload-contract", evidence.TextHash, nil))
 	if err != nil {
 		return storygraph.EvidenceRef{}, "", err
 	}
@@ -501,6 +512,26 @@ func (projection *productionProjection) owner(family, logicalID string) (storygr
 func (projection *productionProjection) addNode(index string, node storygraph.Node) {
 	projection.graph.nodes = append(projection.graph.nodes, node)
 	projection.nodeKeys[index] = node.StoryNodeKey
+}
+
+func (projection *productionProjection) attachEvidence(index string, values []storygraph.EvidenceRef) {
+	key := projection.nodeKeys[index]
+	for nodeIndex := range projection.graph.nodes {
+		if projection.graph.nodes[nodeIndex].StoryNodeKey != key {
+			continue
+		}
+		existing := make(map[storygraph.EvidenceRef]struct{}, len(projection.graph.nodes[nodeIndex].EvidenceRefs))
+		for _, value := range projection.graph.nodes[nodeIndex].EvidenceRefs {
+			existing[value] = struct{}{}
+		}
+		for _, value := range values {
+			if _, ok := existing[value]; !ok {
+				projection.graph.nodes[nodeIndex].EvidenceRefs = append(projection.graph.nodes[nodeIndex].EvidenceRefs, value)
+				existing[value] = struct{}{}
+			}
+		}
+		return
+	}
 }
 
 func (projection *productionProjection) addEdge(edgeType storygraph.EdgeType, from, to string, qualifier storygraph.EdgeQualifier) error {
@@ -528,8 +559,8 @@ func productionOwnerRef(value storygraph.OwnerVersionIdentity, fragmentKey, frag
 	}
 }
 
-func projectionPayload(contract, hash string, fields map[string]any) map[string]any {
-	result := map[string]any{"payload_contract_id": "storygraph-production/" + contract + "-ref-payload-contract", "projection_hash": hash}
+func projectionPayload(contractID, hash string, fields map[string]any) map[string]any {
+	result := map[string]any{"payload_contract_id": contractID, "projection_hash": hash}
 	for key, value := range fields {
 		result[key] = value
 	}

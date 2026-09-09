@@ -46,36 +46,40 @@ func GraphBoundaries() []GraphBoundary {
 type NodeType string
 
 const (
-	NodeTypeSourceRevision               NodeType = "source_revision"
-	NodeTypeSourceEvidence               NodeType = "source_evidence"
-	NodeTypePolicySnapshot               NodeType = "policy_snapshot"
-	NodeTypeEffectiveStyleSnapshot       NodeType = "effective_style_snapshot"
-	NodeTypeAssetIdentity                NodeType = "asset_identity"
-	NodeTypeCharacterSpecification       NodeType = "character_specification"
-	NodeTypeLocationSpecification        NodeType = "location_specification"
-	NodeTypePropSpecification            NodeType = "prop_specification"
-	NodeTypeAssetState                   NodeType = "asset_state"
-	NodeTypeProductionBinding            NodeType = "production_binding"
-	NodeTypeWorldRule                    NodeType = "world_rule"
-	NodeTypeStoryArc                     NodeType = "story_arc"
-	NodeTypePlotThread                   NodeType = "plot_thread"
-	NodeTypeRelationshipClaim            NodeType = "relationship_claim"
-	NodeTypeForeshadowingClaim           NodeType = "foreshadowing_claim"
-	NodeTypePayoffClaim                  NodeType = "payoff_claim"
-	NodeTypeEpisode                      NodeType = "episode"
-	NodeTypeScene                        NodeType = "scene"
-	NodeTypeDialogue                     NodeType = "dialogue"
-	NodeTypeNarrativeBeat                NodeType = "narrative_beat"
-	NodeTypeOccurrence                   NodeType = "occurrence"
-	NodeTypeContinuityClaim              NodeType = "continuity_claim"
-	NodeTypeCausalClaim                  NodeType = "causal_claim"
-	NodeTypeShot                         NodeType = "shot"
-	NodeTypeShotContinuityClaim          NodeType = "shot_continuity_claim"
-	NodeTypeGenerationTarget             NodeType = "generation_target"
-	NodeTypeArtifact                     NodeType = "artifact"
-	NodeTypeAssetVersion                 NodeType = "asset_version"
-	NodeTypeShotProductionBindingVersion NodeType = "shot_production_binding_version"
-	NodeTypeShotImageBindingVersion      NodeType = "shot_image_binding_version"
+	NodeTypeSourceRevision                     NodeType = "source_revision"
+	NodeTypeSourceEvidence                     NodeType = "source_evidence"
+	NodeTypePolicySnapshot                     NodeType = "policy_snapshot"
+	NodeTypeEffectiveStyleSnapshot             NodeType = "effective_style_snapshot"
+	NodeTypeAssetIdentity                      NodeType = "asset_identity"
+	NodeTypeCharacterSpecification             NodeType = "character_specification"
+	NodeTypeLocationSpecification              NodeType = "location_specification"
+	NodeTypePropSpecification                  NodeType = "prop_specification"
+	NodeTypeAssetState                         NodeType = "asset_state"
+	NodeTypeProductionBinding                  NodeType = "production_binding"
+	NodeTypeWorldRule                          NodeType = "world_rule"
+	NodeTypeStoryArc                           NodeType = "story_arc"
+	NodeTypePlotThread                         NodeType = "plot_thread"
+	NodeTypeRelationshipClaim                  NodeType = "relationship_claim"
+	NodeTypeForeshadowingClaim                 NodeType = "foreshadowing_claim"
+	NodeTypePayoffClaim                        NodeType = "payoff_claim"
+	NodeTypeEpisode                            NodeType = "episode"
+	NodeTypeScene                              NodeType = "scene"
+	NodeTypeDialogue                           NodeType = "dialogue"
+	NodeTypeNarrativeBeat                      NodeType = "narrative_beat"
+	NodeTypeOccurrence                         NodeType = "occurrence"
+	NodeTypeContinuityClaim                    NodeType = "continuity_claim"
+	NodeTypeCausalClaim                        NodeType = "causal_claim"
+	NodeTypeShot                               NodeType = "shot"
+	NodeTypeShotContinuityClaim                NodeType = "shot_continuity_claim"
+	NodeTypeGenerationTarget                   NodeType = "generation_target"
+	NodeTypeArtifact                           NodeType = "artifact"
+	NodeTypeAssetVersion                       NodeType = "asset_version"
+	NodeTypeApprovedReferencePlanVersion       NodeType = "approved_reference_plan_version"
+	NodeTypeReferencePlanTarget                NodeType = "reference_plan_target"
+	NodeTypeSceneReferenceBindingVersion       NodeType = "scene_reference_binding_version"
+	NodeTypeInteractionReferenceBindingVersion NodeType = "interaction_reference_binding_version"
+	NodeTypeShotProductionBindingVersion       NodeType = "shot_production_binding_version"
+	NodeTypeShotImageBindingVersion            NodeType = "shot_image_binding_version"
 )
 
 var nodeOwners = map[NodeType]string{
@@ -90,7 +94,9 @@ var nodeOwners = map[NodeType]string{
 	NodeTypeContinuityClaim: "production/planning", NodeTypeCausalClaim: "production/planning",
 	NodeTypeShot: "production/storyboard", NodeTypeShotContinuityClaim: "production/storyboard",
 	NodeTypeShotProductionBindingVersion: "production/storyboard", NodeTypeShotImageBindingVersion: "production/storyboard",
-	NodeTypeGenerationTarget: "generation",
+	NodeTypeGenerationTarget:             "generation",
+	NodeTypeApprovedReferencePlanVersion: "production/reference", NodeTypeReferencePlanTarget: "production/reference",
+	NodeTypeSceneReferenceBindingVersion: "production/reference", NodeTypeInteractionReferenceBindingVersion: "production/reference",
 }
 
 type OwnerRef struct {
@@ -359,6 +365,11 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		node, err := canonicalizeNode(nodes[index], snapshot.SchemaVersion)
 		if err != nil {
 			return CanonicalSnapshot{}, err
+		}
+		if snapshot.SchemaVersion == ProductionSchemaID {
+			if err = validateProductionNode(node); err != nil {
+				return CanonicalSnapshot{}, err
+			}
 		}
 		if _, exists := seenNodes[node.StoryNodeKey]; exists {
 			return CanonicalSnapshot{}, errors.New("duplicate StoryGraph node key")

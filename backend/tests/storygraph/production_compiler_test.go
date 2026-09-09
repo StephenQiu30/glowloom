@@ -115,6 +115,17 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 	assetKey := mustNodeKey(t, storygraph.NodeTypeAssetIdentity, assetRef)
 	sceneKey := mustNodeKey(t, storygraph.NodeTypeScene, planningRef)
 	evidence := storygraph.EvidenceRef{DocumentRevisionID: source.VersionID, AbsoluteStart: 0, AbsoluteEnd: 4, TextHash: productionHash("evidence")}
+	payload := func(contractID, projectionHash string, fields map[string]any) json.RawMessage {
+		value := map[string]any{"payload_contract_id": contractID, "projection_hash": projectionHash}
+		for key, field := range fields {
+			value[key] = field
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
 	return storygraph.ProductionOwnerSnapshot{
 		Origin: storygraph.OwnerSnapshotOriginConfirmed, WorkspaceID: workspaceID, ProjectID: projectID,
 		SourceRevisionID: source.VersionID, SourceRevisionHash: source.ContentHash,
@@ -124,14 +135,15 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 		},
 		OwnerCollections: collections,
 		Graph: storygraph.Snapshot{SchemaVersion: storygraph.ProductionSchemaID, Nodes: []storygraph.Node{
-			{StoryNodeKey: sourceKey, NodeType: storygraph.NodeTypeSourceRevision, OwnerRef: sourceRef, Payload: json.RawMessage(`{}`)},
-			{StoryNodeKey: episodeKey, NodeType: storygraph.NodeTypeEpisode, OwnerRef: episodeRef, EvidenceRefs: []storygraph.EvidenceRef{evidence}, Payload: json.RawMessage(`{}`)},
-			{StoryNodeKey: evidenceKey, NodeType: storygraph.NodeTypeSourceEvidence, OwnerRef: bibleRef, Payload: json.RawMessage(`{}`)},
-			{StoryNodeKey: assetKey, NodeType: storygraph.NodeTypeAssetIdentity, OwnerRef: assetRef, Payload: json.RawMessage(`{"asset_kind":"character"}`)},
-			{StoryNodeKey: sceneKey, NodeType: storygraph.NodeTypeScene, OwnerRef: planningRef, EvidenceRefs: []storygraph.EvidenceRef{evidence}, Payload: json.RawMessage(`{}`)},
+			{StoryNodeKey: sourceKey, NodeType: storygraph.NodeTypeSourceRevision, OwnerRef: sourceRef, Payload: payload("storygraph-production/source_revision-ref-payload-contract", sourceRef.OwnerContentHash, nil)},
+			{StoryNodeKey: episodeKey, NodeType: storygraph.NodeTypeEpisode, OwnerRef: episodeRef, EvidenceRefs: []storygraph.EvidenceRef{evidence}, Payload: payload("storygraph-production/episode-ref-payload-contract", episodeRef.OwnerContentHash, nil)},
+			{StoryNodeKey: evidenceKey, NodeType: storygraph.NodeTypeSourceEvidence, OwnerRef: bibleRef, Payload: payload("storygraph-production/source_evidence-ref-payload-contract", bibleRef.FragmentContentHash, nil)},
+			{StoryNodeKey: assetKey, NodeType: storygraph.NodeTypeAssetIdentity, OwnerRef: assetRef, EvidenceRefs: []storygraph.EvidenceRef{evidence}, Payload: payload("storygraph-production/asset-identity-payload-contract", assetRef.OwnerContentHash, map[string]any{"asset_kind": "character", "creator_decision_ref": nil})},
+			{StoryNodeKey: sceneKey, NodeType: storygraph.NodeTypeScene, OwnerRef: planningRef, EvidenceRefs: []storygraph.EvidenceRef{evidence}, Payload: payload("storygraph-production/scene-ref-payload-contract", planningRef.OwnerContentHash, nil)},
 		}, Edges: []storygraph.Edge{
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, sourceKey, evidenceKey, storygraph.EdgeQualifier{}),
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, sourceKey, episodeKey, storygraph.EdgeQualifier{}),
+			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, assetKey, storygraph.EdgeQualifier{}),
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, sceneKey, storygraph.EdgeQualifier{}),
 		}},
 	}
