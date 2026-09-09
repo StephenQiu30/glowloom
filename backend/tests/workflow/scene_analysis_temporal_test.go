@@ -28,6 +28,9 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
+	worldgorm "github.com/StephenQiu30/lanverse/backend/internal/production/world/adapter/gormdb"
+	worldapp "github.com/StephenQiu30/lanverse/backend/internal/production/world/application"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	reviewdomain "github.com/StephenQiu30/lanverse/backend/internal/review/domain"
@@ -40,11 +43,11 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
+func TestSceneAnalysisGatesResumeRealTemporalWorkflow(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	temporalAddress := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS")
 	if databaseURL == "" || temporalAddress == "" {
-		t.Skip("set PostgreSQL and Temporal test endpoints to run the Structure Identity journey")
+		t.Skip("set PostgreSQL and Temporal test endpoints to run the Scene Analysis gates journey")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -133,11 +136,19 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	bibleStore := biblegorm.New(database)
 	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString)
 	structureIdentityQuery := bibleapp.NewStructureIdentityQuery(bibleStore, projectService)
+	productionWorldService, err := workflowapp.NewProductionWorldAssemblyService(
+		workflowStore,
+		workflowapp.ProductionWorldAssemblyConfig{Now: func() time.Time { return now }, NewID: uuid.NewString},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
+			ProductionWorld: productionWorldService,
 		},
 	)
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
@@ -186,9 +197,20 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		if run.Status != "WAITING_HUMAN" {
 			return false, nil
 		}
-		loadErr := database.Where(
+		query := database.Where(
 			"workflow_run_id = ? AND subject_type = ?", started.ID, "structure_identity_gate_input",
-		).First(&task).Error
+		)
+		var taskCount int64
+		if countErr := query.Model(&model.HumanTask{}).Count(&taskCount).Error; countErr != nil {
+			return false, countErr
+		}
+		if taskCount == 0 {
+			return false, nil
+		}
+		if taskCount != 1 {
+			return false, fmt.Errorf("workflow has %d Structure Identity tasks", taskCount)
+		}
+		loadErr := query.First(&task).Error
 		return loadErr == nil && task.Status == "OPEN", loadErr
 	})
 
@@ -265,9 +287,12 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 	})
+	productionWorldConfirmation := worldapp.NewConfirmationService(
+		worldgorm.NewStore(database), func() time.Time { return now }, uuid.NewString,
+	)
 	signalService := workflowapp.NewSignalService(workflowStore, temporalRuntime, workflowapp.SignalConfig{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, nil),
+		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, productionWorldConfirmation),
 	})
 	workflowActor := workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,
@@ -386,6 +411,65 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	if err != nil || approvalCoordination.WorkflowResumeStatus != "completed" {
 		t.Fatalf("resume approved Structure Identity repair: coordination=%#v err=%v", approvalCoordination, err)
 	}
+	var productionWorldTask model.HumanTask
+	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
+		var current model.WorkflowRun
+		if loadErr := database.First(&current, "id = ?", repairRun.ID).Error; loadErr != nil {
+			return false, loadErr
+		}
+		if current.Status != "WAITING_HUMAN" {
+			return false, nil
+		}
+		query := database.Where(
+			"workflow_run_id = ? AND subject_type = ?", repairRun.ID, "production_world_gate_input",
+		)
+		var taskCount int64
+		if countErr := query.Model(&model.HumanTask{}).Count(&taskCount).Error; countErr != nil {
+			return false, countErr
+		}
+		if taskCount == 0 {
+			return false, nil
+		}
+		if taskCount != 1 {
+			return false, fmt.Errorf("workflow has %d Production World tasks", taskCount)
+		}
+		loadErr := query.First(&productionWorldTask).Error
+		return loadErr == nil && productionWorldTask.Status == "OPEN", loadErr
+	})
+	productionWorldClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: productionWorldTask.ID.String(), ExpectedRevision: productionWorldTask.Revision,
+		IdempotencyKey: "production-world-temporal-claim:" + productionWorldTask.ID.String(),
+	})
+	if err != nil {
+		t.Fatalf("claim Production World review: %v", err)
+	}
+	var productionWorldGateInput model.WorkflowHumanGateInput
+	if err = database.First(&productionWorldGateInput, "id = ?", productionWorldTask.SubjectID).Error; err != nil {
+		t.Fatal(err)
+	}
+	productionWorldGate, _, gateErr := workflow.DecodeProductionWorldGateInput(
+		json.RawMessage(productionWorldGateInput.Input),
+	)
+	if gateErr != nil || productionWorldGate.InputHash != productionWorldTask.SubjectHash ||
+		productionWorldGateInput.InputHash != productionWorldTask.SubjectHash {
+		t.Fatalf("read frozen Production World Gate input: decode=%v", gateErr)
+	}
+	productionWorldApproval, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: productionWorldTask.ID.String(), ClaimToken: productionWorldClaim.ClaimToken, Decision: "approved",
+		ExpectedTaskRevision:    productionWorldClaim.Task.Revision,
+		ExpectedSubjectRevision: productionWorldClaim.Task.SubjectRevision,
+		ExpectedSubjectHash:     productionWorldClaim.Task.SubjectHash,
+		IdempotencyKey:          "production-world-temporal-approval:" + productionWorldTask.ID.String(),
+	})
+	if err != nil {
+		t.Fatalf("approve Production World review: %v", err)
+	}
+	productionWorldCoordination, err := coordinator.ResumeHumanGate(
+		ctx, workflowActor, productionWorldApproval.Decision.ID,
+	)
+	if err != nil || productionWorldCoordination.WorkflowResumeStatus != "completed" {
+		t.Fatalf("resume approved Production World review: coordination=%#v err=%v", productionWorldCoordination, err)
+	}
 	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
 		var current model.WorkflowRun
 		if loadErr := database.First(&current, "id = ?", repairRun.ID).Error; loadErr != nil {
@@ -393,6 +477,24 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		}
 		return current.Status == "SUCCEEDED", nil
 	})
+	var productionWorldApply model.WorkflowHumanGateApplyReceipt
+	if err = database.First(
+		&productionWorldApply, "review_decision_id = ?", productionWorldApproval.Decision.ID,
+	).Error; err != nil {
+		t.Fatal(err)
+	}
+	var productionWorldCommandReceipt model.CommandReceipt
+	if productionWorldApply.OwnerReceiptID == nil || productionWorldApply.OwnerOperation == nil ||
+		*productionWorldApply.OwnerOperation != worlddomain.ConfirmProductionWorldOperation {
+		t.Fatalf("Production World Temporal Apply Receipt = %#v", productionWorldApply)
+	}
+	if err = database.First(&productionWorldCommandReceipt, "id = ?", *productionWorldApply.OwnerReceiptID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if productionWorldCommandReceipt.Operation != worlddomain.ConfirmProductionWorldOperation ||
+		productionWorldCommandReceipt.CreatedBy != fixture.userID {
+		t.Fatalf("Production World Temporal CommandReceipt = %#v", productionWorldCommandReceipt)
+	}
 	var productionEntityInvocation model.SceneAnalysisInvocationRecord
 	if err = database.Where(
 		"workflow_run_id = ? AND stage_key = ?", repairRun.ID, "derive_production_entities",

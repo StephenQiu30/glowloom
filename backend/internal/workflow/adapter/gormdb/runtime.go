@@ -1066,6 +1066,7 @@ func (store *Store) ApplyHumanGate(
 		}
 		subjectRevisionIndependentOfNode :=
 			node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0" ||
+				node.Executor == "gate.production_world_review" && node.DefinitionVersion == "1.0.0" ||
 				node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0" ||

@@ -858,6 +858,27 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		productionWorldOutput.Bindings[0].ReferenceID != productionWorldApplyReceipt.OwnerReceiptID.String() {
 		t.Fatalf("Production World owner signal: apply=%#v output=%#v err=%v", productionWorldApplyReceipt, productionWorldOutput, outputErr)
 	}
+	applyProductionWorldCommand := workflow.ApplyHumanGateCommand{
+		WorkflowRunID: started.ID, NodeRunID: productionWorldGate.NodeRunID, NodeID: productionWorldGate.NodeID,
+		SignalIntentID: productionWorldSignal.ID, Decision: "APPROVED",
+		DecisionPayloadHash: productionWorldSignal.DecisionPayloadHash,
+		OwnerReceiptID:      productionWorldApplyReceipt.OwnerReceiptID.String(),
+		Output:              productionWorldOutput, OutputHash: productionWorldOutputHash,
+	}
+	if err = runtimeService.ApplyHumanGate(ctx, applyProductionWorldCommand); err != nil {
+		t.Fatalf("apply Production World owner output to Workflow node: %v", err)
+	}
+	if err = runtimeService.ApplyHumanGate(ctx, applyProductionWorldCommand); err != nil {
+		t.Fatalf("replay Production World Workflow node application: %v", err)
+	}
+	var appliedProductionWorldGate model.NodeRunProjection
+	if err = database.First(&appliedProductionWorldGate, "id = ?", productionWorldGate.NodeRunID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if appliedProductionWorldGate.Status != "SUCCEEDED" || appliedProductionWorldGate.OutputHash == nil ||
+		*appliedProductionWorldGate.OutputHash != productionWorldOutputHash {
+		t.Fatalf("applied Production World Workflow node = %#v", appliedProductionWorldGate)
+	}
 	replayedProductionWorldSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,
 	}, productionWorldSignalCommand)

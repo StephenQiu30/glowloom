@@ -94,7 +94,7 @@
 - [x] 冻结 Gate 2 的 ProductionWorld、Occurrence、Interaction、Continuity、正式身份版本与预期 Head read set。
 - [x] 在 Backend 持久化 Gate 2 不可变审核输入与唯一 HumanTask；重复打开收敛到同一审核事实和候选集合，正式 Owner 写入仍由下一项负责。
 - [x] 将 Gate 2 approved ReviewDecision 解析为精确 ProductionWorld Owner Material；决议时重新验证 Gate Input、aggregate/upstream Candidate、正式 Source/Identity Head 与完整候选集合。
-- [ ] 实现 ProductionWorld、Occurrence、Interaction/Continuity 的正式版本、Head 与三 Owner family 原子 Apply。
+- [x] 实现 ProductionWorld、Occurrence、Interaction/Continuity 的正式版本、Head 与三 Owner family 原子 Apply。
 - [ ] 实现 Gate 2 六视图最小审核与 changes_requested 受影响闭包。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 

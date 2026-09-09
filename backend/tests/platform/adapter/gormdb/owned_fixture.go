@@ -187,6 +187,20 @@ func deleteOwnedScope(transaction *gorm.DB, userIDs []string, workspaceID string
 			Delete(&model.ProductionBindingState{}).Error; err != nil {
 			return err
 		}
+		worldBindingIDs := transaction.Model(&model.ProductionWorldBinding{}).
+			Select("id").Where("project_id IN ?", projectIDs)
+		if err := transaction.Session(&gorm.Session{SkipHooks: true}).Unscoped().
+			Where("binding_id IN (?)", worldBindingIDs).
+			Delete(&model.ProductionWorldBindingState{}).Error; err != nil {
+			return err
+		}
+		assetIDs := transaction.Model(&model.Asset{}).
+			Select("id").Where("project_id IN ?", projectIDs)
+		if err := transaction.Session(&gorm.Session{SkipHooks: true}).Unscoped().
+			Where("asset_id IN (?)", assetIDs).
+			Delete(&model.AssetIdentityStateMembership{}).Error; err != nil {
+			return err
+		}
 	}
 
 	for index := len(schema.Catalog()) - 1; index >= 0; index-- {
