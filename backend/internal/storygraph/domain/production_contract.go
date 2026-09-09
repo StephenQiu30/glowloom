@@ -90,6 +90,9 @@ func validateProductionNode(node Node) error {
 	if !ok {
 		return fmt.Errorf("Production StoryGraph node type %s is not allowed", node.NodeType)
 	}
+	if node.Label != "" || len(node.BusinessPosition) != 0 {
+		return fmt.Errorf("Production StoryGraph node %s copies mutable Owner presentation", node.StoryNodeKey)
+	}
 	if node.OwnerRef.OwnerKind != definition.ownerKind || !slices.Contains(definition.versionFamilies, node.OwnerRef.VersionFamily) {
 		return fmt.Errorf("Production StoryGraph node %s has an invalid Owner family", node.StoryNodeKey)
 	}
@@ -119,6 +122,12 @@ func validateProductionNode(node Node) error {
 	if projectionHash != expectedProjectionHash {
 		return fmt.Errorf("Production StoryGraph node %s projection hash differs from its Owner ref", node.StoryNodeKey)
 	}
+	if productionRefOnlyNode(node.NodeType) {
+		var strictPayload productionProjectionPayload
+		if err = decodeStrictObject(node.Payload, &strictPayload); err != nil {
+			return fmt.Errorf("Production StoryGraph node %s copies Owner business content", node.StoryNodeKey)
+		}
+	}
 	creatorDecision := payload["creator_decision_ref"]
 	hasCreatorDecision := len(creatorDecision) > 0 && !bytes.Equal(bytes.TrimSpace(creatorDecision), []byte("null"))
 	switch definition.evidencePolicy {
@@ -138,4 +147,12 @@ func validateProductionNode(node Node) error {
 		return errors.New("Production StoryGraph evidence policy is invalid")
 	}
 	return nil
+}
+
+func productionRefOnlyNode(nodeType NodeType) bool {
+	return slices.Contains([]NodeType{
+		NodeTypeSourceRevision, NodeTypeSourceEvidence, NodeTypePolicySnapshot, NodeTypeEffectiveStyleSnapshot,
+		NodeTypeEpisode, NodeTypeScene, NodeTypeDialogue, NodeTypeNarrativeBeat, NodeTypeArtifact,
+		NodeTypeApprovedReferencePlanVersion,
+	}, nodeType)
 }

@@ -32,6 +32,17 @@ func TestProductionNodeContractRejectsOwnerPayloadAndEvidenceDrift(t *testing.T)
 		"evidence forbidden": func(value *storygraph.ProductionOwnerSnapshot) {
 			value.Graph.Nodes[0].EvidenceRefs = append([]storygraph.EvidenceRef(nil), value.Graph.Nodes[1].EvidenceRefs...)
 		},
+		"copied label": func(value *storygraph.ProductionOwnerSnapshot) {
+			productionNodeByType(t, value, storygraph.NodeTypeScene).Label = "开场"
+		},
+		"copied business position": func(value *storygraph.ProductionOwnerSnapshot) {
+			productionNodeByType(t, value, storygraph.NodeTypeOccurrence).BusinessPosition = json.RawMessage(`{"sequence_key":"0001"}`)
+		},
+		"ref payload copies owner content": func(value *storygraph.ProductionOwnerSnapshot) {
+			mutateProductionPayload(t, productionNodeByType(t, value, storygraph.NodeTypeEpisode), func(payload map[string]any) {
+				payload["summary"] = "不应复制到内容图"
+			})
+		},
 	}
 
 	for name, mutate := range tests {
