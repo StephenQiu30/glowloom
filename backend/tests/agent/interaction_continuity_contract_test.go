@@ -67,7 +67,10 @@ func TestInteractionContinuityRequiresThreeFrozenCandidateInputs(t *testing.T) {
 		ProductionEntityCandidateRevisionHash: bindingInput.ProductionEntityCandidateRevisionHash,
 		SceneBindingCandidateRevisionID:       input.SceneBindingCandidateRevisionID,
 		SceneBindingCandidateRevisionHash:     input.SceneBindingCandidateRevisionHash,
-		Interactions:                          []contract.InteractionFragment{}, Continuity: []contract.ContinuityFragment{},
+		SceneStoryTimes: []contract.SceneStoryTimeFragment{{
+			SceneScopeKey: formalScene.ScopeKey, StoryTimeKey: "storytime:00000001",
+		}},
+		Interactions: []contract.InteractionFragment{}, Continuity: []contract.ContinuityFragment{},
 		ReviewIssues: []contract.CandidateReviewIssue{},
 	}
 	raw, err := json.Marshal(candidate)

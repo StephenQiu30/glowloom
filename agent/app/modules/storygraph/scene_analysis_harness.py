@@ -149,9 +149,7 @@ class SceneAnalysisHarness:
         elif stage == "reconcile_interaction_continuity":
             if not isinstance(candidate, InteractionContinuityCandidate):
                 raise CodexSchemaInvalid("Codex CLI returned the wrong continuity schema")
-            source = InteractionContinuityInput.model_validate(
-                self.invocation.payload.stage_input
-            )
+            source = InteractionContinuityInput.model_validate(self.invocation.payload.stage_input)
             _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for_input(source)
         else:

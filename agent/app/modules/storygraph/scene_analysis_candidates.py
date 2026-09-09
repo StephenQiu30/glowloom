@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import math
+import re
 from typing import TYPE_CHECKING, Literal, cast
 from uuid import UUID
 
@@ -1000,10 +1002,30 @@ class SceneBindingFragmentCandidate(StrictSceneAnalysisModel):
                     raise ValueError("Scene binding review Evidence is outside frozen SceneFacts")
 
 
+class PositiveRational(StrictSceneAnalysisModel):
+    numerator: int = Field(ge=1, le=9_007_199_254_740_991)
+    denominator: int = Field(ge=1, le=9_007_199_254_740_991)
+
+    @model_validator(mode="after")
+    def validate_reduced(self) -> PositiveRational:
+        if math.gcd(self.numerator, self.denominator) != 1:
+            raise ValueError("relative scale must be a reduced positive rational")
+        return self
+
+
+class SceneStoryTimeFragment(StrictSceneAnalysisModel):
+    scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    story_time_key: str = Field(pattern=r"^storytime:[a-z0-9][a-z0-9_.:-]{0,127}$")
+
+
 class InteractionFragment(StrictSceneAnalysisModel):
     interaction_key: str = Field(pattern=r"^interaction_[a-z0-9_]{1,120}$")
+    claim_series_key: str = Field(pattern=r"^interaction_series_[a-z0-9_]{1,120}$")
+    claim_revision: int = Field(ge=1, le=9_007_199_254_740_991)
+    supersedes_interaction_key: str | None
     scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
     beat_key: str | None
+    story_time_key: str = Field(pattern=r"^storytime:[a-z0-9][a-z0-9_.:-]{0,127}$")
     predicate: Literal[
         "hold", "carry", "wear", "use", "give", "receive", "place", "drop", "open", "break"
     ]
@@ -1014,19 +1036,44 @@ class InteractionFragment(StrictSceneAnalysisModel):
     holder_after_identity_key: str | None
     prop_state_before_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
     prop_state_after_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
-    hand: str | None
+    state_delta: str | None
+    hand: Literal["left", "right", "both", "unspecified"]
+    grip_type: str | None
     contact_point: str | None
     direction: str | None
-    relative_scale: str | None
+    relative_scale: PositiveRational | None
     evidence: SourceEvidenceSpan
+
+    @model_validator(mode="after")
+    def validate_claim_and_delta(self) -> InteractionFragment:
+        if (self.claim_revision == 1) != (self.supersedes_interaction_key is None):
+            raise ValueError("interaction claim revision and supersedes key must form one chain")
+        if (
+            self.supersedes_interaction_key is not None
+            and re.fullmatch(r"interaction_[a-z0-9_]{1,120}", self.supersedes_interaction_key)
+            is None
+        ):
+            raise ValueError("interaction supersedes key is invalid")
+        for value in (self.grip_type, self.contact_point, self.direction, self.state_delta):
+            if value is not None and (not value.strip() or value != value.strip()):
+                raise ValueError("interaction descriptors must be non-empty canonical strings")
+        changed = self.prop_state_before_key != self.prop_state_after_key
+        if changed != (self.state_delta is not None):
+            raise ValueError("Prop state changes require exactly one explicit delta")
+        return self
 
 
 class ContinuityFragment(StrictSceneAnalysisModel):
     continuity_key: str = Field(pattern=r"^continuity_[a-z0-9_]{1,120}$")
+    claim_series_key: str = Field(pattern=r"^continuity_series_[a-z0-9_]{1,120}$")
+    claim_revision: int = Field(ge=1, le=9_007_199_254_740_991)
+    supersedes_continuity_key: str | None
     subject_kind: Literal["character", "location", "prop"]
     identity_key: str = Field(min_length=1)
     from_scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
     to_scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    story_time_start: str = Field(pattern=r"^storytime:[a-z0-9][a-z0-9_.:-]{0,127}$")
+    story_time_end: str = Field(pattern=r"^storytime:[a-z0-9][a-z0-9_.:-]{0,127}$")
     before_state_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
     after_state_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
     transition: Literal["state_persists", "state_changes"]
@@ -1035,6 +1082,15 @@ class ContinuityFragment(StrictSceneAnalysisModel):
 
     @model_validator(mode="after")
     def validate_transition(self) -> ContinuityFragment:
+        if (self.claim_revision == 1) != (self.supersedes_continuity_key is None):
+            raise ValueError("continuity claim revision and supersedes key must form one chain")
+        if (
+            self.supersedes_continuity_key is not None
+            and re.fullmatch(r"continuity_[a-z0-9_]{1,120}", self.supersedes_continuity_key) is None
+        ):
+            raise ValueError("continuity supersedes key is invalid")
+        if self.story_time_start >= self.story_time_end:
+            raise ValueError("continuity story time must be strictly increasing")
         if self.transition == "state_persists":
             if self.before_state_key != self.after_state_key or self.delta is not None:
                 raise ValueError("state_persists must preserve the exact state without a delta")
@@ -1054,6 +1110,7 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
     production_entity_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     scene_binding_candidate_revision_id: UUID
     scene_binding_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_story_times: list[SceneStoryTimeFragment] = Field(min_length=1)
     interactions: list[InteractionFragment]
     continuity: list[ContinuityFragment]
     review_issues: list[CandidateReviewIssue]
@@ -1074,8 +1131,7 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
             != value.production_entity_candidate_revision_id
             or self.production_entity_candidate_revision_hash
             != value.production_entity_candidate_revision_hash
-            or self.scene_binding_candidate_revision_id
-            != value.scene_binding_candidate_revision_id
+            or self.scene_binding_candidate_revision_id != value.scene_binding_candidate_revision_id
             or self.scene_binding_candidate_revision_hash
             != value.scene_binding_candidate_revision_hash
         ):
@@ -1087,7 +1143,21 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
         )
         facts = SceneFactCandidate.model_validate(value.scene_fact_candidate)
         scenes = {scene.scene_scope_key: scene for scene in bindings.scenes}
-        scene_order = {scene.scene_scope_key: index for index, scene in enumerate(bindings.scenes)}
+        expected_scene_keys = {scene.scene_scope_key for scene in bindings.scenes}
+        supplied_scene_keys = {item.scene_scope_key for item in self.scene_story_times}
+        story_time_by_scene = {
+            item.scene_scope_key: item.story_time_key for item in self.scene_story_times
+        }
+        if (
+            supplied_scene_keys != expected_scene_keys
+            or len(supplied_scene_keys) != len(self.scene_story_times)
+            or len(set(story_time_by_scene.values())) != len(self.scene_story_times)
+            or self.scene_story_times
+            != sorted(self.scene_story_times, key=lambda item: item.story_time_key)
+        ):
+            raise ValueError(
+                "story-time anchors must cover every Scene once in chronological order"
+            )
         occurrences = {
             occurrence.occurrence_key: (scene.scene_scope_key, occurrence)
             for scene in bindings.scenes
@@ -1111,9 +1181,23 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
         }
         if len({item.interaction_key for item in self.interactions}) != len(self.interactions):
             raise ValueError("interaction keys must be unique")
+        if len({item.claim_series_key for item in self.interactions}) != len(self.interactions):
+            raise ValueError("interaction claim series must be unique")
         if len({item.continuity_key for item in self.continuity}) != len(self.continuity):
             raise ValueError("continuity keys must be unique")
+        if len({item.claim_series_key for item in self.continuity}) != len(self.continuity):
+            raise ValueError("continuity claim series must be unique")
+        if self.interactions != sorted(
+            self.interactions, key=lambda item: (item.story_time_key, item.interaction_key)
+        ):
+            raise ValueError("interactions must be in canonical story-time order")
+        if self.continuity != sorted(
+            self.continuity,
+            key=lambda item: (item.story_time_start, item.story_time_end, item.continuity_key),
+        ):
+            raise ValueError("continuity must be in canonical story-time order")
 
+        prop_ledger: dict[str, tuple[str | None, str, str]] = {}
         for item in self.interactions:
             scene = scenes.get(item.scene_scope_key)
             actor = occurrences.get(item.actor_occurrence_key)
@@ -1133,12 +1217,12 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                 or prop[1].subject_kind != "prop"
                 or actor[1].occurrence_role != "actual"
                 or prop[1].occurrence_role != "actual"
+                or item.story_time_key != story_time_by_scene.get(item.scene_scope_key)
                 or item.beat_key is not None
                 and item.beat_key not in {beat.beat_key for beat in scene.beats}
                 or states.get(item.prop_state_before_key) != (prop[1].identity_key, "prop")
                 or states.get(item.prop_state_after_key) != (prop[1].identity_key, "prop")
-                or _source_evidence_key(item.evidence)
-                not in action_evidence[item.scene_scope_key]
+                or _source_evidence_key(item.evidence) not in action_evidence[item.scene_scope_key]
             ):
                 raise ValueError(
                     "interaction does not bind exact actual occurrences and Prop states"
@@ -1158,28 +1242,66 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                 participant_identities.add(counterparty[1].identity_key)
             elif counterparty is not None:
                 raise ValueError("non-transfer interaction cannot add a counterparty")
-            if (
-                item.holder_before_identity_key not in participant_identities | {None}
-                or item.holder_after_identity_key not in participant_identities | {None}
-            ):
+            if item.holder_before_identity_key not in participant_identities | {
+                None
+            } or item.holder_after_identity_key not in participant_identities | {None}:
                 raise ValueError("interaction holder must be null or one participant")
-            if item.predicate in {"hold", "carry", "wear", "use"} and (
-                item.holder_after_identity_key != actor[1].identity_key
+            actor_identity = actor[1].identity_key
+            counterparty_identity = None if counterparty is None else counterparty[1].identity_key
+            before_holder, after_holder = (
+                item.holder_before_identity_key,
+                item.holder_after_identity_key,
+            )
+            if item.predicate == "hold" and not (
+                before_holder in {None, actor_identity} and after_holder == actor_identity
             ):
-                raise ValueError("possession interaction must end with the actor as holder")
-            if item.predicate in {"place", "drop"} and item.holder_after_identity_key is not None:
-                raise ValueError("release interaction must end without a holder")
-            if item.predicate in {"give", "receive"} and (
-                item.holder_before_identity_key != actor[1].identity_key
-                or counterparty is None
-                or item.holder_after_identity_key != counterparty[1].identity_key
+                raise ValueError("hold transition is invalid")
+            if item.predicate == "carry" and not (
+                before_holder == actor_identity and after_holder == actor_identity
             ):
-                raise ValueError("transfer holder transition is invalid")
-            if item.predicate in {"open", "break"} and (
-                item.prop_state_before_key == item.prop_state_after_key
+                raise ValueError("carry transition is invalid")
+            if item.predicate == "wear" and not (
+                before_holder in {None, actor_identity}
+                and after_holder == actor_identity
+                and (before_holder is not None or item.state_delta is not None)
             ):
-                raise ValueError("Prop mutation must change the Prop state")
+                raise ValueError("wear transition is invalid")
+            if item.predicate == "use" and before_holder != after_holder:
+                raise ValueError("use cannot implicitly transfer a holder")
+            if item.predicate == "give" and not (
+                before_holder == actor_identity and after_holder == counterparty_identity
+            ):
+                raise ValueError("give transition is invalid")
+            if item.predicate == "receive" and not (
+                before_holder == counterparty_identity and after_holder == actor_identity
+            ):
+                raise ValueError("receive transition is invalid")
+            if item.predicate in {"place", "drop"} and not (
+                before_holder == actor_identity
+                and after_holder is None
+                and item.state_delta is not None
+            ):
+                raise ValueError("release transition is invalid")
+            if item.predicate in {"open", "break"} and not (
+                before_holder == after_holder and item.state_delta is not None
+            ):
+                raise ValueError("Prop mutation transition is invalid")
 
+            prop_identity = prop[1].identity_key
+            previous = prop_ledger.get(prop_identity)
+            if previous is not None and (
+                previous[2] == item.story_time_key
+                or previous[0] != before_holder
+                or previous[1] != item.prop_state_before_key
+            ):
+                raise ValueError("Prop ledger has a duplicate or discontinuous transition")
+            prop_ledger[prop_identity] = (
+                after_holder,
+                item.prop_state_after_key,
+                item.story_time_key,
+            )
+
+        continuity_ledger: dict[str, tuple[str, str]] = {}
         for item in self.continuity:
             before = [
                 occurrence
@@ -1198,19 +1320,24 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
             if (
                 not before
                 or not after
-                or scene_order.get(item.from_scene_scope_key, -1)
-                >= scene_order.get(item.to_scene_scope_key, -1)
+                or item.story_time_start != story_time_by_scene.get(item.from_scene_scope_key)
+                or item.story_time_end != story_time_by_scene.get(item.to_scene_scope_key)
                 or states.get(item.before_state_key) != (item.identity_key, item.subject_kind)
                 or states.get(item.after_state_key) != (item.identity_key, item.subject_kind)
                 or any(
-                    _source_evidence_key(evidence)
-                    not in value.scene_fact_evidence_universe()
+                    _source_evidence_key(evidence) not in value.scene_fact_evidence_universe()
                     for evidence in item.evidence
                 )
             ):
                 raise ValueError(
                     "continuity does not bind an ordered exact identity/state timeline"
                 )
+            previous = continuity_ledger.get(item.identity_key)
+            if previous is not None and (
+                previous[0] > item.story_time_start or previous[1] != item.before_state_key
+            ):
+                raise ValueError("continuity ledger overlaps or contains an unexplained state jump")
+            continuity_ledger[item.identity_key] = (item.story_time_end, item.after_state_key)
         for issue in self.review_issues:
             for evidence in issue.evidence:
                 if _source_evidence_key(evidence) not in value.scene_fact_evidence_universe():

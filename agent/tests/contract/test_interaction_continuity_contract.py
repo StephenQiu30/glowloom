@@ -73,11 +73,25 @@ def _candidate() -> dict[str, Any]:
         ),
         "scene_binding_candidate_revision_id": str(source.scene_binding_candidate_revision_id),
         "scene_binding_candidate_revision_hash": source.scene_binding_candidate_revision_hash,
+        "scene_story_times": [
+            {
+                "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+                "story_time_key": "storytime:00000001",
+            },
+            {
+                "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+                "story_time_key": "storytime:00000002",
+            },
+        ],
         "interactions": [
             {
                 "interaction_key": "interaction_scene_0001_0001",
+                "claim_series_key": "interaction_series_door_handle_hold",
+                "claim_revision": 1,
+                "supersedes_interaction_key": None,
                 "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
                 "beat_key": "beat_scene_0001_0001",
+                "story_time_key": "storytime:00000001",
                 "predicate": "hold",
                 "actor_occurrence_key": "occurrence_scene_0001_0002",
                 "prop_occurrence_key": "occurrence_scene_0001_0003",
@@ -86,7 +100,9 @@ def _candidate() -> dict[str, Any]:
                 "holder_after_identity_key": "character:linzhou",
                 "prop_state_before_key": "state_prop_door_handle_initial",
                 "prop_state_after_key": "state_prop_door_handle_initial",
-                "hand": None,
+                "state_delta": None,
+                "hand": "unspecified",
+                "grip_type": None,
                 "contact_point": None,
                 "direction": None,
                 "relative_scale": None,
@@ -101,10 +117,15 @@ def _candidate() -> dict[str, Any]:
         "continuity": [
             {
                 "continuity_key": "continuity_character_linzhou_0001",
+                "claim_series_key": "continuity_series_character_linzhou",
+                "claim_revision": 1,
+                "supersedes_continuity_key": None,
                 "subject_kind": "character",
                 "identity_key": "character:linzhou",
                 "from_scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
                 "to_scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+                "story_time_start": "storytime:00000001",
+                "story_time_end": "storytime:00000002",
                 "before_state_key": "state_character_linzhou_initial",
                 "after_state_key": "state_character_linzhou_initial",
                 "transition": "state_persists",
@@ -136,17 +157,79 @@ def test_interaction_continuity_binds_actual_occurrences_and_state_timeline() ->
     assert candidate.continuity[0].transition == "state_persists"
 
 
-@pytest.mark.parametrize("drift", ["double_holder", "mentioned_only", "state_jump", "visual"])
+@pytest.mark.parametrize(
+    ("predicate", "holder_before", "holder_after"),
+    [
+        ("carry", None, "character:linzhou"),
+        ("use", None, "character:linzhou"),
+        ("place", None, None),
+        ("drop", None, None),
+    ],
+)
+def test_interaction_continuity_rejects_invalid_predicate_state_machine(
+    predicate: str,
+    holder_before: str | None,
+    holder_after: str | None,
+) -> None:
+    value = _candidate()
+    interaction = value["interactions"][0]
+    interaction["predicate"] = predicate
+    interaction["holder_before_identity_key"] = holder_before
+    interaction["holder_after_identity_key"] = holder_after
+    with pytest.raises((ValidationError, ValueError)):
+        candidate = InteractionContinuityCandidate.model_validate(value)
+        candidate.validate_for_input(_input())
+
+
+def test_interaction_continuity_uses_explicit_story_time_not_scene_array_order() -> None:
+    value = _candidate()
+    value["scene_story_times"] = [
+        {
+            "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+            "story_time_key": "storytime:00000001",
+        },
+        {
+            "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+            "story_time_key": "storytime:00000002",
+        },
+    ]
+    value["interactions"][0]["story_time_key"] = "storytime:00000002"
+    continuity = value["continuity"][0]
+    continuity["from_scene_scope_key"] = "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2"
+    continuity["to_scene_scope_key"] = "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+    continuity["story_time_start"] = "storytime:00000001"
+    continuity["story_time_end"] = "storytime:00000002"
+    candidate = InteractionContinuityCandidate.model_validate(value)
+    candidate.validate_for_input(_input())
+
+
+def test_interaction_continuity_rejects_duplicate_prop_transition_at_same_story_time() -> None:
+    value = _candidate()
+    duplicate = copy.deepcopy(value["interactions"][0])
+    duplicate["interaction_key"] = "interaction_scene_0001_0002"
+    duplicate["claim_series_key"] = "interaction_series_door_handle_hold_duplicate"
+    value["interactions"].append(duplicate)
+    with pytest.raises((ValidationError, ValueError)):
+        candidate = InteractionContinuityCandidate.model_validate(value)
+        candidate.validate_for_input(_input())
+
+
+@pytest.mark.parametrize(
+    "drift",
+    ["double_holder", "mentioned_only", "state_jump", "claim_range", "scale", "visual"],
+)
 def test_interaction_continuity_rejects_invalid_or_invented_state(drift: str) -> None:
     value = copy.deepcopy(_candidate())
     if drift == "double_holder":
-        value["interactions"][0]["counterparty_occurrence_key"] = (
-            "occurrence_scene_0002_0002"
-        )
+        value["interactions"][0]["counterparty_occurrence_key"] = "occurrence_scene_0002_0002"
     elif drift == "mentioned_only":
         value["interactions"][0]["actor_occurrence_key"] = "occurrence_scene_0001_0001"
     elif drift == "state_jump":
         value["continuity"][0]["after_state_key"] = "state_location_exterior_initial"
+    elif drift == "claim_range":
+        value["interactions"][0]["claim_revision"] = 9_007_199_254_740_992
+    elif drift == "scale":
+        value["interactions"][0]["relative_scale"] = {"numerator": 2, "denominator": 4}
     else:
         value["visual_preset"] = "cinematic"
     with pytest.raises((ValidationError, ValueError)):
@@ -217,8 +300,7 @@ async def test_interaction_continuity_runs_from_three_exact_upstreams(
                     candidate_revision_id=revision_id,
                     candidate_revision_hash=revision_hash,
                     source_invocation_id=UUID(
-                        f"{marker * 8}-{marker * 4}-4{marker * 3}"
-                        f"-8{marker * 3}-{marker * 12}"
+                        f"{marker * 8}-{marker * 4}-4{marker * 3}-8{marker * 3}-{marker * 12}"
                     ),
                     source_result_hash=marker * 64,
                 )
@@ -233,7 +315,5 @@ async def test_interaction_continuity_runs_from_three_exact_upstreams(
         return candidate
 
     monkeypatch.setattr(SceneAnalysisHarness, "_run_codex", return_candidate)
-    result = await SceneAnalysisHarness(
-        invocation, repository_root=REPOSITORY_ROOT
-    ).execute()
+    result = await SceneAnalysisHarness(invocation, repository_root=REPOSITORY_ROOT).execute()
     assert result == candidate

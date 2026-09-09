@@ -86,7 +86,9 @@
 
 目标：正式形成 Character/Appearance、Location、Prop/State、SceneOccurrence、Interaction 与 Continuity，并在 Gate 2 原子应用。
 
-- [ ] Red：同一角色两形象、同一道具两状态、人物持道具几何、交接、无原因瞬移、证据/创作者决议互斥和局部闭包。
+- [x] Red：未知 Occurrence/State/视觉字段、非法 carry/use/release、Scene 数组顺序冒充 story-time、同一 Prop 同时点重复转换。
+- [ ] Red：同一角色两形象、同一道具两状态、give/receive 正向交接、无原因瞬移和人物持道具几何 Evidence。
+- [ ] Red：证据/创作者决议互斥和 changes_requested 局部闭包。
 - [x] 实现 derive_production_entities、bind_scene_occurrences、reconcile_interaction_continuity 三阶段 strict Candidate。
 - [ ] 实现 ProductionWorld、Occurrence、Interaction/Continuity 的版本、Head、read set 与三 Owner family 原子 Apply。
 - [ ] 实现 Gate 2 六视图最小审核与 changes_requested 受影响闭包。

@@ -117,9 +117,7 @@ def test_structure_identity_review_preserves_deterministic_blockers_and_sorted_i
 
     downgraded = candidate.model_copy(deep=True)
     blocker_issue = next(
-        issue
-        for issue in downgraded.review_issues
-        if issue.issue_key == blocker["issue_key"]
+        issue for issue in downgraded.review_issues if issue.issue_key == blocker["issue_key"]
     )
     blocker_issue.severity = "warning"
     with pytest.raises(ValueError, match="deterministic"):
