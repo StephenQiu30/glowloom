@@ -162,6 +162,12 @@ class SceneAnalysisHarness:
             )
             _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for(source)
+        production_repair = self.invocation.payload.production_world_repair
+        if production_repair is not None:
+            production_repair.validate_candidate_for(
+                stage,
+                candidate.model_dump(mode="json"),
+            )
         size = len(
             json.dumps(
                 candidate.model_dump(mode="json"),

@@ -640,6 +640,8 @@ Gate 2 的 MVP 不引入通用 Patch DSL，只接受四个语义操作：`revise
 
 Gate 2 `ChangeRequest` 的原因码与操作一一对应为 `production_entity_incorrect|scene_occurrence_incorrect|interaction_incorrect|continuity_incorrect`。`affected_scope_keys` 必须逐项等于 Backend 对所选 target 重算的完整闭包；至少一条 Evidence 必须来自该闭包内冻结事实，引用 Candidate issue 时使用 `<source_stage>/<issue_key>`。`user_note` 只保留为审核审计，不能替代 Evidence，也不得进入 Agent 输入；无法用冻结 Evidence 表达的 CreatorDecision 必须走单独的 typed Owner 决议，不能让模型依据自由文本猜测。Workflow root 机械映射为 `derive_production_entities|bind_scene_occurrences|reconcile_interaction_continuity`，不能由客户端指定。
 
+每个受影响制作阶段都接收自己的精确 `base_candidate`，而不是把上游或“最新 Candidate”当作局部修复基线。Agent 在完整 stage schema 校验之后执行闭包保持检查，Backend 在接受 AttemptResult 前独立执行同一检查：lineage 与 story time 永远冻结；Entity/State、Occurrence、Interaction、Continuity、Ledger 只有对应 operation 授权的既有 key 可改变；Dialogue、Beat 及闭包外集合逐项保持；被引用的当前阶段 ReviewIssue 可被修正或删除，其他 Issue 保持。MVP 不允许 repair 新增、删除或重命名这些业务 key，也拒绝与 base 完全一致的无效结果；确需改变 key 集合时必须回到更上游的 typed 决议，而不是扩大本次 Agent 权限。
+
 文本 `review_candidate` 模型只返回 Issue，不拥有整体 `pass` 或 Gate 状态。`review_reference_artifact` 可以按每个 Rubric 项输出 `pass|warn|fail|not_assessable`，但该项级判定不等于整体 Gate pass，更不是 CandidateSelection。Mechanical gate blocker 不能被模型降级；Human Decision 也不能绕过 Schema/Evidence/Owner reference 的 fail-closed 条件。
 
 ## 14. Invocation、Attempt 与 unknown 恢复

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal, Self
 from uuid import UUID
@@ -387,6 +388,245 @@ class ProductionWorldRepairDirective(StrictSceneAnalysisModel):
             or self.base_candidate.candidate_type != expected_type
         ):
             raise ValueError("Production World repair directive targets another stage")
+
+    def validate_candidate_for(
+        self,
+        stage_key: SceneAnalysisStageKey,
+        candidate: dict[str, Any],
+    ) -> None:
+        self.validate_for(stage_key)
+        base = self.base_candidate.candidate
+        if base == candidate:
+            raise ValueError("Production World repair Candidate did not change")
+        valid = False
+        if stage_key == "derive_production_entities":
+            valid = _preserves_production_entities(self, base, candidate)
+        elif stage_key == "bind_scene_occurrences":
+            valid = _preserves_scene_occurrences(self, base, candidate)
+        elif stage_key == "reconcile_interaction_continuity":
+            valid = _preserves_interaction_continuity(self, base, candidate)
+        if not valid:
+            raise ValueError(
+                "Production World repair Candidate changed content outside its authorized closure"
+            )
+
+
+def _preserves_production_entities(
+    directive: ProductionWorldRepairDirective,
+    base: dict[str, Any],
+    current: dict[str, Any],
+) -> bool:
+    if directive.change_spec.operation != "revise_production_entity" or not _same_except(
+        base, current, "entities", "design_gaps", "review_issues"
+    ):
+        return False
+    base_entities = _indexed_objects(base, "entities", "identity_key")
+    current_entities = _indexed_objects(current, "entities", "identity_key")
+    if (
+        base_entities is None
+        or current_entities is None
+        or base_entities.keys() != current_entities.keys()
+    ):
+        return False
+    targets = set(directive.change_spec.target_keys)
+    authorized_gap_subjects: set[str] = set()
+    for identity_key, base_entity in base_entities.items():
+        current_entity = current_entities[identity_key]
+        base_states = _indexed_objects(base_entity, "states", "state_key")
+        current_states = _indexed_objects(current_entity, "states", "state_key")
+        if (
+            base_states is None
+            or current_states is None
+            or base_states.keys() != current_states.keys()
+        ):
+            return False
+        if identity_key in targets:
+            if not _same_fields(
+                base_entity, current_entity, "identity_key", "kind", "specification_key"
+            ):
+                return False
+            authorized_gap_subjects.update(
+                {identity_key, str(base_entity.get("specification_key", "")), *base_states.keys()}
+            )
+            continue
+        if not _same_except(base_entity, current_entity, "states"):
+            return False
+        for state_key, base_state in base_states.items():
+            if state_key in targets:
+                authorized_gap_subjects.add(state_key)
+            elif base_state != current_states[state_key]:
+                return False
+    return _preserves_authorized_objects(
+        base,
+        current,
+        "design_gaps",
+        "gap_key",
+        lambda value: value.get("subject_key") in authorized_gap_subjects,
+    ) and _preserves_review_issues(directive, "derive_production_entities", base, current)
+
+
+def _preserves_scene_occurrences(
+    directive: ProductionWorldRepairDirective,
+    base: dict[str, Any],
+    current: dict[str, Any],
+) -> bool:
+    if directive.change_spec.operation not in {
+        "revise_production_entity",
+        "rebind_scene_occurrence",
+    } or not _same_except(base, current, "scenes", "review_issues"):
+        return False
+    base_scenes = _indexed_objects(base, "scenes", "scene_scope_key")
+    current_scenes = _indexed_objects(current, "scenes", "scene_scope_key")
+    if base_scenes is None or current_scenes is None or base_scenes.keys() != current_scenes.keys():
+        return False
+    targets = set(directive.change_spec.target_keys)
+    closure_occurrences = set(directive.closure.occurrence_keys)
+    for scene_key, base_scene in base_scenes.items():
+        current_scene = current_scenes[scene_key]
+        if not _same_except(base_scene, current_scene, "occurrences"):
+            return False
+        base_occurrences = _indexed_objects(base_scene, "occurrences", "occurrence_key")
+        current_occurrences = _indexed_objects(current_scene, "occurrences", "occurrence_key")
+        if (
+            base_occurrences is None
+            or current_occurrences is None
+            or base_occurrences.keys() != current_occurrences.keys()
+        ):
+            return False
+        for occurrence_key, base_occurrence in base_occurrences.items():
+            allowed = occurrence_key in closure_occurrences
+            if directive.change_spec.operation == "rebind_scene_occurrence":
+                allowed = scene_key in targets or occurrence_key in targets
+            if not allowed and base_occurrence != current_occurrences[occurrence_key]:
+                return False
+    return _preserves_review_issues(directive, "bind_scene_occurrences", base, current)
+
+
+def _preserves_interaction_continuity(
+    directive: ProductionWorldRepairDirective,
+    base: dict[str, Any],
+    current: dict[str, Any],
+) -> bool:
+    if not _same_except(
+        base,
+        current,
+        "interactions",
+        "continuity",
+        "continuity_ledger",
+        "review_issues",
+    ):
+        return False
+    operation = directive.change_spec.operation
+    if operation in {"revise_production_entity", "rebind_scene_occurrence"}:
+        allowed_interactions = set(directive.closure.interaction_keys)
+        allowed_continuity = set(directive.closure.continuity_keys)
+    elif operation == "revise_interaction":
+        allowed_interactions = set(directive.change_spec.target_keys)
+        allowed_continuity = set(directive.closure.continuity_keys)
+    elif operation == "revise_continuity":
+        allowed_interactions = set()
+        allowed_continuity = set(directive.change_spec.target_keys)
+    else:
+        return False
+    return (
+        _preserves_fixed_keys(
+            base, current, "interactions", "interaction_key", allowed_interactions
+        )
+        and _preserves_fixed_keys(base, current, "continuity", "continuity_key", allowed_continuity)
+        and _preserves_fixed_keys(
+            base,
+            current,
+            "continuity_ledger",
+            "ledger_key",
+            set(directive.closure.ledger_keys),
+        )
+        and _preserves_review_issues(directive, "reconcile_interaction_continuity", base, current)
+    )
+
+
+def _indexed_objects(
+    root: dict[str, Any], field: str, key_field: str
+) -> dict[str, dict[str, Any]] | None:
+    values = root.get(field)
+    if not isinstance(values, list):
+        return None
+    result: dict[str, dict[str, Any]] = {}
+    for value in values:
+        if not isinstance(value, dict):
+            return None
+        key = value.get(key_field)
+        if not isinstance(key, str) or not key.strip() or key in result:
+            return None
+        result[key] = value
+    return result
+
+
+def _same_except(left: dict[str, Any], right: dict[str, Any], *fields: str) -> bool:
+    return ({key: value for key, value in left.items() if key not in fields}) == {
+        key: value for key, value in right.items() if key not in fields
+    }
+
+
+def _same_fields(left: dict[str, Any], right: dict[str, Any], *fields: str) -> bool:
+    return all(left.get(field) == right.get(field) for field in fields)
+
+
+def _preserves_fixed_keys(
+    base: dict[str, Any],
+    current: dict[str, Any],
+    field: str,
+    key_field: str,
+    allowed: set[str],
+) -> bool:
+    base_items = _indexed_objects(base, field, key_field)
+    current_items = _indexed_objects(current, field, key_field)
+    if base_items is None or current_items is None or base_items.keys() != current_items.keys():
+        return False
+    return all(key in allowed or value == current_items[key] for key, value in base_items.items())
+
+
+def _preserves_authorized_objects(
+    base: dict[str, Any],
+    current: dict[str, Any],
+    field: str,
+    key_field: str,
+    authorized: Callable[[dict[str, Any]], bool],
+) -> bool:
+    base_items = _indexed_objects(base, field, key_field)
+    current_items = _indexed_objects(current, field, key_field)
+    if base_items is None or current_items is None:
+        return False
+    for key in base_items.keys() | current_items.keys():
+        left = base_items.get(key)
+        right = current_items.get(key)
+        if left == right:
+            continue
+        if (left is not None and not authorized(left)) or (
+            right is not None and not authorized(right)
+        ):
+            return False
+    return True
+
+
+def _preserves_review_issues(
+    directive: ProductionWorldRepairDirective,
+    stage: str,
+    base: dict[str, Any],
+    current: dict[str, Any],
+) -> bool:
+    prefix = f"{stage}/"
+    allowed = {
+        reference.removeprefix(prefix)
+        for reference in directive.issue_refs
+        if reference.startswith(prefix)
+    }
+    return _preserves_authorized_objects(
+        base,
+        current,
+        "review_issues",
+        "issue_key",
+        lambda value: value.get("issue_key") in allowed,
+    )
 
 
 class ScriptSpanProposalInput(StrictSceneAnalysisModel):

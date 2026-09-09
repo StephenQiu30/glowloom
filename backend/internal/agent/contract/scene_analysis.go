@@ -916,6 +916,13 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 				return errors.New("invalid accepted Interaction/Continuity candidate")
 			}
 		}
+		if invocation.Payload.ProductionRepair != nil && ValidateProductionWorldRepairCandidate(
+			*invocation.Payload.ProductionRepair,
+			invocation.Payload.Variant.StageKey,
+			value.Candidate,
+		) != nil {
+			return errors.New("accepted Production World repair changed content outside its authorized closure")
+		}
 	case "rejected", "outcome_unknown":
 		expectedRetry := "never"
 		if value.Status == "outcome_unknown" {
