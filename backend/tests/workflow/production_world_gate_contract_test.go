@@ -12,16 +12,17 @@ import (
 	"github.com/google/uuid"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
 func TestProductionWorldCandidatePartitionsThreeFrozenFragments(t *testing.T) {
 	draft := productionWorldCandidateDraft(t)
-	value, encoded, err := workflow.NewProductionWorldCandidate(draft)
+	value, encoded, err := worlddomain.NewProductionWorldCandidate(draft)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.SchemaVersion != workflow.ProductionWorldCandidateSchemaVersion || len(value.ContentHash) != 64 {
+	if value.SchemaVersion != worlddomain.ProductionWorldCandidateSchemaVersion || len(value.ContentHash) != 64 {
 		t.Fatalf("invalid Production World Candidate identity: %#v", value)
 	}
 	if len(value.Bible.Specifications) != 1 || len(value.Asset.Identities) != 1 ||
@@ -37,7 +38,7 @@ func TestProductionWorldCandidatePartitionsThreeFrozenFragments(t *testing.T) {
 		len(value.InteractionProjectionHash) != 64 || len(value.ContinuityProjectionHash) != 64 {
 		t.Fatalf("Production World proof is incomplete: %#v", value.SharedProof)
 	}
-	decoded, canonical, err := workflow.DecodeProductionWorldCandidate(encoded)
+	decoded, canonical, err := worlddomain.DecodeProductionWorldCandidate(encoded)
 	if err != nil || decoded.ContentHash != value.ContentHash || string(canonical) != string(encoded) {
 		t.Fatalf("decode Production World Candidate: decoded=%#v err=%v", decoded, err)
 	}
@@ -45,7 +46,7 @@ func TestProductionWorldCandidatePartitionsThreeFrozenFragments(t *testing.T) {
 
 func TestProductionWorldGateInputBindsAggregateAndSeparatePlanningProjections(t *testing.T) {
 	candidateDraft := productionWorldCandidateDraft(t)
-	candidate, _, err := workflow.NewProductionWorldCandidate(candidateDraft)
+	candidate, _, err := worlddomain.NewProductionWorldCandidate(candidateDraft)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,12 +92,12 @@ func TestProductionWorldGateInputBindsAggregateAndSeparatePlanningProjections(t 
 func TestProductionWorldContractsRejectUpstreamAndHashDrift(t *testing.T) {
 	draft := productionWorldCandidateDraft(t)
 	draft.SceneOccurrenceCandidate.CandidateRevisionHash = strings.Repeat("0", 64)
-	if _, _, err := workflow.NewProductionWorldCandidate(draft); err == nil {
+	if _, _, err := worlddomain.NewProductionWorldCandidate(draft); err == nil {
 		t.Fatal("Production World Candidate accepted a SceneOccurrence revision hash outside its frozen input")
 	}
 
 	draft = productionWorldCandidateDraft(t)
-	candidate, _, err := workflow.NewProductionWorldCandidate(draft)
+	candidate, _, err := worlddomain.NewProductionWorldCandidate(draft)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestProductionWorldContractsRejectUpstreamAndHashDrift(t *testing.T) {
 	}
 }
 
-func productionWorldCandidateDraft(t *testing.T) workflow.ProductionWorldCandidateDraft {
+func productionWorldCandidateDraft(t *testing.T) worlddomain.ProductionWorldCandidateDraft {
 	t.Helper()
 	text := "林舟"
 	sourceHash := sha256Text(text)
@@ -269,7 +270,7 @@ func productionWorldCandidateDraft(t *testing.T) workflow.ProductionWorldCandida
 		Continuity: []agentcontract.ContinuityFragment{}, ReviewIssues: []agentcontract.CandidateReviewIssue{},
 	}
 	continuityRef := candidateRef("reconcile_interaction_continuity", "d", sourceHash)
-	return workflow.ProductionWorldCandidateDraft{
+	return worlddomain.ProductionWorldCandidateDraft{
 		WorkspaceID: workspaceID, ProjectID: projectID,
 		SourceVersion: agentcontract.ScriptSourceVersionIdentity{
 			OwnerKind: "production/script", LogicalID: uuid.NewString(), VersionID: sourceVersionID,

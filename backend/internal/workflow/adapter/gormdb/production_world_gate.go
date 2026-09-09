@@ -16,6 +16,7 @@ import (
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -96,62 +97,62 @@ func loadProductionWorldGateCandidate(
 	database *gorm.DB,
 	run model.WorkflowRun,
 	binding domain.NodeInputBinding,
-) (model.StageCandidateRevision, domain.ProductionWorldCandidate, error) {
+) (model.StageCandidateRevision, worlddomain.ProductionWorldCandidate, error) {
 	candidateID, err := uuid.Parse(binding.ReferenceID)
 	if err != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate identity is invalid")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate identity is invalid")
 	}
 	var revision model.StageCandidateRevision
 	if err = database.First(&revision, "id = ?", candidateID).Error; err != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, normalizeNotFound(err)
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, normalizeNotFound(err)
 	}
-	candidate, _, err := domain.DecodeProductionWorldCandidate(json.RawMessage(revision.Candidate))
+	candidate, _, err := worlddomain.DecodeProductionWorldCandidate(json.RawMessage(revision.Candidate))
 	if err != nil || candidate.WorkspaceID != run.WorkspaceID.String() || candidate.ProjectID != run.ProjectID.String() ||
 		revision.WorkspaceID != run.WorkspaceID || revision.OriginKind != "aggregate" || revision.RevisionNo != 1 ||
 		binding.ReferenceVersion != strconv.FormatInt(revision.RevisionNo, 10) ||
 		binding.ContentHash != revision.CandidateRevisionHash || revision.CandidateContentHash != candidate.ContentHash {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate has drifted")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate has drifted")
 	}
 	var origin agentcontract.AggregateCandidateOrigin
 	if json.Unmarshal(revision.AggregateOrigin, &origin) != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate aggregate origin is invalid")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate aggregate origin is invalid")
 	}
 	expectedRevisionHash, err := (agentcontract.CandidateRevisionMaterial{
 		StageInstanceKey: revision.StageInstanceKey, RevisionNo: revision.RevisionNo,
 		OriginKind: "aggregate", AggregateOrigin: &origin, CandidateContentHash: revision.CandidateContentHash,
 	}).Hash()
 	if err != nil || expectedRevisionHash != revision.CandidateRevisionHash {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate Revision has drifted")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate Revision has drifted")
 	}
 	var head model.StageCandidateHead
 	if err = database.First(&head, "stage_instance_key = ?", revision.StageInstanceKey).Error; err != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, normalizeNotFound(err)
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, normalizeNotFound(err)
 	}
 	if head.WorkspaceID != run.WorkspaceID || head.CurrentRevisionID != revision.ID ||
 		head.CurrentCandidateRevisionHash != revision.CandidateRevisionHash || head.Revision != revision.RevisionNo {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate Head has drifted")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate Candidate Head has drifted")
 	}
 	manifestID, parseErr := uuid.Parse(origin.ShardManifestID)
 	if parseErr != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate Manifest identity is invalid")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate Manifest identity is invalid")
 	}
 	var manifest model.ShardManifest
 	if err = database.First(&manifest, "id = ? AND version = ?", manifestID, origin.ManifestVersion).Error; err != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, normalizeNotFound(err)
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, normalizeNotFound(err)
 	}
 	if manifest.WorkspaceID != run.WorkspaceID || manifest.WorkflowRunID != run.ID ||
 		manifest.Stage != application.ProductionWorldAssemblyStage ||
 		manifest.ManifestHash != origin.ShardManifestHash {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate Manifest has drifted")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate Manifest has drifted")
 	}
 	var sourceNode model.NodeRunProjection
 	if err = database.First(&sourceNode, "id = ?", manifest.NodeRunID).Error; err != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, normalizeNotFound(err)
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, normalizeNotFound(err)
 	}
 	if sourceNode.WorkflowRunID != run.ID || sourceNode.NodeID != binding.SourceNodeID ||
 		sourceNode.DefinitionKey != "production.production_world_assembly" ||
 		sourceNode.Executor != "activity.production_world_assembly" {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate source Node has drifted")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate source Node has drifted")
 	}
 	sourceResult, resultErr := completedNodeResult(sourceNode)
 	if resultErr != nil || len(sourceResult.Output.Bindings) != 1 ||
@@ -160,7 +161,7 @@ func loadProductionWorldGateCandidate(
 		sourceResult.Output.Bindings[0].ReferenceID != binding.ReferenceID ||
 		sourceResult.Output.Bindings[0].ReferenceVersion != binding.ReferenceVersion ||
 		sourceResult.Output.Bindings[0].ContentHash != binding.ContentHash {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate source output has drifted")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate source output has drifted")
 	}
 	manifestRecord := application.ProductionWorldCandidateRecord{
 		ManifestID: manifest.ID.String(), CandidateRevisionID: revision.ID.String(),
@@ -172,17 +173,17 @@ func loadProductionWorldGateCandidate(
 	}
 	identities, parseErr := parseProductionWorldRecordIdentities(manifestRecord)
 	if parseErr != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, parseErr
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, parseErr
 	}
 	expectedManifest, buildErr := buildProductionWorldManifest(manifestRecord, identities, manifest.ID)
 	var persistedLeaves []agentcontract.AggregateLeafCandidateRef
 	if buildErr != nil || json.Unmarshal(manifest.Shards, &persistedLeaves) != nil ||
 		manifest.CoverageHash != expectedManifest.CoverageHash || manifest.ManifestHash != expectedManifest.ManifestHash ||
 		!reflect.DeepEqual(persistedLeaves, origin.LeafCandidates) {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, errors.New("Production World Gate Manifest proof has drifted")
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, errors.New("Production World Gate Manifest proof has drifted")
 	}
 	if err = validateProductionWorldLeafHeads(database, candidate, origin.LeafCandidates, run.WorkspaceID, run.ProjectID); err != nil {
-		return model.StageCandidateRevision{}, domain.ProductionWorldCandidate{}, err
+		return model.StageCandidateRevision{}, worlddomain.ProductionWorldCandidate{}, err
 	}
 	return revision, candidate, nil
 }
@@ -190,7 +191,7 @@ func loadProductionWorldGateCandidate(
 func validateProductionWorldFormalReadSet(
 	database *gorm.DB,
 	run model.WorkflowRun,
-	candidate domain.ProductionWorldCandidate,
+	candidate worlddomain.ProductionWorldCandidate,
 ) error {
 	versionID, err := uuid.Parse(candidate.SourceVersion.VersionID)
 	if err != nil {
@@ -311,7 +312,7 @@ func resolveProductionWorldOwnerMaterial(
 
 func productionWorldCandidateIDs(
 	value domain.ProductionWorldGateInput,
-	candidate domain.ProductionWorldCandidate,
+	candidate worlddomain.ProductionWorldCandidate,
 ) []string {
 	result := []string{
 		value.Subject.ProductionWorldCandidate.CandidateRevisionID,

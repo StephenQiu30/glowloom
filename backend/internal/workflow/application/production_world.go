@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
-	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 )
 
 const ProductionWorldAssemblyStage = "assemble_production_world"
@@ -20,7 +20,7 @@ type ProductionWorldAssemblyCommand struct {
 	WorkflowRunID string
 	NodeRunID     string
 	InputHash     string
-	Draft         domain.ProductionWorldCandidateDraft
+	Draft         worlddomain.ProductionWorldCandidateDraft
 	Leaves        []agentcontract.AggregateLeafCandidateRef
 }
 
@@ -94,7 +94,7 @@ func (service *ProductionWorldAssemblyService) AssembleProductionWorld(
 			return ProductionWorldCandidateRevision{}, errors.New("invalid Production World assembly command")
 		}
 	}
-	candidate, candidateJSON, err := domain.NewProductionWorldCandidate(command.Draft)
+	candidate, candidateJSON, err := worlddomain.NewProductionWorldCandidate(command.Draft)
 	if err != nil {
 		return ProductionWorldCandidateRevision{}, err
 	}
@@ -118,7 +118,7 @@ func (service *ProductionWorldAssemblyService) AssembleProductionWorld(
 	})
 }
 
-func validProductionWorldLeaves(value domain.ProductionWorldCandidate, leaves []agentcontract.AggregateLeafCandidateRef) bool {
+func validProductionWorldLeaves(value worlddomain.ProductionWorldCandidate, leaves []agentcontract.AggregateLeafCandidateRef) bool {
 	if len(leaves) != 3 {
 		return false
 	}

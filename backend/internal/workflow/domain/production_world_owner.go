@@ -7,6 +7,8 @@ import (
 	"io"
 
 	"github.com/google/uuid"
+
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 )
 
 const ProductionWorldOwnerMaterialSchema = "production-world-owner-material-production"
@@ -14,10 +16,10 @@ const ProductionWorldOwnerMaterialSchema = "production-world-owner-material-prod
 // ProductionWorldOwnerMaterial is the exact immutable input handed from Workflow
 // to the Backend coordinator after Gate 2 approval.
 type ProductionWorldOwnerMaterial struct {
-	SchemaVersion string                   `json:"schema_version"`
-	GateInputID   string                   `json:"gate_input_id"`
-	GateInput     ProductionWorldGateInput `json:"gate_input"`
-	Candidate     ProductionWorldCandidate `json:"candidate"`
+	SchemaVersion string                               `json:"schema_version"`
+	GateInputID   string                               `json:"gate_input_id"`
+	GateInput     ProductionWorldGateInput             `json:"gate_input"`
+	Candidate     worlddomain.ProductionWorldCandidate `json:"candidate"`
 }
 
 func DecodeProductionWorldOwnerMaterial(raw json.RawMessage) (ProductionWorldOwnerMaterial, error) {
@@ -49,7 +51,7 @@ func DecodeProductionWorldOwnerMaterial(raw json.RawMessage) (ProductionWorldOwn
 	if err != nil {
 		return ProductionWorldOwnerMaterial{}, err
 	}
-	candidate, canonicalCandidate, err := DecodeProductionWorldCandidate(candidateJSON)
+	candidate, canonicalCandidate, err := worlddomain.DecodeProductionWorldCandidate(candidateJSON)
 	if err != nil || string(canonicalCandidate) != string(candidateJSON) {
 		return ProductionWorldOwnerMaterial{}, errors.New("Production World owner Candidate has drifted")
 	}

@@ -32,6 +32,7 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
@@ -540,7 +541,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	).Error; err != nil {
 		t.Fatalf("query Production World Candidate revision: %v", err)
 	}
-	productionWorld, _, err := workflow.DecodeProductionWorldCandidate(json.RawMessage(productionWorldRevision.Candidate))
+	productionWorld, _, err := worlddomain.DecodeProductionWorldCandidate(json.RawMessage(productionWorldRevision.Candidate))
 	if err != nil || productionWorld.ContentHash != productionWorldRevision.CandidateContentHash ||
 		productionWorld.UpstreamCandidates.ProductionEntity.CandidateRevisionID != productionEntityCandidate.ID ||
 		productionWorld.UpstreamCandidates.SceneOccurrence.CandidateRevisionID != sceneBindingCandidate.ID ||
@@ -567,7 +568,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	directCommand := workflowapp.ProductionWorldAssemblyCommand{
 		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[9].NodeRunID,
 		InputHash: productionWorldManifest.RootInputHash,
-		Draft: workflow.ProductionWorldCandidateDraft{
+		Draft: worlddomain.ProductionWorldCandidateDraft{
 			WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 			SourceVersion: contract.ScriptSourceVersionIdentity{
 				OwnerKind: accepted.Identity.OwnerKind, LogicalID: accepted.Identity.LogicalID,

@@ -15,8 +15,8 @@ import (
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
 const productionWorldManifestSchema = "production-world-aggregate-manifest-production"
@@ -32,7 +32,7 @@ func (store *Store) EnsureProductionWorldCandidate(
 	if err != nil {
 		return application.ProductionWorldCandidateRevision{}, err
 	}
-	candidate, _, err := domain.DecodeProductionWorldCandidate(value.Candidate)
+	candidate, _, err := worlddomain.DecodeProductionWorldCandidate(value.Candidate)
 	if err != nil || candidate.WorkspaceID != value.WorkspaceID || candidate.ProjectID != value.ProjectID ||
 		candidate.ContentHash != value.CandidateContentHash || value.Stage != application.ProductionWorldAssemblyStage {
 		return application.ProductionWorldCandidateRevision{}, errors.New("invalid Production World Candidate record")
@@ -106,7 +106,7 @@ func parseProductionWorldRecordIdentities(
 
 func validateProductionWorldLeafHeads(
 	database *gorm.DB,
-	candidate domain.ProductionWorldCandidate,
+	candidate worlddomain.ProductionWorldCandidate,
 	leaves []agentcontract.AggregateLeafCandidateRef,
 	workspaceID, projectID uuid.UUID,
 ) error {
@@ -229,7 +229,7 @@ func buildProductionWorldManifest(
 func ensureProductionWorldRevision(
 	database *gorm.DB,
 	value application.ProductionWorldCandidateRecord,
-	candidate domain.ProductionWorldCandidate,
+	candidate worlddomain.ProductionWorldCandidate,
 	manifest model.ShardManifest,
 	identities productionWorldRecordIdentities,
 ) (application.ProductionWorldCandidateRevision, error) {
@@ -265,7 +265,7 @@ func ensureProductionWorldRevision(
 			return application.ProductionWorldCandidateRevision{}, err
 		}
 		var persistedOrigin agentcontract.AggregateCandidateOrigin
-		persistedCandidate, _, decodeErr := domain.DecodeProductionWorldCandidate(json.RawMessage(existing.Candidate))
+		persistedCandidate, _, decodeErr := worlddomain.DecodeProductionWorldCandidate(json.RawMessage(existing.Candidate))
 		if json.Unmarshal(existing.AggregateOrigin, &persistedOrigin) != nil || decodeErr != nil ||
 			existing.WorkspaceID != identities.workspaceID || existing.StageInstanceKey != stageInstanceKey ||
 			existing.RevisionNo != 1 || existing.OriginKind != "aggregate" ||

@@ -22,6 +22,7 @@ import (
 	scriptdomain "github.com/StephenQiu30/lanverse/backend/internal/production/script/domain"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -1578,7 +1579,7 @@ func (executor *NodeExecutor) executeProductionWorldAssembly(
 	}
 	result, err := executor.productionWorld.AssembleProductionWorld(ctx, workflowapp.ProductionWorldAssemblyCommand{
 		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID, InputHash: command.InputHash,
-		Draft: domain.ProductionWorldCandidateDraft{
+		Draft: worlddomain.ProductionWorldCandidateDraft{
 			WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
 			SourceVersion: agentcontract.ScriptSourceVersionIdentity{
 				OwnerKind: accepted.Identity.OwnerKind, LogicalID: accepted.Identity.LogicalID,
