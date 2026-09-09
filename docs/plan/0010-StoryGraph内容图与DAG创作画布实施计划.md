@@ -97,6 +97,8 @@
 - [x] 实现 ProductionWorld、Occurrence、Interaction/Continuity 的正式版本、Head 与三 Owner family 原子 Apply。
 - [x] 实现 Gate 2 Backend 六视图不可变 Review Detail 与公开 typed Query；不提前建设 `VP-I11` 完整前端工作台。
 - [ ] 实现 Gate 2 typed changes_requested 受影响闭包。
+  - [x] 固定四类语义操作，并由 Backend 对冻结六视图计算确定性的七类直接依赖闭包；无关的下一跳场景不得进入 Scene/Occurrence/Continuity/Ledger 集合。
+  - [ ] 将闭包冻结到 Gate Input/Review Detail，验证 `changes_requested` payload，并启动对应的有界 repair Run。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I04 — storygraph-production 制作投影与可追溯 Query
