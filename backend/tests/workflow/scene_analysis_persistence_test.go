@@ -146,7 +146,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 11 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 12 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
@@ -156,7 +156,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		plan.Nodes[7].Executor != "activity.scene_occurrence_binding" ||
 		plan.Nodes[8].Executor != "activity.interaction_continuity_reconciliation" ||
 		plan.Nodes[9].Executor != "activity.production_world_assembly" ||
-		plan.Nodes[10].Executor != "gate.production_world_review" {
+		plan.Nodes[10].Executor != "gate.production_world_review" ||
+		plan.Nodes[11].Executor != "activity.production_storygraph_projection" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -188,9 +189,12 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	productionGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
+		Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString,
+	})
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, productionGraphService, nil, nil, nil, nil,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
 			ProductionWorld: productionWorldService,
@@ -920,19 +924,28 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || !reflect.DeepEqual(replayedWorld, confirmedWorld) {
 		t.Fatalf("replay Production World confirmation: got=%#v want=%#v err=%v", replayedWorld, confirmedWorld, err)
 	}
-	productionGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
-		Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString,
+	productionGraphNode := plan.Nodes[11]
+	productionGraphResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: productionGraphNode.NodeRunID, NodeID: productionGraphNode.NodeID,
+		Executor: productionGraphNode.Executor, Attempt: 1,
 	})
+	if err != nil || productionGraphResult.Status != "SUCCEEDED" || len(productionGraphResult.Output.Bindings) != 1 ||
+		productionGraphResult.Output.Bindings[0].Port != "storygraph" ||
+		productionGraphResult.Output.Bindings[0].ValueType != "storygraph_version" {
+		t.Fatalf("execute Production StoryGraph Workflow node: result=%#v err=%v", productionGraphResult, err)
+	}
 	productionGraphCommand := storygraphapp.CompileProductionCommand{
 		ProjectID: fixture.projectID.String(), ProductionWorldReceiptID: confirmedWorld.CommandReceiptID,
-		ProductionWorldReceiptHash: confirmedWorld.ReceiptContentHash, ExpectedHeadRevision: 0,
-		IdempotencyKey: "production-storygraph:" + confirmedWorld.CommandReceiptID,
+		ProductionWorldReceiptHash: confirmedWorld.ReceiptContentHash,
+		IdempotencyKey:             "production-storygraph:" + confirmedWorld.CommandReceiptID,
 	}
 	productionGraphActor := storygraphapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
 	productionGraph, err := productionGraphService.CompileProduction(ctx, productionGraphActor, productionGraphCommand)
 	if err != nil || productionGraph.Version.SchemaVersion != storygraphdomain.ProductionSchemaID ||
 		productionGraph.Version.ProductionInput == nil || len(productionGraph.Version.ProductionInput.OwnerCollections) < 7 ||
 		productionGraph.Head.CurrentVersionID != productionGraph.Version.ID ||
+		productionGraphResult.Output.Bindings[0].ReferenceID != productionGraph.Version.ID ||
+		productionGraphResult.Output.Bindings[0].ContentHash != productionGraph.Version.ContentHash ||
 		countStoryGraphNodeType(productionGraph.Version.Nodes, storygraphdomain.NodeTypeOccurrence) == 0 ||
 		countStoryGraphNodeType(productionGraph.Version.Nodes, storygraphdomain.NodeTypeContinuityClaim) == 0 ||
 		countStoryGraphEdgeType(productionGraph.Version.Edges, storygraphdomain.EdgeTypeClaimParticipant) == 0 ||
@@ -1735,6 +1748,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "interaction-continuity", DefinitionKey: "agent.interaction_continuity_reconciliation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "production-world", DefinitionKey: "production.production_world_assembly", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "production-world-gate", DefinitionKey: "human.production_world_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "production-storygraph", DefinitionKey: "production.storygraph_projection", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -1770,6 +1784,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "bindings-production-world", FromNodeID: "scene-bindings", FromPort: "candidate", ToNodeID: "production-world", ToPort: "bindings"},
 			{ID: "continuity-production-world", FromNodeID: "interaction-continuity", FromPort: "candidate", ToNodeID: "production-world", ToPort: "continuity"},
 			{ID: "production-world-gate-input", FromNodeID: "production-world", FromPort: "candidate", ToNodeID: "production-world-gate", ToPort: "candidate"},
+			{ID: "production-world-storygraph", FromNodeID: "production-world-gate", FromPort: "world", ToNodeID: "production-storygraph", ToPort: "world"},
 		},
 	}
 }

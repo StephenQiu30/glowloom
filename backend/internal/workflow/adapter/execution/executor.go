@@ -38,6 +38,8 @@ func (executor *NodeExecutor) Execute(
 		"activity.production_entity_derivation",
 		"activity.scene_occurrence_binding",
 		"activity.interaction_continuity_reconciliation",
+		"activity.production_world_assembly",
+		"activity.production_storygraph_projection",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

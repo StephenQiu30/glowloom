@@ -40,6 +40,7 @@ const (
 	sceneOccurrenceBindingExecutor     = "activity.scene_occurrence_binding"
 	interactionContinuityExecutor      = "activity.interaction_continuity_reconciliation"
 	productionWorldAssemblyExecutor    = "activity.production_world_assembly"
+	productionStoryGraphExecutor       = "activity.production_storygraph_projection"
 	sourceEvidenceExecutor             = "activity.source_evidence"
 	storyAnalysisExecutor              = "activity.story_analysis"
 	storyReviewExecutor                = "activity.story_review"
@@ -130,6 +131,7 @@ type PlanningOwnerSetSource interface {
 
 type StoryGraphCompiler interface {
 	CompileOwnerSet(context.Context, storygraphapp.Actor, storygraphapp.CompileOwnerSetCommand) (storygraphapp.CompileResult, error)
+	CompileProduction(context.Context, storygraphapp.Actor, storygraphapp.CompileProductionCommand) (storygraphapp.CompileResult, error)
 }
 
 type StoryboardWorkflowOwner interface {
@@ -225,6 +227,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeSceneAnalysis(ctx, command, "reconcile_interaction_continuity")
 	case productionWorldAssemblyExecutor:
 		return executor.executeProductionWorldAssembly(ctx, command)
+	case productionStoryGraphExecutor:
+		return executor.executeProductionStoryGraph(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -849,6 +853,64 @@ func (executor *NodeExecutor) executeStoryGraphCompile(
 		compiled.Head.CurrentVersionID != compiled.Version.ID || compiled.Head.CurrentContentHash != compiled.Version.ContentHash ||
 		compiled.Receipt.ResourceID != compiled.Version.ID || compiled.Receipt.CreatedBy != command.InitiatorUserID {
 		return domain.NodeExecutorResult{}, errors.New("StoryGraph publication does not match workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "storygraph", ValueType: "storygraph_version", ReferenceID: compiled.Version.ID,
+			ReferenceVersion: strconv.FormatInt(compiled.Version.VersionNo, 10), ContentHash: compiled.Version.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeProductionStoryGraph(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.storygraphs == nil {
+		return domain.NodeExecutorResult{}, errors.New("Production StoryGraph owner is unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "storygraph" ||
+		command.OutputPorts[0].ValueType != "storygraph_version" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production StoryGraph node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production StoryGraph node config")
+	}
+	binding := input.Bindings[0]
+	if binding.Port != "world" || binding.ValueType != "production_world_owner_set" ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != "world" ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || binding.ReferenceVersion != "1" ||
+		!workflowContentHashPattern.MatchString(binding.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Production World Owner receipt input has drifted")
+	}
+	if _, parseErr := uuid.Parse(binding.ReferenceID); parseErr != nil {
+		return domain.NodeExecutorResult{}, errors.New("Production World Owner receipt input has drifted")
+	}
+	compiled, err := executor.storygraphs.CompileProduction(ctx, storygraphapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, storygraphapp.CompileProductionCommand{
+		ProjectID: command.ProjectID, ProductionWorldReceiptID: binding.ReferenceID,
+		ProductionWorldReceiptHash: binding.ContentHash, IdempotencyKey: "production-storygraph:" + binding.ReferenceID,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if compiled.Version.WorkspaceID != command.WorkspaceID || compiled.Version.ProjectID != command.ProjectID ||
+		compiled.Version.SchemaVersion != storygraph.ProductionSchemaID || compiled.Version.ProductionInput == nil ||
+		compiled.Version.ProductionInput.Coverage.ProductionWorldReceiptID != binding.ReferenceID ||
+		compiled.Version.ProductionInput.Coverage.ProductionWorldReceiptHash != binding.ContentHash ||
+		compiled.Version.Status != "published" || compiled.Version.VersionNo < 1 ||
+		compiled.Head.CurrentVersionID != compiled.Version.ID || compiled.Head.CurrentContentHash != compiled.Version.ContentHash ||
+		compiled.Receipt.ResourceID != compiled.Version.ID || compiled.Receipt.CreatedBy != command.InitiatorUserID {
+		return domain.NodeExecutorResult{}, errors.New("Production StoryGraph publication does not match Workflow input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,

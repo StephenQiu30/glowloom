@@ -34,6 +34,9 @@ import (
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	reviewdomain "github.com/StephenQiu30/lanverse/backend/internal/review/domain"
+	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
+	storygraphdomain "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
@@ -143,9 +146,12 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	productionGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
+		Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString,
+	})
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, productionGraphService, nil, nil, nil, nil,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
 			ProductionWorld: productionWorldService,
@@ -651,6 +657,29 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	if productionWorldCommandReceipt.Operation != worlddomain.ConfirmProductionWorldOperation ||
 		productionWorldCommandReceipt.CreatedBy != fixture.userID {
 		t.Fatalf("Production World Temporal CommandReceipt = %#v", productionWorldCommandReceipt)
+	}
+	var productionGraphNode model.NodeRunProjection
+	if err = database.Where(
+		"workflow_run_id = ? AND node_id = ?", productionWorldRepairRun.ID, "production-storygraph",
+	).First(&productionGraphNode).Error; err != nil {
+		t.Fatalf("query Temporal Production StoryGraph node: %v", err)
+	}
+	if productionGraphNode.Status != "SUCCEEDED" || productionGraphNode.OutputHash == nil {
+		t.Fatalf("Temporal Production StoryGraph node = %#v", productionGraphNode)
+	}
+	productionGraphOutput, _, _, graphOutputErr := workflow.ParseNodeOutput(json.RawMessage(productionGraphNode.Output))
+	if graphOutputErr != nil || len(productionGraphOutput.Bindings) != 1 ||
+		productionGraphOutput.Bindings[0].ValueType != "storygraph_version" {
+		t.Fatalf("Temporal Production StoryGraph output=%#v err=%v", productionGraphOutput, graphOutputErr)
+	}
+	var productionGraphVersion model.StoryGraphVersion
+	if err = database.First(&productionGraphVersion, "id = ?", productionGraphOutput.Bindings[0].ReferenceID).Error; err != nil {
+		t.Fatalf("query Temporal Production StoryGraph version: %v", err)
+	}
+	if productionGraphVersion.SchemaVersion != storygraphdomain.ProductionSchemaID ||
+		productionGraphVersion.ContentHash != productionGraphOutput.Bindings[0].ContentHash ||
+		len(productionGraphVersion.CompilationInput) == 0 {
+		t.Fatalf("Temporal Production StoryGraph version = %#v", productionGraphVersion)
 	}
 	var productionEntityInvocation model.SceneAnalysisInvocationRecord
 	if err = database.Where(

@@ -92,8 +92,6 @@ type CompileProductionCommand struct {
 	ProjectID                  string `json:"project_id"`
 	ProductionWorldReceiptID   string `json:"production_world_receipt_id"`
 	ProductionWorldReceiptHash string `json:"production_world_receipt_hash"`
-	ExpectedHeadRevision       int64  `json:"expected_head_revision"`
-	ExpectedCurrentContentHash string `json:"expected_current_content_hash"`
 	IdempotencyKey             string `json:"idempotency_key"`
 }
 
@@ -130,10 +128,8 @@ func (service *Service) CompileProduction(
 	command.ProductionWorldReceiptHash = strings.TrimSpace(command.ProductionWorldReceiptHash)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if service == nil || service.transactions == nil || service.config.Now == nil || service.config.NewID == nil ||
-		command.ProjectID == "" || command.ExpectedHeadRevision < 0 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 ||
-		!hashPattern.MatchString(command.ProductionWorldReceiptHash) ||
-		(command.ExpectedHeadRevision == 0 && command.ExpectedCurrentContentHash != "") ||
-		(command.ExpectedHeadRevision > 0 && !hashPattern.MatchString(command.ExpectedCurrentContentHash)) {
+		command.ProjectID == "" || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 ||
+		!hashPattern.MatchString(command.ProductionWorldReceiptHash) {
 		return CompileResult{}, invalid("Invalid Production StoryGraph compilation request")
 	}
 	if _, err := uuid.Parse(command.ProductionWorldReceiptID); err != nil {
@@ -154,15 +150,15 @@ func (service *Service) CompileProduction(
 		} else if !errors.Is(receiptErr, platformcommand.ErrReceiptNotFound) {
 			return receiptErr
 		}
-		if state.HeadRevision != command.ExpectedHeadRevision || state.CurrentContentHash != command.ExpectedCurrentContentHash {
-			result.Head = headFromState(state)
-			return stale(state)
-		}
 		snapshot, loadErr := repo.LoadProductionOwnerSnapshot(
 			ctx, state, command.ProductionWorldReceiptID, command.ProductionWorldReceiptHash,
 		)
 		if loadErr != nil {
 			return loadErr
+		}
+		if snapshot.Coverage.ProductionWorldReceiptID != command.ProductionWorldReceiptID ||
+			snapshot.Coverage.ProductionWorldReceiptHash != command.ProductionWorldReceiptHash {
+			return invalid("Production World receipt does not match the compiler snapshot")
 		}
 		compiled, compileErr := storygraph.CompileProductionOwnerSnapshot(snapshot)
 		if compileErr != nil {

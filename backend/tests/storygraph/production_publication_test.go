@@ -27,7 +27,7 @@ func TestCompileProductionPublishesExactInputAndReplaysAtomically(t *testing.T) 
 		ProjectID:                  snapshot.ProjectID,
 		ProductionWorldReceiptID:   snapshot.Coverage.ProductionWorldReceiptID,
 		ProductionWorldReceiptHash: snapshot.Coverage.ProductionWorldReceiptHash,
-		ExpectedHeadRevision:       0, IdempotencyKey: "publish-production-storygraph",
+		IdempotencyKey:             "publish-production-storygraph",
 	}
 	actor := storygraphapp.Actor{UserID: uuid.NewString(), TokenVersion: 1}
 
@@ -61,5 +61,18 @@ func TestCompileProductionPublishesExactInputAndReplaysAtomically(t *testing.T) 
 	if !errors.As(err, &applicationError) || applicationError.Code != "storygraph_schema_downgrade" ||
 		store.versionWrites != 1 || store.receiptWrites != 1 || store.outboxWrites != 1 {
 		t.Fatalf("legacy downgrade error=%#v store=%#v", err, store)
+	}
+
+	next := command
+	next.ProductionWorldReceiptID = uuid.NewString()
+	next.ProductionWorldReceiptHash = productionHash("next-production-world")
+	next.IdempotencyKey = "append-production-storygraph"
+	store.productionSnapshot.Coverage.ProductionWorldReceiptID = next.ProductionWorldReceiptID
+	store.productionSnapshot.Coverage.ProductionWorldReceiptHash = next.ProductionWorldReceiptHash
+	appended, err := service.CompileProduction(context.Background(), actor, next)
+	if err != nil || appended.Version.VersionNo != 2 || appended.Version.ParentVersionID == nil ||
+		*appended.Version.ParentVersionID != published.Version.ID || appended.Head.Revision != 2 ||
+		store.versionWrites != 2 || store.receiptWrites != 2 || store.outboxWrites != 2 {
+		t.Fatalf("append Production StoryGraph=%#v err=%v store=%#v", appended, err, store)
 	}
 }
