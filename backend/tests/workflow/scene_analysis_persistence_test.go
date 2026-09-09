@@ -352,10 +352,13 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 	})
+	productionWorldConfirmation := worldapp.NewConfirmationService(
+		worldgorm.NewStore(database), func() time.Time { return now }, uuid.NewString,
+	)
 	signalService := workflowapp.NewSignalService(
 		workflowStore, &acceptingStructureIdentitySignaler{}, workflowapp.SignalConfig{
 			Now: func() time.Time { return now }, NewID: uuid.NewString,
-			Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil),
+			Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, productionWorldConfirmation),
 		},
 	)
 	signalIntent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
@@ -790,12 +793,13 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		}
 	}
 	confirmationCommand := worldapp.ConfirmProductionWorldCommand{
-		CommandID: uuid.NewString(), WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		CommandID:   uuid.NewSHA1(uuid.NameSpaceURL, []byte("lanverse:confirm-production-world:"+productionWorldDecisionID.String())).String(),
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		ActorID: fixture.userID.String(), GateInputID: productionWorldOwnerMaterial.GateInputID,
 		GateInputHash:    productionWorldOwnerMaterial.GateInput.InputHash,
 		ReviewDecisionID: productionWorldDecisionID.String(), CandidateRevisionID: productionWorldRevision.ID.String(),
 		CandidateRevision: productionWorldRevision.RevisionNo, CandidateRevisionHash: productionWorldRevision.CandidateRevisionHash,
-		IdempotencyKey: "confirm-production-world:" + productionWorldDecisionID.String(),
+		IdempotencyKey: "workflow-production-world:" + productionWorldDecisionID.String(),
 		ExpectedHeads:  expectedProductionWorldHeads, Candidate: productionWorld,
 	}
 	failedCommand := confirmationCommand
@@ -826,23 +830,60 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			t.Fatalf("Production World rollback %T count=%d err=%v", check.model, count, countErr)
 		}
 	}
-	confirmationService := worldapp.NewConfirmationService(
-		worldgorm.NewStore(database), func() time.Time { return now }, uuid.NewString,
+	productionWorldSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: productionWorldGate.NodeRunID,
+		HumanTaskID: productionWorldTask.ID.String(), ReviewDecisionID: productionWorldDecisionID.String(),
+		SubjectRevision: productionWorldTask.SubjectRevision, Decision: "approved",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+		IdempotencyKey:      "production-world-signal:" + productionWorldDecisionID.String(),
+	}
+	productionWorldSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, productionWorldSignalCommand)
+	if err != nil || productionWorldSignal.Status != "completed" {
+		t.Fatalf("signal Production World owner chain: intent=%#v err=%v", productionWorldSignal, err)
+	}
+	var productionWorldApplyReceipt model.WorkflowHumanGateApplyReceipt
+	if err = database.First(&productionWorldApplyReceipt, "review_decision_id = ?", productionWorldDecisionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	productionWorldOutput, _, productionWorldOutputHash, outputErr := workflow.ParseNodeOutput(
+		json.RawMessage(productionWorldApplyReceipt.Output),
 	)
-	confirmedWorld, err := confirmationService.ConfirmProductionWorld(ctx, confirmationCommand)
+	if outputErr != nil || productionWorldApplyReceipt.Status != "completed" ||
+		productionWorldApplyReceipt.OwnerReceiptID == nil || productionWorldApplyReceipt.OwnerOperation == nil ||
+		*productionWorldApplyReceipt.OwnerOperation != worlddomain.ConfirmProductionWorldOperation ||
+		productionWorldApplyReceipt.OutputHash == nil || *productionWorldApplyReceipt.OutputHash != productionWorldOutputHash ||
+		len(productionWorldOutput.Bindings) != 1 || productionWorldOutput.Bindings[0].ValueType != "production_world_owner_set" ||
+		productionWorldOutput.Bindings[0].ReferenceID != productionWorldApplyReceipt.OwnerReceiptID.String() {
+		t.Fatalf("Production World owner signal: apply=%#v output=%#v err=%v", productionWorldApplyReceipt, productionWorldOutput, outputErr)
+	}
+	replayedProductionWorldSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, productionWorldSignalCommand)
+	if err != nil || replayedProductionWorldSignal.ID != productionWorldSignal.ID ||
+		replayedProductionWorldSignal.InputHash != productionWorldSignal.InputHash ||
+		replayedProductionWorldSignal.Status != productionWorldSignal.Status ||
+		replayedProductionWorldSignal.AttemptNo != productionWorldSignal.AttemptNo ||
+		replayedProductionWorldSignal.Revision != productionWorldSignal.Revision ||
+		!replayedProductionWorldSignal.CreatedAt.Equal(productionWorldSignal.CreatedAt) ||
+		!replayedProductionWorldSignal.UpdatedAt.Equal(productionWorldSignal.UpdatedAt) {
+		t.Fatalf("replay Production World owner signal: got=%#v want=%#v err=%v", replayedProductionWorldSignal, productionWorldSignal, err)
+	}
+	confirmedWorld, err := productionWorldConfirmation.ConfirmProductionWorld(ctx, confirmationCommand)
 	if err != nil || confirmedWorld.CommandID != confirmationCommand.CommandID ||
 		confirmedWorld.CommandContractID != worlddomain.ConfirmProductionWorldContract ||
 		confirmedWorld.CommandReceiptID == "" || confirmedWorld.ReceiptContentHash == "" ||
 		len(confirmedWorld.OrderedCollectionReceiptRefs) != 2+len(productionWorld.SharedProof.PlanningEpisodeScopes) {
 		t.Fatalf("confirm Production World atomically: result=%#v err=%v", confirmedWorld, err)
 	}
-	replayedWorld, err := confirmationService.ConfirmProductionWorld(ctx, confirmationCommand)
+	replayedWorld, err := productionWorldConfirmation.ConfirmProductionWorld(ctx, confirmationCommand)
 	if err != nil || !reflect.DeepEqual(replayedWorld, confirmedWorld) {
 		t.Fatalf("replay Production World confirmation: got=%#v want=%#v err=%v", replayedWorld, confirmedWorld, err)
 	}
 	driftedConfirmation := confirmationCommand
 	driftedConfirmation.CommandID = uuid.NewString()
-	if _, conflictErr := confirmationService.ConfirmProductionWorld(ctx, driftedConfirmation); !errors.Is(conflictErr, worldapp.ErrProductionWorldConfirmationConflict) {
+	if _, conflictErr := productionWorldConfirmation.ConfirmProductionWorld(ctx, driftedConfirmation); !errors.Is(conflictErr, worldapp.ErrProductionWorldConfirmationConflict) {
 		t.Fatalf("Production World idempotency drift error = %v", conflictErr)
 	}
 	var collectionReceiptCount, commandReceiptCount, confirmationOutboxCount, rebaseHeadCount int64

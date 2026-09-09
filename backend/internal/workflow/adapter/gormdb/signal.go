@@ -21,6 +21,7 @@ import (
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -590,6 +591,14 @@ func validateHumanGateOwnerEvidence(
 				break
 			}
 		}
+	} else if node.Executor == "gate.production_world_review" {
+		for _, binding := range resolved.Input.Bindings {
+			if binding.Port == "candidate" && binding.ValueType == "production_world_candidate" &&
+				binding.SourceKind == domain.NodeInputSourceNodeOutput && humanTaskContainsCandidateString(task.CandidateIDs, binding.ReferenceID) {
+				candidate, candidateFound = binding, true
+				break
+			}
+		}
 	} else {
 		candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
 		if candidateErr != nil {
@@ -620,10 +629,11 @@ func validateHumanGateOwnerEvidence(
 	episodePlanOwnerApply := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 	episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
 	storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
+	productionWorldOwnerApply := node.Executor == "gate.production_world_review" && node.DefinitionVersion == "1.0.0"
 	receiptMatchesOutput := receipt.ResourceID.String() == binding.ReferenceID
 	if episodePlanOwnerApply || episodePlanningOwnerApply {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID && receipt.ResourceID.String() == candidate.ReferenceID
-	} else if storyboardIntentOwnerApply {
+	} else if storyboardIntentOwnerApply || productionWorldOwnerApply {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID
 	}
 	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
@@ -838,6 +848,23 @@ func validateHumanGateOwnerEvidence(
 			}
 		}
 	}
+	if productionWorldOwnerApply {
+		var confirmed worlddomain.ConfirmProductionWorldResult
+		if err := json.Unmarshal(receipt.Result, &confirmed); err != nil {
+			return errors.New("Production World Receipt result is invalid")
+		}
+		verified, verifyErr := worlddomain.CompleteConfirmProductionWorldResult(confirmed)
+		candidateRevision, revisionErr := strconv.ParseInt(candidate.ReferenceVersion, 10, 64)
+		if verifyErr != nil || revisionErr != nil || verified.ResultContentHash != confirmed.ResultContentHash ||
+			verified.ReceiptContentHash != confirmed.ReceiptContentHash ||
+			confirmed.CommandReceiptID != receipt.ID.String() || confirmed.CommandID != receipt.ResourceID.String() ||
+			confirmed.CommandContractID != worlddomain.ConfirmProductionWorldContract ||
+			confirmed.CommandContentHash != receipt.InputHash || confirmed.SubjectRef.VersionID != candidate.ReferenceID ||
+			confirmed.SubjectRef.Revision != candidateRevision || confirmed.SubjectRef.ContentHash != candidate.ContentHash ||
+			confirmed.ReceiptContentHash != binding.ContentHash || confirmed.CommittedBy != apply.CreatedBy.String() {
+			return errors.New("Production World Receipt does not match the frozen Candidate")
+		}
+	}
 	return nil
 }
 
@@ -917,6 +944,8 @@ func humanGateOwnerOperation(node model.NodeRunProjection) (string, bool) {
 		return "", false
 	case "gate.generation_image_review":
 		return "generation.candidate.select", true
+	case "gate.production_world_review":
+		return worlddomain.ConfirmProductionWorldOperation, true
 	default:
 		return "", false
 	}

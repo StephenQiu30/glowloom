@@ -458,7 +458,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		Owner: workflowproduction.New(bibleService, nil, nil, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		})),
+		}), nil),
 	})
 	signalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: bibleGateNode.ID.String(),
@@ -928,7 +928,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		Owner: workflowproduction.New(bibleService, nil, nil, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		})),
+		}), nil),
 	})
 	structureSignalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: structureGateNode.ID.String(),
@@ -1365,6 +1365,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 				planningapp.NewService(planninggorm.New(driftDatabase), planningapp.Config{Now: time.Now, NewID: uuid.NewString}),
 				planningapp.NewEpisodePlanningService(planninggorm.New(driftDatabase), planningapp.Config{Now: time.Now, NewID: uuid.NewString}),
 				storyboardapp.NewService(storyboardgorm.New(driftDatabase), storyboardapp.Config{Now: time.Now, NewID: uuid.NewString}),
+				nil,
 			),
 		})
 		driftCommand := storyboardSignalCommand
@@ -1400,7 +1401,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	storyboardUnknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
 	storyboardSignalService := workflowapp.NewSignalService(workflowStore, storyboardUnknownSignaler, workflowapp.SignalConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(bibleService, nil, nil, planningService, episodePlanningService, storyboardService),
+		Owner: workflowproduction.New(bibleService, nil, nil, planningService, episodePlanningService, storyboardService, nil),
 	})
 	unknownStoryboardSignal, err := storyboardSignalService.SignalHumanGate(ctx, workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,

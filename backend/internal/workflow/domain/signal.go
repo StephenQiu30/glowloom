@@ -141,6 +141,12 @@ func HumanGateOutputMatchesCandidate(
 			output.ReferenceID != candidate.ReferenceID && len(output.ContentHash) == 64 &&
 			output.ContentHash != candidate.ContentHash
 	}
+	if executor == "gate.production_world_review" && candidate.ValueType == "production_world_candidate" {
+		candidateRevision, candidateErr := strconv.ParseInt(candidate.ReferenceVersion, 10, 64)
+		return candidateRevision >= 1 && candidateErr == nil && len(candidate.ContentHash) == 64 &&
+			output.ValueType == "production_world_owner_set" && output.ReferenceVersion == "1" &&
+			output.ReferenceID != candidate.ReferenceID && len(output.ContentHash) == 64
+	}
 	if output.ReferenceID != candidate.ReferenceID {
 		return false
 	}

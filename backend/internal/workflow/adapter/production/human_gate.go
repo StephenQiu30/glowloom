@@ -19,6 +19,8 @@ import (
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	worldapp "github.com/StephenQiu30/lanverse/backend/internal/production/world/application"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -58,6 +60,10 @@ type StoryboardSetOwner interface {
 	FreezeIntentSet(context.Context, storyboardapp.Actor, storyboardapp.FreezeIntentSetCommand) (storyboardapp.FreezeIntentSetResult, error)
 }
 
+type ProductionWorldOwner interface {
+	ConfirmProductionWorld(context.Context, worldapp.ConfirmProductionWorldCommand) (worlddomain.ConfirmProductionWorldResult, error)
+}
+
 type Applier struct {
 	bibles              BibleOwner
 	structureIdentities StructureIdentityOwner
@@ -65,6 +71,7 @@ type Applier struct {
 	plans               PlanningConfirmationOwner
 	planningCandidates  EpisodePlanningOwner
 	storyboards         StoryboardSetOwner
+	productionWorlds    ProductionWorldOwner
 }
 
 func New(
@@ -74,10 +81,12 @@ func New(
 	plans PlanningConfirmationOwner,
 	planningCandidates EpisodePlanningOwner,
 	storyboards StoryboardSetOwner,
+	productionWorlds ProductionWorldOwner,
 ) *Applier {
 	return &Applier{
 		bibles: bibles, structureIdentities: structureIdentities, projects: projects,
 		plans: plans, planningCandidates: planningCandidates, storyboards: storyboards,
+		productionWorlds: productionWorlds,
 	}
 }
 
@@ -102,6 +111,9 @@ func (applier *Applier) ApplyHumanGateDecision(
 	}
 	if application.Executor == "gate.storyboard_review" {
 		return applier.freezeStoryboardIntents(ctx, actor, application)
+	}
+	if application.Executor == "gate.production_world_review" {
+		return applier.applyProductionWorld(ctx, actor, application)
 	}
 	if applier.bibles == nil || application.Executor != "gate.production_bible_review" ||
 		application.Candidate.ValueType != "story_reconciliation_candidate" ||
@@ -161,6 +173,73 @@ func (applier *Applier) ApplyHumanGateDecision(
 	}
 	return domain.HumanGateOwnerResult{
 		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
+	}, nil
+}
+
+func (applier *Applier) applyProductionWorld(
+	ctx context.Context,
+	actor workflowapp.Actor,
+	application domain.HumanGateOwnerApplication,
+) (domain.HumanGateOwnerResult, error) {
+	if applier.productionWorlds == nil || application.Decision != "approved" ||
+		application.Candidate.ValueType != "production_world_candidate" ||
+		application.OutputPort != "world" || application.OutputValueType != "production_world_owner_set" {
+		return domain.HumanGateOwnerResult{}, errors.New("unsupported Production World Human Gate owner application")
+	}
+	material, err := domain.DecodeProductionWorldOwnerMaterial(application.OwnerMaterial)
+	if err != nil || material.GateInputID == "" || material.GateInput.WorkspaceID != application.WorkspaceID ||
+		material.GateInput.ProjectID != application.ProjectID || material.GateInput.WorkflowRunID != application.WorkflowRunID ||
+		material.GateInput.NodeRunID != application.NodeRunID || material.GateInput.InputHash == "" ||
+		material.GateInput.Subject.ProductionWorldCandidate.CandidateRevisionID != application.Candidate.ReferenceID ||
+		material.GateInput.Subject.ProductionWorldCandidate.CandidateRevisionHash != application.Candidate.ContentHash ||
+		material.Candidate.ContentHash != material.GateInput.Subject.ProductionWorldCandidate.CandidateContentHash {
+		return domain.HumanGateOwnerResult{}, errors.New("Production World Human Gate material has drifted")
+	}
+	expectedHeads := make([]worldapp.ExpectedHead, len(material.GateInput.Subject.ExpectedHeads))
+	for index, head := range material.GateInput.Subject.ExpectedHeads {
+		expectedHeads[index] = worldapp.ExpectedHead{
+			OwnerKind: head.OwnerKind, VersionFamily: head.VersionFamily, ScopeKind: head.ScopeKind,
+			ScopeKey: head.ScopeKey, Revision: head.Revision, ContentHash: head.ContentHash,
+		}
+	}
+	commandID := uuid.NewSHA1(
+		uuid.NameSpaceURL,
+		[]byte("lanverse:confirm-production-world:"+application.ReviewDecisionID),
+	).String()
+	candidate := material.GateInput.Subject.ProductionWorldCandidate
+	result, err := applier.productionWorlds.ConfirmProductionWorld(ctx, worldapp.ConfirmProductionWorldCommand{
+		CommandID: commandID, WorkspaceID: application.WorkspaceID, ProjectID: application.ProjectID,
+		ActorID: actor.UserID, GateInputID: material.GateInputID, GateInputHash: material.GateInput.InputHash,
+		ReviewDecisionID: application.ReviewDecisionID, CandidateRevisionID: candidate.CandidateRevisionID,
+		CandidateRevision: candidate.CandidateRevision, CandidateRevisionHash: candidate.CandidateRevisionHash,
+		IdempotencyKey: "workflow-production-world:" + application.ReviewDecisionID,
+		ExpectedHeads:  expectedHeads, Candidate: material.Candidate,
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
+	}
+	verified, verifyErr := worlddomain.CompleteConfirmProductionWorldResult(result)
+	if verifyErr != nil || verified.ResultContentHash != result.ResultContentHash ||
+		verified.ReceiptContentHash != result.ReceiptContentHash || result.CommandID != commandID ||
+		result.CommandReceiptID == "" || result.CommandContractID != worlddomain.ConfirmProductionWorldContract ||
+		result.SubjectRef.VersionID != candidate.CandidateRevisionID ||
+		result.SubjectRef.Revision != candidate.CandidateRevision || result.SubjectRef.ContentHash != candidate.CandidateRevisionHash ||
+		result.CommittedBy != actor.UserID {
+		return domain.HumanGateOwnerResult{}, errors.New("Production World owner result does not match Workflow Gate")
+	}
+	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: application.OutputPort, ValueType: application.OutputValueType,
+			ReferenceID: result.CommandReceiptID, ReferenceVersion: "1", ContentHash: result.ReceiptContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	return domain.HumanGateOwnerResult{
+		ReceiptID: result.CommandReceiptID, Operation: worlddomain.ConfirmProductionWorldOperation,
+		Output: output, OutputHash: outputHash,
 	}, nil
 }
 
@@ -692,6 +771,11 @@ func normalizeOwnerApplyError(err error) error {
 		return &workflowapp.Error{
 			Code: storyboardError.Code, Message: storyboardError.Message,
 			NextAction: storyboardError.NextAction, Status: storyboardError.Status,
+		}
+	}
+	if errors.Is(err, worldapp.ErrProductionWorldConfirmationConflict) {
+		return &workflowapp.Error{
+			Code: "resource_conflict", Message: "Production World confirmation input has changed", Status: 409,
 		}
 	}
 	return err

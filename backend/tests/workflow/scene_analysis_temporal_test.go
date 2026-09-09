@@ -267,7 +267,7 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	})
 	signalService := workflowapp.NewSignalService(workflowStore, temporalRuntime, workflowapp.SignalConfig{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil),
+		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, nil),
 	})
 	workflowActor := workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,

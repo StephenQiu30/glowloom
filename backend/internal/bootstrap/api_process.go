@@ -65,6 +65,8 @@ import (
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardhttp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/httpapi"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	worldgorm "github.com/StephenQiu30/lanverse/backend/internal/production/world/adapter/gormdb"
+	worldapp "github.com/StephenQiu30/lanverse/backend/internal/production/world/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewhttp "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/httpapi"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
@@ -385,8 +387,14 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 		workflowapp.ControlConfig{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString},
 	)
 	workflowHandler := workflowhttp.New(workflowStartService, workflowQueryService, workflowControlService, tokenVerifier)
+	productionWorldConfirmation := worldapp.NewConfirmationService(
+		worldgorm.NewStore(database), func() time.Time { return time.Now().UTC() }, uuid.NewString,
+	)
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
-		workflowproduction.New(bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService),
+		workflowproduction.New(
+			bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService,
+			productionWorldConfirmation,
+		),
 		workflowgeneration.NewHumanGateApplier(selectionService),
 	)
 	if err != nil {
