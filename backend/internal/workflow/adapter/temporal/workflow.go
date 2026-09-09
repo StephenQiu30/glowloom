@@ -32,14 +32,15 @@ type NodeActivityCommand = workflowdomain.NodeActivityCommand
 type NodeActivityResult = workflowdomain.NodeActivityResult
 
 type HumanGateSignal struct {
-	WorkflowRunID  string                            `json:"workflow_run_id"`
-	NodeRunID      string                            `json:"node_run_id"`
-	SignalID       string                            `json:"signal_id"`
-	SignalIntentID string                            `json:"signal_intent_id"`
-	Decision       string                            `json:"decision"`
-	OwnerReceiptID string                            `json:"owner_receipt_id"`
-	Output         workflowdomain.NodeOutputSnapshot `json:"output"`
-	OutputHash     string                            `json:"output_hash"`
+	WorkflowRunID       string                            `json:"workflow_run_id"`
+	NodeRunID           string                            `json:"node_run_id"`
+	SignalID            string                            `json:"signal_id"`
+	SignalIntentID      string                            `json:"signal_intent_id"`
+	Decision            string                            `json:"decision"`
+	DecisionPayloadHash string                            `json:"decision_payload_hash"`
+	OwnerReceiptID      string                            `json:"owner_receipt_id"`
+	Output              workflowdomain.NodeOutputSnapshot `json:"output"`
+	OutputHash          string                            `json:"output_hash"`
 }
 
 type WorkflowControlSignal struct {
@@ -112,7 +113,8 @@ func productionWorkflow(
 			apply := ApplyHumanGateCommand{
 				WorkflowRunID: request.WorkflowRunID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
 				SignalIntentID: signal.SignalIntentID, Decision: signal.Decision,
-				OwnerReceiptID: signal.OwnerReceiptID, Output: signal.Output, OutputHash: signal.OutputHash,
+				DecisionPayloadHash: signal.DecisionPayloadHash,
+				OwnerReceiptID:      signal.OwnerReceiptID, Output: signal.Output, OutputHash: signal.OutputHash,
 			}
 			applyContext := workflow.WithActivityOptions(ctx, shortActivityOptions("apply-human-gate:"+node.NodeRunID))
 			if err = workflow.ExecuteActivity(applyContext, ApplyHumanGateActivityName, apply).Get(ctx, nil); err != nil {
@@ -361,7 +363,7 @@ func awaitHumanGateSignal(
 
 func validHumanGateSignal(signal HumanGateSignal, workflowRunID, nodeRunID string) bool {
 	if signal.WorkflowRunID != workflowRunID || signal.NodeRunID != nodeRunID || strings.TrimSpace(signal.SignalID) == "" ||
-		strings.TrimSpace(signal.SignalIntentID) == "" {
+		strings.TrimSpace(signal.SignalIntentID) == "" || len(signal.DecisionPayloadHash) != 64 {
 		return false
 	}
 	switch signal.Decision {

@@ -5,6 +5,7 @@ type HumanGateReviewDecision struct {
 	HumanTaskID, ReviewDecisionID         string
 	SubjectRevision                       int
 	SubjectHash, Decision                 string
+	DecisionPayloadHash                   string
 }
 
 type HumanGateCoordination struct {

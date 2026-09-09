@@ -30,6 +30,7 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 	}}
 	repository.application = workflow.HumanGateOwnerApplication{
 		ProjectID: "project-1", Executor: "gate.production_bible_review", Decision: "approved",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 		Candidate: workflow.NodeInputBinding{
 			Port: "candidate", ValueType: "story_reconciliation_candidate", SourceKind: workflow.NodeInputSourceNodeOutput,
 			ReferenceID: "00000000-0000-0000-0000-000000000333", ReferenceVersion: "1", ContentHash: strings.Repeat("c", 64),
@@ -55,7 +56,7 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 	command := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: "workspace-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
 		HumanTaskID: "task-1", ReviewDecisionID: "decision-1", SubjectRevision: 7,
-		Decision: "approved", IdempotencyKey: "signal-decision-1",
+		Decision: "approved", DecisionPayloadHash: emptyReviewDecisionPayloadHash, IdempotencyKey: "signal-decision-1",
 	}
 	actor := workflowapp.Actor{UserID: "reviewer-1", TokenVersion: 1}
 
@@ -70,14 +71,15 @@ func TestHumanGateSignalReusesStableIdentityUntilUnknownIsReconciled(t *testing.
 	requests := signaler.Requests()
 	if len(requests) != 2 || requests[0].SignalIntentID != requests[1].SignalIntentID ||
 		requests[0].SignalID != requests[1].SignalID || requests[0].InputHash != requests[1].InputHash ||
+		requests[0].DecisionPayloadHash != emptyReviewDecisionPayloadHash ||
 		requests[0].InputHash == "" || requests[0].OwnerReceiptID != owner.result.ReceiptID ||
 		requests[0].OutputHash != ownerOutputHash || len(repository.receipts) != 2 || owner.calls != 1 {
 		t.Fatalf("signal retry identities = requests %#v receipts %#v", requests, repository.receipts)
 	}
 	drifted := command
-	drifted.Decision = "selected"
+	drifted.DecisionPayloadHash = strings.Repeat("e", 64)
 	if _, err = service.SignalHumanGate(context.Background(), actor, drifted); err == nil {
-		t.Fatal("signal replay accepted the same idempotency key with different input")
+		t.Fatal("signal replay accepted the same idempotency key with a different decision payload hash")
 	}
 	if owner.calls != 1 || len(signaler.Requests()) != 2 {
 		t.Fatalf("drifted signal replay produced effects: owner calls=%d signal requests=%d", owner.calls, len(signaler.Requests()))
@@ -89,6 +91,7 @@ func TestRejectedEpisodePlanGateResumesWithoutCallingThePlanningOwner(t *testing
 	repository := newSignalRepository()
 	repository.application = workflow.HumanGateOwnerApplication{
 		ProjectID: "project-1", Executor: "gate.episode_plan_review", Decision: "rejected",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 		Candidate: workflow.NodeInputBinding{
 			Port: "candidate", ValueType: "episode_segmentation_candidate", SourceKind: workflow.NodeInputSourceNodeOutput,
 			ReferenceID: "00000000-0000-0000-0000-000000000401", ReferenceVersion: "1", ContentHash: strings.Repeat("e", 64),
@@ -108,7 +111,7 @@ func TestRejectedEpisodePlanGateResumesWithoutCallingThePlanningOwner(t *testing
 	}, workflowapp.SignalHumanGateCommand{
 		WorkspaceID: "workspace-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
 		HumanTaskID: "task-1", ReviewDecisionID: "decision-1", SubjectRevision: 1,
-		Decision: "rejected", IdempotencyKey: "episode-plan-rejected",
+		Decision: "rejected", DecisionPayloadHash: emptyReviewDecisionPayloadHash, IdempotencyKey: "episode-plan-rejected",
 	})
 	if err != nil || intent.Status != "completed" || owner.calls != 0 ||
 		repository.prepared.ApplyReceipt.Status != "not_required" || repository.prepared.ApplyReceipt.OwnerReceiptID != "" ||
@@ -125,6 +128,7 @@ func TestNonApprovedStoryboardIntentGateResumesWithoutFreezingOrCallingOwner(t *
 			repository := newSignalRepository()
 			repository.application = workflow.HumanGateOwnerApplication{
 				ProjectID: "project-1", Executor: "gate.storyboard_review", Decision: decision,
+				DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 				Candidate: workflow.NodeInputBinding{
 					Port: "candidate", ValueType: "storyboard_intent_candidate_set", SourceKind: workflow.NodeInputSourceNodeOutput,
 					ReferenceID: "00000000-0000-0000-0000-000000000411", ReferenceVersion: "1",
@@ -145,7 +149,7 @@ func TestNonApprovedStoryboardIntentGateResumesWithoutFreezingOrCallingOwner(t *
 			}, workflowapp.SignalHumanGateCommand{
 				WorkspaceID: "workspace-1", WorkflowRunID: "run-1", NodeRunID: "node-run-1",
 				HumanTaskID: "task-1", ReviewDecisionID: "decision-1", SubjectRevision: 1,
-				Decision: decision, IdempotencyKey: "storyboard-intent-" + decision,
+				Decision: decision, DecisionPayloadHash: emptyReviewDecisionPayloadHash, IdempotencyKey: "storyboard-intent-" + decision,
 			})
 			if err != nil || intent.Status != "completed" || owner.calls != 0 ||
 				repository.prepared.ApplyReceipt.Status != "not_required" ||
@@ -189,6 +193,7 @@ func (repo *signalRepository) ResolveHumanGateOwnerApplication(
 	resolved.WorkspaceID, resolved.WorkflowRunID, resolved.NodeRunID = request.WorkspaceID, request.WorkflowRunID, request.NodeRunID
 	resolved.HumanTaskID, resolved.ReviewDecisionID = request.HumanTaskID, request.ReviewDecisionID
 	resolved.SubjectRevision, resolved.Decision = request.SubjectRevision, request.Decision
+	resolved.DecisionPayloadHash = request.DecisionPayloadHash
 	return resolved, nil
 }
 

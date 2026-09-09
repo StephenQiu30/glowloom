@@ -251,7 +251,7 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	signalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: task.NodeRunID.String(),
 		HumanTaskID: task.ID.String(), ReviewDecisionID: decision.Decision.ID,
-		SubjectRevision: task.SubjectRevision, Decision: "approved",
+		SubjectRevision: task.SubjectRevision, Decision: "approved", DecisionPayloadHash: decision.Decision.DecisionPayloadHash,
 		IdempotencyKey: "structure-identity-temporal-signal:" + decision.Decision.ID,
 	}
 	intent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
@@ -287,6 +287,14 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	if err = database.First(&version, "id = ?", output.Bindings[0].ReferenceID).Error; err != nil {
 		t.Fatal(err)
 	}
+	var applyReceipt model.WorkflowHumanGateApplyReceipt
+	if err = database.First(&applyReceipt, "review_decision_id = ?", decision.Decision.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var persistedIntent model.WorkflowSignalIntent
+	if err = database.First(&persistedIntent, "review_decision_id = ?", decision.Decision.ID).Error; err != nil {
+		t.Fatal(err)
+	}
 	var applyCount, signalIntentCount, signalReceiptCount int64
 	for value, count := range map[any]*int64{
 		&model.WorkflowHumanGateApplyReceipt{}: &applyCount,
@@ -297,7 +305,9 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if version.ReviewDecisionID.String() != decision.Decision.ID || applyCount != 1 ||
+	if version.ReviewDecisionID.String() != decision.Decision.ID ||
+		applyReceipt.DecisionPayloadHash != decision.Decision.DecisionPayloadHash ||
+		persistedIntent.DecisionPayloadHash != decision.Decision.DecisionPayloadHash || applyCount != 1 ||
 		signalIntentCount != 1 || signalReceiptCount != 1 {
 		t.Fatalf("Structure Identity Temporal facts: version=%#v apply=%d intent=%d receipt=%d",
 			version, applyCount, signalIntentCount, signalReceiptCount)

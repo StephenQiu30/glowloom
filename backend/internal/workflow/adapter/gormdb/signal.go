@@ -97,6 +97,7 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 		}
 		task, decision, bindingErr := loadHumanGateDecision(
 			transaction, run, node, taskID, decisionID, request.SubjectRevision, request.Decision,
+			request.DecisionPayloadHash,
 		)
 		if bindingErr != nil {
 			return bindingErr
@@ -152,7 +153,8 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 			WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(), WorkflowRunID: run.ID.String(),
 			NodeRunID: node.ID.String(), HumanTaskID: task.ID.String(), ReviewDecisionID: decision.ID.String(),
 			SubjectRevision: task.SubjectRevision, Decision: decision.Decision, Executor: node.Executor,
-			Candidate: candidate, OutputPort: output.Key, OutputValueType: output.ValueType,
+			DecisionPayloadHash: decision.DecisionPayloadHash,
+			Candidate:           candidate, OutputPort: output.Key, OutputValueType: output.ValueType,
 			NodeConfig:    append(json.RawMessage(nil), resolved.Input.Config...),
 			OwnerMaterial: append(json.RawMessage(nil), ownerMaterial...),
 			FrozenInputs:  append([]authoring.FrozenReference(nil), resolved.Input.FrozenInputs...),
@@ -253,6 +255,7 @@ func (store *Store) RecordHumanGateOwnerConflict(
 		}
 		if _, _, loadErr := loadHumanGateDecision(
 			transaction, run, node, record.HumanTaskID, record.ReviewDecisionID, record.SubjectRevision, record.Decision,
+			record.DecisionPayloadHash,
 		); loadErr != nil {
 			return loadErr
 		}
@@ -361,11 +364,12 @@ func validateHumanGateDecisionBinding(
 		intent.WorkspaceID != apply.WorkspaceID || intent.WorkflowRunID != apply.WorkflowRunID ||
 		intent.NodeRunID != apply.NodeRunID || intent.HumanTaskID != apply.HumanTaskID ||
 		intent.ReviewDecisionID != apply.ReviewDecisionID || intent.SubjectRevision != apply.SubjectRevision ||
-		intent.Decision != apply.Decision {
+		intent.Decision != apply.Decision || intent.DecisionPayloadHash != apply.DecisionPayloadHash {
 		return errors.New("workflow human gate signal binding has drifted")
 	}
 	task, decision, err := loadHumanGateDecision(
 		transaction, run, node, apply.HumanTaskID, apply.ReviewDecisionID, apply.SubjectRevision, apply.Decision,
+		apply.DecisionPayloadHash,
 	)
 	if err != nil {
 		return err
@@ -381,6 +385,7 @@ func loadHumanGateDecision(
 	decisionID uuid.UUID,
 	subjectRevision int,
 	decisionValue string,
+	decisionPayloadHash string,
 ) (model.HumanTask, model.ReviewDecision, error) {
 	var task model.HumanTask
 	if err := transaction.First(&task, "id = ?", taskID).Error; err != nil {
@@ -399,7 +404,8 @@ func loadHumanGateDecision(
 		task.SubjectRevision != expectedSubjectRevision || task.SubjectRevision != subjectRevision ||
 		task.Status != "COMPLETED" || decision.WorkspaceID != run.WorkspaceID || decision.HumanTaskID != task.ID ||
 		decision.SubjectRevision != task.SubjectRevision || decision.SubjectHash != task.SubjectHash ||
-		decision.Decision != decisionValue || !humanTaskContainsDecision(task.AllowedDecisions, decision.Decision) {
+		decision.Decision != decisionValue || decision.DecisionPayloadHash != decisionPayloadHash ||
+		!humanTaskContainsDecision(task.AllowedDecisions, decision.Decision) {
 		return model.HumanTask{}, model.ReviewDecision{}, errors.New("workflow human gate review decision has drifted")
 	}
 	if decision.Decision == "selected" {
@@ -965,6 +971,9 @@ func (store *Store) FinalizeSignalAttempt(
 }
 
 func signalApplyRecord(value domain.HumanGateApplyReceipt) (model.WorkflowHumanGateApplyReceipt, error) {
+	if len(value.DecisionPayloadHash) != 64 {
+		return model.WorkflowHumanGateApplyReceipt{}, errors.New("invalid workflow human gate decision payload hash")
+	}
 	id, workspaceID, runID, nodeID, taskID, decisionID, createdBy, err := signalIDs(
 		value.ID, value.WorkspaceID, value.WorkflowRunID, value.NodeRunID, value.HumanTaskID, value.ReviewDecisionID, value.CreatedBy,
 	)
@@ -1000,13 +1009,17 @@ func signalApplyRecord(value domain.HumanGateApplyReceipt) (model.WorkflowHumanG
 	return model.WorkflowHumanGateApplyReceipt{
 		ID: id, WorkspaceID: workspaceID, WorkflowRunID: runID, NodeRunID: nodeID,
 		HumanTaskID: taskID, ReviewDecisionID: decisionID, SubjectRevision: value.SubjectRevision,
-		Decision: value.Decision, Status: value.Status, ConflictCode: conflictCode,
+		Decision: value.Decision, DecisionPayloadHash: value.DecisionPayloadHash,
+		Status: value.Status, ConflictCode: conflictCode,
 		OwnerReceiptID: ownerReceiptID, OwnerOperation: ownerOperation,
 		Output: output, OutputHash: outputHash, CreatedBy: createdBy, CreatedAt: value.CreatedAt,
 	}, nil
 }
 
 func signalIntentRecord(value domain.SignalIntent, applyReceiptID uuid.UUID) (model.WorkflowSignalIntent, error) {
+	if len(value.DecisionPayloadHash) != 64 {
+		return model.WorkflowSignalIntent{}, errors.New("invalid workflow signal decision payload hash")
+	}
 	id, workspaceID, runID, nodeID, taskID, decisionID, createdBy, err := signalIDs(
 		value.ID, value.WorkspaceID, value.WorkflowRunID, value.NodeRunID, value.HumanTaskID, value.ReviewDecisionID, value.CreatedBy,
 	)
@@ -1018,7 +1031,8 @@ func signalIntentRecord(value domain.SignalIntent, applyReceiptID uuid.UUID) (mo
 		HumanTaskID: taskID, ReviewDecisionID: decisionID, ApplyReceiptID: applyReceiptID,
 		IdempotencyKey: value.IdempotencyKey, CommandInputHash: value.CommandInputHash,
 		TemporalWorkflowID: value.TemporalWorkflowID, SignalID: value.SignalID, InputHash: value.InputHash,
-		Decision: value.Decision, SubjectRevision: value.SubjectRevision, Status: value.Status,
+		Decision: value.Decision, DecisionPayloadHash: value.DecisionPayloadHash,
+		SubjectRevision: value.SubjectRevision, Status: value.Status,
 		AttemptNo: value.AttemptNo, Revision: value.Revision, CreatedBy: createdBy,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
@@ -1053,7 +1067,8 @@ func signalApplyDomain(value model.WorkflowHumanGateApplyReceipt) domain.HumanGa
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), WorkflowRunID: value.WorkflowRunID.String(),
 		NodeRunID: value.NodeRunID.String(), HumanTaskID: value.HumanTaskID.String(), ReviewDecisionID: value.ReviewDecisionID.String(),
 		SubjectRevision: value.SubjectRevision, Decision: value.Decision, Status: value.Status,
-		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+		DecisionPayloadHash: value.DecisionPayloadHash,
+		CreatedBy:           value.CreatedBy.String(), CreatedAt: value.CreatedAt,
 	}
 	if value.ConflictCode != nil {
 		result.ConflictCode = *value.ConflictCode
@@ -1075,7 +1090,8 @@ func signalIntentDomain(value model.WorkflowSignalIntent) domain.SignalIntent {
 		IdempotencyKey: value.IdempotencyKey, CommandInputHash: value.CommandInputHash,
 		TemporalWorkflowID: value.TemporalWorkflowID, SignalID: value.SignalID, InputHash: value.InputHash,
 		Decision: value.Decision, SubjectRevision: value.SubjectRevision, Status: value.Status,
-		AttemptNo: value.AttemptNo, Revision: value.Revision, CreatedBy: value.CreatedBy.String(),
+		DecisionPayloadHash: value.DecisionPayloadHash,
+		AttemptNo:           value.AttemptNo, Revision: value.Revision, CreatedBy: value.CreatedBy.String(),
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
 }
@@ -1085,7 +1101,7 @@ func sameSignalApply(record model.WorkflowHumanGateApplyReceipt, desired domain.
 		record.WorkflowRunID.String() != desired.WorkflowRunID || record.NodeRunID.String() != desired.NodeRunID ||
 		record.HumanTaskID.String() != desired.HumanTaskID || record.ReviewDecisionID.String() != desired.ReviewDecisionID ||
 		record.SubjectRevision != desired.SubjectRevision || record.Decision != desired.Decision ||
-		record.Status != desired.Status ||
+		record.DecisionPayloadHash != desired.DecisionPayloadHash || record.Status != desired.Status ||
 		record.CreatedBy.String() != desired.CreatedBy {
 		return false
 	}

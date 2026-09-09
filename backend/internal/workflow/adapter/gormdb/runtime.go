@@ -1011,8 +1011,10 @@ func (store *Store) ApplyHumanGate(
 			return normalizeNotFound(loadErr)
 		}
 		if intent.Status != "completed" || intent.WorkflowRunID != run.ID || intent.NodeRunID != node.ID ||
-			intent.Decision != decision || apply.WorkflowRunID != run.ID || apply.NodeRunID != node.ID ||
+			intent.Decision != decision || intent.DecisionPayloadHash != command.DecisionPayloadHash ||
+			apply.WorkflowRunID != run.ID || apply.NodeRunID != node.ID ||
 			apply.ReviewDecisionID != intent.ReviewDecisionID || apply.Decision != decision ||
+			apply.DecisionPayloadHash != command.DecisionPayloadHash ||
 			node.WorkflowRunID != run.ID || node.NodeID != command.NodeID || node.RiskLevel != "human_gate" {
 			return errors.New("workflow human gate apply identity has drifted")
 		}

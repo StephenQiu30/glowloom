@@ -87,14 +87,15 @@ type FailRunCommand struct {
 }
 
 type ApplyHumanGateCommand struct {
-	WorkflowRunID  string             `json:"workflow_run_id"`
-	NodeRunID      string             `json:"node_run_id"`
-	NodeID         string             `json:"node_id"`
-	SignalIntentID string             `json:"signal_intent_id"`
-	Decision       string             `json:"decision"`
-	OwnerReceiptID string             `json:"owner_receipt_id"`
-	Output         NodeOutputSnapshot `json:"output"`
-	OutputHash     string             `json:"output_hash"`
+	WorkflowRunID       string             `json:"workflow_run_id"`
+	NodeRunID           string             `json:"node_run_id"`
+	NodeID              string             `json:"node_id"`
+	SignalIntentID      string             `json:"signal_intent_id"`
+	Decision            string             `json:"decision"`
+	DecisionPayloadHash string             `json:"decision_payload_hash"`
+	OwnerReceiptID      string             `json:"owner_receipt_id"`
+	Output              NodeOutputSnapshot `json:"output"`
+	OutputHash          string             `json:"output_hash"`
 }
 
 type HumanGateBinding struct {

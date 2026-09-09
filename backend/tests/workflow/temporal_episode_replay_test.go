@@ -72,6 +72,7 @@ func TestEpisodeWorkflowCompletesOnRealTemporalAndReplaysHistory(t *testing.T) {
 		ID: uuid.NewString(), WorkspaceID: uuid.NewString(), TemporalWorkflowID: run.GetID(), SignalID: uuid.NewString(),
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: plan.Nodes[1].NodeRunID,
 		HumanTaskID: uuid.NewString(), ReviewDecisionID: uuid.NewString(), SubjectRevision: 1, Decision: "approved",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 	}
 	preparation := approvedHumanGateSignalPreparation(signalIntent)
 	signalRequest, err := workflowapp.NewSignalRequest(preparation)

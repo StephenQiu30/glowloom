@@ -28,7 +28,8 @@ func (runtime *Client) Signal(ctx context.Context, request domain.SignalRequest)
 	payloads, err := runtime.dataConverter.ToPayloads(HumanGateSignal{
 		WorkflowRunID: request.WorkflowRunID, NodeRunID: request.NodeRunID,
 		SignalID: request.SignalID, SignalIntentID: request.SignalIntentID, Decision: request.Decision,
-		OwnerReceiptID: request.OwnerReceiptID, Output: request.Output, OutputHash: request.OutputHash,
+		DecisionPayloadHash: request.DecisionPayloadHash,
+		OwnerReceiptID:      request.OwnerReceiptID, Output: request.Output, OutputHash: request.OutputHash,
 	})
 	if err != nil {
 		return domain.SignalObservation{}, err
@@ -111,7 +112,8 @@ func (runtime *Client) findSignal(ctx context.Context, request domain.SignalRequ
 			TemporalWorkflowID: request.TemporalWorkflowID, SignalID: signal.SignalID,
 			SignalIntentID: signal.SignalIntentID, WorkflowRunID: signal.WorkflowRunID,
 			NodeRunID: signal.NodeRunID, Decision: signal.Decision,
-			OwnerReceiptID: signal.OwnerReceiptID, Output: signal.Output, OutputHash: signal.OutputHash,
+			DecisionPayloadHash: signal.DecisionPayloadHash,
+			OwnerReceiptID:      signal.OwnerReceiptID, Output: signal.Output, OutputHash: signal.OutputHash,
 		}
 		observedHash, hashErr := platformcommand.InputHash(observed)
 		if hashErr != nil {
@@ -133,7 +135,7 @@ func reconciledSignal(expectedHash, observedHash string) domain.SignalObservatio
 func validSignalRequest(request domain.SignalRequest) bool {
 	if strings.TrimSpace(request.TemporalWorkflowID) == "" || strings.TrimSpace(request.SignalID) == "" ||
 		strings.TrimSpace(request.SignalIntentID) == "" || strings.TrimSpace(request.WorkflowRunID) == "" ||
-		strings.TrimSpace(request.NodeRunID) == "" || len(request.InputHash) != 64 {
+		strings.TrimSpace(request.NodeRunID) == "" || len(request.DecisionPayloadHash) != 64 || len(request.InputHash) != 64 {
 		return false
 	}
 	switch request.Decision {

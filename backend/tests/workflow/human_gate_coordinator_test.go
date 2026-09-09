@@ -14,6 +14,7 @@ func TestHumanGateCoordinatorResumesOnlyFromPersistedDecisionIdentity(t *testing
 		WorkspaceID: "workspace-1", WorkflowRunID: "run-1", NodeRunID: "node-1",
 		HumanTaskID: "task-1", ReviewDecisionID: "decision-1", SubjectRevision: 3,
 		SubjectHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Decision: "rejected",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 	}
 	decisions := &humanGateDecisionReader{decision: decision}
 	statuses := &humanGateStatusRepository{status: workflowdomain.HumanGateCoordination{
@@ -38,6 +39,7 @@ func TestHumanGateCoordinatorDoesNotRetryPersistedOwnerConflict(t *testing.T) {
 		WorkspaceID: "workspace-2", WorkflowRunID: "run-2", NodeRunID: "node-2",
 		HumanTaskID: "task-2", ReviewDecisionID: "decision-2", SubjectRevision: 1,
 		SubjectHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Decision: "approved",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 	}}
 	signals := &humanGateSignalService{}
 	statuses := &humanGateStatusRepository{status: workflowdomain.HumanGateCoordination{

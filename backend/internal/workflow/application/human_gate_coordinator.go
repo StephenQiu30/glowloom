@@ -69,7 +69,8 @@ func (coordinator *HumanGateCoordinator) ResumeHumanGate(
 		WorkspaceID: decision.WorkspaceID, WorkflowRunID: decision.WorkflowRunID, NodeRunID: decision.NodeRunID,
 		HumanTaskID: decision.HumanTaskID, ReviewDecisionID: decision.ReviewDecisionID,
 		SubjectRevision: decision.SubjectRevision, Decision: decision.Decision,
-		IdempotencyKey: "human-gate-decision:" + decision.ReviewDecisionID,
+		DecisionPayloadHash: decision.DecisionPayloadHash,
+		IdempotencyKey:      "human-gate-decision:" + decision.ReviewDecisionID,
 	})
 	updated, statusErr := coordinator.loadStatus(ctx, decision)
 	if statusErr != nil {
@@ -101,7 +102,8 @@ func (coordinator *HumanGateCoordinator) resolveDecision(
 	}
 	if decision.ReviewDecisionID != decisionID || decision.WorkspaceID == "" || decision.WorkflowRunID == "" ||
 		decision.NodeRunID == "" || decision.HumanTaskID == "" || decision.SubjectRevision < 1 ||
-		len(decision.SubjectHash) != 64 || !validHumanGateDecision(decision.Decision) {
+		len(decision.SubjectHash) != 64 || len(decision.DecisionPayloadHash) != 64 ||
+		!validHumanGateDecision(decision.Decision) {
 		return domain.HumanGateReviewDecision{}, errors.New("human gate review decision has drifted")
 	}
 	return decision, nil

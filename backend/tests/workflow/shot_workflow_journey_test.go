@@ -243,7 +243,8 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 	signalCommand := workflowapp.SignalHumanGateCommand{
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: task.NodeRunID.String(),
 		HumanTaskID: task.ID.String(), ReviewDecisionID: decision.Decision.ID,
-		SubjectRevision: decision.Decision.SubjectRevision, Decision: "selected", IdempotencyKey: "formal-shot-signal",
+		SubjectRevision: decision.Decision.SubjectRevision, Decision: "selected",
+		DecisionPayloadHash: decision.Decision.DecisionPayloadHash, IdempotencyKey: "formal-shot-signal",
 	}
 	signal, err := signals.SignalHumanGate(ctx, workflowActor, signalCommand)
 	if err != nil || signal.Status != "completed" {
@@ -310,7 +311,8 @@ func TestFormalShotWorkflowSelectsAndBindsImageOnRealPostgresAndTemporal(t *test
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: rerun.ID, NodeRunID: rerunTask.NodeRunID.String(),
 		HumanTaskID: rerunTask.ID.String(), ReviewDecisionID: rerunDecision.Decision.ID,
 		SubjectRevision: rerunDecision.Decision.SubjectRevision, Decision: "selected",
-		IdempotencyKey: "formal-shot-rerun-signal",
+		DecisionPayloadHash: rerunDecision.Decision.DecisionPayloadHash,
+		IdempotencyKey:      "formal-shot-rerun-signal",
 	})
 	if err != nil || rerunSignal.Status != "completed" {
 		t.Fatalf("signal formal single Shot rerun selection: signal=%#v err=%v", rerunSignal, err)

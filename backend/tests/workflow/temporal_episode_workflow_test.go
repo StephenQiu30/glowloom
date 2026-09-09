@@ -58,6 +58,9 @@ func TestEpisodeWorkflowExecutesCompiledOrderAndWaitsForHumanSignal(t *testing.T
 	)
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, command temporaladapter.ApplyHumanGateCommand) error {
+			if command.DecisionPayloadHash != emptyReviewDecisionPayloadHash {
+				return temporal.NewNonRetryableApplicationError("decision payload hash drifted", "workflow_contract_violation", nil)
+			}
 			record("apply:" + command.NodeID)
 			return nil
 		},
@@ -75,7 +78,8 @@ func TestEpisodeWorkflowExecutesCompiledOrderAndWaitsForHumanSignal(t *testing.T
 		environment.SignalWorkflow(temporaladapter.HumanGateSignalName, temporaladapter.HumanGateSignal{
 			WorkflowRunID: request.WorkflowRunID, NodeRunID: "node-run-review",
 			SignalID: "signal-review", SignalIntentID: "signal-intent-review", Decision: "APPROVED",
-			OwnerReceiptID: ownerReceiptID, Output: output, OutputHash: outputHash,
+			DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+			OwnerReceiptID:      ownerReceiptID, Output: output, OutputHash: outputHash,
 		})
 	}, time.Minute)
 
@@ -129,7 +133,7 @@ func approvedHumanGateSignalPreparation(intent workflow.SignalIntent) workflow.S
 			ID: "00000000-0000-0000-0000-000000000335", WorkspaceID: intent.WorkspaceID,
 			WorkflowRunID: intent.WorkflowRunID, NodeRunID: intent.NodeRunID, HumanTaskID: intent.HumanTaskID,
 			ReviewDecisionID: intent.ReviewDecisionID, SubjectRevision: intent.SubjectRevision,
-			Decision: intent.Decision, Status: "completed",
+			Decision: intent.Decision, DecisionPayloadHash: intent.DecisionPayloadHash, Status: "completed",
 			OwnerReceiptID: ownerReceiptID, OwnerOperation: "production_bible.confirm",
 			Output: output, OutputHash: outputHash,
 		},

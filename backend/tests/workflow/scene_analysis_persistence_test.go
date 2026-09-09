@@ -284,14 +284,15 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err = database.Create(&model.ReviewDecision{
 		ID: decisionID, WorkspaceID: fixture.workspaceID, HumanTaskID: humanTask.ID,
 		Decision: "approved", SubjectRevision: humanTask.SubjectRevision, SubjectHash: humanTask.SubjectHash,
-		CreatedBy: fixture.userID, CreatedAt: now,
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+		CreatedBy:           fixture.userID, CreatedAt: now,
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	ownerApplication, err := workflowStore.ResolveHumanGateOwnerApplication(ctx, workflow.HumanGateDecisionRequest{
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: gate.NodeRunID,
 		HumanTaskID: humanTask.ID.String(), ReviewDecisionID: decisionID.String(),
-		SubjectRevision: humanTask.SubjectRevision, Decision: "approved",
+		SubjectRevision: humanTask.SubjectRevision, Decision: "approved", DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 	})
 	if err != nil {
 		t.Fatalf("resolve Structure Identity owner application: %v", err)
@@ -333,7 +334,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	}, workflowapp.SignalHumanGateCommand{
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: gate.NodeRunID,
 		HumanTaskID: humanTask.ID.String(), ReviewDecisionID: decisionID.String(),
-		SubjectRevision: humanTask.SubjectRevision, Decision: "approved",
+		SubjectRevision: humanTask.SubjectRevision, Decision: "approved", DecisionPayloadHash: emptyReviewDecisionPayloadHash,
 		IdempotencyKey: "structure-identity-signal:" + decisionID.String(),
 	})
 	if err != nil {
@@ -345,6 +346,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	}
 	ownerOutput, _, ownerOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(applyReceipt.Output))
 	if err != nil || signalIntent.Status != "completed" || applyReceipt.Status != "completed" ||
+		applyReceipt.DecisionPayloadHash != emptyReviewDecisionPayloadHash ||
+		signalIntent.DecisionPayloadHash != emptyReviewDecisionPayloadHash ||
 		applyReceipt.OwnerOperation == nil || *applyReceipt.OwnerOperation != "production_bible.confirm_structure_identity_set" ||
 		applyReceipt.OutputHash == nil || *applyReceipt.OutputHash != ownerOutputHash || len(ownerOutput.Bindings) != 1 ||
 		ownerOutput.Bindings[0].ValueType != "structure_identity_set_version" {

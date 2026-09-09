@@ -464,7 +464,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: bibleGateNode.ID.String(),
 		HumanTaskID: decision.Task.ID, ReviewDecisionID: decision.Decision.ID,
 		SubjectRevision: decision.Decision.SubjectRevision, Decision: decision.Decision.Decision,
-		IdempotencyKey: "story-bible-review-signal",
+		DecisionPayloadHash: decision.Decision.DecisionPayloadHash,
+		IdempotencyKey:      "story-bible-review-signal",
 	}
 	unknownIntent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,
@@ -765,7 +766,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: episodeGateNode.ID.String(),
 		HumanTaskID: episodeDecision.Task.ID, ReviewDecisionID: episodeDecision.Decision.ID,
 		SubjectRevision: episodeDecision.Decision.SubjectRevision, Decision: episodeDecision.Decision.Decision,
-		IdempotencyKey: "episode-plan-review-signal",
+		DecisionPayloadHash: episodeDecision.Decision.DecisionPayloadHash,
+		IdempotencyKey:      "episode-plan-review-signal",
 	}
 	episodeSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,
@@ -932,7 +934,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: structureGateNode.ID.String(),
 		HumanTaskID: structureDecision.Task.ID, ReviewDecisionID: structureDecision.Decision.ID,
 		SubjectRevision: structureDecision.Decision.SubjectRevision, Decision: structureDecision.Decision.Decision,
-		IdempotencyKey: "episode-planning-review-signal",
+		DecisionPayloadHash: structureDecision.Decision.DecisionPayloadHash,
+		IdempotencyKey:      "episode-planning-review-signal",
 	}
 	unknownPlanningSignal, err := planningSignalService.SignalHumanGate(ctx, workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,
@@ -1339,7 +1342,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: run.ID, NodeRunID: storyboardGateNode.ID.String(),
 		HumanTaskID: storyboardDecision.Task.ID, ReviewDecisionID: storyboardDecision.Decision.ID,
 		SubjectRevision: storyboardDecision.Decision.SubjectRevision, Decision: storyboardDecision.Decision.Decision,
-		IdempotencyKey: "storyboard-intent-review-signal",
+		DecisionPayloadHash: storyboardDecision.Decision.DecisionPayloadHash,
+		IdempotencyKey:      "storyboard-intent-review-signal",
 	}
 	func() {
 		driftDatabase := database.Begin()

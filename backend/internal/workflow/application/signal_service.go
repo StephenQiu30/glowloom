@@ -47,6 +47,7 @@ type SignalHumanGateCommand struct {
 	HumanTaskID, ReviewDecisionID         string
 	SubjectRevision                       int
 	Decision, IdempotencyKey              string
+	DecisionPayloadHash                   string
 }
 
 func NewSignalService(repository SignalRepository, signaler WorkflowSignaler, config SignalConfig) *SignalService {
@@ -69,10 +70,12 @@ func (service *SignalService) SignalHumanGate(
 		HumanTaskID, ReviewDecisionID         string
 		SubjectRevision                       int
 		Decision                              string
+		DecisionPayloadHash                   string
 	}{
 		WorkspaceID: command.WorkspaceID, WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
 		HumanTaskID: command.HumanTaskID, ReviewDecisionID: command.ReviewDecisionID,
 		SubjectRevision: command.SubjectRevision, Decision: command.Decision,
+		DecisionPayloadHash: command.DecisionPayloadHash,
 	})
 	if err != nil {
 		return domain.SignalIntent{}, err
@@ -86,6 +89,7 @@ func (service *SignalService) SignalHumanGate(
 			WorkspaceID: command.WorkspaceID, WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
 			HumanTaskID: command.HumanTaskID, ReviewDecisionID: command.ReviewDecisionID,
 			SubjectRevision: command.SubjectRevision, Decision: command.Decision,
+			DecisionPayloadHash: command.DecisionPayloadHash,
 		})
 		if resolveErr != nil {
 			return domain.SignalIntent{}, normalizeError(resolveErr)
@@ -107,7 +111,8 @@ func (service *SignalService) SignalHumanGate(
 						WorkspaceID: command.WorkspaceID, WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
 						HumanTaskID: command.HumanTaskID, ReviewDecisionID: command.ReviewDecisionID,
 						SubjectRevision: command.SubjectRevision, Decision: command.Decision,
-						Status: "conflict", ConflictCode: typed.Code, CreatedBy: actor.UserID, CreatedAt: now,
+						DecisionPayloadHash: command.DecisionPayloadHash,
+						Status:              "conflict", ConflictCode: typed.Code, CreatedBy: actor.UserID, CreatedAt: now,
 					})
 					if recordErr != nil {
 						return domain.SignalIntent{}, normalizeError(recordErr)
@@ -128,7 +133,8 @@ func (service *SignalService) SignalHumanGate(
 				WorkspaceID: command.WorkspaceID, WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
 				HumanTaskID: command.HumanTaskID, ReviewDecisionID: command.ReviewDecisionID,
 				SubjectRevision: command.SubjectRevision, Decision: command.Decision,
-				OwnerReceiptID: owner.ReceiptID, OwnerOperation: owner.Operation, Output: owner.Output, OutputHash: owner.OutputHash,
+				DecisionPayloadHash: command.DecisionPayloadHash,
+				OwnerReceiptID:      owner.ReceiptID, OwnerOperation: owner.Operation, Output: owner.Output, OutputHash: owner.OutputHash,
 				CreatedBy: actor.UserID, CreatedAt: now,
 			},
 			Intent: domain.SignalIntent{
@@ -136,7 +142,8 @@ func (service *SignalService) SignalHumanGate(
 				NodeRunID: command.NodeRunID, HumanTaskID: command.HumanTaskID, ReviewDecisionID: command.ReviewDecisionID,
 				IdempotencyKey: command.IdempotencyKey, CommandInputHash: commandInputHash,
 				SignalID: stableID("workflow-human-gate-signal", intentID), Decision: command.Decision,
-				SubjectRevision: command.SubjectRevision, Status: "pending", Revision: 1,
+				DecisionPayloadHash: command.DecisionPayloadHash,
+				SubjectRevision:     command.SubjectRevision, Status: "pending", Revision: 1,
 				CreatedBy: actor.UserID, CreatedAt: now, UpdatedAt: now,
 			},
 		}
@@ -183,13 +190,15 @@ func NewSignalRequest(prepared domain.SignalPreparation) (domain.SignalRequest, 
 		apply.NodeRunID == "" || apply.NodeRunID != intent.NodeRunID ||
 		apply.HumanTaskID == "" || apply.HumanTaskID != intent.HumanTaskID ||
 		apply.ReviewDecisionID == "" || apply.ReviewDecisionID != intent.ReviewDecisionID ||
-		apply.SubjectRevision < 1 || apply.SubjectRevision != intent.SubjectRevision || apply.Decision != intent.Decision {
+		apply.SubjectRevision < 1 || apply.SubjectRevision != intent.SubjectRevision || apply.Decision != intent.Decision ||
+		len(apply.DecisionPayloadHash) != 64 || apply.DecisionPayloadHash != intent.DecisionPayloadHash {
 		return domain.SignalRequest{}, errors.New("workflow human gate signal facts have drifted")
 	}
 	request := domain.SignalRequest{
 		TemporalWorkflowID: intent.TemporalWorkflowID, SignalID: intent.SignalID, SignalIntentID: intent.ID,
 		WorkflowRunID: intent.WorkflowRunID, NodeRunID: intent.NodeRunID, Decision: strings.ToUpper(intent.Decision),
-		OwnerReceiptID: apply.OwnerReceiptID, Output: apply.Output, OutputHash: apply.OutputHash,
+		DecisionPayloadHash: intent.DecisionPayloadHash,
+		OwnerReceiptID:      apply.OwnerReceiptID, Output: apply.Output, OutputHash: apply.OutputHash,
 	}
 	if intent.Decision == "approved" || intent.Decision == "selected" {
 		normalized, _, outputHash, outputErr := domain.BuildNodeOutput(apply.Output)
@@ -236,6 +245,7 @@ func validHumanGateOwnerApplication(
 		application.WorkflowRunID == command.WorkflowRunID && application.NodeRunID == command.NodeRunID &&
 		application.HumanTaskID == command.HumanTaskID && application.ReviewDecisionID == command.ReviewDecisionID &&
 		application.SubjectRevision == command.SubjectRevision && application.Decision == command.Decision &&
+		application.DecisionPayloadHash == command.DecisionPayloadHash &&
 		strings.TrimSpace(application.Executor) != "" && strings.TrimSpace(application.OutputPort) != "" &&
 		strings.TrimSpace(application.OutputValueType) != "" &&
 		application.Candidate.SourceKind == domain.NodeInputSourceNodeOutput &&
@@ -282,6 +292,7 @@ func normalizeSignalCommand(command SignalHumanGateCommand) SignalHumanGateComma
 	command.HumanTaskID = strings.TrimSpace(command.HumanTaskID)
 	command.ReviewDecisionID = strings.TrimSpace(command.ReviewDecisionID)
 	command.Decision = strings.ToLower(strings.TrimSpace(command.Decision))
+	command.DecisionPayloadHash = strings.ToLower(strings.TrimSpace(command.DecisionPayloadHash))
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	return command
 }
@@ -289,6 +300,9 @@ func normalizeSignalCommand(command SignalHumanGateCommand) SignalHumanGateComma
 func validSignalCommand(command SignalHumanGateCommand) bool {
 	if command.WorkspaceID == "" || command.WorkflowRunID == "" || command.NodeRunID == "" || command.HumanTaskID == "" ||
 		command.ReviewDecisionID == "" || command.SubjectRevision < 1 || command.IdempotencyKey == "" || len(command.IdempotencyKey) > 200 {
+		return false
+	}
+	if len(command.DecisionPayloadHash) != 64 {
 		return false
 	}
 	switch command.Decision {
