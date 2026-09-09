@@ -12,6 +12,48 @@ import (
 
 const humanTaskSubjectHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
+func TestHumanTaskDecisionPreservesExplicitEmptyIssueReferences(t *testing.T) {
+	now := time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC)
+	reviewer, claimToken := "reviewer-production-world", "claim-production-world"
+	repository := newHumanTaskRepository()
+	repository.task = review.HumanTask{
+		ID: "task-production-world", WorkspaceID: "workspace-production-world",
+		ProjectID: "project-production-world", WorkflowRunID: "run-production-world",
+		NodeRunID: "node-production-world", SubjectType: "production_world_gate_input",
+		SubjectID: "subject-production-world", SubjectRevision: 1, SubjectHash: humanTaskSubjectHash,
+		CandidateIDs: []string{}, AllowedDecisions: []string{"approved", "changes_requested", "rejected"},
+		RubricVersion: "production-world-review", Status: "CLAIMED", Revision: 2,
+		ClaimedBy: &reviewer, ClaimToken: &claimToken, ClaimExpiresAt: timePointer(now.Add(5 * time.Minute)),
+		CreatedAt: now, UpdatedAt: now,
+	}
+	service := reviewapp.NewService(repository, reviewapp.Config{
+		Now: func() time.Time { return now }, NewID: func() string { return "decision-production-world" },
+		ClaimLease: 5 * time.Minute,
+	})
+	result, err := service.Decide(context.Background(), reviewapp.Actor{UserID: reviewer}, reviewapp.DecideCommand{
+		TaskID: repository.task.ID, ClaimToken: claimToken, Decision: "changes_requested",
+		ExpectedTaskRevision: 2, ExpectedSubjectRevision: 1, ExpectedSubjectHash: humanTaskSubjectHash,
+		ChangeRequest: &review.ChangeRequest{
+			IssueRefs: []string{},
+			EvidenceRefs: []review.ChangeEvidenceRef{{
+				SourceVersionID: "source-version", SourceStart: 0, SourceEnd: 1, TextHash: humanTaskSubjectHash,
+			}},
+			ChangeSpec: review.ChangeSpec{
+				Operation: "revise_interaction", TargetKeys: []string{"interaction:one"},
+				AffectedScopeKeys: []string{"interaction:one"},
+			},
+			ReasonCode: "interaction_incorrect",
+		},
+		IdempotencyKey: "production-world-empty-issues",
+	})
+	if err != nil || result.Decision.ChangeRequest == nil || result.Decision.ChangeRequest.IssueRefs == nil ||
+		len(result.Decision.ChangeRequest.IssueRefs) != 0 {
+		t.Fatalf("explicit empty issue references were not preserved: result=%#v err=%v", result, err)
+	}
+}
+
+func timePointer(value time.Time) *time.Time { return &value }
+
 func TestHumanTaskClaimExpiryAndImmutableDecision(t *testing.T) {
 	now := time.Date(2026, time.August, 26, 0, 0, 0, 0, time.UTC)
 	repository := newHumanTaskRepository()

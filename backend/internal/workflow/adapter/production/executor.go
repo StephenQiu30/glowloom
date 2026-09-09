@@ -1296,10 +1296,19 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis node config")
 	}
 	var repair *agentcontract.StructureIdentityRepairDirective
+	var productionRepair *agentcontract.ProductionWorldRepairDirective
 	if len(config) == 1 {
-		raw, found := config["repair"]
-		if !found || json.Unmarshal(raw, &repair) != nil || repair == nil || repair.ValidateFor(stageKey) != nil ||
-			(stageKey != "propose_script_spans" && stageKey != "resolve_identities") {
+		if raw, found := config["repair"]; found {
+			if json.Unmarshal(raw, &repair) != nil || repair == nil || repair.ValidateFor(stageKey) != nil ||
+				(stageKey != "propose_script_spans" && stageKey != "resolve_identities") {
+				return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis repair config")
+			}
+		} else if raw, found := config["production_world_repair"]; found {
+			if json.Unmarshal(raw, &productionRepair) != nil || productionRepair == nil ||
+				productionRepair.ValidateFor(stageKey) != nil {
+				return domain.NodeExecutorResult{}, errors.New("invalid Production World repair config")
+			}
+		} else {
 			return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis repair config")
 		}
 	}
@@ -1416,6 +1425,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		StageKey: stageKey, Source: source, Upstreams: upstreams,
 		DeterministicIssues:             []agentcontract.CandidateReviewIssue{},
 		Repair:                          repair,
+		ProductionRepair:                productionRepair,
 		StructureIdentitySetVersionID:   structureIdentityBinding.ReferenceID,
 		StructureIdentitySetVersionHash: structureIdentityBinding.ContentHash,
 		StructureIdentitySet:            structureIdentitySet,

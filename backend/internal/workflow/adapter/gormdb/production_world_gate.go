@@ -45,7 +45,7 @@ func prepareProductionWorldGateInput(
 		WorkflowRunID: run.ID.String(), NodeRunID: node.ID.String(),
 		CandidateRevisionID: revision.ID.String(), CandidateRevision: revision.RevisionNo,
 		CandidateRevisionHash: revision.CandidateRevisionHash, Candidate: candidate,
-		AllowedDecisions: []string{"approved", "rejected"}, ExpectedHeads: expectedHeads,
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, ExpectedHeads: expectedHeads,
 	})
 	if err != nil {
 		return model.WorkflowHumanGateInput{}, domain.ProductionWorldGateInput{}, nil, err

@@ -979,7 +979,7 @@ func humanGateAllowedDecisions(executor string) ([]string, error) {
 	case "gate.generation_image_review":
 		return []string{"changes_requested", "rejected", "selected"}, nil
 	case "gate.production_world_review":
-		return []string{"approved", "rejected"}, nil
+		return []string{"approved", "changes_requested", "rejected"}, nil
 	case "gate.structure_identity_review":
 		return []string{"approved", "changes_requested", "rejected"}, nil
 	case "gate.production_bible_review", "gate.episode_plan_review", "gate.episode_structure_review", "gate.storyboard_review":

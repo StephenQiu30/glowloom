@@ -43,7 +43,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestSceneAnalysisGatesResumeRealTemporalWorkflow(t *testing.T) {
+func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	temporalAddress := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS")
 	if databaseURL == "" || temporalAddress == "" {
@@ -454,25 +454,177 @@ func TestSceneAnalysisGatesResumeRealTemporalWorkflow(t *testing.T) {
 		productionWorldGateInput.InputHash != productionWorldTask.SubjectHash {
 		t.Fatalf("read frozen Production World Gate input: decode=%v", gateErr)
 	}
-	productionWorldApproval, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
-		TaskID: productionWorldTask.ID.String(), ClaimToken: productionWorldClaim.ClaimToken, Decision: "approved",
-		ExpectedTaskRevision:    productionWorldClaim.Task.Revision,
+	productionWorldTaskDetail, err := reviewService.GetTask(ctx, reviewActor, productionWorldTask.ID.String())
+	if err != nil {
+		t.Fatalf("read Production World review detail: %v", err)
+	}
+	productionWorldDetail, _, detailErr := workflow.DecodeProductionWorldReviewDetail(
+		productionWorldTaskDetail.Subject,
+	)
+	if detailErr != nil || len(productionWorldDetail.Views.Interactions) != 1 {
+		t.Fatalf("decode Production World review detail: detail=%#v err=%v", productionWorldDetail, detailErr)
+	}
+	interaction := productionWorldDetail.Views.Interactions[0]
+	productionWorldSelection := workflow.ProductionWorldRepairSelection{
+		Operation: workflow.ProductionWorldRepairReviseInteraction, TargetKeys: []string{interaction.InteractionKey},
+	}
+	productionWorldClosure, err := workflow.NewProductionWorldRepairClosure(
+		productionWorldDetail.Views,
+		productionWorldSelection,
+	)
+	if err != nil {
+		t.Fatalf("derive Production World repair closure: %v", err)
+	}
+	productionWorldNote := "只修正冻结证据覆盖的交互几何，不修改其他制作世界事实。"
+	typedProductionWorldChange := workflow.ProductionWorldChangeRequest{
+		IssueRefs: []string{},
+		EvidenceRefs: []workflow.HumanGateEvidenceRef{{
+			SourceVersionID: productionWorldGate.Subject.SourceVersion.VersionID,
+			SourceStart:     interaction.Evidence.SourceStart,
+			SourceEnd:       interaction.Evidence.SourceEnd,
+			TextHash:        interaction.Evidence.TextHash,
+		}},
+		ChangeSpec: workflow.ProductionWorldRepairChange{
+			Operation:         productionWorldSelection.Operation,
+			TargetKeys:        productionWorldSelection.TargetKeys,
+			AffectedScopeKeys: productionWorldClosure.AllKeys(),
+		},
+		ReasonCode: "interaction_incorrect", UserNote: &productionWorldNote,
+	}
+	if err = workflow.ValidateProductionWorldChangeRequest(
+		productionWorldGate,
+		productionWorldDetail,
+		typedProductionWorldChange,
+	); err != nil {
+		t.Fatalf(
+			"validate bounded Production World repair request: targets=%#v closure=%#v err=%v",
+			productionWorldDetail.RepairTargets,
+			productionWorldClosure,
+			err,
+		)
+	}
+	productionWorldDecision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: productionWorldTask.ID.String(), ClaimToken: productionWorldClaim.ClaimToken,
+		Decision: "changes_requested", ExpectedTaskRevision: productionWorldClaim.Task.Revision,
 		ExpectedSubjectRevision: productionWorldClaim.Task.SubjectRevision,
 		ExpectedSubjectHash:     productionWorldClaim.Task.SubjectHash,
-		IdempotencyKey:          "production-world-temporal-approval:" + productionWorldTask.ID.String(),
+		ChangeRequest: &reviewdomain.ChangeRequest{
+			IssueRefs: typedProductionWorldChange.IssueRefs,
+			EvidenceRefs: []reviewdomain.ChangeEvidenceRef{{
+				SourceVersionID: typedProductionWorldChange.EvidenceRefs[0].SourceVersionID,
+				SourceStart:     typedProductionWorldChange.EvidenceRefs[0].SourceStart,
+				SourceEnd:       typedProductionWorldChange.EvidenceRefs[0].SourceEnd,
+				TextHash:        typedProductionWorldChange.EvidenceRefs[0].TextHash,
+			}},
+			ChangeSpec: reviewdomain.ChangeSpec{
+				Operation:         typedProductionWorldChange.ChangeSpec.Operation,
+				TargetKeys:        typedProductionWorldChange.ChangeSpec.TargetKeys,
+				AffectedScopeKeys: typedProductionWorldChange.ChangeSpec.AffectedScopeKeys,
+			},
+			ReasonCode: typedProductionWorldChange.ReasonCode, UserNote: typedProductionWorldChange.UserNote,
+		},
+		IdempotencyKey: "production-world-temporal-change:" + productionWorldTask.ID.String(),
 	})
 	if err != nil {
-		t.Fatalf("approve Production World review: %v", err)
+		t.Fatalf("request bounded Production World repair: %v", err)
 	}
 	productionWorldCoordination, err := coordinator.ResumeHumanGate(
-		ctx, workflowActor, productionWorldApproval.Decision.ID,
+		ctx, workflowActor, productionWorldDecision.Decision.ID,
 	)
 	if err != nil || productionWorldCoordination.WorkflowResumeStatus != "completed" {
-		t.Fatalf("resume approved Production World review: coordination=%#v err=%v", productionWorldCoordination, err)
+		t.Fatalf("resume bounded Production World decision: coordination=%#v err=%v", productionWorldCoordination, err)
 	}
 	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
 		var current model.WorkflowRun
 		if loadErr := database.First(&current, "id = ?", repairRun.ID).Error; loadErr != nil {
+			return false, loadErr
+		}
+		return current.Status == "NEEDS_ATTENTION" && current.ProgressStage == "human_gate:changes_requested", nil
+	})
+	productionWorldCoordination, err = coordinator.ResumeHumanGate(
+		ctx, workflowActor, productionWorldDecision.Decision.ID,
+	)
+	if err != nil || productionWorldCoordination.RepairWorkflowRunID == "" {
+		t.Fatalf("start bounded Production World repair: coordination=%#v err=%v", productionWorldCoordination, err)
+	}
+	var productionWorldRepairRun model.WorkflowRun
+	var repairedProductionWorldTask model.HumanTask
+	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
+		if loadErr := database.First(
+			&productionWorldRepairRun,
+			"id = ?",
+			productionWorldCoordination.RepairWorkflowRunID,
+		).Error; loadErr != nil {
+			return false, loadErr
+		}
+		if productionWorldRepairRun.Status != "WAITING_HUMAN" {
+			return false, nil
+		}
+		query := database.Where(
+			"workflow_run_id = ? AND subject_type = ?",
+			productionWorldRepairRun.ID,
+			"production_world_gate_input",
+		)
+		var taskCount int64
+		if countErr := query.Model(&model.HumanTask{}).Count(&taskCount).Error; countErr != nil {
+			return false, countErr
+		}
+		if taskCount == 0 {
+			return false, nil
+		}
+		if taskCount != 1 {
+			return false, fmt.Errorf("Production World repair workflow has %d review tasks", taskCount)
+		}
+		loadErr := query.First(&repairedProductionWorldTask).Error
+		return loadErr == nil && repairedProductionWorldTask.Status == "OPEN", loadErr
+	})
+	if productionWorldRepairRun.SourceWorkflowRunID == nil ||
+		*productionWorldRepairRun.SourceWorkflowRunID != repairRun.ID ||
+		productionWorldRepairRun.RerunRootNodeID == nil ||
+		*productionWorldRepairRun.RerunRootNodeID != "interaction-continuity" ||
+		productionWorldRepairRun.RepairDecisionID == nil ||
+		productionWorldRepairRun.RepairDecisionID.String() != productionWorldDecision.Decision.ID ||
+		productionWorldRepairRun.RepairDecisionHash == nil ||
+		*productionWorldRepairRun.RepairDecisionHash != productionWorldDecision.Decision.DecisionPayloadHash ||
+		deterministicRuntime.productionRepair == nil ||
+		deterministicRuntime.productionRepairStage != "reconcile_interaction_continuity" ||
+		deterministicRuntime.productionRepairNote {
+		t.Fatalf(
+			"bounded Production World repair identity drifted: run=%#v runtime=%#v",
+			productionWorldRepairRun,
+			deterministicRuntime,
+		)
+	}
+	productionWorldRepairClaim, err := reviewService.Claim(ctx, reviewActor, reviewapp.ClaimCommand{
+		TaskID: repairedProductionWorldTask.ID.String(), ExpectedRevision: repairedProductionWorldTask.Revision,
+		IdempotencyKey: "production-world-temporal-repair-claim:" + repairedProductionWorldTask.ID.String(),
+	})
+	if err != nil {
+		t.Fatalf("claim repaired Production World review: %v", err)
+	}
+	productionWorldApproval, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
+		TaskID: repairedProductionWorldTask.ID.String(), ClaimToken: productionWorldRepairClaim.ClaimToken,
+		Decision: "approved", ExpectedTaskRevision: productionWorldRepairClaim.Task.Revision,
+		ExpectedSubjectRevision: productionWorldRepairClaim.Task.SubjectRevision,
+		ExpectedSubjectHash:     productionWorldRepairClaim.Task.SubjectHash,
+		IdempotencyKey:          "production-world-temporal-repair-approval:" + repairedProductionWorldTask.ID.String(),
+	})
+	if err != nil {
+		t.Fatalf("approve repaired Production World review: %v", err)
+	}
+	productionWorldApprovalCoordination, err := coordinator.ResumeHumanGate(
+		ctx, workflowActor, productionWorldApproval.Decision.ID,
+	)
+	if err != nil || productionWorldApprovalCoordination.WorkflowResumeStatus != "completed" {
+		t.Fatalf(
+			"resume approved Production World repair: coordination=%#v err=%v",
+			productionWorldApprovalCoordination,
+			err,
+		)
+	}
+	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
+		var current model.WorkflowRun
+		if loadErr := database.First(&current, "id = ?", productionWorldRepairRun.ID).Error; loadErr != nil {
 			return false, loadErr
 		}
 		return current.Status == "SUCCEEDED", nil
@@ -569,6 +721,80 @@ func TestSceneAnalysisGatesResumeRealTemporalWorkflow(t *testing.T) {
 		) != nil {
 		t.Fatalf("validate Temporal Interaction/Continuity Candidate: input=%#v candidate=%#v err=%v",
 			continuityInput, continuityCandidate, err)
+	}
+	var repairedContinuityInvocation model.SceneAnalysisInvocationRecord
+	if err = database.Where(
+		"workflow_run_id = ? AND stage_key = ?",
+		productionWorldRepairRun.ID,
+		"reconcile_interaction_continuity",
+	).First(&repairedContinuityInvocation).Error; err != nil {
+		t.Fatalf("query repaired Interaction/Continuity invocation: %v", err)
+	}
+	var repairedContinuityCandidate model.SceneAnalysisCandidateRevision
+	if err = database.First(
+		&repairedContinuityCandidate,
+		"source_invocation_id = ?",
+		repairedContinuityInvocation.ID,
+	).Error; err != nil {
+		t.Fatalf("query repaired Interaction/Continuity Candidate: %v", err)
+	}
+	var repairedContinuityPayload contract.SceneAnalysisPayload
+	var repairedContinuityInput contract.InteractionContinuityInput
+	if err = json.Unmarshal(repairedContinuityInvocation.Payload, &repairedContinuityPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(repairedContinuityPayload.StageInput, &repairedContinuityInput); err != nil ||
+		repairedContinuityPayload.ProductionRepair == nil ||
+		repairedContinuityPayload.ProductionRepair.ReviewDecisionID != productionWorldDecision.Decision.ID ||
+		repairedContinuityPayload.ProductionRepair.DecisionPayloadHash != productionWorldDecision.Decision.DecisionPayloadHash ||
+		repairedContinuityPayload.ProductionRepair.BaseCandidate.Identity.CandidateRevisionID != continuityCandidate.ID.String() ||
+		repairedContinuityInput.SceneBindingCandidateRevisionID != sceneBindingCandidate.ID.String() ||
+		repairedContinuityCandidate.CandidateContentHash == continuityCandidate.CandidateContentHash ||
+		jsonContainsKey(json.RawMessage(repairedContinuityInvocation.Payload), "user_note") ||
+		contract.ValidateInteractionContinuityCandidate(
+			json.RawMessage(repairedContinuityCandidate.Candidate),
+			repairedContinuityInput,
+		) != nil ||
+		contract.ValidateProductionWorldRepairCandidate(
+			*repairedContinuityPayload.ProductionRepair,
+			"reconcile_interaction_continuity",
+			json.RawMessage(repairedContinuityCandidate.Candidate),
+		) != nil {
+		t.Fatalf(
+			"validate bounded repaired Interaction/Continuity Candidate: payload=%#v input=%#v candidate=%#v err=%v",
+			repairedContinuityPayload,
+			repairedContinuityInput,
+			repairedContinuityCandidate,
+			err,
+		)
+	}
+	var reusedProductionStageInvocationCount int64
+	if err = database.Model(&model.SceneAnalysisInvocationRecord{}).Where(
+		"workflow_run_id = ? AND stage_key IN ?",
+		productionWorldRepairRun.ID,
+		[]string{"derive_production_entities", "bind_scene_occurrences"},
+	).Count(&reusedProductionStageInvocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	var reusedProductionStageCount int64
+	if err = database.Model(&model.NodeRunProjection{}).Where(
+		"workflow_run_id = ? AND node_id IN ? AND status = ? AND reused_from_node_run_id IS NOT NULL",
+		productionWorldRepairRun.ID,
+		[]string{"production-entities", "scene-bindings"},
+		"SKIPPED",
+	).Count(&reusedProductionStageCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if reusedProductionStageInvocationCount != 0 || reusedProductionStageCount != 2 ||
+		repairedProductionWorldTask.SubjectID == productionWorldTask.SubjectID ||
+		repairedProductionWorldTask.SubjectHash == productionWorldTask.SubjectHash {
+		t.Fatalf(
+			"Production World repair did not reuse upstream and freeze a new Gate: invocations=%d reused=%d original=%#v repaired=%#v",
+			reusedProductionStageInvocationCount,
+			reusedProductionStageCount,
+			productionWorldTask,
+			repairedProductionWorldTask,
+		)
 	}
 }
 

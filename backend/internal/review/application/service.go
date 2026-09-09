@@ -286,10 +286,13 @@ func cloneChangeRequest(value *domain.ChangeRequest) *domain.ChangeRequest {
 		return nil
 	}
 	result := *value
-	result.IssueRefs = append([]string(nil), value.IssueRefs...)
-	result.EvidenceRefs = append([]domain.ChangeEvidenceRef(nil), value.EvidenceRefs...)
-	result.ChangeSpec.TargetKeys = append([]string(nil), value.ChangeSpec.TargetKeys...)
-	result.ChangeSpec.AffectedScopeKeys = append([]string(nil), value.ChangeSpec.AffectedScopeKeys...)
+	result.IssueRefs = append(make([]string, 0, len(value.IssueRefs)), value.IssueRefs...)
+	result.EvidenceRefs = append(make([]domain.ChangeEvidenceRef, 0, len(value.EvidenceRefs)), value.EvidenceRefs...)
+	result.ChangeSpec.TargetKeys = append(make([]string, 0, len(value.ChangeSpec.TargetKeys)), value.ChangeSpec.TargetKeys...)
+	result.ChangeSpec.AffectedScopeKeys = append(
+		make([]string, 0, len(value.ChangeSpec.AffectedScopeKeys)),
+		value.ChangeSpec.AffectedScopeKeys...,
+	)
 	if value.UserNote != nil {
 		note := *value.UserNote
 		result.UserNote = &note

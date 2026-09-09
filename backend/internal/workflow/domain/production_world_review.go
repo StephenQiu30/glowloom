@@ -241,7 +241,7 @@ func validateProductionWorldReviewDetail(value ProductionWorldReviewDetail) erro
 		!nodeOutputContentHashPattern.MatchString(value.PartitionRoots.Planning) ||
 		!nodeOutputContentHashPattern.MatchString(value.PartitionRoots.Asset) ||
 		!nodeOutputContentHashPattern.MatchString(value.PartitionRoots.Proof) ||
-		!slices.Equal(value.AllowedDecisions, []string{"approved", "rejected"}) ||
+		!slices.Equal(value.AllowedDecisions, []string{"approved", "changes_requested", "rejected"}) ||
 		validateProductionWorldRepairTargetSets(value.RepairTargets) != nil ||
 		value.Views.CharacterAppearances == nil || value.Views.Locations == nil || value.Views.PropStates == nil ||
 		value.Views.SceneOccurrences == nil || value.Views.Interactions == nil || value.Views.Continuity.Claims == nil ||

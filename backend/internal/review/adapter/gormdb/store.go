@@ -788,7 +788,10 @@ func validateAndEncodeDecisionPayload(
 			return nil, loadErr
 		}
 		change := workflowdomain.ProductionWorldChangeRequest{
-			IssueRefs: append([]string(nil), decision.ChangeRequest.IssueRefs...),
+			IssueRefs: append(
+				make([]string, 0, len(decision.ChangeRequest.IssueRefs)),
+				decision.ChangeRequest.IssueRefs...,
+			),
 			ChangeSpec: workflowdomain.ProductionWorldRepairChange{
 				Operation:         decision.ChangeRequest.ChangeSpec.Operation,
 				TargetKeys:        append([]string(nil), decision.ChangeRequest.ChangeSpec.TargetKeys...),
@@ -805,7 +808,7 @@ func validateAndEncodeDecisionPayload(
 			}
 		}
 		if validationErr := workflowdomain.ValidateProductionWorldChangeRequest(gate, detail, change); validationErr != nil {
-			return nil, invalid("Change request is outside the frozen Production World repair targets")
+			return nil, invalid("Invalid Production World change request: " + validationErr.Error())
 		}
 		payload, marshalErr := json.Marshal(struct {
 			ChangeRequest *domain.ChangeRequest `json:"change_request"`

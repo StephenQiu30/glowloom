@@ -62,7 +62,7 @@ func TestPublicHumanTaskHandlerPresentsProductionWorldSixViews(t *testing.T) {
 	task := reviewdomain.HumanTask{
 		ID: publicTaskID, ProjectID: publicProjectID, Status: "OPEN", Revision: 1,
 		SubjectType: "production_world_gate_input", SubjectID: publicTaskID, SubjectRevision: 1,
-		SubjectHash: publicSubjectHash, AllowedDecisions: []string{"approved", "rejected"},
+		SubjectHash: publicSubjectHash, AllowedDecisions: []string{"approved", "changes_requested", "rejected"},
 		CreatedAt: now, UpdatedAt: now,
 	}
 	subject := json.RawMessage(`{
@@ -81,7 +81,7 @@ func TestPublicHumanTaskHandlerPresentsProductionWorldSixViews(t *testing.T) {
 			"asset":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 			"proof":"1111111111111111111111111111111111111111111111111111111111111111"
 		},
-		"allowed_decisions":["approved","rejected"],
+		"allowed_decisions":["approved","changes_requested","rejected"],
 		"repair_targets":[
 			{"operation":"revise_production_entity","target_keys":[]},
 			{"operation":"rebind_scene_occurrence","target_keys":[]},

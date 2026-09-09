@@ -73,6 +73,7 @@ type ExecuteCommand struct {
 	Upstreams                       []Candidate
 	DeterministicIssues             []contract.CandidateReviewIssue
 	Repair                          *contract.StructureIdentityRepairDirective
+	ProductionRepair                *contract.ProductionWorldRepairDirective
 	StructureIdentitySetVersionID   string
 	StructureIdentitySetVersionHash string
 	StructureIdentitySet            json.RawMessage
@@ -429,6 +430,10 @@ func validateExecuteCommand(command ExecuteCommand) error {
 	if command.Repair != nil && command.Repair.ValidateFor(command.StageKey) != nil {
 		return &Error{Code: "invalid_scene_analysis_repair", Message: "Scene Analysis repair directive is invalid"}
 	}
+	if command.ProductionRepair != nil &&
+		(command.Repair != nil || command.ProductionRepair.ValidateFor(command.StageKey) != nil) {
+		return &Error{Code: "invalid_scene_analysis_repair", Message: "Production World repair directive is invalid"}
+	}
 	if command.StageKey == "propose_script_spans" {
 		if len(command.Upstreams) != 0 {
 			return &Error{Code: "unexpected_upstream_candidate", Message: "ScriptSpan stage cannot read an upstream candidate"}
@@ -707,6 +712,20 @@ func buildManifest(command ExecuteCommand, now time.Time) (ManifestRecord, error
 			return ManifestRecord{}, hashErr
 		}
 	}
+	if command.ProductionRepair != nil {
+		encoded, marshalErr := json.Marshal(struct {
+			RootInputHash string                                   `json:"root_input_hash"`
+			Repair        *contract.ProductionWorldRepairDirective `json:"production_world_repair"`
+		}{RootInputHash: rootInputHash, Repair: command.ProductionRepair})
+		if marshalErr != nil {
+			return ManifestRecord{}, marshalErr
+		}
+		var hashErr error
+		rootInputHash, hashErr = platformcanonical.Hash(encoded)
+		if hashErr != nil {
+			return ManifestRecord{}, hashErr
+		}
+	}
 	manifestID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf(
 		"lanverse:scene-analysis:manifest:%s:%s:%s", command.NodeRunID, command.StageKey, rootInputHash,
 	))).String()
@@ -755,6 +774,7 @@ func buildInvocation(
 			ManifestID: manifest.ID, ManifestHash: manifest.ManifestHash, ShardKey: "script:full",
 			CodepointStart: 0, CodepointEnd: utf8.RuneCountInString(text),
 		},
+		ProductionRepair: command.ProductionRepair,
 	}
 	if command.StageKey == "propose_script_spans" {
 		payload.UpstreamCandidates = []contract.SceneAnalysisCandidateRevisionIdentity{}

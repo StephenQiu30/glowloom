@@ -63,7 +63,7 @@ func TestProductionWorldChangeRequestMatchesFrozenTargetEvidenceAndClosure(t *te
 		WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
 		CandidateRevisionHash: strings.Repeat("a", 64), Candidate: candidate,
-		AllowedDecisions: []string{"approved", "rejected"}, ExpectedHeads: productionWorldExpectedHeads(candidate, 0, 0),
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"}, ExpectedHeads: productionWorldExpectedHeads(candidate, 0, 0),
 	})
 	if err != nil {
 		t.Fatal(err)

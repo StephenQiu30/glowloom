@@ -1730,14 +1730,17 @@ func (starter *immediateSceneAnalysisStarter) Start(_ context.Context, request w
 }
 
 type deterministicSceneAnalysisRuntime struct {
-	now           time.Time
-	calls         int
-	reviewIssue   bool
-	spanCandidate json.RawMessage
-	factCandidate json.RawMessage
-	repair        *contract.StructureIdentityRepairDirective
-	repairStage   string
-	repairHasNote bool
+	now                   time.Time
+	calls                 int
+	reviewIssue           bool
+	spanCandidate         json.RawMessage
+	factCandidate         json.RawMessage
+	repair                *contract.StructureIdentityRepairDirective
+	repairStage           string
+	repairHasNote         bool
+	productionRepair      *contract.ProductionWorldRepairDirective
+	productionRepairStage string
+	productionRepairNote  bool
 }
 
 type failOnceSceneAnalysisRuntime struct {
@@ -1860,6 +1863,16 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
 		candidate = buildInteractionContinuityCandidate(input)
+		if invocation.Payload.ProductionRepair != nil {
+			runtime.productionRepair = invocation.Payload.ProductionRepair
+			runtime.productionRepairStage = invocation.Payload.Variant.StageKey
+			runtime.productionRepairNote = jsonContainsKey(invocation.Payload.StageInput, "user_note") ||
+				jsonContainsKey(mustSceneJSON(invocation.Payload.ProductionRepair), "user_note")
+			candidate = buildRepairedInteractionContinuityCandidate(
+				candidate,
+				*invocation.Payload.ProductionRepair,
+			)
+		}
 	} else {
 		var input contract.StructureIdentityReviewInput
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
@@ -1902,6 +1915,31 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		return contract.SceneAnalysisAttemptResult{}, err
 	}
 	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
+}
+
+func buildRepairedInteractionContinuityCandidate(
+	base json.RawMessage,
+	directive contract.ProductionWorldRepairDirective,
+) json.RawMessage {
+	var candidate contract.InteractionContinuityCandidate
+	if err := json.Unmarshal(base, &candidate); err != nil {
+		panic("decode deterministic Interaction/Continuity repair fixture: " + err.Error())
+	}
+	if directive.ChangeSpec.Operation != contract.ProductionWorldRepairReviseInteraction ||
+		len(directive.ChangeSpec.TargetKeys) != 1 {
+		panic("unsupported deterministic Production World repair directive")
+	}
+	target := directive.ChangeSpec.TargetKeys[0]
+	for index := range candidate.Interactions {
+		if candidate.Interactions[index].InteractionKey != target {
+			continue
+		}
+		candidate.Interactions[index].Hand = "left"
+		evidence := candidate.Interactions[index].Evidence
+		candidate.Interactions[index].GeometryEvidence.Hand = &evidence
+		return mustSceneJSON(candidate)
+	}
+	panic("deterministic Production World repair target is missing")
 }
 
 func jsonContainsKey(value json.RawMessage, key string) bool {

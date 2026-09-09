@@ -223,7 +223,7 @@ func completeProductionWorldGateInput(value *ProductionWorldGateInput, verify bo
 		value.AllowedDecisions[index] = strings.ToLower(strings.TrimSpace(value.AllowedDecisions[index]))
 	}
 	slices.Sort(value.AllowedDecisions)
-	if !slices.Equal(value.AllowedDecisions, []string{"approved", "rejected"}) {
+	if !slices.Equal(value.AllowedDecisions, []string{"approved", "changes_requested", "rejected"}) {
 		return errors.New("Gate 2 requires exact typed decisions")
 	}
 	slices.SortFunc(value.Subject.ExpectedHeads, compareProductionWorldExpectedHead)

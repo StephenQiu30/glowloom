@@ -22,7 +22,7 @@ func TestProductionWorldReviewDetailHasSixTypedViews(t *testing.T) {
 		WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
 		CandidateRevisionHash: "e" + candidate.ContentHash[1:], Candidate: candidate,
-		AllowedDecisions: []string{"approved", "rejected"},
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"},
 		ExpectedHeads:    productionWorldExpectedHeads(candidate, 0, 0),
 	})
 	if err != nil {
@@ -79,7 +79,7 @@ func TestProductionWorldReviewDetailRejectsCandidateOutsideFrozenGate(t *testing
 		WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
 		CandidateRevisionHash: "e" + candidate.ContentHash[1:], Candidate: candidate,
-		AllowedDecisions: []string{"approved", "rejected"},
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"},
 		ExpectedHeads:    productionWorldExpectedHeads(candidate, 0, 0),
 	})
 	if err != nil {

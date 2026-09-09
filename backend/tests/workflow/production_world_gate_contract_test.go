@@ -60,7 +60,7 @@ func TestProductionWorldGateInputBindsAggregateAndSeparatePlanningProjections(t 
 		WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
 		CandidateRevisionHash: strings.Repeat("f", 64), Candidate: candidate,
-		AllowedDecisions: []string{"rejected", "approved"},
+		AllowedDecisions: []string{"rejected", "changes_requested", "approved"},
 		ExpectedHeads:    productionWorldExpectedHeads(candidate, 1, 2),
 	}
 	value, encoded, err := workflow.NewProductionWorldGateInput(draft)
@@ -115,7 +115,7 @@ func TestProductionWorldContractsRejectUpstreamAndHashDrift(t *testing.T) {
 		WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
 		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
 		CandidateRevisionHash: strings.Repeat("e", 64), Candidate: candidate,
-		AllowedDecisions: []string{"approved", "rejected"},
+		AllowedDecisions: []string{"approved", "changes_requested", "rejected"},
 		ExpectedHeads:    productionWorldExpectedHeads(candidate, 0, 0),
 	}
 	_, encoded, err := workflow.NewProductionWorldGateInput(gateDraft)

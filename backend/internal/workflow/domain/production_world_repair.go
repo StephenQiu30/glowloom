@@ -281,10 +281,14 @@ func ValidateProductionWorldChangeRequest(
 		!sameProductionWorldRepairTargetSets(detail.RepairTargets, gate.Subject.RepairTargets) {
 		return errors.New("Production World change request review binding has drifted")
 	}
-	if !validOptionalProductionWorldIssueRefs(request.IssueRefs) ||
-		!validProductionWorldRepairEvidenceRefs(request.EvidenceRefs) ||
-		!validProductionWorldRepairReason(request.ChangeSpec.Operation, request.ReasonCode) {
-		return errors.New("invalid Production World change request")
+	if !validOptionalProductionWorldIssueRefs(request.IssueRefs) {
+		return errors.New("invalid Production World change request issue references")
+	}
+	if !validProductionWorldRepairEvidenceRefs(request.EvidenceRefs) {
+		return errors.New("invalid Production World change request evidence references")
+	}
+	if !validProductionWorldRepairReason(request.ChangeSpec.Operation, request.ReasonCode) {
+		return errors.New("invalid Production World change request reason")
 	}
 	if request.UserNote != nil {
 		note := strings.TrimSpace(*request.UserNote)
