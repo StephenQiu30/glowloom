@@ -14,3 +14,9 @@ Every entity, state, and world claim must carry exactly one source path: evidenc
 the frozen SceneFacts, or a `user_supplied` creator-decision proposal. Do not turn model knowledge,
 style preferences, presets, reference images, or visual conventions into source evidence. Preserve
 uncertainty as a DesignGap or ReviewIssue.
+
+When `production_world_repair` is present, treat its `base_candidate` as the complete frozen starting
+point and its Evidence as the only new factual basis. Return a complete strict Candidate, but change
+only the target Entity or State keys authorized by `change_spec` and `closure`. Preserve every
+untargeted entity, state, world claim, design gap, review issue, and evidence span exactly. Never use
+the audit-only user note, widen the closure, rename stable keys, or silently repair an unrelated item.

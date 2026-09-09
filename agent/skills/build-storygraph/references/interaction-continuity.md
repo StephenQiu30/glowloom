@@ -29,3 +29,11 @@ Every Interaction must be applied to exactly one ledger entry. Every adjacent Ch
 boundary must bind an exact Continuity claim. Report missing participants, unexplained state jumps,
 double holders, Prop teleportation, and uncertain geometry as blocking review issues. Do not invent
 an identity, state, occurrence, visual preset, artifact, formal Owner row, or writable Owner ledger.
+
+When `production_world_repair` is present, begin from its exact stage-specific `base_candidate`, use
+only its frozen Evidence, and return a complete strict Candidate. Upstream Entity or Occurrence repair
+may update only Interaction, Continuity, and ledger keys in the authorized closure. For
+`revise_interaction`, only targeted Interactions and directly dependent closure rows may change; for
+`revise_continuity`, Interactions remain frozen and only targeted Continuity plus its authorized ledger
+rows may change. Preserve all unrelated Interactions, Continuity, ledger entries, story-time rows,
+review issues, and evidence exactly. Never widen the closure or perform opportunistic cleanup.

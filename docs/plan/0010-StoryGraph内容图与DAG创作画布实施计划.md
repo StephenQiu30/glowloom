@@ -100,6 +100,7 @@
   - [x] 固定四类语义操作，并由 Backend 对冻结六视图计算确定性的七类直接依赖闭包；无关的下一跳场景不得进入 Scene/Occurrence/Continuity/Ledger 集合。
   - [x] 从 ProductionWorldCandidate 派生四组有序 target inventory，冻结到 Gate Input 并通过 Review Detail/OpenAPI 公开；repair 未接通前不提前开放 `changes_requested`。
   - [x] 固定 Gate 2 ChangeRequest 的 operation/reason/evidence/issue/closure 合同，并机械映射唯一 Workflow root；该内部合同不单独开放决议。
+  - [x] 固定 Backend/Agent 共用的 stage-specific repair directive、精确 base Candidate 与 Skill 约束；Evidence 必须非空，`user_note` 仅审计且不进入 Agent 输入。
   - [ ] 在 Review 持久化时重算合同，向受影响生产阶段注入有界 repair directive，启动 repair Run 后再开放决议。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 

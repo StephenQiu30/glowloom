@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	ProductionWorldRepairReviseEntity      = "revise_production_entity"
-	ProductionWorldRepairRebindOccurrence  = "rebind_scene_occurrence"
-	ProductionWorldRepairReviseInteraction = "revise_interaction"
-	ProductionWorldRepairReviseContinuity  = "revise_continuity"
+	ProductionWorldRepairReviseEntity      = agentcontract.ProductionWorldRepairReviseEntity
+	ProductionWorldRepairRebindOccurrence  = agentcontract.ProductionWorldRepairRebindOccurrence
+	ProductionWorldRepairReviseInteraction = agentcontract.ProductionWorldRepairReviseInteraction
+	ProductionWorldRepairReviseContinuity  = agentcontract.ProductionWorldRepairReviseContinuity
 )
 
 type ProductionWorldRepairSelection struct {
@@ -292,9 +292,6 @@ func ValidateProductionWorldChangeRequest(
 			return errors.New("invalid Production World change request note")
 		}
 	}
-	if len(request.IssueRefs) == 0 && len(request.EvidenceRefs) == 0 && request.UserNote == nil {
-		return errors.New("Production World change request has no review basis")
-	}
 	selection := ProductionWorldRepairSelection{
 		Operation: request.ChangeSpec.Operation, TargetKeys: append([]string(nil), request.ChangeSpec.TargetKeys...),
 	}
@@ -336,7 +333,7 @@ func validOptionalProductionWorldIssueRefs(values []string) bool {
 }
 
 func validProductionWorldRepairEvidenceRefs(values []HumanGateEvidenceRef) bool {
-	if values == nil || !slices.IsSortedFunc(values, compareHumanGateEvidenceRef) {
+	if len(values) == 0 || !slices.IsSortedFunc(values, compareHumanGateEvidenceRef) {
 		return false
 	}
 	for index, value := range values {

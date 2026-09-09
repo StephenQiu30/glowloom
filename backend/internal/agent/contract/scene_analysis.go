@@ -23,7 +23,7 @@ const (
 	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
 	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
-	SceneAnalysisSkillBundleHash                  = "35c84b098a54e2b7ea84db984a2ce8e8d613015cf87820d59d00d1b7551ce1fd"
+	SceneAnalysisSkillBundleHash                  = "f917388e00b4daf3ff9c866b95ec0bdd31bc7cde4dea0e7680305e4b212c3828"
 )
 
 var structureIdentityRepairIssuePattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)
@@ -437,12 +437,16 @@ type SceneAnalysisPayload struct {
 	UpstreamCandidates []SceneAnalysisCandidateRevisionIdentity `json:"upstream_candidates"`
 	Shard              SceneAnalysisShard                       `json:"shard"`
 	StageInput         json.RawMessage                          `json:"stage_input"`
+	ProductionRepair   *ProductionWorldRepairDirective          `json:"production_world_repair,omitempty"`
 }
 
 func (value SceneAnalysisPayload) Validate() error {
 	if value.Variant.Validate() != nil || value.Scope.Validate() != nil || value.Shard.Validate() != nil ||
 		len(value.SourceRefs) != 1 || value.SourceRefs[0].Validate() != nil || !jsonObject(value.StageInput) {
 		return errors.New("invalid Scene Analysis payload")
+	}
+	if value.ProductionRepair != nil && value.ProductionRepair.ValidateFor(value.Variant.StageKey) != nil {
+		return errors.New("invalid Production World repair payload")
 	}
 	source := value.SourceRefs[0]
 	switch value.Variant.StageKey {

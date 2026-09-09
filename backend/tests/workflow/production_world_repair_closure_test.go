@@ -108,6 +108,10 @@ func TestProductionWorldChangeRequestMatchesFrozenTargetEvidenceAndClosure(t *te
 		func(value *workflow.ProductionWorldChangeRequest) {
 			value.EvidenceRefs, value.IssueRefs, value.UserNote = []workflow.HumanGateEvidenceRef{}, []string{}, nil
 		},
+		func(value *workflow.ProductionWorldChangeRequest) {
+			note := "请重新理解人物状态"
+			value.EvidenceRefs, value.UserNote = []workflow.HumanGateEvidenceRef{}, &note
+		},
 	}
 	for index, mutate := range mutations {
 		changed := request.Clone()

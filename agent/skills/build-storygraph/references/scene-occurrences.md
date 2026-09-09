@@ -12,3 +12,10 @@ do not bind by name, fuzzy search, array position, or a current/latest pointer.
 Dialogues and Beats must reproduce the frozen SceneFact text, Evidence, and order. Bind a dialogue
 speaker only when its speaker Evidence exactly matches a resolved formal character mapping in the
 same Scene; otherwise leave the speaker identity unresolved. Report uncertainty as a ReviewIssue.
+
+When `production_world_repair` is present, begin from its exact stage-specific `base_candidate` and
+return a complete strict Candidate. An upstream Entity repair may alter only Occurrences named by the
+authorized closure. A `rebind_scene_occurrence` target may alter only that exact Occurrence, or the
+Occurrences inside an explicitly targeted Scene. Dialogues, Beats, untargeted Scenes and untargeted
+Occurrences remain exactly frozen. Use only the supplied Evidence; never infer broader cleanup or
+accept a free-form note as repair authority.

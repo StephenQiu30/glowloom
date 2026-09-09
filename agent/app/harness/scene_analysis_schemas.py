@@ -252,6 +252,143 @@ class StructureIdentityRepairDirective(StrictSceneAnalysisModel):
             raise ValueError("repair operation targets another Scene Analysis stage")
 
 
+ProductionWorldRepairOperation = Literal[
+    "revise_production_entity",
+    "rebind_scene_occurrence",
+    "revise_interaction",
+    "revise_continuity",
+]
+
+
+class ProductionWorldRepairChange(StrictSceneAnalysisModel):
+    operation: ProductionWorldRepairOperation
+    target_keys: list[str]
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> ProductionWorldRepairChange:
+        if (
+            not self.target_keys
+            or self.target_keys != sorted(set(self.target_keys))
+            or any(not value.strip() for value in self.target_keys)
+        ):
+            raise ValueError("Production World repair targets must be sorted and unique")
+        return self
+
+
+class ProductionWorldRepairClosure(StrictSceneAnalysisModel):
+    scene_scope_keys: list[str]
+    entity_keys: list[str]
+    state_keys: list[str]
+    occurrence_keys: list[str]
+    interaction_keys: list[str]
+    continuity_keys: list[str]
+    ledger_keys: list[str]
+
+    @model_validator(mode="after")
+    def validate_keys(self) -> ProductionWorldRepairClosure:
+        for values in (
+            self.scene_scope_keys,
+            self.entity_keys,
+            self.state_keys,
+            self.occurrence_keys,
+            self.interaction_keys,
+            self.continuity_keys,
+            self.ledger_keys,
+        ):
+            if values != sorted(set(values)) or any(not value.strip() for value in values):
+                raise ValueError("Production World repair closure must be sorted and unique")
+        return self
+
+
+class ProductionWorldRepairBaseCandidate(StrictSceneAnalysisModel):
+    identity: SceneAnalysisCandidateRevisionIdentity
+    candidate_type: Literal[
+        "production_entity_fragment_candidate",
+        "scene_binding_fragment_candidate",
+        "continuity_fragment_candidate",
+    ]
+    candidate_content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_content(self) -> ProductionWorldRepairBaseCandidate:
+        if production_canonical_hash(self.candidate) != self.candidate_content_hash:
+            raise ValueError("Production World repair base Candidate content drifted")
+        return self
+
+
+class ProductionWorldRepairDirective(StrictSceneAnalysisModel):
+    review_decision_id: UUID
+    decision_payload_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    issue_refs: list[str]
+    evidence_refs: list[StructureIdentityRepairEvidence] = Field(min_length=1)
+    change_spec: ProductionWorldRepairChange
+    closure: ProductionWorldRepairClosure
+    reason_code: Literal[
+        "production_entity_incorrect",
+        "scene_occurrence_incorrect",
+        "interaction_incorrect",
+        "continuity_incorrect",
+    ]
+    base_candidate: ProductionWorldRepairBaseCandidate
+
+    @model_validator(mode="after")
+    def validate_directive(self) -> ProductionWorldRepairDirective:
+        if self.issue_refs != sorted(set(self.issue_refs)) or any(
+            not value.strip() for value in self.issue_refs
+        ):
+            raise ValueError("Production World repair issues must be sorted and unique")
+        evidence_order = [
+            (str(value.source_version_id), value.source_start, value.source_end, value.text_hash)
+            for value in self.evidence_refs
+        ]
+        if evidence_order != sorted(set(evidence_order)):
+            raise ValueError("Production World repair evidence must be sorted and unique")
+        expected_reason = {
+            "revise_production_entity": "production_entity_incorrect",
+            "rebind_scene_occurrence": "scene_occurrence_incorrect",
+            "revise_interaction": "interaction_incorrect",
+            "revise_continuity": "continuity_incorrect",
+        }[self.change_spec.operation]
+        if self.reason_code != expected_reason:
+            raise ValueError("Production World repair reason does not match its operation")
+        allowed = {
+            "revise_production_entity": self.closure.entity_keys + self.closure.state_keys,
+            "rebind_scene_occurrence": self.closure.scene_scope_keys + self.closure.occurrence_keys,
+            "revise_interaction": self.closure.interaction_keys,
+            "revise_continuity": self.closure.continuity_keys,
+        }[self.change_spec.operation]
+        if any(value not in allowed for value in self.change_spec.target_keys):
+            raise ValueError("Production World repair target is outside its closure")
+        return self
+
+    def validate_for(self, stage_key: SceneAnalysisStageKey) -> None:
+        order = {
+            "derive_production_entities": 1,
+            "bind_scene_occurrences": 2,
+            "reconcile_interaction_continuity": 3,
+        }
+        root = {
+            "revise_production_entity": "derive_production_entities",
+            "rebind_scene_occurrence": "bind_scene_occurrences",
+            "revise_interaction": "reconcile_interaction_continuity",
+            "revise_continuity": "reconcile_interaction_continuity",
+        }[self.change_spec.operation]
+        expected_type = {
+            "derive_production_entities": "production_entity_fragment_candidate",
+            "bind_scene_occurrences": "scene_binding_fragment_candidate",
+            "reconcile_interaction_continuity": "continuity_fragment_candidate",
+        }.get(stage_key)
+        if (
+            stage_key not in order
+            or order[stage_key] < order[root]
+            or self.base_candidate.identity.stage_key != stage_key
+            or self.base_candidate.identity.shard_key != "script:full"
+            or self.base_candidate.candidate_type != expected_type
+        ):
+            raise ValueError("Production World repair directive targets another stage")
+
+
 class ScriptSpanProposalInput(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -582,10 +719,13 @@ class SceneAnalysisPayload(StrictSceneAnalysisModel):
     upstream_candidates: list[SceneAnalysisCandidateRevisionIdentity]
     shard: SceneAnalysisShard
     stage_input: dict[str, Any]
+    production_world_repair: ProductionWorldRepairDirective | None = None
 
     @model_validator(mode="after")
     def validate_stage_input(self) -> SceneAnalysisPayload:
         source = self.source_refs[0]
+        if self.production_world_repair is not None:
+            self.production_world_repair.validate_for(self.variant.stage_key)
         if self.variant.stage_key == "propose_script_spans":
             value = ScriptSpanProposalInput.model_validate(self.stage_input)
             if (
@@ -958,6 +1098,8 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
 
 def _canonical_payload(payload: SceneAnalysisPayload) -> dict[str, Any]:
     value = payload.model_dump(mode="json")
+    if value.get("production_world_repair") is None:
+        value.pop("production_world_repair", None)
     if value["stage_input"].get("repair") is None:
         value["stage_input"].pop("repair", None)
     value["source_refs"] = sorted(

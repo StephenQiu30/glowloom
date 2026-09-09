@@ -1149,9 +1149,11 @@ class ContinuityLedgerEntry(StrictSceneAnalysisModel):
             self.holder_identity_key is not None or self.transition_interaction_key is not None
         ):
             raise ValueError("character ledger entries cannot carry holder or Prop transition")
-        if self.transition_interaction_key is not None and re.fullmatch(
-            r"interaction_[a-z0-9_]{1,120}", self.transition_interaction_key
-        ) is None:
+        if (
+            self.transition_interaction_key is not None
+            and re.fullmatch(r"interaction_[a-z0-9_]{1,120}", self.transition_interaction_key)
+            is None
+        ):
             raise ValueError("ledger transition Interaction key is invalid")
         evidence_keys = [_source_evidence_key(value) for value in self.evidence]
         if len(evidence_keys) != len(set(evidence_keys)):
@@ -1290,8 +1292,7 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                 or states.get(item.prop_state_after_key) != (prop[1].identity_key, "prop")
                 or _source_evidence_key(item.evidence) not in action_evidence[item.scene_scope_key]
                 or any(
-                    _source_evidence_key(evidence)
-                    not in action_evidence[item.scene_scope_key]
+                    _source_evidence_key(evidence) not in action_evidence[item.scene_scope_key]
                     for evidence in item.geometry_evidence.supplied()
                 )
             ):
@@ -1425,9 +1426,7 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
             supplied_subjects[subject_key] = entry
             if entry.subject_kind == "prop":
                 if entry.holder_identity_key is not None:
-                    holder = actual_subjects.get(
-                        (entry.scene_scope_key, entry.holder_identity_key)
-                    )
+                    holder = actual_subjects.get((entry.scene_scope_key, entry.holder_identity_key))
                     if holder is None or holder.subject_kind != "character":
                         raise ValueError("Prop ledger holder must be an actual Character")
                 prop_entries.setdefault(entry.identity_key, []).append(entry)
@@ -1463,8 +1462,7 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                         if (
                             entry.state_key != previous_entry.state_key
                             or entry.holder_identity_key != previous_entry.holder_identity_key
-                            or entry.location_identity_key
-                            != previous_entry.location_identity_key
+                            or entry.location_identity_key != previous_entry.location_identity_key
                         ):
                             raise ValueError(
                                 "Prop ledger contains an unexplained state or teleport"
