@@ -68,6 +68,11 @@ type CompiledProductionOwnerSnapshot struct {
 	Graph                                                        CanonicalSnapshot
 }
 
+type ProductionCompilationInput struct {
+	Coverage         ProductionCoverageProof `json:"verified_coverage_proof"`
+	OwnerCollections []OwnerCollectionRef    `json:"exact_owner_collections"`
+}
+
 type productionCollectionDefinition struct {
 	OwnerKind, ScopeKind string
 	AllowEmpty           bool
@@ -168,7 +173,8 @@ func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledP
 			}
 			members[key] = member
 			ownerHeads = append(ownerHeads, OwnerHeadRef{
-				OwnerKind: member.OwnerKind, OwnerLogicalID: member.LogicalID, OwnerVersionID: member.VersionID,
+				OwnerKind: member.OwnerKind, VersionFamily: member.VersionFamily,
+				OwnerLogicalID: member.LogicalID, OwnerVersionID: member.VersionID,
 				OwnerRevision: member.Revision, ContentHash: member.ContentHash,
 			})
 			if member.VersionID == snapshot.SourceRevisionID && member.ContentHash == snapshot.SourceRevisionHash &&
@@ -188,7 +194,9 @@ func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledP
 	}
 	for _, node := range snapshot.Graph.Nodes {
 		member, exists := members[productionOwnerVersionKey(node.OwnerRef.OwnerKind, node.OwnerRef.OwnerLogicalID, node.OwnerRef.OwnerVersionID)]
-		if !exists || member.Revision != node.OwnerRef.OwnerRevision || member.ContentHash != node.OwnerRef.ContentHash {
+		if !exists || member.Revision != node.OwnerRef.OwnerRevision || member.ContentHash != node.OwnerRef.ownerContentHash() ||
+			node.OwnerRef.WorkspaceID != snapshot.WorkspaceID || node.OwnerRef.ProjectID != snapshot.ProjectID ||
+			node.OwnerRef.VersionFamily != member.VersionFamily {
 			return CompiledProductionOwnerSnapshot{}, fmt.Errorf("Production StoryGraph node %s is outside the frozen Owner Collections", node.StoryNodeKey)
 		}
 	}

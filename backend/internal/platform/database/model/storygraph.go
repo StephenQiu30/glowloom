@@ -23,6 +23,7 @@ type StoryGraphVersion struct {
 	OwnerHeadRefs      datatypes.JSON     `gorm:"type:jsonb;not null;check:ck_sg_owner_heads,jsonb_typeof(owner_head_refs) = 'array'"`
 	OwnerSetHash       string             `gorm:"type:char(64);not null;check:ck_sg_owner_set_hash,char_length(owner_set_hash) = 64"`
 	SchemaVersion      string             `gorm:"type:varchar(40);not null"`
+	CompilationInput   datatypes.JSON     `gorm:"type:jsonb"`
 	Nodes              datatypes.JSON     `gorm:"type:jsonb;not null;check:ck_sg_nodes,jsonb_typeof(nodes) = 'array'"`
 	Edges              datatypes.JSON     `gorm:"type:jsonb;not null;check:ck_sg_edges,jsonb_typeof(edges) = 'array'"`
 	TopologyHash       string             `gorm:"type:char(64);not null;check:ck_sg_topology_hash,char_length(topology_hash) = 64"`

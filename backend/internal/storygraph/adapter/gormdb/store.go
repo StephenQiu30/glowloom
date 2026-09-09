@@ -50,6 +50,11 @@ func (repo *repository) LockPublication(ctx context.Context, actor storygraphapp
 	state.CurrentVersionID = head.CurrentVersionID.String()
 	state.CurrentContentHash = head.CurrentContentHash
 	state.HeadRevision = head.Revision
+	var current model.StoryGraphVersion
+	if err = repo.database.WithContext(ctx).Select("schema_version").First(&current, "id = ?", head.CurrentVersionID).Error; err != nil {
+		return storygraph.PublicationState{}, err
+	}
+	state.CurrentSchemaID = current.SchemaVersion
 	return state, nil
 }
 
@@ -280,12 +285,21 @@ func versionRecord(value storygraph.Version) (model.StoryGraphVersion, error) {
 	if err != nil {
 		return model.StoryGraphVersion{}, err
 	}
+	var compilationInput datatypes.JSON
+	if value.ProductionInput != nil {
+		encoded, encodeErr := json.Marshal(value.ProductionInput)
+		if encodeErr != nil {
+			return model.StoryGraphVersion{}, encodeErr
+		}
+		compilationInput = datatypes.JSON(encoded)
+	}
 	return model.StoryGraphVersion{
 		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, VersionNo: value.VersionNo,
 		ParentVersionID: parentVersionID, ParentContentHash: value.ParentContentHash,
 		SourceRevisionID: sourceRevisionID, SourceRevisionHash: value.SourceRevisionHash,
 		OwnerHeadRefs: ownerHeads, OwnerSetHash: value.OwnerSetHash, SchemaVersion: value.SchemaVersion,
-		Nodes: nodes, Edges: edges, TopologyHash: value.TopologyHash, ContentHash: value.ContentHash,
+		CompilationInput: compilationInput,
+		Nodes:            nodes, Edges: edges, TopologyHash: value.TopologyHash, ContentHash: value.ContentHash,
 		Status: value.Status, PublishedAt: value.PublishedAt, CreatedBy: createdBy, CreatedAt: value.CreatedAt,
 	}, nil
 }
@@ -296,6 +310,14 @@ func versionDomain(record model.StoryGraphVersion) (storygraph.Version, error) {
 	var edges []storygraph.Edge
 	if err := json.Unmarshal(record.OwnerHeadRefs, &ownerHeads); err != nil {
 		return storygraph.Version{}, err
+	}
+	var productionInput *storygraph.ProductionCompilationInput
+	if len(record.CompilationInput) > 0 {
+		value := new(storygraph.ProductionCompilationInput)
+		if err := json.Unmarshal(record.CompilationInput, value); err != nil {
+			return storygraph.Version{}, err
+		}
+		productionInput = value
 	}
 	if err := json.Unmarshal(record.Nodes, &nodes); err != nil {
 		return storygraph.Version{}, err
@@ -315,6 +337,7 @@ func versionDomain(record model.StoryGraphVersion) (storygraph.Version, error) {
 		OwnerHeads: ownerHeads, OwnerSetHash: record.OwnerSetHash, SchemaVersion: record.SchemaVersion,
 		Nodes: nodes, Edges: edges, TopologyHash: record.TopologyHash, ContentHash: record.ContentHash,
 		Status: record.Status, PublishedAt: record.PublishedAt, CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt,
+		ProductionInput: productionInput,
 	}, nil
 }
 

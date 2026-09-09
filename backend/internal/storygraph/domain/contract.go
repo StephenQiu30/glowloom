@@ -94,23 +94,46 @@ var nodeOwners = map[NodeType]string{
 }
 
 type OwnerRef struct {
-	OwnerKind      string `json:"owner_kind"`
-	OwnerLogicalID string `json:"owner_logical_id"`
-	FragmentKey    string `json:"fragment_key,omitempty"`
-	OwnerVersionID string `json:"owner_version_id"`
-	OwnerRevision  int64  `json:"owner_revision"`
-	ContentHash    string `json:"content_hash"`
+	WorkspaceID         string `json:"workspace_id,omitempty"`
+	ProjectID           string `json:"project_id,omitempty"`
+	OwnerKind           string `json:"owner_kind"`
+	VersionFamily       string `json:"version_family,omitempty"`
+	OwnerLogicalID      string `json:"owner_logical_id"`
+	FragmentKey         string `json:"fragment_key,omitempty"`
+	FragmentContentHash string `json:"fragment_content_hash,omitempty"`
+	OwnerVersionID      string `json:"owner_version_id"`
+	OwnerRevision       int64  `json:"owner_revision"`
+	OwnerContentHash    string `json:"owner_content_hash,omitempty"`
+	ContentHash         string `json:"content_hash,omitempty"`
 }
 
 func (value OwnerRef) validate(nodeType NodeType) error {
 	expectedOwner, ok := nodeOwners[nodeType]
-	if !ok || value.OwnerKind != expectedOwner || strings.TrimSpace(value.OwnerLogicalID) == "" || value.OwnerRevision < 1 || !hashPattern.MatchString(value.ContentHash) {
+	if !ok || value.OwnerKind != expectedOwner || strings.TrimSpace(value.OwnerLogicalID) == "" || value.OwnerRevision < 1 || !hashPattern.MatchString(value.ownerContentHash()) {
 		return errors.New("invalid StoryGraph owner reference")
+	}
+	productionRef := value.VersionFamily != "" || value.WorkspaceID != "" || value.ProjectID != "" || value.OwnerContentHash != "" || value.FragmentContentHash != ""
+	if productionRef {
+		if _, err := uuid.Parse(value.WorkspaceID); err != nil {
+			return errors.New("invalid StoryGraph owner reference")
+		}
+		if _, err := uuid.Parse(value.ProjectID); err != nil || value.VersionFamily == "" || value.ContentHash != "" || value.OwnerContentHash == "" ||
+			(value.FragmentKey == "") != (value.FragmentContentHash == "") ||
+			(value.FragmentContentHash != "" && !hashPattern.MatchString(value.FragmentContentHash)) {
+			return errors.New("invalid StoryGraph owner reference")
+		}
 	}
 	if _, err := uuid.Parse(value.OwnerVersionID); err != nil {
 		return errors.New("invalid StoryGraph owner reference")
 	}
 	return nil
+}
+
+func (value OwnerRef) ownerContentHash() string {
+	if value.OwnerContentHash != "" {
+		return value.OwnerContentHash
+	}
+	return value.ContentHash
 }
 
 func DeriveStoryNodeKey(nodeType NodeType, owner OwnerRef) (string, error) {
@@ -147,6 +170,7 @@ const (
 	EdgeTypeSupports               EdgeType = "supports"
 	EdgeTypeClaimParticipant       EdgeType = "claim_participant"
 	EdgeTypeClaimAnchor            EdgeType = "claim_anchor"
+	EdgeTypeClaimState             EdgeType = "claim_state"
 	EdgeTypeSupersedes             EdgeType = "supersedes"
 )
 
@@ -155,12 +179,14 @@ var edgeTypes = []EdgeType{
 	EdgeTypeAnchorsOccurrence, EdgeTypeInstantiatesOccurrence, EdgeTypeRealizes, EdgeTypeInforms, EdgeTypeConstrains,
 	EdgeTypeMaterializes, EdgeTypeBindsInput, EdgeTypeFeedsGeneration, EdgeTypeBindsOutput, EdgeTypeSupports,
 	EdgeTypeClaimParticipant, EdgeTypeClaimAnchor, EdgeTypeSupersedes,
+	EdgeTypeClaimState,
 }
 
 type EdgeQualifier struct {
 	BindingRole     string `json:"binding_role,omitempty"`
 	ParticipantRole string `json:"participant_role,omitempty"`
 	AnchorRole      string `json:"anchor_role,omitempty"`
+	StateRole       string `json:"state_role,omitempty"`
 	SequenceKey     string `json:"sequence_key,omitempty"`
 }
 
@@ -170,19 +196,27 @@ func (value EdgeQualifier) validate(edgeType EdgeType) error {
 	}
 	switch edgeType {
 	case EdgeTypeMaterializes:
-		if !oneOf(value.BindingRole, "specification", "state", "asset", "asset_version") || value.ParticipantRole != "" || value.AnchorRole != "" || value.SequenceKey != "" {
+		if !oneOf(value.BindingRole, "specification", "state", "asset", "asset_version") || value.ParticipantRole != "" || value.AnchorRole != "" || value.StateRole != "" || value.SequenceKey != "" {
 			return errors.New("invalid materializes qualifier")
 		}
 	case EdgeTypeClaimParticipant:
-		if !oneOf(value.ParticipantRole, "subject", "object", "participant") || value.BindingRole != "" || value.AnchorRole != "" || value.SequenceKey != "" {
+		if !oneOf(value.ParticipantRole, "subject", "object", "participant", "actor", "prop", "counterparty", "holder_before", "holder_after") || value.BindingRole != "" || value.AnchorRole != "" || value.StateRole != "" || value.SequenceKey != "" {
 			return errors.New("invalid claim participant qualifier")
 		}
 	case EdgeTypeClaimAnchor:
-		if strings.TrimSpace(value.AnchorRole) == "" || value.BindingRole != "" || value.ParticipantRole != "" || value.SequenceKey != "" {
+		if !oneOf(value.AnchorRole, "episode", "scene", "beat", "character_occurrence", "prop_occurrence", "scope_start", "scope_end") || value.BindingRole != "" || value.ParticipantRole != "" || value.StateRole != "" || value.SequenceKey != "" {
 			return errors.New("invalid claim anchor qualifier")
 		}
+	case EdgeTypeClaimState:
+		if !oneOf(value.StateRole, "before", "after", "prop_before", "prop_after") || value.BindingRole != "" || value.ParticipantRole != "" || value.AnchorRole != "" || value.SequenceKey != "" {
+			return errors.New("invalid claim state qualifier")
+		}
+	case EdgeTypeAnchorsOccurrence:
+		if (value.AnchorRole != "" && !oneOf(value.AnchorRole, "scene", "beat")) || value.BindingRole != "" || value.ParticipantRole != "" || value.StateRole != "" || value.SequenceKey != "" {
+			return errors.New("invalid occurrence anchor qualifier")
+		}
 	case EdgeTypeContains, EdgeTypePrecedes:
-		if value.BindingRole != "" || value.ParticipantRole != "" || value.AnchorRole != "" {
+		if value.BindingRole != "" || value.ParticipantRole != "" || value.AnchorRole != "" || value.StateRole != "" {
 			return errors.New("invalid sequence qualifier")
 		}
 	default:
@@ -322,7 +356,7 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 	nodes := append(make([]Node, 0, len(snapshot.Nodes)), snapshot.Nodes...)
 	seenNodes := make(map[string]struct{}, len(nodes))
 	for index := range nodes {
-		node, err := canonicalizeNode(nodes[index])
+		node, err := canonicalizeNode(nodes[index], snapshot.SchemaVersion)
 		if err != nil {
 			return CanonicalSnapshot{}, err
 		}
@@ -359,8 +393,10 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 	if _, err := TopologicalOrder(keys, edges); err != nil {
 		return CanonicalSnapshot{}, err
 	}
-	if err := validateClaimEdges(nodes, edges); err != nil {
-		return CanonicalSnapshot{}, err
+	if snapshot.SchemaVersion != ProductionSchemaID {
+		if err := validateClaimEdges(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
 	}
 
 	topologyNodes := make([]struct {
@@ -479,9 +515,11 @@ func edgeEndpointAllowed(edgeType EdgeType, from, to NodeType, qualifier EdgeQua
 	case EdgeTypeSupports:
 		return oneOfNode(from, NodeTypeSourceRevision, NodeTypeSourceEvidence) && isClaimNode(to)
 	case EdgeTypeClaimParticipant:
-		return oneOfNode(from, NodeTypeAssetIdentity, NodeTypeWorldRule) && isClaimNode(to)
+		return oneOfNode(from, NodeTypeAssetIdentity, NodeTypeOccurrence, NodeTypeWorldRule) && isClaimNode(to)
 	case EdgeTypeClaimAnchor:
 		return oneOfNode(from, NodeTypeEpisode, NodeTypeScene, NodeTypeNarrativeBeat, NodeTypeOccurrence) && isClaimNode(to)
+	case EdgeTypeClaimState:
+		return from == NodeTypeAssetState && to == NodeTypeContinuityClaim
 	case EdgeTypeSupersedes:
 		return isClaimNode(from) && isClaimNode(to)
 	default:
@@ -491,6 +529,7 @@ func edgeEndpointAllowed(edgeType EdgeType, from, to NodeType, qualifier EdgeQua
 
 func derivedFactNode(value NodeType) bool {
 	return oneOfNode(value,
+		NodeTypeAssetIdentity, NodeTypeAssetState,
 		NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification,
 		NodeTypeWorldRule, NodeTypeStoryArc, NodeTypePlotThread,
 		NodeTypeRelationshipClaim, NodeTypeForeshadowingClaim, NodeTypePayoffClaim,
@@ -503,7 +542,7 @@ func oneOfNode(value NodeType, candidates ...NodeType) bool {
 	return slices.Contains(candidates, value)
 }
 
-func canonicalizeNode(node Node) (Node, error) {
+func canonicalizeNode(node Node, schemaID string) (Node, error) {
 	derivedKey, err := DeriveStoryNodeKey(node.NodeType, node.OwnerRef)
 	if err != nil || node.StoryNodeKey != derivedKey {
 		return Node{}, errors.New("StoryGraph node key does not match its Owner")
@@ -535,7 +574,7 @@ func canonicalizeNode(node Node) (Node, error) {
 			return Node{}, errors.New("duplicate StoryGraph evidence reference")
 		}
 	}
-	if isClaimNode(node.NodeType) {
+	if schemaID != ProductionSchemaID && isClaimNode(node.NodeType) {
 		var claim ClaimPayload
 		if err = decodeStrictObject(node.Payload, &claim); err != nil || claim.Validate() != nil {
 			return Node{}, errors.New("invalid StoryGraph claim payload")

@@ -98,8 +98,14 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 		productionCollection(t, workspaceID, projectID, "asset", "asset_identity_state_set", "project", "project:"+projectID, []storygraph.OwnerVersionIdentity{asset}),
 	}
 	ownerRef := func(value storygraph.OwnerVersionIdentity, fragment string) storygraph.OwnerRef {
-		return storygraph.OwnerRef{OwnerKind: value.OwnerKind, OwnerLogicalID: value.LogicalID, FragmentKey: fragment,
-			OwnerVersionID: value.VersionID, OwnerRevision: value.Revision, ContentHash: value.ContentHash}
+		fragmentHash := ""
+		if fragment != "" {
+			fragmentHash = productionHash(fragment)
+		}
+		return storygraph.OwnerRef{WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID,
+			OwnerKind: value.OwnerKind, VersionFamily: value.VersionFamily, OwnerLogicalID: value.LogicalID,
+			FragmentKey: fragment, FragmentContentHash: fragmentHash,
+			OwnerVersionID: value.VersionID, OwnerRevision: value.Revision, OwnerContentHash: value.ContentHash}
 	}
 	sourceRef, episodeRef := ownerRef(source, ""), ownerRef(episode, "")
 	bibleRef, assetRef, planningRef := ownerRef(bible, "evidence:opening"), ownerRef(asset, ""), ownerRef(planning, "")

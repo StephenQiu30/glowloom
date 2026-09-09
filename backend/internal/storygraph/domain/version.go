@@ -13,6 +13,7 @@ const OwnerSnapshotOriginConfirmed = "confirmed_owner_facts"
 
 type OwnerHeadRef struct {
 	OwnerKind      string `json:"owner_kind"`
+	VersionFamily  string `json:"version_family,omitempty"`
 	OwnerLogicalID string `json:"owner_logical_id"`
 	OwnerVersionID string `json:"owner_version_id"`
 	OwnerRevision  int64  `json:"owner_revision"`
@@ -113,10 +114,10 @@ func CanonicalOwnerHeadRefs(values []OwnerHeadRef) ([]OwnerHeadRef, string, erro
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
-		return ownerHeadKey(result[i].OwnerKind, result[i].OwnerLogicalID) < ownerHeadKey(result[j].OwnerKind, result[j].OwnerLogicalID)
+		return ownerHeadIdentityKey(result[i]) < ownerHeadIdentityKey(result[j])
 	})
 	for index := 1; index < len(result); index++ {
-		if ownerHeadKey(result[index-1].OwnerKind, result[index-1].OwnerLogicalID) == ownerHeadKey(result[index].OwnerKind, result[index].OwnerLogicalID) {
+		if ownerHeadIdentityKey(result[index-1]) == ownerHeadIdentityKey(result[index]) {
 			return nil, "", errors.New("duplicate StoryGraph Owner Head")
 		}
 	}
@@ -139,6 +140,10 @@ func knownOwnerKind(value string) bool {
 
 func ownerHeadKey(kind, logicalID string) string {
 	return kind + "\x00" + logicalID
+}
+
+func ownerHeadIdentityKey(value OwnerHeadRef) string {
+	return value.OwnerKind + "\x00" + value.VersionFamily + "\x00" + value.OwnerLogicalID
 }
 
 func nodeRequiresEvidence(nodeType NodeType) bool {

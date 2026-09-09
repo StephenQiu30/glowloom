@@ -164,13 +164,14 @@ func assertOwnerSetConflict(t *testing.T, err error) {
 }
 
 type ownerSetStore struct {
-	state         storygraph.PublicationState
-	snapshot      storygraph.OwnerSnapshot
-	receipts      map[string]platformcommand.Receipt
-	versions      map[string]storygraph.Version
-	versionWrites int
-	receiptWrites int
-	outboxWrites  int
+	state              storygraph.PublicationState
+	snapshot           storygraph.OwnerSnapshot
+	productionSnapshot storygraph.ProductionOwnerSnapshot
+	receipts           map[string]platformcommand.Receipt
+	versions           map[string]storygraph.Version
+	versionWrites      int
+	receiptWrites      int
+	outboxWrites       int
 }
 
 func (store *ownerSetStore) WithinSerializableTransaction(
@@ -186,6 +187,15 @@ func (store *ownerSetStore) LockPublication(context.Context, storygraphapp.Actor
 
 func (store *ownerSetStore) LoadOwnerSnapshot(context.Context, storygraph.PublicationState) (storygraph.OwnerSnapshot, error) {
 	return store.snapshot, nil
+}
+
+func (store *ownerSetStore) LoadProductionOwnerSnapshot(
+	context.Context,
+	storygraph.PublicationState,
+	string,
+	string,
+) (storygraph.ProductionOwnerSnapshot, error) {
+	return store.productionSnapshot, nil
 }
 
 func (store *ownerSetStore) FindReceipt(
@@ -222,6 +232,7 @@ func (store *ownerSetStore) SwitchHead(
 ) (storygraph.Head, error) {
 	store.state.CurrentVersionID = version.ID
 	store.state.CurrentContentHash = version.ContentHash
+	store.state.CurrentSchemaID = version.SchemaVersion
 	store.state.HeadRevision = version.VersionNo
 	return storygraph.Head{
 		WorkspaceID: version.WorkspaceID, ProjectID: version.ProjectID, CurrentVersionID: version.ID,

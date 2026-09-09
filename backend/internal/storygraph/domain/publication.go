@@ -16,6 +16,7 @@ type Version struct {
 	Edges                                        []Edge
 	TopologyHash, ContentHash, Status, CreatedBy string
 	PublishedAt, CreatedAt                       time.Time
+	ProductionInput                              *ProductionCompilationInput
 }
 
 type Head struct {
@@ -25,8 +26,8 @@ type Head struct {
 }
 
 type PublicationState struct {
-	WorkspaceID, ProjectID, CurrentVersionID, CurrentContentHash string
-	HeadRevision                                                 int64
+	WorkspaceID, ProjectID, CurrentVersionID, CurrentContentHash, CurrentSchemaID string
+	HeadRevision                                                                  int64
 }
 
 type OutboxEvent struct {

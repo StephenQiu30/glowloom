@@ -46,6 +46,9 @@ import (
 	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
+	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
+	storygraphdomain "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
@@ -917,6 +920,37 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || !reflect.DeepEqual(replayedWorld, confirmedWorld) {
 		t.Fatalf("replay Production World confirmation: got=%#v want=%#v err=%v", replayedWorld, confirmedWorld, err)
 	}
+	productionGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
+		Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString,
+	})
+	productionGraphCommand := storygraphapp.CompileProductionCommand{
+		ProjectID: fixture.projectID.String(), ProductionWorldReceiptID: confirmedWorld.CommandReceiptID,
+		ProductionWorldReceiptHash: confirmedWorld.ReceiptContentHash, ExpectedHeadRevision: 0,
+		IdempotencyKey: "production-storygraph:" + confirmedWorld.CommandReceiptID,
+	}
+	productionGraphActor := storygraphapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+	productionGraph, err := productionGraphService.CompileProduction(ctx, productionGraphActor, productionGraphCommand)
+	if err != nil || productionGraph.Version.SchemaVersion != storygraphdomain.ProductionSchemaID ||
+		productionGraph.Version.ProductionInput == nil || len(productionGraph.Version.ProductionInput.OwnerCollections) < 7 ||
+		productionGraph.Head.CurrentVersionID != productionGraph.Version.ID ||
+		countStoryGraphNodeType(productionGraph.Version.Nodes, storygraphdomain.NodeTypeOccurrence) == 0 ||
+		countStoryGraphNodeType(productionGraph.Version.Nodes, storygraphdomain.NodeTypeContinuityClaim) == 0 ||
+		countStoryGraphEdgeType(productionGraph.Version.Edges, storygraphdomain.EdgeTypeClaimParticipant) == 0 ||
+		countStoryGraphEdgeType(productionGraph.Version.Edges, storygraphdomain.EdgeTypeClaimState) == 0 {
+		t.Fatalf("compile confirmed Production World StoryGraph: result=%#v err=%v", productionGraph, err)
+	}
+	for _, node := range productionGraph.Version.Nodes {
+		if node.OwnerRef.WorkspaceID != fixture.workspaceID.String() || node.OwnerRef.ProjectID != fixture.projectID.String() ||
+			node.OwnerRef.VersionFamily == "" || node.OwnerRef.OwnerContentHash == "" || node.OwnerRef.ContentHash != "" {
+			t.Fatalf("Production StoryGraph node has an incomplete Owner Version identity: %#v", node)
+		}
+	}
+	replayedProductionGraph, err := productionGraphService.CompileProduction(ctx, productionGraphActor, productionGraphCommand)
+	if err != nil || replayedProductionGraph.Version.ID != productionGraph.Version.ID ||
+		replayedProductionGraph.Receipt.ID != productionGraph.Receipt.ID ||
+		!reflect.DeepEqual(replayedProductionGraph.Version.ProductionInput, productionGraph.Version.ProductionInput) {
+		t.Fatalf("replay persisted Production StoryGraph: got=%#v want=%#v err=%v", replayedProductionGraph, productionGraph, err)
+	}
 	driftedConfirmation := confirmationCommand
 	driftedConfirmation.CommandID = uuid.NewString()
 	if _, conflictErr := productionWorldConfirmation.ConfirmProductionWorld(ctx, driftedConfirmation); !errors.Is(conflictErr, worldapp.ErrProductionWorldConfirmationConflict) {
@@ -1613,6 +1647,26 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if accepted.Identity.VersionID != fixture.revisionID.String() {
 		t.Fatalf("accepted Source identity = %#v", accepted.Identity)
 	}
+}
+
+func countStoryGraphNodeType(nodes []storygraphdomain.Node, nodeType storygraphdomain.NodeType) int {
+	count := 0
+	for _, node := range nodes {
+		if node.NodeType == nodeType {
+			count++
+		}
+	}
+	return count
+}
+
+func countStoryGraphEdgeType(edges []storygraphdomain.Edge, edgeType storygraphdomain.EdgeType) int {
+	count := 0
+	for _, edge := range edges {
+		if edge.EdgeType == edgeType {
+			count++
+		}
+	}
+	return count
 }
 
 type acceptingStructureIdentitySignaler struct{}

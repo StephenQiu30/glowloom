@@ -454,7 +454,7 @@ func assetCollectionRefs(result assetapp.ApplyProductionWorldAssetsResult) []dom
 			VersionID: value.ID, Revision: int64(value.Revision), ContentHash: value.ContentHash})
 	}
 	for _, value := range result.States {
-		refs = append(refs, domain.CollectionMemberRef{OwnerKind: "asset/state", LogicalID: value.StateKey,
+		refs = append(refs, domain.CollectionMemberRef{OwnerKind: "asset", LogicalID: value.StateKey,
 			VersionID: value.ID, Revision: int64(value.Revision), ContentHash: value.ContentHash})
 	}
 	sortCollectionRefs(refs)
