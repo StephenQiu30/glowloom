@@ -45,6 +45,7 @@ class StoryGraphBundle:
         *_ALLOWED_PATHS,
         "references/scene-facts.md",
         "references/script-spans.md",
+        "references/structure-identity-review.md",
     )
 
     def __init__(self, repository_root: Path | None = None) -> None:

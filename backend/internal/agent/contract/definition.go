@@ -117,6 +117,7 @@ func storyGraphKnownBundlePaths() []string {
 		StoryGraphBundlePaths(),
 		"references/scene-facts.md",
 		"references/script-spans.md",
+		"references/structure-identity-review.md",
 	)
 }
 

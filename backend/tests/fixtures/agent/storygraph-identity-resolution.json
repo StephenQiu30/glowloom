@@ -1,6 +1,6 @@
 {
-  "expected_input_hash": "38937ee58c61058ba8809e29a91261dc6110b54b1566233e5acb3e104fad79da",
-  "expected_stage_instance_key": "986a57a3fded19bc6c273a919d27157d2fbf7151ed1906e87c431b37d34e25ed",
+  "expected_input_hash": "689d7b10b9e81bf8f1df32604ce420ec9196da717ca283c87aa9450f40733555",
+  "expected_stage_instance_key": "05441b0fb4bc508e7df60e221d2b482eabf02561f9354e2a39053c5d88b4cf67",
   "valid_candidate": {
     "source_version_id": "33333333-3333-4333-8333-333333333333",
     "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",

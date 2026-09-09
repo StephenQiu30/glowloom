@@ -15,6 +15,7 @@ from app.harness.scene_analysis_schemas import (
     SceneAnalysisInvocation,
     SceneFactExtractionInput,
     ScriptSpanProposalInput,
+    StructureIdentityReviewInput,
 )
 from app.modules.storygraph.bundle import BundleInvalid
 from app.modules.storygraph.harness import (
@@ -28,6 +29,7 @@ from app.modules.storygraph.scene_analysis_candidates import (
     SceneFactCandidate,
     ScriptSpanCandidate,
     SourceEvidenceSpan,
+    StructureIdentityReviewCandidate,
 )
 from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 from app.reasoning.codex import (
@@ -75,8 +77,9 @@ class SceneAnalysisHarness:
 
     async def execute(self) -> BaseModel:
         stage = self.invocation.payload.variant.stage_key
-        spec = scene_analysis_stage_spec(stage)
-        guidance = self.bundle.guidance(stage)
+        profile = self.invocation.payload.variant.profile_key
+        spec = scene_analysis_stage_spec(stage, profile)
+        guidance = self.bundle.guidance(stage, profile)
         prompt = json.dumps(
             self.invocation.payload.model_dump(mode="json", exclude_none=True),
             ensure_ascii=False,
@@ -105,7 +108,7 @@ class SceneAnalysisHarness:
                 raise CodexSchemaInvalid("SceneFact source identity drifted")
             _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for_spans(source.normalized_text, spans.spans)
-        else:
+        elif stage == "resolve_identities":
             if not isinstance(candidate, IdentityResolutionCandidate):
                 raise CodexSchemaInvalid("Codex CLI returned the wrong IdentityResolution schema")
             source = IdentityResolutionInput.model_validate(self.invocation.payload.stage_input)
@@ -123,6 +126,16 @@ class SceneAnalysisHarness:
                 scene_facts,
                 allowed_reuse_identity_keys=set(source.allowed_reuse_identity_keys),
             )
+        else:
+            if not isinstance(candidate, StructureIdentityReviewCandidate):
+                raise CodexSchemaInvalid(
+                    "Codex CLI returned the wrong structure identity review schema"
+                )
+            source = StructureIdentityReviewInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            _materialize_evidence_hashes(candidate, source.normalized_text)
+            candidate.validate_for(source)
         size = len(
             json.dumps(
                 candidate.model_dump(mode="json"),
@@ -158,7 +171,12 @@ class SceneAnalysisHarness:
 
 
 def _materialize_evidence_hashes(
-    candidate: ScriptSpanCandidate | SceneFactCandidate | IdentityResolutionCandidate,
+    candidate: (
+        ScriptSpanCandidate
+        | SceneFactCandidate
+        | IdentityResolutionCandidate
+        | StructureIdentityReviewCandidate
+    ),
     normalized_text: str,
 ) -> None:
     evidence: list[SourceEvidenceSpan | IdentityMentionRef] = []
@@ -177,15 +195,26 @@ def _materialize_evidence_hashes(
             evidence.extend(value.evidence for value in scene.dialogues)
             evidence.extend(value.evidence for value in scene.raw_character_mentions)
             evidence.extend(value.evidence for value in scene.raw_prop_mentions)
-    else:
+    elif isinstance(candidate, IdentityResolutionCandidate):
         for cluster in candidate.resolved_clusters:
             evidence.extend(cluster.mention_refs)
             evidence.extend(cluster.supporting_evidence)
             evidence.extend(cluster.contradicting_evidence)
         evidence.extend(value.mention_ref for value in candidate.ambiguous_mentions)
         evidence.extend(value.mention_ref for value in candidate.rejected_mentions)
+    else:
+        for issue in candidate.review_issues:
+            evidence.extend(issue.evidence)
+        return _fill_evidence_hashes(evidence, normalized_text)
     for issue in candidate.review_issues:
         evidence.extend(issue.evidence)
+    _fill_evidence_hashes(evidence, normalized_text)
+
+
+def _fill_evidence_hashes(
+    evidence: list[SourceEvidenceSpan | IdentityMentionRef],
+    normalized_text: str,
+) -> None:
     for value in evidence:
         if (
             value.source_end > len(normalized_text)

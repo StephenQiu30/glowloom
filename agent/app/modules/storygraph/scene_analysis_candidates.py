@@ -45,6 +45,29 @@ class CandidateReviewIssue(StrictSceneAnalysisModel):
     evidence: list[SourceEvidenceSpan]
 
 
+class StructureIdentityReviewSuggestion(StrictSceneAnalysisModel):
+    issue_key: str = Field(pattern=r"^issue_[a-z0-9_]{1,80}$")
+    action: Literal[
+        "inspect_source",
+        "adjust_episode_boundary",
+        "adjust_scene_boundary",
+        "separate_identity",
+        "merge_identity",
+        "resolve_mention",
+        "reject_mention",
+    ]
+    target_keys: list[str] = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> StructureIdentityReviewSuggestion:
+        if self.target_keys != sorted(set(self.target_keys)) or any(
+            not value.strip() for value in self.target_keys
+        ):
+            raise ValueError("review suggestion targets must be sorted and unique")
+        return self
+
+
 class ScriptEpisodeSpan(StrictSceneAnalysisModel):
     temporary_episode_id: str = Field(pattern=r"^episode_[a-z0-9_]{1,80}$")
     position: int = Field(ge=1)
@@ -440,6 +463,61 @@ class IdentityResolutionCandidate(StrictSceneAnalysisModel):
             or coverage.mention_universe_hash != production_canonical_hash(ordered_universe)
         ):
             raise ValueError("identity mention coverage proof is invalid")
+
+
+class StructureIdentityReviewCandidate(StrictSceneAnalysisModel):
+    profile_key: Literal["structure_identity"]
+    source_version_id: UUID
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    span_candidate_revision_id: UUID
+    span_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_fact_candidate_revision_id: UUID
+    scene_fact_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    identity_candidate_revision_id: UUID
+    identity_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_issues: list[CandidateReviewIssue]
+    suggestions: list[StructureIdentityReviewSuggestion]
+
+    @model_validator(mode="after")
+    def validate_ordering(self) -> StructureIdentityReviewCandidate:
+        issue_keys = [value.issue_key for value in self.review_issues]
+        if issue_keys != sorted(set(issue_keys)):
+            raise ValueError("structure identity review issues must be unique and sorted")
+        suggestion_keys = [value.issue_key for value in self.suggestions]
+        if suggestion_keys != sorted(set(suggestion_keys)):
+            raise ValueError("structure identity review suggestions must be unique and sorted")
+        if any(value not in set(issue_keys) for value in suggestion_keys):
+            raise ValueError("review suggestion references an unknown issue")
+        return self
+
+    def validate_for(self, value: object) -> None:
+        from app.harness.scene_analysis_schemas import StructureIdentityReviewInput
+
+        if not isinstance(value, StructureIdentityReviewInput):
+            raise ValueError("structure identity review input is invalid")
+        if (
+            self.source_version_id != value.source_version_id
+            or self.source_hash != value.source_hash
+            or self.span_candidate_revision_id != value.span_candidate_revision_id
+            or self.span_candidate_revision_hash != value.span_candidate_revision_hash
+            or self.scene_fact_candidate_revision_id != value.scene_fact_candidate_revision_id
+            or self.scene_fact_candidate_revision_hash != value.scene_fact_candidate_revision_hash
+            or self.identity_candidate_revision_id != value.identity_candidate_revision_id
+            or self.identity_candidate_revision_hash != value.identity_candidate_revision_hash
+        ):
+            raise ValueError("structure identity review target drifted")
+        supplied_by_key = {issue.issue_key: issue for issue in self.review_issues}
+        if any(
+            supplied_by_key.get(issue.issue_key) != issue
+            for issue in value.deterministic_issues
+        ):
+            raise ValueError("structure identity review changed a deterministic issue")
+        deterministic_keys = {issue.issue_key for issue in value.deterministic_issues}
+        for issue in self.review_issues:
+            for evidence in issue.evidence:
+                evidence.validate_for_text(value.normalized_text)
+            if issue.issue_key not in deterministic_keys and not issue.evidence:
+                raise ValueError("semantic review issue must carry source evidence")
 
 
 def _identity_mention_key(value: IdentityMentionRef) -> tuple[object, ...]:

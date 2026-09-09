@@ -416,11 +416,11 @@ async def test_scene_analysis_harness_materializes_evidence_hash_after_anchor_va
 
 def test_scene_analysis_bundle_discloses_only_stage_specific_references() -> None:
     bundle = SceneAnalysisBundle()
-    assert bundle.loaded_paths("propose_script_spans") == (
+    assert bundle.loaded_paths("propose_script_spans", "default") == (
         "SKILL.md",
         "references/script-spans.md",
     )
-    assert bundle.loaded_paths("extract_scene_facts") == (
+    assert bundle.loaded_paths("extract_scene_facts", "default") == (
         "SKILL.md",
         "references/scene-facts.md",
     )

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -17,11 +18,12 @@ import (
 )
 
 const (
-	SceneAnalysisWireSchemaVersion           = "storygraph-stage-wire-production"
-	ScriptSpanCandidateSchemaVersion         = "script-span-candidate-production"
-	SceneFactCandidateSchemaVersion          = "scene-fact-candidate-production"
-	IdentityResolutionCandidateSchemaVersion = "identity-resolution-candidate-production"
-	SceneAnalysisSkillBundleHash             = "1f5f3880ccc36f35fad75c75ac0a9a6bc92bc34e72875e57fceeab39e9275492"
+	SceneAnalysisWireSchemaVersion                = "storygraph-stage-wire-production"
+	ScriptSpanCandidateSchemaVersion              = "script-span-candidate-production"
+	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
+	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
+	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
+	SceneAnalysisSkillBundleHash                  = "2194bf507c1860ab386ba14ffc95f951b12bff708aee49948bcbfb443fe54649"
 )
 
 type SceneAnalysisStageVariant struct {
@@ -33,11 +35,12 @@ type SceneAnalysisStageVariant struct {
 
 func (value SceneAnalysisStageVariant) Validate() error {
 	expectedSchema := map[string]string{
-		"propose_script_spans": ScriptSpanCandidateSchemaVersion,
-		"extract_scene_facts":  SceneFactCandidateSchemaVersion,
-		"resolve_identities":   IdentityResolutionCandidateSchemaVersion,
-	}[value.StageKey]
-	if value.ProfileKey != "default" || value.LaneKey != "primary" ||
+		"propose_script_spans\x00default":        ScriptSpanCandidateSchemaVersion,
+		"extract_scene_facts\x00default":         SceneFactCandidateSchemaVersion,
+		"resolve_identities\x00default":          IdentityResolutionCandidateSchemaVersion,
+		"review_candidate\x00structure_identity": StructureIdentityReviewCandidateSchemaVersion,
+	}[value.StageKey+"\x00"+value.ProfileKey]
+	if value.LaneKey != "primary" ||
 		expectedSchema == "" || value.OutputSchemaVersion != expectedSchema {
 		return errors.New("invalid Scene Analysis stage variant")
 	}
@@ -75,7 +78,7 @@ type SceneAnalysisCandidateRevisionIdentity struct {
 
 func (value SceneAnalysisCandidateRevisionIdentity) Validate() error {
 	if (value.StageKey != "propose_script_spans" && value.StageKey != "extract_scene_facts" &&
-		value.StageKey != "resolve_identities") ||
+		value.StageKey != "resolve_identities" && value.StageKey != "review_candidate") ||
 		strings.TrimSpace(value.ShardKey) == "" ||
 		!hashPattern.MatchString(value.CandidateRevisionHash) ||
 		!hashPattern.MatchString(value.SourceResultHash) {
@@ -234,6 +237,74 @@ type IdentityResolutionInput struct {
 	AllowedReuseIdentityKeys       []string        `json:"allowed_reuse_identity_keys"`
 }
 
+type StructureIdentityReviewInput struct {
+	SourceVersionID                string                 `json:"source_version_id"`
+	SourceHash                     string                 `json:"source_hash"`
+	NormalizedText                 string                 `json:"normalized_text"`
+	SpanCandidateRevisionID        string                 `json:"span_candidate_revision_id"`
+	SpanCandidateRevisionHash      string                 `json:"span_candidate_revision_hash"`
+	SpanCandidate                  json.RawMessage        `json:"span_candidate"`
+	SceneFactCandidateRevisionID   string                 `json:"scene_fact_candidate_revision_id"`
+	SceneFactCandidateRevisionHash string                 `json:"scene_fact_candidate_revision_hash"`
+	SceneFactCandidate             json.RawMessage        `json:"scene_fact_candidate"`
+	IdentityCandidateRevisionID    string                 `json:"identity_candidate_revision_id"`
+	IdentityCandidateRevisionHash  string                 `json:"identity_candidate_revision_hash"`
+	IdentityCandidate              json.RawMessage        `json:"identity_candidate"`
+	DeterministicIssues            []CandidateReviewIssue `json:"deterministic_issues"`
+}
+
+func (value StructureIdentityReviewInput) Validate() error {
+	for _, identifier := range []string{
+		value.SourceVersionID, value.SpanCandidateRevisionID,
+		value.SceneFactCandidateRevisionID, value.IdentityCandidateRevisionID,
+	} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid structure identity review identity")
+		}
+	}
+	if value.NormalizedText == "" || hashUTF8(value.NormalizedText) != value.SourceHash ||
+		!hashPattern.MatchString(value.SpanCandidateRevisionHash) ||
+		!hashPattern.MatchString(value.SceneFactCandidateRevisionHash) ||
+		!hashPattern.MatchString(value.IdentityCandidateRevisionHash) ||
+		ValidateScriptSpanCandidate(value.SpanCandidate, value.NormalizedText) != nil ||
+		ValidateSceneFactCandidate(value.SceneFactCandidate, value.NormalizedText, value.SpanCandidate) != nil ||
+		value.DeterministicIssues == nil {
+		return errors.New("invalid structure identity review input")
+	}
+	var spans ScriptSpanCandidate
+	var facts SceneFactCandidate
+	var identities IdentityResolutionCandidate
+	if decodeStrict(value.SpanCandidate, &spans) != nil ||
+		decodeStrict(value.SceneFactCandidate, &facts) != nil ||
+		decodeStrict(value.IdentityCandidate, &identities) != nil {
+		return errors.New("invalid structure identity review candidate chain")
+	}
+	allowedReuse := make(map[string]struct{})
+	for _, cluster := range identities.ResolvedClusters {
+		if cluster.ReuseIdentityKey != nil {
+			allowedReuse[*cluster.ReuseIdentityKey] = struct{}{}
+		}
+	}
+	if ValidateIdentityResolutionCandidate(value.IdentityCandidate, value.SceneFactCandidate, allowedReuse) != nil ||
+		spans.SourceVersionID != value.SourceVersionID || spans.SourceHash != value.SourceHash ||
+		facts.SourceVersionID != value.SourceVersionID || facts.SourceHash != value.SourceHash ||
+		facts.SpanCandidateRevisionID != value.SpanCandidateRevisionID ||
+		facts.SpanCandidateRevisionHash != value.SpanCandidateRevisionHash ||
+		identities.SourceVersionID != value.SourceVersionID || identities.SourceHash != value.SourceHash ||
+		identities.SceneFactCandidateRevisionID != value.SceneFactCandidateRevisionID ||
+		identities.SceneFactCandidateRevisionHash != value.SceneFactCandidateRevisionHash {
+		return errors.New("structure identity review candidate chain drifted")
+	}
+	previous := ""
+	for _, issue := range value.DeterministicIssues {
+		if issue.IssueKey <= previous || validateCandidateReviewIssue(issue, []rune(value.NormalizedText), true) != nil {
+			return errors.New("deterministic review issues must be unique and sorted")
+		}
+		previous = issue.IssueKey
+	}
+	return nil
+}
+
 func (value IdentityResolutionInput) Validate() error {
 	for _, identifier := range []string{value.SourceVersionID, value.SceneFactCandidateRevisionID} {
 		if _, err := uuid.Parse(identifier); err != nil {
@@ -315,6 +386,31 @@ func (value SceneAnalysisPayload) Validate() error {
 			value.Shard.CodepointStart != 0 ||
 			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
 			return errors.New("identity input does not match its frozen SceneFacts")
+		}
+	case "review_candidate":
+		var input StructureIdentityReviewInput
+		if decodeStrict(value.StageInput, &input) != nil || input.Validate() != nil ||
+			len(value.UpstreamCandidates) != 3 || source.VersionID != input.SourceVersionID ||
+			source.ContentHash != input.SourceHash || value.Shard.CodepointStart != 0 ||
+			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
+			return errors.New("review input does not match its frozen structure and identity")
+		}
+		expected := map[string][2]string{
+			"propose_script_spans": {input.SpanCandidateRevisionID, input.SpanCandidateRevisionHash},
+			"extract_scene_facts":  {input.SceneFactCandidateRevisionID, input.SceneFactCandidateRevisionHash},
+			"resolve_identities":   {input.IdentityCandidateRevisionID, input.IdentityCandidateRevisionHash},
+		}
+		for _, upstream := range value.UpstreamCandidates {
+			identity, exists := expected[upstream.StageKey]
+			if !exists || upstream.Validate() != nil || identity != [2]string{
+				upstream.CandidateRevisionID, upstream.CandidateRevisionHash,
+			} {
+				return errors.New("review upstream Candidate identity drifted")
+			}
+			delete(expected, upstream.StageKey)
+		}
+		if len(expected) != 0 {
+			return errors.New("review upstream Candidate set is incomplete")
 		}
 	default:
 		return errors.New("unsupported Scene Analysis stage")
@@ -547,6 +643,7 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 		"propose_script_spans": "script_span_candidate",
 		"extract_scene_facts":  "scene_fact_candidate",
 		"resolve_identities":   "identity_resolution_candidate",
+		"review_candidate":     "structure_identity_review_candidate",
 	}
 	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
 		value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
@@ -629,6 +726,12 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 				candidate.SceneFactCandidateRevisionID != input.SceneFactCandidateRevisionID ||
 				candidate.SceneFactCandidateRevisionHash != input.SceneFactCandidateRevisionHash {
 				return errors.New("IdentityResolution candidate source identity drifted")
+			}
+		case "review_candidate":
+			var input StructureIdentityReviewInput
+			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil ||
+				ValidateStructureIdentityReviewCandidate(value.Candidate, input) != nil {
+				return errors.New("invalid accepted structure identity review candidate")
 			}
 		}
 	case "rejected", "outcome_unknown":
@@ -1167,6 +1270,131 @@ func ValidateIdentityResolutionCandidate(
 		coverage.ResolvedCount+coverage.AmbiguousCount+coverage.RejectedCount != coverage.MentionCount ||
 		coverage.MentionUniverseHash != universeHash {
 		return errors.New("identity mention coverage proof is invalid")
+	}
+	return nil
+}
+
+type StructureIdentityReviewSuggestion struct {
+	IssueKey   string   `json:"issue_key"`
+	Action     string   `json:"action"`
+	TargetKeys []string `json:"target_keys"`
+	Rationale  string   `json:"rationale"`
+}
+
+type StructureIdentityReviewCandidate struct {
+	ProfileKey                     string                              `json:"profile_key"`
+	SourceVersionID                string                              `json:"source_version_id"`
+	SourceHash                     string                              `json:"source_hash"`
+	SpanCandidateRevisionID        string                              `json:"span_candidate_revision_id"`
+	SpanCandidateRevisionHash      string                              `json:"span_candidate_revision_hash"`
+	SceneFactCandidateRevisionID   string                              `json:"scene_fact_candidate_revision_id"`
+	SceneFactCandidateRevisionHash string                              `json:"scene_fact_candidate_revision_hash"`
+	IdentityCandidateRevisionID    string                              `json:"identity_candidate_revision_id"`
+	IdentityCandidateRevisionHash  string                              `json:"identity_candidate_revision_hash"`
+	ReviewIssues                   []CandidateReviewIssue              `json:"review_issues"`
+	Suggestions                    []StructureIdentityReviewSuggestion `json:"suggestions"`
+}
+
+func ValidateStructureIdentityReviewCandidate(
+	raw json.RawMessage,
+	input StructureIdentityReviewInput,
+) error {
+	if err := input.Validate(); err != nil {
+		return err
+	}
+	var value StructureIdentityReviewCandidate
+	if decodeStrict(raw, &value) != nil || value.ProfileKey != "structure_identity" ||
+		value.ReviewIssues == nil || value.Suggestions == nil ||
+		value.SourceVersionID != input.SourceVersionID || value.SourceHash != input.SourceHash ||
+		value.SpanCandidateRevisionID != input.SpanCandidateRevisionID ||
+		value.SpanCandidateRevisionHash != input.SpanCandidateRevisionHash ||
+		value.SceneFactCandidateRevisionID != input.SceneFactCandidateRevisionID ||
+		value.SceneFactCandidateRevisionHash != input.SceneFactCandidateRevisionHash ||
+		value.IdentityCandidateRevisionID != input.IdentityCandidateRevisionID ||
+		value.IdentityCandidateRevisionHash != input.IdentityCandidateRevisionHash {
+		return errors.New("structure identity review candidate does not match its frozen target")
+	}
+	for _, identifier := range []string{
+		value.SourceVersionID, value.SpanCandidateRevisionID,
+		value.SceneFactCandidateRevisionID, value.IdentityCandidateRevisionID,
+	} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid structure identity review candidate identity")
+		}
+	}
+	deterministic := make(map[string]CandidateReviewIssue, len(input.DeterministicIssues))
+	for _, issue := range input.DeterministicIssues {
+		deterministic[issue.IssueKey] = issue
+	}
+	issues := make(map[string]struct{}, len(value.ReviewIssues))
+	previous := ""
+	text := []rune(input.NormalizedText)
+	for _, issue := range value.ReviewIssues {
+		frozen, isDeterministic := deterministic[issue.IssueKey]
+		if issue.IssueKey <= previous || validateCandidateReviewIssue(issue, text, isDeterministic) != nil {
+			return errors.New("structure identity review issues must be unique and sorted")
+		}
+		if isDeterministic {
+			if !reflect.DeepEqual(frozen, issue) {
+				return errors.New("structure identity review changed a deterministic issue")
+			}
+			delete(deterministic, issue.IssueKey)
+		} else if len(issue.Evidence) == 0 {
+			return errors.New("semantic review issue must carry source evidence")
+		}
+		issues[issue.IssueKey] = struct{}{}
+		previous = issue.IssueKey
+	}
+	if len(deterministic) != 0 {
+		return errors.New("structure identity review omitted a deterministic issue")
+	}
+	allowedActions := map[string]struct{}{
+		"inspect_source": {}, "adjust_episode_boundary": {}, "adjust_scene_boundary": {},
+		"separate_identity": {}, "merge_identity": {}, "resolve_mention": {}, "reject_mention": {},
+	}
+	previous = ""
+	for _, suggestion := range value.Suggestions {
+		if suggestion.IssueKey <= previous || strings.TrimSpace(suggestion.Rationale) == "" ||
+			len(suggestion.TargetKeys) == 0 || !slices.IsSorted(suggestion.TargetKeys) {
+			return errors.New("structure identity review suggestions must be unique and sorted")
+		}
+		if _, exists := issues[suggestion.IssueKey]; !exists {
+			return errors.New("review suggestion references an unknown issue")
+		}
+		if _, allowed := allowedActions[suggestion.Action]; !allowed {
+			return errors.New("review suggestion action is invalid")
+		}
+		previousTarget := ""
+		for _, target := range suggestion.TargetKeys {
+			if strings.TrimSpace(target) == "" || target == previousTarget {
+				return errors.New("review suggestion targets must be sorted and unique")
+			}
+			previousTarget = target
+		}
+		previous = suggestion.IssueKey
+	}
+	return nil
+}
+
+var candidateReviewIssueKeyPattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)
+var candidateReviewCodePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,80}$`)
+
+func validateCandidateReviewIssue(
+	value CandidateReviewIssue,
+	text []rune,
+	allowEmptyEvidence bool,
+) error {
+	if !candidateReviewIssueKeyPattern.MatchString(value.IssueKey) ||
+		!candidateReviewCodePattern.MatchString(value.Code) ||
+		(value.Severity != "warning" && value.Severity != "blocking") ||
+		strings.TrimSpace(value.Scope) == "" || strings.TrimSpace(value.Summary) == "" ||
+		value.Evidence == nil || (!allowEmptyEvidence && len(value.Evidence) == 0) {
+		return errors.New("invalid candidate review issue")
+	}
+	for _, evidence := range value.Evidence {
+		if evidence.Validate(text) != nil {
+			return errors.New("invalid candidate review issue Evidence")
+		}
 	}
 	return nil
 }

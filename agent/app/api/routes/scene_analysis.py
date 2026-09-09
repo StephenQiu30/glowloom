@@ -72,7 +72,8 @@ async def invoke_scene_analysis(
             dispatch_authorization_hash=authorization.authorization_hash,
             status="accepted",
             candidate_type=scene_analysis_stage_spec(
-                invocation.payload.variant.stage_key
+                invocation.payload.variant.stage_key,
+                invocation.payload.variant.profile_key,
             ).candidate_type,
             candidate=candidate,
             input_hash=invocation.input_hash,
@@ -159,7 +160,8 @@ def _failure(
         dispatch_authorization_hash=authorization.authorization_hash,
         status=status,
         candidate_type=scene_analysis_stage_spec(
-            invocation.payload.variant.stage_key
+            invocation.payload.variant.stage_key,
+            invocation.payload.variant.profile_key,
         ).candidate_type,
         candidate=None,
         input_hash=invocation.input_hash,

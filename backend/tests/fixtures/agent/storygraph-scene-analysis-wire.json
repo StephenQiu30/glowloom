@@ -11,7 +11,7 @@
       "skill_release_id": "66666666-6666-4666-8666-666666666666",
       "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
       "stage_release_hash": "3333333333333333333333333333333333333333333333333333333333333333",
-      "bundle_content_hash": "1f5f3880ccc36f35fad75c75ac0a9a6bc92bc34e72875e57fceeab39e9275492",
+      "bundle_content_hash": "2194bf507c1860ab386ba14ffc95f951b12bff708aee49948bcbfb443fe54649",
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     },
     "control": {
@@ -68,7 +68,7 @@
         "newline_normalization": "lf"
       }
     },
-    "input_hash": "74e1cd632f869d508eb236aece68f907df2351dc89f749f2789139a8691a8081"
+    "input_hash": "efbf86e4c74086a426a477845a3badce7fdd5936c7d1782409a11f880ba69eed"
   },
   "valid_script_span_candidate": {
     "source_version_id": "33333333-3333-4333-8333-333333333333",
@@ -156,9 +156,9 @@
     ],
     "review_issues": []
   },
-  "expected_input_hash": "74e1cd632f869d508eb236aece68f907df2351dc89f749f2789139a8691a8081",
-  "expected_stage_instance_key": "7982a3f62607729358b3ed5576b9f1b9f6a9a57ba6b9aaa4b38c9e86bf5e9b22",
-  "expected_result_hash": "3c965caec507d8f8094cea31d06b59b48ed2baaf6979de896fe411b4ac8805dd",
+  "expected_input_hash": "efbf86e4c74086a426a477845a3badce7fdd5936c7d1782409a11f880ba69eed",
+  "expected_stage_instance_key": "444e2be1aedde62d00207ebc34ad6c7df5c73f783e8d418667085784764047e0",
+  "expected_result_hash": "e5e4b9a9091cb20ef05de672f8c9019a62509a7b9ebe87b5b47c515fbf49c1ab",
   "reject_mutations": [
     {"name": "missing_attempt_id", "operation": "remove", "path": "attempt_id"},
     {"name": "unknown_style_field", "operation": "add_stage_input", "path": "visual_style", "value": "赛博朋克"},

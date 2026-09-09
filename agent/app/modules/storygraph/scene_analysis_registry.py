@@ -9,10 +9,14 @@ from app.modules.storygraph.scene_analysis_candidates import (
     IdentityResolutionCandidate,
     SceneFactCandidate,
     ScriptSpanCandidate,
+    StructureIdentityReviewCandidate,
 )
 
 SceneAnalysisCandidateType = Literal[
-    "script_span_candidate", "scene_fact_candidate", "identity_resolution_candidate"
+    "script_span_candidate",
+    "scene_fact_candidate",
+    "identity_resolution_candidate",
+    "structure_identity_review_candidate",
 ]
 
 
@@ -23,27 +27,32 @@ class SceneAnalysisStageSpec:
     references: tuple[str, ...]
 
 
-SCENE_ANALYSIS_REGISTRY: dict[str, SceneAnalysisStageSpec] = {
-    "propose_script_spans": SceneAnalysisStageSpec(
+SCENE_ANALYSIS_REGISTRY: dict[tuple[str, str], SceneAnalysisStageSpec] = {
+    ("propose_script_spans", "default"): SceneAnalysisStageSpec(
         candidate_type="script_span_candidate",
         candidate_model=ScriptSpanCandidate,
         references=("script-spans.md",),
     ),
-    "extract_scene_facts": SceneAnalysisStageSpec(
+    ("extract_scene_facts", "default"): SceneAnalysisStageSpec(
         candidate_type="scene_fact_candidate",
         candidate_model=SceneFactCandidate,
         references=("scene-facts.md",),
     ),
-    "resolve_identities": SceneAnalysisStageSpec(
+    ("resolve_identities", "default"): SceneAnalysisStageSpec(
         candidate_type="identity_resolution_candidate",
         candidate_model=IdentityResolutionCandidate,
         references=("entity-reconciliation.md",),
     ),
+    ("review_candidate", "structure_identity"): SceneAnalysisStageSpec(
+        candidate_type="structure_identity_review_candidate",
+        candidate_model=StructureIdentityReviewCandidate,
+        references=("structure-identity-review.md",),
+    ),
 }
 
 
-def scene_analysis_stage_spec(stage: str) -> SceneAnalysisStageSpec:
+def scene_analysis_stage_spec(stage: str, profile: str) -> SceneAnalysisStageSpec:
     try:
-        return SCENE_ANALYSIS_REGISTRY[stage]
+        return SCENE_ANALYSIS_REGISTRY[(stage, profile)]
     except KeyError as error:
-        raise ValueError("unknown Scene Analysis stage") from error
+        raise ValueError("unknown Scene Analysis stage variant") from error

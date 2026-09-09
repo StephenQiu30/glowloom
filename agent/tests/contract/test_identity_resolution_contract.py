@@ -99,11 +99,11 @@ def test_identity_resolution_stage_has_an_exact_variant_schema_and_resource() ->
         lane_key="primary",
         output_schema_version="identity-resolution-candidate-production",
     )
-    spec = scene_analysis_stage_spec(variant.stage_key)
+    spec = scene_analysis_stage_spec(variant.stage_key, variant.profile_key)
 
     assert spec.candidate_type == "identity_resolution_candidate"
     assert spec.candidate_model is IdentityResolutionCandidate
-    assert SceneAnalysisBundle().loaded_paths(variant.stage_key) == (
+    assert SceneAnalysisBundle().loaded_paths(variant.stage_key, variant.profile_key) == (
         "SKILL.md",
         "references/entity-reconciliation.md",
     )

@@ -1,0 +1,75 @@
+{
+  "input_identity": {
+    "source_version_id": "33333333-3333-4333-8333-333333333333",
+    "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+    "span_candidate_revision_id": "99999999-9999-4999-8999-999999999999",
+    "span_candidate_revision_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "scene_fact_candidate_revision_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "scene_fact_candidate_revision_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "identity_candidate_revision_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "identity_candidate_revision_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "upstream_candidates": [
+    {
+      "stage_key": "propose_script_spans",
+      "shard_key": "script:full",
+      "candidate_revision_id": "99999999-9999-4999-8999-999999999999",
+      "candidate_revision_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+      "source_invocation_id": "91919191-9191-4191-8191-919191919191",
+      "source_result_hash": "9191919191919191919191919191919191919191919191919191919191919191"
+    },
+    {
+      "stage_key": "extract_scene_facts",
+      "shard_key": "script:full",
+      "candidate_revision_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "candidate_revision_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_invocation_id": "92929292-9292-4292-8292-929292929292",
+      "source_result_hash": "9292929292929292929292929292929292929292929292929292929292929292"
+    },
+    {
+      "stage_key": "resolve_identities",
+      "shard_key": "script:full",
+      "candidate_revision_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "candidate_revision_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "source_invocation_id": "93939393-9393-4393-8393-939393939393",
+      "source_result_hash": "9393939393939393939393939393939393939393939393939393939393939393"
+    }
+  ],
+  "deterministic_issues": [],
+  "valid_candidate": {
+    "profile_key": "structure_identity",
+    "source_version_id": "33333333-3333-4333-8333-333333333333",
+    "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+    "span_candidate_revision_id": "99999999-9999-4999-8999-999999999999",
+    "span_candidate_revision_hash": "9999999999999999999999999999999999999999999999999999999999999999",
+    "scene_fact_candidate_revision_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "scene_fact_candidate_revision_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "identity_candidate_revision_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "identity_candidate_revision_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "review_issues": [
+      {
+        "issue_key": "issue_identity_alias_0001",
+        "code": "identity_alias_needs_confirmation",
+        "severity": "warning",
+        "scope": "identity_character_linzhou",
+        "summary": "林舟的称谓归一需要人工确认",
+        "evidence": [
+          {
+            "source_start": 8,
+            "source_end": 10,
+            "text_hash": "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+            "exact_anchor": "林舟"
+          }
+        ]
+      }
+    ],
+    "suggestions": [
+      {
+        "issue_key": "issue_identity_alias_0001",
+        "action": "inspect_source",
+        "target_keys": ["identity_character_linzhou"],
+        "rationale": "确认该称谓是否始终指向同一角色。"
+      }
+    ]
+  }
+}

@@ -7,9 +7,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.modules.storygraph.scene_analysis_candidates import CandidateReviewIssue
 from app.protocol.canonical import production_canonical_hash
 
-SceneAnalysisStageKey = Literal["propose_script_spans", "extract_scene_facts", "resolve_identities"]
+SceneAnalysisStageKey = Literal[
+    "propose_script_spans",
+    "extract_scene_facts",
+    "resolve_identities",
+    "review_candidate",
+]
 
 
 class StrictSceneAnalysisModel(BaseModel):
@@ -18,21 +24,26 @@ class StrictSceneAnalysisModel(BaseModel):
 
 class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
     stage_key: SceneAnalysisStageKey
-    profile_key: Literal["default"]
+    profile_key: Literal["default", "structure_identity"]
     lane_key: Literal["primary"]
     output_schema_version: Literal[
         "script-span-candidate-production",
         "scene-fact-candidate-production",
         "identity-resolution-candidate-production",
+        "structure-identity-review-candidate-production",
     ]
 
     @model_validator(mode="after")
     def validate_output_schema(self) -> SceneAnalysisStageVariant:
         expected = {
-            "propose_script_spans": "script-span-candidate-production",
-            "extract_scene_facts": "scene-fact-candidate-production",
-            "resolve_identities": "identity-resolution-candidate-production",
-        }[self.stage_key]
+            ("propose_script_spans", "default"): "script-span-candidate-production",
+            ("extract_scene_facts", "default"): "scene-fact-candidate-production",
+            ("resolve_identities", "default"): "identity-resolution-candidate-production",
+            (
+                "review_candidate",
+                "structure_identity",
+            ): "structure-identity-review-candidate-production",
+        }.get((self.stage_key, self.profile_key))
         if self.output_schema_version != expected:
             raise ValueError("Scene Analysis output schema does not match its stage")
         return self
@@ -48,7 +59,9 @@ class ScriptSourceVersionIdentity(StrictSceneAnalysisModel):
 
 
 class SceneAnalysisCandidateRevisionIdentity(StrictSceneAnalysisModel):
-    stage_key: Literal["propose_script_spans", "extract_scene_facts"]
+    stage_key: Literal[
+        "propose_script_spans", "extract_scene_facts", "resolve_identities", "review_candidate"
+    ]
     shard_key: str = Field(min_length=1)
     candidate_revision_id: UUID
     candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -155,6 +168,57 @@ class IdentityResolutionInput(StrictSceneAnalysisModel):
         return self
 
 
+class StructureIdentityReviewInput(StrictSceneAnalysisModel):
+    source_version_id: UUID
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    normalized_text: str = Field(min_length=1)
+    span_candidate_revision_id: UUID
+    span_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    span_candidate: dict[str, Any]
+    scene_fact_candidate_revision_id: UUID
+    scene_fact_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_fact_candidate: dict[str, Any]
+    identity_candidate_revision_id: UUID
+    identity_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    identity_candidate: dict[str, Any]
+    deterministic_issues: list[CandidateReviewIssue]
+
+    @model_validator(mode="after")
+    def validate_frozen_candidates(self) -> StructureIdentityReviewInput:
+        from app.modules.storygraph.scene_analysis_candidates import (
+            IdentityResolutionCandidate,
+            SceneFactCandidate,
+            ScriptSpanCandidate,
+        )
+
+        if hashlib.sha256(self.normalized_text.encode("utf-8")).hexdigest() != self.source_hash:
+            raise ValueError("structure identity review source hash drifted")
+        spans = ScriptSpanCandidate.model_validate(self.span_candidate)
+        scene_facts = SceneFactCandidate.model_validate(self.scene_fact_candidate)
+        identities = IdentityResolutionCandidate.model_validate(self.identity_candidate)
+        issue_keys = [value.issue_key for value in self.deterministic_issues]
+        if issue_keys != sorted(set(issue_keys)):
+            raise ValueError("deterministic review issues must be unique and sorted")
+        if (
+            spans.source_version_id != self.source_version_id
+            or spans.source_hash != self.source_hash
+            or scene_facts.source_version_id != self.source_version_id
+            or scene_facts.source_hash != self.source_hash
+            or scene_facts.span_candidate_revision_id != self.span_candidate_revision_id
+            or scene_facts.span_candidate_revision_hash != self.span_candidate_revision_hash
+            or identities.source_version_id != self.source_version_id
+            or identities.source_hash != self.source_hash
+            or identities.scene_fact_candidate_revision_id
+            != self.scene_fact_candidate_revision_id
+            or identities.scene_fact_candidate_revision_hash
+            != self.scene_fact_candidate_revision_hash
+        ):
+            raise ValueError("structure identity review candidate chain drifted")
+        spans.validate_for_text(self.normalized_text)
+        scene_facts.validate_for_spans(self.normalized_text, spans.spans)
+        return self
+
+
 class SceneAnalysisPayload(StrictSceneAnalysisModel):
     variant: SceneAnalysisStageVariant
     scope: SceneAnalysisScope
@@ -190,7 +254,7 @@ class SceneAnalysisPayload(StrictSceneAnalysisModel):
                 or self.shard.codepoint_end != len(value.normalized_text)
             ):
                 raise ValueError("scene fact input does not match its frozen spans")
-        else:
+        elif self.variant.stage_key == "resolve_identities":
             value = IdentityResolutionInput.model_validate(self.stage_input)
             if (
                 len(self.upstream_candidates) != 1
@@ -205,6 +269,35 @@ class SceneAnalysisPayload(StrictSceneAnalysisModel):
                 or self.shard.codepoint_end != len(value.normalized_text)
             ):
                 raise ValueError("identity input does not match its frozen SceneFacts")
+        else:
+            value = StructureIdentityReviewInput.model_validate(self.stage_input)
+            expected = {
+                "propose_script_spans": (
+                    value.span_candidate_revision_id,
+                    value.span_candidate_revision_hash,
+                ),
+                "extract_scene_facts": (
+                    value.scene_fact_candidate_revision_id,
+                    value.scene_fact_candidate_revision_hash,
+                ),
+                "resolve_identities": (
+                    value.identity_candidate_revision_id,
+                    value.identity_candidate_revision_hash,
+                ),
+            }
+            supplied = {
+                item.stage_key: (item.candidate_revision_id, item.candidate_revision_hash)
+                for item in self.upstream_candidates
+            }
+            if (
+                len(self.upstream_candidates) != 3
+                or supplied != expected
+                or source.version_id != value.source_version_id
+                or source.content_hash != value.source_hash
+                or self.shard.codepoint_start != 0
+                or self.shard.codepoint_end != len(value.normalized_text)
+            ):
+                raise ValueError("review input does not match its frozen structure and identity")
         return self
 
 
@@ -345,7 +438,10 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
     dispatch_authorization_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     status: Literal["accepted", "rejected", "outcome_unknown"]
     candidate_type: Literal[
-        "script_span_candidate", "scene_fact_candidate", "identity_resolution_candidate"
+        "script_span_candidate",
+        "scene_fact_candidate",
+        "identity_resolution_candidate",
+        "structure_identity_review_candidate",
     ]
     candidate: dict[str, Any] | None
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -413,7 +509,10 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
             or self.dispatch_authorization_hash != dispatch_authorization_hash
             or self.input_hash != invocation.input_hash
             or self.candidate_type
-            != scene_analysis_stage_spec(invocation.payload.variant.stage_key).candidate_type
+            != scene_analysis_stage_spec(
+                invocation.payload.variant.stage_key,
+                invocation.payload.variant.profile_key,
+            ).candidate_type
             or self.executor.runtime_image_digest != invocation.stage_release.agent_image_digest
         ):
             raise ValueError("Scene Analysis result identity does not match invocation")

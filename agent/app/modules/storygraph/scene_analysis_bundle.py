@@ -12,7 +12,7 @@ from app.modules.storygraph.scene_analysis_registry import (
 )
 
 SCENE_ANALYSIS_SKILL_BUNDLE_HASH = (
-    "1f5f3880ccc36f35fad75c75ac0a9a6bc92bc34e72875e57fceeab39e9275492"
+    "2194bf507c1860ab386ba14ffc95f951b12bff708aee49948bcbfb443fe54649"
 )
 
 
@@ -36,6 +36,7 @@ class SceneAnalysisBundle:
         "references/entity-reconciliation.md",
         "references/scene-facts.md",
         "references/script-spans.md",
+        "references/structure-identity-review.md",
     )
 
     def __init__(self, repository_root: Path | None = None) -> None:
@@ -85,14 +86,14 @@ class SceneAnalysisBundle:
             digest.update(b"\0")
             digest.update(len(content).to_bytes(8, "big"))
             digest.update(content)
-        for stage in sorted(SCENE_ANALYSIS_REGISTRY):
+        for stage, profile in sorted(SCENE_ANALYSIS_REGISTRY):
             schema = json.dumps(
-                scene_analysis_stage_spec(stage).candidate_model.model_json_schema(),
+                scene_analysis_stage_spec(stage, profile).candidate_model.model_json_schema(),
                 ensure_ascii=False,
                 separators=(",", ":"),
                 sort_keys=True,
             ).encode("utf-8")
-            identity = f"output-schema:{stage}".encode()
+            identity = f"output-schema:{stage}:{profile}".encode()
             digest.update(identity)
             digest.update(b"\0")
             digest.update(len(schema).to_bytes(8, "big"))
@@ -113,14 +114,14 @@ class SceneAnalysisBundle:
             raise BundleInvalid("Scene Analysis bundle hash does not match its release")
         return computed
 
-    def loaded_paths(self, stage: str) -> tuple[str, ...]:
-        spec = scene_analysis_stage_spec(stage)
+    def loaded_paths(self, stage: str, profile: str) -> tuple[str, ...]:
+        spec = scene_analysis_stage_spec(stage, profile)
         return ("SKILL.md", *(f"references/{name}" for name in spec.references))
 
-    def guidance(self, stage: str) -> str:
+    def guidance(self, stage: str, profile: str) -> str:
         self._verify_root()
         sections: list[str] = []
-        for relative_path in self.loaded_paths(stage):
+        for relative_path in self.loaded_paths(stage, profile):
             if relative_path not in self._STAGE_RESOURCE_PATHS:
                 raise BundleInvalid("Scene Analysis stage requested an undeclared reference")
             path = self.root / relative_path
