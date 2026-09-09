@@ -83,8 +83,15 @@ type ProductionWorldReviewIssue struct {
 	Issue       agentcontract.CandidateReviewIssue `json:"issue"`
 }
 
+type ProductionWorldPlanningEpisodeScope struct {
+	EpisodeID      string   `json:"episode_id"`
+	ScopeKey       string   `json:"scope_key"`
+	SceneScopeKeys []string `json:"scene_scope_keys"`
+}
+
 type ProductionWorldSharedProof struct {
 	ExpectedBusinessKeyRoots []ProductionWorldExpectedBusinessKeySet `json:"expected_business_key_roots"`
+	PlanningEpisodeScopes    []ProductionWorldPlanningEpisodeScope   `json:"planning_episode_scopes"`
 	ScopeKeys                []string                                `json:"scope_keys"`
 	ScopeClosureRoot         string                                  `json:"scope_closure_root"`
 	CrossPartitionRefs       []ProductionWorldCrossPartitionRef      `json:"cross_partition_refs"`
@@ -188,6 +195,11 @@ func NewProductionWorldCandidate(
 			ReviewIssues:     productionWorldReviewIssues(production, scenes, continuity),
 		},
 	}
+	episodeScopes, err := productionWorldEpisodeScopes(draft.FrozenInput.StructureIdentitySet, value.Planning.Scenes)
+	if err != nil {
+		return ProductionWorldCandidate{}, nil, err
+	}
+	value.SharedProof.PlanningEpisodeScopes = episodeScopes
 	if err := completeProductionWorldCandidate(&value, false); err != nil {
 		return ProductionWorldCandidate{}, nil, err
 	}
@@ -292,7 +304,7 @@ func completeProductionWorldCandidate(value *ProductionWorldCandidate, verify bo
 	}
 	if value.Bible.Specifications == nil || value.Bible.WorldClaims == nil || value.Planning.Scenes == nil ||
 		value.Planning.SceneStoryTimes == nil || value.Planning.Interactions == nil || value.Planning.Continuity == nil ||
-		value.Asset.Identities == nil || value.SharedProof.DesignGaps == nil ||
+		value.Asset.Identities == nil || value.SharedProof.PlanningEpisodeScopes == nil || value.SharedProof.DesignGaps == nil ||
 		value.SharedProof.ContinuityLedger == nil || value.SharedProof.ReviewIssues == nil {
 		return errors.New("Production World partitions are incomplete")
 	}
@@ -403,6 +415,31 @@ func validateProductionWorldGraph(value *ProductionWorldCandidate) error {
 			occurrences[occurrence.OccurrenceKey] = occurrence
 		}
 	}
+	coveredScenes := make(map[string]struct{}, len(scenes))
+	previousEpisodeScope := ""
+	for _, episode := range value.SharedProof.PlanningEpisodeScopes {
+		if episode.ScopeKey <= previousEpisodeScope || episode.ScopeKey != "episode:"+episode.EpisodeID ||
+			len(episode.SceneScopeKeys) == 0 || !slices.IsSorted(episode.SceneScopeKeys) {
+			return errors.New("Production World Planning Episode scope is not canonical")
+		}
+		if _, err := uuid.Parse(episode.EpisodeID); err != nil {
+			return errors.New("Production World Planning Episode identity is invalid")
+		}
+		for index, sceneScopeKey := range episode.SceneScopeKeys {
+			if _, exists := scenes[sceneScopeKey]; !exists ||
+				(index > 0 && episode.SceneScopeKeys[index-1] == sceneScopeKey) {
+				return errors.New("Production World Planning Episode Scene reference is invalid")
+			}
+			if _, duplicate := coveredScenes[sceneScopeKey]; duplicate {
+				return errors.New("Production World Planning Scene belongs to multiple Episodes")
+			}
+			coveredScenes[sceneScopeKey] = struct{}{}
+		}
+		previousEpisodeScope = episode.ScopeKey
+	}
+	if len(coveredScenes) != len(scenes) {
+		return errors.New("Production World Planning Episode coverage is incomplete")
+	}
 	if len(value.Planning.SceneStoryTimes) != len(scenes) {
 		return errors.New("Production World story-time coverage is incomplete")
 	}
@@ -477,6 +514,43 @@ func validateProductionWorldGraph(value *ProductionWorldCandidate) error {
 		}
 	}
 	return nil
+}
+
+func productionWorldEpisodeScopes(
+	identitySet agentcontract.FrozenStructureIdentitySet,
+	planningScenes []agentcontract.SceneBindingFragment,
+) ([]ProductionWorldPlanningEpisodeScope, error) {
+	episodes := make(map[string]*ProductionWorldPlanningEpisodeScope, len(identitySet.EpisodeRefs))
+	result := make([]ProductionWorldPlanningEpisodeScope, len(identitySet.EpisodeRefs))
+	for index, episode := range identitySet.EpisodeRefs {
+		result[index] = ProductionWorldPlanningEpisodeScope{
+			EpisodeID:      episode.EpisodeID,
+			ScopeKey:       "episode:" + episode.EpisodeID,
+			SceneScopeKeys: []string{},
+		}
+		episodes[episode.EpisodeID] = &result[index]
+	}
+	knownScenes := make(map[string]struct{}, len(planningScenes))
+	for _, scene := range planningScenes {
+		knownScenes[scene.SceneScopeKey] = struct{}{}
+	}
+	for _, scene := range identitySet.SceneRefs {
+		episode := episodes[scene.EpisodeID]
+		if episode == nil {
+			return nil, errors.New("Production World Planning Scene has no Episode")
+		}
+		if _, exists := knownScenes[scene.ScopeKey]; !exists {
+			return nil, errors.New("Production World Planning Scene coverage drifted")
+		}
+		episode.SceneScopeKeys = append(episode.SceneScopeKeys, scene.ScopeKey)
+	}
+	for index := range result {
+		slices.Sort(result[index].SceneScopeKeys)
+	}
+	slices.SortFunc(result, func(left, right ProductionWorldPlanningEpisodeScope) int {
+		return cmp.Compare(left.ScopeKey, right.ScopeKey)
+	})
+	return result, nil
 }
 
 func productionWorldExpectedKeys(value ProductionWorldCandidate) ([]ProductionWorldExpectedBusinessKeySet, error) {

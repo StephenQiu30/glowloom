@@ -25,6 +25,11 @@ func TestProductionWorldCandidatePartitionsThreeFrozenFragments(t *testing.T) {
 	if value.SchemaVersion != worlddomain.ProductionWorldCandidateSchemaVersion || len(value.ContentHash) != 64 {
 		t.Fatalf("invalid Production World Candidate identity: %#v", value)
 	}
+	if len(value.SharedProof.PlanningEpisodeScopes) != 1 ||
+		value.SharedProof.PlanningEpisodeScopes[0].EpisodeID != draft.FrozenInput.StructureIdentitySet.EpisodeRefs[0].EpisodeID ||
+		!slices.Equal(value.SharedProof.PlanningEpisodeScopes[0].SceneScopeKeys, value.SharedProof.ScopeKeys) {
+		t.Fatalf("Production World Candidate lost Episode to Scene closure: %#v", value.SharedProof.PlanningEpisodeScopes)
+	}
 	if len(value.Bible.Specifications) != 1 || len(value.Asset.Identities) != 1 ||
 		len(value.Planning.Scenes) != 1 || len(value.Planning.SceneStoryTimes) != 1 {
 		t.Fatalf("Production World partitions are incomplete: %#v", value)
@@ -56,11 +61,7 @@ func TestProductionWorldGateInputBindsAggregateAndSeparatePlanningProjections(t 
 		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
 		CandidateRevisionHash: strings.Repeat("f", 64), Candidate: candidate,
 		AllowedDecisions: []string{"rejected", "approved"},
-		ExpectedHeads: []workflow.HumanGateExpectedHead{
-			{OwnerKind: "asset", LogicalID: candidateDraft.ProjectID, Revision: 0},
-			{OwnerKind: "production/planning", LogicalID: candidateDraft.ProjectID, Revision: 2, ContentHash: strings.Repeat("d", 64)},
-			{OwnerKind: "production/bible", LogicalID: candidateDraft.ProjectID, Revision: 1, ContentHash: strings.Repeat("c", 64)},
-		},
+		ExpectedHeads:    productionWorldExpectedHeads(candidate, 1, 2),
 	}
 	value, encoded, err := workflow.NewProductionWorldGateInput(draft)
 	if err != nil {
@@ -75,7 +76,8 @@ func TestProductionWorldGateInputBindsAggregateAndSeparatePlanningProjections(t 
 		value.Subject.ContinuityCandidate.ProjectionKind != "continuity" ||
 		value.Subject.InteractionCandidate.Candidate != candidate.UpstreamCandidates.InteractionContinuity ||
 		value.Subject.ContinuityCandidate.Candidate != candidate.UpstreamCandidates.InteractionContinuity ||
-		value.Subject.StructureIdentitySetVersion.VersionID != candidate.StructureIdentitySetVersion.VersionID {
+		value.Subject.StructureIdentitySetVersion.VersionID != candidate.StructureIdentitySetVersion.VersionID ||
+		len(value.Subject.ExpectedHeads) != 4 {
 		t.Fatalf("Gate 2 Subject is incomplete: %#v", value.Subject)
 	}
 	if !slices.Equal(value.EffectPlan.AtomicStep.OwnerKinds, []string{"asset", "production/bible", "production/planning"}) ||
@@ -107,11 +109,7 @@ func TestProductionWorldContractsRejectUpstreamAndHashDrift(t *testing.T) {
 		CandidateRevisionID: uuid.NewString(), CandidateRevision: 1,
 		CandidateRevisionHash: strings.Repeat("e", 64), Candidate: candidate,
 		AllowedDecisions: []string{"approved", "rejected"},
-		ExpectedHeads: []workflow.HumanGateExpectedHead{
-			{OwnerKind: "production/bible", LogicalID: draft.ProjectID, Revision: 0},
-			{OwnerKind: "production/planning", LogicalID: draft.ProjectID, Revision: 0},
-			{OwnerKind: "asset", LogicalID: draft.ProjectID, Revision: 0},
-		},
+		ExpectedHeads:    productionWorldExpectedHeads(candidate, 0, 0),
 	}
 	_, encoded, err := workflow.NewProductionWorldGateInput(gateDraft)
 	if err != nil {
@@ -307,3 +305,23 @@ func sha256Text(value string) string {
 }
 
 func stringRef(value string) *string { return &value }
+
+func productionWorldExpectedHeads(
+	candidate worlddomain.ProductionWorldCandidate,
+	bibleRevision, episodeRevision int64,
+) []workflow.ProductionWorldExpectedHead {
+	bibleHash, episodeHash := "", ""
+	if bibleRevision > 0 {
+		bibleHash = strings.Repeat("c", 64)
+	}
+	if episodeRevision > 0 {
+		episodeHash = strings.Repeat("d", 64)
+	}
+	episode := candidate.SharedProof.PlanningEpisodeScopes[0]
+	return []workflow.ProductionWorldExpectedHead{
+		{OwnerKind: "asset", VersionFamily: "asset_identity_state_set", ScopeKind: "project", ScopeKey: "project:" + candidate.ProjectID},
+		{OwnerKind: "production/bible", VersionFamily: "bible_production_world_set", ScopeKind: "project", ScopeKey: "project:" + candidate.ProjectID, Revision: bibleRevision, ContentHash: bibleHash},
+		{OwnerKind: "production/planning", VersionFamily: "planning_scene_set", ScopeKind: "episode", ScopeKey: episode.ScopeKey, Revision: episodeRevision, ContentHash: episodeHash},
+		{OwnerKind: "production/planning", VersionFamily: "planning_structure_rebase_set", ScopeKind: "project", ScopeKey: "project:" + candidate.ProjectID},
+	}
+}

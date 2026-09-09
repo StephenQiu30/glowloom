@@ -39,11 +39,7 @@ func prepareProductionWorldGateInput(
 	if err = validateProductionWorldFormalReadSet(database, run, candidate); err != nil {
 		return model.WorkflowHumanGateInput{}, domain.ProductionWorldGateInput{}, nil, err
 	}
-	expectedHeads := []domain.HumanGateExpectedHead{
-		{OwnerKind: "asset", LogicalID: run.ProjectID.String()},
-		{OwnerKind: "production/bible", LogicalID: run.ProjectID.String()},
-		{OwnerKind: "production/planning", LogicalID: run.ProjectID.String()},
-	}
+	expectedHeads := productionWorldInitialExpectedHeads(candidate)
 	gate, encoded, err := domain.NewProductionWorldGateInput(domain.ProductionWorldGateInputDraft{
 		WorkspaceID: run.WorkspaceID.String(), ProjectID: run.ProjectID.String(),
 		WorkflowRunID: run.ID.String(), NodeRunID: node.ID.String(),
@@ -79,6 +75,23 @@ func prepareProductionWorldGateInput(
 		return model.WorkflowHumanGateInput{}, domain.ProductionWorldGateInput{}, nil, err
 	}
 	return record, gate, productionWorldCandidateIDs(gate, candidate), nil
+}
+
+func productionWorldInitialExpectedHeads(candidate worlddomain.ProductionWorldCandidate) []domain.ProductionWorldExpectedHead {
+	result := []domain.ProductionWorldExpectedHead{
+		{OwnerKind: "asset", VersionFamily: "asset_identity_state_set", ScopeKind: "project", ScopeKey: "project:" + candidate.ProjectID},
+		{OwnerKind: "production/bible", VersionFamily: "bible_production_world_set", ScopeKind: "project", ScopeKey: "project:" + candidate.ProjectID},
+	}
+	for _, episode := range candidate.SharedProof.PlanningEpisodeScopes {
+		result = append(result, domain.ProductionWorldExpectedHead{
+			OwnerKind: "production/planning", VersionFamily: "planning_scene_set",
+			ScopeKind: "episode", ScopeKey: episode.ScopeKey,
+		})
+	}
+	return append(result, domain.ProductionWorldExpectedHead{
+		OwnerKind: "production/planning", VersionFamily: "planning_structure_rebase_set",
+		ScopeKind: "project", ScopeKey: "project:" + candidate.ProjectID,
+	})
 }
 
 func productionWorldGateBinding(input domain.NodeInputSnapshot) (domain.NodeInputBinding, error) {

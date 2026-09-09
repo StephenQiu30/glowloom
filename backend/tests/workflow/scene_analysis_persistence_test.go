@@ -693,7 +693,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		decodedProductionWorldGate.Subject.InteractionCandidate.Candidate.CandidateRevisionID != continuityCandidate.ID ||
 		decodedProductionWorldGate.Subject.ContinuityCandidate.Candidate.CandidateRevisionID != continuityCandidate.ID ||
 		decodedProductionWorldGate.Subject.InteractionCandidate.ProjectionHash == decodedProductionWorldGate.Subject.ContinuityCandidate.ProjectionHash ||
-		len(decodedProductionWorldGate.Subject.ExpectedHeads) != 3 {
+		len(decodedProductionWorldGate.Subject.ExpectedHeads) != 4 {
 		t.Fatalf("persisted Production World Gate input = %#v err=%v", decodedProductionWorldGate, gateDecodeErr)
 	}
 	for _, expectedHead := range decodedProductionWorldGate.Subject.ExpectedHeads {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"reflect"
 
 	"github.com/google/uuid"
 
@@ -60,6 +61,7 @@ func DecodeProductionWorldOwnerMaterial(raw json.RawMessage) (ProductionWorldOwn
 		candidate.StructureIdentitySetVersion != gate.Subject.StructureIdentitySetVersion ||
 		candidate.UpstreamCandidates.SceneOccurrence != gate.Subject.SceneOccurrenceCandidate ||
 		candidate.UpstreamCandidates.InteractionContinuity != gate.Subject.InteractionCandidate.Candidate ||
+		!reflect.DeepEqual(candidate.SharedProof.PlanningEpisodeScopes, gate.Subject.PlanningEpisodeScopes) ||
 		candidate.InteractionProjectionHash != gate.Subject.InteractionCandidate.ProjectionHash ||
 		candidate.ContinuityProjectionHash != gate.Subject.ContinuityCandidate.ProjectionHash ||
 		candidate.ContentHash != gate.Subject.ProductionWorldCandidate.CandidateContentHash {

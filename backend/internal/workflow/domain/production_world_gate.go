@@ -42,6 +42,15 @@ type ProductionWorldBusinessKeyRoot struct {
 	Root      string `json:"root"`
 }
 
+type ProductionWorldExpectedHead struct {
+	OwnerKind     string `json:"owner_kind"`
+	VersionFamily string `json:"version_family"`
+	ScopeKind     string `json:"scope_kind"`
+	ScopeKey      string `json:"scope_key"`
+	Revision      int64  `json:"revision"`
+	ContentHash   string `json:"content_hash"`
+}
+
 type ProductionWorldGateSubject struct {
 	SourceVersion               agentcontract.ScriptSourceVersionIdentity            `json:"source_version"`
 	StructureIdentitySetVersion worlddomain.ProductionWorldOwnerVersionRef           `json:"structure_identity_set_version"`
@@ -50,17 +59,18 @@ type ProductionWorldGateSubject struct {
 	InteractionCandidate        ProductionWorldCandidateProjectionRef                `json:"interaction_candidate"`
 	ContinuityCandidate         ProductionWorldCandidateProjectionRef                `json:"continuity_candidate"`
 	ExpectedBusinessKeyRoots    []ProductionWorldBusinessKeyRoot                     `json:"expected_business_key_roots"`
+	PlanningEpisodeScopes       []worlddomain.ProductionWorldPlanningEpisodeScope    `json:"planning_episode_scopes"`
 	ScopeClosureRoot            string                                               `json:"scope_closure_root"`
-	ExpectedHeads               []HumanGateExpectedHead                              `json:"expected_heads"`
+	ExpectedHeads               []ProductionWorldExpectedHead                        `json:"expected_heads"`
 	ReadSetRoot                 string                                               `json:"read_set_root"`
 }
 
 type ProductionWorldAtomicEffectStep struct {
-	StepKey       string                  `json:"step_key"`
-	OwnerKinds    []string                `json:"owner_kinds"`
-	OwnerCommand  string                  `json:"owner_command"`
-	ExpectedHeads []HumanGateExpectedHead `json:"expected_heads"`
-	ReadSetRoot   string                  `json:"read_set_root"`
+	StepKey       string                        `json:"step_key"`
+	OwnerKinds    []string                      `json:"owner_kinds"`
+	OwnerCommand  string                        `json:"owner_command"`
+	ExpectedHeads []ProductionWorldExpectedHead `json:"expected_heads"`
+	ReadSetRoot   string                        `json:"read_set_root"`
 }
 
 type ProductionWorldEffectPlan struct {
@@ -75,7 +85,7 @@ type ProductionWorldGateInputDraft struct {
 	CandidateRevisionHash                            string
 	Candidate                                        worlddomain.ProductionWorldCandidate
 	AllowedDecisions                                 []string
-	ExpectedHeads                                    []HumanGateExpectedHead
+	ExpectedHeads                                    []ProductionWorldExpectedHead
 }
 
 type ProductionWorldGateInput struct {
@@ -129,8 +139,9 @@ func NewProductionWorldGateInput(
 				ProjectionKind: "continuity", ProjectionHash: candidate.ContinuityProjectionHash,
 			},
 			ExpectedBusinessKeyRoots: productionWorldBusinessKeyRoots(candidate.SharedProof.ExpectedBusinessKeyRoots),
+			PlanningEpisodeScopes:    append([]worlddomain.ProductionWorldPlanningEpisodeScope(nil), candidate.SharedProof.PlanningEpisodeScopes...),
 			ScopeClosureRoot:         candidate.SharedProof.ScopeClosureRoot,
-			ExpectedHeads:            append([]HumanGateExpectedHead(nil), draft.ExpectedHeads...),
+			ExpectedHeads:            append([]ProductionWorldExpectedHead(nil), draft.ExpectedHeads...),
 		},
 		AllowedDecisions: append([]string(nil), draft.AllowedDecisions...),
 	}
@@ -184,7 +195,8 @@ func completeProductionWorldGateInput(value *ProductionWorldGateInput, verify bo
 		validateProductionWorldProjection(value.Subject.ContinuityCandidate, "continuity") != nil ||
 		value.Subject.InteractionCandidate.Candidate != value.Subject.ContinuityCandidate.Candidate ||
 		!nodeOutputContentHashPattern.MatchString(value.Subject.ScopeClosureRoot) ||
-		len(value.Subject.ExpectedBusinessKeyRoots) != 3 {
+		len(value.Subject.ExpectedBusinessKeyRoots) != 3 ||
+		validateProductionWorldPlanningEpisodeScopes(value.Subject.PlanningEpisodeScopes, value.Subject.ScopeClosureRoot) != nil {
 		return errors.New("invalid Gate 2 Subject")
 	}
 	if _, err := uuid.Parse(value.Subject.StructureIdentitySetVersion.VersionID); err != nil {
@@ -204,7 +216,7 @@ func completeProductionWorldGateInput(value *ProductionWorldGateInput, verify bo
 		return errors.New("Gate 2 requires exact typed decisions")
 	}
 	slices.SortFunc(value.Subject.ExpectedHeads, compareProductionWorldExpectedHead)
-	if err := validateProductionWorldExpectedHeads(value.Subject.ExpectedHeads, value.ProjectID); err != nil {
+	if err := validateProductionWorldExpectedHeads(value.Subject.ExpectedHeads, value.ProjectID, value.Subject.PlanningEpisodeScopes); err != nil {
 		return err
 	}
 	readSetRoot := hashProductionWorldMaterial(productionWorldReadSetMaterial(value.Subject))
@@ -220,7 +232,7 @@ func completeProductionWorldGateInput(value *ProductionWorldGateInput, verify bo
 			StepKey:       confirmProductionWorldStep,
 			OwnerKinds:    []string{"asset", "production/bible", "production/planning"},
 			OwnerCommand:  "confirm_production_world",
-			ExpectedHeads: append([]HumanGateExpectedHead(nil), value.Subject.ExpectedHeads...),
+			ExpectedHeads: append([]ProductionWorldExpectedHead(nil), value.Subject.ExpectedHeads...),
 			ReadSetRoot:   readSetRoot,
 		},
 	}
@@ -261,17 +273,74 @@ func validateProductionWorldProjection(value ProductionWorldCandidateProjectionR
 	return nil
 }
 
-func compareProductionWorldExpectedHead(left, right HumanGateExpectedHead) int {
-	return cmp.Compare(left.OwnerKind, right.OwnerKind)
+func validateProductionWorldPlanningEpisodeScopes(
+	values []worlddomain.ProductionWorldPlanningEpisodeScope,
+	scopeClosureRoot string,
+) error {
+	if len(values) == 0 {
+		return errors.New("Gate 2 Planning Episode scope set is empty")
+	}
+	allScenes := make([]string, 0)
+	previousScope := ""
+	for _, value := range values {
+		if value.ScopeKey <= previousScope || value.ScopeKey != "episode:"+value.EpisodeID ||
+			len(value.SceneScopeKeys) == 0 || !slices.IsSorted(value.SceneScopeKeys) {
+			return errors.New("Gate 2 Planning Episode scope set is invalid")
+		}
+		if _, err := uuid.Parse(value.EpisodeID); err != nil {
+			return errors.New("Gate 2 Planning Episode identity is invalid")
+		}
+		for index, scene := range value.SceneScopeKeys {
+			if strings.TrimSpace(scene) == "" || (index > 0 && value.SceneScopeKeys[index-1] == scene) {
+				return errors.New("Gate 2 Planning Episode Scene set is invalid")
+			}
+			allScenes = append(allScenes, scene)
+		}
+		previousScope = value.ScopeKey
+	}
+	slices.Sort(allScenes)
+	if !uniqueNonempty(allScenes) || hashProductionWorldMaterial(allScenes) != scopeClosureRoot {
+		return errors.New("Gate 2 Planning Episode scope closure has drifted")
+	}
+	return nil
 }
 
-func validateProductionWorldExpectedHeads(values []HumanGateExpectedHead, projectID string) error {
-	expected := []string{"asset", "production/bible", "production/planning"}
+func compareProductionWorldExpectedHead(left, right ProductionWorldExpectedHead) int {
+	if result := cmp.Compare(left.OwnerKind, right.OwnerKind); result != 0 {
+		return result
+	}
+	if result := cmp.Compare(left.VersionFamily, right.VersionFamily); result != 0 {
+		return result
+	}
+	return cmp.Compare(left.ScopeKey, right.ScopeKey)
+}
+
+func validateProductionWorldExpectedHeads(
+	values []ProductionWorldExpectedHead,
+	projectID string,
+	episodes []worlddomain.ProductionWorldPlanningEpisodeScope,
+) error {
+	expected := []ProductionWorldExpectedHead{
+		{OwnerKind: "asset", VersionFamily: "asset_identity_state_set", ScopeKind: "project", ScopeKey: "project:" + projectID},
+		{OwnerKind: "production/bible", VersionFamily: "bible_production_world_set", ScopeKind: "project", ScopeKey: "project:" + projectID},
+	}
+	for _, episode := range episodes {
+		expected = append(expected, ProductionWorldExpectedHead{
+			OwnerKind: "production/planning", VersionFamily: "planning_scene_set",
+			ScopeKind: "episode", ScopeKey: episode.ScopeKey,
+		})
+	}
+	expected = append(expected, ProductionWorldExpectedHead{
+		OwnerKind: "production/planning", VersionFamily: "planning_structure_rebase_set",
+		ScopeKind: "project", ScopeKey: "project:" + projectID,
+	})
 	if len(values) != len(expected) {
 		return errors.New("Gate 2 expected Head set is incomplete")
 	}
 	for index, value := range values {
-		if value.OwnerKind != expected[index] || value.LogicalID != projectID || value.Revision < 0 ||
+		identity := expected[index]
+		if value.OwnerKind != identity.OwnerKind || value.VersionFamily != identity.VersionFamily ||
+			value.ScopeKind != identity.ScopeKind || value.ScopeKey != identity.ScopeKey || value.Revision < 0 ||
 			(value.Revision == 0 && value.ContentHash != "") ||
 			(value.Revision > 0 && !nodeOutputContentHashPattern.MatchString(value.ContentHash)) {
 			return errors.New("invalid Gate 2 expected Head")
@@ -289,12 +358,13 @@ func productionWorldReadSetMaterial(value ProductionWorldGateSubject) any {
 		InteractionCandidate        ProductionWorldCandidateProjectionRef                `json:"interaction_candidate"`
 		ContinuityCandidate         ProductionWorldCandidateProjectionRef                `json:"continuity_candidate"`
 		ExpectedBusinessKeyRoots    []ProductionWorldBusinessKeyRoot                     `json:"expected_business_key_roots"`
+		PlanningEpisodeScopes       []worlddomain.ProductionWorldPlanningEpisodeScope    `json:"planning_episode_scopes"`
 		ScopeClosureRoot            string                                               `json:"scope_closure_root"`
-		ExpectedHeads               []HumanGateExpectedHead                              `json:"expected_heads"`
+		ExpectedHeads               []ProductionWorldExpectedHead                        `json:"expected_heads"`
 	}{
 		value.SourceVersion, value.StructureIdentitySetVersion, value.ProductionWorldCandidate,
 		value.SceneOccurrenceCandidate, value.InteractionCandidate, value.ContinuityCandidate,
-		value.ExpectedBusinessKeyRoots, value.ScopeClosureRoot, value.ExpectedHeads,
+		value.ExpectedBusinessKeyRoots, value.PlanningEpisodeScopes, value.ScopeClosureRoot, value.ExpectedHeads,
 	}
 }
 
