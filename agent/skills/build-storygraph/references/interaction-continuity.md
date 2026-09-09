@@ -15,9 +15,17 @@ emit duplicate give/receive claims. `give` transfers actor to counterparty; `rec
 counterparty to actor. `carry` preserves the actor holder, `use` never transfers a holder, and
 `place`/`drop` release the actor holder. Every Prop State change has one explicit `state_delta`;
 `open` and `break` require that change. `hand` is typed, and relative scale is a reduced positive
-rational. Geometry fields may be populated only when the frozen Scene Fact Evidence states them.
+rational. For every populated hand, grip, contact, direction, or scale field, emit the matching
+`geometry_evidence` field from the same frozen Scene action; leave both the value and its Evidence
+empty when the script does not state it.
 
 Continuity is either `state_persists` with the same state and no delta, or `state_changes` with two
-states of the same identity and an explicit delta. Report missing participants, unexplained state
-jumps, double holders, Prop teleportation, and uncertain geometry as blocking review issues. Do not
-invent an identity, state, occurrence, visual preset, artifact, formal Owner row, or writable ledger.
+states of the same identity and an explicit delta. Emit one `continuity_ledger` entry for every
+actual Character and Prop in every Scene. Each entry binds the exact occurrence state, story time,
+actual Scene location when present, and the subject/location Evidence. A Prop entry also records its
+single holder and the Interaction that produces its exit state. A changed Prop state, holder, or
+location must be explained by that transition; only carry or transfer can explain a location change.
+Every Interaction must be applied to exactly one ledger entry. Every adjacent Character ledger
+boundary must bind an exact Continuity claim. Report missing participants, unexplained state jumps,
+double holders, Prop teleportation, and uncertain geometry as blocking review issues. Do not invent
+an identity, state, occurrence, visual preset, artifact, formal Owner row, or writable Owner ledger.

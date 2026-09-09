@@ -70,7 +70,14 @@ func TestInteractionContinuityRequiresThreeFrozenCandidateInputs(t *testing.T) {
 		SceneStoryTimes: []contract.SceneStoryTimeFragment{{
 			SceneScopeKey: formalScene.ScopeKey, StoryTimeKey: "storytime:00000001",
 		}},
-		Interactions: []contract.InteractionFragment{}, Continuity: []contract.ContinuityFragment{},
+		Interactions: []contract.InteractionFragment{},
+		ContinuityLedger: []contract.ContinuityLedgerEntry{{
+			LedgerKey: "ledger_character_linzhou_scene_0001", SubjectKind: "character",
+			IdentityKey: "character:linzhou", SceneScopeKey: formalScene.ScopeKey,
+			StoryTimeKey: "storytime:00000001", StateKey: "state_character_linzhou_initial",
+			Evidence: []contract.SourceEvidenceSpan{bindingCandidate.Scenes[0].Occurrences[0].Evidence},
+		}},
+		Continuity:   []contract.ContinuityFragment{},
 		ReviewIssues: []contract.CandidateReviewIssue{},
 	}
 	raw, err := json.Marshal(candidate)

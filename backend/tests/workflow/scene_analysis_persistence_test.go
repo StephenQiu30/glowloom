@@ -1403,22 +1403,30 @@ func buildInteractionContinuityCandidate(input contract.InteractionContinuityInp
 	_ = json.Unmarshal(input.SceneBindingCandidate, &bindings)
 	_ = json.Unmarshal(input.SceneFactCandidate, &facts)
 	first, second := bindings.Scenes[0], bindings.Scenes[1]
-	var actor, prop contract.SceneOccurrenceFragment
+	var actor, prop, firstLocation contract.SceneOccurrenceFragment
 	for _, occurrence := range first.Occurrences {
 		switch occurrence.SubjectKind {
 		case "character":
 			actor = occurrence
 		case "prop":
 			prop = occurrence
+		case "location":
+			firstLocation = occurrence
 		}
 	}
-	var nextActor contract.SceneOccurrenceFragment
+	var nextActor, secondLocation contract.SceneOccurrenceFragment
 	for _, occurrence := range second.Occurrences {
-		if occurrence.SubjectKind == "character" {
+		switch occurrence.SubjectKind {
+		case "character":
 			nextActor = occurrence
+		case "location":
+			secondLocation = occurrence
 		}
 	}
 	holder := actor.IdentityKey
+	firstLocationIdentity := firstLocation.IdentityKey
+	secondLocationIdentity := secondLocation.IdentityKey
+	transitionKey := "interaction_scene_0001_0001"
 	candidate := mustSceneJSON(contract.InteractionContinuityCandidate{
 		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
 		StructureIdentitySetVersionID:         input.StructureIdentitySetVersionID,
@@ -1434,7 +1442,7 @@ func buildInteractionContinuityCandidate(input contract.InteractionContinuityInp
 			{SceneScopeKey: second.SceneScopeKey, StoryTimeKey: "storytime:00000002"},
 		},
 		Interactions: []contract.InteractionFragment{{
-			InteractionKey: "interaction_scene_0001_0001",
+			InteractionKey: transitionKey,
 			ClaimSeriesKey: "interaction_series_door_handle_hold", ClaimRevision: 1,
 			SceneScopeKey: first.SceneScopeKey, BeatKey: &first.Beats[0].BeatKey,
 			StoryTimeKey: "storytime:00000001", Predicate: "hold", Hand: "unspecified",
@@ -1443,6 +1451,30 @@ func buildInteractionContinuityCandidate(input contract.InteractionContinuityInp
 			PropStateBeforeKey:     prop.StateKey, PropStateAfterKey: prop.StateKey,
 			Evidence: facts.Scenes[0].Actions[0].Evidence,
 		}},
+		ContinuityLedger: []contract.ContinuityLedgerEntry{
+			{
+				LedgerKey: "ledger_character_linzhou_scene_0001", SubjectKind: "character",
+				IdentityKey: actor.IdentityKey, SceneScopeKey: first.SceneScopeKey,
+				StoryTimeKey: "storytime:00000001", StateKey: actor.StateKey,
+				LocationIdentityKey: &firstLocationIdentity,
+				Evidence:            []contract.SourceEvidenceSpan{firstLocation.Evidence, actor.Evidence},
+			},
+			{
+				LedgerKey: "ledger_prop_door_handle_scene_0001", SubjectKind: "prop",
+				IdentityKey: prop.IdentityKey, SceneScopeKey: first.SceneScopeKey,
+				StoryTimeKey: "storytime:00000001", StateKey: prop.StateKey,
+				HolderIdentityKey: &holder, LocationIdentityKey: &firstLocationIdentity,
+				TransitionInteractionKey: &transitionKey,
+				Evidence:                 []contract.SourceEvidenceSpan{firstLocation.Evidence, prop.Evidence},
+			},
+			{
+				LedgerKey: "ledger_character_linzhou_scene_0002", SubjectKind: "character",
+				IdentityKey: nextActor.IdentityKey, SceneScopeKey: second.SceneScopeKey,
+				StoryTimeKey: "storytime:00000002", StateKey: nextActor.StateKey,
+				LocationIdentityKey: &secondLocationIdentity,
+				Evidence:            []contract.SourceEvidenceSpan{secondLocation.Evidence, nextActor.Evidence},
+			},
+		},
 		Continuity: []contract.ContinuityFragment{{
 			ContinuityKey:  "continuity_character_linzhou_0001",
 			ClaimSeriesKey: "continuity_series_character_linzhou", ClaimRevision: 1,

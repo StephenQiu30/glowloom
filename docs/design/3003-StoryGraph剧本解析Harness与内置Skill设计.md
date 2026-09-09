@@ -473,6 +473,8 @@ shared proof
 
 Interaction Candidate 精确镜像 `0010` 的状态机：typed predicate、actor/prop/counterparty Occurrence、Scene/Beat/story-time、holder before/after、PropState before/after、手别/接触/方向/比例、claim revision/supersedes。普通 Continuity 只允许 `state_persists|state_changes`。Ledger 必须机械拒绝双 holder、无因状态跳变、道具瞬移和 give/receive 双重应用。
 
+MVP Wire 将人物—道具几何的每个可选值与同名 `geometry_evidence` 字段一一绑定；未给出手别、握法、接触点、方向或比例时，对应 Evidence 也必须为空。`continuity_ledger` 对每个实际 Character/Prop Occurrence 逐场保存 `state_key + holder_identity_key? + location_identity_key? + transition_interaction_key? + evidence`。人物相邻边界必须命中一条精确 Continuity；道具的 State、holder 或 Location 变化必须由同一时点唯一 Interaction 解释，跨地点只接受 `carry|give|receive`，否则以无原因瞬移拒绝。该 Ledger 仍是 Candidate 视图，不是 Agent 可写的正式 Owner。
+
 Agent 只能提出 `needs_creator_decision` 或 DesignGap；不能构造 ContentAddressedAuditRef。Gate 2 用户决定由目标 Owner 内容定址并满足 `evidence XOR creator decision`。
 
 ## 9. 宏观 Workflow、Gate 与正式输出

@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -21,9 +21,15 @@ from app.modules.storygraph.scene_analysis_bundle import (
     SCENE_ANALYSIS_SKILL_BUNDLE_HASH,
     SceneAnalysisBundle,
 )
-from app.modules.storygraph.scene_analysis_candidates import InteractionContinuityCandidate
+from app.modules.storygraph.scene_analysis_candidates import (
+    InteractionContinuityCandidate,
+    ProductionEntityFragmentCandidate,
+)
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
 from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
+from tests.contract.interaction_continuity_journey_fixture import (
+    build_interaction_journey,
+)
 from tests.contract.test_scene_occurrence_binding_contract import (
     _candidate as scene_binding_candidate,  # pyright: ignore[reportPrivateUsage]
 )
@@ -106,6 +112,13 @@ def _candidate() -> dict[str, Any]:
                 "contact_point": None,
                 "direction": None,
                 "relative_scale": None,
+                "geometry_evidence": {
+                    "hand": None,
+                    "grip_type": None,
+                    "contact_point": None,
+                    "direction": None,
+                    "relative_scale": None,
+                },
                 "evidence": _evidence(
                     8,
                     15,
@@ -113,6 +126,83 @@ def _candidate() -> dict[str, Any]:
                     "林舟握住门把。",
                 ),
             }
+        ],
+        "continuity_ledger": [
+            {
+                "ledger_key": "ledger_character_linzhou_scene_0001",
+                "subject_kind": "character",
+                "identity_key": "character:linzhou",
+                "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+                "story_time_key": "storytime:00000001",
+                "state_key": "state_character_linzhou_initial",
+                "holder_identity_key": None,
+                "location_identity_key": "location:interior",
+                "transition_interaction_key": None,
+                "evidence": [
+                    _evidence(
+                        6,
+                        7,
+                        "b2126ce9c100bff0cc963326e29fadc751106ad7fd7f34aa46cddc06d8198c6a",
+                        "内",
+                    ),
+                    _evidence(
+                        8,
+                        10,
+                        "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+                        "林舟",
+                    ),
+                ],
+            },
+            {
+                "ledger_key": "ledger_prop_door_handle_scene_0001",
+                "subject_kind": "prop",
+                "identity_key": "prop:door_handle",
+                "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+                "story_time_key": "storytime:00000001",
+                "state_key": "state_prop_door_handle_initial",
+                "holder_identity_key": "character:linzhou",
+                "location_identity_key": "location:interior",
+                "transition_interaction_key": "interaction_scene_0001_0001",
+                "evidence": [
+                    _evidence(
+                        6,
+                        7,
+                        "b2126ce9c100bff0cc963326e29fadc751106ad7fd7f34aa46cddc06d8198c6a",
+                        "内",
+                    ),
+                    _evidence(
+                        12,
+                        14,
+                        "3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9",
+                        "门把",
+                    ),
+                ],
+            },
+            {
+                "ledger_key": "ledger_character_linzhou_scene_0002",
+                "subject_kind": "character",
+                "identity_key": "character:linzhou",
+                "scene_scope_key": "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+                "story_time_key": "storytime:00000002",
+                "state_key": "state_character_linzhou_initial",
+                "holder_identity_key": None,
+                "location_identity_key": "location:exterior",
+                "transition_interaction_key": None,
+                "evidence": [
+                    _evidence(
+                        22,
+                        23,
+                        "0e826095b60ccf039478a7e093220d79a4614158557924383bd3c7ef1bb06d8a",
+                        "外",
+                    ),
+                    _evidence(
+                        24,
+                        26,
+                        "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+                        "林舟",
+                    ),
+                ],
+            },
         ],
         "continuity": [
             {
@@ -157,6 +247,74 @@ def test_interaction_continuity_binds_actual_occurrences_and_state_timeline() ->
     assert candidate.continuity[0].transition == "state_persists"
 
 
+def test_interaction_continuity_covers_transfer_geometry_and_cross_scene_ledger() -> None:
+    stage_input, value = build_interaction_journey()
+
+    candidate = InteractionContinuityCandidate.model_validate(value)
+    candidate.validate_for_input(stage_input)
+    production = ProductionEntityFragmentCandidate.model_validate(
+        stage_input.production_entity_candidate
+    )
+    states_by_identity = {
+        entity.identity_key: [state.state_key for state in entity.states]
+        for entity in production.entities
+    }
+
+    assert [item.predicate for item in candidate.interactions] == ["hold", "give", "carry"]
+    assert len(candidate.continuity_ledger) == 7
+    assert len(states_by_identity["character:linzhou"]) == 2
+    assert len(states_by_identity["prop:box"]) == 2
+
+
+def test_interaction_continuity_accepts_receive_as_the_single_transfer_view() -> None:
+    stage_input, value = build_interaction_journey()
+    transfer = value["interactions"][1]
+    transfer["predicate"] = "receive"
+    transfer["actor_occurrence_key"], transfer["counterparty_occurrence_key"] = (
+        transfer["counterparty_occurrence_key"],
+        transfer["actor_occurrence_key"],
+    )
+
+    candidate = InteractionContinuityCandidate.model_validate(value)
+    candidate.validate_for_input(stage_input)
+
+
+def test_interaction_continuity_rejects_transfer_double_application() -> None:
+    stage_input, value = build_interaction_journey()
+    duplicate = copy.deepcopy(value["interactions"][1])
+    duplicate["interaction_key"] = "interaction_box_transfer_receive"
+    duplicate["claim_series_key"] = "interaction_series_box_transfer_receive"
+    duplicate["predicate"] = "receive"
+    duplicate["actor_occurrence_key"], duplicate["counterparty_occurrence_key"] = (
+        duplicate["counterparty_occurrence_key"],
+        duplicate["actor_occurrence_key"],
+    )
+    value["interactions"].insert(2, duplicate)
+
+    with pytest.raises((ValidationError, ValueError)):
+        candidate = InteractionContinuityCandidate.model_validate(value)
+        candidate.validate_for_input(stage_input)
+
+
+def test_interaction_continuity_rejects_prop_teleport_without_carry_transition() -> None:
+    stage_input, value = build_interaction_journey()
+    value["interactions"].pop()
+    value["continuity_ledger"][-1]["transition_interaction_key"] = None
+
+    with pytest.raises((ValidationError, ValueError)):
+        candidate = InteractionContinuityCandidate.model_validate(value)
+        candidate.validate_for_input(stage_input)
+
+
+def test_interaction_continuity_rejects_unproved_geometry() -> None:
+    stage_input, value = build_interaction_journey()
+    value["interactions"][0]["geometry_evidence"]["hand"] = None
+
+    with pytest.raises((ValidationError, ValueError)):
+        candidate = InteractionContinuityCandidate.model_validate(value)
+        candidate.validate_for_input(stage_input)
+
+
 @pytest.mark.parametrize(
     ("predicate", "holder_before", "holder_after"),
     [
@@ -194,6 +352,16 @@ def test_interaction_continuity_uses_explicit_story_time_not_scene_array_order()
         },
     ]
     value["interactions"][0]["story_time_key"] = "storytime:00000002"
+    ledger_entries = cast(list[dict[str, Any]], value["continuity_ledger"])
+    for entry in ledger_entries:
+        entry["story_time_key"] = (
+            "storytime:00000001"
+            if entry["scene_scope_key"] == "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2"
+            else "storytime:00000002"
+        )
+    ledger_entries.sort(
+        key=lambda item: (item["story_time_key"], item["subject_kind"], item["identity_key"])
+    )
     continuity = value["continuity"][0]
     continuity["from_scene_scope_key"] = "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2"
     continuity["to_scene_scope_key"] = "scene:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"

@@ -17,6 +17,7 @@ var (
 	continuityKeyPattern        = regexp.MustCompile(`^continuity_[a-z0-9_]{1,120}$`)
 	interactionSeriesKeyPattern = regexp.MustCompile(`^interaction_series_[a-z0-9_]{1,120}$`)
 	continuitySeriesKeyPattern  = regexp.MustCompile(`^continuity_series_[a-z0-9_]{1,120}$`)
+	continuityLedgerKeyPattern  = regexp.MustCompile(`^ledger_[a-z0-9_]{1,120}$`)
 	storyTimeKeyPattern         = regexp.MustCompile(`^storytime:[a-z0-9][a-z0-9_.:-]{0,127}$`)
 )
 
@@ -54,29 +55,38 @@ type SceneStoryTimeFragment struct {
 	StoryTimeKey  string `json:"story_time_key"`
 }
 
+type InteractionGeometryEvidence struct {
+	Hand          *SourceEvidenceSpan `json:"hand"`
+	GripType      *SourceEvidenceSpan `json:"grip_type"`
+	ContactPoint  *SourceEvidenceSpan `json:"contact_point"`
+	Direction     *SourceEvidenceSpan `json:"direction"`
+	RelativeScale *SourceEvidenceSpan `json:"relative_scale"`
+}
+
 type InteractionFragment struct {
-	InteractionKey            string             `json:"interaction_key"`
-	ClaimSeriesKey            string             `json:"claim_series_key"`
-	ClaimRevision             int                `json:"claim_revision"`
-	SupersedesInteractionKey  *string            `json:"supersedes_interaction_key"`
-	SceneScopeKey             string             `json:"scene_scope_key"`
-	BeatKey                   *string            `json:"beat_key"`
-	StoryTimeKey              string             `json:"story_time_key"`
-	Predicate                 string             `json:"predicate"`
-	ActorOccurrenceKey        string             `json:"actor_occurrence_key"`
-	PropOccurrenceKey         string             `json:"prop_occurrence_key"`
-	CounterpartyOccurrenceKey *string            `json:"counterparty_occurrence_key"`
-	HolderBeforeIdentityKey   *string            `json:"holder_before_identity_key"`
-	HolderAfterIdentityKey    *string            `json:"holder_after_identity_key"`
-	PropStateBeforeKey        string             `json:"prop_state_before_key"`
-	PropStateAfterKey         string             `json:"prop_state_after_key"`
-	StateDelta                *string            `json:"state_delta"`
-	Hand                      string             `json:"hand"`
-	GripType                  *string            `json:"grip_type"`
-	ContactPoint              *string            `json:"contact_point"`
-	Direction                 *string            `json:"direction"`
-	RelativeScale             *PositiveRational  `json:"relative_scale"`
-	Evidence                  SourceEvidenceSpan `json:"evidence"`
+	InteractionKey            string                      `json:"interaction_key"`
+	ClaimSeriesKey            string                      `json:"claim_series_key"`
+	ClaimRevision             int                         `json:"claim_revision"`
+	SupersedesInteractionKey  *string                     `json:"supersedes_interaction_key"`
+	SceneScopeKey             string                      `json:"scene_scope_key"`
+	BeatKey                   *string                     `json:"beat_key"`
+	StoryTimeKey              string                      `json:"story_time_key"`
+	Predicate                 string                      `json:"predicate"`
+	ActorOccurrenceKey        string                      `json:"actor_occurrence_key"`
+	PropOccurrenceKey         string                      `json:"prop_occurrence_key"`
+	CounterpartyOccurrenceKey *string                     `json:"counterparty_occurrence_key"`
+	HolderBeforeIdentityKey   *string                     `json:"holder_before_identity_key"`
+	HolderAfterIdentityKey    *string                     `json:"holder_after_identity_key"`
+	PropStateBeforeKey        string                      `json:"prop_state_before_key"`
+	PropStateAfterKey         string                      `json:"prop_state_after_key"`
+	StateDelta                *string                     `json:"state_delta"`
+	Hand                      string                      `json:"hand"`
+	GripType                  *string                     `json:"grip_type"`
+	ContactPoint              *string                     `json:"contact_point"`
+	Direction                 *string                     `json:"direction"`
+	RelativeScale             *PositiveRational           `json:"relative_scale"`
+	GeometryEvidence          InteractionGeometryEvidence `json:"geometry_evidence"`
+	Evidence                  SourceEvidenceSpan          `json:"evidence"`
 }
 
 type ContinuityFragment struct {
@@ -97,6 +107,19 @@ type ContinuityFragment struct {
 	Evidence                []SourceEvidenceSpan `json:"evidence"`
 }
 
+type ContinuityLedgerEntry struct {
+	LedgerKey                string               `json:"ledger_key"`
+	SubjectKind              string               `json:"subject_kind"`
+	IdentityKey              string               `json:"identity_key"`
+	SceneScopeKey            string               `json:"scene_scope_key"`
+	StoryTimeKey             string               `json:"story_time_key"`
+	StateKey                 string               `json:"state_key"`
+	HolderIdentityKey        *string              `json:"holder_identity_key"`
+	LocationIdentityKey      *string              `json:"location_identity_key"`
+	TransitionInteractionKey *string              `json:"transition_interaction_key"`
+	Evidence                 []SourceEvidenceSpan `json:"evidence"`
+}
+
 type InteractionContinuityCandidate struct {
 	SourceVersionID                       string                   `json:"source_version_id"`
 	SourceHash                            string                   `json:"source_hash"`
@@ -110,6 +133,7 @@ type InteractionContinuityCandidate struct {
 	SceneBindingCandidateRevisionHash     string                   `json:"scene_binding_candidate_revision_hash"`
 	SceneStoryTimes                       []SceneStoryTimeFragment `json:"scene_story_times"`
 	Interactions                          []InteractionFragment    `json:"interactions"`
+	ContinuityLedger                      []ContinuityLedgerEntry  `json:"continuity_ledger"`
 	Continuity                            []ContinuityFragment     `json:"continuity"`
 	ReviewIssues                          []CandidateReviewIssue   `json:"review_issues"`
 }
@@ -135,6 +159,11 @@ type continuityLedgerState struct {
 	stateKey     string
 }
 
+type ledgerOccurrence struct {
+	sceneKey   string
+	occurrence SceneOccurrenceFragment
+}
+
 func ValidateInteractionContinuityCandidate(
 	raw json.RawMessage,
 	input InteractionContinuityInput,
@@ -143,7 +172,8 @@ func ValidateInteractionContinuityCandidate(
 		return err
 	}
 	var value InteractionContinuityCandidate
-	if decodeStrict(raw, &value) != nil || value.SceneStoryTimes == nil || value.Interactions == nil || value.Continuity == nil ||
+	if decodeStrict(raw, &value) != nil || value.SceneStoryTimes == nil || value.Interactions == nil ||
+		value.ContinuityLedger == nil || value.Continuity == nil ||
 		value.ReviewIssues == nil || value.SourceVersionID != input.SourceVersionID ||
 		value.SourceHash != input.SourceHash ||
 		value.StructureIdentitySetVersionID != input.StructureIdentitySetVersionID ||
@@ -252,6 +282,17 @@ func ValidateInteractionContinuityCandidate(
 	}
 
 	evidenceUniverse := productionEntityEvidenceUniverse(input.SceneFactCandidate)
+	characterLedger, err := validateContinuityLedger(
+		value.ContinuityLedger,
+		value.Interactions,
+		occurrences,
+		states,
+		storyTimeByScene,
+		evidenceUniverse,
+	)
+	if err != nil {
+		return err
+	}
 	continuityKeys := make(map[string]struct{}, len(value.Continuity))
 	continuitySeries := make(map[string]struct{}, len(value.Continuity))
 	continuityLedger := make(map[string]continuityLedgerState)
@@ -292,6 +333,32 @@ func ValidateInteractionContinuityCandidate(
 			storyTimeEnd: continuity.StoryTimeEnd, stateKey: continuity.AfterStateKey,
 		}
 	}
+	continuityLinks := make(map[string]struct{})
+	for _, continuity := range value.Continuity {
+		if continuity.SubjectKind == "character" {
+			continuityLinks[continuityLinkKey(
+				continuity.IdentityKey,
+				continuity.FromSceneScopeKey,
+				continuity.ToSceneScopeKey,
+				continuity.BeforeStateKey,
+				continuity.AfterStateKey,
+			)] = struct{}{}
+		}
+	}
+	for _, entries := range characterLedger {
+		for index := 1; index < len(entries); index++ {
+			before, after := entries[index-1], entries[index]
+			if _, exists := continuityLinks[continuityLinkKey(
+				before.IdentityKey,
+				before.SceneScopeKey,
+				after.SceneScopeKey,
+				before.StateKey,
+				after.StateKey,
+			)]; !exists {
+				return errors.New("Character ledger boundary lacks an exact Continuity claim")
+			}
+		}
+	}
 	runes := []rune(input.NormalizedText)
 	previousIssue := ""
 	for _, issue := range value.ReviewIssues {
@@ -320,6 +387,12 @@ func validateInteraction(
 	actor, actorExists := occurrences[value.ActorOccurrenceKey]
 	prop, propExists := occurrences[value.PropOccurrenceKey]
 	_, evidenceExists := actionEvidence[value.SceneScopeKey][sourceEvidenceKey(value.Evidence)]
+	geometryEvidenceExists := true
+	for _, evidence := range interactionGeometryEvidence(value.GeometryEvidence) {
+		if _, exists := actionEvidence[value.SceneScopeKey][sourceEvidenceKey(*evidence)]; !exists {
+			geometryEvidenceExists = false
+		}
+	}
 	before := states[value.PropStateBeforeKey]
 	after := states[value.PropStateAfterKey]
 	if !interactionKeyPattern.MatchString(value.InteractionKey) ||
@@ -333,6 +406,7 @@ func validateInteraction(
 		actor.occurrence.OccurrenceRole != "actual" || prop.occurrence.OccurrenceRole != "actual" ||
 		before != (productionStateIdentity{prop.occurrence.IdentityKey, "prop"}) ||
 		after != (productionStateIdentity{prop.occurrence.IdentityKey, "prop"}) || !evidenceExists ||
+		!geometryEvidenceExists ||
 		value.StoryTimeKey != storyTimeByScene[value.SceneScopeKey] ||
 		!interactionValueIn(value.Hand, "left", "right", "both", "unspecified") ||
 		!validInteractionDescriptors(value) ||
@@ -466,6 +540,181 @@ func validateContinuity(
 	return nil
 }
 
+func validateContinuityLedger(
+	entries []ContinuityLedgerEntry,
+	interactions []InteractionFragment,
+	occurrences map[string]occurrenceBinding,
+	states map[string]productionStateIdentity,
+	storyTimeByScene map[string]string,
+	evidenceUniverse map[string]struct{},
+) (map[string][]ContinuityLedgerEntry, error) {
+	if len(entries) == 0 || !sort.SliceIsSorted(entries, func(left, right int) bool {
+		if entries[left].StoryTimeKey != entries[right].StoryTimeKey {
+			return entries[left].StoryTimeKey < entries[right].StoryTimeKey
+		}
+		if entries[left].SubjectKind != entries[right].SubjectKind {
+			return entries[left].SubjectKind < entries[right].SubjectKind
+		}
+		return entries[left].IdentityKey < entries[right].IdentityKey
+	}) {
+		return nil, errors.New("Continuity ledger is not in canonical story-time order")
+	}
+
+	actualSubjects := make(map[string]occurrenceBinding)
+	actualLocations := make(map[string]map[string]SceneOccurrenceFragment)
+	for _, occurrence := range occurrences {
+		if occurrence.occurrence.OccurrenceRole != "actual" {
+			continue
+		}
+		if interactionValueIn(occurrence.occurrence.SubjectKind, "character", "prop") {
+			key := ledgerSubjectKey(occurrence.sceneKey, occurrence.occurrence.IdentityKey)
+			if previous, exists := actualSubjects[key]; exists &&
+				previous.occurrence.StateKey != occurrence.occurrence.StateKey {
+				return nil, errors.New("one Scene cannot bind two ledger states for one identity")
+			}
+			actualSubjects[key] = occurrence
+			continue
+		}
+		if occurrence.occurrence.SubjectKind == "location" {
+			if actualLocations[occurrence.sceneKey] == nil {
+				actualLocations[occurrence.sceneKey] = make(map[string]SceneOccurrenceFragment)
+			}
+			actualLocations[occurrence.sceneKey][occurrence.occurrence.IdentityKey] = occurrence.occurrence
+		}
+	}
+
+	interactionByKey := make(map[string]InteractionFragment, len(interactions))
+	for _, interaction := range interactions {
+		interactionByKey[interaction.InteractionKey] = interaction
+	}
+	seenLedgerKeys := make(map[string]struct{}, len(entries))
+	suppliedSubjects := make(map[string]struct{}, len(entries))
+	usedInteractions := make(map[string]struct{}, len(interactions))
+	propEntries := make(map[string][]ContinuityLedgerEntry)
+	characterEntries := make(map[string][]ContinuityLedgerEntry)
+	for _, entry := range entries {
+		subjectKey := ledgerSubjectKey(entry.SceneScopeKey, entry.IdentityKey)
+		occurrence, subjectExists := actualSubjects[subjectKey]
+		if !continuityLedgerKeyPattern.MatchString(entry.LedgerKey) ||
+			!interactionValueIn(entry.SubjectKind, "character", "prop") ||
+			!subjectExists || occurrence.occurrence.SubjectKind != entry.SubjectKind ||
+			occurrence.occurrence.StateKey != entry.StateKey ||
+			states[entry.StateKey] != (productionStateIdentity{
+				identityKey: entry.IdentityKey, kind: entry.SubjectKind,
+			}) || entry.StoryTimeKey != storyTimeByScene[entry.SceneScopeKey] ||
+			len(entry.Evidence) == 0 {
+			return nil, errors.New("Continuity ledger does not bind an exact subject and state")
+		}
+		if _, duplicate := seenLedgerKeys[entry.LedgerKey]; duplicate {
+			return nil, errors.New("Continuity ledger key is duplicated")
+		}
+		seenLedgerKeys[entry.LedgerKey] = struct{}{}
+		if _, duplicate := suppliedSubjects[subjectKey]; duplicate {
+			return nil, errors.New("Continuity ledger subject is duplicated")
+		}
+		suppliedSubjects[subjectKey] = struct{}{}
+
+		sceneLocations := actualLocations[entry.SceneScopeKey]
+		var location SceneOccurrenceFragment
+		locationExists := false
+		if entry.LocationIdentityKey != nil {
+			location, locationExists = sceneLocations[*entry.LocationIdentityKey]
+		}
+		if (len(sceneLocations) > 0) != locationExists {
+			return nil, errors.New("Continuity ledger does not bind the exact Scene location")
+		}
+		evidenceKeys := make(map[string]struct{}, len(entry.Evidence))
+		for _, evidence := range entry.Evidence {
+			key := productionEvidenceKey(evidence)
+			if _, duplicate := evidenceKeys[key]; duplicate {
+				return nil, errors.New("Continuity ledger Evidence is duplicated")
+			}
+			if _, exists := evidenceUniverse[key]; !exists {
+				return nil, errors.New("Continuity ledger Evidence is outside SceneFacts")
+			}
+			evidenceKeys[key] = struct{}{}
+		}
+		if _, exists := evidenceKeys[productionEvidenceKey(occurrence.occurrence.Evidence)]; !exists {
+			return nil, errors.New("Continuity ledger lacks exact subject Evidence")
+		}
+		if locationExists {
+			if _, exists := evidenceKeys[productionEvidenceKey(location.Evidence)]; !exists {
+				return nil, errors.New("Continuity ledger lacks exact location Evidence")
+			}
+		}
+
+		if entry.SubjectKind == "character" {
+			if entry.HolderIdentityKey != nil || entry.TransitionInteractionKey != nil {
+				return nil, errors.New("Character ledger cannot carry holder or Prop transition")
+			}
+			characterEntries[entry.IdentityKey] = append(characterEntries[entry.IdentityKey], entry)
+			continue
+		}
+		if entry.HolderIdentityKey != nil {
+			holder, exists := actualSubjects[ledgerSubjectKey(entry.SceneScopeKey, *entry.HolderIdentityKey)]
+			if !exists || holder.occurrence.SubjectKind != "character" {
+				return nil, errors.New("Prop ledger holder must be an actual Character")
+			}
+		}
+		propEntries[entry.IdentityKey] = append(propEntries[entry.IdentityKey], entry)
+		if entry.TransitionInteractionKey == nil {
+			continue
+		}
+		transition, exists := interactionByKey[*entry.TransitionInteractionKey]
+		if !exists {
+			return nil, errors.New("Continuity ledger references an unknown Interaction")
+		}
+		if _, duplicate := usedInteractions[*entry.TransitionInteractionKey]; duplicate {
+			return nil, errors.New("Interaction is applied to the Continuity ledger twice")
+		}
+		propOccurrence := occurrences[transition.PropOccurrenceKey].occurrence
+		if transition.SceneScopeKey != entry.SceneScopeKey ||
+			transition.StoryTimeKey != entry.StoryTimeKey ||
+			propOccurrence.IdentityKey != entry.IdentityKey ||
+			transition.PropStateAfterKey != entry.StateKey ||
+			stringPointerValue(transition.HolderAfterIdentityKey) != stringPointerValue(entry.HolderIdentityKey) {
+			return nil, errors.New("Continuity ledger transition does not match its Interaction exit state")
+		}
+		usedInteractions[*entry.TransitionInteractionKey] = struct{}{}
+	}
+	if len(suppliedSubjects) != len(actualSubjects) {
+		return nil, errors.New("Continuity ledger must cover every actual Character and Prop once")
+	}
+	if len(usedInteractions) != len(interactionByKey) {
+		return nil, errors.New("every Interaction must produce one Continuity ledger transition")
+	}
+
+	for _, values := range propEntries {
+		for index := 1; index < len(values); index++ {
+			before, after := values[index-1], values[index]
+			if after.TransitionInteractionKey == nil {
+				if after.StateKey != before.StateKey ||
+					stringPointerValue(after.HolderIdentityKey) != stringPointerValue(before.HolderIdentityKey) ||
+					stringPointerValue(after.LocationIdentityKey) != stringPointerValue(before.LocationIdentityKey) {
+					return nil, errors.New("Prop ledger contains an unexplained state or teleport")
+				}
+				continue
+			}
+			transition := interactionByKey[*after.TransitionInteractionKey]
+			if transition.PropStateBeforeKey != before.StateKey ||
+				stringPointerValue(transition.HolderBeforeIdentityKey) != stringPointerValue(before.HolderIdentityKey) ||
+				(stringPointerValue(after.LocationIdentityKey) != stringPointerValue(before.LocationIdentityKey) &&
+					!interactionValueIn(transition.Predicate, "carry", "give", "receive")) {
+				return nil, errors.New("Prop ledger transition does not explain its boundary change")
+			}
+		}
+	}
+	return characterEntries, nil
+}
+
+func ledgerSubjectKey(sceneKey, identityKey string) string {
+	return sceneKey + "\x00" + identityKey
+}
+
+func continuityLinkKey(identityKey, fromScene, toScene, beforeState, afterState string) string {
+	return strings.Join([]string{identityKey, fromScene, toScene, beforeState, afterState}, "\x00")
+}
+
 func interactionValueIn(value string, allowed ...string) bool {
 	for _, candidate := range allowed {
 		if value == candidate {
@@ -493,7 +742,27 @@ func validInteractionDescriptors(value InteractionFragment) bool {
 			return false
 		}
 	}
+	if (value.Hand != "unspecified") != (value.GeometryEvidence.Hand != nil) ||
+		(value.GripType != nil) != (value.GeometryEvidence.GripType != nil) ||
+		(value.ContactPoint != nil) != (value.GeometryEvidence.ContactPoint != nil) ||
+		(value.Direction != nil) != (value.GeometryEvidence.Direction != nil) ||
+		(value.RelativeScale != nil) != (value.GeometryEvidence.RelativeScale != nil) {
+		return false
+	}
 	return true
+}
+
+func interactionGeometryEvidence(value InteractionGeometryEvidence) []*SourceEvidenceSpan {
+	candidates := []*SourceEvidenceSpan{
+		value.Hand, value.GripType, value.ContactPoint, value.Direction, value.RelativeScale,
+	}
+	result := make([]*SourceEvidenceSpan, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate != nil {
+			result = append(result, candidate)
+		}
+	}
+	return result
 }
 
 func greatestCommonDivisor(left, right int64) int64 {

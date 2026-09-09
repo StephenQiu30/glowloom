@@ -1018,6 +1018,27 @@ class SceneStoryTimeFragment(StrictSceneAnalysisModel):
     story_time_key: str = Field(pattern=r"^storytime:[a-z0-9][a-z0-9_.:-]{0,127}$")
 
 
+class InteractionGeometryEvidence(StrictSceneAnalysisModel):
+    hand: SourceEvidenceSpan | None
+    grip_type: SourceEvidenceSpan | None
+    contact_point: SourceEvidenceSpan | None
+    direction: SourceEvidenceSpan | None
+    relative_scale: SourceEvidenceSpan | None
+
+    def supplied(self) -> list[SourceEvidenceSpan]:
+        return [
+            value
+            for value in (
+                self.hand,
+                self.grip_type,
+                self.contact_point,
+                self.direction,
+                self.relative_scale,
+            )
+            if value is not None
+        ]
+
+
 class InteractionFragment(StrictSceneAnalysisModel):
     interaction_key: str = Field(pattern=r"^interaction_[a-z0-9_]{1,120}$")
     claim_series_key: str = Field(pattern=r"^interaction_series_[a-z0-9_]{1,120}$")
@@ -1042,6 +1063,7 @@ class InteractionFragment(StrictSceneAnalysisModel):
     contact_point: str | None
     direction: str | None
     relative_scale: PositiveRational | None
+    geometry_evidence: InteractionGeometryEvidence
     evidence: SourceEvidenceSpan
 
     @model_validator(mode="after")
@@ -1060,6 +1082,16 @@ class InteractionFragment(StrictSceneAnalysisModel):
         changed = self.prop_state_before_key != self.prop_state_after_key
         if changed != (self.state_delta is not None):
             raise ValueError("Prop state changes require exactly one explicit delta")
+        if (self.hand != "unspecified") != (self.geometry_evidence.hand is not None):
+            raise ValueError("specified hand requires exact geometry Evidence")
+        for descriptor, evidence in (
+            (self.grip_type, self.geometry_evidence.grip_type),
+            (self.contact_point, self.geometry_evidence.contact_point),
+            (self.direction, self.geometry_evidence.direction),
+            (self.relative_scale, self.geometry_evidence.relative_scale),
+        ):
+            if (descriptor is not None) != (evidence is not None):
+                raise ValueError("geometry fields and their Evidence must be supplied together")
         return self
 
 
@@ -1099,6 +1131,34 @@ class ContinuityFragment(StrictSceneAnalysisModel):
         return self
 
 
+class ContinuityLedgerEntry(StrictSceneAnalysisModel):
+    ledger_key: str = Field(pattern=r"^ledger_[a-z0-9_]{1,120}$")
+    subject_kind: Literal["character", "prop"]
+    identity_key: str = Field(min_length=1)
+    scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    story_time_key: str = Field(pattern=r"^storytime:[a-z0-9][a-z0-9_.:-]{0,127}$")
+    state_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
+    holder_identity_key: str | None
+    location_identity_key: str | None
+    transition_interaction_key: str | None
+    evidence: list[SourceEvidenceSpan] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> ContinuityLedgerEntry:
+        if self.subject_kind == "character" and (
+            self.holder_identity_key is not None or self.transition_interaction_key is not None
+        ):
+            raise ValueError("character ledger entries cannot carry holder or Prop transition")
+        if self.transition_interaction_key is not None and re.fullmatch(
+            r"interaction_[a-z0-9_]{1,120}", self.transition_interaction_key
+        ) is None:
+            raise ValueError("ledger transition Interaction key is invalid")
+        evidence_keys = [_source_evidence_key(value) for value in self.evidence]
+        if len(evidence_keys) != len(set(evidence_keys)):
+            raise ValueError("ledger Evidence must be unique")
+        return self
+
+
 class InteractionContinuityCandidate(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -1112,6 +1172,7 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
     scene_binding_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     scene_story_times: list[SceneStoryTimeFragment] = Field(min_length=1)
     interactions: list[InteractionFragment]
+    continuity_ledger: list[ContinuityLedgerEntry] = Field(min_length=1)
     continuity: list[ContinuityFragment]
     review_issues: list[CandidateReviewIssue]
 
@@ -1196,6 +1257,11 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
             key=lambda item: (item.story_time_start, item.story_time_end, item.continuity_key),
         ):
             raise ValueError("continuity must be in canonical story-time order")
+        if self.continuity_ledger != sorted(
+            self.continuity_ledger,
+            key=lambda item: (item.story_time_key, item.subject_kind, item.identity_key),
+        ):
+            raise ValueError("continuity ledger must be in canonical story-time order")
 
         prop_ledger: dict[str, tuple[str | None, str, str]] = {}
         for item in self.interactions:
@@ -1223,6 +1289,11 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                 or states.get(item.prop_state_before_key) != (prop[1].identity_key, "prop")
                 or states.get(item.prop_state_after_key) != (prop[1].identity_key, "prop")
                 or _source_evidence_key(item.evidence) not in action_evidence[item.scene_scope_key]
+                or any(
+                    _source_evidence_key(evidence)
+                    not in action_evidence[item.scene_scope_key]
+                    for evidence in item.geometry_evidence.supplied()
+                )
             ):
                 raise ValueError(
                     "interaction does not bind exact actual occurrences and Prop states"
@@ -1288,11 +1359,11 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                 raise ValueError("Prop mutation transition is invalid")
 
             prop_identity = prop[1].identity_key
-            previous = prop_ledger.get(prop_identity)
-            if previous is not None and (
-                previous[2] == item.story_time_key
-                or previous[0] != before_holder
-                or previous[1] != item.prop_state_before_key
+            previous_prop_transition = prop_ledger.get(prop_identity)
+            if previous_prop_transition is not None and (
+                previous_prop_transition[2] == item.story_time_key
+                or previous_prop_transition[0] != before_holder
+                or previous_prop_transition[1] != item.prop_state_before_key
             ):
                 raise ValueError("Prop ledger has a duplicate or discontinuous transition")
             prop_ledger[prop_identity] = (
@@ -1300,6 +1371,115 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                 item.prop_state_after_key,
                 item.story_time_key,
             )
+
+        interaction_by_key = {item.interaction_key: item for item in self.interactions}
+        actual_subjects: dict[tuple[str, str], SceneOccurrenceFragment] = {}
+        actual_locations: dict[str, dict[str, SceneOccurrenceFragment]] = {}
+        for scene_key, occurrence in occurrences.values():
+            if occurrence.occurrence_role != "actual":
+                continue
+            if occurrence.subject_kind in {"character", "prop"}:
+                subject_key = (scene_key, occurrence.identity_key)
+                previous_occurrence = actual_subjects.get(subject_key)
+                if (
+                    previous_occurrence is not None
+                    and previous_occurrence.state_key != occurrence.state_key
+                ):
+                    raise ValueError("one Scene cannot bind two ledger states for one identity")
+                actual_subjects[subject_key] = occurrence
+            elif occurrence.subject_kind == "location":
+                actual_locations.setdefault(scene_key, {})[occurrence.identity_key] = occurrence
+
+        supplied_subjects: dict[tuple[str, str], ContinuityLedgerEntry] = {}
+        prop_entries: dict[str, list[ContinuityLedgerEntry]] = {}
+        used_interactions: set[str] = set()
+        ledger_keys: set[str] = set()
+        evidence_universe = value.scene_fact_evidence_universe()
+        for entry in self.continuity_ledger:
+            subject_key = (entry.scene_scope_key, entry.identity_key)
+            occurrence = actual_subjects.get(subject_key)
+            scene_locations = actual_locations.get(entry.scene_scope_key, {})
+            location = (
+                None
+                if entry.location_identity_key is None
+                else scene_locations.get(entry.location_identity_key)
+            )
+            evidence_keys = {_source_evidence_key(evidence) for evidence in entry.evidence}
+            if (
+                entry.ledger_key in ledger_keys
+                or subject_key in supplied_subjects
+                or occurrence is None
+                or occurrence.subject_kind != entry.subject_kind
+                or occurrence.state_key != entry.state_key
+                or bool(scene_locations) != (location is not None)
+                or entry.story_time_key != story_time_by_scene.get(entry.scene_scope_key)
+                or _source_evidence_key(occurrence.evidence) not in evidence_keys
+                or location is not None
+                and _source_evidence_key(location.evidence) not in evidence_keys
+                or not evidence_keys.issubset(evidence_universe)
+            ):
+                raise ValueError(
+                    "continuity ledger does not bind exact subject, state, location, and Evidence"
+                )
+            ledger_keys.add(entry.ledger_key)
+            supplied_subjects[subject_key] = entry
+            if entry.subject_kind == "prop":
+                if entry.holder_identity_key is not None:
+                    holder = actual_subjects.get(
+                        (entry.scene_scope_key, entry.holder_identity_key)
+                    )
+                    if holder is None or holder.subject_kind != "character":
+                        raise ValueError("Prop ledger holder must be an actual Character")
+                prop_entries.setdefault(entry.identity_key, []).append(entry)
+            if entry.transition_interaction_key is not None:
+                transition = interaction_by_key.get(entry.transition_interaction_key)
+                if (
+                    transition is None
+                    or entry.transition_interaction_key in used_interactions
+                    or transition.scene_scope_key != entry.scene_scope_key
+                    or transition.story_time_key != entry.story_time_key
+                    or occurrences[transition.prop_occurrence_key][1].identity_key
+                    != entry.identity_key
+                    or transition.prop_state_after_key != entry.state_key
+                    or transition.holder_after_identity_key != entry.holder_identity_key
+                ):
+                    raise ValueError("ledger transition does not match its Interaction exit state")
+                used_interactions.add(entry.transition_interaction_key)
+        if set(supplied_subjects) != set(actual_subjects):
+            raise ValueError("continuity ledger must cover every actual Character and Prop once")
+        if used_interactions != set(interaction_by_key):
+            raise ValueError("every Interaction must produce exactly one Prop ledger transition")
+
+        for entries in prop_entries.values():
+            previous_entry: ContinuityLedgerEntry | None = None
+            for entry in entries:
+                if previous_entry is not None:
+                    transition = (
+                        None
+                        if entry.transition_interaction_key is None
+                        else interaction_by_key[entry.transition_interaction_key]
+                    )
+                    if transition is None:
+                        if (
+                            entry.state_key != previous_entry.state_key
+                            or entry.holder_identity_key != previous_entry.holder_identity_key
+                            or entry.location_identity_key
+                            != previous_entry.location_identity_key
+                        ):
+                            raise ValueError(
+                                "Prop ledger contains an unexplained state or teleport"
+                            )
+                    elif (
+                        transition.prop_state_before_key != previous_entry.state_key
+                        or transition.holder_before_identity_key
+                        != previous_entry.holder_identity_key
+                        or entry.location_identity_key != previous_entry.location_identity_key
+                        and transition.predicate not in {"carry", "give", "receive"}
+                    ):
+                        raise ValueError(
+                            "Prop ledger transition does not explain its boundary change"
+                        )
+                previous_entry = entry
 
         continuity_ledger: dict[str, tuple[str, str]] = {}
         for item in self.continuity:
@@ -1332,12 +1512,39 @@ class InteractionContinuityCandidate(StrictSceneAnalysisModel):
                 raise ValueError(
                     "continuity does not bind an ordered exact identity/state timeline"
                 )
-            previous = continuity_ledger.get(item.identity_key)
-            if previous is not None and (
-                previous[0] > item.story_time_start or previous[1] != item.before_state_key
+            previous_continuity = continuity_ledger.get(item.identity_key)
+            if previous_continuity is not None and (
+                previous_continuity[0] > item.story_time_start
+                or previous_continuity[1] != item.before_state_key
             ):
                 raise ValueError("continuity ledger overlaps or contains an unexplained state jump")
             continuity_ledger[item.identity_key] = (item.story_time_end, item.after_state_key)
+
+        character_entries: dict[str, list[ContinuityLedgerEntry]] = {}
+        for entry in self.continuity_ledger:
+            if entry.subject_kind == "character":
+                character_entries.setdefault(entry.identity_key, []).append(entry)
+        continuity_links = {
+            (
+                item.identity_key,
+                item.from_scene_scope_key,
+                item.to_scene_scope_key,
+                item.before_state_key,
+                item.after_state_key,
+            )
+            for item in self.continuity
+            if item.subject_kind == "character"
+        }
+        for entries in character_entries.values():
+            for before, after in zip(entries, entries[1:], strict=False):
+                if (
+                    before.identity_key,
+                    before.scene_scope_key,
+                    after.scene_scope_key,
+                    before.state_key,
+                    after.state_key,
+                ) not in continuity_links:
+                    raise ValueError("Character ledger boundary lacks an exact Continuity claim")
         for issue in self.review_issues:
             for evidence in issue.evidence:
                 if _source_evidence_key(evidence) not in value.scene_fact_evidence_universe():
