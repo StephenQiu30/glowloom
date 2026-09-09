@@ -735,6 +735,21 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		productionWorldTask.SubjectHash != productionWorldGateInput.InputHash {
 		t.Fatalf("Production World HumanTask = %#v candidates=%v err=%v", productionWorldTask, productionWorldCandidateIDs, err)
 	}
+	productionWorldDetail, err := reviewService.GetTask(ctx, reviewapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, productionWorldTask.ID.String())
+	if err != nil {
+		t.Fatalf("query Production World review detail: %v", err)
+	}
+	productionWorldReview, _, detailErr := workflow.DecodeProductionWorldReviewDetail(productionWorldDetail.Subject)
+	if detailErr != nil || productionWorldReview.InputHash != productionWorldGateInput.InputHash ||
+		productionWorldReview.CandidateRevision.CandidateRevisionID != productionWorldRevision.ID.String() ||
+		productionWorldReview.Views.CharacterAppearances == nil || productionWorldReview.Views.Locations == nil ||
+		productionWorldReview.Views.PropStates == nil || productionWorldReview.Views.SceneOccurrences == nil ||
+		productionWorldReview.Views.Interactions == nil || productionWorldReview.Views.Continuity.Claims == nil ||
+		productionWorldReview.Views.Continuity.Ledger == nil {
+		t.Fatalf("Production World six-view detail = %#v err=%v", productionWorldReview, detailErr)
+	}
 	if err = runtimeService.OpenHumanGate(ctx, productionWorldGateCommand); err != nil {
 		t.Fatalf("replay Production World HumanTask open: %v", err)
 	}

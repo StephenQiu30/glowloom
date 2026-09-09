@@ -6828,6 +6828,399 @@
           }
         }
       },
+      "ProductionWorldCandidateRevisionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidate_revision_id", "candidate_revision", "candidate_revision_hash", "candidate_content_hash"],
+        "properties": {
+          "candidate_revision_id": { "type": "string", "format": "uuid" },
+          "candidate_revision": { "type": "integer", "minimum": 1 },
+          "candidate_revision_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "candidate_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ProductionWorldPartitionRootsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bible", "planning", "asset", "proof"],
+        "properties": {
+          "bible": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "planning": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "asset": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "proof": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ProductionWorldEvidenceSpanResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_start", "source_end", "text_hash", "exact_anchor"],
+        "properties": {
+          "source_start": { "type": "integer", "minimum": 0 },
+          "source_end": { "type": "integer", "minimum": 1 },
+          "text_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "exact_anchor": { "type": "string" }
+        }
+      },
+      "ProductionWorldCreatorDecisionProposalResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decision_key", "rationale"],
+        "properties": {
+          "decision_key": { "type": "string" },
+          "rationale": { "type": "string" }
+        }
+      },
+      "ProductionWorldSourceBasisResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provenance", "evidence", "creator_decision_proposal"],
+        "properties": {
+          "provenance": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }
+          },
+          "creator_decision_proposal": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ProductionWorldCreatorDecisionProposalResponse" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "ProductionWorldSemanticSlotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot_key", "resolution", "value", "design_gap_key"],
+        "properties": {
+          "slot_key": { "type": "string" },
+          "resolution": { "type": "string" },
+          "value": { "type": ["string", "null"] },
+          "design_gap_key": { "type": ["string", "null"] }
+        }
+      },
+      "ProductionWorldStateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state_key", "state_kind", "complete_slots", "applicable_scene_scope_keys",
+          "entry_reason", "exit_reason", "previous_state_key", "next_state_key", "basis"
+        ],
+        "properties": {
+          "state_key": { "type": "string" },
+          "state_kind": { "type": "string" },
+          "complete_slots": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldSemanticSlotResponse" }
+          },
+          "applicable_scene_scope_keys": { "type": "array", "items": { "type": "string" } },
+          "entry_reason": { "type": "string" },
+          "exit_reason": { "type": "string" },
+          "previous_state_key": { "type": ["string", "null"] },
+          "next_state_key": { "type": ["string", "null"] },
+          "basis": { "$ref": "#/components/schemas/ProductionWorldSourceBasisResponse" }
+        }
+      },
+      "ProductionWorldEntityReviewItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["identity_key", "kind", "specification_key", "specification_slots", "states", "basis"],
+        "properties": {
+          "identity_key": { "type": "string" },
+          "kind": { "type": "string", "enum": ["character", "location", "prop"] },
+          "specification_key": { "type": "string" },
+          "specification_slots": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldSemanticSlotResponse" }
+          },
+          "states": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldStateResponse" }
+          },
+          "basis": { "$ref": "#/components/schemas/ProductionWorldSourceBasisResponse" }
+        }
+      },
+      "ProductionWorldOccurrenceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["occurrence_key", "order", "subject_kind", "identity_key", "state_key", "occurrence_role", "evidence"],
+        "properties": {
+          "occurrence_key": { "type": "string" },
+          "order": { "type": "integer", "minimum": 1 },
+          "subject_kind": { "type": "string", "enum": ["character", "location", "prop"] },
+          "identity_key": { "type": "string" },
+          "state_key": { "type": "string" },
+          "occurrence_role": { "type": "string" },
+          "evidence": { "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }
+        }
+      },
+      "ProductionWorldSceneOccurrenceReviewItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scene_scope_key", "scene_owner_logical_id", "temporary_scene_id", "source_start",
+          "source_end", "story_time_key", "occurrences"
+        ],
+        "properties": {
+          "scene_scope_key": { "type": "string" },
+          "scene_owner_logical_id": { "type": "string", "format": "uuid" },
+          "temporary_scene_id": { "type": "string" },
+          "source_start": { "type": "integer", "minimum": 0 },
+          "source_end": { "type": "integer", "minimum": 1 },
+          "story_time_key": { "type": "string" },
+          "occurrences": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldOccurrenceResponse" }
+          }
+        }
+      },
+      "ProductionWorldPositiveRationalResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["numerator", "denominator"],
+        "properties": {
+          "numerator": { "type": "integer", "minimum": 1 },
+          "denominator": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "ProductionWorldInteractionGeometryEvidenceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["hand", "grip_type", "contact_point", "direction", "relative_scale"],
+        "properties": {
+          "hand": { "oneOf": [{ "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }, { "type": "null" }] },
+          "grip_type": { "oneOf": [{ "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }, { "type": "null" }] },
+          "contact_point": { "oneOf": [{ "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }, { "type": "null" }] },
+          "direction": { "oneOf": [{ "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }, { "type": "null" }] },
+          "relative_scale": { "oneOf": [{ "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }, { "type": "null" }] }
+        }
+      },
+      "ProductionWorldInteractionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "interaction_key", "claim_series_key", "claim_revision", "supersedes_interaction_key",
+          "scene_scope_key", "beat_key", "story_time_key", "predicate", "actor_occurrence_key",
+          "prop_occurrence_key", "counterparty_occurrence_key", "holder_before_identity_key",
+          "holder_after_identity_key", "prop_state_before_key", "prop_state_after_key", "state_delta",
+          "hand", "grip_type", "contact_point", "direction", "relative_scale", "geometry_evidence", "evidence"
+        ],
+        "properties": {
+          "interaction_key": { "type": "string" },
+          "claim_series_key": { "type": "string" },
+          "claim_revision": { "type": "integer", "minimum": 1 },
+          "supersedes_interaction_key": { "type": ["string", "null"] },
+          "scene_scope_key": { "type": "string" },
+          "beat_key": { "type": ["string", "null"] },
+          "story_time_key": { "type": "string" },
+          "predicate": { "type": "string" },
+          "actor_occurrence_key": { "type": "string" },
+          "prop_occurrence_key": { "type": "string" },
+          "counterparty_occurrence_key": { "type": ["string", "null"] },
+          "holder_before_identity_key": { "type": ["string", "null"] },
+          "holder_after_identity_key": { "type": ["string", "null"] },
+          "prop_state_before_key": { "type": "string" },
+          "prop_state_after_key": { "type": "string" },
+          "state_delta": { "type": ["string", "null"] },
+          "hand": { "type": "string" },
+          "grip_type": { "type": ["string", "null"] },
+          "contact_point": { "type": ["string", "null"] },
+          "direction": { "type": ["string", "null"] },
+          "relative_scale": {
+            "oneOf": [{ "$ref": "#/components/schemas/ProductionWorldPositiveRationalResponse" }, { "type": "null" }]
+          },
+          "geometry_evidence": { "$ref": "#/components/schemas/ProductionWorldInteractionGeometryEvidenceResponse" },
+          "evidence": { "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }
+        }
+      },
+      "ProductionWorldContinuityClaimResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "continuity_key", "claim_series_key", "claim_revision", "supersedes_continuity_key",
+          "subject_kind", "identity_key", "from_scene_scope_key", "to_scene_scope_key",
+          "story_time_start", "story_time_end", "before_state_key", "after_state_key",
+          "transition", "delta", "evidence"
+        ],
+        "properties": {
+          "continuity_key": { "type": "string" },
+          "claim_series_key": { "type": "string" },
+          "claim_revision": { "type": "integer", "minimum": 1 },
+          "supersedes_continuity_key": { "type": ["string", "null"] },
+          "subject_kind": { "type": "string" },
+          "identity_key": { "type": "string" },
+          "from_scene_scope_key": { "type": "string" },
+          "to_scene_scope_key": { "type": "string" },
+          "story_time_start": { "type": "string" },
+          "story_time_end": { "type": "string" },
+          "before_state_key": { "type": "string" },
+          "after_state_key": { "type": "string" },
+          "transition": { "type": "string" },
+          "delta": { "type": ["string", "null"] },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }
+          }
+        }
+      },
+      "ProductionWorldContinuityLedgerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ledger_key", "subject_kind", "identity_key", "scene_scope_key", "story_time_key",
+          "state_key", "holder_identity_key", "location_identity_key", "transition_interaction_key", "evidence"
+        ],
+        "properties": {
+          "ledger_key": { "type": "string" },
+          "subject_kind": { "type": "string" },
+          "identity_key": { "type": "string" },
+          "scene_scope_key": { "type": "string" },
+          "story_time_key": { "type": "string" },
+          "state_key": { "type": "string" },
+          "holder_identity_key": { "type": ["string", "null"] },
+          "location_identity_key": { "type": ["string", "null"] },
+          "transition_interaction_key": { "type": ["string", "null"] },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }
+          }
+        }
+      },
+      "ProductionWorldContinuityReviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claims", "ledger"],
+        "properties": {
+          "claims": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldContinuityClaimResponse" }
+          },
+          "ledger": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldContinuityLedgerResponse" }
+          }
+        }
+      },
+      "ProductionWorldReviewViewsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["character_appearances", "locations", "prop_states", "scene_occurrences", "interactions", "continuity"],
+        "properties": {
+          "character_appearances": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEntityReviewItemResponse" }
+          },
+          "locations": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEntityReviewItemResponse" }
+          },
+          "prop_states": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEntityReviewItemResponse" }
+          },
+          "scene_occurrences": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldSceneOccurrenceReviewItemResponse" }
+          },
+          "interactions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldInteractionResponse" }
+          },
+          "continuity": { "$ref": "#/components/schemas/ProductionWorldContinuityReviewResponse" }
+        }
+      },
+      "ProductionWorldClaimResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_key", "claim_type", "subject_identity_keys", "statement", "basis"],
+        "properties": {
+          "claim_key": { "type": "string" },
+          "claim_type": { "type": "string" },
+          "subject_identity_keys": { "type": "array", "items": { "type": "string" } },
+          "statement": { "type": "string" },
+          "basis": { "$ref": "#/components/schemas/ProductionWorldSourceBasisResponse" }
+        }
+      },
+      "ProductionWorldDesignGapResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "gap_key", "subject_key", "field_key", "missing_reason", "source_constraints",
+          "mutually_exclusive_options", "impacted_scene_scope_keys", "allowed_resolution_sources"
+        ],
+        "properties": {
+          "gap_key": { "type": "string" },
+          "subject_key": { "type": "string" },
+          "field_key": { "type": "string" },
+          "missing_reason": { "type": "string" },
+          "source_constraints": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }
+          },
+          "mutually_exclusive_options": { "type": "array", "items": { "type": "string" } },
+          "impacted_scene_scope_keys": { "type": "array", "items": { "type": "string" } },
+          "allowed_resolution_sources": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ProductionWorldCandidateReviewIssueResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue_key", "code", "severity", "scope", "summary", "evidence"],
+        "properties": {
+          "issue_key": { "type": "string" },
+          "code": { "type": "string" },
+          "severity": { "type": "string", "enum": ["warning", "blocking"] },
+          "scope": { "type": "string" },
+          "summary": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldEvidenceSpanResponse" }
+          }
+        }
+      },
+      "ProductionWorldReviewIssueResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_stage", "issue"],
+        "properties": {
+          "source_stage": { "type": "string" },
+          "issue": { "$ref": "#/components/schemas/ProductionWorldCandidateReviewIssueResponse" }
+        }
+      },
+      "ProductionWorldReviewSubjectResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version", "gate_key", "input_hash", "candidate_revision", "partition_roots",
+          "allowed_decisions", "views", "world_claims", "design_gaps", "review_issues"
+        ],
+        "properties": {
+          "schema_version": { "type": "string", "const": "production-world-review-detail-production" },
+          "gate_key": { "type": "string", "const": "bible_continuity" },
+          "input_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "candidate_revision": { "$ref": "#/components/schemas/ProductionWorldCandidateRevisionResponse" },
+          "partition_roots": { "$ref": "#/components/schemas/ProductionWorldPartitionRootsResponse" },
+          "allowed_decisions": {
+            "type": "array",
+            "prefixItems": [{ "const": "approved" }, { "const": "rejected" }],
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "views": { "$ref": "#/components/schemas/ProductionWorldReviewViewsResponse" },
+          "world_claims": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldClaimResponse" }
+          },
+          "design_gaps": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldDesignGapResponse" }
+          },
+          "review_issues": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldReviewIssueResponse" }
+          }
+        }
+      },
       "HumanGateChangeRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -7071,6 +7464,9 @@
                 "oneOf": [
                   {
                     "$ref": "#/components/schemas/StructureIdentityReviewSubjectResponse"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProductionWorldReviewSubjectResponse"
                   },
                   {
                     "type": "null"

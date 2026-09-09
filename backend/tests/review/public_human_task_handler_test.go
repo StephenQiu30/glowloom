@@ -2,6 +2,7 @@ package review_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +54,60 @@ func TestPublicHumanTaskHandlerListsWithoutClaimTokenAndReturnsOwnerTokenOnDetai
 	mux.ServeHTTP(detail, httptest.NewRequest(http.MethodGet, "/api/human-tasks/"+publicTaskID, nil))
 	if detail.Code != http.StatusOK || !strings.Contains(detail.Body.String(), publicClaimToken) {
 		t.Fatalf("detail response=%d %s", detail.Code, detail.Body.String())
+	}
+}
+
+func TestPublicHumanTaskHandlerPresentsProductionWorldSixViews(t *testing.T) {
+	now := time.Date(2026, time.September, 10, 10, 0, 0, 0, time.UTC)
+	task := reviewdomain.HumanTask{
+		ID: publicTaskID, ProjectID: publicProjectID, Status: "OPEN", Revision: 1,
+		SubjectType: "production_world_gate_input", SubjectID: publicTaskID, SubjectRevision: 1,
+		SubjectHash: publicSubjectHash, AllowedDecisions: []string{"approved", "rejected"},
+		CreatedAt: now, UpdatedAt: now,
+	}
+	subject := json.RawMessage(`{
+		"schema_version":"production-world-review-detail-production",
+		"gate_key":"bible_continuity",
+		"input_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"candidate_revision":{
+			"candidate_revision_id":"00000000-0000-0000-0000-000000000106",
+			"candidate_revision":1,
+			"candidate_revision_hash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			"candidate_content_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+		},
+		"partition_roots":{
+			"bible":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			"planning":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			"asset":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			"proof":"1111111111111111111111111111111111111111111111111111111111111111"
+		},
+		"allowed_decisions":["approved","rejected"],
+		"views":{
+			"character_appearances":[],"locations":[],"prop_states":[],
+			"scene_occurrences":[],"interactions":[],"continuity":{"claims":[],"ledger":[]}
+		},
+		"world_claims":[],"design_gaps":[],"review_issues":[]
+	}`)
+	reviews := &publicReviewStub{detail: reviewdomain.HumanTaskDetail{Task: task, Subject: subject}}
+	mux := http.NewServeMux()
+	reviewhttp.New(reviews, &publicCoordinatorStub{}, publicAuthenticator{userID: publicProjectID}).Register(mux)
+
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/human-tasks/"+publicTaskID, nil))
+	var payload struct {
+		Data struct {
+			Subject struct {
+				SchemaVersion string                     `json:"schema_version"`
+				Views         map[string]json.RawMessage `json:"views"`
+			} `json:"subject"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || payload.Data.Subject.SchemaVersion != "production-world-review-detail-production" ||
+		len(payload.Data.Subject.Views) != 6 {
+		t.Fatalf("Production World detail response=%d %s", response.Code, response.Body.String())
 	}
 }
 

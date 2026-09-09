@@ -17,6 +17,7 @@ import (
 	platformcommandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/adapter/gormdb"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/review/domain"
 	workflowdomain "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -151,6 +152,12 @@ func (store *Store) GetTask(
 				return errors.New("structure identity review subject has drifted")
 			}
 			detail.Subject = canonical
+		} else if record.SubjectType == "production_world_gate_input" {
+			subject, loadErr := loadProductionWorldReviewSubject(transaction, record, mapped)
+			if loadErr != nil {
+				return loadErr
+			}
+			detail.Subject = subject
 		}
 		var decision model.ReviewDecision
 		loadErr := transaction.Where("human_task_id = ?", record.ID).First(&decision).Error
@@ -168,6 +175,46 @@ func (store *Store) GetTask(
 		return nil
 	})
 	return detail, err
+}
+
+func loadProductionWorldReviewSubject(
+	transaction *gorm.DB,
+	task model.HumanTask,
+	mapped domain.HumanTask,
+) (json.RawMessage, error) {
+	var subject model.WorkflowHumanGateInput
+	if err := transaction.First(&subject, "id = ?", task.SubjectID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	gate, _, err := workflowdomain.DecodeProductionWorldGateInput(json.RawMessage(subject.Input))
+	if err != nil || subject.WorkspaceID != task.WorkspaceID || subject.ProjectID != task.ProjectID ||
+		subject.WorkflowRunID != task.WorkflowRunID || subject.NodeRunID != task.NodeRunID ||
+		subject.InputHash != task.SubjectHash || gate.InputHash != task.SubjectHash || task.SubjectRevision != 1 {
+		return nil, errors.New("Production World review subject has drifted")
+	}
+	candidateID, err := uuid.Parse(gate.Subject.ProductionWorldCandidate.CandidateRevisionID)
+	if err != nil || !slices.Contains(mapped.CandidateIDs, candidateID.String()) {
+		return nil, errors.New("Production World review Candidate binding has drifted")
+	}
+	var revision model.StageCandidateRevision
+	if err = transaction.First(&revision, "id = ?", candidateID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	frozen := gate.Subject.ProductionWorldCandidate
+	if revision.WorkspaceID != task.WorkspaceID || revision.OriginKind != "aggregate" ||
+		revision.RevisionNo != frozen.CandidateRevision || revision.CandidateRevisionHash != frozen.CandidateRevisionHash ||
+		revision.CandidateContentHash != frozen.CandidateContentHash {
+		return nil, errors.New("Production World review Candidate revision has drifted")
+	}
+	candidate, _, err := worlddomain.DecodeProductionWorldCandidate(json.RawMessage(revision.Candidate))
+	if err != nil {
+		return nil, errors.New("Production World review Candidate has drifted")
+	}
+	_, encoded, err := workflowdomain.NewProductionWorldReviewDetail(gate, candidate)
+	if err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }
 
 func (store *Store) GetDecision(ctx context.Context, actor application.Actor, decisionID string) (domain.DecisionResult, error) {

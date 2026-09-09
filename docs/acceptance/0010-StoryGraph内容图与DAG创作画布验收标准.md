@@ -355,13 +355,13 @@
 
 ### `VP-I03` — 制作世界、人物多形象、道具交互与 Gate 2
 
-- 状态：进行中；三阶段 strict Candidate、ProductionWorld 确定性组装、Gate 2 冻结审核输入、approved 决议解析、三个 Owner family 原子 Apply，以及双 Gate 的真实 Temporal 恢复链路已完成。当前未完成项是 Gate 2 六视图审核和 `changes_requested` 受影响闭包，因此 `VP-I03` 仍未关闭。
-- Git 基线/提交：基线 `b7e5b67e`；ProductionWorld 集合证明 `05088bfd`、三域原子确认 `e1e83bf4`、人工确认接线 `15573e1d`；真实 Temporal Gate 2 恢复证据随本记录所在提交交付。
+- 状态：进行中；三阶段 strict Candidate、ProductionWorld 确定性组装、Gate 2 冻结审核输入、Backend 六视图 Review Detail、approved 决议解析、三个 Owner family 原子 Apply，以及双 Gate 的真实 Temporal 恢复链路已完成。当前未完成项是 Gate 2 typed `changes_requested` 受影响闭包，因此 `VP-I03` 仍未关闭。
+- Git 基线/提交：基线 `b7e5b67e`；ProductionWorld 集合证明 `05088bfd`、三域原子确认 `e1e83bf4`、人工确认接线 `15573e1d`、真实 Temporal Gate 2 恢复 `7e66478b`；六视图 Review Detail 证据随本记录所在提交交付。
 - Red 命令与失败：前三阶段的 schema/contract Red 已记录；本切片首次运行真实 `TestSceneAnalysisGatesResumeRealTemporalWorkflow` 时，Worker 因未注入 ProductionWorld assembler 连续重试并报 `Production World assembly owners are unavailable`；接通装配后，Gate 2 Apply 又以 `Workflow human gate changed before decision application` 失败，证明 Gate 2 的不可变审核输入修订尚未被运行时识别为独立事实。
-- Green/定向验证：`TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays` 在真实 PostgreSQL 下验证 Gate 2 Signal → 三域事务 → Apply Receipt、强制冲突全回滚与幂等重放；`TestSceneAnalysisGatesResumeRealTemporalWorkflow` 在本机 PostgreSQL + Homebrew Temporal 下通过，验证 Gate 1 `changes_requested` 修订后批准、三个制作世界 Candidate、ProductionWorld 装配、Gate 2 批准、`ConfirmProductionWorld` CommandReceipt、原 Run 恢复与最终 `SUCCEEDED`。
-- 全量质量门禁：`gofmt`、数据库架构边界测试、`go vet ./...`、`go test -p=1 ./...` 全部通过；真实旅程另以 `go test -race ./tests/workflow -run '^TestSceneAnalysisGatesResumeRealTemporalWorkflow$' -count=1` 通过。此处只记录当前功能切片的真实性门禁，不代表整个 SOP 或 `VP-I03` 已完成。
+- Green/定向验证：`TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays` 在真实 PostgreSQL 下验证 Gate 2 Signal → 三域事务 → Apply Receipt、强制冲突全回滚、幂等重放及冻结 Candidate 的六视图查询；`TestProductionWorldReviewDetailHasSixTypedViews` 验证角色/形象、地点、道具/状态、场景出现、交互和连续性恰为六个 typed 视图，空视图也保持空数组而非缺失；Review HTTP 与 OpenAPI 测试证明公开详情不返回内部可变状态且生成客户端拥有精确字段。`TestSceneAnalysisGatesResumeRealTemporalWorkflow` 在本机 PostgreSQL + Homebrew Temporal 下通过，验证 Gate 1 `changes_requested` 修订后批准、三个制作世界 Candidate、ProductionWorld 装配、Gate 2 批准、`ConfirmProductionWorld` CommandReceipt、原 Run 恢复与最终 `SUCCEEDED`。
+- 全量质量门禁：`gofmt`、数据库架构边界测试、`go vet ./...`、`go test -p=1 ./...` 全部通过；真实 PostgreSQL 旅程以 `go test -race -v ./tests/workflow -run '^TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays$' -count=1` 明确执行通过；Frontend `openapi2ts`、lint、typecheck、73 项测试与 production build 通过。此前真实 Temporal 双 Gate 旅程也已通过。此处只记录当前功能切片的真实性门禁，不代表整个 SOP 或 `VP-I03` 已完成。
 - 真实输入/产物/事实对账：十一节点 Workflow 依次形成 Source、Span、Scene Fact、Identity、Structure/Identity Review 与 Gate 1、Production Entity、Scene Binding、Interaction/Continuity、ProductionWorld 和 Gate 2；Gate 2 只消费冻结的 aggregate/upstream Candidate 与正式 Head，并由 Backend 唯一写入 ProductionWorldVersion、SceneOccurrenceVersion、ContinuityVersion 及各自 Head/Receipt。Agent 仍只写候选。
-- 未覆盖条件与残余风险：尚未执行真实 Codex CLI 语义质量验证；Gate 2 六视图 Review Detail、typed `changes_requested` 局部闭包和对应重跑尚未实现，`VPR-WLD-010`、`VPR-FE-005` 与 `VP-I03` 保持未完成。最终 `agent-browser` 验收按约定待全部开发完成后执行。
+- 未覆盖条件与残余风险：尚未执行真实 Codex CLI 语义质量验证；Gate 2 typed `changes_requested` 局部闭包和对应重跑尚未实现，因此 `VPR-WLD-010` 与 `VP-I03` 保持未完成。当前只交付 Backend 六视图数据契约，`VP-I11` 的六视图交互界面与 `VPR-FE-005` 仍未完成；最终 `agent-browser` 验收按约定待全部开发完成后执行。
 
 ### `VP-I04` — storygraph-production 制作投影与可追溯 Query
 

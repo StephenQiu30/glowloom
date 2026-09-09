@@ -378,7 +378,17 @@ func presentDetail(detail reviewdomain.HumanTaskDetail, coordination *workflowdo
 }
 
 func presentReviewSubject(subjectType string, raw json.RawMessage) any {
-	if subjectType != "structure_identity_gate_input" || len(raw) == 0 {
+	if len(raw) == 0 {
+		return nil
+	}
+	if subjectType == "production_world_gate_input" {
+		detail, _, err := workflowdomain.DecodeProductionWorldReviewDetail(raw)
+		if err != nil {
+			return nil
+		}
+		return detail
+	}
+	if subjectType != "structure_identity_gate_input" {
 		return nil
 	}
 	gate, _, err := workflowdomain.DecodeStructureIdentityGateInput(raw)

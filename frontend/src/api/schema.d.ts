@@ -2623,6 +2623,204 @@ export interface components {
             impact_summary: components["schemas"]["StructureIdentityImpactSummaryResponse"];
             repair_options: components["schemas"]["StructureIdentityRepairOptionResponse"][];
         };
+        ProductionWorldCandidateRevisionResponse: {
+            /** Format: uuid */
+            candidate_revision_id: string;
+            candidate_revision: number;
+            candidate_revision_hash: string;
+            candidate_content_hash: string;
+        };
+        ProductionWorldPartitionRootsResponse: {
+            bible: string;
+            planning: string;
+            asset: string;
+            proof: string;
+        };
+        ProductionWorldEvidenceSpanResponse: {
+            source_start: number;
+            source_end: number;
+            text_hash: string;
+            exact_anchor: string;
+        };
+        ProductionWorldCreatorDecisionProposalResponse: {
+            decision_key: string;
+            rationale: string;
+        };
+        ProductionWorldSourceBasisResponse: {
+            provenance: string;
+            evidence: components["schemas"]["ProductionWorldEvidenceSpanResponse"][];
+            creator_decision_proposal: components["schemas"]["ProductionWorldCreatorDecisionProposalResponse"] | null;
+        };
+        ProductionWorldSemanticSlotResponse: {
+            slot_key: string;
+            resolution: string;
+            value: string | null;
+            design_gap_key: string | null;
+        };
+        ProductionWorldStateResponse: {
+            state_key: string;
+            state_kind: string;
+            complete_slots: components["schemas"]["ProductionWorldSemanticSlotResponse"][];
+            applicable_scene_scope_keys: string[];
+            entry_reason: string;
+            exit_reason: string;
+            previous_state_key: string | null;
+            next_state_key: string | null;
+            basis: components["schemas"]["ProductionWorldSourceBasisResponse"];
+        };
+        ProductionWorldEntityReviewItemResponse: {
+            identity_key: string;
+            /** @enum {string} */
+            kind: "character" | "location" | "prop";
+            specification_key: string;
+            specification_slots: components["schemas"]["ProductionWorldSemanticSlotResponse"][];
+            states: components["schemas"]["ProductionWorldStateResponse"][];
+            basis: components["schemas"]["ProductionWorldSourceBasisResponse"];
+        };
+        ProductionWorldOccurrenceResponse: {
+            occurrence_key: string;
+            order: number;
+            /** @enum {string} */
+            subject_kind: "character" | "location" | "prop";
+            identity_key: string;
+            state_key: string;
+            occurrence_role: string;
+            evidence: components["schemas"]["ProductionWorldEvidenceSpanResponse"];
+        };
+        ProductionWorldSceneOccurrenceReviewItemResponse: {
+            scene_scope_key: string;
+            /** Format: uuid */
+            scene_owner_logical_id: string;
+            temporary_scene_id: string;
+            source_start: number;
+            source_end: number;
+            story_time_key: string;
+            occurrences: components["schemas"]["ProductionWorldOccurrenceResponse"][];
+        };
+        ProductionWorldPositiveRationalResponse: {
+            numerator: number;
+            denominator: number;
+        };
+        ProductionWorldInteractionGeometryEvidenceResponse: {
+            hand: components["schemas"]["ProductionWorldEvidenceSpanResponse"] | null;
+            grip_type: components["schemas"]["ProductionWorldEvidenceSpanResponse"] | null;
+            contact_point: components["schemas"]["ProductionWorldEvidenceSpanResponse"] | null;
+            direction: components["schemas"]["ProductionWorldEvidenceSpanResponse"] | null;
+            relative_scale: components["schemas"]["ProductionWorldEvidenceSpanResponse"] | null;
+        };
+        ProductionWorldInteractionResponse: {
+            interaction_key: string;
+            claim_series_key: string;
+            claim_revision: number;
+            supersedes_interaction_key: string | null;
+            scene_scope_key: string;
+            beat_key: string | null;
+            story_time_key: string;
+            predicate: string;
+            actor_occurrence_key: string;
+            prop_occurrence_key: string;
+            counterparty_occurrence_key: string | null;
+            holder_before_identity_key: string | null;
+            holder_after_identity_key: string | null;
+            prop_state_before_key: string;
+            prop_state_after_key: string;
+            state_delta: string | null;
+            hand: string;
+            grip_type: string | null;
+            contact_point: string | null;
+            direction: string | null;
+            relative_scale: components["schemas"]["ProductionWorldPositiveRationalResponse"] | null;
+            geometry_evidence: components["schemas"]["ProductionWorldInteractionGeometryEvidenceResponse"];
+            evidence: components["schemas"]["ProductionWorldEvidenceSpanResponse"];
+        };
+        ProductionWorldContinuityClaimResponse: {
+            continuity_key: string;
+            claim_series_key: string;
+            claim_revision: number;
+            supersedes_continuity_key: string | null;
+            subject_kind: string;
+            identity_key: string;
+            from_scene_scope_key: string;
+            to_scene_scope_key: string;
+            story_time_start: string;
+            story_time_end: string;
+            before_state_key: string;
+            after_state_key: string;
+            transition: string;
+            delta: string | null;
+            evidence: components["schemas"]["ProductionWorldEvidenceSpanResponse"][];
+        };
+        ProductionWorldContinuityLedgerResponse: {
+            ledger_key: string;
+            subject_kind: string;
+            identity_key: string;
+            scene_scope_key: string;
+            story_time_key: string;
+            state_key: string;
+            holder_identity_key: string | null;
+            location_identity_key: string | null;
+            transition_interaction_key: string | null;
+            evidence: components["schemas"]["ProductionWorldEvidenceSpanResponse"][];
+        };
+        ProductionWorldContinuityReviewResponse: {
+            claims: components["schemas"]["ProductionWorldContinuityClaimResponse"][];
+            ledger: components["schemas"]["ProductionWorldContinuityLedgerResponse"][];
+        };
+        ProductionWorldReviewViewsResponse: {
+            character_appearances: components["schemas"]["ProductionWorldEntityReviewItemResponse"][];
+            locations: components["schemas"]["ProductionWorldEntityReviewItemResponse"][];
+            prop_states: components["schemas"]["ProductionWorldEntityReviewItemResponse"][];
+            scene_occurrences: components["schemas"]["ProductionWorldSceneOccurrenceReviewItemResponse"][];
+            interactions: components["schemas"]["ProductionWorldInteractionResponse"][];
+            continuity: components["schemas"]["ProductionWorldContinuityReviewResponse"];
+        };
+        ProductionWorldClaimResponse: {
+            claim_key: string;
+            claim_type: string;
+            subject_identity_keys: string[];
+            statement: string;
+            basis: components["schemas"]["ProductionWorldSourceBasisResponse"];
+        };
+        ProductionWorldDesignGapResponse: {
+            gap_key: string;
+            subject_key: string;
+            field_key: string;
+            missing_reason: string;
+            source_constraints: components["schemas"]["ProductionWorldEvidenceSpanResponse"][];
+            mutually_exclusive_options: string[];
+            impacted_scene_scope_keys: string[];
+            allowed_resolution_sources: string[];
+        };
+        ProductionWorldCandidateReviewIssueResponse: {
+            issue_key: string;
+            code: string;
+            /** @enum {string} */
+            severity: "warning" | "blocking";
+            scope: string;
+            summary: string;
+            evidence: components["schemas"]["ProductionWorldEvidenceSpanResponse"][];
+        };
+        ProductionWorldReviewIssueResponse: {
+            source_stage: string;
+            issue: components["schemas"]["ProductionWorldCandidateReviewIssueResponse"];
+        };
+        ProductionWorldReviewSubjectResponse: {
+            /** @constant */
+            schema_version: "production-world-review-detail-production";
+            /** @constant */
+            gate_key: "bible_continuity";
+            input_hash: string;
+            candidate_revision: components["schemas"]["ProductionWorldCandidateRevisionResponse"];
+            partition_roots: components["schemas"]["ProductionWorldPartitionRootsResponse"];
+            allowed_decisions: [
+                "approved",
+                "rejected"
+            ];
+            views: components["schemas"]["ProductionWorldReviewViewsResponse"];
+            world_claims: components["schemas"]["ProductionWorldClaimResponse"][];
+            design_gaps: components["schemas"]["ProductionWorldDesignGapResponse"][];
+            review_issues: components["schemas"]["ProductionWorldReviewIssueResponse"][];
+        };
         HumanGateChangeRequest: {
             issue_refs: string[];
             evidence_refs: components["schemas"]["HumanGateChangeEvidenceRef"][];
@@ -2676,7 +2874,7 @@ export interface components {
         HumanTaskDetailEnvelope: {
             data: {
                 task: components["schemas"]["HumanTaskResponse"];
-                subject: components["schemas"]["StructureIdentityReviewSubjectResponse"] | null;
+                subject: components["schemas"]["StructureIdentityReviewSubjectResponse"] | components["schemas"]["ProductionWorldReviewSubjectResponse"] | null;
                 decision: components["schemas"]["ReviewDecisionResponse"] | null;
                 coordination: components["schemas"]["HumanGateCoordinationResponse"] | null;
             };

@@ -35,10 +35,13 @@ export function SubjectPanel({
   onRepairChange: (value: API.HumanGateChangeRequest) => void;
   projectId: string;
   repairRequest: API.HumanGateChangeRequest | null;
-  subject: API.StructureIdentityReviewSubjectResponse | null;
+  subject: API.HumanTaskDetailEnvelope["data"]["subject"];
   task: API.HumanTaskResponse;
 }) {
   const selectionSubject = task.subject_type === "generation_candidate_selection";
+  const structureSubject = subject?.schema_version === "structure-identity-human-gate-input-production"
+    ? subject
+    : null;
   return (
     <Card className="border" id="subject-fact">
       <CardHeader className="border-b">
@@ -89,13 +92,13 @@ export function SubjectPanel({
             </ul>
           </div>
         ) : null}
-        {task.subject_type === "structure_identity_gate_input" && subject ? (
+        {task.subject_type === "structure_identity_gate_input" && structureSubject ? (
           <fieldset className="grid gap-3 border-t pt-5" disabled={!canDecide}>
             <legend className="text-sm font-semibold">冻结修复选项</legend>
             <p className="text-xs text-muted-foreground">
               只能选择 Backend 已冻结的错误项、证据、目标和影响场景；提交后会生成新的候选与审核任务。
             </p>
-            {subject.repair_options.map((option) => (
+            {structureSubject.repair_options.map((option) => (
               <div className="grid gap-2 border p-3" key={option.issue_key}>
                 <div>
                   <p className="text-sm font-medium">{option.summary}</p>
