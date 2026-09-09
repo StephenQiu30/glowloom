@@ -29,12 +29,18 @@ export function TaskStatusPanel({
     : coordination.workflow_resume_status === "unknown"
       ? "结果未知，可安全恢复"
       : coordination.workflow_resume_status === "completed"
-        ? workflowFactVerified
-          ? "工作流已继续"
-          : "恢复已确认，正在核对运行事实"
+        ? decision?.decision === "changes_requested"
+          ? coordination.repair_workflow_run_id
+            ? "有界修复已启动"
+            : "原流程已结束，等待启动修复"
+          : workflowFactVerified
+            ? "工作流已继续"
+            : "恢复已确认，正在核对运行事实"
         : coordination.workflow_resume_status === "conflict"
           ? "工作流恢复冲突"
           : "等待恢复";
+  const workflowReference = coordination?.repair_workflow_run_id
+    ?? coordination?.workflow_signal_receipt_id;
 
   return (
     <section aria-label="审核状态" className="grid gap-px overflow-hidden border bg-border sm:grid-cols-2 xl:grid-cols-4" role="region">
@@ -51,9 +57,7 @@ export function TaskStatusPanel({
       />
       <StatusCell
         label="工作流恢复"
-        meta={coordination?.workflow_signal_receipt_id
-          ? shortId(coordination.workflow_signal_receipt_id)
-          : undefined}
+        meta={workflowReference ? shortId(workflowReference) : undefined}
         value={workflowText}
       />
     </section>

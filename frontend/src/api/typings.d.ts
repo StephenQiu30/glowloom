@@ -177,6 +177,9 @@ declare global {
     type StoryboardTextIntentVersion = components["schemas"]["StoryboardTextIntentVersion"];
     type StoryboardTextIntentVisual = components["schemas"]["StoryboardTextIntentVisual"];
     type StoryboardVisualRequirement = components["schemas"]["StoryboardVisualRequirement"];
+    type StructureIdentityImpactSummaryResponse = components["schemas"]["StructureIdentityImpactSummaryResponse"];
+    type StructureIdentityRepairOptionResponse = components["schemas"]["StructureIdentityRepairOptionResponse"];
+    type StructureIdentityReviewSubjectResponse = components["schemas"]["StructureIdentityReviewSubjectResponse"];
     type TaskErrorResponse = components["schemas"]["TaskErrorResponse"];
     type TaskResponse = components["schemas"]["TaskResponse"];
     type TaskScopeResponse = components["schemas"]["TaskScopeResponse"];

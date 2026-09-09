@@ -18,6 +18,7 @@ export function ReviewActions({
   onRelease,
   onRenew,
   onResume,
+  repairRequest,
   task,
 }: {
   busy: boolean;
@@ -31,6 +32,7 @@ export function ReviewActions({
   onRelease: () => void;
   onRenew: () => void;
   onResume: () => void;
+  repairRequest: API.HumanGateChangeRequest | null;
   task: API.HumanTaskResponse;
 }) {
   const canClaim = canWrite
@@ -39,9 +41,10 @@ export function ReviewActions({
   const canUseClaim = canWrite && !decision && task.status === "CLAIMED" && Boolean(claimToken);
   const canResume = canWrite
     && Boolean(decision)
-    && coordination?.workflow_resume_status !== "completed"
     && coordination?.workflow_resume_status !== "conflict"
-    && coordination?.owner_apply_status !== "conflict";
+    && coordination?.owner_apply_status !== "conflict"
+    && (coordination?.workflow_resume_status !== "completed"
+      || (decision?.decision === "changes_requested" && !coordination.repair_workflow_run_id));
 
   return (
     <Card className="border">
@@ -84,7 +87,9 @@ export function ReviewActions({
           <div className="flex flex-wrap gap-3 border-t pt-4">
             {task.allowed_decisions.map((value) => (
               <Button
-                disabled={busy || (value === "selected" && !effectiveCandidate)}
+                disabled={busy
+                  || (value === "selected" && !effectiveCandidate)
+                  || (value === "changes_requested" && !repairRequest)}
                 key={value}
                 onClick={() => onDecision(value)}
                 variant={value === "rejected" ? "outline" : "default"}
@@ -97,7 +102,10 @@ export function ReviewActions({
         {canResume ? (
           <Button className="w-fit" disabled={busy} onClick={onResume}>
             <RefreshCcw aria-hidden="true" />
-            按原决议恢复工作流
+            {decision?.decision === "changes_requested"
+              && coordination?.workflow_resume_status === "completed"
+              ? "启动有界修复"
+              : "按原决议恢复工作流"}
           </Button>
         ) : null}
         {!canClaim && !canUseClaim && !canResume ? (

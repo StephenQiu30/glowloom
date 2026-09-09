@@ -43,6 +43,7 @@ export function ReviewWorkbench({
   const [statusFilter, setStatusFilter] = useState<TaskFilter>("active");
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [repairRequest, setRepairRequest] = useState<API.HumanGateChangeRequest | null>(null);
   const [commandMessage, setCommandMessage] = useState<string>();
   const [commandFailed, setCommandFailed] = useState(false);
 
@@ -99,12 +100,14 @@ export function ReviewWorkbench({
       && Boolean(coordination.owner_receipt_id));
   const workflowFactVerified = coordination?.workflow_resume_status === "completed"
     && ownerEvidenceReady
-    && Boolean(gateNode)
-    && gateNode?.status !== "WAITING_HUMAN"
-    && gateNode?.status !== "QUEUED"
-    && gateNode?.status !== "RUNNING"
-    && gateNode?.status !== "RETRYING"
-    && Boolean(gateNode?.output_hash.trim());
+    && (detail?.decision?.decision === "changes_requested"
+      ? Boolean(coordination.repair_workflow_run_id)
+      : Boolean(gateNode)
+        && gateNode?.status !== "WAITING_HUMAN"
+        && gateNode?.status !== "QUEUED"
+        && gateNode?.status !== "RUNNING"
+        && gateNode?.status !== "RETRYING"
+        && Boolean(gateNode?.output_hash.trim()));
 
   function commandKey(action: string, identity: string): string {
     return `${action}:${identity}`;
@@ -167,6 +170,7 @@ export function ReviewWorkbench({
   async function handleDecision(decision: DecisionValue) {
     if (!task || !claimToken || detail?.decision) return;
     if (decision === "selected" && !effectiveCandidate) return;
+    if (decision === "changes_requested" && !repairRequest) return;
     await runCommand(
       () => decideTask({
         projectId,
@@ -181,9 +185,12 @@ export function ReviewWorkbench({
           selected_candidate_id: decision === "selected"
             ? effectiveCandidate
             : null,
+          ...(decision === "changes_requested" && repairRequest
+            ? { change_request: repairRequest }
+            : {}),
           idempotency_key: commandKey(
             "human-task-decision",
-            `${task.id}:${task.revision}:${decision}:${effectiveCandidate}`,
+            `${task.id}:${task.revision}:${decision}:${effectiveCandidate}:${repairRequest?.change_spec.operation ?? ""}`,
           ),
         },
       }).unwrap(),
@@ -266,10 +273,12 @@ export function ReviewWorkbench({
                 setStatusFilter(value);
                 setSelectedTaskId("");
                 setSelectedCandidateId("");
+                setRepairRequest(null);
               }}
               onSelect={(taskId) => {
                 setSelectedTaskId(taskId);
                 setSelectedCandidateId("");
+                setRepairRequest(null);
                 setCommandMessage(undefined);
               }}
               selectedTaskId={requestedTaskId}
@@ -331,7 +340,10 @@ export function ReviewWorkbench({
                     )}
                     effectiveCandidate={effectiveCandidate}
                     onCandidateChange={setSelectedCandidateId}
+                    onRepairChange={setRepairRequest}
                     projectId={projectId}
+                    repairRequest={repairRequest}
+                    subject={detail.subject}
                     task={task}
                   />
 
@@ -346,6 +358,7 @@ export function ReviewWorkbench({
                     onRelease={() => handleClaimCommand("release")}
                     onRenew={() => handleClaimCommand("renew")}
                     onResume={handleResume}
+                    repairRequest={repairRequest}
                     task={task}
                     coordination={coordination}
                   />

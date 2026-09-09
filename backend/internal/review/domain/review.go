@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"slices"
 	"time"
 )
@@ -71,6 +72,7 @@ type HumanTaskPage struct {
 type HumanTaskDetail struct {
 	Task     HumanTask
 	Decision *ReviewDecision
+	Subject  json.RawMessage
 }
 
 func SameTaskBinding(left, right HumanTask) bool {

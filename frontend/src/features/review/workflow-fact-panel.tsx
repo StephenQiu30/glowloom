@@ -51,8 +51,10 @@ export function WorkflowFactPanel({
             <Fact label="Gate Output hash" value={shortHash(gateNode.output_hash)} mono />
             <Fact
               label="复核结论"
-              value={verified
-                ? "工作流已继续"
+              value={coordination?.repair_workflow_run_id
+                ? `有界修复已创建 ${shortId(coordination.repair_workflow_run_id)}`
+                : verified
+                  ? "工作流已继续"
                 : coordination?.workflow_resume_status === "completed"
                   ? "恢复已确认，运行事实尚未收敛"
                   : "等待 Workflow Resume 完成"}

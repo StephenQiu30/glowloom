@@ -139,6 +139,19 @@ func (store *Store) GetTask(
 			mapped.ClaimToken = nil
 		}
 		detail.Task = mapped
+		if record.SubjectType == "structure_identity_gate_input" {
+			var subject model.WorkflowHumanGateInput
+			if loadErr := transaction.First(&subject, "id = ?", record.SubjectID).Error; loadErr != nil {
+				return normalizeNotFound(loadErr)
+			}
+			gate, canonical, decodeErr := workflowdomain.DecodeStructureIdentityGateInput(json.RawMessage(subject.Input))
+			if decodeErr != nil || subject.WorkspaceID != record.WorkspaceID || subject.ProjectID != record.ProjectID ||
+				subject.WorkflowRunID != record.WorkflowRunID || subject.NodeRunID != record.NodeRunID ||
+				subject.InputHash != record.SubjectHash || gate.InputHash != record.SubjectHash || record.SubjectRevision != 1 {
+				return errors.New("structure identity review subject has drifted")
+			}
+			detail.Subject = canonical
+		}
 		var decision model.ReviewDecision
 		loadErr := transaction.Where("human_task_id = ?", record.ID).First(&decision).Error
 		if errors.Is(loadErr, gorm.ErrRecordNotFound) {

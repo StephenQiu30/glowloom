@@ -136,6 +136,43 @@ function coordination(
   };
 }
 
+function structureSubject(): API.StructureIdentityReviewSubjectResponse {
+  return {
+    schema_version: "structure-identity-human-gate-input-production",
+    gate_key: "structure_identity",
+    input_hash: "a".repeat(64),
+    evidence_refs: [{
+      source_version_id: "019ffa00-a000-7000-8000-000000000018",
+      source_start: 8,
+      source_end: 10,
+      text_hash: "d".repeat(64),
+    }],
+    impact_summary: {
+      affected_scope_keys: ["scene:019ffa00-a000-7000-8000-000000000019"],
+      preserved_families: ["script_source", "script_spans", "scene_facts"],
+      invalidated_families: ["production_world", "storyboard"],
+    },
+    repair_options: [{
+      issue_key: "issue_identity_ambiguous",
+      code: "identity_ambiguous",
+      severity: "warning",
+      scope: "scene:019ffa00-a000-7000-8000-000000000019",
+      summary: "林舟的身份归属需要确认",
+      evidence_refs: [{
+        source_version_id: "019ffa00-a000-7000-8000-000000000018",
+        source_start: 8,
+        source_end: 10,
+        text_hash: "d".repeat(64),
+      }],
+      allowed_changes: [{
+        operation: "resolve_mention",
+        target_keys: ["mention:8:10"],
+        affected_scope_keys: ["scene:019ffa00-a000-7000-8000-000000000019"],
+      }],
+    }],
+  };
+}
+
 function workflowRun(
   nodeStatus: API.WorkflowNodeRunResponse["status"] = "SUCCEEDED",
   outputHash = "b".repeat(64),
@@ -187,7 +224,11 @@ function workflowRun(
   };
 }
 
-let currentDetail: API.HumanTaskDetailEnvelope["data"];
+type TestHumanTaskDetail = Omit<API.HumanTaskDetailEnvelope["data"], "subject"> & {
+  subject?: API.StructureIdentityReviewSubjectResponse | null;
+};
+
+let currentDetail: TestHumanTaskDetail;
 
 describe("公共审核工作台", () => {
   beforeEach(() => {
@@ -217,7 +258,9 @@ describe("公共审核工作台", () => {
     apiMocks.listTasks.mockImplementation(async () => ({
       data: { items: [listItem(currentDetail.task)], next_after: null },
     }));
-    apiMocks.getTask.mockImplementation(async () => ({ data: currentDetail }));
+    apiMocks.getTask.mockImplementation(async () => ({
+      data: { ...currentDetail, subject: currentDetail.subject ?? null },
+    }));
     apiMocks.getWorkflowRun.mockResolvedValue({ data: workflowRun() });
     apiMocks.resumeDecision.mockImplementation(async () => {
       const resumed = coordination({
@@ -257,6 +300,7 @@ describe("公共审核工作台", () => {
         candidate_ids: [candidateOne, candidateTwo, candidateThree, candidateFour],
         rubric_version: "gate.structure_identity_review@1.0.0",
       }),
+      subject: structureSubject(),
       decision: null,
       coordination: null,
     };
@@ -268,6 +312,83 @@ describe("公共审核工作台", () => {
     expect(screen.getByText(candidateTwo)).toBeInTheDocument();
     expect(screen.getByText(candidateThree)).toBeInTheDocument();
     expect(screen.getByText(candidateFour)).toBeInTheDocument();
+    expect(screen.getByText("林舟的身份归属需要确认")).toBeInTheDocument();
+  });
+
+  it("只提交 Gate1 冻结的有界修复指令", async () => {
+    const claimed = task({
+      subject_type: "structure_identity_gate_input",
+      status: "CLAIMED",
+      revision: 2,
+      claim: {
+        claimed_by: userId,
+        expires_at: "2099-08-27T02:10:00Z",
+        claim_token: claimToken,
+      },
+    });
+    currentDetail = {
+      task: claimed,
+      subject: structureSubject(),
+      decision: null,
+      coordination: null,
+    };
+    apiMocks.decideTask.mockResolvedValue({
+      data: {
+        task: { ...claimed, status: "COMPLETED", claim: null, revision: 3 },
+        decision: { ...decision(), decision: "changes_requested" },
+        coordination: coordination({ owner_apply_status: "not_required" }),
+      },
+    });
+    const user = userEvent.setup();
+    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+
+    const requestButton = await screen.findByRole("button", { name: "要求修改" });
+    expect(requestButton).toBeDisabled();
+    await user.click(screen.getByRole("radio", { name: /确认提及归属/ }));
+    expect(requestButton).toBeEnabled();
+    await user.click(requestButton);
+
+    expect(apiMocks.decideTask).toHaveBeenCalledWith(
+      { human_task_id: taskId },
+      expect.objectContaining({
+        decision: "changes_requested",
+        selected_candidate_id: null,
+        change_request: {
+          issue_refs: ["issue_identity_ambiguous"],
+          evidence_refs: [{
+            source_version_id: "019ffa00-a000-7000-8000-000000000018",
+            source_start: 8,
+            source_end: 10,
+            text_hash: "d".repeat(64),
+          }],
+          change_spec: {
+            operation: "resolve_mention",
+            target_keys: ["mention:8:10"],
+            affected_scope_keys: ["scene:019ffa00-a000-7000-8000-000000000019"],
+          },
+          reason_code: "identity_resolution_incorrect",
+        },
+      }),
+    );
+  });
+
+  it("原流程结束但修复运行未创建时仍允许幂等启动修复", async () => {
+    currentDetail = {
+      task: task({ status: "COMPLETED", revision: 3, subject_type: "structure_identity_gate_input" }),
+      subject: structureSubject(),
+      decision: { ...decision(), decision: "changes_requested" },
+      coordination: coordination({
+        owner_apply_status: "not_required",
+        owner_receipt_id: null,
+        workflow_resume_status: "completed",
+      }),
+    };
+    const user = userEvent.setup();
+    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+
+    expect(await screen.findByText("原流程已结束，等待启动修复")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "启动有界修复" }));
+    expect(apiMocks.resumeDecision).toHaveBeenCalledWith({ review_decision_id: decisionId });
   });
 
   it("从详情恢复 Claim Token，并只提交冻结候选与服务端 revision", async () => {

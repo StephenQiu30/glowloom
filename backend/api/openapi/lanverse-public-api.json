@@ -6485,7 +6485,15 @@
         "properties": {
           "operation": {
             "type": "string",
-            "minLength": 1
+            "enum": [
+              "inspect_source",
+              "adjust_episode_boundary",
+              "adjust_scene_boundary",
+              "separate_identity",
+              "merge_identity",
+              "resolve_mention",
+              "reject_mention"
+            ]
           },
           "target_keys": {
             "type": "array",
@@ -6504,6 +6512,75 @@
               "type": "string",
               "minLength": 1
             }
+          }
+        }
+      },
+      "StructureIdentityRepairOptionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "issue_key",
+          "code",
+          "severity",
+          "scope",
+          "summary",
+          "evidence_refs",
+          "allowed_changes"
+        ],
+        "properties": {
+          "issue_key": { "type": "string" },
+          "code": { "type": "string" },
+          "severity": { "type": "string", "enum": ["warning", "blocking"] },
+          "scope": { "type": "string" },
+          "summary": { "type": "string" },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HumanGateChangeEvidenceRef" }
+          },
+          "allowed_changes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HumanGateChangeSpec" }
+          }
+        }
+      },
+      "StructureIdentityImpactSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["affected_scope_keys", "preserved_families", "invalidated_families"],
+        "properties": {
+          "affected_scope_keys": { "type": "array", "items": { "type": "string" } },
+          "preserved_families": { "type": "array", "items": { "type": "string" } },
+          "invalidated_families": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "StructureIdentityReviewSubjectResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "gate_key",
+          "input_hash",
+          "evidence_refs",
+          "impact_summary",
+          "repair_options"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "structure-identity-human-gate-input-production"
+          },
+          "gate_key": { "type": "string", "const": "structure_identity" },
+          "input_hash": { "type": "string" },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HumanGateChangeEvidenceRef" }
+          },
+          "impact_summary": {
+            "$ref": "#/components/schemas/StructureIdentityImpactSummaryResponse"
+          },
+          "repair_options": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/StructureIdentityRepairOptionResponse" }
           }
         }
       },
@@ -6539,7 +6616,12 @@
           },
           "reason_code": {
             "type": "string",
-            "minLength": 1
+            "enum": [
+              "source_interpretation_incorrect",
+              "insufficient_evidence",
+              "structure_boundary_incorrect",
+              "identity_resolution_incorrect"
+            ]
           },
           "user_note": {
             "type": "string",
@@ -6733,12 +6815,23 @@
             "additionalProperties": false,
             "required": [
               "task",
+              "subject",
               "decision",
               "coordination"
             ],
             "properties": {
               "task": {
                 "$ref": "#/components/schemas/HumanTaskResponse"
+              },
+              "subject": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/StructureIdentityReviewSubjectResponse"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "decision": {
                 "oneOf": [

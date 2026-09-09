@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -359,7 +360,10 @@ func emptyBody(request *http.Request) bool {
 }
 
 func presentDetail(detail reviewdomain.HumanTaskDetail, coordination *workflowdomain.HumanGateCoordination) map[string]any {
-	result := map[string]any{"task": presentTask(detail.Task, detail.Task.ClaimToken != nil)}
+	result := map[string]any{
+		"task":    presentTask(detail.Task, detail.Task.ClaimToken != nil),
+		"subject": presentReviewSubject(detail.Task.SubjectType, detail.Subject),
+	}
 	if detail.Decision == nil {
 		result["decision"], result["coordination"] = nil, nil
 		return result
@@ -371,6 +375,24 @@ func presentDetail(detail reviewdomain.HumanTaskDetail, coordination *workflowdo
 		result["coordination"] = presentCoordination(*coordination)
 	}
 	return result
+}
+
+func presentReviewSubject(subjectType string, raw json.RawMessage) any {
+	if subjectType != "structure_identity_gate_input" || len(raw) == 0 {
+		return nil
+	}
+	gate, _, err := workflowdomain.DecodeStructureIdentityGateInput(raw)
+	if err != nil {
+		return nil
+	}
+	return map[string]any{
+		"schema_version": gate.SchemaVersion,
+		"gate_key":       gate.GateKey,
+		"input_hash":     gate.InputHash,
+		"evidence_refs":  gate.EvidenceRefs,
+		"impact_summary": gate.Impact,
+		"repair_options": gate.RepairOptions,
+	}
 }
 
 func presentDecisionResult(result reviewdomain.DecisionResult, coordination workflowdomain.HumanGateCoordination) map[string]any {

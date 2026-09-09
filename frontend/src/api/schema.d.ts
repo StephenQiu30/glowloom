@@ -2442,15 +2442,42 @@ export interface components {
             text_hash: string;
         };
         HumanGateChangeSpec: {
-            operation: string;
+            /** @enum {string} */
+            operation: "inspect_source" | "adjust_episode_boundary" | "adjust_scene_boundary" | "separate_identity" | "merge_identity" | "resolve_mention" | "reject_mention";
             target_keys: string[];
             affected_scope_keys: string[];
+        };
+        StructureIdentityRepairOptionResponse: {
+            issue_key: string;
+            code: string;
+            /** @enum {string} */
+            severity: "warning" | "blocking";
+            scope: string;
+            summary: string;
+            evidence_refs: components["schemas"]["HumanGateChangeEvidenceRef"][];
+            allowed_changes: components["schemas"]["HumanGateChangeSpec"][];
+        };
+        StructureIdentityImpactSummaryResponse: {
+            affected_scope_keys: string[];
+            preserved_families: string[];
+            invalidated_families: string[];
+        };
+        StructureIdentityReviewSubjectResponse: {
+            /** @constant */
+            schema_version: "structure-identity-human-gate-input-production";
+            /** @constant */
+            gate_key: "structure_identity";
+            input_hash: string;
+            evidence_refs: components["schemas"]["HumanGateChangeEvidenceRef"][];
+            impact_summary: components["schemas"]["StructureIdentityImpactSummaryResponse"];
+            repair_options: components["schemas"]["StructureIdentityRepairOptionResponse"][];
         };
         HumanGateChangeRequest: {
             issue_refs: string[];
             evidence_refs: components["schemas"]["HumanGateChangeEvidenceRef"][];
             change_spec: components["schemas"]["HumanGateChangeSpec"];
-            reason_code: string;
+            /** @enum {string} */
+            reason_code: "source_interpretation_incorrect" | "insufficient_evidence" | "structure_boundary_incorrect" | "identity_resolution_incorrect";
             user_note?: string;
         };
         ReviewDecisionResponse: {
@@ -2498,6 +2525,7 @@ export interface components {
         HumanTaskDetailEnvelope: {
             data: {
                 task: components["schemas"]["HumanTaskResponse"];
+                subject: components["schemas"]["StructureIdentityReviewSubjectResponse"] | null;
                 decision: components["schemas"]["ReviewDecisionResponse"] | null;
                 coordination: components["schemas"]["HumanGateCoordinationResponse"] | null;
             };

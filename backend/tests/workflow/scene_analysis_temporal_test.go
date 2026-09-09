@@ -198,6 +198,11 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	if err = database.First(&gateInput, "id = ?", task.SubjectID).Error; err != nil {
 		t.Fatal(err)
 	}
+	reviewDetail, err := reviewService.GetTask(ctx, reviewActor, task.ID.String())
+	reviewGate, _, decodeReviewErr := workflow.DecodeStructureIdentityGateInput(reviewDetail.Subject)
+	if err != nil || decodeReviewErr != nil || reviewGate.InputHash != gateInput.InputHash {
+		t.Fatalf("read frozen Structure Identity review subject: err=%v decode=%v", err, decodeReviewErr)
+	}
 	gateContract, _, err := workflow.DecodeStructureIdentityGateInput(json.RawMessage(gateInput.Input))
 	if err != nil || len(gateContract.RepairOptions) != 1 || len(gateContract.RepairOptions[0].AllowedChanges) != 1 {
 		t.Fatalf("load Structure Identity repair option: gate=%#v err=%v", gateContract, err)
@@ -290,9 +295,20 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		if repairRun.Status != "WAITING_HUMAN" {
 			return false, nil
 		}
-		loadErr := database.Where(
+		query := database.Where(
 			"workflow_run_id = ? AND subject_type = ?", repairRun.ID, "structure_identity_gate_input",
-		).First(&repairTask).Error
+		)
+		var taskCount int64
+		if countErr := query.Model(&model.HumanTask{}).Count(&taskCount).Error; countErr != nil {
+			return false, countErr
+		}
+		if taskCount == 0 {
+			return false, nil
+		}
+		if taskCount != 1 {
+			return false, fmt.Errorf("repair workflow has %d Structure Identity tasks", taskCount)
+		}
+		loadErr := query.First(&repairTask).Error
 		return loadErr == nil && repairTask.Status == "OPEN", loadErr
 	})
 	if repairRun.SourceWorkflowRunID == nil || repairRun.SourceWorkflowRunID.String() != started.ID ||
