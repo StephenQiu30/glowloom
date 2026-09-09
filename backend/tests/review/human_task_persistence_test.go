@@ -195,6 +195,9 @@ func TestHumanTaskPersistsClaimTakeoverAndOneDecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("persist review decision: %v", err)
 	}
+	if decided.Decision.DecisionPayloadHash != "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" {
+		t.Fatalf("approved decision payload hash = %q", decided.Decision.DecisionPayloadHash)
+	}
 	replayed, err := service.Decide(ctx, reviewapp.Actor{UserID: reviewerB.String(), TokenVersion: 1}, reviewapp.DecideCommand{
 		TaskID: task.ID, ClaimToken: third.ClaimToken, ExpectedTaskRevision: third.Task.Revision,
 		ExpectedSubjectRevision: task.SubjectRevision, ExpectedSubjectHash: task.SubjectHash,

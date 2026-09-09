@@ -43,6 +43,7 @@ type ReviewDecision struct {
 	SubjectHash         string         `gorm:"type:char(64);not null;check:ck_rev_decision_subject_hash,char_length(subject_hash) = 64"`
 	SelectedCandidateID *uuid.UUID     `gorm:"type:uuid"`
 	DecisionPayload     datatypes.JSON `gorm:"type:jsonb;not null;default:'{}';check:ck_rev_decision_payload,jsonb_typeof(decision_payload) = 'object'"`
+	DecisionPayloadHash string         `gorm:"type:char(64);not null;default:'44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a';check:ck_rev_decision_payload_hash,char_length(decision_payload_hash) = 64"`
 	CreatedBy           uuid.UUID      `gorm:"type:uuid;not null"`
 	CreatedAt           time.Time      `gorm:"type:timestamptz;not null;index:ix_rev_decisions_workspace_created,priority:2,sort:desc"`
 	Workspace           Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`

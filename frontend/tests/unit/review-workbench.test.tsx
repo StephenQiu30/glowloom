@@ -114,6 +114,7 @@ function decision(): API.ReviewDecisionResponse {
     subject_hash: "a".repeat(64),
     selected_candidate_id: null,
     change_request: null,
+    decision_payload_hash: "a".repeat(64),
     created_by: userId,
     created_at: "2026-08-27T02:05:00Z",
   };

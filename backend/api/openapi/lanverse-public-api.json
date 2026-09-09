@@ -6559,6 +6559,7 @@
           "subject_hash",
           "selected_candidate_id",
           "change_request",
+          "decision_payload_hash",
           "created_by",
           "created_at"
         ],
@@ -6604,6 +6605,10 @@
                 "type": "null"
               }
             ]
+          },
+          "decision_payload_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
           },
           "created_by": {
             "type": "string",

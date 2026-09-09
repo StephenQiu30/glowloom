@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformcommandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/adapter/gormdb"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
@@ -512,10 +513,15 @@ func (store *Store) Decide(
 		if payloadErr != nil {
 			return payloadErr
 		}
+		decisionPayloadHash, hashErr := platformcanonical.Hash(json.RawMessage(decisionPayload))
+		if hashErr != nil {
+			return hashErr
+		}
 		decision := model.ReviewDecision{
 			ID: decisionID, WorkspaceID: task.WorkspaceID, HumanTaskID: task.ID, Decision: desired.Decision,
 			SubjectRevision: desired.SubjectRevision, SubjectHash: desired.SubjectHash,
-			DecisionPayload: decisionPayload, CreatedBy: actorID, CreatedAt: now.UTC(),
+			DecisionPayload: decisionPayload, DecisionPayloadHash: decisionPayloadHash,
+			CreatedBy: actorID, CreatedAt: now.UTC(),
 		}
 		if command.SelectedCandidateID != "" {
 			selected, parseErr := uuid.Parse(command.SelectedCandidateID)
@@ -669,14 +675,17 @@ func decisionDomain(value model.ReviewDecision) (domain.ReviewDecision, error) {
 	var payload struct {
 		ChangeRequest *domain.ChangeRequest `json:"change_request,omitempty"`
 	}
-	if len(value.DecisionPayload) == 0 || json.Unmarshal(value.DecisionPayload, &payload) != nil {
+	payloadHash, hashErr := platformcanonical.Hash(json.RawMessage(value.DecisionPayload))
+	if len(value.DecisionPayload) == 0 || json.Unmarshal(value.DecisionPayload, &payload) != nil ||
+		hashErr != nil || payloadHash != value.DecisionPayloadHash {
 		return domain.ReviewDecision{}, errors.New("review decision payload has drifted")
 	}
 	return domain.ReviewDecision{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), HumanTaskID: value.HumanTaskID.String(),
 		Decision: value.Decision, SubjectRevision: value.SubjectRevision, SubjectHash: value.SubjectHash,
 		SelectedCandidateID: selected, ChangeRequest: payload.ChangeRequest,
-		CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+		DecisionPayloadHash: value.DecisionPayloadHash,
+		CreatedBy:           value.CreatedBy.String(), CreatedAt: value.CreatedAt,
 	}, nil
 }
 

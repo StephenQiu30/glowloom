@@ -406,6 +406,7 @@ func presentDecision(decision reviewdomain.ReviewDecision) map[string]any {
 		"subject_revision": decision.SubjectRevision, "subject_hash": decision.SubjectHash,
 		"selected_candidate_id": nullableString(decision.SelectedCandidateID),
 		"change_request":        decision.ChangeRequest,
+		"decision_payload_hash": decision.DecisionPayloadHash,
 		"created_by":            decision.CreatedBy, "created_at": decision.CreatedAt,
 	}
 }

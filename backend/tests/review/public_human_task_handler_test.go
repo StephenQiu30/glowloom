@@ -67,7 +67,8 @@ func TestPublicHumanTaskHandlerMapsLeaseDecisionAndResumeWithoutClientOwnedGateF
 	}
 	decision := reviewdomain.ReviewDecision{
 		ID: publicDecisionID, HumanTaskID: publicTaskID, Decision: "approved",
-		SubjectRevision: 1, SubjectHash: publicSubjectHash, CreatedAt: now,
+		SubjectRevision: 1, SubjectHash: publicSubjectHash,
+		DecisionPayloadHash: strings.Repeat("b", 64), CreatedAt: now,
 	}
 	reviews := &publicReviewStub{
 		claim:    reviewdomain.ClaimResult{Task: task, ClaimToken: publicClaimToken},
@@ -141,7 +142,8 @@ func TestPublicHumanTaskHandlerCarriesTypedStructureIdentityChangeRequest(t *tes
 	}
 	decision := reviewdomain.ReviewDecision{
 		ID: publicDecisionID, HumanTaskID: publicTaskID, Decision: "changes_requested",
-		SubjectRevision: 1, SubjectHash: publicSubjectHash, ChangeRequest: change, CreatedAt: now,
+		SubjectRevision: 1, SubjectHash: publicSubjectHash, ChangeRequest: change,
+		DecisionPayloadHash: strings.Repeat("b", 64), CreatedAt: now,
 	}
 	reviews := &publicReviewStub{decision: reviewdomain.DecisionResult{
 		Task: reviewdomain.HumanTask{ID: publicTaskID}, Decision: decision,
@@ -168,7 +170,10 @@ func TestPublicHumanTaskHandlerCarriesTypedStructureIdentityChangeRequest(t *tes
 }
 
 func TestPublicHumanTaskHandlerCarriesCommittedDecisionWhenOwnerApplyConflicts(t *testing.T) {
-	decision := reviewdomain.ReviewDecision{ID: publicDecisionID, HumanTaskID: publicTaskID, Decision: "approved", SubjectRevision: 1, SubjectHash: publicSubjectHash}
+	decision := reviewdomain.ReviewDecision{
+		ID: publicDecisionID, HumanTaskID: publicTaskID, Decision: "approved", SubjectRevision: 1,
+		SubjectHash: publicSubjectHash, DecisionPayloadHash: strings.Repeat("b", 64),
+	}
 	reviews := &publicReviewStub{decision: reviewdomain.DecisionResult{
 		Task: reviewdomain.HumanTask{ID: publicTaskID}, Decision: decision,
 	}}

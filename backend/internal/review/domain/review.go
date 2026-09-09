@@ -27,6 +27,7 @@ type ReviewDecision struct {
 	SubjectHash                  string
 	SelectedCandidateID          *string
 	ChangeRequest                *ChangeRequest
+	DecisionPayloadHash          string
 	CreatedBy                    string
 	CreatedAt                    time.Time
 }

@@ -2465,6 +2465,7 @@ export interface components {
             /** Format: uuid */
             selected_candidate_id: string | null;
             change_request: components["schemas"]["HumanGateChangeRequest"] | null;
+            decision_payload_hash: string;
             /** Format: uuid */
             created_by: string;
             /** Format: date-time */
