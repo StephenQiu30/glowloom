@@ -93,8 +93,13 @@ def test_docker_transport_is_explicit_and_limited_to_compose_peers(
 
     configure(monkeypatch)
     monkeypatch.setenv("CREATION_DOCKER_NETWORK", "true")
-    monkeypatch.setenv("CREATION_TEMPORAL_ADDRESS", "host.docker.internal:7233")
-    assert Settings.from_environment().temporal_address == "host.docker.internal:7233"
+    for address in ("host.docker.internal:7233", "temporal:7233"):
+        monkeypatch.setenv("CREATION_TEMPORAL_ADDRESS", address)
+        assert Settings.from_environment().temporal_address == address
+    monkeypatch.setenv("CREATION_TEMPORAL_ADDRESS", "untrusted-temporal:7233")
+    with pytest.raises(ValueError):
+        Settings.from_environment()
+    monkeypatch.setenv("CREATION_TEMPORAL_ADDRESS", "temporal:7233")
     for key, value in [
         ("CREATION_PLATFORM_URL", "http://backend:8686"),
         ("CREATION_HARNESS_URL", "http://agent:8787"),
