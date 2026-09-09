@@ -156,6 +156,7 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 type storyGraphSceneAnalysisWireFixture struct {
 	ValidInvocation          json.RawMessage `json:"valid_invocation"`
 	ValidScriptSpanCandidate json.RawMessage `json:"valid_script_span_candidate"`
+	ValidSceneFactCandidate  json.RawMessage `json:"valid_scene_fact_candidate"`
 	ExpectedInputHash        string          `json:"expected_input_hash"`
 	ExpectedStageInstanceKey string          `json:"expected_stage_instance_key"`
 	ExpectedResultHash       string          `json:"expected_result_hash"`

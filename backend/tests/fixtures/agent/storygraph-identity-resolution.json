@@ -1,0 +1,92 @@
+{
+  "valid_candidate": {
+    "source_version_id": "33333333-3333-4333-8333-333333333333",
+    "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
+    "scene_fact_candidate_revision_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "scene_fact_candidate_revision_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "resolved_clusters": [
+      {
+        "temporary_identity_key": "identity_character_linzhou",
+        "kind": "character",
+        "resolution": "new",
+        "reuse_identity_key": null,
+        "canonical_name": "林舟",
+        "aliases": ["林舟"],
+        "mention_refs": [
+          {
+            "kind": "character",
+            "temporary_scene_id": "scene_0001",
+            "source_start": 8,
+            "source_end": 10,
+            "text_hash": "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+            "exact_anchor": "林舟"
+          },
+          {
+            "kind": "character",
+            "temporary_scene_id": "scene_0002",
+            "source_start": 24,
+            "source_end": 26,
+            "text_hash": "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+            "exact_anchor": "林舟"
+          }
+        ],
+        "supporting_evidence": [
+          {
+            "source_start": 8,
+            "source_end": 10,
+            "text_hash": "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+            "exact_anchor": "林舟"
+          },
+          {
+            "source_start": 24,
+            "source_end": 26,
+            "text_hash": "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+            "exact_anchor": "林舟"
+          }
+        ],
+        "contradicting_evidence": [],
+        "confidence": 0.98,
+        "rationale": "两个提及使用相同姓名，且原文没有同名拆分证据。"
+      },
+      {
+        "temporary_identity_key": "identity_prop_door_handle",
+        "kind": "prop",
+        "resolution": "new",
+        "reuse_identity_key": null,
+        "canonical_name": "门把",
+        "aliases": ["门把"],
+        "mention_refs": [
+          {
+            "kind": "prop",
+            "temporary_scene_id": "scene_0001",
+            "source_start": 12,
+            "source_end": 14,
+            "text_hash": "3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9",
+            "exact_anchor": "门把"
+          }
+        ],
+        "supporting_evidence": [
+          {
+            "source_start": 12,
+            "source_end": 14,
+            "text_hash": "3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9",
+            "exact_anchor": "门把"
+          }
+        ],
+        "contradicting_evidence": [],
+        "confidence": 1.0,
+        "rationale": "原文中唯一的道具提及。"
+      }
+    ],
+    "ambiguous_mentions": [],
+    "rejected_mentions": [],
+    "coverage": {
+      "mention_count": 3,
+      "resolved_count": 3,
+      "ambiguous_count": 0,
+      "rejected_count": 0,
+      "mention_universe_hash": "6f5a7c25ccec44b59edfd0c1e26520ee25267312ada4e035e3a21cd597c47b1d"
+    },
+    "review_issues": []
+  }
+}

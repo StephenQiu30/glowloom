@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -788,6 +789,272 @@ func ValidateSceneFactCandidate(raw json.RawMessage, text string, spanRaw json.R
 		return errors.New("SceneFact span coverage is incomplete")
 	}
 	return nil
+}
+
+var temporaryIdentityKeyPattern = regexp.MustCompile(`^identity_(character|prop)_[a-z0-9_]{1,80}$`)
+
+type IdentityMentionRef struct {
+	Kind             string `json:"kind"`
+	TemporarySceneID string `json:"temporary_scene_id"`
+	SourceStart      int    `json:"source_start"`
+	SourceEnd        int    `json:"source_end"`
+	TextHash         string `json:"text_hash"`
+	ExactAnchor      string `json:"exact_anchor"`
+}
+
+type IdentityCluster struct {
+	TemporaryIdentityKey  string               `json:"temporary_identity_key"`
+	Kind                  string               `json:"kind"`
+	Resolution            string               `json:"resolution"`
+	ReuseIdentityKey      *string              `json:"reuse_identity_key"`
+	CanonicalName         string               `json:"canonical_name"`
+	Aliases               []string             `json:"aliases"`
+	MentionRefs           []IdentityMentionRef `json:"mention_refs"`
+	SupportingEvidence    []SourceEvidenceSpan `json:"supporting_evidence"`
+	ContradictingEvidence []SourceEvidenceSpan `json:"contradicting_evidence"`
+	Confidence            float64              `json:"confidence"`
+	Rationale             string               `json:"rationale"`
+}
+
+type AmbiguousIdentityMention struct {
+	MentionRef            IdentityMentionRef `json:"mention_ref"`
+	CandidateIdentityKeys []string           `json:"candidate_identity_keys"`
+	Confidence            float64            `json:"confidence"`
+	Rationale             string             `json:"rationale"`
+}
+
+type RejectedIdentityMention struct {
+	MentionRef IdentityMentionRef `json:"mention_ref"`
+	Rationale  string             `json:"rationale"`
+}
+
+type IdentityResolutionCoverage struct {
+	MentionCount        int    `json:"mention_count"`
+	ResolvedCount       int    `json:"resolved_count"`
+	AmbiguousCount      int    `json:"ambiguous_count"`
+	RejectedCount       int    `json:"rejected_count"`
+	MentionUniverseHash string `json:"mention_universe_hash"`
+}
+
+type IdentityResolutionCandidate struct {
+	SourceVersionID                string                     `json:"source_version_id"`
+	SourceHash                     string                     `json:"source_hash"`
+	SceneFactCandidateRevisionID   string                     `json:"scene_fact_candidate_revision_id"`
+	SceneFactCandidateRevisionHash string                     `json:"scene_fact_candidate_revision_hash"`
+	ResolvedClusters               []IdentityCluster          `json:"resolved_clusters"`
+	AmbiguousMentions              []AmbiguousIdentityMention `json:"ambiguous_mentions"`
+	RejectedMentions               []RejectedIdentityMention  `json:"rejected_mentions"`
+	Coverage                       IdentityResolutionCoverage `json:"coverage"`
+	ReviewIssues                   []CandidateReviewIssue     `json:"review_issues"`
+}
+
+func ValidateIdentityResolutionCandidate(
+	raw json.RawMessage,
+	sceneFactRaw json.RawMessage,
+	allowedReuseIdentityKeys map[string]struct{},
+) error {
+	var value IdentityResolutionCandidate
+	var sceneFacts SceneFactCandidate
+	if decodeStrict(raw, &value) != nil || decodeStrict(sceneFactRaw, &sceneFacts) != nil ||
+		value.SourceVersionID != sceneFacts.SourceVersionID || value.SourceHash != sceneFacts.SourceHash ||
+		!hashPattern.MatchString(value.SceneFactCandidateRevisionHash) || value.ResolvedClusters == nil ||
+		value.AmbiguousMentions == nil || value.RejectedMentions == nil || value.ReviewIssues == nil {
+		return errors.New("invalid IdentityResolution candidate")
+	}
+	for _, identifier := range []string{value.SourceVersionID, value.SceneFactCandidateRevisionID} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid IdentityResolution source identity")
+		}
+	}
+
+	expected := make(map[string]IdentityMentionRef)
+	sourceEvidence := make(map[string]struct{})
+	for _, scene := range sceneFacts.Scenes {
+		grounded := make([]SourceEvidenceSpan, 0, len(scene.Actions)+len(scene.Dialogues)+len(scene.RawCharacterMentions)+len(scene.RawPropMentions)+2)
+		if scene.Location != nil {
+			grounded = append(grounded, scene.Location.Evidence)
+		}
+		if scene.Time != nil {
+			grounded = append(grounded, scene.Time.Evidence)
+		}
+		for _, action := range scene.Actions {
+			grounded = append(grounded, action.Evidence)
+		}
+		for _, dialogue := range scene.Dialogues {
+			grounded = append(grounded, dialogue.Evidence)
+		}
+		for _, mention := range scene.RawCharacterMentions {
+			grounded = append(grounded, mention.Evidence)
+		}
+		for _, mention := range scene.RawPropMentions {
+			grounded = append(grounded, mention.Evidence)
+		}
+		for _, evidence := range grounded {
+			sourceEvidence[sourceEvidenceKey(evidence)] = struct{}{}
+		}
+		for _, group := range []struct {
+			kind     string
+			mentions []RawEntityMention
+		}{{"character", scene.RawCharacterMentions}, {"prop", scene.RawPropMentions}} {
+			for _, mention := range group.mentions {
+				ref := IdentityMentionRef{
+					Kind: group.kind, TemporarySceneID: scene.TemporarySceneID,
+					SourceStart: mention.Evidence.SourceStart, SourceEnd: mention.Evidence.SourceEnd,
+					TextHash: mention.Evidence.TextHash, ExactAnchor: mention.Evidence.ExactAnchor,
+				}
+				key := identityMentionKey(ref)
+				if _, duplicate := expected[key]; duplicate {
+					return errors.New("SceneFact raw mention is duplicated")
+				}
+				expected[key] = ref
+			}
+		}
+	}
+
+	supplied := make([]IdentityMentionRef, 0, len(expected))
+	identityKinds := make(map[string]string, len(value.ResolvedClusters))
+	resolvedCount := 0
+	for _, cluster := range value.ResolvedClusters {
+		if !temporaryIdentityKeyPattern.MatchString(cluster.TemporaryIdentityKey) ||
+			!strings.HasPrefix(cluster.TemporaryIdentityKey, "identity_"+cluster.Kind+"_") ||
+			(cluster.Kind != "character" && cluster.Kind != "prop") || len(cluster.MentionRefs) == 0 ||
+			len(cluster.SupportingEvidence) == 0 || cluster.ContradictingEvidence == nil ||
+			cluster.Confidence < 0 || cluster.Confidence > 1 || strings.TrimSpace(cluster.Rationale) == "" ||
+			strings.TrimSpace(cluster.CanonicalName) == "" || len(cluster.Aliases) == 0 {
+			return errors.New("invalid identity cluster")
+		}
+		if _, duplicate := identityKinds[cluster.TemporaryIdentityKey]; duplicate {
+			return errors.New("identity cluster key is duplicated")
+		}
+		identityKinds[cluster.TemporaryIdentityKey] = cluster.Kind
+		aliasSet := make(map[string]struct{}, len(cluster.Aliases))
+		canonicalAlias := false
+		for _, alias := range cluster.Aliases {
+			if strings.TrimSpace(alias) == "" {
+				return errors.New("identity alias is empty")
+			}
+			if _, duplicate := aliasSet[alias]; duplicate {
+				return errors.New("identity alias is duplicated")
+			}
+			aliasSet[alias] = struct{}{}
+			canonicalAlias = canonicalAlias || alias == cluster.CanonicalName
+		}
+		if !canonicalAlias {
+			return errors.New("identity aliases omit the canonical name")
+		}
+		switch cluster.Resolution {
+		case "new":
+			if cluster.ReuseIdentityKey != nil {
+				return errors.New("new identity carries a reuse key")
+			}
+		case "reuse":
+			if cluster.ReuseIdentityKey == nil || strings.TrimSpace(*cluster.ReuseIdentityKey) == "" {
+				return errors.New("reused identity omits its key")
+			}
+			if _, allowed := allowedReuseIdentityKeys[*cluster.ReuseIdentityKey]; !allowed {
+				return errors.New("identity reuse key is outside the input allowlist")
+			}
+		default:
+			return errors.New("invalid identity resolution")
+		}
+		for _, evidence := range append(cluster.SupportingEvidence, cluster.ContradictingEvidence...) {
+			if _, exists := sourceEvidence[sourceEvidenceKey(evidence)]; !exists {
+				return errors.New("identity evidence is not present in the frozen SceneFacts")
+			}
+		}
+		for _, ref := range cluster.MentionRefs {
+			if ref.Kind != cluster.Kind {
+				return errors.New("identity cluster mixes mention kinds")
+			}
+			supplied = append(supplied, ref)
+		}
+		resolvedCount += len(cluster.MentionRefs)
+	}
+	for _, ambiguous := range value.AmbiguousMentions {
+		if len(ambiguous.CandidateIdentityKeys) == 0 || ambiguous.Confidence < 0 ||
+			ambiguous.Confidence > 1 || strings.TrimSpace(ambiguous.Rationale) == "" {
+			return errors.New("invalid ambiguous identity mention")
+		}
+		seenCandidates := make(map[string]struct{}, len(ambiguous.CandidateIdentityKeys))
+		for _, key := range ambiguous.CandidateIdentityKeys {
+			kind, exists := identityKinds[key]
+			if !exists {
+				return errors.New("ambiguous mention references an unknown identity cluster")
+			}
+			if kind != ambiguous.MentionRef.Kind {
+				return errors.New("ambiguous mention references a different identity kind")
+			}
+			if _, duplicate := seenCandidates[key]; duplicate {
+				return errors.New("ambiguous identity candidate is duplicated")
+			}
+			seenCandidates[key] = struct{}{}
+		}
+		supplied = append(supplied, ambiguous.MentionRef)
+	}
+	for _, rejected := range value.RejectedMentions {
+		if strings.TrimSpace(rejected.Rationale) == "" {
+			return errors.New("invalid rejected identity mention")
+		}
+		supplied = append(supplied, rejected.MentionRef)
+	}
+
+	seenMentions := make(map[string]struct{}, len(supplied))
+	for _, ref := range supplied {
+		key := identityMentionKey(ref)
+		expectedRef, exists := expected[key]
+		if !exists || expectedRef != ref {
+			return errors.New("identity mention drifted from its SceneFact evidence")
+		}
+		if _, duplicate := seenMentions[key]; duplicate {
+			return errors.New("identity mention belongs to more than one partition")
+		}
+		seenMentions[key] = struct{}{}
+	}
+	if len(seenMentions) != len(expected) {
+		return errors.New("identity candidate does not partition every raw mention")
+	}
+
+	orderedKeys := make([]string, 0, len(expected))
+	for key := range expected {
+		orderedKeys = append(orderedKeys, key)
+	}
+	sort.Strings(orderedKeys)
+	orderedUniverse := make([]IdentityMentionRef, 0, len(orderedKeys))
+	for _, key := range orderedKeys {
+		orderedUniverse = append(orderedUniverse, expected[key])
+	}
+	encodedUniverse, err := json.Marshal(orderedUniverse)
+	if err != nil {
+		return err
+	}
+	universeHash, err := ProductionCanonicalHash(encodedUniverse)
+	if err != nil {
+		return err
+	}
+	coverage := value.Coverage
+	if coverage.MentionCount != len(expected) || coverage.ResolvedCount != resolvedCount ||
+		coverage.AmbiguousCount != len(value.AmbiguousMentions) ||
+		coverage.RejectedCount != len(value.RejectedMentions) ||
+		coverage.ResolvedCount+coverage.AmbiguousCount+coverage.RejectedCount != coverage.MentionCount ||
+		coverage.MentionUniverseHash != universeHash {
+		return errors.New("identity mention coverage proof is invalid")
+	}
+	return nil
+}
+
+func identityMentionKey(value IdentityMentionRef) string {
+	return fmt.Sprintf(
+		"%s\x00%s\x00%020d\x00%020d\x00%s\x00%s",
+		value.Kind, value.TemporarySceneID, value.SourceStart, value.SourceEnd,
+		value.TextHash, value.ExactAnchor,
+	)
+}
+
+func sourceEvidenceKey(value SourceEvidenceSpan) string {
+	return fmt.Sprintf(
+		"%020d\x00%020d\x00%s\x00%s",
+		value.SourceStart, value.SourceEnd, value.TextHash, value.ExactAnchor,
+	)
 }
 
 func hashUTF8(value string) string {
