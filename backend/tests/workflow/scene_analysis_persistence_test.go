@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -22,6 +23,7 @@ import (
 	agentgrant "github.com/StephenQiu30/lanverse/backend/internal/agent/grant"
 	assetgorm "github.com/StephenQiu30/lanverse/backend/internal/asset/adapter/gormdb"
 	assetapp "github.com/StephenQiu30/lanverse/backend/internal/asset/application"
+	assetdomain "github.com/StephenQiu30/lanverse/backend/internal/asset/domain"
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
@@ -31,6 +33,9 @@ import (
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
+	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
+	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
@@ -850,6 +855,117 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		var count int64
 		if countErr := database.Model(record).Where("project_id = ?", fixture.projectID).Count(&count).Error; countErr != nil || count != expected {
 			t.Fatalf("Production World Bible %T count=%d want=%d err=%v", record, count, expected, countErr)
+		}
+	}
+	planningHeads := make([]planningapp.ExpectedProductionWorldPlanningHead, len(productionWorld.SharedProof.PlanningEpisodeScopes))
+	for index, episodeScope := range productionWorld.SharedProof.PlanningEpisodeScopes {
+		planningHeads[index] = planningapp.ExpectedProductionWorldPlanningHead{EpisodeID: episodeScope.EpisodeID}
+	}
+	planningOwner := planningapp.NewProductionWorldPlanningOwner(func() time.Time { return now }, uuid.NewString)
+	planningCommand := planningapp.ApplyProductionWorldPlanningCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), ActorID: fixture.userID.String(),
+		ExpectedBusinessKeyRoot: productionWorldBusinessKeyRoot(t, productionWorld, "planning"),
+		ExpectedHeads:           planningHeads, EpisodeScopes: productionWorld.SharedProof.PlanningEpisodeScopes,
+		Planning: productionWorld.Planning, Assets: assetResult.Assets, States: assetResult.States,
+		Specifications: bibleResult.Specifications, Bindings: bibleResult.Bindings,
+	}
+	planningResult, err := planningOwner.ApplyProductionWorldPlanning(ctx, planninggorm.NewProductionWorldRepository(database), planningCommand)
+	if err != nil || len(planningResult.Heads) != len(productionWorld.SharedProof.PlanningEpisodeScopes) || len(planningResult.Facts) == 0 {
+		t.Fatalf("apply Production World Planning owner: result=%#v err=%v", planningResult, err)
+	}
+	for _, head := range planningResult.Heads {
+		if head.HeadRevision != 1 || head.MemberCount == 0 || head.ScopeKey != "episode:"+head.EpisodeID {
+			t.Fatalf("Production World Planning Head = %#v", head)
+		}
+	}
+	if _, staleErr := planningOwner.ApplyProductionWorldPlanning(ctx, planninggorm.NewProductionWorldRepository(database), planningCommand); !errors.Is(staleErr, planningapp.ErrProductionWorldPlanningConflict) {
+		t.Fatalf("stale Production World Planning Head error = %v", staleErr)
+	}
+	for index, head := range planningResult.Heads {
+		planningCommand.ExpectedHeads[index] = planningapp.ExpectedProductionWorldPlanningHead{
+			EpisodeID: head.EpisodeID, Revision: head.HeadRevision, ContentHash: head.HeadContentHash,
+		}
+		reloadedHead, reloadErr := planninggorm.NewProductionWorldRepository(database).GetProductionWorldPlanningHead(
+			ctx, fixture.workspaceID.String(), fixture.projectID.String(), head.EpisodeID, false,
+		)
+		if reloadErr != nil || !reflect.DeepEqual(reloadedHead, head) {
+			t.Fatalf("reload Production World Planning Head: got=%#v want=%#v err=%v", reloadedHead, head, reloadErr)
+		}
+	}
+	replayedPlanning, err := planningOwner.ApplyProductionWorldPlanning(ctx, planninggorm.NewProductionWorldRepository(database), planningCommand)
+	if err != nil || !reflect.DeepEqual(replayedPlanning.Heads, planningResult.Heads) || len(replayedPlanning.Facts) != len(planningResult.Facts) {
+		t.Fatalf("replay Production World Planning owner: result=%#v err=%v", replayedPlanning, err)
+	}
+	planningExpectedCounts := map[any]int64{
+		&model.ProductionWorldPlanningScene{}:       int64(len(productionWorld.Planning.Scenes)),
+		&model.ProductionWorldPlanningDialogue{}:    int64(productionWorldDialogueCount(productionWorld.Planning.Scenes)),
+		&model.ProductionWorldPlanningBeat{}:        int64(productionWorldBeatCount(productionWorld.Planning.Scenes)),
+		&model.ProductionWorldPlanningOccurrence{}:  int64(productionWorldOccurrenceCount(productionWorld.Planning.Scenes)),
+		&model.ProductionWorldPlanningClaim{}:       int64(len(productionWorld.Planning.Interactions) + len(productionWorld.Planning.Continuity)),
+		&model.ProductionWorldPlanningMembership{}:  int64(len(planningResult.Facts)),
+		&model.ProductionWorldPlanningEpisodeHead{}: int64(len(productionWorld.SharedProof.PlanningEpisodeScopes)),
+	}
+	for record, expected := range planningExpectedCounts {
+		var count int64
+		if countErr := database.Model(record).Where("project_id = ?", fixture.projectID).Count(&count).Error; countErr != nil || count != expected {
+			t.Fatalf("Production World Planning %T count=%d want=%d err=%v", record, count, expected, countErr)
+		}
+	}
+	assetByIdentity := make(map[string]assetdomain.Asset, len(assetResult.Assets))
+	stateByKey := make(map[string]assetdomain.AssetState, len(assetResult.States))
+	specificationByIdentity := make(map[string]bibledomain.ProductionWorldSpecification, len(bibleResult.Specifications))
+	bindingByIdentity := make(map[string]bibledomain.ProductionWorldBinding, len(bibleResult.Bindings))
+	for _, asset := range assetResult.Assets {
+		assetByIdentity[asset.IdentityKey] = asset
+	}
+	for _, state := range assetResult.States {
+		stateByKey[state.StateKey] = state
+	}
+	for _, specification := range bibleResult.Specifications {
+		specificationByIdentity[specification.IdentityKey] = specification
+	}
+	for _, binding := range bibleResult.Bindings {
+		bindingByIdentity[binding.IdentityKey] = binding
+	}
+	var occurrenceRecords []model.ProductionWorldPlanningOccurrence
+	if err = database.Where("project_id = ?", fixture.projectID).Find(&occurrenceRecords).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range occurrenceRecords {
+		var payload planningdomain.OccurrenceFactPayload
+		if json.Unmarshal(record.Payload, &payload) != nil {
+			t.Fatalf("decode Planning Occurrence %s", record.ID)
+		}
+		var fragment contract.SceneOccurrenceFragment
+		if json.Unmarshal(payload.Fragment, &fragment) != nil {
+			t.Fatalf("decode Planning Occurrence fragment %s", record.ID)
+		}
+		asset, state := assetByIdentity[fragment.IdentityKey], stateByKey[fragment.StateKey]
+		specification, binding := specificationByIdentity[fragment.IdentityKey], bindingByIdentity[fragment.IdentityKey]
+		if record.AssetID.String() != asset.ID || record.AssetStateID.String() != state.ID ||
+			record.SpecificationID.String() != specification.ID || record.ProductionBindingID.String() != binding.ID ||
+			record.AssetContentHash != asset.ContentHash || record.StateContentHash != state.ContentHash ||
+			record.SpecificationHash != specification.ContentHash || record.BindingHash != binding.ContentHash {
+			t.Fatalf("Planning Occurrence exact refs drifted: record=%#v payload=%#v", record, payload)
+		}
+	}
+	episodeBySceneScope := make(map[string]string)
+	for _, scope := range productionWorld.SharedProof.PlanningEpisodeScopes {
+		for _, sceneScopeKey := range scope.SceneScopeKeys {
+			episodeBySceneScope[sceneScopeKey] = scope.EpisodeID
+		}
+	}
+	var planningClaimRecords []model.ProductionWorldPlanningClaim
+	if err = database.Where("project_id = ?", fixture.projectID).Find(&planningClaimRecords).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range planningClaimRecords {
+		var payload planningdomain.PlanningClaimFactPayload
+		var targetScene model.ProductionWorldPlanningScene
+		if json.Unmarshal(record.Payload, &payload) != nil ||
+			database.First(&targetScene, "id = ?", record.TargetSceneID).Error != nil ||
+			record.EpisodeID.String() != episodeBySceneScope[targetScene.SceneScopeKey] {
+			t.Fatalf("Planning Claim target Episode assignment drifted: record=%#v payload=%#v", record, payload)
 		}
 	}
 	dispatchFailureNodeRunID := uuid.New()
@@ -2016,6 +2132,30 @@ func productionWorldBusinessKeyRoot(t *testing.T, value worlddomain.ProductionWo
 	}
 	t.Fatalf("Production World business key root %q not found", partition)
 	return ""
+}
+
+func productionWorldOccurrenceCount(scenes []contract.SceneBindingFragment) int {
+	count := 0
+	for _, scene := range scenes {
+		count += len(scene.Occurrences)
+	}
+	return count
+}
+
+func productionWorldDialogueCount(scenes []contract.SceneBindingFragment) int {
+	count := 0
+	for _, scene := range scenes {
+		count += len(scene.Dialogues)
+	}
+	return count
+}
+
+func productionWorldBeatCount(scenes []contract.SceneBindingFragment) int {
+	count := 0
+	for _, scene := range scenes {
+		count += len(scene.Beats)
+	}
+	return count
 }
 
 func identityMentionTestKey(value contract.IdentityMentionRef) string {
