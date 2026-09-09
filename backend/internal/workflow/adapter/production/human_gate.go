@@ -4,13 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
+	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
+	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -29,6 +36,14 @@ type BibleOwner interface {
 	Confirm(context.Context, bibleapp.Actor, bibleapp.ConfirmCommand) (bibleapp.ConfirmResult, error)
 }
 
+type StructureIdentityOwner interface {
+	ConfirmStructureIdentitySet(context.Context, bibleapp.Actor, bibleapp.ConfirmStructureIdentitySetCommand) (bibledomain.ConfirmStructureIdentitySetResult, error)
+}
+
+type ProjectEpisodeOwner interface {
+	ConfirmEpisodeLifecycle(context.Context, projectapp.Actor, projectapp.ConfirmEpisodeLifecycleCommand) (projectdomain.EpisodeLifecycleSet, error)
+}
+
 type PlanningConfirmationOwner interface {
 	ConfirmPlan(context.Context, planningapp.Actor, planningapp.ConfirmPlanCommand) (planningapp.ConfirmPlanResult, error)
 	ApplyEpisodePlan(context.Context, planningapp.Actor, planningapp.ApplyEpisodePlanCommand) (planningapp.ApplyEpisodePlanResult, error)
@@ -44,19 +59,26 @@ type StoryboardSetOwner interface {
 }
 
 type Applier struct {
-	bibles             BibleOwner
-	plans              PlanningConfirmationOwner
-	planningCandidates EpisodePlanningOwner
-	storyboards        StoryboardSetOwner
+	bibles              BibleOwner
+	structureIdentities StructureIdentityOwner
+	projects            ProjectEpisodeOwner
+	plans               PlanningConfirmationOwner
+	planningCandidates  EpisodePlanningOwner
+	storyboards         StoryboardSetOwner
 }
 
 func New(
 	bibles BibleOwner,
+	structureIdentities StructureIdentityOwner,
+	projects ProjectEpisodeOwner,
 	plans PlanningConfirmationOwner,
 	planningCandidates EpisodePlanningOwner,
 	storyboards StoryboardSetOwner,
 ) *Applier {
-	return &Applier{bibles: bibles, plans: plans, planningCandidates: planningCandidates, storyboards: storyboards}
+	return &Applier{
+		bibles: bibles, structureIdentities: structureIdentities, projects: projects,
+		plans: plans, planningCandidates: planningCandidates, storyboards: storyboards,
+	}
 }
 
 func (applier *Applier) ApplyHumanGateDecision(
@@ -71,6 +93,9 @@ func (applier *Applier) ApplyHumanGateDecision(
 	}
 	if application.Executor == "gate.episode_plan_review" {
 		return applier.applyEpisodePlan(ctx, actor, application)
+	}
+	if application.Executor == "gate.structure_identity_review" {
+		return applier.applyStructureIdentity(ctx, actor, application)
 	}
 	if application.Executor == "gate.episode_structure_review" {
 		return applier.applyEpisodeStructures(ctx, actor, application)
@@ -137,6 +162,251 @@ func (applier *Applier) ApplyHumanGateDecision(
 	return domain.HumanGateOwnerResult{
 		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
 	}, nil
+}
+
+func (applier *Applier) applyStructureIdentity(
+	ctx context.Context,
+	actor workflowapp.Actor,
+	application domain.HumanGateOwnerApplication,
+) (domain.HumanGateOwnerResult, error) {
+	if applier.projects == nil || applier.structureIdentities == nil || application.Decision != "approved" ||
+		application.Candidate.ValueType != "structure_identity_review_candidate" ||
+		application.OutputPort != "identities" || application.OutputValueType != "structure_identity_set_version" {
+		return domain.HumanGateOwnerResult{}, errors.New("unsupported Structure Identity Human Gate owner application")
+	}
+	material, err := domain.DecodeStructureIdentityOwnerMaterial(application.OwnerMaterial)
+	if err != nil || material.GateInput.WorkspaceID != application.WorkspaceID ||
+		material.GateInput.ProjectID != application.ProjectID || material.GateInput.WorkflowRunID != application.WorkflowRunID ||
+		material.GateInput.NodeRunID != application.NodeRunID || material.GateInput.InputHash == "" ||
+		material.GateInput.Subject.ReviewCandidate.CandidateRevisionID != application.Candidate.ReferenceID ||
+		material.GateInput.Subject.ReviewCandidate.CandidateRevisionHash != application.Candidate.ContentHash {
+		return domain.HumanGateOwnerResult{}, errors.New("Structure Identity Human Gate material has drifted")
+	}
+	byStage := make(map[string]domain.StructureIdentityOwnerCandidate, len(material.Candidates))
+	for _, candidate := range material.Candidates {
+		byStage[candidate.Identity.StageKey] = candidate
+	}
+	var spans agentcontract.ScriptSpanCandidate
+	var facts agentcontract.SceneFactCandidate
+	var identities agentcontract.IdentityResolutionCandidate
+	var review agentcontract.StructureIdentityReviewCandidate
+	if json.Unmarshal(byStage["propose_script_spans"].Candidate, &spans) != nil ||
+		json.Unmarshal(byStage["extract_scene_facts"].Candidate, &facts) != nil ||
+		json.Unmarshal(byStage["resolve_identities"].Candidate, &identities) != nil ||
+		json.Unmarshal(byStage["review_candidate"].Candidate, &review) != nil ||
+		spans.SourceVersionID != material.GateInput.Subject.SourceVersion.VersionID ||
+		facts.SourceVersionID != spans.SourceVersionID || identities.SourceVersionID != spans.SourceVersionID ||
+		review.SourceVersionID != spans.SourceVersionID || slices.ContainsFunc(review.ReviewIssues, func(issue agentcontract.CandidateReviewIssue) bool {
+		return issue.Severity == "blocking"
+	}) {
+		return domain.HumanGateOwnerResult{}, errors.New("Structure Identity reviewed Candidate set has drifted")
+	}
+	projectStep, bibleStep, err := structureIdentityEffectSteps(material.GateInput)
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	episodeSpans := make([]projectdomain.EpisodeLifecycleSpan, len(spans.Episodes))
+	for index, episode := range spans.Episodes {
+		heading := ""
+		if episode.Heading != nil {
+			heading = *episode.Heading
+		}
+		episodeSpans[index] = projectdomain.EpisodeLifecycleSpan{
+			TemporaryEpisodeID: episode.TemporaryEpisodeID, Position: episode.Position,
+			SourceStart: episode.CodepointStart, SourceEnd: episode.CodepointEnd, Heading: heading,
+		}
+	}
+	projectResult, err := applier.projects.ConfirmEpisodeLifecycle(ctx, projectapp.Actor{
+		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
+	}, projectapp.ConfirmEpisodeLifecycleCommand{
+		WorkspaceID: application.WorkspaceID, ProjectID: application.ProjectID,
+		GateInputID: material.GateInputID, GateInputHash: material.GateInput.InputHash,
+		ReviewDecisionID:        application.ReviewDecisionID,
+		SourceVersionID:         material.GateInput.Subject.SourceVersion.VersionID,
+		SourceHash:              material.GateInput.Subject.SourceVersion.ContentHash,
+		ExpectedProjectRevision: int(projectStep.ExpectedHead.Revision),
+		ExpectedActiveOrderHash: projectStep.ExpectedHead.ContentHash,
+		EpisodeSpans:            episodeSpans,
+		IdempotencyKey:          "workflow-structure-identity-project:" + application.ReviewDecisionID,
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
+	}
+	command, err := buildStructureIdentityCommand(application, material, spans, facts, identities, projectResult, bibleStep)
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	bibleResult, err := applier.structureIdentities.ConfirmStructureIdentitySet(ctx, bibleapp.Actor{
+		UserID: actor.UserID, TokenVersion: actor.TokenVersion,
+	}, command)
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
+	}
+	version := bibleResult.Version
+	if version.WorkspaceID != application.WorkspaceID || version.ProjectID != application.ProjectID ||
+		version.GateInputID != material.GateInputID || version.GateInputHash != material.GateInput.InputHash ||
+		version.ReviewDecisionID != application.ReviewDecisionID || version.ProjectEpisodeReceiptID != projectResult.ID ||
+		bibleResult.CommandOperation != bibledomain.StructureIdentityCommandOperation ||
+		bibleResult.CommandReceiptID == "" || bibleResult.Receipt.VersionID != version.ID ||
+		bibleResult.Receipt.CheckpointKey != bibledomain.StructureIdentityCheckpointKey ||
+		bibleResult.Receipt.CollectionFamily != bibledomain.StructureIdentityCollectionFamily {
+		return domain.HumanGateOwnerResult{}, errors.New("Structure Identity owner result does not match Workflow Gate")
+	}
+	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: application.OutputPort, ValueType: application.OutputValueType,
+			ReferenceID: version.ID, ReferenceVersion: strconv.Itoa(version.Version), ContentHash: version.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	return domain.HumanGateOwnerResult{
+		ReceiptID: bibleResult.CommandReceiptID, Operation: bibleResult.CommandOperation,
+		Output: output, OutputHash: outputHash,
+	}, nil
+}
+
+func structureIdentityEffectSteps(
+	gate domain.StructureIdentityGateInput,
+) (domain.StructureIdentityEffectStep, domain.StructureIdentityEffectStep, error) {
+	if len(gate.EffectPlan.Steps) != 2 {
+		return domain.StructureIdentityEffectStep{}, domain.StructureIdentityEffectStep{}, errors.New("Structure Identity effect plan is incomplete")
+	}
+	projectStep, bibleStep := gate.EffectPlan.Steps[0], gate.EffectPlan.Steps[1]
+	if projectStep.OwnerKind != "production/project" || projectStep.OwnerCommand != "confirm_project_episode_lifecycle" ||
+		bibleStep.OwnerKind != "production/bible" || bibleStep.OwnerCommand != "confirm_structure_identity_set" {
+		return domain.StructureIdentityEffectStep{}, domain.StructureIdentityEffectStep{}, errors.New("Structure Identity effect plan has drifted")
+	}
+	return projectStep, bibleStep, nil
+}
+
+func buildStructureIdentityCommand(
+	application domain.HumanGateOwnerApplication,
+	material domain.StructureIdentityOwnerMaterial,
+	spans agentcontract.ScriptSpanCandidate,
+	facts agentcontract.SceneFactCandidate,
+	identities agentcontract.IdentityResolutionCandidate,
+	episodes projectdomain.EpisodeLifecycleSet,
+	bibleStep domain.StructureIdentityEffectStep,
+) (bibleapp.ConfirmStructureIdentitySetCommand, error) {
+	projectID, err := uuid.Parse(application.ProjectID)
+	if err != nil {
+		return bibleapp.ConfirmStructureIdentitySetCommand{}, errors.New("Structure Identity Project identity is invalid")
+	}
+	episodesByTemporaryID := make(map[string]projectdomain.EpisodeLifecycleEpisodeRef, len(episodes.Episodes))
+	for _, episode := range episodes.Episodes {
+		episodesByTemporaryID[episode.TemporaryEpisodeID] = episode
+	}
+	sceneFactsBySpan := make(map[string]agentcontract.SceneFact, len(facts.Scenes))
+	for _, scene := range facts.Scenes {
+		sceneFactsBySpan[scene.SpanID] = scene
+	}
+	scenes := make([]bibledomain.StructureIdentitySceneRef, len(spans.Spans))
+	for index, span := range spans.Spans {
+		episode := episodesByTemporaryID[span.EpisodeSpanID]
+		fact, exists := sceneFactsBySpan[span.TemporarySpanID]
+		if episode.EpisodeID == "" || !exists || fact.SourceStart != span.CodepointStart || fact.SourceEnd != span.CodepointEnd {
+			return bibleapp.ConfirmStructureIdentitySetCommand{}, errors.New("Structure Identity Scene mapping has drifted")
+		}
+		sceneID := uuid.NewSHA1(projectID, []byte("lanverse:scene:"+span.TemporarySpanID)).String()
+		scenes[index] = bibledomain.StructureIdentitySceneRef{
+			TemporaryEpisodeID: span.EpisodeSpanID, EpisodeID: episode.EpisodeID,
+			TemporarySpanID: span.TemporarySpanID, TemporarySceneID: fact.TemporarySceneID,
+			SceneOwnerLogicalID: sceneID, ScopeKey: "scene:" + sceneID,
+			SourceStart: span.CodepointStart, SourceEnd: span.CodepointEnd, EvidenceHash: span.Evidence.TextHash,
+		}
+	}
+	identityValues := make([]bibledomain.StructureIdentity, len(identities.ResolvedClusters))
+	mentionMappings := make([]bibledomain.StructureIdentityMentionMapping, 0, identities.Coverage.MentionCount)
+	for index, cluster := range identities.ResolvedClusters {
+		identityKey := uuid.NewSHA1(projectID, []byte("lanverse:identity:"+cluster.TemporaryIdentityKey)).String()
+		if cluster.Resolution == "reuse" && cluster.ReuseIdentityKey != nil {
+			identityKey = *cluster.ReuseIdentityKey
+		}
+		identityValues[index] = bibledomain.StructureIdentity{
+			TemporaryIdentityKey: cluster.TemporaryIdentityKey, IdentityKey: identityKey,
+			Kind: cluster.Kind, Resolution: cluster.Resolution, ReuseIdentityKey: cluster.ReuseIdentityKey,
+			CanonicalName: cluster.CanonicalName, Aliases: append([]string(nil), cluster.Aliases...),
+		}
+		for _, mention := range cluster.MentionRefs {
+			key := identityKey
+			mentionMappings = append(mentionMappings, structureIdentityMentionMapping(mention, "resolved", &key))
+		}
+	}
+	for _, ambiguous := range identities.AmbiguousMentions {
+		mentionMappings = append(mentionMappings, structureIdentityMentionMapping(ambiguous.MentionRef, "unresolved", nil))
+	}
+	for _, rejected := range identities.RejectedMentions {
+		mentionMappings = append(mentionMappings, structureIdentityMentionMapping(rejected.MentionRef, "unresolved", nil))
+	}
+	slices.SortFunc(mentionMappings, func(left, right bibledomain.StructureIdentityMentionMapping) int {
+		if left.SourceStart != right.SourceStart {
+			return left.SourceStart - right.SourceStart
+		}
+		if left.SourceEnd != right.SourceEnd {
+			return left.SourceEnd - right.SourceEnd
+		}
+		if compared := strings.Compare(left.Kind, right.Kind); compared != 0 {
+			return compared
+		}
+		return strings.Compare(left.TemporarySceneID, right.TemporarySceneID)
+	})
+	mentionUniverseHash, err := platformcommand.InputHash(mentionMappings)
+	if err != nil {
+		return bibleapp.ConfirmStructureIdentitySetCommand{}, err
+	}
+	scopes := make([]string, len(scenes))
+	for index, scene := range scenes {
+		scopes[index] = scene.ScopeKey
+	}
+	scopeSetHash, err := platformcommand.InputHash(scopes)
+	if err != nil {
+		return bibleapp.ConfirmStructureIdentitySetCommand{}, err
+	}
+	candidateRefs := make([]bibledomain.StructureIdentityCandidateRef, len(material.Candidates))
+	for index, candidate := range material.Candidates {
+		candidateRefs[index] = bibledomain.StructureIdentityCandidateRef{
+			StageKey: candidate.Identity.StageKey, ShardKey: candidate.Identity.ShardKey,
+			CandidateRevisionID:   candidate.Identity.CandidateRevisionID,
+			CandidateRevisionHash: candidate.Identity.CandidateRevisionHash,
+			SourceInvocationID:    candidate.Identity.SourceInvocationID, SourceResultHash: candidate.Identity.SourceResultHash,
+			SkillReleaseID: candidate.Release.SkillReleaseID, SkillReleaseHash: candidate.Release.SkillReleaseHash,
+			StageReleaseHash: candidate.Release.StageReleaseHash, BundleContentHash: candidate.Release.BundleContentHash,
+			AgentImageDigest: candidate.Release.AgentImageDigest,
+		}
+	}
+	return bibleapp.ConfirmStructureIdentitySetCommand{
+		WorkspaceID: application.WorkspaceID, ProjectID: application.ProjectID,
+		GateInputID: material.GateInputID, GateInputHash: material.GateInput.InputHash,
+		ReviewDecisionID: application.ReviewDecisionID, ProjectEpisodeReceiptID: episodes.ID,
+		DocumentRevisionID:   material.GateInput.Subject.SourceVersion.VersionID,
+		DocumentRevisionHash: material.GateInput.Subject.SourceVersion.ContentHash,
+		SpanIndexID:          material.SpanIndexID, SpanIndexHash: material.SpanIndexHash,
+		ExpectedHeadRevision: bibleStep.ExpectedHead.Revision, ExpectedHeadHash: bibleStep.ExpectedHead.ContentHash,
+		CandidateRefs: candidateRefs, SceneRefs: scenes, Identities: identityValues, MentionMappings: mentionMappings,
+		Coverage: bibledomain.StructureIdentityCoverage{
+			SceneCount: len(scenes), IdentityCount: len(identityValues), MentionCount: len(mentionMappings),
+			ResolvedCount:       identities.Coverage.ResolvedCount,
+			UnresolvedCount:     identities.Coverage.AmbiguousCount + identities.Coverage.RejectedCount,
+			MentionUniverseHash: mentionUniverseHash, ScopeSetHash: scopeSetHash,
+		},
+		IdempotencyKey: "workflow-structure-identity-bible:" + application.ReviewDecisionID,
+	}, nil
+}
+
+func structureIdentityMentionMapping(
+	mention agentcontract.IdentityMentionRef,
+	resolution string,
+	identityKey *string,
+) bibledomain.StructureIdentityMentionMapping {
+	return bibledomain.StructureIdentityMentionMapping{
+		Kind: mention.Kind, TemporarySceneID: mention.TemporarySceneID,
+		SourceStart: mention.SourceStart, SourceEnd: mention.SourceEnd,
+		TextHash: mention.TextHash, ExactAnchor: mention.ExactAnchor,
+		Resolution: resolution, IdentityKey: identityKey,
+	}
 }
 
 func (applier *Applier) freezeStoryboardIntents(
@@ -408,6 +678,13 @@ func normalizeOwnerApplyError(err error) error {
 		return &workflowapp.Error{
 			Code: planningError.Code, Message: planningError.Message,
 			NextAction: planningError.NextAction, Status: planningError.Status,
+		}
+	}
+	var projectError *projectapp.Error
+	if errors.As(err, &projectError) {
+		return &workflowapp.Error{
+			Code: projectError.Code, Message: projectError.Message,
+			NextAction: projectError.NextAction, Status: projectError.Status,
 		}
 	}
 	var storyboardError *storyboardapp.Error

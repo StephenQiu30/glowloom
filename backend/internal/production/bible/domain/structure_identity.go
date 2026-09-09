@@ -6,6 +6,7 @@ const (
 	StructureIdentitySetSchemaVersion = "structure-identity-set-production"
 	StructureIdentityCheckpointKey    = "gate_1_structure_identity"
 	StructureIdentityCollectionFamily = "bible_structure_identity_set"
+	StructureIdentityCommandOperation = "production_bible.confirm_structure_identity_set"
 )
 
 type StructureIdentityCandidateRef struct {
@@ -114,6 +115,8 @@ type StructureIdentityCollectionReceipt struct {
 }
 
 type ConfirmStructureIdentitySetResult struct {
-	Version StructureIdentitySetVersion        `json:"version"`
-	Receipt StructureIdentityCollectionReceipt `json:"receipt"`
+	Version          StructureIdentitySetVersion        `json:"version"`
+	Receipt          StructureIdentityCollectionReceipt `json:"receipt"`
+	CommandReceiptID string                             `json:"command_receipt_id"`
+	CommandOperation string                             `json:"command_operation"`
 }

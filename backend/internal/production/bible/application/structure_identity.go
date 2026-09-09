@@ -16,8 +16,6 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
 
-const confirmStructureIdentitySetOperation = "production_bible.confirm_structure_identity_set"
-
 type ConfirmStructureIdentitySetCommand struct {
 	WorkspaceID, ProjectID                       string
 	GateInputID, GateInputHash, ReviewDecisionID string
@@ -222,13 +220,14 @@ func (service *Service) ConfirmStructureIdentitySet(
 		); createErr != nil {
 			return createErr
 		}
+		commandReceiptID := service.config.NewID()
+		result.CommandReceiptID, result.CommandOperation = commandReceiptID, domain.StructureIdentityCommandOperation
 		encodedResult, encodeErr := platformcommand.Result(result)
 		if encodeErr != nil {
 			return encodeErr
 		}
-		commandReceiptID := service.config.NewID()
 		if createErr := repository.CreateStructureIdentityCommandReceipt(ctx, platformcommand.Receipt{
-			ID: commandReceiptID, WorkspaceID: command.WorkspaceID, Operation: confirmStructureIdentitySetOperation,
+			ID: commandReceiptID, WorkspaceID: command.WorkspaceID, Operation: domain.StructureIdentityCommandOperation,
 			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: versionID,
 			Result: encodedResult, CreatedBy: actor.UserID, CreatedAt: now,
 		}); createErr != nil {

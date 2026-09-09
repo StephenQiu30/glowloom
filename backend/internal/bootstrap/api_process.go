@@ -382,7 +382,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	)
 	workflowHandler := workflowhttp.New(workflowStartService, workflowQueryService, workflowControlService, tokenVerifier)
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
-		workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardService),
+		workflowproduction.New(bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService),
 		workflowgeneration.NewHumanGateApplier(selectionService),
 	)
 	if err != nil {

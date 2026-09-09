@@ -42,7 +42,7 @@ func (repo *repository) FindStructureIdentityCommandReceipt(
 	ctx context.Context,
 	workspaceID, key string,
 ) (platformcommand.Receipt, error) {
-	return repo.FindReceipt(ctx, workspaceID, "production_bible.confirm_structure_identity_set", key)
+	return repo.FindReceipt(ctx, workspaceID, domain.StructureIdentityCommandOperation, key)
 }
 
 func (repo *repository) GetStructureIdentitySource(

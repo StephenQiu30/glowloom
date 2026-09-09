@@ -111,22 +111,37 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 			!resolved.Execution.OutputPorts[0].Required {
 			return errors.New("workflow human gate owner contract has drifted")
 		}
-		candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
-		if candidateErr != nil {
-			return candidateErr
-		}
 		var candidate domain.NodeInputBinding
 		candidateFound := false
-		for _, binding := range resolved.Input.Bindings {
-			if node.Executor == "gate.generation_image_review" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
-				binding.Port == "candidates" && binding.ValueType == "generation_candidate_set" {
-				candidate, candidateFound = binding, true
-				break
+		var ownerMaterial json.RawMessage
+		if node.Executor == "gate.structure_identity_review" {
+			ownerMaterial, resolveErr = resolveStructureIdentityOwnerMaterial(transaction, run, node, task, resolved.Input)
+			if resolveErr != nil {
+				return resolveErr
 			}
-			if node.Executor != "gate.generation_image_review" &&
-				binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
-				candidate, candidateFound = binding, true
-				break
+			for _, binding := range resolved.Input.Bindings {
+				if binding.Port == "review" && binding.ValueType == "structure_identity_review_candidate" &&
+					binding.SourceKind == domain.NodeInputSourceNodeOutput && humanTaskContainsCandidateString(task.CandidateIDs, binding.ReferenceID) {
+					candidate, candidateFound = binding, true
+					break
+				}
+			}
+		} else {
+			candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
+			if candidateErr != nil {
+				return candidateErr
+			}
+			for _, binding := range resolved.Input.Bindings {
+				if node.Executor == "gate.generation_image_review" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+					binding.Port == "candidates" && binding.ValueType == "generation_candidate_set" {
+					candidate, candidateFound = binding, true
+					break
+				}
+				if node.Executor != "gate.generation_image_review" &&
+					binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
+					candidate, candidateFound = binding, true
+					break
+				}
 			}
 		}
 		if !candidateFound {
@@ -138,8 +153,9 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 			NodeRunID: node.ID.String(), HumanTaskID: task.ID.String(), ReviewDecisionID: decision.ID.String(),
 			SubjectRevision: task.SubjectRevision, Decision: decision.Decision, Executor: node.Executor,
 			Candidate: candidate, OutputPort: output.Key, OutputValueType: output.ValueType,
-			NodeConfig:   append(json.RawMessage(nil), resolved.Input.Config...),
-			FrozenInputs: append([]authoring.FrozenReference(nil), resolved.Input.FrozenInputs...),
+			NodeConfig:    append(json.RawMessage(nil), resolved.Input.Config...),
+			OwnerMaterial: append(json.RawMessage(nil), ownerMaterial...),
+			FrozenInputs:  append([]authoring.FrozenReference(nil), resolved.Input.FrozenInputs...),
 		}
 		return nil
 	})
@@ -407,6 +423,18 @@ func expectedHumanGateSubject(
 	episodePlanOwnerApply := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 	episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
 	storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
+	structureIdentityOwnerApply := node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0"
+	if structureIdentityOwnerApply {
+		var gateInput model.WorkflowHumanGateInput
+		if err = transaction.First(&gateInput, "node_run_id = ?", node.ID).Error; err != nil {
+			return "", uuid.Nil, 0, "", normalizeNotFound(err)
+		}
+		if gateInput.WorkspaceID != run.WorkspaceID || gateInput.ProjectID != run.ProjectID ||
+			gateInput.WorkflowRunID != run.ID || gateInput.InputHash == "" {
+			return "", uuid.Nil, 0, "", errors.New("Structure Identity Human Gate input has drifted")
+		}
+		return "structure_identity_gate_input", gateInput.ID, 1, gateInput.InputHash, nil
+	}
 	if !productionBibleOwnerApply && !episodePlanOwnerApply && !episodePlanningOwnerApply && !storyboardIntentOwnerApply {
 		return humanGateSubjectType(node.Executor), node.ID, node.Revision, resolved.InputHash, nil
 	}
@@ -463,6 +491,11 @@ func humanTaskCandidateIDs(raw []byte) ([]string, error) {
 	return candidates, nil
 }
 
+func humanTaskContainsCandidateString(raw []byte, candidateID string) bool {
+	id, err := uuid.Parse(candidateID)
+	return err == nil && humanTaskContainsCandidate(raw, id)
+}
+
 func selectedHumanGateCandidate(task model.HumanTask, decision model.ReviewDecision) (string, error) {
 	candidates, err := humanTaskCandidateIDs(task.CandidateIDs)
 	if err != nil || len(candidates) == 0 {
@@ -512,22 +545,32 @@ func validateHumanGateOwnerEvidence(
 		domain.ValidateNodeOutputPorts(output, resolved.Execution.OutputPorts) != nil || len(output.Bindings) != 1 {
 		return errors.New("workflow human gate owner output contract has drifted")
 	}
-	candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
-	if candidateErr != nil {
-		return candidateErr
-	}
 	var candidate domain.NodeInputBinding
 	candidateFound := false
-	for _, binding := range resolved.Input.Bindings {
-		if node.Executor == "gate.generation_image_review" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
-			binding.Port == "candidates" && binding.ValueType == "generation_candidate_set" {
-			candidate, candidateFound = binding, true
-			break
+	if node.Executor == "gate.structure_identity_review" {
+		for _, binding := range resolved.Input.Bindings {
+			if binding.Port == "review" && binding.ValueType == "structure_identity_review_candidate" &&
+				binding.SourceKind == domain.NodeInputSourceNodeOutput && humanTaskContainsCandidateString(task.CandidateIDs, binding.ReferenceID) {
+				candidate, candidateFound = binding, true
+				break
+			}
 		}
-		if node.Executor != "gate.generation_image_review" &&
-			binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
-			candidate, candidateFound = binding, true
-			break
+	} else {
+		candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
+		if candidateErr != nil {
+			return candidateErr
+		}
+		for _, binding := range resolved.Input.Bindings {
+			if node.Executor == "gate.generation_image_review" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+				binding.Port == "candidates" && binding.ValueType == "generation_candidate_set" {
+				candidate, candidateFound = binding, true
+				break
+			}
+			if node.Executor != "gate.generation_image_review" &&
+				binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.ReferenceID == candidateID {
+				candidate, candidateFound = binding, true
+				break
+			}
 		}
 	}
 	binding := output.Bindings[0]
@@ -568,6 +611,37 @@ func validateHumanGateOwnerEvidence(
 			version.ContentHash != binding.ContentHash || version.ReviewDecisionID != decision.ID ||
 			receipt.ResourceID != version.ID {
 			return errors.New("production Bible Version does not match the frozen Candidate and ReviewDecision")
+		}
+	}
+	if node.Executor == "gate.structure_identity_review" {
+		versionID, parseErr := uuid.Parse(binding.ReferenceID)
+		referenceVersion, versionErr := strconv.Atoi(binding.ReferenceVersion)
+		if parseErr != nil || versionErr != nil || referenceVersion < 1 {
+			return errors.New("Structure Identity Version output identity is invalid")
+		}
+		var version model.StructureIdentitySetVersion
+		if err := transaction.First(&version, "id = ?", versionID).Error; err != nil {
+			return normalizeNotFound(err)
+		}
+		var candidateRefs []bibledomain.StructureIdentityCandidateRef
+		if err := json.Unmarshal(version.CandidateRefs, &candidateRefs); err != nil {
+			return errors.New("Structure Identity Version Candidate lineage is invalid")
+		}
+		candidateIDs, candidateErr := humanTaskCandidateIDs(task.CandidateIDs)
+		if candidateErr != nil || len(candidateRefs) != len(candidateIDs) {
+			return errors.New("Structure Identity Version Candidate set has drifted")
+		}
+		persistedCandidateIDs := make([]string, len(candidateRefs))
+		for index, ref := range candidateRefs {
+			persistedCandidateIDs[index] = ref.CandidateRevisionID
+		}
+		slices.Sort(candidateIDs)
+		slices.Sort(persistedCandidateIDs)
+		if !slices.Equal(candidateIDs, persistedCandidateIDs) || version.WorkspaceID != run.WorkspaceID ||
+			version.ProjectID != run.ProjectID || version.Version != referenceVersion ||
+			version.ContentHash != binding.ContentHash || version.ReviewDecisionID != decision.ID ||
+			receipt.ResourceID != version.ID {
+			return errors.New("Structure Identity Version does not match the frozen Candidate set and ReviewDecision")
 		}
 	}
 	if episodePlanOwnerApply {
@@ -787,6 +861,8 @@ func planningStructureContainsFragments(
 
 func humanGateOwnerOperation(node model.NodeRunProjection) (string, bool) {
 	switch node.Executor {
+	case "gate.structure_identity_review":
+		return bibledomain.StructureIdentityCommandOperation, true
 	case "gate.production_bible_review":
 		return "production_bible.confirm", true
 	case "gate.episode_plan_review":

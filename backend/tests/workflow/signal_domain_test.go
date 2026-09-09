@@ -55,6 +55,28 @@ func TestProductionBibleHumanGateOutputCreatesAnImmutableVersionIdentity(t *test
 	}
 }
 
+func TestStructureIdentityHumanGateOutputCreatesAnImmutableVersionIdentity(t *testing.T) {
+	candidate := workflow.NodeInputBinding{
+		ValueType:        "structure_identity_review_candidate",
+		ReferenceID:      "47fb8568-bbb9-4071-898a-01bcf812356c",
+		ReferenceVersion: "1",
+		ContentHash:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	output := workflow.NodeOutputBinding{
+		ValueType:        "structure_identity_set_version",
+		ReferenceID:      "77bb2559-b058-4309-957b-6f656e096945",
+		ReferenceVersion: "1",
+		ContentHash:      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	}
+	if !workflow.HumanGateOutputMatchesCandidate("gate.structure_identity_review", candidate, output) {
+		t.Fatal("Structure Identity gate must publish a distinct immutable Version")
+	}
+	output.ReferenceID = candidate.ReferenceID
+	if workflow.HumanGateOutputMatchesCandidate("gate.structure_identity_review", candidate, output) {
+		t.Fatal("Structure Identity gate accepted its Agent Candidate as a formal Version")
+	}
+}
+
 func TestEpisodePlanHumanGateOutputUsesMaterializedSetIdentityAndHash(t *testing.T) {
 	candidate := workflow.NodeInputBinding{
 		ValueType: "episode_segmentation_candidate", ReferenceID: "47fb8568-bbb9-4071-898a-01bcf812356c",

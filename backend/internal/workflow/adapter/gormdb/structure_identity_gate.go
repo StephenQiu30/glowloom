@@ -100,6 +100,10 @@ func prepareStructureIdentityGateInput(
 	if err != nil {
 		return model.WorkflowHumanGateInput{}, domain.StructureIdentityGateInput{}, err
 	}
+	bibleHead, err := structureIdentityBibleHead(database, run.ProjectID)
+	if err != nil {
+		return model.WorkflowHumanGateInput{}, domain.StructureIdentityGateInput{}, err
+	}
 	allowedDecisions := []string{"changes_requested", "rejected"}
 	if !structureIdentityReviewBlocksApproval(reviewCandidate) {
 		allowedDecisions = append(allowedDecisions, "approved")
@@ -123,9 +127,7 @@ func prepareStructureIdentityGateInput(
 		},
 		AllowedDecisions:    allowedDecisions,
 		ExpectedProjectHead: projectHead,
-		ExpectedBibleHead: domain.HumanGateExpectedHead{
-			OwnerKind: "production/bible", LogicalID: run.ProjectID.String(), Revision: 0,
-		},
+		ExpectedBibleHead:   bibleHead,
 	})
 	if err != nil {
 		return model.WorkflowHumanGateInput{}, domain.StructureIdentityGateInput{}, err
@@ -222,7 +224,7 @@ func loadStructureIdentityCandidate(
 		return structureIdentityCandidate{}, errors.New("structure identity Gate Candidate identity is invalid")
 	}
 	var record model.SceneAnalysisCandidateRevision
-	if err = database.Preload("SourceInvocation").First(&record, "id = ?", candidateID).Error; err != nil {
+	if err = database.Preload("SourceInvocation.Release").First(&record, "id = ?", candidateID).Error; err != nil {
 		return structureIdentityCandidate{}, normalizeNotFound(err)
 	}
 	invocation := record.SourceInvocation
@@ -364,6 +366,119 @@ func structureIdentityProjectHead(database *gorm.DB, projectID uuid.UUID) (domai
 		OwnerKind: "production/project", LogicalID: project.ID.String(),
 		Revision: int64(project.Revision), ContentHash: contentHash,
 	}, nil
+}
+
+func structureIdentityBibleHead(database *gorm.DB, projectID uuid.UUID) (domain.HumanGateExpectedHead, error) {
+	result := domain.HumanGateExpectedHead{
+		OwnerKind: "production/bible", LogicalID: projectID.String(), Revision: 0,
+	}
+	var head model.StructureIdentityScopeHead
+	err := database.First(&head, "project_id = ?", projectID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return result, nil
+	}
+	if err != nil {
+		return domain.HumanGateExpectedHead{}, err
+	}
+	if head.ProjectID != projectID || head.HeadRevision < 1 || len(head.HeadHash) != 64 {
+		return domain.HumanGateExpectedHead{}, errors.New("structure identity Bible Head has drifted")
+	}
+	result.Revision, result.ContentHash = head.HeadRevision, head.HeadHash
+	return result, nil
+}
+
+func resolveStructureIdentityOwnerMaterial(
+	database *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+	task model.HumanTask,
+	input domain.NodeInputSnapshot,
+) (json.RawMessage, error) {
+	if task.SubjectType != "structure_identity_gate_input" {
+		return nil, errors.New("Structure Identity Human Gate subject has drifted")
+	}
+	var record model.WorkflowHumanGateInput
+	if err := database.First(&record, "id = ?", task.SubjectID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	gate, _, err := domain.DecodeStructureIdentityGateInput(json.RawMessage(record.Input))
+	if err != nil || record.WorkspaceID != run.WorkspaceID || record.ProjectID != run.ProjectID ||
+		record.WorkflowRunID != run.ID || record.NodeRunID != node.ID || record.InputHash != task.SubjectHash ||
+		record.InputHash != gate.InputHash || task.SubjectRevision != 1 {
+		return nil, errors.New("Structure Identity Human Gate input has drifted")
+	}
+	actualCandidateIDs, err := humanTaskCandidateIDs(task.CandidateIDs)
+	if err != nil {
+		return nil, errors.New("Structure Identity Human Gate Candidate set has drifted")
+	}
+	slices.Sort(actualCandidateIDs)
+	if !slices.Equal(actualCandidateIDs, structureIdentityCandidateIDs(gate)) {
+		return nil, errors.New("Structure Identity Human Gate Candidate set has drifted")
+	}
+	bindings, err := structureIdentityGateBindings(input)
+	if err != nil {
+		return nil, err
+	}
+	source, _, err := loadStructureIdentitySource(database, run, bindings["source"])
+	if err != nil || source != gate.Subject.SourceVersion {
+		return nil, errors.New("Structure Identity owner source has drifted")
+	}
+	ordered := []struct {
+		port, stage, candidateType string
+		identity                   agentcontract.SceneAnalysisCandidateRevisionIdentity
+	}{
+		{"spans", "propose_script_spans", "script_span_candidate", gate.Subject.SpanCandidate},
+		{"facts", "extract_scene_facts", "scene_fact_candidate", gate.Subject.SceneFactCandidate},
+		{"identities", "resolve_identities", "identity_resolution_candidate", gate.Subject.IdentityCandidate},
+		{"review", "review_candidate", "structure_identity_review_candidate", gate.Subject.ReviewCandidate},
+	}
+	candidates := make([]domain.StructureIdentityOwnerCandidate, len(ordered))
+	for index, expected := range ordered {
+		candidate, loadErr := loadStructureIdentityCandidate(
+			database, run, source, bindings[expected.port], expected.stage, expected.candidateType,
+		)
+		if loadErr != nil || candidate.identity != expected.identity {
+			return nil, errors.New("Structure Identity owner Candidate has drifted")
+		}
+		release := candidate.record.SourceInvocation.Release
+		releaseIdentity := agentcontract.SceneAnalysisReleaseIdentity{
+			SkillReleaseID: release.SkillReleaseID.String(), SkillReleaseHash: release.SkillReleaseHash,
+			StageReleaseHash: release.StageReleaseHash, BundleContentHash: release.BundleContentHash,
+			AgentImageDigest: release.AgentImageDigest,
+		}
+		if release.ID != candidate.record.SourceInvocation.ReleaseID || releaseIdentity.Validate() != nil {
+			return nil, errors.New("Structure Identity owner Skill Release has drifted")
+		}
+		candidates[index] = domain.StructureIdentityOwnerCandidate{
+			Identity: candidate.identity, Release: releaseIdentity,
+			Candidate: append(json.RawMessage(nil), candidate.record.Candidate...),
+		}
+	}
+	var sourceHead model.ScriptSourceScopeHead
+	if err = database.First(&sourceHead, "project_id = ?", run.ProjectID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	var spanIndex model.SourceSpanIndexVersion
+	if err = database.First(&spanIndex, "id = ?", sourceHead.CurrentSpanIndexID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	if spanIndex.ProjectID != run.ProjectID || spanIndex.WorkspaceID != run.WorkspaceID ||
+		spanIndex.DocumentRevisionID.String() != source.VersionID || spanIndex.SourceHash != source.ContentHash {
+		return nil, errors.New("Structure Identity owner Span Index has drifted")
+	}
+	material := domain.StructureIdentityOwnerMaterial{
+		SchemaVersion: domain.StructureIdentityOwnerMaterialSchema, GateInputID: record.ID.String(),
+		GateInput: gate, SpanIndexID: spanIndex.ID.String(), SpanIndexHash: spanIndex.ContentHash,
+		Candidates: candidates,
+	}
+	encoded, err := json.Marshal(material)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = domain.DecodeStructureIdentityOwnerMaterial(encoded); err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }
 
 func sameStructureIdentityGateInput(left, right model.WorkflowHumanGateInput) bool {

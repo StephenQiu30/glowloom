@@ -42,6 +42,7 @@ type HumanGateOwnerApplication struct {
 	Candidate                                        NodeInputBinding
 	OutputPort, OutputValueType                      string
 	NodeConfig                                       json.RawMessage
+	OwnerMaterial                                    json.RawMessage
 	FrozenInputs                                     []authoring.FrozenReference
 }
 
@@ -107,6 +108,12 @@ func HumanGateOutputMatchesCandidate(
 		return candidate.ValueType == "story_reconciliation_candidate" && candidateErr == nil && candidateRevision >= 1 &&
 			output.ValueType == "production_bible_version" && versionErr == nil && version >= 1 &&
 			output.ReferenceID != candidate.ReferenceID && len(candidate.ContentHash) == 64 && len(output.ContentHash) == 64
+	}
+	if executor == "gate.structure_identity_review" {
+		version, versionErr := strconv.Atoi(output.ReferenceVersion)
+		return candidate.ValueType == "structure_identity_review_candidate" &&
+			output.ValueType == "structure_identity_set_version" && versionErr == nil && version >= 1 &&
+			output.ReferenceID != candidate.ReferenceID && len(output.ContentHash) == 64
 	}
 	if executor == "gate.generation_image_review" {
 		return candidate.ValueType == "generation_candidate_set" && candidate.ReferenceVersion == "1" &&

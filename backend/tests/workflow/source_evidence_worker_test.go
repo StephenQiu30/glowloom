@@ -456,7 +456,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	unknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
 	signalService := workflowapp.NewSignalService(workflowStore, unknownSignaler, workflowapp.SignalConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
+		Owner: workflowproduction.New(bibleService, nil, nil, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		})),
 	})
@@ -924,7 +924,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	planningUnknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
 	planningSignalService := workflowapp.NewSignalService(workflowStore, planningUnknownSignaler, workflowapp.SignalConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
+		Owner: workflowproduction.New(bibleService, nil, nil, planningService, episodePlanningService, storyboardapp.NewService(storyboardgorm.New(database), storyboardapp.Config{
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 		})),
 	})
@@ -1356,6 +1356,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
 			Owner: workflowproduction.New(
 				bibleapp.NewService(biblegorm.New(driftDatabase), bibleapp.Config{Now: time.Now, NewID: uuid.NewString}),
+				nil,
+				nil,
 				planningapp.NewService(planninggorm.New(driftDatabase), planningapp.Config{Now: time.Now, NewID: uuid.NewString}),
 				planningapp.NewEpisodePlanningService(planninggorm.New(driftDatabase), planningapp.Config{Now: time.Now, NewID: uuid.NewString}),
 				storyboardapp.NewService(storyboardgorm.New(driftDatabase), storyboardapp.Config{Now: time.Now, NewID: uuid.NewString}),
@@ -1394,7 +1396,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	storyboardUnknownSignaler := &unknownOnceWorkflowSignaler{delegate: temporalRuntime}
 	storyboardSignalService := workflowapp.NewSignalService(workflowStore, storyboardUnknownSignaler, workflowapp.SignalConfig{
 		Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(bibleService, planningService, episodePlanningService, storyboardService),
+		Owner: workflowproduction.New(bibleService, nil, nil, planningService, episodePlanningService, storyboardService),
 	})
 	unknownStoryboardSignal, err := storyboardSignalService.SignalHumanGate(ctx, workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,

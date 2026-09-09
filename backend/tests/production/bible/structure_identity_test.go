@@ -128,6 +128,7 @@ func TestConfirmStructureIdentitySetPublishesGateOneCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	if first.Version.ID != second.Version.ID || first.Receipt.ID != second.Receipt.ID ||
+		first.CommandReceiptID != second.CommandReceiptID || first.CommandOperation != bibledomain.StructureIdentityCommandOperation ||
 		first.Version.SchemaVersion != bibledomain.StructureIdentitySetSchemaVersion || first.Version.Version != 1 ||
 		first.Version.ProjectEpisodeReceiptID != episodes.ID || first.Receipt.CheckpointKey != bibledomain.StructureIdentityCheckpointKey ||
 		first.Receipt.CollectionFamily != bibledomain.StructureIdentityCollectionFamily || len(first.Receipt.CoveredScopeKeys) != 2 {

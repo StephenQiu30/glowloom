@@ -26,6 +26,10 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
+	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
+	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
@@ -271,6 +275,34 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		humanTask.SubjectRevision != 1 || humanTask.SubjectHash != gateInput.InputHash {
 		t.Fatalf("StructureIdentity HumanTask = %#v candidates=%v err=%v", humanTask, taskCandidateIDs, err)
 	}
+	decisionID := uuid.New()
+	if err = database.Model(&model.HumanTask{}).Where("id = ?", humanTask.ID).Updates(map[string]any{
+		"status": "COMPLETED", "revision": humanTask.Revision + 1, "updated_at": now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Create(&model.ReviewDecision{
+		ID: decisionID, WorkspaceID: fixture.workspaceID, HumanTaskID: humanTask.ID,
+		Decision: "approved", SubjectRevision: humanTask.SubjectRevision, SubjectHash: humanTask.SubjectHash,
+		CreatedBy: fixture.userID, CreatedAt: now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	ownerApplication, err := workflowStore.ResolveHumanGateOwnerApplication(ctx, workflow.HumanGateDecisionRequest{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: gate.NodeRunID,
+		HumanTaskID: humanTask.ID.String(), ReviewDecisionID: decisionID.String(),
+		SubjectRevision: humanTask.SubjectRevision, Decision: "approved",
+	})
+	if err != nil {
+		t.Fatalf("resolve Structure Identity owner application: %v", err)
+	}
+	ownerMaterial, err := workflow.DecodeStructureIdentityOwnerMaterial(ownerApplication.OwnerMaterial)
+	if err != nil || ownerApplication.Candidate.ReferenceID != final.Output.Bindings[0].ReferenceID ||
+		ownerApplication.OutputPort != "identities" || ownerApplication.OutputValueType != "structure_identity_set_version" ||
+		ownerMaterial.GateInputID != gateInput.ID.String() || ownerMaterial.GateInput.InputHash != gateInput.InputHash ||
+		ownerMaterial.SpanIndexID != accepted.SpanIndexID || len(ownerMaterial.Candidates) != 4 {
+		t.Fatalf("Structure Identity owner material = %#v application=%#v err=%v", ownerMaterial, ownerApplication, err)
+	}
 	if err = runtimeService.OpenHumanGate(ctx, gateCommand); err != nil {
 		t.Fatalf("replay StructureIdentity HumanTask open: %v", err)
 	}
@@ -285,6 +317,63 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	}
 	if gateInputCount != 1 || humanTaskCount != 1 {
 		t.Fatalf("Gate replay facts: inputs=%d tasks=%d", gateInputCount, humanTaskCount)
+	}
+	bibleService := bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
+		Now: func() time.Time { return now }, NewID: uuid.NewString,
+	})
+	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString)
+	signalService := workflowapp.NewSignalService(
+		workflowStore, &acceptingStructureIdentitySignaler{}, workflowapp.SignalConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil),
+		},
+	)
+	signalIntent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: gate.NodeRunID,
+		HumanTaskID: humanTask.ID.String(), ReviewDecisionID: decisionID.String(),
+		SubjectRevision: humanTask.SubjectRevision, Decision: "approved",
+		IdempotencyKey: "structure-identity-signal:" + decisionID.String(),
+	})
+	if err != nil {
+		t.Fatalf("signal Structure Identity owner chain: %v", err)
+	}
+	var applyReceipt model.WorkflowHumanGateApplyReceipt
+	if err = database.First(&applyReceipt, "review_decision_id = ?", decisionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	ownerOutput, _, ownerOutputHash, err := workflow.ParseNodeOutput(json.RawMessage(applyReceipt.Output))
+	if err != nil || signalIntent.Status != "completed" || applyReceipt.Status != "completed" ||
+		applyReceipt.OwnerOperation == nil || *applyReceipt.OwnerOperation != "production_bible.confirm_structure_identity_set" ||
+		applyReceipt.OutputHash == nil || *applyReceipt.OutputHash != ownerOutputHash || len(ownerOutput.Bindings) != 1 ||
+		ownerOutput.Bindings[0].ValueType != "structure_identity_set_version" {
+		t.Fatalf("Structure Identity owner signal: intent=%#v apply=%#v output=%#v err=%v", signalIntent, applyReceipt, ownerOutput, err)
+	}
+	var structureVersion model.StructureIdentitySetVersion
+	if err = database.First(&structureVersion, "id = ?", ownerOutput.Bindings[0].ReferenceID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var projectReceipt, collectionReceipt, outboxCount int64
+	if err = database.Model(&model.CommandReceipt{}).Where(
+		"workspace_id = ? AND operation = ?", fixture.workspaceID, "project.confirm_episode_lifecycle",
+	).Count(&projectReceipt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.StructureIdentityCollectionReceipt{}).Where(
+		"version_id = ?", structureVersion.ID,
+	).Count(&collectionReceipt).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.OutboxEvent{}).Where(
+		"aggregate_id = ? AND event_type = ?", structureVersion.ID.String(), "StructureIdentitySetPublished",
+	).Count(&outboxCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if structureVersion.ReviewDecisionID != decisionID || structureVersion.GateInputID != gateInput.ID ||
+		projectReceipt != 1 || collectionReceipt != 1 || outboxCount != 1 {
+		t.Fatalf("Structure Identity SOP facts: version=%#v project_receipts=%d collection_receipts=%d outbox=%d",
+			structureVersion, projectReceipt, collectionReceipt, outboxCount)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -720,6 +809,15 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if accepted.Identity.VersionID != fixture.revisionID.String() {
 		t.Fatalf("accepted Source identity = %#v", accepted.Identity)
 	}
+}
+
+type acceptingStructureIdentitySignaler struct{}
+
+func (*acceptingStructureIdentitySignaler) Signal(
+	_ context.Context,
+	request workflow.SignalRequest,
+) (workflow.SignalObservation, error) {
+	return workflow.SignalObservation{Outcome: workflow.SignalOutcomeSignaled, ObservedInputHash: request.InputHash}, nil
 }
 
 type sceneAnalysisFixture struct {
