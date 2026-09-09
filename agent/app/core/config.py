@@ -50,7 +50,10 @@ class Settings:
             raise ValueError("CREATION_TEMPORAL_TLS must be true or false")
         tls = tls_value == "true"
         host = urlsplit("http://" + address).hostname
-        docker_temporal = docker_network() and address == "host.docker.internal:7233"
+        docker_temporal = docker_network() and address in {
+            "host.docker.internal:7233",
+            "temporal:7233",
+        }
         if not host or (
             not tls and host not in {"localhost", "127.0.0.1", "::1"} and not docker_temporal
         ):
