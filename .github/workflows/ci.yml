@@ -364,6 +364,7 @@ jobs:
           if ! service_compose up --detach --no-build --wait --wait-timeout 240 frontend backend agent; then
             service_compose ps --all
             service_compose logs --no-color backend
+            service_compose logs --no-color agent
             exit 1
           fi
           service_compose ps --status running --services | grep -qx backend
