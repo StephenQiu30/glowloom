@@ -27,6 +27,17 @@ func TestIdentityResolutionCandidatePartitionsEveryRawMentionExactlyOnce(t *test
 	); err != nil {
 		t.Fatalf("valid IdentityResolution candidate rejected: %v", err)
 	}
+	var candidate contract.IdentityResolutionCandidate
+	if err := json.Unmarshal(identity.ValidCandidate, &candidate); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]bool{}
+	for _, cluster := range candidate.ResolvedClusters {
+		kinds[cluster.Kind] = true
+	}
+	if !kinds["character"] || !kinds["location"] || !kinds["prop"] {
+		t.Fatalf("IdentityResolution kinds = %v", kinds)
+	}
 
 	var duplicate map[string]any
 	if err := json.Unmarshal(identity.ValidCandidate, &duplicate); err != nil {

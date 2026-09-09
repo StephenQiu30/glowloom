@@ -293,7 +293,7 @@ class SceneFactCandidate(StrictSceneAnalysisModel):
 
 
 class IdentityMentionRef(StrictSceneAnalysisModel):
-    kind: Literal["character", "prop"]
+    kind: Literal["character", "location", "prop"]
     temporary_scene_id: str = Field(pattern=r"^scene_[a-z0-9_]{1,80}$")
     source_start: int = Field(ge=0)
     source_end: int = Field(gt=0)
@@ -308,8 +308,10 @@ class IdentityMentionRef(StrictSceneAnalysisModel):
 
 
 class IdentityCluster(StrictSceneAnalysisModel):
-    temporary_identity_key: str = Field(pattern=r"^identity_(character|prop)_[a-z0-9_]{1,80}$")
-    kind: Literal["character", "prop"]
+    temporary_identity_key: str = Field(
+        pattern=r"^identity_(character|location|prop)_[a-z0-9_]{1,80}$"
+    )
+    kind: Literal["character", "location", "prop"]
     resolution: Literal["new", "reuse"]
     reuse_identity_key: str | None
     canonical_name: str = Field(min_length=1)
@@ -396,13 +398,27 @@ class IdentityResolutionCandidate(StrictSceneAnalysisModel):
                 *(value.evidence for value in scene.raw_prop_mentions),
             ]
             source_evidence.update(_source_evidence_key(value) for value in grounded)
+            if scene.location is not None:
+                location = scene.location.evidence
+                ref = IdentityMentionRef(
+                    kind="location",
+                    temporary_scene_id=scene.temporary_scene_id,
+                    source_start=location.source_start,
+                    source_end=location.source_end,
+                    text_hash=location.text_hash,
+                    exact_anchor=location.exact_anchor,
+                )
+                key = _identity_mention_key(ref)
+                if key in expected:
+                    raise ValueError("scene facts contain a duplicated raw mention")
+                expected[key] = ref
             for kind, mentions in (
                 ("character", scene.raw_character_mentions),
                 ("prop", scene.raw_prop_mentions),
             ):
                 for mention in mentions:
                     ref = IdentityMentionRef(
-                        kind=cast(Literal["character", "prop"], kind),
+                        kind=cast(Literal["character", "location", "prop"], kind),
                         temporary_scene_id=scene.temporary_scene_id,
                         source_start=mention.evidence.source_start,
                         source_end=mention.evidence.source_end,
@@ -415,7 +431,7 @@ class IdentityResolutionCandidate(StrictSceneAnalysisModel):
                     expected[key] = ref
 
         supplied: list[IdentityMentionRef] = []
-        identity_kinds: dict[str, Literal["character", "prop"]] = {}
+        identity_kinds: dict[str, Literal["character", "location", "prop"]] = {}
         resolved_count = 0
         for cluster in self.resolved_clusters:
             if cluster.temporary_identity_key in identity_kinds:

@@ -1,6 +1,6 @@
 {
-  "expected_input_hash": "689d7b10b9e81bf8f1df32604ce420ec9196da717ca283c87aa9450f40733555",
-  "expected_stage_instance_key": "05441b0fb4bc508e7df60e221d2b482eabf02561f9354e2a39053c5d88b4cf67",
+  "expected_input_hash": "5526ca5bc93d35e73abfc73e412e07055410722cda62784a545313de5ad41461",
+  "expected_stage_instance_key": "62f10fd51b75e651d0804bd33113089485360ee18b7562dfc10467e20646586a",
   "valid_candidate": {
     "source_version_id": "33333333-3333-4333-8333-333333333333",
     "source_hash": "16af9a5dcdeaecc141af6e4ef5c03fc3f10fed79c1c7c6c0667cc7afd4ddb96e",
@@ -78,16 +78,74 @@
         "contradicting_evidence": [],
         "confidence_basis_points": 10000,
         "rationale": "原文中唯一的道具提及。"
+      },
+      {
+        "temporary_identity_key": "identity_location_interior",
+        "kind": "location",
+        "resolution": "new",
+        "reuse_identity_key": null,
+        "canonical_name": "内",
+        "aliases": ["内"],
+        "mention_refs": [
+          {
+            "kind": "location",
+            "temporary_scene_id": "scene_0001",
+            "source_start": 6,
+            "source_end": 7,
+            "text_hash": "b2126ce9c100bff0cc963326e29fadc751106ad7fd7f34aa46cddc06d8198c6a",
+            "exact_anchor": "内"
+          }
+        ],
+        "supporting_evidence": [
+          {
+            "source_start": 6,
+            "source_end": 7,
+            "text_hash": "b2126ce9c100bff0cc963326e29fadc751106ad7fd7f34aa46cddc06d8198c6a",
+            "exact_anchor": "内"
+          }
+        ],
+        "contradicting_evidence": [],
+        "confidence_basis_points": 10000,
+        "rationale": "场景地点属性有精确原文证据。"
+      },
+      {
+        "temporary_identity_key": "identity_location_exterior",
+        "kind": "location",
+        "resolution": "new",
+        "reuse_identity_key": null,
+        "canonical_name": "外",
+        "aliases": ["外"],
+        "mention_refs": [
+          {
+            "kind": "location",
+            "temporary_scene_id": "scene_0002",
+            "source_start": 22,
+            "source_end": 23,
+            "text_hash": "0e826095b60ccf039478a7e093220d79a4614158557924383bd3c7ef1bb06d8a",
+            "exact_anchor": "外"
+          }
+        ],
+        "supporting_evidence": [
+          {
+            "source_start": 22,
+            "source_end": 23,
+            "text_hash": "0e826095b60ccf039478a7e093220d79a4614158557924383bd3c7ef1bb06d8a",
+            "exact_anchor": "外"
+          }
+        ],
+        "contradicting_evidence": [],
+        "confidence_basis_points": 10000,
+        "rationale": "场景地点属性有精确原文证据。"
       }
     ],
     "ambiguous_mentions": [],
     "rejected_mentions": [],
     "coverage": {
-      "mention_count": 3,
-      "resolved_count": 3,
+      "mention_count": 5,
+      "resolved_count": 5,
       "ambiguous_count": 0,
       "rejected_count": 0,
-      "mention_universe_hash": "6f5a7c25ccec44b59edfd0c1e26520ee25267312ada4e035e3a21cd597c47b1d"
+      "mention_universe_hash": "81b8554c02299253813bebbba366e5293d9a852457a99d6f7e20f227dfa98164"
     },
     "review_issues": []
   }

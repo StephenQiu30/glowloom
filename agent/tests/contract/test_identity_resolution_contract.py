@@ -45,6 +45,11 @@ def test_identity_resolution_candidate_partitions_every_raw_mention_exactly_once
     candidate = IdentityResolutionCandidate.model_validate(identity["valid_candidate"])
 
     candidate.validate_for_scene_facts(scene_facts, allowed_reuse_identity_keys=set())
+    assert {cluster.kind for cluster in candidate.resolved_clusters} == {
+        "character",
+        "location",
+        "prop",
+    }
 
 
 @pytest.mark.parametrize(

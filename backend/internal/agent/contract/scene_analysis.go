@@ -23,7 +23,7 @@ const (
 	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
 	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
-	SceneAnalysisSkillBundleHash                  = "2194bf507c1860ab386ba14ffc95f951b12bff708aee49948bcbfb443fe54649"
+	SceneAnalysisSkillBundleHash                  = "22dd99ec826bbef237b38f9b3a428e334b75c2a7215c5d4fe00d224c6555d866"
 )
 
 type SceneAnalysisStageVariant struct {
@@ -1023,7 +1023,7 @@ func ValidateSceneFactCandidate(raw json.RawMessage, text string, spanRaw json.R
 	return nil
 }
 
-var temporaryIdentityKeyPattern = regexp.MustCompile(`^identity_(character|prop)_[a-z0-9_]{1,80}$`)
+var temporaryIdentityKeyPattern = regexp.MustCompile(`^identity_(character|location|prop)_[a-z0-9_]{1,80}$`)
 
 type IdentityMentionRef struct {
 	Kind             string `json:"kind"`
@@ -1124,6 +1124,18 @@ func ValidateIdentityResolutionCandidate(
 		for _, evidence := range grounded {
 			sourceEvidence[sourceEvidenceKey(evidence)] = struct{}{}
 		}
+		if scene.Location != nil {
+			ref := IdentityMentionRef{
+				Kind: "location", TemporarySceneID: scene.TemporarySceneID,
+				SourceStart: scene.Location.Evidence.SourceStart, SourceEnd: scene.Location.Evidence.SourceEnd,
+				TextHash: scene.Location.Evidence.TextHash, ExactAnchor: scene.Location.Evidence.ExactAnchor,
+			}
+			key := identityMentionKey(ref)
+			if _, duplicate := expected[key]; duplicate {
+				return errors.New("SceneFact raw mention is duplicated")
+			}
+			expected[key] = ref
+		}
 		for _, group := range []struct {
 			kind     string
 			mentions []RawEntityMention
@@ -1149,7 +1161,7 @@ func ValidateIdentityResolutionCandidate(
 	for _, cluster := range value.ResolvedClusters {
 		if !temporaryIdentityKeyPattern.MatchString(cluster.TemporaryIdentityKey) ||
 			!strings.HasPrefix(cluster.TemporaryIdentityKey, "identity_"+cluster.Kind+"_") ||
-			(cluster.Kind != "character" && cluster.Kind != "prop") || len(cluster.MentionRefs) == 0 ||
+			(cluster.Kind != "character" && cluster.Kind != "location" && cluster.Kind != "prop") ||
 			len(cluster.SupportingEvidence) == 0 || cluster.ContradictingEvidence == nil ||
 			cluster.ConfidenceBasisPoints < 0 || cluster.ConfidenceBasisPoints > 10_000 || strings.TrimSpace(cluster.Rationale) == "" ||
 			strings.TrimSpace(cluster.CanonicalName) == "" || len(cluster.Aliases) == 0 {

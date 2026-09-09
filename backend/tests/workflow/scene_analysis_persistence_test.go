@@ -995,37 +995,67 @@ func buildSceneFactCandidate(input contract.SceneFactExtractionInput) json.RawMe
 func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) json.RawMessage {
 	var facts contract.SceneFactCandidate
 	_ = json.Unmarshal(input.SceneFactCandidate, &facts)
-	mentionRefs := make([]contract.IdentityMentionRef, 0, len(facts.Scenes))
-	supportingEvidence := make([]contract.SourceEvidenceSpan, 0, len(facts.Scenes))
+	characterRefs := make([]contract.IdentityMentionRef, 0, len(facts.Scenes))
+	characterEvidence := make([]contract.SourceEvidenceSpan, 0, len(facts.Scenes))
+	locationClusters := make([]contract.IdentityCluster, 0, len(facts.Scenes))
+	universe := make([]contract.IdentityMentionRef, 0, len(facts.Scenes)*2)
 	for _, scene := range facts.Scenes {
 		for _, mention := range scene.RawCharacterMentions {
-			mentionRefs = append(mentionRefs, contract.IdentityMentionRef{
+			ref := contract.IdentityMentionRef{
 				Kind: "character", TemporarySceneID: scene.TemporarySceneID,
 				SourceStart: mention.Evidence.SourceStart, SourceEnd: mention.Evidence.SourceEnd,
 				TextHash: mention.Evidence.TextHash, ExactAnchor: mention.Evidence.ExactAnchor,
+			}
+			characterRefs = append(characterRefs, ref)
+			characterEvidence = append(characterEvidence, mention.Evidence)
+			universe = append(universe, ref)
+		}
+		if scene.Location != nil {
+			ref := contract.IdentityMentionRef{
+				Kind: "location", TemporarySceneID: scene.TemporarySceneID,
+				SourceStart: scene.Location.Evidence.SourceStart, SourceEnd: scene.Location.Evidence.SourceEnd,
+				TextHash: scene.Location.Evidence.TextHash, ExactAnchor: scene.Location.Evidence.ExactAnchor,
+			}
+			universe = append(universe, ref)
+			locationClusters = append(locationClusters, contract.IdentityCluster{
+				TemporaryIdentityKey: "identity_location_" + scene.TemporarySceneID,
+				Kind:                 "location", Resolution: "new", CanonicalName: scene.Location.Text,
+				Aliases: []string{scene.Location.Text}, MentionRefs: []contract.IdentityMentionRef{ref},
+				SupportingEvidence:    []contract.SourceEvidenceSpan{scene.Location.Evidence},
+				ContradictingEvidence: []contract.SourceEvidenceSpan{}, ConfidenceBasisPoints: 10000,
+				Rationale: "地点属性来自当前场景的精确原文证据。",
 			})
-			supportingEvidence = append(supportingEvidence, mention.Evidence)
 		}
 	}
-	universeHash, _ := contract.ProductionCanonicalHash(mustSceneJSON(mentionRefs))
+	slices.SortFunc(universe, func(left, right contract.IdentityMentionRef) int {
+		return strings.Compare(identityMentionTestKey(left), identityMentionTestKey(right))
+	})
+	universeHash, _ := contract.ProductionCanonicalHash(mustSceneJSON(universe))
+	clusters := []contract.IdentityCluster{{
+		TemporaryIdentityKey: "identity_character_linzhou", Kind: "character", Resolution: "new",
+		CanonicalName: "林舟", Aliases: []string{"林舟"}, MentionRefs: characterRefs,
+		SupportingEvidence: characterEvidence, ContradictingEvidence: []contract.SourceEvidenceSpan{},
+		ConfidenceBasisPoints: 9800, Rationale: "两个场景中的同名角色提及没有相互矛盾的证据。",
+	}}
+	clusters = append(clusters, locationClusters...)
 	return mustSceneJSON(contract.IdentityResolutionCandidate{
 		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
 		SceneFactCandidateRevisionID:   input.SceneFactCandidateRevisionID,
 		SceneFactCandidateRevisionHash: input.SceneFactCandidateRevisionHash,
-		ResolvedClusters: []contract.IdentityCluster{{
-			TemporaryIdentityKey: "identity_character_linzhou", Kind: "character", Resolution: "new",
-			CanonicalName: "林舟", Aliases: []string{"林舟"}, MentionRefs: mentionRefs,
-			SupportingEvidence: supportingEvidence, ContradictingEvidence: []contract.SourceEvidenceSpan{},
-			ConfidenceBasisPoints: 9800, Rationale: "两个场景中的同名角色提及没有相互矛盾的证据。",
-		}},
-		AmbiguousMentions: []contract.AmbiguousIdentityMention{},
-		RejectedMentions:  []contract.RejectedIdentityMention{},
+		ResolvedClusters:               clusters,
+		AmbiguousMentions:              []contract.AmbiguousIdentityMention{},
+		RejectedMentions:               []contract.RejectedIdentityMention{},
 		Coverage: contract.IdentityResolutionCoverage{
-			MentionCount: len(mentionRefs), ResolvedCount: len(mentionRefs),
+			MentionCount: len(universe), ResolvedCount: len(universe),
 			MentionUniverseHash: universeHash,
 		},
 		ReviewIssues: []contract.CandidateReviewIssue{},
 	})
+}
+
+func identityMentionTestKey(value contract.IdentityMentionRef) string {
+	return fmt.Sprintf("%s\x00%s\x00%020d\x00%020d\x00%s\x00%s", value.Kind, value.TemporarySceneID,
+		value.SourceStart, value.SourceEnd, value.TextHash, value.ExactAnchor)
 }
 
 func sceneEvidence(text string, start, end int) map[string]any {
