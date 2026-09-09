@@ -4,7 +4,7 @@ import hashlib
 import re
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -517,6 +517,8 @@ def _preserves_interaction_continuity(
     ):
         return False
     operation = directive.change_spec.operation
+    allowed_interactions: set[str]
+    allowed_continuity: set[str]
     if operation in {"revise_production_entity", "rebind_scene_occurrence"}:
         allowed_interactions = set(directive.closure.interaction_keys)
         allowed_continuity = set(directive.closure.continuity_keys)
@@ -551,8 +553,9 @@ def _indexed_objects(
     if not isinstance(values, list):
         return None
     result: dict[str, dict[str, Any]] = {}
-    for value in values:
-        if not isinstance(value, dict):
+    for item in cast(list[Any], values):
+        value = cast(dict[str, Any], item) if isinstance(item, dict) else None
+        if value is None:
             return None
         key = value.get(key_field)
         if not isinstance(key, str) or not key.strip() or key in result:
