@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "17.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "18.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -28,6 +28,16 @@ func SystemCatalog() (Catalog, error) {
 			"agent.identity_resolution", "Global Identity Resolution", "agent", "activity.identity_resolution", "by_inputs", "external_ai",
 			[]PortDefinition{requiredPort("source", "script_source_version"), requiredPort("facts", "scene_fact_candidate")},
 			[]PortDefinition{requiredPort("candidate", "identity_resolution_candidate")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
+			"agent.structure_identity_review", "Structure and Identity Review", "agent", "activity.structure_identity_review", "by_inputs", "external_ai",
+			[]PortDefinition{
+				requiredPort("source", "script_source_version"),
+				requiredPort("spans", "script_span_candidate"),
+				requiredPort("facts", "scene_fact_candidate"),
+				requiredPort("identities", "identity_resolution_candidate"),
+			},
+			[]PortDefinition{requiredPort("candidate", "structure_identity_review_candidate")}, emptyNodeConfig(),
 		),
 		systemNodeDefinition(
 			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",

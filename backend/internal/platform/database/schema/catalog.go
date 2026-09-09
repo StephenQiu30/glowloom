@@ -86,6 +86,7 @@ func Catalog() []any {
 		&model.SceneAnalysisDispatchAuthorization{},
 		&model.SceneAnalysisResult{},
 		&model.SceneAnalysisCandidateRevision{},
+		&model.SceneAnalysisInvocationRead{},
 		&model.SceneAnalysisCandidateHead{},
 		&model.ProductionBibleVersion{},
 		&model.Asset{},
@@ -136,7 +137,9 @@ func refreshEvolvingConstraints(ctx context.Context, database *gorm.DB) error {
 	}{
 		{model: &model.ShardManifest{}, name: "ck_agt_manifest_stage"},
 		{model: &model.SceneAnalysisRelease{}, name: "ck_agt_scene_release_stage"},
+		{model: &model.SceneAnalysisRelease{}, name: "ck_agt_scene_release_profile"},
 		{model: &model.SceneAnalysisInvocationRecord{}, name: "ck_agt_scene_invocation_stage"},
+		{model: &model.SceneAnalysisInvocationRecord{}, name: "ck_agt_scene_invocation_profile"},
 		{model: &model.SceneAnalysisCandidateRevision{}, name: "ck_agt_scene_candidate_type"},
 	}
 	return database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {

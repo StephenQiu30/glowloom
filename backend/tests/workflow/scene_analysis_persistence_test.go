@@ -34,7 +34,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing.T) {
+func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set LANVERSE_TEST_DATABASE_URL to run the Scene Analysis workflow journey")
@@ -123,10 +123,11 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 4 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 5 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
-		plan.Nodes[3].Executor != "activity.identity_resolution" {
+		plan.Nodes[3].Executor != "activity.identity_resolution" ||
+		plan.Nodes[4].Executor != "activity.structure_identity_review" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -157,6 +158,7 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 		Now: func() time.Time { return now }, NewID: uuid.NewString, Executor: nodeExecutor,
 	})
 	var final workflow.NodeActivityResult
+	var identityOutput workflow.NodeActivityResult
 	for _, node := range plan.Nodes {
 		final, err = runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
 			WorkflowRunID: started.ID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
@@ -165,14 +167,34 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 		if err != nil || final.Status != "SUCCEEDED" {
 			t.Fatalf("execute %s: calls=%d result=%#v err=%v", node.Executor, agentRuntime.calls, final, err)
 		}
+		if node.Executor == "activity.identity_resolution" {
+			identityOutput = final
+		}
 	}
-	if len(final.Output.Bindings) != 1 || final.Output.Bindings[0].ValueType != "identity_resolution_candidate" {
-		t.Fatalf("IdentityResolution output = %#v", final.Output)
+	if len(final.Output.Bindings) != 1 || final.Output.Bindings[0].ValueType != "structure_identity_review_candidate" {
+		t.Fatalf("StructureIdentityReview output = %#v", final.Output)
 	}
 	candidate, err := sceneService.GetCandidate(ctx, fixture.projectID.String(), final.Output.Bindings[0].ReferenceID)
-	if err != nil || candidate.CandidateRevisionHash != final.Output.Bindings[0].ContentHash ||
-		contract.ValidateIdentityResolutionCandidate(candidate.Candidate, agentRuntime.factCandidate, map[string]struct{}{}) != nil {
-		t.Fatalf("query persisted IdentityResolution Candidate: candidate=%#v err=%v", candidate, err)
+	if err != nil || candidate.CandidateRevisionHash != final.Output.Bindings[0].ContentHash {
+		t.Fatalf("query persisted StructureIdentityReview Candidate: candidate=%#v err=%v", candidate, err)
+	}
+	var reviewInvocation model.SceneAnalysisInvocationRecord
+	if err = database.First(&reviewInvocation, "id = ?", candidate.SourceInvocationID).Error; err != nil {
+		t.Fatalf("query StructureIdentityReview invocation: %v", err)
+	}
+	var reviewPayload contract.SceneAnalysisPayload
+	var reviewInput contract.StructureIdentityReviewInput
+	if err = json.Unmarshal(reviewInvocation.Payload, &reviewPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(reviewPayload.StageInput, &reviewInput); err != nil ||
+		contract.ValidateStructureIdentityReviewCandidate(candidate.Candidate, reviewInput) != nil {
+		t.Fatalf("validate persisted StructureIdentityReview Candidate: %v", err)
+	}
+	var reviewReads []model.SceneAnalysisInvocationRead
+	if err = database.Where("invocation_id = ?", reviewInvocation.ID).
+		Order("position ASC").Find(&reviewReads).Error; err != nil || len(reviewReads) != 3 {
+		t.Fatalf("query StructureIdentityReview read set: reads=%#v err=%v", reviewReads, err)
 	}
 	if candidate.SourceResultHash == candidate.CandidateContentHash {
 		t.Fatal("Candidate lineage reused output_hash as source_result_hash")
@@ -190,11 +212,11 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 		)
 	}
 	replayed, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
-		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[3].NodeRunID, NodeID: plan.Nodes[3].NodeID,
-		Executor: plan.Nodes[3].Executor, Attempt: 2,
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[4].NodeRunID, NodeID: plan.Nodes[4].NodeID,
+		Executor: plan.Nodes[4].Executor, Attempt: 2,
 	})
-	if err != nil || replayed.OutputHash != final.OutputHash || agentRuntime.calls != 3 {
-		t.Fatalf("replay IdentityResolution node: calls=%d result=%#v err=%v", agentRuntime.calls, replayed, err)
+	if err != nil || replayed.OutputHash != final.OutputHash || agentRuntime.calls != 4 {
+		t.Fatalf("replay StructureIdentityReview node: calls=%d result=%#v err=%v", agentRuntime.calls, replayed, err)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -404,17 +426,26 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 		t.Fatalf("read-set drift published %d Candidate revisions", driftedCandidateCount)
 	}
 
+	identityCandidate, err := sceneService.GetCandidate(
+		ctx, fixture.projectID.String(), identityOutput.Output.Bindings[0].ReferenceID,
+	)
+	if err != nil {
+		t.Fatalf("query persisted IdentityResolution Candidate: %v", err)
+	}
 	var identityInvocation model.SceneAnalysisInvocationRecord
-	if err = database.First(&identityInvocation, "id = ?", candidate.SourceInvocationID).Error; err != nil {
+	if err = database.First(&identityInvocation, "id = ?", identityCandidate.SourceInvocationID).Error; err != nil {
 		t.Fatalf("query IdentityResolution invocation: %v", err)
 	}
-	if identityInvocation.UpstreamCandidateRevisionID == nil {
+	var identityRead model.SceneAnalysisInvocationRead
+	if err = database.First(
+		&identityRead, "invocation_id = ? AND stage_key = ?", identityInvocation.ID, "extract_scene_facts",
+	).Error; err != nil {
 		t.Fatal("IdentityResolution invocation has no upstream SceneFact Candidate")
 	}
 	factCandidate, err := sceneService.GetCandidate(
 		ctx,
 		fixture.projectID.String(),
-		identityInvocation.UpstreamCandidateRevisionID.String(),
+		identityRead.CandidateRevisionID.String(),
 	)
 	if err != nil {
 		t.Fatalf("query upstream SceneFact Candidate: %v", err)
@@ -423,13 +454,16 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 	if err = database.First(&sceneFactInvocation, "id = ?", factCandidate.SourceInvocationID).Error; err != nil {
 		t.Fatalf("query SceneFact invocation: %v", err)
 	}
-	if sceneFactInvocation.UpstreamCandidateRevisionID == nil {
+	var sceneFactRead model.SceneAnalysisInvocationRead
+	if err = database.First(
+		&sceneFactRead, "invocation_id = ? AND stage_key = ?", sceneFactInvocation.ID, "propose_script_spans",
+	).Error; err != nil {
 		t.Fatal("Scene Fact invocation has no upstream Script Span Candidate")
 	}
 	spanCandidate, err := sceneService.GetCandidate(
 		ctx,
 		fixture.projectID.String(),
-		sceneFactInvocation.UpstreamCandidateRevisionID.String(),
+		sceneFactRead.CandidateRevisionID.String(),
 	)
 	if err != nil {
 		t.Fatalf("query upstream Script Span Candidate: %v", err)
@@ -465,7 +499,7 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 	upstreamReadSetDriftCommand := unknownOutcomeCommand
 	upstreamReadSetDriftCommand.NodeRunID = upstreamReadSetDriftNodeRunID.String()
 	upstreamReadSetDriftCommand.StageKey = "extract_scene_facts"
-	upstreamReadSetDriftCommand.Upstream = &spanCandidate
+	upstreamReadSetDriftCommand.Upstreams = []agentapp.Candidate{spanCandidate}
 	_, upstreamReadSetDriftErr := upstreamReadSetDriftService.Execute(ctx, upstreamReadSetDriftCommand)
 	if err = database.Model(&model.SceneAnalysisInvocationRecord{}).
 		Where("id = ?", spanCandidate.SourceInvocationID).
@@ -484,6 +518,58 @@ func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing
 	}
 	if upstreamDriftedCandidateCount != 0 {
 		t.Fatalf("upstream read-set drift published %d Candidate revisions", upstreamDriftedCandidateCount)
+	}
+	multiReadDriftNodeRunID := uuid.New()
+	if err = database.Create(&model.NodeRunProjection{
+		ID: multiReadDriftNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: parsedWorkflowRunID,
+		NodeID: "review-upstream-read-set-drift", DefinitionKey: "agent.structure_identity_review",
+		DefinitionVersion: "1.0.0", Executor: "activity.structure_identity_review",
+		RiskLevel: "external_ai", Status: "QUEUED", Attempt: 0, Revision: 1,
+		CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create review read-set drift NodeRun: %v", err)
+	}
+	multiReadDriftRuntime := &readSetDriftSceneAnalysisRuntime{
+		delegate: deterministicSceneAnalysisRuntime{now: now},
+		beforeResult: func() error {
+			return database.Model(&model.SceneAnalysisInvocationRecord{}).
+				Where("id = ?", identityCandidate.SourceInvocationID).
+				Update("shard_key", "script:drifted").Error
+		},
+	}
+	multiReadDriftService, err := agentapp.NewSceneAnalysisService(
+		agentgorm.NewSceneAnalysisStore(database), multiReadDriftRuntime, dispatchSigner,
+		agentapp.SceneAnalysisConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 7),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	multiReadDriftCommand := unknownOutcomeCommand
+	multiReadDriftCommand.NodeRunID = multiReadDriftNodeRunID.String()
+	multiReadDriftCommand.StageKey = "review_candidate"
+	multiReadDriftCommand.Upstreams = []agentapp.Candidate{spanCandidate, factCandidate, identityCandidate}
+	multiReadDriftCommand.DeterministicIssues = []contract.CandidateReviewIssue{}
+	_, multiReadDriftErr := multiReadDriftService.Execute(ctx, multiReadDriftCommand)
+	if err = database.Model(&model.SceneAnalysisInvocationRecord{}).
+		Where("id = ?", identityCandidate.SourceInvocationID).
+		Update("shard_key", "script:full").Error; err != nil {
+		t.Fatalf("restore review upstream read-set fixture: %v", err)
+	}
+	if agentapp.ErrorCode(multiReadDriftErr) != "stale_read_set" {
+		t.Fatalf("review read-set drift execution error = %v", multiReadDriftErr)
+	}
+	var multiReadDriftedCandidateCount int64
+	if err = database.Model(&model.SceneAnalysisCandidateRevision{}).
+		Where("source_invocation_id IN (?)", database.Model(&model.SceneAnalysisInvocationRecord{}).
+			Select("id").Where("node_run_id = ?", multiReadDriftNodeRunID)).
+		Count(&multiReadDriftedCandidateCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if multiReadDriftedCandidateCount != 0 {
+		t.Fatalf("review read-set drift published %d Candidate revisions", multiReadDriftedCandidateCount)
 	}
 
 	bundleUnavailableNodeRunID := uuid.New()
@@ -603,6 +689,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "spans", DefinitionKey: "agent.script_span_proposal", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "facts", DefinitionKey: "agent.scene_fact_extraction", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "identities", DefinitionKey: "agent.identity_resolution", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "review", DefinitionKey: "agent.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -610,6 +697,10 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "spans-facts", FromNodeID: "spans", FromPort: "candidate", ToNodeID: "facts", ToPort: "spans"},
 			{ID: "source-identities", FromNodeID: "source", FromPort: "source", ToNodeID: "identities", ToPort: "source"},
 			{ID: "facts-identities", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "identities", ToPort: "facts"},
+			{ID: "source-review", FromNodeID: "source", FromPort: "source", ToNodeID: "review", ToPort: "source"},
+			{ID: "spans-review", FromNodeID: "spans", FromPort: "candidate", ToNodeID: "review", ToPort: "spans"},
+			{ID: "facts-review", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "review", ToPort: "facts"},
+			{ID: "identities-review", FromNodeID: "identities", FromPort: "candidate", ToNodeID: "review", ToPort: "identities"},
 		},
 	}
 }
@@ -716,12 +807,18 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		}
 		candidate = buildSceneFactCandidate(input)
 		runtime.factCandidate = append([]byte(nil), candidate...)
-	} else {
+	} else if invocation.Payload.Variant.StageKey == "resolve_identities" {
 		var input contract.IdentityResolutionInput
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
 		candidate = buildIdentityResolutionCandidate(input)
+	} else {
+		var input contract.StructureIdentityReviewInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return contract.SceneAnalysisAttemptResult{}, err
+		}
+		candidate = buildStructureIdentityReviewCandidate(input)
 	}
 	outputHash, err := contract.ProductionCanonicalHash(candidate)
 	if err != nil {
@@ -741,6 +838,7 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			"propose_script_spans": "script_span_candidate",
 			"extract_scene_facts":  "scene_fact_candidate",
 			"resolve_identities":   "identity_resolution_candidate",
+			"review_candidate":     "structure_identity_review_candidate",
 		}[invocation.Payload.Variant.StageKey],
 		Candidate: candidate, InputHash: invocation.InputHash, OutputHash: &outputHash,
 		Diagnostics: []contract.SceneAnalysisDiagnostic{}, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now,
@@ -754,6 +852,20 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		return contract.SceneAnalysisAttemptResult{}, err
 	}
 	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
+}
+
+func buildStructureIdentityReviewCandidate(input contract.StructureIdentityReviewInput) json.RawMessage {
+	return mustSceneJSON(map[string]any{
+		"profile_key":       "structure_identity",
+		"source_version_id": input.SourceVersionID, "source_hash": input.SourceHash,
+		"span_candidate_revision_id":         input.SpanCandidateRevisionID,
+		"span_candidate_revision_hash":       input.SpanCandidateRevisionHash,
+		"scene_fact_candidate_revision_id":   input.SceneFactCandidateRevisionID,
+		"scene_fact_candidate_revision_hash": input.SceneFactCandidateRevisionHash,
+		"identity_candidate_revision_id":     input.IdentityCandidateRevisionID,
+		"identity_candidate_revision_hash":   input.IdentityCandidateRevisionHash,
+		"review_issues":                      input.DeterministicIssues, "suggestions": []any{},
+	})
 }
 
 func buildSpanCandidate(input contract.ScriptSpanProposalInput) json.RawMessage {

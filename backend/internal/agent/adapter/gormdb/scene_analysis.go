@@ -128,7 +128,14 @@ func (repo *sceneAnalysisRepository) CreateInvocation(ctx context.Context, value
 	if err != nil {
 		return err
 	}
-	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error
+	if err = repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error; err != nil {
+		return err
+	}
+	upstreams, err := sceneAnalysisInvocationUpstreams(value)
+	if err != nil || len(upstreams) == 0 {
+		return err
+	}
+	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&upstreams).Error
 }
 
 func (repo *sceneAnalysisRepository) FindCandidateByInvocation(ctx context.Context, invocationID string) (agentapp.Candidate, error) {
@@ -302,71 +309,80 @@ func (repo *sceneAnalysisRepository) validateUpstreamReadSet(
 	upstreams []contract.SceneAnalysisCandidateRevisionIdentity,
 	invocation model.SceneAnalysisInvocationRecord,
 ) error {
-	if len(upstreams) == 0 {
-		if invocation.UpstreamCandidateRevisionID != nil || invocation.UpstreamCandidateRevisionHash != nil {
+	var persisted []model.SceneAnalysisInvocationRead
+	if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
+		Where("invocation_id = ?", invocation.ID).Order("position ASC").Find(&persisted).Error; err != nil {
+		return normalizeSceneAnalysisReadSet(err)
+	}
+	if len(persisted) != len(upstreams) {
+		return staleSceneAnalysisReadSet()
+	}
+	allowedStages := map[string]map[string]struct{}{
+		"propose_script_spans": {},
+		"extract_scene_facts":  {"propose_script_spans": {}},
+		"resolve_identities":   {"extract_scene_facts": {}},
+		"review_candidate": {
+			"propose_script_spans": {}, "extract_scene_facts": {}, "resolve_identities": {},
+		},
+	}[invocation.StageKey]
+	expectedTypes := map[string]string{
+		"propose_script_spans": "script_span_candidate",
+		"extract_scene_facts":  "scene_fact_candidate",
+		"resolve_identities":   "identity_resolution_candidate",
+	}
+	for index, upstream := range upstreams {
+		read := persisted[index]
+		candidateID, candidateErr := uuid.Parse(upstream.CandidateRevisionID)
+		sourceInvocationID, invocationErr := uuid.Parse(upstream.SourceInvocationID)
+		if candidateErr != nil || invocationErr != nil || read.Position != index+1 ||
+			read.StageKey != upstream.StageKey || read.ShardKey != upstream.ShardKey ||
+			read.CandidateRevisionID != candidateID || read.CandidateRevisionHash != upstream.CandidateRevisionHash ||
+			read.SourceInvocationID != sourceInvocationID || read.SourceResultHash != upstream.SourceResultHash {
 			return staleSceneAnalysisReadSet()
 		}
-		return nil
-	}
-	if len(upstreams) != 1 || invocation.UpstreamCandidateRevisionID == nil ||
-		invocation.UpstreamCandidateRevisionHash == nil {
-		return staleSceneAnalysisReadSet()
-	}
-	upstream := upstreams[0]
-	candidateID, candidateErr := uuid.Parse(upstream.CandidateRevisionID)
-	sourceInvocationID, invocationErr := uuid.Parse(upstream.SourceInvocationID)
-	if candidateErr != nil || invocationErr != nil || *invocation.UpstreamCandidateRevisionID != candidateID ||
-		*invocation.UpstreamCandidateRevisionHash != upstream.CandidateRevisionHash {
-		return staleSceneAnalysisReadSet()
-	}
-	var candidate model.SceneAnalysisCandidateRevision
-	if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
-		First(&candidate, "id = ?", candidateID).Error; err != nil {
-		return normalizeSceneAnalysisReadSet(err)
-	}
-	var sourceInvocation model.SceneAnalysisInvocationRecord
-	if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
-		First(&sourceInvocation, "id = ?", sourceInvocationID).Error; err != nil {
-		return normalizeSceneAnalysisReadSet(err)
-	}
-	var sourceResult model.SceneAnalysisResult
-	if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
-		First(&sourceResult, "id = ?", candidate.SourceResultID).Error; err != nil {
-		return normalizeSceneAnalysisReadSet(err)
-	}
-	var sourceAttempt model.SceneAnalysisAttempt
-	if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
-		First(&sourceAttempt, "id = ?", sourceResult.AttemptID).Error; err != nil {
-		return normalizeSceneAnalysisReadSet(err)
-	}
-	result, resultErr := contract.DecodeSceneAnalysisAttemptResult(sourceResult.Result)
-	computedResultHash, resultHashErr := result.ComputeResultHash()
-	contentHash, contentErr := contract.ProductionCanonicalHash(json.RawMessage(candidate.Candidate))
-	revisionHash, revisionErr := sceneAnalysisCandidateRevisionHash(candidate)
-	expectedUpstream := map[string]struct {
-		stageKey      string
-		candidateType string
-	}{
-		"extract_scene_facts": {stageKey: "propose_script_spans", candidateType: "script_span_candidate"},
-		"resolve_identities":  {stageKey: "extract_scene_facts", candidateType: "scene_fact_candidate"},
-	}[invocation.StageKey]
-	if upstream.StageKey != sourceInvocation.StageKey || upstream.ShardKey != sourceInvocation.ShardKey ||
-		expectedUpstream.stageKey == "" || sourceInvocation.StageKey != expectedUpstream.stageKey ||
-		candidate.WorkspaceID != invocation.WorkspaceID || candidate.ProjectID != invocation.ProjectID ||
-		candidate.CandidateType != expectedUpstream.candidateType || candidate.SourceInvocationID != sourceInvocationID ||
-		candidate.CandidateRevisionHash != upstream.CandidateRevisionHash ||
-		candidate.SourceResultHash != upstream.SourceResultHash || sourceAttempt.InvocationID != sourceInvocationID ||
-		sourceInvocation.Status != "accepted" || sourceAttempt.Status != "completed" || sourceResult.Status != "accepted" ||
-		sourceResult.InputHash != sourceInvocation.InputHash || resultErr != nil ||
-		result.InvocationID != sourceInvocationID.String() || result.AttemptID != sourceAttempt.ID.String() ||
-		result.InputHash != sourceInvocation.InputHash || result.Status != "accepted" ||
-		result.CandidateType != expectedUpstream.candidateType || result.OutputHash == nil || sourceResult.OutputHash == nil ||
-		*result.OutputHash != *sourceResult.OutputHash || resultHashErr != nil ||
-		computedResultHash != result.ResultHash || result.ResultHash != upstream.SourceResultHash ||
-		*sourceResult.OutputHash != candidate.CandidateContentHash || contentErr != nil ||
-		contentHash != candidate.CandidateContentHash || revisionErr != nil ||
-		revisionHash != candidate.CandidateRevisionHash {
-		return staleSceneAnalysisReadSet()
+		var candidate model.SceneAnalysisCandidateRevision
+		if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
+			First(&candidate, "id = ?", candidateID).Error; err != nil {
+			return normalizeSceneAnalysisReadSet(err)
+		}
+		var sourceInvocation model.SceneAnalysisInvocationRecord
+		if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
+			First(&sourceInvocation, "id = ?", sourceInvocationID).Error; err != nil {
+			return normalizeSceneAnalysisReadSet(err)
+		}
+		var sourceResult model.SceneAnalysisResult
+		if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
+			First(&sourceResult, "id = ?", candidate.SourceResultID).Error; err != nil {
+			return normalizeSceneAnalysisReadSet(err)
+		}
+		var sourceAttempt model.SceneAnalysisAttempt
+		if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
+			First(&sourceAttempt, "id = ?", sourceResult.AttemptID).Error; err != nil {
+			return normalizeSceneAnalysisReadSet(err)
+		}
+		result, resultErr := contract.DecodeSceneAnalysisAttemptResult(sourceResult.Result)
+		computedResultHash, resultHashErr := result.ComputeResultHash()
+		contentHash, contentErr := contract.ProductionCanonicalHash(json.RawMessage(candidate.Candidate))
+		revisionHash, revisionErr := sceneAnalysisCandidateRevisionHash(candidate)
+		_, allowedStage := allowedStages[upstream.StageKey]
+		expectedType := expectedTypes[upstream.StageKey]
+		if upstream.StageKey != sourceInvocation.StageKey || upstream.ShardKey != sourceInvocation.ShardKey ||
+			!allowedStage || expectedType == "" || candidate.WorkspaceID != invocation.WorkspaceID ||
+			candidate.ProjectID != invocation.ProjectID || candidate.CandidateType != expectedType ||
+			candidate.SourceInvocationID != sourceInvocationID || candidate.CandidateRevisionHash != upstream.CandidateRevisionHash ||
+			candidate.SourceResultHash != upstream.SourceResultHash || sourceAttempt.InvocationID != sourceInvocationID ||
+			sourceInvocation.Status != "accepted" || sourceAttempt.Status != "completed" || sourceResult.Status != "accepted" ||
+			sourceResult.InputHash != sourceInvocation.InputHash || resultErr != nil ||
+			result.InvocationID != sourceInvocationID.String() || result.AttemptID != sourceAttempt.ID.String() ||
+			result.InputHash != sourceInvocation.InputHash || result.Status != "accepted" ||
+			result.CandidateType != expectedType || result.OutputHash == nil || sourceResult.OutputHash == nil ||
+			*result.OutputHash != *sourceResult.OutputHash || resultHashErr != nil ||
+			computedResultHash != result.ResultHash || result.ResultHash != upstream.SourceResultHash ||
+			*sourceResult.OutputHash != candidate.CandidateContentHash || contentErr != nil ||
+			contentHash != candidate.CandidateContentHash || revisionErr != nil ||
+			revisionHash != candidate.CandidateRevisionHash {
+			return staleSceneAnalysisReadSet()
+		}
 	}
 	return nil
 }
@@ -620,10 +636,6 @@ func sceneAnalysisInvocationRecord(value agentapp.InvocationRecord) (model.Scene
 	if err != nil {
 		return model.SceneAnalysisInvocationRecord{}, err
 	}
-	upstreamID, err := optionalSceneAnalysisUUID(value.UpstreamCandidateRevisionID)
-	if err != nil {
-		return model.SceneAnalysisInvocationRecord{}, err
-	}
 	return model.SceneAnalysisInvocationRecord{
 		ID: parsed[0], WorkspaceID: parsed[1], ProjectID: parsed[2], WorkflowRunID: parsed[3], NodeRunID: parsed[4],
 		ReleaseID: parsed[5], ControlRecordID: parsed[6], ControlRevision: invocation.Control.ControlRevision,
@@ -631,11 +643,35 @@ func sceneAnalysisInvocationRecord(value agentapp.InvocationRecord) (model.Scene
 		WireSchemaID: invocation.WireSchemaVersion, StageKey: invocation.Payload.Variant.StageKey,
 		ProfileKey: invocation.Payload.Variant.ProfileKey, StageInstanceKey: invocation.StageInstanceKey(),
 		InputHash: invocation.InputHash, SourceVersionID: parsed[7], SourceHash: value.SourceHash,
-		UpstreamCandidateRevisionID: upstreamID, UpstreamCandidateRevisionHash: value.UpstreamCandidateRevisionHash,
 		ShardManifestID: parsed[8], ShardManifestHash: value.Manifest.ManifestHash,
 		ShardKey: invocation.Payload.Shard.ShardKey, Payload: datatypes.JSON(payload), Budget: datatypes.JSON(budget),
 		Status: "queued", CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt,
 	}, nil
+}
+
+func sceneAnalysisInvocationUpstreams(
+	value agentapp.InvocationRecord,
+) ([]model.SceneAnalysisInvocationRead, error) {
+	invocationID, err := uuid.Parse(value.Invocation.InvocationID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]model.SceneAnalysisInvocationRead, len(value.Invocation.Payload.UpstreamCandidates))
+	for index, upstream := range value.Invocation.Payload.UpstreamCandidates {
+		candidateID, candidateErr := uuid.Parse(upstream.CandidateRevisionID)
+		sourceInvocationID, invocationErr := uuid.Parse(upstream.SourceInvocationID)
+		if candidateErr != nil || invocationErr != nil {
+			return nil, errors.New("invalid Scene Analysis upstream identity")
+		}
+		result[index] = model.SceneAnalysisInvocationRead{
+			InvocationID: invocationID, Position: index + 1, StageKey: upstream.StageKey,
+			ShardKey: upstream.ShardKey, CandidateRevisionID: candidateID,
+			CandidateRevisionHash: upstream.CandidateRevisionHash,
+			SourceInvocationID:    sourceInvocationID, SourceResultHash: upstream.SourceResultHash,
+			CreatedAt: value.CreatedAt,
+		}
+	}
+	return result, nil
 }
 
 func sceneAnalysisAttemptRecord(value agentapp.AttemptRecord) (model.SceneAnalysisAttempt, error) {
@@ -771,9 +807,7 @@ func (repo *sceneAnalysisRepository) invocationDomain(
 		Invocation: invocation, WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(),
 		WorkflowRunID: record.WorkflowRunID.String(), NodeRunID: record.NodeRunID.String(), ReleaseID: record.ReleaseID.String(),
 		SourceVersionID: record.SourceVersionID.String(), SourceHash: record.SourceHash,
-		UpstreamCandidateRevisionID:   optionalSceneAnalysisString(record.UpstreamCandidateRevisionID),
-		UpstreamCandidateRevisionHash: record.UpstreamCandidateRevisionHash,
-		Manifest:                      manifest, CreatedAt: record.CreatedAt,
+		Manifest: manifest, CreatedAt: record.CreatedAt,
 	}, nil
 }
 
@@ -794,22 +828,6 @@ func (repo *sceneAnalysisRepository) candidateDomain(
 		SourceResultID: record.SourceResultID.String(), SourceResultHash: record.SourceResultHash,
 		CreatedAt: record.CreatedAt,
 	}, nil
-}
-
-func optionalSceneAnalysisUUID(value *string) (*uuid.UUID, error) {
-	if value == nil {
-		return nil, nil
-	}
-	parsed, err := uuid.Parse(*value)
-	return &parsed, err
-}
-
-func optionalSceneAnalysisString(value *uuid.UUID) *string {
-	if value == nil {
-		return nil
-	}
-	result := value.String()
-	return &result
 }
 
 func normalizeSceneAnalysisNotFound(err error) error {
