@@ -20,18 +20,24 @@ type HumanGateCoordinationRepository interface {
 	GetHumanGateCoordination(context.Context, string, string) (domain.HumanGateCoordination, error)
 }
 
+type HumanGateRepairService interface {
+	RerunFromHumanGate(context.Context, Actor, domain.HumanGateReviewDecision) (domain.WorkflowRun, error)
+}
+
 type HumanGateCoordinator struct {
 	decisions HumanGateDecisionReader
 	signals   HumanGateSignalService
 	statuses  HumanGateCoordinationRepository
+	repairs   HumanGateRepairService
 }
 
 func NewHumanGateCoordinator(
 	decisions HumanGateDecisionReader,
 	signals HumanGateSignalService,
 	statuses HumanGateCoordinationRepository,
+	repairs HumanGateRepairService,
 ) *HumanGateCoordinator {
-	return &HumanGateCoordinator{decisions: decisions, signals: signals, statuses: statuses}
+	return &HumanGateCoordinator{decisions: decisions, signals: signals, statuses: statuses, repairs: repairs}
 }
 
 func (coordinator *HumanGateCoordinator) GetHumanGate(
@@ -63,7 +69,7 @@ func (coordinator *HumanGateCoordinator) ResumeHumanGate(
 		return current, conflict("Human gate coordination is in conflict")
 	}
 	if current.WorkflowResumeStatus == "completed" {
-		return current, nil
+		return coordinator.ensureRepair(ctx, actor, decision, current)
 	}
 	_, signalErr := coordinator.signals.SignalHumanGate(ctx, actor, SignalHumanGateCommand{
 		WorkspaceID: decision.WorkspaceID, WorkflowRunID: decision.WorkflowRunID, NodeRunID: decision.NodeRunID,
@@ -82,7 +88,29 @@ func (coordinator *HumanGateCoordinator) ResumeHumanGate(
 	if updated.OwnerApplyStatus == "conflict" || updated.WorkflowResumeStatus == "conflict" {
 		return updated, conflict("Human gate coordination is in conflict")
 	}
-	return updated, nil
+	return coordinator.ensureRepair(ctx, actor, decision, updated)
+}
+
+func (coordinator *HumanGateCoordinator) ensureRepair(
+	ctx context.Context,
+	actor Actor,
+	decision domain.HumanGateReviewDecision,
+	coordination domain.HumanGateCoordination,
+) (domain.HumanGateCoordination, error) {
+	if decision.Decision != "changes_requested" || decision.SubjectType != "structure_identity_gate_input" ||
+		coordination.WorkflowResumeStatus != "completed" ||
+		coordination.RepairWorkflowRunID != "" {
+		return coordination, nil
+	}
+	repairRun, err := coordinator.repairs.RerunFromHumanGate(ctx, actor, decision)
+	if errors.Is(err, ErrRepairSourcePending) {
+		return coordination, nil
+	}
+	if err != nil {
+		return coordination, err
+	}
+	coordination.RepairWorkflowRunID = repairRun.ID
+	return coordination, nil
 }
 
 func (coordinator *HumanGateCoordinator) resolveDecision(
@@ -92,7 +120,7 @@ func (coordinator *HumanGateCoordinator) resolveDecision(
 ) (domain.HumanGateReviewDecision, error) {
 	decisionID = strings.TrimSpace(decisionID)
 	actor.UserID = strings.TrimSpace(actor.UserID)
-	if coordinator == nil || coordinator.decisions == nil || coordinator.signals == nil || coordinator.statuses == nil ||
+	if coordinator == nil || coordinator.decisions == nil || coordinator.signals == nil || coordinator.statuses == nil || coordinator.repairs == nil ||
 		actor.UserID == "" || actor.TokenVersion < 1 || decisionID == "" {
 		return domain.HumanGateReviewDecision{}, invalid("Invalid human gate coordination request")
 	}
@@ -101,10 +129,16 @@ func (coordinator *HumanGateCoordinator) resolveDecision(
 		return domain.HumanGateReviewDecision{}, normalizeError(err)
 	}
 	if decision.ReviewDecisionID != decisionID || decision.WorkspaceID == "" || decision.WorkflowRunID == "" ||
-		decision.NodeRunID == "" || decision.HumanTaskID == "" || decision.SubjectRevision < 1 ||
+		decision.ProjectID == "" || decision.NodeRunID == "" || decision.HumanTaskID == "" || decision.SubjectRevision < 1 ||
 		len(decision.SubjectHash) != 64 || len(decision.DecisionPayloadHash) != 64 ||
 		!validHumanGateDecision(decision.Decision) {
 		return domain.HumanGateReviewDecision{}, errors.New("human gate review decision has drifted")
+	}
+	if (decision.Decision == "changes_requested") != (decision.ChangeRequest != nil) {
+		return domain.HumanGateReviewDecision{}, errors.New("human gate repair decision has drifted")
+	}
+	if decision.Decision == "changes_requested" && decision.SubjectType == "" {
+		return domain.HumanGateReviewDecision{}, errors.New("human gate repair subject has drifted")
 	}
 	return decision, nil
 }

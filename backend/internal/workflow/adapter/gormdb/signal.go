@@ -224,6 +224,17 @@ func (store *Store) GetHumanGateCoordination(
 		} else if !errors.Is(receiptErr, gorm.ErrRecordNotFound) {
 			return receiptErr
 		}
+		var repairRun model.WorkflowRun
+		repairErr := transaction.Where("repair_decision_id = ?", decision).First(&repairRun).Error
+		if repairErr == nil {
+			if repairRun.WorkspaceID != workspace || repairRun.RepairDecisionHash == nil ||
+				*repairRun.RepairDecisionHash != reviewDecision.DecisionPayloadHash {
+				return errors.New("workflow human gate repair run has drifted")
+			}
+			status.RepairWorkflowRunID = repairRun.ID.String()
+		} else if !errors.Is(repairErr, gorm.ErrRecordNotFound) {
+			return repairErr
+		}
 		return nil
 	})
 	return status, err

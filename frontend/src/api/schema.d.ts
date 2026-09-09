@@ -2485,6 +2485,8 @@ export interface components {
             /** Format: uuid */
             workflow_signal_receipt_id: string | null;
             conflict_code: string | null;
+            /** Format: uuid */
+            repair_workflow_run_id: string | null;
         };
         HumanTaskListEnvelope: {
             data: {
@@ -2822,6 +2824,9 @@ export interface components {
             /** Format: uuid */
             source_workflow_run_id: string | null;
             rerun_root_node_id: string | null;
+            /** Format: uuid */
+            repair_decision_id: string | null;
+            repair_decision_hash: string | null;
             /** @enum {string} */
             status: "RUNNING" | "RETRYING" | "WAITING_HUMAN" | "PAUSED" | "NEEDS_ATTENTION" | "SUCCEEDED" | "FAILED" | "CANCELLED";
             progress_stage: string;

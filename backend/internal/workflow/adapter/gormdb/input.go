@@ -7,7 +7,9 @@ import (
 
 	"gorm.io/gorm"
 
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -126,8 +128,12 @@ func resolveNodeExecution(transaction *gorm.DB, run model.WorkflowRun, node mode
 	if err = validateResolvedInputPorts(bindings, execution.InputPorts); err != nil {
 		return resolvedNodeExecution{}, err
 	}
+	config, err := nodeExecutionConfig(transaction, run, node, projections, graphNode.Config)
+	if err != nil {
+		return resolvedNodeExecution{}, err
+	}
 	input, inputJSON, inputHash, err := domain.BuildNodeInput(domain.NodeInputSnapshot{
-		SchemaVersion: domain.NodeInputSchemaVersion, Config: graphNode.Config, Bindings: bindings,
+		SchemaVersion: domain.NodeInputSchemaVersion, Config: config, Bindings: bindings,
 		FrozenInputs: compiled.RunInputSnapshot.FrozenInputs,
 	})
 	if err != nil {
@@ -144,6 +150,86 @@ func resolveNodeExecution(transaction *gorm.DB, run model.WorkflowRun, node mode
 		Input: input, InputJSON: inputJSON, InputHash: inputHash, Execution: execution,
 		CacheMaterial: cacheMaterial, CacheKey: cacheKey,
 	}, nil
+}
+
+func nodeExecutionConfig(
+	transaction *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+	projections []model.NodeRunProjection,
+	base json.RawMessage,
+) (json.RawMessage, error) {
+	if run.RepairDecisionID == nil || run.RepairDecisionHash == nil || run.RerunRootNodeID == nil ||
+		node.NodeID != *run.RerunRootNodeID {
+		return append(json.RawMessage(nil), base...), nil
+	}
+	if run.SourceWorkflowRunID == nil {
+		return nil, errors.New("workflow repair source identity is missing")
+	}
+	var baseConfig map[string]json.RawMessage
+	if json.Unmarshal(base, &baseConfig) != nil || len(baseConfig) != 0 {
+		return nil, errors.New("workflow repair root config is not empty")
+	}
+	var decision model.ReviewDecision
+	if err := transaction.First(&decision, "id = ?", *run.RepairDecisionID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	var payload struct {
+		ChangeRequest *domain.StructureIdentityChangeRequest `json:"change_request"`
+	}
+	var task model.HumanTask
+	if err := transaction.First(&task, "id = ?", decision.HumanTaskID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	payloadHash, hashErr := platformcanonical.Hash(json.RawMessage(decision.DecisionPayload))
+	if hashErr != nil || payloadHash != decision.DecisionPayloadHash || decision.DecisionPayloadHash != *run.RepairDecisionHash ||
+		decision.Decision != "changes_requested" || decision.WorkspaceID != run.WorkspaceID ||
+		task.WorkflowRunID != *run.SourceWorkflowRunID || task.WorkspaceID != run.WorkspaceID || task.ProjectID != run.ProjectID {
+		return nil, errors.New("workflow repair decision payload has drifted")
+	}
+	if err := json.Unmarshal(decision.DecisionPayload, &payload); err != nil || payload.ChangeRequest == nil {
+		return nil, errors.New("workflow repair decision payload is invalid")
+	}
+	source := make([]domain.NodeRunProjection, len(projections))
+	for index, projection := range projections {
+		source[index] = domain.NodeRunProjection{NodeID: projection.NodeID, Executor: projection.Executor}
+	}
+	rootNodeID, err := domain.StructureIdentityRepairRootNode(source, *payload.ChangeRequest)
+	if err != nil || rootNodeID != node.NodeID {
+		return nil, errors.New("workflow repair root has drifted")
+	}
+	evidenceRefs := make([]agentcontract.StructureIdentityRepairEvidence, len(payload.ChangeRequest.EvidenceRefs))
+	for index, evidence := range payload.ChangeRequest.EvidenceRefs {
+		evidenceRefs[index] = agentcontract.StructureIdentityRepairEvidence{
+			SourceVersionID: evidence.SourceVersionID, SourceStart: evidence.SourceStart,
+			SourceEnd: evidence.SourceEnd, TextHash: evidence.TextHash,
+		}
+	}
+	directive := domain.StructureIdentityRepairDirective{
+		ReviewDecisionID: decision.ID.String(), DecisionPayloadHash: decision.DecisionPayloadHash,
+		IssueRefs:    append([]string(nil), payload.ChangeRequest.IssueRefs...),
+		EvidenceRefs: evidenceRefs,
+		ChangeSpec: agentcontract.StructureIdentityRepairChange{
+			Operation:         payload.ChangeRequest.ChangeSpec.Operation,
+			TargetKeys:        append([]string(nil), payload.ChangeRequest.ChangeSpec.TargetKeys...),
+			AffectedScopeKeys: append([]string(nil), payload.ChangeRequest.ChangeSpec.AffectedScopeKeys...),
+		},
+		ReasonCode: payload.ChangeRequest.ReasonCode,
+	}
+	repairStage := map[string]string{
+		"activity.script_span_proposal": "propose_script_spans",
+		"activity.identity_resolution":  "resolve_identities",
+	}[node.Executor]
+	if err := directive.ValidateFor(repairStage); err != nil {
+		return nil, errors.New("workflow repair directive is invalid")
+	}
+	encoded, err := json.Marshal(struct {
+		Repair domain.StructureIdentityRepairDirective `json:"repair"`
+	}{Repair: directive})
+	if err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }
 
 func validateResolvedInputPorts(bindings []domain.NodeInputBinding, expected []authoring.PortDefinition) error {

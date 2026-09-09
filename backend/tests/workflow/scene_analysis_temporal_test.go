@@ -118,8 +118,9 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	deterministicRuntime := &deterministicSceneAnalysisRuntime{now: now, reviewIssue: true}
 	sceneService, err := agentapp.NewSceneAnalysisService(
-		agentgorm.NewSceneAnalysisStore(database), &deterministicSceneAnalysisRuntime{now: now, reviewIssue: true}, dispatchSigner,
+		agentgorm.NewSceneAnalysisStore(database), deterministicRuntime, dispatchSigner,
 		agentapp.SceneAnalysisConfig{
 			Now: func() time.Time { return now }, NewID: uuid.NewString,
 			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 8),
@@ -230,14 +231,24 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 			t.Fatalf("expanded Structure Identity repair scope error=%v", decisionErr)
 		}
 	}
+	userNote := "只修复冻结证据指出的首段解释，不扩大范围。"
+	validChange := &reviewdomain.ChangeRequest{
+		IssueRefs:    append([]string(nil), invalidChange.IssueRefs...),
+		EvidenceRefs: append([]reviewdomain.ChangeEvidenceRef(nil), invalidChange.EvidenceRefs...),
+		ChangeSpec: reviewdomain.ChangeSpec{
+			Operation: change.Operation, TargetKeys: append([]string(nil), change.TargetKeys...),
+			AffectedScopeKeys: append([]string(nil), change.AffectedScopeKeys...),
+		},
+		ReasonCode: "source_interpretation_incorrect", UserNote: &userNote,
+	}
 	decision, err := reviewService.Decide(ctx, reviewActor, reviewapp.DecideCommand{
-		TaskID: task.ID.String(), ClaimToken: claim.ClaimToken, Decision: "approved",
+		TaskID: task.ID.String(), ClaimToken: claim.ClaimToken, Decision: "changes_requested",
 		ExpectedTaskRevision: claim.Task.Revision, ExpectedSubjectRevision: claim.Task.SubjectRevision,
-		ExpectedSubjectHash: claim.Task.SubjectHash,
-		IdempotencyKey:      "structure-identity-temporal-decision:" + task.ID.String(),
+		ExpectedSubjectHash: claim.Task.SubjectHash, ChangeRequest: validChange,
+		IdempotencyKey: "structure-identity-temporal-decision:" + task.ID.String(),
 	})
 	if err != nil {
-		t.Fatalf("approve Structure Identity review: %v", err)
+		t.Fatalf("request bounded Structure Identity repair: %v", err)
 	}
 
 	bibleService := bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
@@ -248,23 +259,15 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
 		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil),
 	})
-	signalCommand := workflowapp.SignalHumanGateCommand{
-		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: task.NodeRunID.String(),
-		HumanTaskID: task.ID.String(), ReviewDecisionID: decision.Decision.ID,
-		SubjectRevision: task.SubjectRevision, Decision: "approved", DecisionPayloadHash: decision.Decision.DecisionPayloadHash,
-		IdempotencyKey: "structure-identity-temporal-signal:" + decision.Decision.ID,
-	}
-	intent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+	workflowActor := workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,
-	}, signalCommand)
-	if err != nil || intent.Status != "completed" {
-		t.Fatalf("signal Structure Identity decision: intent=%#v err=%v", intent, err)
 	}
-	replayed, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
-		UserID: fixture.userID.String(), TokenVersion: 1,
-	}, signalCommand)
-	if err != nil || replayed.ID != intent.ID || replayed.Status != "completed" {
-		t.Fatalf("replay Structure Identity decision: intent=%#v err=%v", replayed, err)
+	coordinator := workflowapp.NewHumanGateCoordinator(
+		workflowreview.NewDecisionReader(reviewService), signalService, workflowStore, startService,
+	)
+	coordination, err := coordinator.ResumeHumanGate(ctx, workflowActor, decision.Decision.ID)
+	if err != nil || coordination.WorkflowResumeStatus != "completed" {
+		t.Fatalf("resume bounded Structure Identity decision: coordination=%#v err=%v", coordination, err)
 	}
 
 	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
@@ -272,20 +275,46 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		if loadErr := database.First(&run, "id = ?", started.ID).Error; loadErr != nil {
 			return false, loadErr
 		}
-		return run.Status == "SUCCEEDED", nil
+		return run.Status == "NEEDS_ATTENTION" && run.ProgressStage == "human_gate:changes_requested", nil
 	})
-	var gate model.NodeRunProjection
-	if err = database.First(&gate, "id = ?", task.NodeRunID).Error; err != nil {
+	coordination, err = coordinator.ResumeHumanGate(ctx, workflowActor, decision.Decision.ID)
+	if err != nil || coordination.RepairWorkflowRunID == "" {
+		t.Fatalf("start bounded Structure Identity repair: coordination=%#v err=%v", coordination, err)
+	}
+	var repairRun model.WorkflowRun
+	var repairTask model.HumanTask
+	waitForStructureIdentityTemporalFact(t, ctx, func() (bool, error) {
+		if loadErr := database.First(&repairRun, "id = ?", coordination.RepairWorkflowRunID).Error; loadErr != nil {
+			return false, loadErr
+		}
+		if repairRun.Status != "WAITING_HUMAN" {
+			return false, nil
+		}
+		loadErr := database.Where(
+			"workflow_run_id = ? AND subject_type = ?", repairRun.ID, "structure_identity_gate_input",
+		).First(&repairTask).Error
+		return loadErr == nil && repairTask.Status == "OPEN", loadErr
+	})
+	if repairRun.SourceWorkflowRunID == nil || repairRun.SourceWorkflowRunID.String() != started.ID ||
+		repairRun.RerunRootNodeID == nil || *repairRun.RerunRootNodeID != "spans" ||
+		repairRun.RepairDecisionID == nil || repairRun.RepairDecisionID.String() != decision.Decision.ID ||
+		repairRun.RepairDecisionHash == nil || *repairRun.RepairDecisionHash != decision.Decision.DecisionPayloadHash {
+		t.Fatalf("bounded repair run identity drifted: %#v", repairRun)
+	}
+	if repairTask.SubjectID == task.SubjectID || repairTask.SubjectHash == task.SubjectHash ||
+		deterministicRuntime.repair == nil || deterministicRuntime.repairStage != "propose_script_spans" ||
+		deterministicRuntime.repair.ReviewDecisionID != decision.Decision.ID ||
+		deterministicRuntime.repair.DecisionPayloadHash != decision.Decision.DecisionPayloadHash ||
+		deterministicRuntime.repairHasNote {
+		t.Fatalf("bounded repair did not produce a new frozen review subject: task=%#v repair=%#v runtime=%#v",
+			task, repairTask, deterministicRuntime)
+	}
+	var persistedGateInput model.WorkflowHumanGateInput
+	if err = database.First(&persistedGateInput, "id = ?", task.SubjectID).Error; err != nil {
 		t.Fatal(err)
 	}
-	output, _, outputHash, err := workflow.ParseNodeOutput(json.RawMessage(gate.Output))
-	if err != nil || gate.Status != "SUCCEEDED" || gate.OutputHash == nil || *gate.OutputHash != outputHash ||
-		len(output.Bindings) != 1 || output.Bindings[0].ValueType != "structure_identity_set_version" {
-		t.Fatalf("Structure Identity Gate output=%#v projection=%#v err=%v", output, gate, err)
-	}
-	var version model.StructureIdentitySetVersion
-	if err = database.First(&version, "id = ?", output.Bindings[0].ReferenceID).Error; err != nil {
-		t.Fatal(err)
+	if persistedGateInput.InputHash != gateInput.InputHash || string(persistedGateInput.Input) != string(gateInput.Input) {
+		t.Fatal("original Structure Identity Gate input changed during repair")
 	}
 	var applyReceipt model.WorkflowHumanGateApplyReceipt
 	if err = database.First(&applyReceipt, "review_decision_id = ?", decision.Decision.ID).Error; err != nil {
@@ -295,7 +324,12 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 	if err = database.First(&persistedIntent, "review_decision_id = ?", decision.Decision.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	var applyCount, signalIntentCount, signalReceiptCount int64
+	var repairRunCount, applyCount, signalIntentCount, signalReceiptCount int64
+	if err = database.Model(&model.WorkflowRun{}).Where(
+		"repair_decision_id = ?", decision.Decision.ID,
+	).Count(&repairRunCount).Error; err != nil {
+		t.Fatal(err)
+	}
 	for value, count := range map[any]*int64{
 		&model.WorkflowHumanGateApplyReceipt{}: &applyCount,
 		&model.WorkflowSignalIntent{}:          &signalIntentCount,
@@ -305,12 +339,11 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if version.ReviewDecisionID.String() != decision.Decision.ID ||
-		applyReceipt.DecisionPayloadHash != decision.Decision.DecisionPayloadHash ||
+	if applyReceipt.DecisionPayloadHash != decision.Decision.DecisionPayloadHash ||
 		persistedIntent.DecisionPayloadHash != decision.Decision.DecisionPayloadHash || applyCount != 1 ||
-		signalIntentCount != 1 || signalReceiptCount != 1 {
-		t.Fatalf("Structure Identity Temporal facts: version=%#v apply=%d intent=%d receipt=%d",
-			version, applyCount, signalIntentCount, signalReceiptCount)
+		signalIntentCount != 1 || signalReceiptCount != 1 || repairRunCount != 1 {
+		t.Fatalf("Structure Identity Temporal repair facts: repair=%d apply=%d intent=%d receipt=%d",
+			repairRunCount, applyCount, signalIntentCount, signalReceiptCount)
 	}
 }
 

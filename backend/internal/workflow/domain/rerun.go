@@ -64,6 +64,35 @@ func BuildRerunScope(
 	return scope, nil
 }
 
+func StructureIdentityRepairRootNode(
+	source []NodeRunProjection,
+	request StructureIdentityChangeRequest,
+) (string, error) {
+	executor := ""
+	switch request.ChangeSpec.Operation {
+	case "inspect_source", "adjust_episode_boundary", "adjust_scene_boundary":
+		executor = "activity.script_span_proposal"
+	case "separate_identity", "merge_identity", "resolve_mention", "reject_mention":
+		executor = "activity.identity_resolution"
+	default:
+		return "", errors.New("unsupported structure identity repair operation")
+	}
+	rootNodeID := ""
+	for _, projection := range source {
+		if projection.Executor != executor {
+			continue
+		}
+		if rootNodeID != "" {
+			return "", errors.New("structure identity repair root is ambiguous")
+		}
+		rootNodeID = projection.NodeID
+	}
+	if rootNodeID == "" {
+		return "", errors.New("structure identity repair root is missing")
+	}
+	return rootNodeID, nil
+}
+
 func rerunExecutions(definition WorkflowDefinitionVersion) (map[string]NodeExecution, []string, error) {
 	if len(definition.NodeExecutions) == 0 || len(definition.ExecutionOrder) != len(definition.NodeExecutions) {
 		return nil, nil, errors.New("workflow definition execution set is invalid")

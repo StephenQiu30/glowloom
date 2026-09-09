@@ -418,6 +418,7 @@ func presentCoordination(value workflowdomain.HumanGateCoordination) map[string]
 		"workflow_resume_status":     value.WorkflowResumeStatus,
 		"workflow_signal_receipt_id": nullableText(value.SignalReceiptID),
 		"conflict_code":              nullableText(value.ConflictCode),
+		"repair_workflow_run_id":     nullableText(value.RepairWorkflowRunID),
 	}
 }
 

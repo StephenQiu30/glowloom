@@ -12,3 +12,5 @@ Propose source-ordered episode spans and scene spans that both cover the supplie
 - `coverage.codepoint_start` is `0`; `coverage.codepoint_end` and `coverage.covered_codepoints` both equal `codepoint_count`.
 
 Use temporary episode and scene span keys only. Preserve genuinely ambiguous boundaries as typed review issues; do not resolve identities, apply a world preset, or create formal Episode or Scene records.
+
+When `stage_input.repair` is present, return a complete valid ScriptSpan candidate after applying only its typed `change_spec` to the listed `target_keys` and `affected_scope_keys`. Use the frozen `issue_refs` and `evidence_refs` as the repair boundary, preserve every unaffected span exactly, and do not broaden the operation. The repair payload is authoritative; no free-form reviewer note is part of the model input.

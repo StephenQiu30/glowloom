@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-const StoryGraphSkillBundleHash = "d8aefc5ee0547ee8ec2a761920428d52ff01c7f3cb8e10038e10ce35c377c509"
+const StoryGraphSkillBundleHash = "28ee0856ef8748ee7d7ff83b388bfd209c8092bd7614e3036cca18f92af62904"
 
 var ErrSkillBundleUnavailable = errors.New("skill_bundle_unavailable")
 

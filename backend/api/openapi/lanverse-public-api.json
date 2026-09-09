@@ -6630,7 +6630,8 @@
           "owner_receipt_id",
           "workflow_resume_status",
           "workflow_signal_receipt_id",
-          "conflict_code"
+          "conflict_code",
+          "repair_workflow_run_id"
         ],
         "properties": {
           "review_decision_id": {
@@ -6678,6 +6679,13 @@
               "string",
               "null"
             ]
+          },
+          "repair_workflow_run_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -7986,6 +7994,8 @@
           "start_input_hash",
           "source_workflow_run_id",
           "rerun_root_node_id",
+          "repair_decision_id",
+          "repair_decision_hash",
           "status",
           "progress_stage",
           "next_action",
@@ -8041,6 +8051,20 @@
               "string",
               "null"
             ]
+          },
+          "repair_decision_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "repair_decision_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$"
           },
           "status": {
             "type": "string",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime
 from typing import Any, Literal, Self
 from uuid import UUID
@@ -123,12 +124,114 @@ class SceneAnalysisShard(StrictSceneAnalysisModel):
         return self
 
 
+class StructureIdentityRepairEvidence(StrictSceneAnalysisModel):
+    source_version_id: UUID
+    source_start: int = Field(ge=0)
+    source_end: int = Field(gt=0)
+    text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_range(self) -> StructureIdentityRepairEvidence:
+        if self.source_end <= self.source_start:
+            raise ValueError("repair evidence range must be increasing")
+        return self
+
+
+class StructureIdentityRepairChange(StrictSceneAnalysisModel):
+    operation: Literal[
+        "inspect_source",
+        "adjust_episode_boundary",
+        "adjust_scene_boundary",
+        "separate_identity",
+        "merge_identity",
+        "resolve_mention",
+        "reject_mention",
+    ]
+    target_keys: list[str]
+    affected_scope_keys: list[str]
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> StructureIdentityRepairChange:
+        if (
+            not self.target_keys
+            or self.target_keys != sorted(set(self.target_keys))
+            or any(not value.strip() for value in self.target_keys)
+        ):
+            raise ValueError("repair target keys must be non-empty, sorted, and unique")
+        if not self.affected_scope_keys or self.affected_scope_keys != sorted(
+            set(self.affected_scope_keys)
+        ):
+            raise ValueError("repair scopes must be non-empty, sorted, and unique")
+        for scope in self.affected_scope_keys:
+            prefix, separator, identifier = scope.partition(":")
+            if prefix != "scene" or separator != ":":
+                raise ValueError("repair scope must identify one frozen scene")
+            UUID(identifier)
+        return self
+
+
+class StructureIdentityRepairDirective(StrictSceneAnalysisModel):
+    review_decision_id: UUID
+    decision_payload_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    issue_refs: list[str]
+    evidence_refs: list[StructureIdentityRepairEvidence]
+    change_spec: StructureIdentityRepairChange
+    reason_code: Literal[
+        "source_interpretation_incorrect",
+        "insufficient_evidence",
+        "structure_boundary_incorrect",
+        "identity_resolution_incorrect",
+    ]
+
+    @model_validator(mode="after")
+    def validate_directive(self) -> StructureIdentityRepairDirective:
+        if (
+            not self.issue_refs
+            or self.issue_refs != sorted(set(self.issue_refs))
+            or any(not re.fullmatch(r"issue_[a-z0-9_]{1,80}", value) for value in self.issue_refs)
+        ):
+            raise ValueError("repair issue refs must be semantic, sorted, and unique")
+        evidence_order = [
+            (str(value.source_version_id), value.source_start, value.source_end, value.text_hash)
+            for value in self.evidence_refs
+        ]
+        if not evidence_order or evidence_order != sorted(set(evidence_order)):
+            raise ValueError("repair evidence refs must be non-empty, sorted, and unique")
+        span_repair = self.change_spec.operation in {
+            "inspect_source",
+            "adjust_episode_boundary",
+            "adjust_scene_boundary",
+        }
+        if span_repair and self.reason_code not in {
+            "source_interpretation_incorrect",
+            "insufficient_evidence",
+            "structure_boundary_incorrect",
+        }:
+            raise ValueError("span repair reason does not match its operation")
+        if not span_repair and self.reason_code != "identity_resolution_incorrect":
+            raise ValueError("identity repair reason does not match its operation")
+        return self
+
+    def validate_for(self, stage_key: SceneAnalysisStageKey) -> None:
+        span_repair = self.change_spec.operation in {
+            "inspect_source",
+            "adjust_episode_boundary",
+            "adjust_scene_boundary",
+        }
+        identity_repair = not span_repair
+        if (stage_key == "propose_script_spans") != span_repair or (
+            stage_key == "resolve_identities"
+        ) != identity_repair:
+            raise ValueError("repair operation targets another Scene Analysis stage")
+
+
 class ScriptSpanProposalInput(StrictSceneAnalysisModel):
     source_version_id: UUID
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     normalized_text: str = Field(min_length=1)
     codepoint_count: int = Field(gt=0)
     newline_normalization: Literal["lf"]
+    repair: StructureIdentityRepairDirective | None = None
 
     @model_validator(mode="after")
     def validate_source(self) -> ScriptSpanProposalInput:
@@ -138,6 +241,8 @@ class ScriptSpanProposalInput(StrictSceneAnalysisModel):
             raise ValueError("source hash does not match normalized text")
         if "\r" in self.normalized_text:
             raise ValueError("normalized Scene Analysis source must use LF line endings")
+        if self.repair is not None:
+            self.repair.validate_for("propose_script_spans")
         return self
 
 
@@ -158,6 +263,7 @@ class IdentityResolutionInput(StrictSceneAnalysisModel):
     scene_fact_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     scene_fact_candidate: dict[str, Any]
     allowed_reuse_identity_keys: list[str]
+    repair: StructureIdentityRepairDirective | None = None
 
     @model_validator(mode="after")
     def validate_reuse_allowlist(self) -> IdentityResolutionInput:
@@ -165,6 +271,8 @@ class IdentityResolutionInput(StrictSceneAnalysisModel):
             not value.strip() for value in self.allowed_reuse_identity_keys
         ):
             raise ValueError("identity reuse allowlist must be sorted, unique, and non-empty")
+        if self.repair is not None:
+            self.repair.validate_for("resolve_identities")
         return self
 
 
@@ -208,8 +316,7 @@ class StructureIdentityReviewInput(StrictSceneAnalysisModel):
             or scene_facts.span_candidate_revision_hash != self.span_candidate_revision_hash
             or identities.source_version_id != self.source_version_id
             or identities.source_hash != self.source_hash
-            or identities.scene_fact_candidate_revision_id
-            != self.scene_fact_candidate_revision_id
+            or identities.scene_fact_candidate_revision_id != self.scene_fact_candidate_revision_id
             or identities.scene_fact_candidate_revision_hash
             != self.scene_fact_candidate_revision_hash
         ):
@@ -520,6 +627,8 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
 
 def _canonical_payload(payload: SceneAnalysisPayload) -> dict[str, Any]:
     value = payload.model_dump(mode="json")
+    if value["stage_input"].get("repair") is None:
+        value["stage_input"].pop("repair", None)
     value["source_refs"] = sorted(
         value["source_refs"],
         key=lambda item: (

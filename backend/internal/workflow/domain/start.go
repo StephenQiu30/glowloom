@@ -24,6 +24,8 @@ type StartRequest struct {
 	InputHash             string `json:"input_hash"`
 	SourceWorkflowRunID   string `json:"source_workflow_run_id,omitempty"`
 	RerunRootNodeID       string `json:"rerun_root_node_id,omitempty"`
+	RepairDecisionID      string `json:"repair_decision_id,omitempty"`
+	RepairDecisionHash    string `json:"repair_decision_hash,omitempty"`
 }
 
 type StartObservation struct {
@@ -36,6 +38,7 @@ type WorkflowRun struct {
 	DefinitionVersionID, RunInputSnapshotID         string
 	TemporalWorkflowID, StartInputHash              string
 	SourceWorkflowRunID, RerunRootNodeID            *string
+	RepairDecisionID, RepairDecisionHash            *string
 	Status, ProgressStage                           string
 	NextAction                                      *string
 	Error                                           json.RawMessage

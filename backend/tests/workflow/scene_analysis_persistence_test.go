@@ -895,6 +895,9 @@ type deterministicSceneAnalysisRuntime struct {
 	reviewIssue   bool
 	spanCandidate json.RawMessage
 	factCandidate json.RawMessage
+	repair        *contract.StructureIdentityRepairDirective
+	repairStage   string
+	repairHasNote bool
 }
 
 type failOnceSceneAnalysisRuntime struct {
@@ -975,6 +978,11 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
 		candidate = buildSpanCandidate(input)
+		if input.Repair != nil {
+			runtime.repair = input.Repair
+			runtime.repairStage = invocation.Payload.Variant.StageKey
+			runtime.repairHasNote = jsonContainsKey(invocation.Payload.StageInput, "user_note")
+		}
 		runtime.spanCandidate = append([]byte(nil), candidate...)
 	} else if invocation.Payload.Variant.StageKey == "extract_scene_facts" {
 		var input contract.SceneFactExtractionInput
@@ -989,6 +997,11 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
 		candidate = buildIdentityResolutionCandidate(input)
+		if input.Repair != nil {
+			runtime.repair = input.Repair
+			runtime.repairStage = invocation.Payload.Variant.StageKey
+			runtime.repairHasNote = jsonContainsKey(invocation.Payload.StageInput, "user_note")
+		}
 	} else {
 		var input contract.StructureIdentityReviewInput
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
@@ -1028,6 +1041,10 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		return contract.SceneAnalysisAttemptResult{}, err
 	}
 	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
+}
+
+func jsonContainsKey(value json.RawMessage, key string) bool {
+	return strings.Contains(string(value), `"`+key+`"`)
 }
 
 func buildStructureIdentityReviewCandidate(input contract.StructureIdentityReviewInput, withReviewIssue bool) json.RawMessage {

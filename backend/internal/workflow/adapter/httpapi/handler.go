@@ -216,6 +216,7 @@ func presentRun(value domain.WorkflowRun) map[string]any {
 		"definition_version_id": value.DefinitionVersionID, "run_input_snapshot_id": value.RunInputSnapshotID,
 		"temporal_workflow_id": value.TemporalWorkflowID, "start_input_hash": value.StartInputHash,
 		"source_workflow_run_id": value.SourceWorkflowRunID, "rerun_root_node_id": value.RerunRootNodeID,
+		"repair_decision_id": value.RepairDecisionID, "repair_decision_hash": value.RepairDecisionHash,
 		"status": value.Status, "progress_stage": value.ProgressStage,
 		"next_action": value.NextAction, "error": nullableJSON(value.Error),
 		"paused_from_status": value.PausedFromStatus, "paused_from_progress_stage": value.PausedFromProgressStage,

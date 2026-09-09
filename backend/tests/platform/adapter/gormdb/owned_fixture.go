@@ -173,6 +173,13 @@ func DeleteOwnedUserFixture(database *gorm.DB, fixture OwnedUserFixture) error {
 
 func deleteOwnedScope(transaction *gorm.DB, userIDs []string, workspaceID string, projectIDs []string) error {
 	if len(projectIDs) > 0 {
+		if err := transaction.Model(&model.WorkflowRun{}).Where(
+			"project_id IN ? AND repair_decision_id IS NOT NULL", projectIDs,
+		).Updates(map[string]any{"repair_decision_id": nil, "repair_decision_hash": nil}).Error; err != nil {
+			return err
+		}
+	}
+	if len(projectIDs) > 0 {
 		bindingIDs := transaction.Model(&model.ProductionBinding{}).
 			Select("id").Where("project_id IN ?", projectIDs)
 		if err := transaction.Session(&gorm.Session{SkipHooks: true}).Unscoped().

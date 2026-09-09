@@ -50,7 +50,7 @@ async def agent_process(repository: Repository, address: str, queue: str) -> Asy
             CREATION_HARNESS_SECRET="native-agent-harness-secret-with-32-bytes",
             CREATION_PLATFORM_URL="http://127.0.0.1:8686",
             CREATION_HARNESS_URL="http://127.0.0.1:8787",
-            CREATION_TEXT_RELEASE_HASH="d8aefc5ee0547ee8ec2a761920428d52ff01c7f3cb8e10038e10ce35c377c509",
+            CREATION_TEXT_RELEASE_HASH="28ee0856ef8748ee7d7ff83b388bfd209c8092bd7614e3036cca18f92af62904",
             CREATION_TEMPORAL_ADDRESS=address,
             CREATION_TASK_QUEUE=queue,
         )

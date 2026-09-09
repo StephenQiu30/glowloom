@@ -1243,8 +1243,16 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis node contract")
 	}
 	var config map[string]json.RawMessage
-	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+	if json.Unmarshal(input.Config, &config) != nil || (len(config) != 0 && len(config) != 1) {
 		return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis node config")
+	}
+	var repair *agentcontract.StructureIdentityRepairDirective
+	if len(config) == 1 {
+		raw, found := config["repair"]
+		if !found || json.Unmarshal(raw, &repair) != nil || repair == nil || repair.ValidateFor(stageKey) != nil ||
+			(stageKey != "propose_script_spans" && stageKey != "resolve_identities") {
+			return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis repair config")
+		}
 	}
 	var sourceBinding domain.NodeInputBinding
 	candidateBindings := make(map[string]domain.NodeInputBinding, len(stage.upstreams))
@@ -1316,6 +1324,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
 		StageKey: stageKey, Source: source, Upstreams: upstreams,
 		DeterministicIssues: []agentcontract.CandidateReviewIssue{},
+		Repair:              repair,
 	})
 	if err != nil {
 		return domain.NodeExecutorResult{}, err

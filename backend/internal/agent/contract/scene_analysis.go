@@ -23,8 +23,10 @@ const (
 	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
 	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
-	SceneAnalysisSkillBundleHash                  = "22dd99ec826bbef237b38f9b3a428e334b75c2a7215c5d4fe00d224c6555d866"
+	SceneAnalysisSkillBundleHash                  = "1b3f6e3dd5a2d60cdf622f525ed6a4b06bf9d67c83e01f2c5cabde9dc5e17ece"
 )
+
+var structureIdentityRepairIssuePattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)
 
 type SceneAnalysisStageVariant struct {
 	StageKey            string `json:"stage_key"`
@@ -198,11 +200,12 @@ func (value SceneAnalysisShard) Validate() error {
 }
 
 type ScriptSpanProposalInput struct {
-	SourceVersionID      string `json:"source_version_id"`
-	SourceHash           string `json:"source_hash"`
-	NormalizedText       string `json:"normalized_text"`
-	CodepointCount       int    `json:"codepoint_count"`
-	NewlineNormalization string `json:"newline_normalization"`
+	SourceVersionID      string                            `json:"source_version_id"`
+	SourceHash           string                            `json:"source_hash"`
+	NormalizedText       string                            `json:"normalized_text"`
+	CodepointCount       int                               `json:"codepoint_count"`
+	NewlineNormalization string                            `json:"newline_normalization"`
+	Repair               *StructureIdentityRepairDirective `json:"repair,omitempty"`
 }
 
 func (value ScriptSpanProposalInput) Validate() error {
@@ -215,7 +218,85 @@ func (value ScriptSpanProposalInput) Validate() error {
 		hashUTF8(value.NormalizedText) != value.SourceHash || value.NewlineNormalization != "lf" {
 		return errors.New("invalid script span source")
 	}
+	if value.Repair != nil && value.Repair.ValidateFor("propose_script_spans") != nil {
+		return errors.New("invalid script span repair directive")
+	}
 	return nil
+}
+
+type StructureIdentityRepairEvidence struct {
+	SourceVersionID string `json:"source_version_id"`
+	SourceStart     int    `json:"source_start"`
+	SourceEnd       int    `json:"source_end"`
+	TextHash        string `json:"text_hash"`
+}
+
+type StructureIdentityRepairChange struct {
+	Operation         string   `json:"operation"`
+	TargetKeys        []string `json:"target_keys"`
+	AffectedScopeKeys []string `json:"affected_scope_keys"`
+}
+
+type StructureIdentityRepairDirective struct {
+	ReviewDecisionID    string                            `json:"review_decision_id"`
+	DecisionPayloadHash string                            `json:"decision_payload_hash"`
+	IssueRefs           []string                          `json:"issue_refs"`
+	EvidenceRefs        []StructureIdentityRepairEvidence `json:"evidence_refs"`
+	ChangeSpec          StructureIdentityRepairChange     `json:"change_spec"`
+	ReasonCode          string                            `json:"reason_code"`
+}
+
+func (value StructureIdentityRepairDirective) ValidateFor(stageKey string) error {
+	if _, err := uuid.Parse(value.ReviewDecisionID); err != nil || !hashPattern.MatchString(value.DecisionPayloadHash) ||
+		len(value.IssueRefs) == 0 || len(value.EvidenceRefs) == 0 || len(value.ChangeSpec.TargetKeys) == 0 ||
+		len(value.ChangeSpec.AffectedScopeKeys) == 0 {
+		return errors.New("invalid structure identity repair directive")
+	}
+	for index, issue := range value.IssueRefs {
+		if !structureIdentityRepairIssuePattern.MatchString(issue) ||
+			(index > 0 && value.IssueRefs[index-1] >= issue) {
+			return errors.New("invalid structure identity repair issue")
+		}
+	}
+	for index, evidence := range value.EvidenceRefs {
+		if _, err := uuid.Parse(evidence.SourceVersionID); err != nil || evidence.SourceStart < 0 ||
+			evidence.SourceEnd <= evidence.SourceStart || !hashPattern.MatchString(evidence.TextHash) ||
+			(index > 0 && compareStructureIdentityRepairEvidence(value.EvidenceRefs[index-1], evidence) >= 0) {
+			return errors.New("invalid structure identity repair evidence")
+		}
+	}
+	for index, key := range value.ChangeSpec.TargetKeys {
+		if strings.TrimSpace(key) == "" || (index > 0 && value.ChangeSpec.TargetKeys[index-1] >= key) {
+			return errors.New("invalid structure identity repair target")
+		}
+	}
+	for index, scope := range value.ChangeSpec.AffectedScopeKeys {
+		identifier, found := strings.CutPrefix(scope, "scene:")
+		if !found || (index > 0 && value.ChangeSpec.AffectedScopeKeys[index-1] >= scope) {
+			return errors.New("invalid structure identity repair scope")
+		}
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid structure identity repair scope")
+		}
+	}
+	spanRepair := slices.Contains([]string{"inspect_source", "adjust_episode_boundary", "adjust_scene_boundary"}, value.ChangeSpec.Operation)
+	identityRepair := slices.Contains([]string{"separate_identity", "merge_identity", "resolve_mention", "reject_mention"}, value.ChangeSpec.Operation)
+	if (stageKey == "propose_script_spans") != spanRepair || (stageKey == "resolve_identities") != identityRepair {
+		return errors.New("structure identity repair operation targets another stage")
+	}
+	if (spanRepair && value.ReasonCode != "source_interpretation_incorrect" && value.ReasonCode != "insufficient_evidence" &&
+		value.ReasonCode != "structure_boundary_incorrect") ||
+		(identityRepair && value.ReasonCode != "identity_resolution_incorrect") {
+		return errors.New("invalid structure identity repair reason")
+	}
+	return nil
+}
+
+func compareStructureIdentityRepairEvidence(left, right StructureIdentityRepairEvidence) int {
+	return strings.Compare(
+		fmt.Sprintf("%s\x00%012d\x00%012d\x00%s", left.SourceVersionID, left.SourceStart, left.SourceEnd, left.TextHash),
+		fmt.Sprintf("%s\x00%012d\x00%012d\x00%s", right.SourceVersionID, right.SourceStart, right.SourceEnd, right.TextHash),
+	)
 }
 
 type SceneFactExtractionInput struct {
@@ -228,13 +309,14 @@ type SceneFactExtractionInput struct {
 }
 
 type IdentityResolutionInput struct {
-	SourceVersionID                string          `json:"source_version_id"`
-	SourceHash                     string          `json:"source_hash"`
-	NormalizedText                 string          `json:"normalized_text"`
-	SceneFactCandidateRevisionID   string          `json:"scene_fact_candidate_revision_id"`
-	SceneFactCandidateRevisionHash string          `json:"scene_fact_candidate_revision_hash"`
-	SceneFactCandidate             json.RawMessage `json:"scene_fact_candidate"`
-	AllowedReuseIdentityKeys       []string        `json:"allowed_reuse_identity_keys"`
+	SourceVersionID                string                            `json:"source_version_id"`
+	SourceHash                     string                            `json:"source_hash"`
+	NormalizedText                 string                            `json:"normalized_text"`
+	SceneFactCandidateRevisionID   string                            `json:"scene_fact_candidate_revision_id"`
+	SceneFactCandidateRevisionHash string                            `json:"scene_fact_candidate_revision_hash"`
+	SceneFactCandidate             json.RawMessage                   `json:"scene_fact_candidate"`
+	AllowedReuseIdentityKeys       []string                          `json:"allowed_reuse_identity_keys"`
+	Repair                         *StructureIdentityRepairDirective `json:"repair,omitempty"`
 }
 
 type StructureIdentityReviewInput struct {
@@ -322,6 +404,9 @@ func (value IdentityResolutionInput) Validate() error {
 		if strings.TrimSpace(key) == "" || index > 0 && value.AllowedReuseIdentityKeys[index-1] >= key {
 			return errors.New("identity reuse allowlist must be sorted and unique")
 		}
+	}
+	if value.Repair != nil && value.Repair.ValidateFor("resolve_identities") != nil {
+		return errors.New("invalid identity resolution repair directive")
 	}
 	return nil
 }

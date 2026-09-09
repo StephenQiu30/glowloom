@@ -395,7 +395,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 		},
 	)
 	humanGateCoordinator := workflowapp.NewHumanGateCoordinator(
-		workflowreview.NewDecisionReader(reviewService), workflowSignalService, workflowStore,
+		workflowreview.NewDecisionReader(reviewService), workflowSignalService, workflowStore, workflowStartService,
 	)
 	reviewHandler := reviewhttp.New(reviewService, humanGateCoordinator, tokenVerifier)
 	httpMetrics := telemetry.NewHTTPMetrics()

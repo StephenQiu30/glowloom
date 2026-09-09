@@ -1,6 +1,9 @@
 package domain
 
-import authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+import (
+	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+)
 
 const (
 	NodeActivityNeedsAttention             = "NEEDS_ATTENTION"
@@ -74,6 +77,8 @@ type NodeExecutorCommand struct {
 	InputHash                               string
 	OutputPorts                             []authoring.PortDefinition
 }
+
+type StructureIdentityRepairDirective = agentcontract.StructureIdentityRepairDirective
 
 type CompleteRunCommand struct {
 	WorkflowRunID string `json:"workflow_run_id"`

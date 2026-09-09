@@ -1,11 +1,13 @@
 package domain
 
 type HumanGateReviewDecision struct {
-	WorkspaceID, WorkflowRunID, NodeRunID string
-	HumanTaskID, ReviewDecisionID         string
-	SubjectRevision                       int
-	SubjectHash, Decision                 string
-	DecisionPayloadHash                   string
+	WorkspaceID, ProjectID, WorkflowRunID, NodeRunID string
+	HumanTaskID, ReviewDecisionID                    string
+	SubjectType                                      string
+	SubjectRevision                                  int
+	SubjectHash, Decision                            string
+	DecisionPayloadHash                              string
+	ChangeRequest                                    *StructureIdentityChangeRequest
 }
 
 type HumanGateCoordination struct {
@@ -13,4 +15,5 @@ type HumanGateCoordination struct {
 	OwnerApplyStatus, OwnerReceiptID      string
 	WorkflowResumeStatus, SignalReceiptID string
 	ConflictCode                          string
+	RepairWorkflowRunID                   string
 }

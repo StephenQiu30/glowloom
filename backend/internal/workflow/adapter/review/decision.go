@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
+	reviewdomain "github.com/StephenQiu30/lanverse/backend/internal/review/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -36,11 +37,40 @@ func (reader *DecisionReader) GetHumanGateDecision(
 		return domain.HumanGateReviewDecision{}, errors.New("review decision and human task have drifted")
 	}
 	return domain.HumanGateReviewDecision{
-		WorkspaceID: result.Task.WorkspaceID, WorkflowRunID: result.Task.WorkflowRunID, NodeRunID: result.Task.NodeRunID,
+		WorkspaceID: result.Task.WorkspaceID, ProjectID: result.Task.ProjectID,
+		WorkflowRunID: result.Task.WorkflowRunID, NodeRunID: result.Task.NodeRunID,
 		HumanTaskID: result.Task.ID, ReviewDecisionID: result.Decision.ID,
+		SubjectType:     result.Task.SubjectType,
 		SubjectRevision: result.Decision.SubjectRevision, SubjectHash: result.Decision.SubjectHash,
 		Decision: result.Decision.Decision, DecisionPayloadHash: result.Decision.DecisionPayloadHash,
+		ChangeRequest: structureIdentityChangeRequest(result.Decision.ChangeRequest),
 	}, nil
+}
+
+func structureIdentityChangeRequest(value *reviewdomain.ChangeRequest) *domain.StructureIdentityChangeRequest {
+	if value == nil {
+		return nil
+	}
+	result := &domain.StructureIdentityChangeRequest{
+		IssueRefs: append([]string(nil), value.IssueRefs...),
+		ChangeSpec: domain.StructureIdentityAllowedChange{
+			Operation: value.ChangeSpec.Operation, TargetKeys: append([]string(nil), value.ChangeSpec.TargetKeys...),
+			AffectedScopeKeys: append([]string(nil), value.ChangeSpec.AffectedScopeKeys...),
+		},
+		ReasonCode: value.ReasonCode,
+	}
+	result.EvidenceRefs = make([]domain.HumanGateEvidenceRef, len(value.EvidenceRefs))
+	for index, evidence := range value.EvidenceRefs {
+		result.EvidenceRefs[index] = domain.HumanGateEvidenceRef{
+			SourceVersionID: evidence.SourceVersionID, SourceStart: evidence.SourceStart,
+			SourceEnd: evidence.SourceEnd, TextHash: evidence.TextHash,
+		}
+	}
+	if value.UserNote != nil {
+		note := *value.UserNote
+		result.UserNote = &note
+	}
+	return result
 }
 
 func mapDecisionError(err error) error {

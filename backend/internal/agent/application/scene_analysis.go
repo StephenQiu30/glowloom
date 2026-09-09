@@ -72,6 +72,7 @@ type ExecuteCommand struct {
 	Source              SourceInput
 	Upstreams           []Candidate
 	DeterministicIssues []contract.CandidateReviewIssue
+	Repair              *contract.StructureIdentityRepairDirective
 }
 
 type ReleaseRecord struct {
@@ -419,6 +420,9 @@ func validateExecuteCommand(command ExecuteCommand) error {
 		len(command.Source.ContentHash) != 64 {
 		return &Error{Code: "invalid_scene_analysis_source", Message: "Scene Analysis source is invalid"}
 	}
+	if command.Repair != nil && command.Repair.ValidateFor(command.StageKey) != nil {
+		return &Error{Code: "invalid_scene_analysis_repair", Message: "Scene Analysis repair directive is invalid"}
+	}
 	if command.StageKey == "propose_script_spans" {
 		if len(command.Upstreams) != 0 {
 			return &Error{Code: "unexpected_upstream_candidate", Message: "ScriptSpan stage cannot read an upstream candidate"}
@@ -554,6 +558,20 @@ func buildManifest(command ExecuteCommand, now time.Time) (ManifestRecord, error
 			return ManifestRecord{}, hashErr
 		}
 	}
+	if command.Repair != nil {
+		encoded, marshalErr := json.Marshal(struct {
+			RootInputHash string                                     `json:"root_input_hash"`
+			Repair        *contract.StructureIdentityRepairDirective `json:"repair"`
+		}{RootInputHash: rootInputHash, Repair: command.Repair})
+		if marshalErr != nil {
+			return ManifestRecord{}, marshalErr
+		}
+		var hashErr error
+		rootInputHash, hashErr = platformcanonical.Hash(encoded)
+		if hashErr != nil {
+			return ManifestRecord{}, hashErr
+		}
+	}
 	manifestID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf(
 		"lanverse:scene-analysis:manifest:%s:%s:%s", command.NodeRunID, command.StageKey, rootInputHash,
 	))).String()
@@ -608,6 +626,7 @@ func buildInvocation(
 		payload.StageInput, _ = json.Marshal(contract.ScriptSpanProposalInput{
 			SourceVersionID: command.Source.VersionID, SourceHash: command.Source.ContentHash,
 			NormalizedText: text, CodepointCount: utf8.RuneCountInString(text), NewlineNormalization: "lf",
+			Repair: command.Repair,
 		})
 	} else if command.StageKey == "extract_scene_facts" {
 		upstream := command.Upstreams[0]
@@ -634,6 +653,7 @@ func buildInvocation(
 			NormalizedText: text, SceneFactCandidateRevisionID: upstream.ID,
 			SceneFactCandidateRevisionHash: upstream.CandidateRevisionHash,
 			SceneFactCandidate:             upstream.Candidate, AllowedReuseIdentityKeys: []string{},
+			Repair: command.Repair,
 		})
 	} else {
 		byStage := make(map[string]Candidate, len(command.Upstreams))

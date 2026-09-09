@@ -60,6 +60,8 @@ type WorkflowRun struct {
 	StartInputHash              string                    `gorm:"type:char(64);not null;check:ck_wrk_run_start_hash,char_length(start_input_hash) = 64"`
 	SourceWorkflowRunID         *uuid.UUID                `gorm:"type:uuid;index:ix_wrk_runs_source;check:ck_wrk_run_rerun_pair,(source_workflow_run_id IS NULL) = (rerun_root_node_id IS NULL);check:ck_wrk_run_rerun_source,source_workflow_run_id IS NULL OR source_workflow_run_id <> id"`
 	RerunRootNodeID             *string                   `gorm:"type:varchar(100)"`
+	RepairDecisionID            *uuid.UUID                `gorm:"type:uuid;uniqueIndex:uq_wrk_runs_repair_decision;check:ck_wrk_run_repair_pair,(repair_decision_id IS NULL) = (repair_decision_hash IS NULL)"`
+	RepairDecisionHash          *string                   `gorm:"type:char(64);check:ck_wrk_run_repair_hash,repair_decision_hash IS NULL OR char_length(repair_decision_hash) = 64"`
 	Status                      string                    `gorm:"type:varchar(30);not null;index:ix_wrk_runs_status_updated,priority:1;check:ck_wrk_run_status,status IN ('QUEUED','RUNNING','WAITING_HUMAN','RETRYING','PAUSED','SUCCEEDED','FAILED','CANCELLED','NEEDS_ATTENTION')"`
 	ProgressStage               string                    `gorm:"type:varchar(80);not null"`
 	NextAction                  *string                   `gorm:"type:varchar(80)"`
@@ -78,6 +80,7 @@ type WorkflowRun struct {
 	RunInputSnapshot            RunInputSnapshot          `gorm:"foreignKey:RunInputSnapshotID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	Creator                     UserAccount               `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	SourceWorkflowRun           *WorkflowRun              `gorm:"foreignKey:SourceWorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	RepairDecision              *ReviewDecision           `gorm:"foreignKey:RepairDecisionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (WorkflowRun) TableName() string { return "wrk_runs" }

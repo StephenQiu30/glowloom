@@ -40,6 +40,40 @@ func TestBuildRerunScopeDirtiesOnlyDownstreamClosureAndRequiresSideInputs(t *tes
 	}
 }
 
+func TestStructureIdentityRepairRootFollowsTheFrozenOperation(t *testing.T) {
+	source := []workflow.NodeRunProjection{
+		{NodeID: "spans", Executor: "activity.script_span_proposal"},
+		{NodeID: "facts", Executor: "activity.scene_fact_extraction"},
+		{NodeID: "identities", Executor: "activity.identity_resolution"},
+	}
+	for _, test := range []struct {
+		operation string
+		want      string
+	}{
+		{operation: "inspect_source", want: "spans"},
+		{operation: "adjust_episode_boundary", want: "spans"},
+		{operation: "adjust_scene_boundary", want: "spans"},
+		{operation: "separate_identity", want: "identities"},
+		{operation: "merge_identity", want: "identities"},
+		{operation: "resolve_mention", want: "identities"},
+		{operation: "reject_mention", want: "identities"},
+	} {
+		t.Run(test.operation, func(t *testing.T) {
+			root, err := workflow.StructureIdentityRepairRootNode(source, workflow.StructureIdentityChangeRequest{
+				ChangeSpec: workflow.StructureIdentityAllowedChange{Operation: test.operation},
+			})
+			if err != nil || root != test.want {
+				t.Fatalf("repair root=%q want=%q err=%v", root, test.want, err)
+			}
+		})
+	}
+	if _, err := workflow.StructureIdentityRepairRootNode(source, workflow.StructureIdentityChangeRequest{
+		ChangeSpec: workflow.StructureIdentityAllowedChange{Operation: "rewrite_everything"},
+	}); err == nil {
+		t.Fatal("repair routing accepted an operation outside the frozen allowlist")
+	}
+}
+
 func rerunDefinitionFixture() workflow.WorkflowDefinitionVersion {
 	port := func(key string) authoring.PortDefinition {
 		return authoring.PortDefinition{Key: key, ValueType: "fact", Required: true}

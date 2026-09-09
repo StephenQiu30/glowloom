@@ -229,11 +229,22 @@ func runRecord(value domain.WorkflowRun) (model.WorkflowRun, error) {
 	} else if value.RerunRootNodeID != nil {
 		return model.WorkflowRun{}, errors.New("invalid workflow rerun root identity")
 	}
+	var repairDecisionID *uuid.UUID
+	if value.RepairDecisionID != nil {
+		parsed, parseErr := uuid.Parse(*value.RepairDecisionID)
+		if parseErr != nil || value.RepairDecisionHash == nil || len(*value.RepairDecisionHash) != 64 || sourceWorkflowRunID == nil {
+			return model.WorkflowRun{}, errors.New("invalid workflow repair decision identity")
+		}
+		repairDecisionID = &parsed
+	} else if value.RepairDecisionHash != nil {
+		return model.WorkflowRun{}, errors.New("invalid workflow repair decision hash")
+	}
 	return model.WorkflowRun{
 		ID: id, WorkspaceID: workspaceID, ProjectID: projectID, AuthoringRevisionID: revisionID,
 		WorkflowDefinitionVersionID: definitionID, RunInputSnapshotID: snapshotID,
 		TemporalWorkflowID: value.TemporalWorkflowID, StartInputHash: value.StartInputHash,
 		SourceWorkflowRunID: sourceWorkflowRunID, RerunRootNodeID: cloneStringPointer(value.RerunRootNodeID),
+		RepairDecisionID: repairDecisionID, RepairDecisionHash: cloneStringPointer(value.RepairDecisionHash),
 		Status: value.Status, ProgressStage: value.ProgressStage, NextAction: value.NextAction,
 		Error: datatypes.JSON(value.Error), PausedFromStatus: value.PausedFromStatus,
 		PausedFromProgressStage: value.PausedFromProgressStage,
@@ -338,12 +349,18 @@ func runDomain(value model.WorkflowRun) domain.WorkflowRun {
 		parsed := value.SourceWorkflowRunID.String()
 		sourceWorkflowRunID = &parsed
 	}
+	var repairDecisionID *string
+	if value.RepairDecisionID != nil {
+		parsed := value.RepairDecisionID.String()
+		repairDecisionID = &parsed
+	}
 	return domain.WorkflowRun{
 		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
 		AuthoringRevisionID: value.AuthoringRevisionID.String(), DefinitionVersionID: value.WorkflowDefinitionVersionID.String(),
 		RunInputSnapshotID: value.RunInputSnapshotID.String(), TemporalWorkflowID: value.TemporalWorkflowID,
 		StartInputHash: value.StartInputHash, Status: value.Status, ProgressStage: value.ProgressStage,
 		SourceWorkflowRunID: sourceWorkflowRunID, RerunRootNodeID: cloneStringPointer(value.RerunRootNodeID),
+		RepairDecisionID: repairDecisionID, RepairDecisionHash: cloneStringPointer(value.RepairDecisionHash),
 		NextAction: value.NextAction, Error: append([]byte(nil), value.Error...),
 		PausedFromStatus:        cloneStringPointer(value.PausedFromStatus),
 		PausedFromProgressStage: cloneStringPointer(value.PausedFromProgressStage), Revision: value.Revision,
@@ -441,6 +458,8 @@ func sameRunIdentity(left, right model.WorkflowRun) bool {
 		left.TemporalWorkflowID == right.TemporalWorkflowID && left.StartInputHash == right.StartInputHash &&
 		equalOptionalUUID(left.SourceWorkflowRunID, right.SourceWorkflowRunID) &&
 		equalOptionalString(left.RerunRootNodeID, right.RerunRootNodeID) &&
+		equalOptionalUUID(left.RepairDecisionID, right.RepairDecisionID) &&
+		equalOptionalString(left.RepairDecisionHash, right.RepairDecisionHash) &&
 		left.CreatedBy == right.CreatedBy && left.InitiatorTokenVersion == right.InitiatorTokenVersion
 }
 

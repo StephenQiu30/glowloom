@@ -489,7 +489,7 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		Now: func() time.Time { now = now.Add(time.Second); return now }, NewID: uuid.NewString,
 		Owner: workflowgeneration.NewHumanGateApplier(selectionService),
 	})
-	coordinator := workflowapp.NewHumanGateCoordinator(workflowreview.NewDecisionReader(reviewService), signals, workflowStore)
+	coordinator := workflowapp.NewHumanGateCoordinator(workflowreview.NewDecisionReader(reviewService), signals, workflowStore, &humanGateRepairService{})
 	unknown, err := coordinator.ResumeHumanGate(ctx, workflowActor, decision.Decision.ID)
 	if err != nil || unknown.WorkflowResumeStatus != "unknown" || unknown.OwnerApplyStatus != "completed" {
 		t.Fatalf("persist unknown Generation selection coordination: status=%#v err=%v", unknown, err)
@@ -500,7 +500,7 @@ func TestGenerationCandidateSetSelectionPersistsThroughWorkflowSignal(t *testing
 		Now: func() time.Time { now = now.Add(time.Second); return now }, NewID: uuid.NewString,
 		Owner: workflowgeneration.NewHumanGateApplier(selectionService),
 	})
-	coordinator = workflowapp.NewHumanGateCoordinator(workflowreview.NewDecisionReader(reviewService), signals, workflowStore)
+	coordinator = workflowapp.NewHumanGateCoordinator(workflowreview.NewDecisionReader(reviewService), signals, workflowStore, &humanGateRepairService{})
 	restartedAPI := http.NewServeMux()
 	reviewhttp.New(reviewService, coordinator, workflowReviewAuthenticator{userID: fixture.userID.String()}).Register(restartedAPI)
 	resumeResponse := httptest.NewRecorder()

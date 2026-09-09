@@ -131,6 +131,7 @@ function coordination(
     workflow_resume_status: "unknown",
     workflow_signal_receipt_id: null,
     conflict_code: null,
+    repair_workflow_run_id: null,
     ...overrides,
   };
 }
@@ -151,6 +152,8 @@ function workflowRun(
       start_input_hash: "c".repeat(64),
       source_workflow_run_id: null,
       rerun_root_node_id: null,
+      repair_decision_id: null,
+      repair_decision_hash: null,
       status: nodeStatus === "FAILED" ? "NEEDS_ATTENTION" : "SUCCEEDED",
       progress_stage: "human_gate:review",
       next_action: null,

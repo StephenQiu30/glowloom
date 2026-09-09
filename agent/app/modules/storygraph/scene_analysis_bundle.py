@@ -12,7 +12,7 @@ from app.modules.storygraph.scene_analysis_registry import (
 )
 
 SCENE_ANALYSIS_SKILL_BUNDLE_HASH = (
-    "22dd99ec826bbef237b38f9b3a428e334b75c2a7215c5d4fe00d224c6555d866"
+    "1b3f6e3dd5a2d60cdf622f525ed6a4b06bf9d67c83e01f2c5cabde9dc5e17ece"
 )
 
 

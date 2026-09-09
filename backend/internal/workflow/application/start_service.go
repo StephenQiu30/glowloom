@@ -42,7 +42,11 @@ type RerunCommand struct {
 	SourceWorkflowRunID string
 	RootNodeID          string
 	IdempotencyKey      string
+	RepairDecisionID    string
+	RepairDecisionHash  string
 }
+
+var ErrRepairSourcePending = errors.New("workflow repair source projection is pending")
 
 type temporalStartInput struct {
 	WorkflowID            string `json:"workflow_id"`
@@ -55,6 +59,8 @@ type temporalStartInput struct {
 	InputSnapshotHash     string `json:"input_snapshot_hash"`
 	SourceWorkflowRunID   string `json:"source_workflow_run_id,omitempty"`
 	RerunRootNodeID       string `json:"rerun_root_node_id,omitempty"`
+	RepairDecisionID      string `json:"repair_decision_id,omitempty"`
+	RepairDecisionHash    string `json:"repair_decision_hash,omitempty"`
 }
 
 func NewStartService(compiler Compiler, transactions TransactionManager, starter WorkflowStarter, config StartConfig) *StartService {
@@ -91,19 +97,66 @@ func (service *StartService) Start(ctx context.Context, actor Actor, command Sta
 }
 
 func (service *StartService) Rerun(ctx context.Context, actor Actor, command RerunCommand) (domain.WorkflowRun, error) {
+	if command.RepairDecisionID != "" || command.RepairDecisionHash != "" {
+		return domain.WorkflowRun{}, invalid("Invalid workflow rerun request")
+	}
+	return service.rerun(ctx, actor, command, false)
+}
+
+func (service *StartService) RerunFromHumanGate(
+	ctx context.Context,
+	actor Actor,
+	decision domain.HumanGateReviewDecision,
+) (domain.WorkflowRun, error) {
+	if decision.Decision != "changes_requested" || decision.SubjectType != "structure_identity_gate_input" ||
+		decision.ChangeRequest == nil || decision.WorkflowRunID == "" ||
+		decision.ReviewDecisionID == "" || len(decision.DecisionPayloadHash) != 64 {
+		return domain.WorkflowRun{}, invalid("Invalid structure identity repair decision")
+	}
+	source, err := service.loadRerunSource(ctx, decision.WorkflowRunID)
+	if err != nil {
+		return domain.WorkflowRun{}, err
+	}
+	if source.Run.Status != "NEEDS_ATTENTION" || source.Run.ProgressStage != "human_gate:changes_requested" {
+		return domain.WorkflowRun{}, ErrRepairSourcePending
+	}
+	rootNodeID, err := domain.StructureIdentityRepairRootNode(source.Nodes, *decision.ChangeRequest)
+	if err != nil {
+		return domain.WorkflowRun{}, invalid(err.Error())
+	}
+	return service.rerun(ctx, actor, RerunCommand{
+		SourceWorkflowRunID: decision.WorkflowRunID,
+		RootNodeID:          rootNodeID,
+		IdempotencyKey:      "human-gate-repair:" + decision.ReviewDecisionID,
+		RepairDecisionID:    decision.ReviewDecisionID,
+		RepairDecisionHash:  decision.DecisionPayloadHash,
+	}, true)
+}
+
+func (service *StartService) rerun(
+	ctx context.Context,
+	actor Actor,
+	command RerunCommand,
+	repair bool,
+) (domain.WorkflowRun, error) {
 	command.SourceWorkflowRunID = strings.TrimSpace(command.SourceWorkflowRunID)
 	command.RootNodeID = strings.TrimSpace(command.RootNodeID)
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
+	command.RepairDecisionID = strings.TrimSpace(command.RepairDecisionID)
+	command.RepairDecisionHash = strings.ToLower(strings.TrimSpace(command.RepairDecisionHash))
 	if command.SourceWorkflowRunID == "" || command.RootNodeID == "" || command.IdempotencyKey == "" ||
 		len(command.IdempotencyKey) > 200 || strings.TrimSpace(actor.UserID) == "" || actor.TokenVersion < 1 ||
 		service.compiler == nil || service.transactions == nil || service.starter == nil ||
-		service.config.Now == nil || service.config.NewID == nil {
+		service.config.Now == nil || service.config.NewID == nil ||
+		repair != (command.RepairDecisionID != "" && len(command.RepairDecisionHash) == 64) {
 		return domain.WorkflowRun{}, invalid("Invalid workflow rerun request")
 	}
 	commandInputHash, err := platformcommand.InputHash(struct {
 		SourceWorkflowRunID string `json:"source_workflow_run_id"`
 		RootNodeID          string `json:"root_node_id"`
-	}{SourceWorkflowRunID: command.SourceWorkflowRunID, RootNodeID: command.RootNodeID})
+		RepairDecisionID    string `json:"repair_decision_id,omitempty"`
+		RepairDecisionHash  string `json:"repair_decision_hash,omitempty"`
+	}{command.SourceWorkflowRunID, command.RootNodeID, command.RepairDecisionID, command.RepairDecisionHash})
 	if err != nil {
 		return domain.WorkflowRun{}, err
 	}
@@ -120,7 +173,7 @@ func (service *StartService) Rerun(ctx context.Context, actor Actor, command Rer
 	if err != nil {
 		return domain.WorkflowRun{}, normalizeError(err)
 	}
-	if err = validateRerunSource(observed); err != nil {
+	if err = validateRerunSource(observed, repair); err != nil {
 		return domain.WorkflowRun{}, err
 	}
 	compiled, err := service.compiler.Compile(ctx, actor, CompileCommand{
@@ -163,6 +216,20 @@ func (service *StartService) Rerun(ctx context.Context, actor Actor, command Rer
 		return domain.WorkflowRun{}, normalizeError(err)
 	}
 	return service.commitStart(ctx, desired, request, commandInputHash)
+}
+
+func (service *StartService) loadRerunSource(ctx context.Context, workflowRunID string) (domain.RerunSource, error) {
+	var source domain.RerunSource
+	err := service.transactions.WithinTransaction(ctx, func(repo Repository) error {
+		rerunRepo, supported := repo.(RerunRepository)
+		if !supported {
+			return errors.New("workflow rerun repository is unavailable")
+		}
+		var loadErr error
+		source, loadErr = rerunRepo.LoadRerunSource(ctx, workflowRunID)
+		return loadErr
+	})
+	return source, normalizeError(err)
 }
 
 func (service *StartService) commitStart(
@@ -235,6 +302,7 @@ func prepareRerun(
 		DefinitionVersionID: compiled.DefinitionID, RunInputSnapshotID: compiled.RunInputSnapshotID,
 		DefinitionContentHash: compiled.Definition.ContentHash, InputSnapshotHash: compiled.RunInputSnapshot.ContentHash,
 		SourceWorkflowRunID: source.Run.ID, RerunRootNodeID: command.RootNodeID,
+		RepairDecisionID: command.RepairDecisionID, RepairDecisionHash: command.RepairDecisionHash,
 	}
 	temporalInputHash, err := platformcommand.InputHash(input)
 	if err != nil {
@@ -246,13 +314,19 @@ func prepareRerun(
 		RunInputSnapshotID: input.RunInputSnapshotID, DefinitionContentHash: input.DefinitionContentHash,
 		InputSnapshotHash: input.InputSnapshotHash, InputHash: temporalInputHash,
 		SourceWorkflowRunID: source.Run.ID, RerunRootNodeID: command.RootNodeID,
+		RepairDecisionID: command.RepairDecisionID, RepairDecisionHash: command.RepairDecisionHash,
 	}
 	sourceID, rootNodeID := source.Run.ID, command.RootNodeID
+	var repairDecisionID, repairDecisionHash *string
+	if command.RepairDecisionID != "" {
+		repairDecisionID, repairDecisionHash = &command.RepairDecisionID, &command.RepairDecisionHash
+	}
 	run := domain.WorkflowRun{
 		ID: runID, WorkspaceID: compiled.Definition.WorkspaceID, ProjectID: compiled.Definition.ProjectID,
 		AuthoringRevisionID: compiled.Definition.AuthoringRevisionID, DefinitionVersionID: compiled.DefinitionID,
 		RunInputSnapshotID: compiled.RunInputSnapshotID, TemporalWorkflowID: workflowID, StartInputHash: temporalInputHash,
 		SourceWorkflowRunID: &sourceID, RerunRootNodeID: &rootNodeID,
+		RepairDecisionID: repairDecisionID, RepairDecisionHash: repairDecisionHash,
 		Status: "QUEUED", ProgressStage: "start_pending", Revision: 1, CreatedBy: createdBy,
 		InitiatorTokenVersion: initiatorTokenVersion, CreatedAt: now, UpdatedAt: now,
 	}
@@ -306,12 +380,15 @@ func prepareRerun(
 	return domain.StartPreparation{Run: run, Nodes: nodes, Intent: intent}, request, nil
 }
 
-func validateRerunSource(source domain.RerunSource) error {
+func validateRerunSource(source domain.RerunSource, repair bool) error {
 	if source.Run.ID == "" || source.Run.WorkspaceID == "" || source.Run.AuthoringRevisionID == "" ||
 		source.Run.DefinitionVersionID == "" || source.Run.RunInputSnapshotID == "" || len(source.Nodes) == 0 {
 		return invalid("Invalid source workflow run")
 	}
-	if source.Run.Status != "FAILED" && source.Run.Status != "SUCCEEDED" {
+	if repair && (source.Run.Status != "NEEDS_ATTENTION" || source.Run.ProgressStage != "human_gate:changes_requested") {
+		return conflict("Source workflow run is not ready for repair")
+	}
+	if !repair && source.Run.Status != "FAILED" && source.Run.Status != "SUCCEEDED" {
 		return conflict("Source workflow run is not terminal for rerun")
 	}
 	return nil
@@ -330,7 +407,9 @@ func sameStartRunIdentity(left, right domain.WorkflowRun) bool {
 		left.StartInputHash == right.StartInputHash && left.CreatedBy == right.CreatedBy &&
 		left.InitiatorTokenVersion == right.InitiatorTokenVersion &&
 		equalOptionalString(left.SourceWorkflowRunID, right.SourceWorkflowRunID) &&
-		equalOptionalString(left.RerunRootNodeID, right.RerunRootNodeID)
+		equalOptionalString(left.RerunRootNodeID, right.RerunRootNodeID) &&
+		equalOptionalString(left.RepairDecisionID, right.RepairDecisionID) &&
+		equalOptionalString(left.RepairDecisionHash, right.RepairDecisionHash)
 }
 
 func equalOptionalString(left, right *string) bool {

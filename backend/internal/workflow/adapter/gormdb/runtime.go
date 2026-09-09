@@ -695,10 +695,18 @@ func (store *Store) FailRun(ctx context.Context, command domain.FailRunCommand, 
 
 func runtimeRerunIdentityMatches(run model.WorkflowRun, request domain.StartRequest) bool {
 	if run.SourceWorkflowRunID == nil || run.RerunRootNodeID == nil {
-		return request.SourceWorkflowRunID == "" && request.RerunRootNodeID == ""
+		return request.SourceWorkflowRunID == "" && request.RerunRootNodeID == "" &&
+			request.RepairDecisionID == "" && request.RepairDecisionHash == "" &&
+			run.RepairDecisionID == nil && run.RepairDecisionHash == nil
+	}
+	repairMatches := run.RepairDecisionID == nil && run.RepairDecisionHash == nil &&
+		request.RepairDecisionID == "" && request.RepairDecisionHash == ""
+	if run.RepairDecisionID != nil && run.RepairDecisionHash != nil {
+		repairMatches = run.RepairDecisionID.String() == request.RepairDecisionID &&
+			*run.RepairDecisionHash == request.RepairDecisionHash
 	}
 	return run.SourceWorkflowRunID.String() == request.SourceWorkflowRunID &&
-		*run.RerunRootNodeID == request.RerunRootNodeID
+		*run.RerunRootNodeID == request.RerunRootNodeID && repairMatches
 }
 
 func validateRerunProjectionSources(
