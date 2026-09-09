@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	CommittedEnvelopeSchema    = "lanverse.event.committed"
-	ScriptVersionPublished     = "ScriptVersionPublished"
-	StoryGraphVersionPublished = "StoryGraphVersionPublished"
-	maximumEnvelopeBytes       = 64 << 10
-	maximumPayloadNestingDepth = 16
+	CommittedEnvelopeSchema       = "lanverse.event.committed"
+	ScriptVersionPublished        = "ScriptVersionPublished"
+	StructureIdentitySetPublished = "StructureIdentitySetPublished"
+	StoryGraphVersionPublished    = "StoryGraphVersionPublished"
+	maximumEnvelopeBytes          = 64 << 10
+	maximumPayloadNestingDepth    = 16
 )
 
 var lowercaseHexHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -195,6 +196,31 @@ func validateEventPayload(envelope Envelope) error {
 		}
 		if value.ParentVersionID != nil && !canonicalUUID(*value.ParentVersionID) {
 			return errors.New("StoryGraph parent version id is invalid")
+		}
+		return nil
+	case StructureIdentitySetPublished:
+		var value struct {
+			Schema              string `json:"schema"`
+			VersionID           string `json:"version_id"`
+			Version             int64  `json:"version"`
+			ContentHash         string `json:"content_hash"`
+			CollectionReceiptID string `json:"collection_receipt_id"`
+			CollectionRootHash  string `json:"collection_root_hash"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&value); err != nil {
+			return fmt.Errorf("decode Structure Identity event payload: %w", err)
+		}
+		if err := requireJSONEnd(decoder); err != nil {
+			return err
+		}
+		if envelope.EventVersion != 1 || envelope.AggregateKind != "production_bible_structure_identity" ||
+			envelope.AggregateID != value.VersionID || value.Version != envelope.AggregateRevision ||
+			value.Schema != "structure-identity-set-production" || !canonicalUUID(value.VersionID) ||
+			!canonicalUUID(value.CollectionReceiptID) || !lowercaseHexHash.MatchString(value.ContentHash) ||
+			!lowercaseHexHash.MatchString(value.CollectionRootHash) {
+			return errors.New("Structure Identity event payload is incomplete")
 		}
 		return nil
 	default:
