@@ -16,10 +16,11 @@ import (
 )
 
 const (
-	SceneAnalysisWireSchemaVersion   = "storygraph-stage-wire-production"
-	ScriptSpanCandidateSchemaVersion = "script-span-candidate-production"
-	SceneFactCandidateSchemaVersion  = "scene-fact-candidate-production"
-	SceneAnalysisSkillBundleHash     = "d096f3d38ff5383d685b2a510cea25985978e294a2a8c46841fa15320eee7b71"
+	SceneAnalysisWireSchemaVersion           = "storygraph-stage-wire-production"
+	ScriptSpanCandidateSchemaVersion         = "script-span-candidate-production"
+	SceneFactCandidateSchemaVersion          = "scene-fact-candidate-production"
+	IdentityResolutionCandidateSchemaVersion = "identity-resolution-candidate-production"
+	SceneAnalysisSkillBundleHash             = "81071e1d07c0a2c422b575ab2f0c6500d1658a2f6afbac7d25fa47d5daf02a71"
 )
 
 type SceneAnalysisStageVariant struct {
@@ -33,6 +34,7 @@ func (value SceneAnalysisStageVariant) Validate() error {
 	expectedSchema := map[string]string{
 		"propose_script_spans": ScriptSpanCandidateSchemaVersion,
 		"extract_scene_facts":  SceneFactCandidateSchemaVersion,
+		"resolve_identities":   IdentityResolutionCandidateSchemaVersion,
 	}[value.StageKey]
 	if value.ProfileKey != "default" || value.LaneKey != "primary" ||
 		expectedSchema == "" || value.OutputSchemaVersion != expectedSchema {
@@ -61,7 +63,7 @@ func (value ScriptSourceVersionIdentity) Validate() error {
 	return nil
 }
 
-type ScriptSpanRevisionIdentity struct {
+type SceneAnalysisCandidateRevisionIdentity struct {
 	StageKey              string `json:"stage_key"`
 	ShardKey              string `json:"shard_key"`
 	CandidateRevisionID   string `json:"candidate_revision_id"`
@@ -70,15 +72,17 @@ type ScriptSpanRevisionIdentity struct {
 	SourceResultHash      string `json:"source_result_hash"`
 }
 
-func (value ScriptSpanRevisionIdentity) Validate() error {
-	if value.StageKey != "propose_script_spans" || strings.TrimSpace(value.ShardKey) == "" ||
+func (value SceneAnalysisCandidateRevisionIdentity) Validate() error {
+	if (value.StageKey != "propose_script_spans" && value.StageKey != "extract_scene_facts" &&
+		value.StageKey != "resolve_identities") ||
+		strings.TrimSpace(value.ShardKey) == "" ||
 		!hashPattern.MatchString(value.CandidateRevisionHash) ||
 		!hashPattern.MatchString(value.SourceResultHash) {
-		return errors.New("invalid script span revision identity")
+		return errors.New("invalid Scene Analysis candidate revision identity")
 	}
 	for _, identifier := range []string{value.CandidateRevisionID, value.SourceInvocationID} {
 		if _, err := uuid.Parse(identifier); err != nil {
-			return errors.New("invalid script span revision identity")
+			return errors.New("invalid Scene Analysis candidate revision identity")
 		}
 	}
 	return nil
@@ -219,6 +223,37 @@ type SceneFactExtractionInput struct {
 	SpanCandidate             json.RawMessage `json:"span_candidate"`
 }
 
+type IdentityResolutionInput struct {
+	SourceVersionID                string          `json:"source_version_id"`
+	SourceHash                     string          `json:"source_hash"`
+	NormalizedText                 string          `json:"normalized_text"`
+	SceneFactCandidateRevisionID   string          `json:"scene_fact_candidate_revision_id"`
+	SceneFactCandidateRevisionHash string          `json:"scene_fact_candidate_revision_hash"`
+	SceneFactCandidate             json.RawMessage `json:"scene_fact_candidate"`
+	AllowedReuseIdentityKeys       []string        `json:"allowed_reuse_identity_keys"`
+}
+
+func (value IdentityResolutionInput) Validate() error {
+	for _, identifier := range []string{value.SourceVersionID, value.SceneFactCandidateRevisionID} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid identity resolution source identity")
+		}
+	}
+	var sceneFacts SceneFactCandidate
+	if value.NormalizedText == "" || hashUTF8(value.NormalizedText) != value.SourceHash ||
+		!hashPattern.MatchString(value.SceneFactCandidateRevisionHash) ||
+		decodeStrict(value.SceneFactCandidate, &sceneFacts) != nil ||
+		sceneFacts.SourceVersionID != value.SourceVersionID || sceneFacts.SourceHash != value.SourceHash {
+		return errors.New("invalid identity resolution source")
+	}
+	for index, key := range value.AllowedReuseIdentityKeys {
+		if strings.TrimSpace(key) == "" || index > 0 && value.AllowedReuseIdentityKeys[index-1] >= key {
+			return errors.New("identity reuse allowlist must be sorted and unique")
+		}
+	}
+	return nil
+}
+
 func (value SceneFactExtractionInput) Validate() error {
 	for _, identifier := range []string{value.SourceVersionID, value.SpanCandidateRevisionID} {
 		if _, err := uuid.Parse(identifier); err != nil {
@@ -234,12 +269,12 @@ func (value SceneFactExtractionInput) Validate() error {
 }
 
 type SceneAnalysisPayload struct {
-	Variant            SceneAnalysisStageVariant     `json:"variant"`
-	Scope              SceneAnalysisScope            `json:"scope"`
-	SourceRefs         []ScriptSourceVersionIdentity `json:"source_refs"`
-	UpstreamCandidates []ScriptSpanRevisionIdentity  `json:"upstream_candidates"`
-	Shard              SceneAnalysisShard            `json:"shard"`
-	StageInput         json.RawMessage               `json:"stage_input"`
+	Variant            SceneAnalysisStageVariant                `json:"variant"`
+	Scope              SceneAnalysisScope                       `json:"scope"`
+	SourceRefs         []ScriptSourceVersionIdentity            `json:"source_refs"`
+	UpstreamCandidates []SceneAnalysisCandidateRevisionIdentity `json:"upstream_candidates"`
+	Shard              SceneAnalysisShard                       `json:"shard"`
+	StageInput         json.RawMessage                          `json:"stage_input"`
 }
 
 func (value SceneAnalysisPayload) Validate() error {
@@ -267,6 +302,18 @@ func (value SceneAnalysisPayload) Validate() error {
 			value.Shard.CodepointStart != 0 ||
 			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
 			return errors.New("scene fact input does not match its frozen spans")
+		}
+	case "resolve_identities":
+		var input IdentityResolutionInput
+		if decodeStrict(value.StageInput, &input) != nil || input.Validate() != nil ||
+			len(value.UpstreamCandidates) != 1 || value.UpstreamCandidates[0].Validate() != nil ||
+			value.UpstreamCandidates[0].StageKey != "extract_scene_facts" ||
+			source.VersionID != input.SourceVersionID || source.ContentHash != input.SourceHash ||
+			value.UpstreamCandidates[0].CandidateRevisionID != input.SceneFactCandidateRevisionID ||
+			value.UpstreamCandidates[0].CandidateRevisionHash != input.SceneFactCandidateRevisionHash ||
+			value.Shard.CodepointStart != 0 ||
+			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
+			return errors.New("identity input does not match its frozen SceneFacts")
 		}
 	default:
 		return errors.New("unsupported Scene Analysis stage")
@@ -344,7 +391,7 @@ func (value SceneAnalysisInvocation) ComputeInputHash() (string, error) {
 	payload.SourceRefs = make([]ScriptSourceVersionIdentity, len(value.Payload.SourceRefs))
 	copy(payload.SourceRefs, value.Payload.SourceRefs)
 	payload.UpstreamCandidates = make(
-		[]ScriptSpanRevisionIdentity,
+		[]SceneAnalysisCandidateRevisionIdentity,
 		len(value.Payload.UpstreamCandidates),
 	)
 	copy(payload.UpstreamCandidates, value.Payload.UpstreamCandidates)
@@ -498,6 +545,7 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 	expectedCandidateType := map[string]string{
 		"propose_script_spans": "script_span_candidate",
 		"extract_scene_facts":  "scene_fact_candidate",
+		"resolve_identities":   "identity_resolution_candidate",
 	}
 	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
 		value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
@@ -557,6 +605,29 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 				candidate.SpanCandidateRevisionID != input.SpanCandidateRevisionID ||
 				candidate.SpanCandidateRevisionHash != input.SpanCandidateRevisionHash {
 				return errors.New("SceneFact candidate source identity drifted")
+			}
+		case "resolve_identities":
+			var input IdentityResolutionInput
+			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil {
+				return errors.New("invalid IdentityResolution input")
+			}
+			allowedReuseIdentityKeys := make(map[string]struct{}, len(input.AllowedReuseIdentityKeys))
+			for _, key := range input.AllowedReuseIdentityKeys {
+				allowedReuseIdentityKeys[key] = struct{}{}
+			}
+			if ValidateIdentityResolutionCandidate(
+				value.Candidate,
+				input.SceneFactCandidate,
+				allowedReuseIdentityKeys,
+			) != nil {
+				return errors.New("invalid accepted IdentityResolution candidate")
+			}
+			var candidate IdentityResolutionCandidate
+			if decodeStrict(value.Candidate, &candidate) != nil ||
+				candidate.SourceVersionID != input.SourceVersionID ||
+				candidate.SceneFactCandidateRevisionID != input.SceneFactCandidateRevisionID ||
+				candidate.SceneFactCandidateRevisionHash != input.SceneFactCandidateRevisionHash {
+				return errors.New("IdentityResolution candidate source identity drifted")
 			}
 		}
 	case "rejected", "outcome_unknown":
@@ -812,14 +883,14 @@ type IdentityCluster struct {
 	MentionRefs           []IdentityMentionRef `json:"mention_refs"`
 	SupportingEvidence    []SourceEvidenceSpan `json:"supporting_evidence"`
 	ContradictingEvidence []SourceEvidenceSpan `json:"contradicting_evidence"`
-	Confidence            float64              `json:"confidence"`
+	ConfidenceBasisPoints int                  `json:"confidence_basis_points"`
 	Rationale             string               `json:"rationale"`
 }
 
 type AmbiguousIdentityMention struct {
 	MentionRef            IdentityMentionRef `json:"mention_ref"`
 	CandidateIdentityKeys []string           `json:"candidate_identity_keys"`
-	Confidence            float64            `json:"confidence"`
+	ConfidenceBasisPoints int                `json:"confidence_basis_points"`
 	Rationale             string             `json:"rationale"`
 }
 
@@ -919,7 +990,7 @@ func ValidateIdentityResolutionCandidate(
 			!strings.HasPrefix(cluster.TemporaryIdentityKey, "identity_"+cluster.Kind+"_") ||
 			(cluster.Kind != "character" && cluster.Kind != "prop") || len(cluster.MentionRefs) == 0 ||
 			len(cluster.SupportingEvidence) == 0 || cluster.ContradictingEvidence == nil ||
-			cluster.Confidence < 0 || cluster.Confidence > 1 || strings.TrimSpace(cluster.Rationale) == "" ||
+			cluster.ConfidenceBasisPoints < 0 || cluster.ConfidenceBasisPoints > 10_000 || strings.TrimSpace(cluster.Rationale) == "" ||
 			strings.TrimSpace(cluster.CanonicalName) == "" || len(cluster.Aliases) == 0 {
 			return errors.New("invalid identity cluster")
 		}
@@ -971,8 +1042,8 @@ func ValidateIdentityResolutionCandidate(
 		resolvedCount += len(cluster.MentionRefs)
 	}
 	for _, ambiguous := range value.AmbiguousMentions {
-		if len(ambiguous.CandidateIdentityKeys) == 0 || ambiguous.Confidence < 0 ||
-			ambiguous.Confidence > 1 || strings.TrimSpace(ambiguous.Rationale) == "" {
+		if len(ambiguous.CandidateIdentityKeys) == 0 || ambiguous.ConfidenceBasisPoints < 0 ||
+			ambiguous.ConfidenceBasisPoints > 10_000 || strings.TrimSpace(ambiguous.Rationale) == "" {
 			return errors.New("invalid ambiguous identity mention")
 		}
 		seenCandidates := make(map[string]struct{}, len(ambiguous.CandidateIdentityKeys))

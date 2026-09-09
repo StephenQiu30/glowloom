@@ -11,7 +11,9 @@ import (
 )
 
 type identityResolutionFixture struct {
-	ValidCandidate json.RawMessage `json:"valid_candidate"`
+	ValidCandidate           json.RawMessage `json:"valid_candidate"`
+	ExpectedInputHash        string          `json:"expected_input_hash"`
+	ExpectedStageInstanceKey string          `json:"expected_stage_instance_key"`
 }
 
 func TestIdentityResolutionCandidatePartitionsEveryRawMentionExactlyOnce(t *testing.T) {
@@ -90,6 +92,69 @@ func TestIdentityResolutionCandidatePartitionsEveryRawMentionExactlyOnce(t *test
 		map[string]struct{}{"character:existing:linzhou": {}},
 	); err != nil {
 		t.Fatalf("allowlisted identity reuse was rejected: %v", err)
+	}
+}
+
+func TestIdentityResolutionStageUsesTheProductionVariant(t *testing.T) {
+	variant := contract.SceneAnalysisStageVariant{
+		StageKey:            "resolve_identities",
+		ProfileKey:          "default",
+		LaneKey:             "primary",
+		OutputSchemaVersion: contract.IdentityResolutionCandidateSchemaVersion,
+	}
+	if err := variant.Validate(); err != nil {
+		t.Fatalf("IdentityResolution stage variant rejected: %v", err)
+	}
+
+	identity := loadIdentityResolutionFixture(t)
+	sceneAnalysis := loadStoryGraphSceneAnalysisWireFixture(t)
+	base, err := contract.DecodeSceneAnalysisInvocation(sceneAnalysis.ValidInvocation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := json.Marshal(contract.IdentityResolutionInput{
+		SourceVersionID:                base.Payload.SourceRefs[0].VersionID,
+		SourceHash:                     base.Payload.SourceRefs[0].ContentHash,
+		NormalizedText:                 "第一场 夜 内\n林舟握住门把。\n第二场 日 外\n林舟离开。",
+		SceneFactCandidateRevisionID:   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		SceneFactCandidateRevisionHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SceneFactCandidate:             sceneAnalysis.ValidSceneFactCandidate,
+		AllowedReuseIdentityKeys:       []string{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invocation, err := contract.NewSceneAnalysisInvocation(
+		base.InvocationID,
+		base.AttemptID,
+		base.StageRelease,
+		base.Control,
+		base.Budget,
+		contract.SceneAnalysisPayload{
+			Variant:    variant,
+			Scope:      base.Payload.Scope,
+			SourceRefs: base.Payload.SourceRefs,
+			UpstreamCandidates: []contract.SceneAnalysisCandidateRevisionIdentity{{
+				StageKey: "extract_scene_facts", ShardKey: "script:full",
+				CandidateRevisionID:   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+				CandidateRevisionHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				SourceInvocationID:    "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+				SourceResultHash:      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			}},
+			Shard:      base.Payload.Shard,
+			StageInput: input,
+		},
+	)
+	if err != nil {
+		t.Fatalf("build IdentityResolution invocation: %v", err)
+	}
+	if invocation.InputHash != identity.ExpectedInputHash ||
+		invocation.StageInstanceKey() != identity.ExpectedStageInstanceKey {
+		t.Fatalf(
+			"IdentityResolution invocation identity drifted: input=%s stage=%s",
+			invocation.InputHash,
+			invocation.StageInstanceKey(),
+		)
 	}
 }
 

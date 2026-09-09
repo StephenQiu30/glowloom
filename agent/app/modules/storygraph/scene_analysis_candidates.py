@@ -224,7 +224,7 @@ class IdentityCluster(StrictSceneAnalysisModel):
     mention_refs: list[IdentityMentionRef] = Field(min_length=1)
     supporting_evidence: list[SourceEvidenceSpan] = Field(min_length=1)
     contradicting_evidence: list[SourceEvidenceSpan]
-    confidence: float = Field(ge=0, le=1)
+    confidence_basis_points: int = Field(ge=0, le=10_000)
     rationale: str = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -245,7 +245,7 @@ class IdentityCluster(StrictSceneAnalysisModel):
 class AmbiguousIdentityMention(StrictSceneAnalysisModel):
     mention_ref: IdentityMentionRef
     candidate_identity_keys: list[str] = Field(min_length=1)
-    confidence: float = Field(ge=0, le=1)
+    confidence_basis_points: int = Field(ge=0, le=10_000)
     rationale: str = Field(min_length=1)
 
     @model_validator(mode="after")

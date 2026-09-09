@@ -34,7 +34,7 @@ import (
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
-func TestSceneAnalysisWorkflowPersistsTwoStrictCandidatesAndReplays(t *testing.T) {
+func TestSceneAnalysisWorkflowPersistsThreeStrictCandidatesAndReplays(t *testing.T) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set LANVERSE_TEST_DATABASE_URL to run the Scene Analysis workflow journey")
@@ -123,9 +123,10 @@ func TestSceneAnalysisWorkflowPersistsTwoStrictCandidatesAndReplays(t *testing.T
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 3 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 4 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
-		plan.Nodes[2].Executor != "activity.scene_fact_extraction" {
+		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
+		plan.Nodes[3].Executor != "activity.identity_resolution" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -162,16 +163,16 @@ func TestSceneAnalysisWorkflowPersistsTwoStrictCandidatesAndReplays(t *testing.T
 			Executor: node.Executor, Attempt: 1,
 		})
 		if err != nil || final.Status != "SUCCEEDED" {
-			t.Fatalf("execute %s: result=%#v err=%v", node.Executor, final, err)
+			t.Fatalf("execute %s: calls=%d result=%#v err=%v", node.Executor, agentRuntime.calls, final, err)
 		}
 	}
-	if len(final.Output.Bindings) != 1 || final.Output.Bindings[0].ValueType != "scene_fact_candidate" {
-		t.Fatalf("SceneFact output = %#v", final.Output)
+	if len(final.Output.Bindings) != 1 || final.Output.Bindings[0].ValueType != "identity_resolution_candidate" {
+		t.Fatalf("IdentityResolution output = %#v", final.Output)
 	}
 	candidate, err := sceneService.GetCandidate(ctx, fixture.projectID.String(), final.Output.Bindings[0].ReferenceID)
 	if err != nil || candidate.CandidateRevisionHash != final.Output.Bindings[0].ContentHash ||
-		contract.ValidateSceneFactCandidate(candidate.Candidate, fixture.text, agentRuntime.spanCandidate) != nil {
-		t.Fatalf("query persisted SceneFact Candidate: candidate=%#v err=%v", candidate, err)
+		contract.ValidateIdentityResolutionCandidate(candidate.Candidate, agentRuntime.factCandidate, map[string]struct{}{}) != nil {
+		t.Fatalf("query persisted IdentityResolution Candidate: candidate=%#v err=%v", candidate, err)
 	}
 	if candidate.SourceResultHash == candidate.CandidateContentHash {
 		t.Fatal("Candidate lineage reused output_hash as source_result_hash")
@@ -189,11 +190,11 @@ func TestSceneAnalysisWorkflowPersistsTwoStrictCandidatesAndReplays(t *testing.T
 		)
 	}
 	replayed, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
-		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[2].NodeRunID, NodeID: plan.Nodes[2].NodeID,
-		Executor: plan.Nodes[2].Executor, Attempt: 2,
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[3].NodeRunID, NodeID: plan.Nodes[3].NodeID,
+		Executor: plan.Nodes[3].Executor, Attempt: 2,
 	})
-	if err != nil || replayed.OutputHash != final.OutputHash || agentRuntime.calls != 2 {
-		t.Fatalf("replay SceneFact node: calls=%d result=%#v err=%v", agentRuntime.calls, replayed, err)
+	if err != nil || replayed.OutputHash != final.OutputHash || agentRuntime.calls != 3 {
+		t.Fatalf("replay IdentityResolution node: calls=%d result=%#v err=%v", agentRuntime.calls, replayed, err)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -403,9 +404,24 @@ func TestSceneAnalysisWorkflowPersistsTwoStrictCandidatesAndReplays(t *testing.T
 		t.Fatalf("read-set drift published %d Candidate revisions", driftedCandidateCount)
 	}
 
+	var identityInvocation model.SceneAnalysisInvocationRecord
+	if err = database.First(&identityInvocation, "id = ?", candidate.SourceInvocationID).Error; err != nil {
+		t.Fatalf("query IdentityResolution invocation: %v", err)
+	}
+	if identityInvocation.UpstreamCandidateRevisionID == nil {
+		t.Fatal("IdentityResolution invocation has no upstream SceneFact Candidate")
+	}
+	factCandidate, err := sceneService.GetCandidate(
+		ctx,
+		fixture.projectID.String(),
+		identityInvocation.UpstreamCandidateRevisionID.String(),
+	)
+	if err != nil {
+		t.Fatalf("query upstream SceneFact Candidate: %v", err)
+	}
 	var sceneFactInvocation model.SceneAnalysisInvocationRecord
-	if err = database.First(&sceneFactInvocation, "id = ?", candidate.SourceInvocationID).Error; err != nil {
-		t.Fatalf("query Scene Fact invocation: %v", err)
+	if err = database.First(&sceneFactInvocation, "id = ?", factCandidate.SourceInvocationID).Error; err != nil {
+		t.Fatalf("query SceneFact invocation: %v", err)
 	}
 	if sceneFactInvocation.UpstreamCandidateRevisionID == nil {
 		t.Fatal("Scene Fact invocation has no upstream Script Span Candidate")
@@ -525,11 +541,11 @@ func TestSceneAnalysisWorkflowPersistsTwoStrictCandidatesAndReplays(t *testing.T
 		value any
 		want  int64
 	}{
-		{&model.SceneAnalysisRelease{}, 2}, {&model.SceneAnalysisControlHead{}, 2},
-		{&model.SceneAnalysisInvocationRecord{}, 2}, {&model.SceneAnalysisAttempt{}, 2},
-		{&model.SceneAnalysisDispatchAuthorization{}, 2},
-		{&model.SceneAnalysisResult{}, 2}, {&model.SceneAnalysisCandidateRevision{}, 2},
-		{&model.SceneAnalysisCandidateHead{}, 2},
+		{&model.SceneAnalysisRelease{}, 3}, {&model.SceneAnalysisControlHead{}, 3},
+		{&model.SceneAnalysisInvocationRecord{}, 3}, {&model.SceneAnalysisAttempt{}, 3},
+		{&model.SceneAnalysisDispatchAuthorization{}, 3},
+		{&model.SceneAnalysisResult{}, 3}, {&model.SceneAnalysisCandidateRevision{}, 3},
+		{&model.SceneAnalysisCandidateHead{}, 3},
 	} {
 		var count int64
 		query := database.Model(assertion.value)
@@ -586,11 +602,14 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "source", DefinitionKey: "input.script_source", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{"document_revision_id":"` + revisionID + `"}`)},
 			{ID: "spans", DefinitionKey: "agent.script_span_proposal", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "facts", DefinitionKey: "agent.scene_fact_extraction", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "identities", DefinitionKey: "agent.identity_resolution", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
 			{ID: "source-facts", FromNodeID: "source", FromPort: "source", ToNodeID: "facts", ToPort: "source"},
 			{ID: "spans-facts", FromNodeID: "spans", FromPort: "candidate", ToNodeID: "facts", ToPort: "spans"},
+			{ID: "source-identities", FromNodeID: "source", FromPort: "source", ToNodeID: "identities", ToPort: "source"},
+			{ID: "facts-identities", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "identities", ToPort: "facts"},
 		},
 	}
 }
@@ -608,6 +627,7 @@ type deterministicSceneAnalysisRuntime struct {
 	now           time.Time
 	calls         int
 	spanCandidate json.RawMessage
+	factCandidate json.RawMessage
 }
 
 type failOnceSceneAnalysisRuntime struct {
@@ -689,12 +709,19 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		}
 		candidate = buildSpanCandidate(input)
 		runtime.spanCandidate = append([]byte(nil), candidate...)
-	} else {
+	} else if invocation.Payload.Variant.StageKey == "extract_scene_facts" {
 		var input contract.SceneFactExtractionInput
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
 		candidate = buildSceneFactCandidate(input)
+		runtime.factCandidate = append([]byte(nil), candidate...)
+	} else {
+		var input contract.IdentityResolutionInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return contract.SceneAnalysisAttemptResult{}, err
+		}
+		candidate = buildIdentityResolutionCandidate(input)
 	}
 	outputHash, err := contract.ProductionCanonicalHash(candidate)
 	if err != nil {
@@ -709,9 +736,13 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		WireSchemaVersion: invocation.WireSchemaVersion, Variant: invocation.Payload.Variant,
 		StageRelease: invocation.StageRelease, Control: invocation.Control,
 		ClaimVersion: authorization.ClaimVersion, DispatchAuthorizationHash: authorization.Hash,
-		Status:        "accepted",
-		CandidateType: map[string]string{"propose_script_spans": "script_span_candidate", "extract_scene_facts": "scene_fact_candidate"}[invocation.Payload.Variant.StageKey],
-		Candidate:     candidate, InputHash: invocation.InputHash, OutputHash: &outputHash,
+		Status: "accepted",
+		CandidateType: map[string]string{
+			"propose_script_spans": "script_span_candidate",
+			"extract_scene_facts":  "scene_fact_candidate",
+			"resolve_identities":   "identity_resolution_candidate",
+		}[invocation.Payload.Variant.StageKey],
+		Candidate: candidate, InputHash: invocation.InputHash, OutputHash: &outputHash,
 		Diagnostics: []contract.SceneAnalysisDiagnostic{}, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now,
 		Executor: contract.SceneAnalysisExecutor{
 			RuntimeClass: "text", RuntimeImageDigest: invocation.StageRelease.AgentImageDigest,
@@ -767,6 +798,42 @@ func buildSceneFactCandidate(input contract.SceneFactExtractionInput) json.RawMe
 		"span_candidate_revision_id":   input.SpanCandidateRevisionID,
 		"span_candidate_revision_hash": input.SpanCandidateRevisionHash,
 		"scenes":                       scenes, "review_issues": []any{},
+	})
+}
+
+func buildIdentityResolutionCandidate(input contract.IdentityResolutionInput) json.RawMessage {
+	var facts contract.SceneFactCandidate
+	_ = json.Unmarshal(input.SceneFactCandidate, &facts)
+	mentionRefs := make([]contract.IdentityMentionRef, 0, len(facts.Scenes))
+	supportingEvidence := make([]contract.SourceEvidenceSpan, 0, len(facts.Scenes))
+	for _, scene := range facts.Scenes {
+		for _, mention := range scene.RawCharacterMentions {
+			mentionRefs = append(mentionRefs, contract.IdentityMentionRef{
+				Kind: "character", TemporarySceneID: scene.TemporarySceneID,
+				SourceStart: mention.Evidence.SourceStart, SourceEnd: mention.Evidence.SourceEnd,
+				TextHash: mention.Evidence.TextHash, ExactAnchor: mention.Evidence.ExactAnchor,
+			})
+			supportingEvidence = append(supportingEvidence, mention.Evidence)
+		}
+	}
+	universeHash, _ := contract.ProductionCanonicalHash(mustSceneJSON(mentionRefs))
+	return mustSceneJSON(contract.IdentityResolutionCandidate{
+		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
+		SceneFactCandidateRevisionID:   input.SceneFactCandidateRevisionID,
+		SceneFactCandidateRevisionHash: input.SceneFactCandidateRevisionHash,
+		ResolvedClusters: []contract.IdentityCluster{{
+			TemporaryIdentityKey: "identity_character_linzhou", Kind: "character", Resolution: "new",
+			CanonicalName: "林舟", Aliases: []string{"林舟"}, MentionRefs: mentionRefs,
+			SupportingEvidence: supportingEvidence, ContradictingEvidence: []contract.SourceEvidenceSpan{},
+			ConfidenceBasisPoints: 9800, Rationale: "两个场景中的同名角色提及没有相互矛盾的证据。",
+		}},
+		AmbiguousMentions: []contract.AmbiguousIdentityMention{},
+		RejectedMentions:  []contract.RejectedIdentityMention{},
+		Coverage: contract.IdentityResolutionCoverage{
+			MentionCount: len(mentionRefs), ResolvedCount: len(mentionRefs),
+			MentionUniverseHash: universeHash,
+		},
+		ReviewIssues: []contract.CandidateReviewIssue{},
 	})
 }
 

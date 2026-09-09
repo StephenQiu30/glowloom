@@ -32,6 +32,7 @@ const (
 	scriptSourceExecutor           = "workflow.input.script_source"
 	scriptSpanProposalExecutor     = "activity.script_span_proposal"
 	sceneFactExtractionExecutor    = "activity.scene_fact_extraction"
+	identityResolutionExecutor     = "activity.identity_resolution"
 	sourceEvidenceExecutor         = "activity.source_evidence"
 	storyAnalysisExecutor          = "activity.story_analysis"
 	storyReviewExecutor            = "activity.story_review"
@@ -195,6 +196,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeSceneAnalysis(ctx, command, "propose_script_spans")
 	case sceneFactExtractionExecutor:
 		return executor.executeSceneAnalysis(ctx, command, "extract_scene_facts")
+	case identityResolutionExecutor:
+		return executor.executeSceneAnalysis(ctx, command, "resolve_identities")
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -1199,15 +1202,30 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		return domain.NodeExecutorResult{}, errors.New("scene Analysis workflow owners are unavailable")
 	}
 	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
-	expectedBindings := 1
-	expectedOutputType := "script_span_candidate"
-	if stageKey == "extract_scene_facts" {
-		expectedBindings = 2
-		expectedOutputType = "scene_fact_candidate"
+	type stageContract struct {
+		bindingCount        int
+		outputType          string
+		upstreamPort        string
+		upstreamType        string
+		expectedUpstreamKey string
 	}
-	if err != nil || inputHash != command.InputHash || len(input.Bindings) != expectedBindings ||
+	stage, exists := map[string]stageContract{
+		"propose_script_spans": {bindingCount: 1, outputType: "script_span_candidate"},
+		"extract_scene_facts": {
+			bindingCount: 2, outputType: "scene_fact_candidate", upstreamPort: "spans",
+			upstreamType: "script_span_candidate", expectedUpstreamKey: "propose_script_spans",
+		},
+		"resolve_identities": {
+			bindingCount: 2, outputType: "identity_resolution_candidate", upstreamPort: "facts",
+			upstreamType: "scene_fact_candidate", expectedUpstreamKey: "extract_scene_facts",
+		},
+	}[stageKey]
+	if !exists {
+		return domain.NodeExecutorResult{}, errors.New("unsupported Scene Analysis stage")
+	}
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != stage.bindingCount ||
 		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
-		command.OutputPorts[0].ValueType != expectedOutputType || !command.OutputPorts[0].Required {
+		command.OutputPorts[0].ValueType != stage.outputType || !command.OutputPorts[0].Required {
 		return domain.NodeExecutorResult{}, errors.New("invalid Scene Analysis node contract")
 	}
 	var config map[string]json.RawMessage
@@ -1222,8 +1240,8 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		case binding.Port == "source" && binding.ValueType == "script_source_version" &&
 			binding.SourceKind == domain.NodeInputSourceNodeOutput && binding.SourcePort == "source":
 			sourceBinding = binding
-		case stageKey == "extract_scene_facts" && binding.Port == "spans" &&
-			binding.ValueType == "script_span_candidate" && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+		case stage.upstreamPort != "" && binding.Port == stage.upstreamPort &&
+			binding.ValueType == stage.upstreamType && binding.SourceKind == domain.NodeInputSourceNodeOutput &&
 			binding.SourcePort == "candidate":
 			copy := binding
 			candidateBinding = &copy
@@ -1233,7 +1251,7 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 	}
 	if sourceBinding.ReferenceID == "" || sourceBinding.ReferenceVersion == "" ||
 		!workflowContentHashPattern.MatchString(sourceBinding.ContentHash) ||
-		(stageKey == "extract_scene_facts") != (candidateBinding != nil) {
+		(stage.upstreamPort != "") != (candidateBinding != nil) {
 		return domain.NodeExecutorResult{}, errors.New("scene Analysis input set is incomplete")
 	}
 	actor := scriptapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
@@ -1267,7 +1285,8 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 			return domain.NodeExecutorResult{}, queryErr
 		}
 		if strconv.FormatInt(value.Revision, 10) != candidateBinding.ReferenceVersion ||
-			value.CandidateRevisionHash != candidateBinding.ContentHash || value.CandidateType != "script_span_candidate" {
+			value.CandidateRevisionHash != candidateBinding.ContentHash || value.CandidateType != stage.upstreamType ||
+			value.StageKey != stage.expectedUpstreamKey {
 			return domain.NodeExecutorResult{}, errors.New("scene Analysis upstream Candidate identity has drifted")
 		}
 		upstream = &value
@@ -1281,14 +1300,14 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 	}
 	if candidate.WorkspaceID != command.WorkspaceID || candidate.ProjectID != command.ProjectID ||
 		candidate.StageKey != stageKey || candidate.ProfileKey != "default" ||
-		candidate.CandidateType != expectedOutputType || candidate.Revision < 1 ||
+		candidate.CandidateType != stage.outputType || candidate.Revision < 1 ||
 		!workflowContentHashPattern.MatchString(candidate.CandidateRevisionHash) {
 		return domain.NodeExecutorResult{}, errors.New("scene Analysis Candidate does not match workflow input")
 	}
 	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
 		SchemaVersion: domain.NodeOutputSchemaVersion,
 		Bindings: []domain.NodeOutputBinding{{
-			Port: "candidate", ValueType: expectedOutputType, ReferenceID: candidate.ID,
+			Port: "candidate", ValueType: stage.outputType, ReferenceID: candidate.ID,
 			ReferenceVersion: strconv.FormatInt(candidate.Revision, 10), ContentHash: candidate.CandidateRevisionHash,
 		}},
 	})

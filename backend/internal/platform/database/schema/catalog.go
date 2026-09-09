@@ -123,5 +123,33 @@ func Sync(ctx context.Context, database *gorm.DB) error {
 	if err := database.WithContext(ctx).AutoMigrate(models...); err != nil {
 		return fmt.Errorf("synchronize GORM model catalog: %w", err)
 	}
+	if err := refreshEvolvingConstraints(ctx, database); err != nil {
+		return fmt.Errorf("synchronize GORM model constraints: %w", err)
+	}
 	return nil
+}
+
+func refreshEvolvingConstraints(ctx context.Context, database *gorm.DB) error {
+	constraints := []struct {
+		model any
+		name  string
+	}{
+		{model: &model.ShardManifest{}, name: "ck_agt_manifest_stage"},
+		{model: &model.SceneAnalysisRelease{}, name: "ck_agt_scene_release_stage"},
+		{model: &model.SceneAnalysisInvocationRecord{}, name: "ck_agt_scene_invocation_stage"},
+		{model: &model.SceneAnalysisCandidateRevision{}, name: "ck_agt_scene_candidate_type"},
+	}
+	return database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
+		for _, constraint := range constraints {
+			if transaction.Migrator().HasConstraint(constraint.model, constraint.name) {
+				if err := transaction.Migrator().DropConstraint(constraint.model, constraint.name); err != nil {
+					return fmt.Errorf("drop %s: %w", constraint.name, err)
+				}
+			}
+			if err := transaction.Migrator().CreateConstraint(constraint.model, constraint.name); err != nil {
+				return fmt.Errorf("create %s: %w", constraint.name, err)
+			}
+		}
+		return nil
+	})
 }

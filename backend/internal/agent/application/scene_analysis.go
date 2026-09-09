@@ -374,6 +374,7 @@ func outcomeUnknownResult(
 		CandidateType: map[string]string{
 			"propose_script_spans": "script_span_candidate",
 			"extract_scene_facts":  "scene_fact_candidate",
+			"resolve_identities":   "identity_resolution_candidate",
 		}[invocation.Payload.Variant.StageKey],
 		InputHash: invocation.InputHash, Diagnostics: diagnostics, DiagnosticHash: diagnosticHash,
 		CompletedAt: completedAt,
@@ -424,11 +425,18 @@ func validateExecuteCommand(command ExecuteCommand) error {
 		}
 		return nil
 	}
-	if command.StageKey != "extract_scene_facts" || command.Upstream == nil ||
+	if command.StageKey == "extract_scene_facts" {
+		if command.Upstream == nil || command.Upstream.ProjectID != command.Source.ProjectID ||
+			command.Upstream.CandidateType != "script_span_candidate" ||
+			contract.ValidateScriptSpanCandidate(command.Upstream.Candidate, command.Source.NormalizedText) != nil {
+			return &Error{Code: "invalid_upstream_candidate", Message: "SceneFact stage requires one exact ScriptSpan candidate"}
+		}
+		return nil
+	}
+	if command.StageKey != "resolve_identities" || command.Upstream == nil ||
 		command.Upstream.ProjectID != command.Source.ProjectID ||
-		command.Upstream.CandidateType != "script_span_candidate" ||
-		contract.ValidateScriptSpanCandidate(command.Upstream.Candidate, command.Source.NormalizedText) != nil {
-		return &Error{Code: "invalid_upstream_candidate", Message: "SceneFact stage requires one exact ScriptSpan candidate"}
+		command.Upstream.CandidateType != "scene_fact_candidate" {
+		return &Error{Code: "invalid_upstream_candidate", Message: "IdentityResolution stage requires one exact SceneFact candidate"}
 	}
 	return nil
 }
@@ -437,6 +445,7 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 	outputSchemaVersion := map[string]string{
 		"propose_script_spans": contract.ScriptSpanCandidateSchemaVersion,
 		"extract_scene_facts":  contract.SceneFactCandidateSchemaVersion,
+		"resolve_identities":   contract.IdentityResolutionCandidateSchemaVersion,
 	}[stageKey]
 	variant := contract.SceneAnalysisStageVariant{
 		StageKey: stageKey, ProfileKey: "default", LaneKey: "primary",
@@ -451,6 +460,7 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 		"wire_schema_version": contract.SceneAnalysisWireSchemaVersion,
 		"lane_key":            "primary",
 		"output_schema_versions": []string{
+			contract.IdentityResolutionCandidateSchemaVersion,
 			contract.SceneFactCandidateSchemaVersion,
 			contract.ScriptSpanCandidateSchemaVersion,
 		},
@@ -483,6 +493,7 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 	resource := map[string]string{
 		"propose_script_spans": "references/script-spans.md",
 		"extract_scene_facts":  "references/scene-facts.md",
+		"resolve_identities":   "references/entity-reconciliation.md",
 	}[stageKey]
 	return ReleaseRecord{
 		ID: releaseID,
@@ -553,14 +564,14 @@ func buildInvocation(
 		},
 	}
 	if command.StageKey == "propose_script_spans" {
-		payload.UpstreamCandidates = []contract.ScriptSpanRevisionIdentity{}
+		payload.UpstreamCandidates = []contract.SceneAnalysisCandidateRevisionIdentity{}
 		payload.StageInput, _ = json.Marshal(contract.ScriptSpanProposalInput{
 			SourceVersionID: command.Source.VersionID, SourceHash: command.Source.ContentHash,
 			NormalizedText: text, CodepointCount: utf8.RuneCountInString(text), NewlineNormalization: "lf",
 		})
-	} else {
-		payload.UpstreamCandidates = []contract.ScriptSpanRevisionIdentity{{
-			StageKey: "propose_script_spans", ShardKey: "script:full",
+	} else if command.StageKey == "extract_scene_facts" {
+		payload.UpstreamCandidates = []contract.SceneAnalysisCandidateRevisionIdentity{{
+			StageKey: command.Upstream.StageKey, ShardKey: "script:full",
 			CandidateRevisionID: command.Upstream.ID, CandidateRevisionHash: command.Upstream.CandidateRevisionHash,
 			SourceInvocationID: command.Upstream.SourceInvocationID, SourceResultHash: command.Upstream.SourceResultHash,
 		}}
@@ -569,6 +580,18 @@ func buildInvocation(
 			NormalizedText: text, SpanCandidateRevisionID: command.Upstream.ID,
 			SpanCandidateRevisionHash: command.Upstream.CandidateRevisionHash,
 			SpanCandidate:             command.Upstream.Candidate,
+		})
+	} else {
+		payload.UpstreamCandidates = []contract.SceneAnalysisCandidateRevisionIdentity{{
+			StageKey: command.Upstream.StageKey, ShardKey: "script:full",
+			CandidateRevisionID: command.Upstream.ID, CandidateRevisionHash: command.Upstream.CandidateRevisionHash,
+			SourceInvocationID: command.Upstream.SourceInvocationID, SourceResultHash: command.Upstream.SourceResultHash,
+		}}
+		payload.StageInput, _ = json.Marshal(contract.IdentityResolutionInput{
+			SourceVersionID: command.Source.VersionID, SourceHash: command.Source.ContentHash,
+			NormalizedText: text, SceneFactCandidateRevisionID: command.Upstream.ID,
+			SceneFactCandidateRevisionHash: command.Upstream.CandidateRevisionHash,
+			SceneFactCandidate:             command.Upstream.Candidate, AllowedReuseIdentityKeys: []string{},
 		})
 	}
 	return contract.NewSceneAnalysisInvocation(invocationID, attemptID, release.Identity, control, budget, payload)

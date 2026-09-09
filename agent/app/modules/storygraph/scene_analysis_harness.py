@@ -11,6 +11,7 @@ from typing import cast
 from pydantic import BaseModel
 
 from app.harness.scene_analysis_schemas import (
+    IdentityResolutionInput,
     SceneAnalysisInvocation,
     SceneFactExtractionInput,
     ScriptSpanProposalInput,
@@ -22,6 +23,8 @@ from app.modules.storygraph.harness import (
 )
 from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_candidates import (
+    IdentityMentionRef,
+    IdentityResolutionCandidate,
     SceneFactCandidate,
     ScriptSpanCandidate,
     SourceEvidenceSpan,
@@ -89,7 +92,7 @@ class SceneAnalysisHarness:
                 raise CodexSchemaInvalid("ScriptSpan source identity drifted")
             _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for_text(source.normalized_text)
-        else:
+        elif stage == "extract_scene_facts":
             if not isinstance(candidate, SceneFactCandidate):
                 raise CodexSchemaInvalid("Codex CLI returned the wrong SceneFact schema")
             source = SceneFactExtractionInput.model_validate(self.invocation.payload.stage_input)
@@ -102,6 +105,24 @@ class SceneAnalysisHarness:
                 raise CodexSchemaInvalid("SceneFact source identity drifted")
             _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for_spans(source.normalized_text, spans.spans)
+        else:
+            if not isinstance(candidate, IdentityResolutionCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong IdentityResolution schema")
+            source = IdentityResolutionInput.model_validate(self.invocation.payload.stage_input)
+            scene_facts = SceneFactCandidate.model_validate(source.scene_fact_candidate)
+            if (
+                candidate.source_version_id != source.source_version_id
+                or candidate.scene_fact_candidate_revision_id
+                != source.scene_fact_candidate_revision_id
+                or candidate.scene_fact_candidate_revision_hash
+                != source.scene_fact_candidate_revision_hash
+            ):
+                raise CodexSchemaInvalid("IdentityResolution source identity drifted")
+            _materialize_evidence_hashes(candidate, source.normalized_text)
+            candidate.validate_for_scene_facts(
+                scene_facts,
+                allowed_reuse_identity_keys=set(source.allowed_reuse_identity_keys),
+            )
         size = len(
             json.dumps(
                 candidate.model_dump(mode="json"),
@@ -137,13 +158,13 @@ class SceneAnalysisHarness:
 
 
 def _materialize_evidence_hashes(
-    candidate: ScriptSpanCandidate | SceneFactCandidate,
+    candidate: ScriptSpanCandidate | SceneFactCandidate | IdentityResolutionCandidate,
     normalized_text: str,
 ) -> None:
-    evidence: list[SourceEvidenceSpan] = []
+    evidence: list[SourceEvidenceSpan | IdentityMentionRef] = []
     if isinstance(candidate, ScriptSpanCandidate):
         evidence.extend(span.evidence for span in candidate.spans)
-    else:
+    elif isinstance(candidate, SceneFactCandidate):
         for scene in candidate.scenes:
             if scene.location is not None:
                 evidence.append(scene.location.evidence)
@@ -153,6 +174,13 @@ def _materialize_evidence_hashes(
             evidence.extend(value.evidence for value in scene.dialogues)
             evidence.extend(value.evidence for value in scene.raw_character_mentions)
             evidence.extend(value.evidence for value in scene.raw_prop_mentions)
+    else:
+        for cluster in candidate.resolved_clusters:
+            evidence.extend(cluster.mention_refs)
+            evidence.extend(cluster.supporting_evidence)
+            evidence.extend(cluster.contradicting_evidence)
+        evidence.extend(value.mention_ref for value in candidate.ambiguous_mentions)
+        evidence.extend(value.mention_ref for value in candidate.rejected_mentions)
     for issue in candidate.review_issues:
         evidence.extend(issue.evidence)
     for value in evidence:

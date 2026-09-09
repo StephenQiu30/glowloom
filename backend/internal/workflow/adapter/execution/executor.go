@@ -34,6 +34,7 @@ func (executor *NodeExecutor) Execute(
 		"workflow.input.script_source",
 		"activity.script_span_proposal",
 		"activity.scene_fact_extraction",
+		"activity.identity_resolution",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

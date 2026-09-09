@@ -299,7 +299,7 @@ func (repo *sceneAnalysisRepository) validateResultReadSet(
 
 func (repo *sceneAnalysisRepository) validateUpstreamReadSet(
 	ctx context.Context,
-	upstreams []contract.ScriptSpanRevisionIdentity,
+	upstreams []contract.SceneAnalysisCandidateRevisionIdentity,
 	invocation model.SceneAnalysisInvocationRecord,
 ) error {
 	if len(upstreams) == 0 {
@@ -343,16 +343,24 @@ func (repo *sceneAnalysisRepository) validateUpstreamReadSet(
 	computedResultHash, resultHashErr := result.ComputeResultHash()
 	contentHash, contentErr := contract.ProductionCanonicalHash(json.RawMessage(candidate.Candidate))
 	revisionHash, revisionErr := sceneAnalysisCandidateRevisionHash(candidate)
+	expectedUpstream := map[string]struct {
+		stageKey      string
+		candidateType string
+	}{
+		"extract_scene_facts": {stageKey: "propose_script_spans", candidateType: "script_span_candidate"},
+		"resolve_identities":  {stageKey: "extract_scene_facts", candidateType: "scene_fact_candidate"},
+	}[invocation.StageKey]
 	if upstream.StageKey != sourceInvocation.StageKey || upstream.ShardKey != sourceInvocation.ShardKey ||
+		expectedUpstream.stageKey == "" || sourceInvocation.StageKey != expectedUpstream.stageKey ||
 		candidate.WorkspaceID != invocation.WorkspaceID || candidate.ProjectID != invocation.ProjectID ||
-		candidate.CandidateType != "script_span_candidate" || candidate.SourceInvocationID != sourceInvocationID ||
+		candidate.CandidateType != expectedUpstream.candidateType || candidate.SourceInvocationID != sourceInvocationID ||
 		candidate.CandidateRevisionHash != upstream.CandidateRevisionHash ||
 		candidate.SourceResultHash != upstream.SourceResultHash || sourceAttempt.InvocationID != sourceInvocationID ||
 		sourceInvocation.Status != "accepted" || sourceAttempt.Status != "completed" || sourceResult.Status != "accepted" ||
 		sourceResult.InputHash != sourceInvocation.InputHash || resultErr != nil ||
 		result.InvocationID != sourceInvocationID.String() || result.AttemptID != sourceAttempt.ID.String() ||
 		result.InputHash != sourceInvocation.InputHash || result.Status != "accepted" ||
-		result.CandidateType != "script_span_candidate" || result.OutputHash == nil || sourceResult.OutputHash == nil ||
+		result.CandidateType != expectedUpstream.candidateType || result.OutputHash == nil || sourceResult.OutputHash == nil ||
 		*result.OutputHash != *sourceResult.OutputHash || resultHashErr != nil ||
 		computedResultHash != result.ResultHash || result.ResultHash != upstream.SourceResultHash ||
 		*sourceResult.OutputHash != candidate.CandidateContentHash || contentErr != nil ||

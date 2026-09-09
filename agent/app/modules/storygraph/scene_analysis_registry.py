@@ -6,11 +6,14 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.modules.storygraph.scene_analysis_candidates import (
+    IdentityResolutionCandidate,
     SceneFactCandidate,
     ScriptSpanCandidate,
 )
 
-SceneAnalysisCandidateType = Literal["script_span_candidate", "scene_fact_candidate"]
+SceneAnalysisCandidateType = Literal[
+    "script_span_candidate", "scene_fact_candidate", "identity_resolution_candidate"
+]
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,11 @@ SCENE_ANALYSIS_REGISTRY: dict[str, SceneAnalysisStageSpec] = {
         candidate_type="scene_fact_candidate",
         candidate_model=SceneFactCandidate,
         references=("scene-facts.md",),
+    ),
+    "resolve_identities": SceneAnalysisStageSpec(
+        candidate_type="identity_resolution_candidate",
+        candidate_model=IdentityResolutionCandidate,
+        references=("entity-reconciliation.md",),
     ),
 }
 
