@@ -90,7 +90,8 @@
 - [x] Red：同一角色两形象、同一道具两状态、give/receive 正向交接、无原因瞬移和人物持道具几何 Evidence。
 - [ ] Red：证据/创作者决议互斥和 changes_requested 局部闭包。
 - [x] 实现 derive_production_entities、bind_scene_occurrences、reconcile_interaction_continuity 三阶段 strict Candidate。
-- [ ] 实现 ProductionWorld、Occurrence、Interaction/Continuity 的版本、Head、read set 与三 Owner family 原子 Apply。
+- [x] Backend 确定性组装 ProductionWorld 三分区、expected business key/cross-ref/scope roots，并冻结 Gate 2 的 ProductionWorld、Occurrence、Interaction、Continuity、正式身份版本与预期 Head read set。
+- [ ] 实现 ProductionWorld、Occurrence、Interaction/Continuity 的正式版本、Head 与三 Owner family 原子 Apply。
 - [ ] 实现 Gate 2 六视图最小审核与 changes_requested 受影响闭包。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
