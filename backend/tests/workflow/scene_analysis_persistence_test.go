@@ -964,6 +964,62 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		!reflect.DeepEqual(replayedProductionGraph.Version.ProductionInput, productionGraph.Version.ProductionInput) {
 		t.Fatalf("replay persisted Production StoryGraph: got=%#v want=%#v err=%v", replayedProductionGraph, productionGraph, err)
 	}
+	var sceneNodeKey, claimNodeKey string
+	for _, node := range productionGraph.Version.Nodes {
+		switch node.NodeType {
+		case storygraphdomain.NodeTypeScene:
+			if sceneNodeKey == "" {
+				sceneNodeKey = node.StoryNodeKey
+			}
+		case storygraphdomain.NodeTypeContinuityClaim:
+			if claimNodeKey == "" {
+				claimNodeKey = node.StoryNodeKey
+			}
+		}
+	}
+	var queryFactsBefore [4]int64
+	for index, value := range []any{&model.StoryGraphVersion{}, &model.StoryGraphHead{}, &model.CommandReceipt{}, &model.OutboxEvent{}} {
+		if err = database.Model(value).Count(&queryFactsBefore[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	productionQueries := storygraphapp.NewQueryService(storygraphgorm.New(database))
+	currentProductionGraph, err := productionQueries.Version(ctx, productionGraphActor, storygraphapp.VersionQuery{
+		ProjectID: fixture.projectID.String(), VersionRef: storygraphapp.VersionRefCurrent,
+	})
+	if err != nil || currentProductionGraph.Stale || currentProductionGraph.Version.ID != productionGraph.Version.ID {
+		t.Fatalf("query current Production StoryGraph: result=%#v err=%v", currentProductionGraph, err)
+	}
+	impact, err := productionQueries.Lens(ctx, productionGraphActor, storygraphapp.LensQuery{
+		ProjectID: fixture.projectID.String(), VersionRef: storygraphapp.VersionRefCurrent,
+		Lens: "impact", ScopeKind: storygraphapp.ScopeStoryNode, ScopeID: sceneNodeKey, Depth: 4, Limit: 200,
+	})
+	if err != nil || impact.Truncated ||
+		countStoryGraphNodeType(impact.Nodes, storygraphdomain.NodeTypeSourceEvidence) == 0 ||
+		countStoryGraphNodeType(impact.Nodes, storygraphdomain.NodeTypeAssetIdentity) == 0 ||
+		countStoryGraphNodeType(impact.Nodes, storygraphdomain.NodeTypeAssetState) == 0 ||
+		countStoryGraphNodeType(impact.Nodes, storygraphdomain.NodeTypeOccurrence) == 0 ||
+		countStoryGraphNodeType(impact.Nodes, storygraphdomain.NodeTypeContinuityClaim) == 0 ||
+		countStoryGraphNodeType(impact.Nodes, storygraphdomain.NodeTypeProductionBinding) == 0 {
+		t.Fatalf("query bounded Scene impact: result=%#v err=%v", impact, err)
+	}
+	trace, err := productionQueries.Trace(ctx, productionGraphActor, storygraphapp.TraceQuery{
+		ProjectID: fixture.projectID.String(), VersionRef: productionGraph.Version.ID,
+		StoryNodeKey: claimNodeKey, Direction: storygraphapp.DirectionUpstream, Depth: 2, Limit: 200,
+	})
+	if err != nil || trace.Truncated ||
+		countStoryGraphNodeType(trace.Nodes, storygraphdomain.NodeTypeSourceEvidence) == 0 ||
+		countStoryGraphNodeType(trace.Nodes, storygraphdomain.NodeTypeScene) == 0 ||
+		countStoryGraphNodeType(trace.Nodes, storygraphdomain.NodeTypeOccurrence) == 0 ||
+		countStoryGraphNodeType(trace.Nodes, storygraphdomain.NodeTypeAssetState) == 0 {
+		t.Fatalf("query bounded Claim evidence trace: result=%#v err=%v", trace, err)
+	}
+	for index, value := range []any{&model.StoryGraphVersion{}, &model.StoryGraphHead{}, &model.CommandReceipt{}, &model.OutboxEvent{}} {
+		var after int64
+		if err = database.Model(value).Count(&after).Error; err != nil || after != queryFactsBefore[index] {
+			t.Fatalf("Production StoryGraph query wrote %T facts: before=%d after=%d err=%v", value, queryFactsBefore[index], after, err)
+		}
+	}
 	driftedConfirmation := confirmationCommand
 	driftedConfirmation.CommandID = uuid.NewString()
 	if _, conflictErr := productionWorldConfirmation.ConfirmProductionWorld(ctx, driftedConfirmation); !errors.Is(conflictErr, worldapp.ErrProductionWorldConfirmationConflict) {

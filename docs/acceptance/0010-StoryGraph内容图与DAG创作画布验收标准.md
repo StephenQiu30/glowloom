@@ -370,13 +370,13 @@
 
 ### `VP-I04` — storygraph-production 制作投影与可追溯 Query
 
-- 状态：进行中；Gate 2 正式 Owner 读取、Temporal DAG 的 P0 制作投影和原子发布已接通，严格 Schema Manifest 与有界 Query 未完成
-- Git 基线/提交：Compiler 输入合同 `06358b09`；原子发布见 `506edd53`；DAG 接入见 `feat(workflow): 接通正式制作关系图`
+- 状态：进行中；Gate 2 正式 Owner 读取、Temporal DAG 的 P0 制作投影、原子发布和有界 production Query 已接通，严格 Schema Manifest 未完成
+- Git 基线/提交：Compiler 输入合同 `06358b09`；原子发布见 `506edd53`；DAG 接入见 `89aad81b`；production Query 见 `feat(storygraph): 接通制作图有界查询`
 - Red 命令与失败：Production Owner 合同测试先拒绝缺集合、跨 Project、`current/latest`、Candidate 污染、Collection root 漂移和节点越界；发布测试固定重复幂等键输入漂移与 production→legacy 降级必须零写入。
-- Green/定向验证：`go test ./tests/storygraph ./tests/authoring ./tests/workflow -count=1` 通过；真实 PostgreSQL 旅程在 Gate 2 Apply 后由 `activity.production_storygraph_projection` 编译并回读 `storygraph-production`，验证 Occurrence/ContinuityClaim、typed participant/state Edge 和完整 Owner Version identity；真实 Homebrew Temporal 的 Gate 2 repair 旅程在批准后执行同一节点并以 production Version 完成 Run。
+- Green/定向验证：`go test ./tests/storygraph ./tests/authoring ./tests/workflow -count=1` 通过；真实 PostgreSQL 旅程在 Gate 2 Apply 后由 `activity.production_storygraph_projection` 编译并回读 `storygraph-production`，验证 Occurrence/ContinuityClaim、typed participant/state Edge 和完整 Owner Version identity；真实 Homebrew Temporal 的 Gate 2 repair 旅程在批准后执行同一节点并以 production Version 完成 Run。production Query 额外验证 current Version 非误报 stale、Scene depth=4 Impact 和 Claim depth=2 upstream trace 均有界且可反查 Evidence/Identity/State/Occurrence/Claim/Binding。
 - 全量 CI：当前实现通过 `go test ./tests/architecture -count=1`、`go vet ./...` 与 `go test -count=1 -p 1 ./...`；该结果只作为当前 SOP 切片质量门，不抵扣未实现的 VP-I04 条目。
 - 真实输入/产物/事实对账：Compiler 只以 Gate 2 `production_world.confirm` CommandReceipt 和其中七类 Collection Receipt 为入口，通过正式 GORM Model 重读 Source、Episode、StructureIdentity、ProductionWorld、Asset/State 与 Planning Scene facts；Workflow 节点只消费 Gate 2 的 `production_world_owner_set`，以 CommandReceipt ID 派生跨 Attempt 稳定幂等键；同一事务落 StoryGraphVersion、线性 Head、CommandReceipt 和 Outbox，Version 的 `compilation_input` 保存可重建的 Coverage 与 exact OwnerCollections，回放从 PostgreSQL 返回同一前像；新的 Gate 2 Receipt 可沿 production Head 追加，旧编译入口不能降级覆盖；未创建替代数据库、Schema 或 migration，也未启动/重启环境服务。
-- 未覆盖条件与残余风险：production Payload/Edge 全量 Manifest 与机械 invariant、Prepare/Publish 间 Owner Head 漂移复验、DAG/反向证据/Diff/ImpactPreview 有界 Query 尚未完成；当前投影是 P0 关系闭环，不宣称 VP-I04 或完整 SOP 已验收。按约定，`agent-browser` 仅在全部开发完成后执行。
+- 未覆盖条件与残余风险：production Payload/Edge 全量 Manifest 与机械 invariant、Prepare/Publish 间 Owner Head 漂移复验尚未完成；当前投影和 Query 是 P0 关系闭环，不宣称 VP-I04 或完整 SOP 已验收。按约定，`agent-browser` 仅在全部开发完成后执行。
 
 ### `VP-I05` — Skill 供应链、4–6 Preset、视觉基础与 Gate 3
 

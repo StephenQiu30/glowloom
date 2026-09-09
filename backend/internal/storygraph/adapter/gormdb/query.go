@@ -2,12 +2,15 @@ package gormdb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
+	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 )
@@ -52,6 +55,19 @@ func (store *Store) GetCurrentOwnerSetHash(ctx context.Context, actor storygraph
 	if err != nil {
 		return "", err
 	}
+	var head model.StoryGraphHead
+	if err = store.database.WithContext(ctx).Where(
+		"workspace_id = ? AND project_id = ?", project.WorkspaceID, project.ID,
+	).First(&head).Error; err != nil {
+		return "", normalizeNotFound(err)
+	}
+	current, err := store.versionForProject(ctx, project.WorkspaceID, project.ID, head.CurrentVersionID)
+	if err != nil {
+		return "", err
+	}
+	if current.SchemaVersion == storygraph.ProductionSchemaID {
+		return store.currentProductionOwnerSetHash(ctx, repo, project.WorkspaceID, project.ID)
+	}
 	snapshot, err := repo.LoadOwnerSnapshot(ctx, storygraph.PublicationState{
 		WorkspaceID: project.WorkspaceID.String(), ProjectID: project.ID.String(),
 	})
@@ -64,6 +80,49 @@ func (store *Store) GetCurrentOwnerSetHash(ctx context.Context, actor storygraph
 	}
 	_, ownerSetHash, err := storygraph.CanonicalOwnerHeadRefs(snapshot.OwnerHeads)
 	return ownerSetHash, err
+}
+
+func (store *Store) currentProductionOwnerSetHash(
+	ctx context.Context,
+	repo *repository,
+	workspaceID uuid.UUID,
+	projectID uuid.UUID,
+) (string, error) {
+	var latest model.ProductionWorldCollectionReceipt
+	if err := store.database.WithContext(ctx).Where(
+		"workspace_id = ? AND project_id = ? AND version_family = ?",
+		workspaceID, projectID, bibledomain.BibleProductionWorldFamily,
+	).Order("scope_revision DESC").Order("id DESC").First(&latest).Error; err != nil {
+		return "", normalizeNotFound(err)
+	}
+	var receipt model.CommandReceipt
+	if err := store.database.WithContext(ctx).Where(
+		"workspace_id = ? AND operation = ? AND resource_id = ?",
+		workspaceID, worlddomain.ConfirmProductionWorldOperation, latest.CommandID,
+	).First(&receipt).Error; err != nil {
+		return "", normalizeNotFound(err)
+	}
+	var confirmation worlddomain.ConfirmProductionWorldResult
+	if err := json.Unmarshal(receipt.Result, &confirmation); err != nil {
+		return "", errors.New("Production World command receipt is invalid")
+	}
+	verified, err := worlddomain.CompleteConfirmProductionWorldResult(confirmation)
+	if err != nil || verified.ResultContentHash != confirmation.ResultContentHash ||
+		verified.ReceiptContentHash != confirmation.ReceiptContentHash ||
+		confirmation.CommandReceiptID != receipt.ID.String() || confirmation.CommandID != latest.CommandID.String() {
+		return "", errors.New("Production World command receipt has drifted")
+	}
+	snapshot, err := repo.LoadProductionOwnerSnapshot(ctx, storygraph.PublicationState{
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(),
+	}, confirmation.CommandReceiptID, confirmation.ReceiptContentHash)
+	if err != nil {
+		return "", err
+	}
+	compiled, err := storygraph.CompileProductionOwnerSnapshot(snapshot)
+	if err != nil {
+		return "", err
+	}
+	return compiled.OwnerSetHash, nil
 }
 
 func (store *Store) versionForProject(ctx context.Context, workspaceID, projectID, versionID uuid.UUID) (storygraph.Version, error) {
