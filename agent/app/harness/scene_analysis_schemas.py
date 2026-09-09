@@ -21,6 +21,7 @@ SceneAnalysisStageKey = Literal[
     "review_candidate",
     "derive_production_entities",
     "bind_scene_occurrences",
+    "reconcile_interaction_continuity",
 ]
 
 
@@ -39,6 +40,7 @@ class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
         "structure-identity-review-candidate-production",
         "production-entity-fragment-candidate-production",
         "scene-binding-fragment-candidate-production",
+        "continuity-fragment-candidate-production",
     ]
 
     @model_validator(mode="after")
@@ -59,6 +61,10 @@ class SceneAnalysisStageVariant(StrictSceneAnalysisModel):
                 "bind_scene_occurrences",
                 "default",
             ): "scene-binding-fragment-candidate-production",
+            (
+                "reconcile_interaction_continuity",
+                "default",
+            ): "continuity-fragment-candidate-production",
         }.get((self.stage_key, self.profile_key))
         if self.output_schema_version != expected:
             raise ValueError("Scene Analysis output schema does not match its stage")
@@ -82,6 +88,7 @@ class SceneAnalysisCandidateRevisionIdentity(StrictSceneAnalysisModel):
         "review_candidate",
         "derive_production_entities",
         "bind_scene_occurrences",
+        "reconcile_interaction_continuity",
     ]
     shard_key: str = Field(min_length=1)
     candidate_revision_id: UUID
@@ -552,6 +559,22 @@ class SceneOccurrenceBindingInput(ProductionEntityDerivationInput):
         return self
 
 
+class InteractionContinuityInput(SceneOccurrenceBindingInput):
+    scene_binding_candidate_revision_id: UUID
+    scene_binding_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_binding_candidate: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_scene_bindings(self) -> InteractionContinuityInput:
+        from app.modules.storygraph.scene_analysis_candidates import (
+            SceneBindingFragmentCandidate,
+        )
+
+        candidate = SceneBindingFragmentCandidate.model_validate(self.scene_binding_candidate)
+        candidate.validate_for_input(self)
+        return self
+
+
 class SceneAnalysisPayload(StrictSceneAnalysisModel):
     variant: SceneAnalysisStageVariant
     scope: SceneAnalysisScope
@@ -648,6 +671,39 @@ class SceneAnalysisPayload(StrictSceneAnalysisModel):
                 or self.shard.codepoint_end != len(value.normalized_text)
             ):
                 raise ValueError("Scene binding input does not match its frozen production graph")
+        elif self.variant.stage_key == "reconcile_interaction_continuity":
+            value = InteractionContinuityInput.model_validate(self.stage_input)
+            expected = {
+                "extract_scene_facts": (
+                    value.scene_fact_candidate_revision_id,
+                    value.scene_fact_candidate_revision_hash,
+                ),
+                "derive_production_entities": (
+                    value.production_entity_candidate_revision_id,
+                    value.production_entity_candidate_revision_hash,
+                ),
+                "bind_scene_occurrences": (
+                    value.scene_binding_candidate_revision_id,
+                    value.scene_binding_candidate_revision_hash,
+                ),
+            }
+            supplied = {
+                item.stage_key: (item.candidate_revision_id, item.candidate_revision_hash)
+                for item in self.upstream_candidates
+            }
+            if (
+                len(self.upstream_candidates) != 3
+                or supplied != expected
+                or source.version_id != value.source_version_id
+                or source.content_hash != value.source_hash
+                or self.scope.workspace_id != value.structure_identity_set.workspace_id
+                or self.scope.project_id != value.structure_identity_set.project_id
+                or self.shard.codepoint_start != 0
+                or self.shard.codepoint_end != len(value.normalized_text)
+            ):
+                raise ValueError(
+                    "interaction continuity input does not match its frozen production graph"
+                )
         else:
             value = StructureIdentityReviewInput.model_validate(self.stage_input)
             expected = {
@@ -822,6 +878,8 @@ class SceneAnalysisAttemptResult(StrictSceneAnalysisModel):
         "identity_resolution_candidate",
         "structure_identity_review_candidate",
         "production_entity_fragment_candidate",
+        "scene_binding_fragment_candidate",
+        "continuity_fragment_candidate",
     ]
     candidate: dict[str, Any] | None
     input_hash: str = Field(pattern=r"^[0-9a-f]{64}$")

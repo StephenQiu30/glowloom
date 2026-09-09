@@ -328,12 +328,16 @@ func (repo *sceneAnalysisRepository) validateUpstreamReadSet(
 		"bind_scene_occurrences": {
 			"extract_scene_facts": {}, "derive_production_entities": {},
 		},
+		"reconcile_interaction_continuity": {
+			"extract_scene_facts": {}, "derive_production_entities": {}, "bind_scene_occurrences": {},
+		},
 	}[invocation.StageKey]
 	expectedTypes := map[string]string{
 		"propose_script_spans":       "script_span_candidate",
 		"extract_scene_facts":        "scene_fact_candidate",
 		"resolve_identities":         "identity_resolution_candidate",
 		"derive_production_entities": "production_entity_fragment_candidate",
+		"bind_scene_occurrences":     "scene_binding_fragment_candidate",
 	}
 	for index, upstream := range upstreams {
 		read := persisted[index]

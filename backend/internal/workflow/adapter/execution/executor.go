@@ -37,6 +37,7 @@ func (executor *NodeExecutor) Execute(
 		"activity.identity_resolution",
 		"activity.production_entity_derivation",
 		"activity.scene_occurrence_binding",
+		"activity.interaction_continuity_reconciliation",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

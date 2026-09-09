@@ -120,6 +120,7 @@ func storyGraphKnownBundlePaths() []string {
 		"references/structure-identity-review.md",
 		"references/production-entities.md",
 		"references/scene-occurrences.md",
+		"references/interaction-continuity.md",
 	)
 }
 

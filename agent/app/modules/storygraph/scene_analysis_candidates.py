@@ -998,3 +998,220 @@ class SceneBindingFragmentCandidate(StrictSceneAnalysisModel):
                 evidence.validate_for_text(value.normalized_text)
                 if _source_evidence_key(evidence) not in value.scene_fact_evidence_universe():
                     raise ValueError("Scene binding review Evidence is outside frozen SceneFacts")
+
+
+class InteractionFragment(StrictSceneAnalysisModel):
+    interaction_key: str = Field(pattern=r"^interaction_[a-z0-9_]{1,120}$")
+    scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    beat_key: str | None
+    predicate: Literal[
+        "hold", "carry", "wear", "use", "give", "receive", "place", "drop", "open", "break"
+    ]
+    actor_occurrence_key: str = Field(pattern=r"^occurrence_[a-z0-9_]{1,120}$")
+    prop_occurrence_key: str = Field(pattern=r"^occurrence_[a-z0-9_]{1,120}$")
+    counterparty_occurrence_key: str | None
+    holder_before_identity_key: str | None
+    holder_after_identity_key: str | None
+    prop_state_before_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
+    prop_state_after_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
+    hand: str | None
+    contact_point: str | None
+    direction: str | None
+    relative_scale: str | None
+    evidence: SourceEvidenceSpan
+
+
+class ContinuityFragment(StrictSceneAnalysisModel):
+    continuity_key: str = Field(pattern=r"^continuity_[a-z0-9_]{1,120}$")
+    subject_kind: Literal["character", "location", "prop"]
+    identity_key: str = Field(min_length=1)
+    from_scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    to_scene_scope_key: str = Field(pattern=r"^scene:[0-9a-f-]{36}$")
+    before_state_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
+    after_state_key: str = Field(pattern=r"^state_[a-z0-9_]{1,120}$")
+    transition: Literal["state_persists", "state_changes"]
+    delta: str | None
+    evidence: list[SourceEvidenceSpan] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_transition(self) -> ContinuityFragment:
+        if self.transition == "state_persists":
+            if self.before_state_key != self.after_state_key or self.delta is not None:
+                raise ValueError("state_persists must preserve the exact state without a delta")
+        elif self.before_state_key == self.after_state_key or not self.delta:
+            raise ValueError("state_changes must bind distinct states and a delta")
+        return self
+
+
+class InteractionContinuityCandidate(StrictSceneAnalysisModel):
+    source_version_id: UUID
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    structure_identity_set_version_id: UUID
+    structure_identity_set_version_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_fact_candidate_revision_id: UUID
+    scene_fact_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    production_entity_candidate_revision_id: UUID
+    production_entity_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scene_binding_candidate_revision_id: UUID
+    scene_binding_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    interactions: list[InteractionFragment]
+    continuity: list[ContinuityFragment]
+    review_issues: list[CandidateReviewIssue]
+
+    def validate_for_input(self, value: object) -> None:
+        from app.harness.scene_analysis_schemas import InteractionContinuityInput
+
+        if not isinstance(value, InteractionContinuityInput):
+            raise ValueError("interaction continuity input is invalid")
+        if (
+            self.source_version_id != value.source_version_id
+            or self.source_hash != value.source_hash
+            or self.structure_identity_set_version_id != value.structure_identity_set_version_id
+            or self.structure_identity_set_version_hash != value.structure_identity_set_version_hash
+            or self.scene_fact_candidate_revision_id != value.scene_fact_candidate_revision_id
+            or self.scene_fact_candidate_revision_hash != value.scene_fact_candidate_revision_hash
+            or self.production_entity_candidate_revision_id
+            != value.production_entity_candidate_revision_id
+            or self.production_entity_candidate_revision_hash
+            != value.production_entity_candidate_revision_hash
+            or self.scene_binding_candidate_revision_id
+            != value.scene_binding_candidate_revision_id
+            or self.scene_binding_candidate_revision_hash
+            != value.scene_binding_candidate_revision_hash
+        ):
+            raise ValueError("interaction continuity lineage drifted")
+
+        bindings = SceneBindingFragmentCandidate.model_validate(value.scene_binding_candidate)
+        production = ProductionEntityFragmentCandidate.model_validate(
+            value.production_entity_candidate
+        )
+        facts = SceneFactCandidate.model_validate(value.scene_fact_candidate)
+        scenes = {scene.scene_scope_key: scene for scene in bindings.scenes}
+        scene_order = {scene.scene_scope_key: index for index, scene in enumerate(bindings.scenes)}
+        occurrences = {
+            occurrence.occurrence_key: (scene.scene_scope_key, occurrence)
+            for scene in bindings.scenes
+            for occurrence in scene.occurrences
+        }
+        states = {
+            state.state_key: (entity.identity_key, entity.kind)
+            for entity in production.entities
+            for state in entity.states
+        }
+        action_evidence = {
+            scene_ref.scope_key: {
+                _source_evidence_key(action.evidence)
+                for action in next(
+                    item
+                    for item in facts.scenes
+                    if item.temporary_scene_id == scene_ref.temporary_scene_id
+                ).actions
+            }
+            for scene_ref in value.structure_identity_set.scene_refs
+        }
+        if len({item.interaction_key for item in self.interactions}) != len(self.interactions):
+            raise ValueError("interaction keys must be unique")
+        if len({item.continuity_key for item in self.continuity}) != len(self.continuity):
+            raise ValueError("continuity keys must be unique")
+
+        for item in self.interactions:
+            scene = scenes.get(item.scene_scope_key)
+            actor = occurrences.get(item.actor_occurrence_key)
+            prop = occurrences.get(item.prop_occurrence_key)
+            counterparty = (
+                occurrences.get(item.counterparty_occurrence_key)
+                if item.counterparty_occurrence_key is not None
+                else None
+            )
+            if (
+                scene is None
+                or actor is None
+                or prop is None
+                or actor[0] != item.scene_scope_key
+                or prop[0] != item.scene_scope_key
+                or actor[1].subject_kind != "character"
+                or prop[1].subject_kind != "prop"
+                or actor[1].occurrence_role != "actual"
+                or prop[1].occurrence_role != "actual"
+                or item.beat_key is not None
+                and item.beat_key not in {beat.beat_key for beat in scene.beats}
+                or states.get(item.prop_state_before_key) != (prop[1].identity_key, "prop")
+                or states.get(item.prop_state_after_key) != (prop[1].identity_key, "prop")
+                or _source_evidence_key(item.evidence)
+                not in action_evidence[item.scene_scope_key]
+            ):
+                raise ValueError(
+                    "interaction does not bind exact actual occurrences and Prop states"
+                )
+            participant_identities = {actor[1].identity_key}
+            if item.predicate in {"give", "receive"}:
+                if (
+                    counterparty is None
+                    or counterparty[0] != item.scene_scope_key
+                    or counterparty[1].subject_kind != "character"
+                    or counterparty[1].occurrence_role != "actual"
+                    or counterparty[1].identity_key == actor[1].identity_key
+                ):
+                    raise ValueError(
+                        "transfer interaction requires one distinct actual counterparty"
+                    )
+                participant_identities.add(counterparty[1].identity_key)
+            elif counterparty is not None:
+                raise ValueError("non-transfer interaction cannot add a counterparty")
+            if (
+                item.holder_before_identity_key not in participant_identities | {None}
+                or item.holder_after_identity_key not in participant_identities | {None}
+            ):
+                raise ValueError("interaction holder must be null or one participant")
+            if item.predicate in {"hold", "carry", "wear", "use"} and (
+                item.holder_after_identity_key != actor[1].identity_key
+            ):
+                raise ValueError("possession interaction must end with the actor as holder")
+            if item.predicate in {"place", "drop"} and item.holder_after_identity_key is not None:
+                raise ValueError("release interaction must end without a holder")
+            if item.predicate in {"give", "receive"} and (
+                item.holder_before_identity_key != actor[1].identity_key
+                or counterparty is None
+                or item.holder_after_identity_key != counterparty[1].identity_key
+            ):
+                raise ValueError("transfer holder transition is invalid")
+            if item.predicate in {"open", "break"} and (
+                item.prop_state_before_key == item.prop_state_after_key
+            ):
+                raise ValueError("Prop mutation must change the Prop state")
+
+        for item in self.continuity:
+            before = [
+                occurrence
+                for scene_key, occurrence in occurrences.values()
+                if scene_key == item.from_scene_scope_key
+                and occurrence.identity_key == item.identity_key
+                and occurrence.occurrence_role == "actual"
+            ]
+            after = [
+                occurrence
+                for scene_key, occurrence in occurrences.values()
+                if scene_key == item.to_scene_scope_key
+                and occurrence.identity_key == item.identity_key
+                and occurrence.occurrence_role == "actual"
+            ]
+            if (
+                not before
+                or not after
+                or scene_order.get(item.from_scene_scope_key, -1)
+                >= scene_order.get(item.to_scene_scope_key, -1)
+                or states.get(item.before_state_key) != (item.identity_key, item.subject_kind)
+                or states.get(item.after_state_key) != (item.identity_key, item.subject_kind)
+                or any(
+                    _source_evidence_key(evidence)
+                    not in value.scene_fact_evidence_universe()
+                    for evidence in item.evidence
+                )
+            ):
+                raise ValueError(
+                    "continuity does not bind an ordered exact identity/state timeline"
+                )
+        for issue in self.review_issues:
+            for evidence in issue.evidence:
+                if _source_evidence_key(evidence) not in value.scene_fact_evidence_universe():
+                    raise ValueError("continuity review Evidence is outside frozen SceneFacts")

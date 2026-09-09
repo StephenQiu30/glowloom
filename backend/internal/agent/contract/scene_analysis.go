@@ -23,7 +23,7 @@ const (
 	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
 	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
-	SceneAnalysisSkillBundleHash                  = "2870bd21483c3de5f381a5a24bfbb16e4c3e3aaf9e337b6429ef86c8afaf6c4f"
+	SceneAnalysisSkillBundleHash                  = "6b02a4650850ed8a1ce3f4fd24cfaf4ee886b3b91ead3650364132f5138294a1"
 )
 
 var structureIdentityRepairIssuePattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)
@@ -37,12 +37,13 @@ type SceneAnalysisStageVariant struct {
 
 func (value SceneAnalysisStageVariant) Validate() error {
 	expectedSchema := map[string]string{
-		"propose_script_spans\x00default":        ScriptSpanCandidateSchemaVersion,
-		"extract_scene_facts\x00default":         SceneFactCandidateSchemaVersion,
-		"resolve_identities\x00default":          IdentityResolutionCandidateSchemaVersion,
-		"review_candidate\x00structure_identity": StructureIdentityReviewCandidateSchemaVersion,
-		"derive_production_entities\x00default":  ProductionEntityFragmentCandidateSchemaVersion,
-		"bind_scene_occurrences\x00default":      SceneBindingFragmentCandidateSchemaVersion,
+		"propose_script_spans\x00default":             ScriptSpanCandidateSchemaVersion,
+		"extract_scene_facts\x00default":              SceneFactCandidateSchemaVersion,
+		"resolve_identities\x00default":               IdentityResolutionCandidateSchemaVersion,
+		"review_candidate\x00structure_identity":      StructureIdentityReviewCandidateSchemaVersion,
+		"derive_production_entities\x00default":       ProductionEntityFragmentCandidateSchemaVersion,
+		"bind_scene_occurrences\x00default":           SceneBindingFragmentCandidateSchemaVersion,
+		"reconcile_interaction_continuity\x00default": InteractionContinuityCandidateSchemaVersion,
 	}[value.StageKey+"\x00"+value.ProfileKey]
 	if value.LaneKey != "primary" ||
 		expectedSchema == "" || value.OutputSchemaVersion != expectedSchema {
@@ -83,7 +84,8 @@ type SceneAnalysisCandidateRevisionIdentity struct {
 func (value SceneAnalysisCandidateRevisionIdentity) Validate() error {
 	if (value.StageKey != "propose_script_spans" && value.StageKey != "extract_scene_facts" &&
 		value.StageKey != "resolve_identities" && value.StageKey != "review_candidate" &&
-		value.StageKey != "derive_production_entities" && value.StageKey != "bind_scene_occurrences") ||
+		value.StageKey != "derive_production_entities" && value.StageKey != "bind_scene_occurrences" &&
+		value.StageKey != "reconcile_interaction_continuity") ||
 		strings.TrimSpace(value.ShardKey) == "" ||
 		!hashPattern.MatchString(value.CandidateRevisionHash) ||
 		!hashPattern.MatchString(value.SourceResultHash) {
@@ -539,6 +541,34 @@ func (value SceneAnalysisPayload) Validate() error {
 		if len(expected) != 0 {
 			return errors.New("Scene binding upstream Candidate set is incomplete")
 		}
+	case "reconcile_interaction_continuity":
+		var input InteractionContinuityInput
+		if decodeStrict(value.StageInput, &input) != nil || input.Validate() != nil ||
+			len(value.UpstreamCandidates) != 3 || source.VersionID != input.SourceVersionID ||
+			source.ContentHash != input.SourceHash ||
+			value.Scope.WorkspaceID != input.StructureIdentitySet.WorkspaceID ||
+			value.Scope.ProjectID != input.StructureIdentitySet.ProjectID ||
+			value.Shard.CodepointStart != 0 ||
+			value.Shard.CodepointEnd != utf8.RuneCountInString(input.NormalizedText) {
+			return errors.New("Interaction/Continuity input does not match its frozen production graph")
+		}
+		expected := map[string][2]string{
+			"extract_scene_facts":        {input.SceneFactCandidateRevisionID, input.SceneFactCandidateRevisionHash},
+			"derive_production_entities": {input.ProductionEntityCandidateRevisionID, input.ProductionEntityCandidateRevisionHash},
+			"bind_scene_occurrences":     {input.SceneBindingCandidateRevisionID, input.SceneBindingCandidateRevisionHash},
+		}
+		for _, upstream := range value.UpstreamCandidates {
+			identity, exists := expected[upstream.StageKey]
+			if !exists || upstream.Validate() != nil || identity != [2]string{
+				upstream.CandidateRevisionID, upstream.CandidateRevisionHash,
+			} {
+				return errors.New("Interaction/Continuity upstream Candidate identity drifted")
+			}
+			delete(expected, upstream.StageKey)
+		}
+		if len(expected) != 0 {
+			return errors.New("Interaction/Continuity upstream Candidate set is incomplete")
+		}
 	default:
 		return errors.New("unsupported Scene Analysis stage")
 	}
@@ -767,12 +797,13 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 	dispatchAuthorizationHash string,
 ) error {
 	expectedCandidateType := map[string]string{
-		"propose_script_spans":       "script_span_candidate",
-		"extract_scene_facts":        "scene_fact_candidate",
-		"resolve_identities":         "identity_resolution_candidate",
-		"review_candidate":           "structure_identity_review_candidate",
-		"derive_production_entities": "production_entity_fragment_candidate",
-		"bind_scene_occurrences":     "scene_binding_fragment_candidate",
+		"propose_script_spans":             "script_span_candidate",
+		"extract_scene_facts":              "scene_fact_candidate",
+		"resolve_identities":               "identity_resolution_candidate",
+		"review_candidate":                 "structure_identity_review_candidate",
+		"derive_production_entities":       "production_entity_fragment_candidate",
+		"bind_scene_occurrences":           "scene_binding_fragment_candidate",
+		"reconcile_interaction_continuity": "continuity_fragment_candidate",
 	}
 	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
 		value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
@@ -873,6 +904,12 @@ func (value SceneAnalysisAttemptResult) ValidateFor(
 			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil ||
 				ValidateSceneBindingFragmentCandidate(value.Candidate, input) != nil {
 				return errors.New("invalid accepted Scene binding candidate")
+			}
+		case "reconcile_interaction_continuity":
+			var input InteractionContinuityInput
+			if decodeStrict(invocation.Payload.StageInput, &input) != nil || input.Validate() != nil ||
+				ValidateInteractionContinuityCandidate(value.Candidate, input) != nil {
+				return errors.New("invalid accepted Interaction/Continuity candidate")
 			}
 		}
 	case "rejected", "outcome_unknown":

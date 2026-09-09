@@ -12,7 +12,7 @@ from app.modules.storygraph.scene_analysis_registry import (
 )
 
 SCENE_ANALYSIS_SKILL_BUNDLE_HASH = (
-    "2870bd21483c3de5f381a5a24bfbb16e4c3e3aaf9e337b6429ef86c8afaf6c4f"
+    "6b02a4650850ed8a1ce3f4fd24cfaf4ee886b3b91ead3650364132f5138294a1"
 )
 
 
@@ -34,6 +34,7 @@ class SceneAnalysisBundle:
     _STAGE_RESOURCE_PATHS = (
         "SKILL.md",
         "references/entity-reconciliation.md",
+        "references/interaction-continuity.md",
         "references/production-entities.md",
         "references/scene-occurrences.md",
         "references/scene-facts.md",

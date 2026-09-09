@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.modules.storygraph.scene_analysis_candidates import (
     IdentityResolutionCandidate,
+    InteractionContinuityCandidate,
     ProductionEntityFragmentCandidate,
     SceneBindingFragmentCandidate,
     SceneFactCandidate,
@@ -21,6 +22,7 @@ SceneAnalysisCandidateType = Literal[
     "structure_identity_review_candidate",
     "production_entity_fragment_candidate",
     "scene_binding_fragment_candidate",
+    "continuity_fragment_candidate",
 ]
 
 
@@ -61,6 +63,11 @@ SCENE_ANALYSIS_REGISTRY: dict[tuple[str, str], SceneAnalysisStageSpec] = {
         candidate_type="scene_binding_fragment_candidate",
         candidate_model=SceneBindingFragmentCandidate,
         references=("scene-occurrences.md",),
+    ),
+    ("reconcile_interaction_continuity", "default"): SceneAnalysisStageSpec(
+        candidate_type="continuity_fragment_candidate",
+        candidate_model=InteractionContinuityCandidate,
+        references=("interaction-continuity.md",),
     ),
 }
 

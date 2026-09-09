@@ -442,6 +442,32 @@ func TestStructureIdentityGateResumesRealTemporalWorkflow(t *testing.T) {
 		t.Fatalf("validate Temporal Scene binding Candidate: input=%#v candidate=%#v err=%v",
 			sceneBindingInput, sceneBindingCandidate, err)
 	}
+	var continuityInvocation model.SceneAnalysisInvocationRecord
+	if err = database.Where(
+		"workflow_run_id = ? AND stage_key = ?", repairRun.ID, "reconcile_interaction_continuity",
+	).First(&continuityInvocation).Error; err != nil {
+		t.Fatalf("query Temporal Interaction/Continuity invocation: %v", err)
+	}
+	var continuityCandidate model.SceneAnalysisCandidateRevision
+	if err = database.First(
+		&continuityCandidate, "source_invocation_id = ?", continuityInvocation.ID,
+	).Error; err != nil {
+		t.Fatalf("query Temporal Interaction/Continuity Candidate: %v", err)
+	}
+	var continuityPayload contract.SceneAnalysisPayload
+	var continuityInput contract.InteractionContinuityInput
+	if err = json.Unmarshal(continuityInvocation.Payload, &continuityPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(continuityPayload.StageInput, &continuityInput); err != nil ||
+		continuityCandidate.CandidateType != "continuity_fragment_candidate" ||
+		continuityInput.SceneBindingCandidateRevisionID != sceneBindingCandidate.ID.String() ||
+		contract.ValidateInteractionContinuityCandidate(
+			json.RawMessage(continuityCandidate.Candidate), continuityInput,
+		) != nil {
+		t.Fatalf("validate Temporal Interaction/Continuity Candidate: input=%#v candidate=%#v err=%v",
+			continuityInput, continuityCandidate, err)
+	}
 }
 
 func waitForStructureIdentityTemporalFact(

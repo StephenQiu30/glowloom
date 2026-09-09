@@ -131,14 +131,15 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 8 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 9 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
 		plan.Nodes[4].Executor != "activity.structure_identity_review" ||
 		plan.Nodes[5].Executor != "gate.structure_identity_review" ||
 		plan.Nodes[6].Executor != "activity.production_entity_derivation" ||
-		plan.Nodes[7].Executor != "activity.scene_occurrence_binding" {
+		plan.Nodes[7].Executor != "activity.scene_occurrence_binding" ||
+		plan.Nodes[8].Executor != "activity.interaction_continuity_reconciliation" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -467,6 +468,50 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		sceneBindingReads[0].StageKey != "extract_scene_facts" ||
 		sceneBindingReads[1].StageKey != "derive_production_entities" {
 		t.Fatalf("Scene binding exact read set: reads=%#v err=%v", sceneBindingReads, err)
+	}
+	continuityResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[8].NodeRunID, NodeID: plan.Nodes[8].NodeID,
+		Executor: plan.Nodes[8].Executor, Attempt: 1,
+	})
+	if err != nil || continuityResult.Status != "SUCCEEDED" ||
+		len(continuityResult.Output.Bindings) != 1 ||
+		continuityResult.Output.Bindings[0].ValueType != "continuity_fragment_candidate" {
+		t.Fatalf("reconcile Interaction/Continuity: result=%#v err=%v", continuityResult, err)
+	}
+	continuityCandidate, err := sceneService.GetCandidate(
+		ctx, fixture.projectID.String(), continuityResult.Output.Bindings[0].ReferenceID,
+	)
+	if err != nil {
+		t.Fatalf("query persisted Interaction/Continuity Candidate: %v", err)
+	}
+	var continuityInvocation model.SceneAnalysisInvocationRecord
+	if err = database.First(&continuityInvocation, "id = ?", continuityCandidate.SourceInvocationID).Error; err != nil {
+		t.Fatalf("query Interaction/Continuity invocation: %v", err)
+	}
+	var continuityPayload contract.SceneAnalysisPayload
+	var continuityInput contract.InteractionContinuityInput
+	if err = json.Unmarshal(continuityInvocation.Payload, &continuityPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(continuityPayload.StageInput, &continuityInput); err != nil ||
+		continuityInput.SceneBindingCandidateRevisionID != sceneBindingCandidate.ID ||
+		contract.ValidateInteractionContinuityCandidate(
+			continuityCandidate.Candidate, continuityInput,
+		) != nil {
+		t.Fatalf("validate persisted Interaction/Continuity Candidate: input=%#v err=%v", continuityInput, err)
+	}
+	var continuityValue contract.InteractionContinuityCandidate
+	if err = json.Unmarshal(continuityCandidate.Candidate, &continuityValue); err != nil ||
+		len(continuityValue.Interactions) != 1 || len(continuityValue.Continuity) != 1 {
+		t.Fatalf("Interaction/Continuity facts: candidate=%#v err=%v", continuityValue, err)
+	}
+	var continuityReads []model.SceneAnalysisInvocationRead
+	if err = database.Where("invocation_id = ?", continuityInvocation.ID).
+		Order("position ASC").Find(&continuityReads).Error; err != nil || len(continuityReads) != 3 ||
+		continuityReads[0].StageKey != "extract_scene_facts" ||
+		continuityReads[1].StageKey != "derive_production_entities" ||
+		continuityReads[2].StageKey != "bind_scene_occurrences" {
+		t.Fatalf("Interaction/Continuity exact read set: reads=%#v err=%v", continuityReads, err)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -952,6 +997,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "structure-identity-gate", DefinitionKey: "human.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "production-entities", DefinitionKey: "agent.production_entity_derivation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "scene-bindings", DefinitionKey: "agent.scene_occurrence_binding", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "interaction-continuity", DefinitionKey: "agent.interaction_continuity_reconciliation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -975,6 +1021,11 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "facts-scene-bindings", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "scene-bindings", ToPort: "facts"},
 			{ID: "identities-scene-bindings", FromNodeID: "structure-identity-gate", FromPort: "identities", ToNodeID: "scene-bindings", ToPort: "identities"},
 			{ID: "entities-scene-bindings", FromNodeID: "production-entities", FromPort: "candidate", ToNodeID: "scene-bindings", ToPort: "entities"},
+			{ID: "source-interaction-continuity", FromNodeID: "source", FromPort: "source", ToNodeID: "interaction-continuity", ToPort: "source"},
+			{ID: "facts-interaction-continuity", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "interaction-continuity", ToPort: "facts"},
+			{ID: "identities-interaction-continuity", FromNodeID: "structure-identity-gate", FromPort: "identities", ToNodeID: "interaction-continuity", ToPort: "identities"},
+			{ID: "entities-interaction-continuity", FromNodeID: "production-entities", FromPort: "candidate", ToNodeID: "interaction-continuity", ToPort: "entities"},
+			{ID: "bindings-interaction-continuity", FromNodeID: "scene-bindings", FromPort: "candidate", ToNodeID: "interaction-continuity", ToPort: "bindings"},
 		},
 	}
 }
@@ -1113,6 +1164,12 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 			return contract.SceneAnalysisAttemptResult{}, err
 		}
 		candidate = buildSceneBindingCandidate(input)
+	} else if invocation.Payload.Variant.StageKey == "reconcile_interaction_continuity" {
+		var input contract.InteractionContinuityInput
+		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
+			return contract.SceneAnalysisAttemptResult{}, err
+		}
+		candidate = buildInteractionContinuityCandidate(input)
 	} else {
 		var input contract.StructureIdentityReviewInput
 		if err := json.Unmarshal(invocation.Payload.StageInput, &input); err != nil {
@@ -1135,12 +1192,13 @@ func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
 		ClaimVersion: authorization.ClaimVersion, DispatchAuthorizationHash: authorization.Hash,
 		Status: "accepted",
 		CandidateType: map[string]string{
-			"propose_script_spans":       "script_span_candidate",
-			"extract_scene_facts":        "scene_fact_candidate",
-			"resolve_identities":         "identity_resolution_candidate",
-			"review_candidate":           "structure_identity_review_candidate",
-			"derive_production_entities": "production_entity_fragment_candidate",
-			"bind_scene_occurrences":     "scene_binding_fragment_candidate",
+			"propose_script_spans":             "script_span_candidate",
+			"extract_scene_facts":              "scene_fact_candidate",
+			"resolve_identities":               "identity_resolution_candidate",
+			"review_candidate":                 "structure_identity_review_candidate",
+			"derive_production_entities":       "production_entity_fragment_candidate",
+			"bind_scene_occurrences":           "scene_binding_fragment_candidate",
+			"reconcile_interaction_continuity": "continuity_fragment_candidate",
 		}[invocation.Payload.Variant.StageKey],
 		Candidate: candidate, InputHash: invocation.InputHash, OutputHash: &outputHash,
 		Diagnostics: []contract.SceneAnalysisDiagnostic{}, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now,
@@ -1337,6 +1395,61 @@ func buildSceneBindingCandidate(input contract.SceneOccurrenceBindingInput) json
 		ProductionEntityCandidateRevisionHash: input.ProductionEntityCandidateRevisionHash,
 		Scenes:                                scenes, ReviewIssues: []contract.CandidateReviewIssue{},
 	})
+}
+
+func buildInteractionContinuityCandidate(input contract.InteractionContinuityInput) json.RawMessage {
+	var bindings contract.SceneBindingFragmentCandidate
+	var facts contract.SceneFactCandidate
+	_ = json.Unmarshal(input.SceneBindingCandidate, &bindings)
+	_ = json.Unmarshal(input.SceneFactCandidate, &facts)
+	first, second := bindings.Scenes[0], bindings.Scenes[1]
+	var actor, prop contract.SceneOccurrenceFragment
+	for _, occurrence := range first.Occurrences {
+		switch occurrence.SubjectKind {
+		case "character":
+			actor = occurrence
+		case "prop":
+			prop = occurrence
+		}
+	}
+	var nextActor contract.SceneOccurrenceFragment
+	for _, occurrence := range second.Occurrences {
+		if occurrence.SubjectKind == "character" {
+			nextActor = occurrence
+		}
+	}
+	holder := actor.IdentityKey
+	candidate := mustSceneJSON(contract.InteractionContinuityCandidate{
+		SourceVersionID: input.SourceVersionID, SourceHash: input.SourceHash,
+		StructureIdentitySetVersionID:         input.StructureIdentitySetVersionID,
+		StructureIdentitySetVersionHash:       input.StructureIdentitySetVersionHash,
+		SceneFactCandidateRevisionID:          input.SceneFactCandidateRevisionID,
+		SceneFactCandidateRevisionHash:        input.SceneFactCandidateRevisionHash,
+		ProductionEntityCandidateRevisionID:   input.ProductionEntityCandidateRevisionID,
+		ProductionEntityCandidateRevisionHash: input.ProductionEntityCandidateRevisionHash,
+		SceneBindingCandidateRevisionID:       input.SceneBindingCandidateRevisionID,
+		SceneBindingCandidateRevisionHash:     input.SceneBindingCandidateRevisionHash,
+		Interactions: []contract.InteractionFragment{{
+			InteractionKey: "interaction_scene_0001_0001", SceneScopeKey: first.SceneScopeKey,
+			BeatKey: &first.Beats[0].BeatKey, Predicate: "hold",
+			ActorOccurrenceKey: actor.OccurrenceKey, PropOccurrenceKey: prop.OccurrenceKey,
+			HolderAfterIdentityKey: &holder,
+			PropStateBeforeKey:     prop.StateKey, PropStateAfterKey: prop.StateKey,
+			Evidence: facts.Scenes[0].Actions[0].Evidence,
+		}},
+		Continuity: []contract.ContinuityFragment{{
+			ContinuityKey: "continuity_character_linzhou_0001", SubjectKind: "character",
+			IdentityKey: actor.IdentityKey, FromSceneScopeKey: first.SceneScopeKey,
+			ToSceneScopeKey: second.SceneScopeKey, BeforeStateKey: actor.StateKey,
+			AfterStateKey: nextActor.StateKey, Transition: "state_persists",
+			Evidence: []contract.SourceEvidenceSpan{actor.Evidence, nextActor.Evidence},
+		}},
+		ReviewIssues: []contract.CandidateReviewIssue{},
+	})
+	if err := contract.ValidateInteractionContinuityCandidate(candidate, input); err != nil {
+		panic("invalid deterministic Interaction/Continuity fixture: " + err.Error())
+	}
+	return candidate
 }
 
 func buildSpanCandidate(input contract.ScriptSpanProposalInput) json.RawMessage {

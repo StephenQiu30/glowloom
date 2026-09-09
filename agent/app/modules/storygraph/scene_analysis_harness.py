@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.harness.scene_analysis_schemas import (
     IdentityResolutionInput,
+    InteractionContinuityInput,
     ProductionEntityDerivationInput,
     SceneAnalysisInvocation,
     SceneFactExtractionInput,
@@ -28,6 +29,7 @@ from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_candidates import (
     IdentityMentionRef,
     IdentityResolutionCandidate,
+    InteractionContinuityCandidate,
     ProductionEntityFragmentCandidate,
     SceneBindingFragmentCandidate,
     SceneFactCandidate,
@@ -144,6 +146,14 @@ class SceneAnalysisHarness:
             source = SceneOccurrenceBindingInput.model_validate(self.invocation.payload.stage_input)
             _materialize_evidence_hashes(candidate, source.normalized_text)
             candidate.validate_for_input(source)
+        elif stage == "reconcile_interaction_continuity":
+            if not isinstance(candidate, InteractionContinuityCandidate):
+                raise CodexSchemaInvalid("Codex CLI returned the wrong continuity schema")
+            source = InteractionContinuityInput.model_validate(
+                self.invocation.payload.stage_input
+            )
+            _materialize_evidence_hashes(candidate, source.normalized_text)
+            candidate.validate_for_input(source)
         else:
             if not isinstance(candidate, StructureIdentityReviewCandidate):
                 raise CodexSchemaInvalid(
@@ -196,6 +206,7 @@ def _materialize_evidence_hashes(
         | StructureIdentityReviewCandidate
         | ProductionEntityFragmentCandidate
         | SceneBindingFragmentCandidate
+        | InteractionContinuityCandidate
     ),
     normalized_text: str,
 ) -> None:
@@ -235,6 +246,10 @@ def _materialize_evidence_hashes(
             evidence.extend(claim.basis.evidence)
         for gap in candidate.design_gaps:
             evidence.extend(gap.source_constraints)
+    elif isinstance(candidate, InteractionContinuityCandidate):
+        evidence.extend(value.evidence for value in candidate.interactions)
+        for value in candidate.continuity:
+            evidence.extend(value.evidence)
     else:
         for scene in candidate.scenes:
             evidence.extend(value.evidence for value in scene.dialogues)
