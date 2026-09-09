@@ -85,7 +85,11 @@ func TestProductionWorldReviewDetailRejectsCandidateOutsideFrozenGate(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate.ContentHash = "f" + candidate.ContentHash[1:]
+	replacement := byte('0')
+	if candidate.ContentHash[len(candidate.ContentHash)-1] == replacement {
+		replacement = '1'
+	}
+	candidate.ContentHash = candidate.ContentHash[:len(candidate.ContentHash)-1] + string(replacement)
 	if _, _, err = workflow.NewProductionWorldReviewDetail(gate, candidate); err == nil {
 		t.Fatal("review detail accepted a Candidate outside the frozen Gate")
 	}
