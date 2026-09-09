@@ -763,9 +763,14 @@ func buildSpanCandidate(input contract.ScriptSpanProposalInput) json.RawMessage 
 		"source_version_id": input.SourceVersionID, "source_hash": input.SourceHash,
 		"codepoint_count": len(text),
 		"coverage":        map[string]any{"source_hash": input.SourceHash, "codepoint_start": 0, "codepoint_end": len(text), "covered_codepoints": len(text)},
+		"episodes": []any{map[string]any{
+			"temporary_episode_id": "episode_0001", "position": 1,
+			"codepoint_start": 0, "codepoint_end": len(text), "heading": nil, "evidence": nil,
+			"scene_span_ids": []string{"span_0001", "span_0002"},
+		}},
 		"spans": []any{
-			map[string]any{"temporary_span_id": "span_0001", "kind": "scene", "codepoint_start": 0, "codepoint_end": second, "heading": "第一场 夜 内", "evidence": sceneEvidence(input.NormalizedText, 0, runeIndex(input.NormalizedText, "\n"))},
-			map[string]any{"temporary_span_id": "span_0002", "kind": "scene", "codepoint_start": second, "codepoint_end": len(text), "heading": "第二场 日 外", "evidence": sceneEvidence(input.NormalizedText, second, second+runeIndex(string(text[second:]), "\n"))},
+			map[string]any{"temporary_span_id": "span_0001", "episode_span_id": "episode_0001", "kind": "scene", "codepoint_start": 0, "codepoint_end": second, "heading": "第一场 夜 内", "evidence": sceneEvidence(input.NormalizedText, 0, runeIndex(input.NormalizedText, "\n"))},
+			map[string]any{"temporary_span_id": "span_0002", "episode_span_id": "episode_0001", "kind": "scene", "codepoint_start": second, "codepoint_end": len(text), "heading": "第二场 日 外", "evidence": sceneEvidence(input.NormalizedText, second, second+runeIndex(string(text[second:]), "\n"))},
 		},
 		"review_issues": []any{},
 	})

@@ -82,9 +82,15 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 			"source_hash": sourceHash, "codepoint_start": 0,
 			"codepoint_end": len([]rune(text)), "covered_codepoints": len([]rune(text)),
 		},
+		"episodes": []any{map[string]any{
+			"temporary_episode_id": "episode_0001", "position": 1,
+			"codepoint_start": 0, "codepoint_end": len([]rune(text)),
+			"heading": nil, "evidence": nil,
+			"scene_span_ids": []string{"span_0001", "span_0002"},
+		}},
 		"spans": []any{
 			map[string]any{
-				"temporary_span_id": "span_0001", "kind": "scene",
+				"temporary_span_id": "span_0001", "episode_span_id": "episode_0001", "kind": "scene",
 				"codepoint_start": 0, "codepoint_end": 16, "heading": "第一场 夜 内",
 				"evidence": map[string]any{
 					"source_start": 0, "source_end": 7,
@@ -92,7 +98,7 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 				},
 			},
 			map[string]any{
-				"temporary_span_id": "span_0002", "kind": "scene",
+				"temporary_span_id": "span_0002", "episode_span_id": "episode_0001", "kind": "scene",
 				"codepoint_start": 16, "codepoint_end": len([]rune(text)), "heading": "第二场 日 外",
 				"evidence": map[string]any{
 					"source_start": 16, "source_end": 23,
@@ -104,6 +110,14 @@ func TestSceneAnalysisSpanAndSceneFactContracts(t *testing.T) {
 	})
 	if err = contract.ValidateScriptSpanCandidate(spanCandidate, text); err != nil {
 		t.Fatalf("valid span candidate rejected: %v", err)
+	}
+	var membershipDrifted map[string]any
+	if err = json.Unmarshal(spanCandidate, &membershipDrifted); err != nil {
+		t.Fatal(err)
+	}
+	membershipDrifted["episodes"].([]any)[0].(map[string]any)["scene_span_ids"] = []any{"span_0001"}
+	if err = contract.ValidateScriptSpanCandidate(mustJSON(t, membershipDrifted), text); err == nil {
+		t.Fatal("incomplete episode-to-scene membership was accepted")
 	}
 	var drifted map[string]any
 	if err = json.Unmarshal(spanCandidate, &drifted); err != nil {

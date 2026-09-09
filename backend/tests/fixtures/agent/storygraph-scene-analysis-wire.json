@@ -11,7 +11,7 @@
       "skill_release_id": "66666666-6666-4666-8666-666666666666",
       "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
       "stage_release_hash": "3333333333333333333333333333333333333333333333333333333333333333",
-      "bundle_content_hash": "81071e1d07c0a2c422b575ab2f0c6500d1658a2f6afbac7d25fa47d5daf02a71",
+      "bundle_content_hash": "1f5f3880ccc36f35fad75c75ac0a9a6bc92bc34e72875e57fceeab39e9275492",
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     },
     "control": {
@@ -68,7 +68,7 @@
         "newline_normalization": "lf"
       }
     },
-    "input_hash": "0d2c17ed77bf3acea33be5a501d938c5012155b459ecf005460f1f67bec59d57"
+    "input_hash": "74e1cd632f869d508eb236aece68f907df2351dc89f749f2789139a8691a8081"
   },
   "valid_script_span_candidate": {
     "source_version_id": "33333333-3333-4333-8333-333333333333",
@@ -80,9 +80,21 @@
       "codepoint_end": 29,
       "covered_codepoints": 29
     },
+    "episodes": [
+      {
+        "temporary_episode_id": "episode_0001",
+        "position": 1,
+        "codepoint_start": 0,
+        "codepoint_end": 29,
+        "heading": null,
+        "evidence": null,
+        "scene_span_ids": ["span_0001", "span_0002"]
+      }
+    ],
     "spans": [
       {
         "temporary_span_id": "span_0001",
+        "episode_span_id": "episode_0001",
         "kind": "scene",
         "codepoint_start": 0,
         "codepoint_end": 16,
@@ -96,6 +108,7 @@
       },
       {
         "temporary_span_id": "span_0002",
+        "episode_span_id": "episode_0001",
         "kind": "scene",
         "codepoint_start": 16,
         "codepoint_end": 29,
@@ -143,9 +156,9 @@
     ],
     "review_issues": []
   },
-  "expected_input_hash": "0d2c17ed77bf3acea33be5a501d938c5012155b459ecf005460f1f67bec59d57",
-  "expected_stage_instance_key": "6527b1a42c5e244182817c146204483843b4d2bc54ae11c69a8a9eb84ad7fd01",
-  "expected_result_hash": "8169b986bc9a044746d8219d5de6bd7bcfbdef08fdbe227bbf351994c26dd275",
+  "expected_input_hash": "74e1cd632f869d508eb236aece68f907df2351dc89f749f2789139a8691a8081",
+  "expected_stage_instance_key": "7982a3f62607729358b3ed5576b9f1b9f6a9a57ba6b9aaa4b38c9e86bf5e9b22",
+  "expected_result_hash": "3c965caec507d8f8094cea31d06b59b48ed2baaf6979de896fe411b4ac8805dd",
   "reject_mutations": [
     {"name": "missing_attempt_id", "operation": "remove", "path": "attempt_id"},
     {"name": "unknown_style_field", "operation": "add_stage_input", "path": "visual_style", "value": "赛博朋克"},

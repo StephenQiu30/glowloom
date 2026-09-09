@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ const (
 	ScriptSpanCandidateSchemaVersion         = "script-span-candidate-production"
 	SceneFactCandidateSchemaVersion          = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion = "identity-resolution-candidate-production"
-	SceneAnalysisSkillBundleHash             = "81071e1d07c0a2c422b575ab2f0c6500d1658a2f6afbac7d25fa47d5daf02a71"
+	SceneAnalysisSkillBundleHash             = "1f5f3880ccc36f35fad75c75ac0a9a6bc92bc34e72875e57fceeab39e9275492"
 )
 
 type SceneAnalysisStageVariant struct {
@@ -691,8 +692,19 @@ type CandidateReviewIssue struct {
 	Evidence []SourceEvidenceSpan `json:"evidence"`
 }
 
+type ScriptEpisodeSpan struct {
+	TemporaryEpisodeID string              `json:"temporary_episode_id"`
+	Position           int                 `json:"position"`
+	CodepointStart     int                 `json:"codepoint_start"`
+	CodepointEnd       int                 `json:"codepoint_end"`
+	Heading            *string             `json:"heading"`
+	Evidence           *SourceEvidenceSpan `json:"evidence"`
+	SceneSpanIDs       []string            `json:"scene_span_ids"`
+}
+
 type ScriptSceneSpan struct {
 	TemporarySpanID string             `json:"temporary_span_id"`
+	EpisodeSpanID   string             `json:"episode_span_id"`
 	Kind            string             `json:"kind"`
 	CodepointStart  int                `json:"codepoint_start"`
 	CodepointEnd    int                `json:"codepoint_end"`
@@ -712,6 +724,7 @@ type ScriptSpanCandidate struct {
 	SourceHash      string                  `json:"source_hash"`
 	CodepointCount  int                     `json:"codepoint_count"`
 	Coverage        ScriptSpanCoverageProof `json:"coverage"`
+	Episodes        []ScriptEpisodeSpan     `json:"episodes"`
 	Spans           []ScriptSceneSpan       `json:"spans"`
 	ReviewIssues    []CandidateReviewIssue  `json:"review_issues"`
 }
@@ -719,7 +732,7 @@ type ScriptSpanCandidate struct {
 func ValidateScriptSpanCandidate(raw json.RawMessage, text string) error {
 	var value ScriptSpanCandidate
 	if decodeStrict(raw, &value) != nil || value.SourceHash != hashUTF8(text) ||
-		value.CodepointCount != utf8.RuneCountInString(text) || len(value.Spans) == 0 ||
+		value.CodepointCount != utf8.RuneCountInString(text) || len(value.Episodes) == 0 || len(value.Spans) == 0 ||
 		value.Coverage.SourceHash != value.SourceHash || value.Coverage.CodepointStart != 0 ||
 		value.Coverage.CodepointEnd != value.CodepointCount ||
 		value.Coverage.CoveredCodepoints != value.CodepointCount {
@@ -729,12 +742,51 @@ func ValidateScriptSpanCandidate(raw json.RawMessage, text string) error {
 		return errors.New("invalid Scene Analysis ScriptSpan source identity")
 	}
 	runes := []rune(text)
+	previousEpisodeEnd := 0
+	episodeBounds := make(map[string][2]int, len(value.Episodes))
+	expectedSceneKeys := make(map[string][]string, len(value.Episodes))
+	for index, episode := range value.Episodes {
+		if !strings.HasPrefix(episode.TemporaryEpisodeID, "episode_") || episode.Position != index+1 ||
+			episode.CodepointStart != previousEpisodeEnd || episode.CodepointEnd <= episode.CodepointStart ||
+			episode.CodepointEnd > len(runes) || len(episode.SceneSpanIDs) == 0 ||
+			(episode.Heading == nil) != (episode.Evidence == nil) {
+			return errors.New("EpisodeSpan coverage is invalid")
+		}
+		if _, duplicate := episodeBounds[episode.TemporaryEpisodeID]; duplicate {
+			return errors.New("EpisodeSpan key is duplicated")
+		}
+		if episode.Heading != nil && (strings.TrimSpace(*episode.Heading) == "" ||
+			episode.Evidence.SourceStart < episode.CodepointStart ||
+			episode.Evidence.SourceEnd > episode.CodepointEnd ||
+			episode.Evidence.Validate(runes) != nil || *episode.Heading != episode.Evidence.ExactAnchor) {
+			return errors.New("EpisodeSpan heading evidence is invalid")
+		}
+		seenSceneKeys := make(map[string]struct{}, len(episode.SceneSpanIDs))
+		for _, key := range episode.SceneSpanIDs {
+			if !strings.HasPrefix(key, "span_") {
+				return errors.New("EpisodeSpan scene key is invalid")
+			}
+			if _, duplicate := seenSceneKeys[key]; duplicate {
+				return errors.New("EpisodeSpan scene key is duplicated")
+			}
+			seenSceneKeys[key] = struct{}{}
+		}
+		episodeBounds[episode.TemporaryEpisodeID] = [2]int{episode.CodepointStart, episode.CodepointEnd}
+		expectedSceneKeys[episode.TemporaryEpisodeID] = episode.SceneSpanIDs
+		previousEpisodeEnd = episode.CodepointEnd
+	}
+	if previousEpisodeEnd != len(runes) {
+		return errors.New("EpisodeSpan source coverage is incomplete")
+	}
 	previousEnd := 0
 	keys := map[string]struct{}{}
+	suppliedSceneKeys := make(map[string][]string, len(expectedSceneKeys))
 	for _, span := range value.Spans {
-		if strings.TrimSpace(span.TemporarySpanID) == "" || span.Kind != "scene" ||
+		bounds, episodeExists := episodeBounds[span.EpisodeSpanID]
+		if strings.TrimSpace(span.TemporarySpanID) == "" || span.Kind != "scene" || !episodeExists ||
 			span.CodepointStart != previousEnd || span.CodepointEnd <= span.CodepointStart ||
 			span.CodepointEnd > len(runes) || strings.TrimSpace(span.Heading) == "" ||
+			span.CodepointStart < bounds[0] || span.CodepointEnd > bounds[1] ||
 			span.Evidence.SourceStart < span.CodepointStart ||
 			span.Evidence.SourceEnd > span.CodepointEnd || span.Evidence.Validate(runes) != nil {
 			return errors.New("ScriptSpan coverage is invalid")
@@ -743,10 +795,16 @@ func ValidateScriptSpanCandidate(raw json.RawMessage, text string) error {
 			return errors.New("ScriptSpan key is duplicated")
 		}
 		keys[span.TemporarySpanID] = struct{}{}
+		suppliedSceneKeys[span.EpisodeSpanID] = append(suppliedSceneKeys[span.EpisodeSpanID], span.TemporarySpanID)
 		previousEnd = span.CodepointEnd
 	}
 	if previousEnd != len(runes) {
 		return errors.New("ScriptSpan source coverage is incomplete")
+	}
+	for episodeKey, expected := range expectedSceneKeys {
+		if !slices.Equal(suppliedSceneKeys[episodeKey], expected) {
+			return errors.New("ScriptSpan episode membership is incomplete")
+		}
 	}
 	return nil
 }

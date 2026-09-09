@@ -29,6 +29,7 @@ from app.modules.storygraph.scene_analysis_bundle import SceneAnalysisBundle
 from app.modules.storygraph.scene_analysis_candidates import (
     SceneFact,
     SceneFactCandidate,
+    ScriptEpisodeSpan,
     ScriptSceneSpan,
     ScriptSpanCandidate,
     ScriptSpanCoverageProof,
@@ -145,9 +146,21 @@ def test_scene_analysis_script_span_candidate_requires_exact_codepoint_coverage(
             codepoint_end=len(text),
             covered_codepoints=len(text),
         ),
+        episodes=[
+            ScriptEpisodeSpan(
+                temporary_episode_id="episode_0001",
+                position=1,
+                codepoint_start=0,
+                codepoint_end=len(text),
+                heading=None,
+                evidence=None,
+                scene_span_ids=["span_0001", "span_0002"],
+            )
+        ],
         spans=[
             ScriptSceneSpan(
                 temporary_span_id="span_0001",
+                episode_span_id="episode_0001",
                 kind="scene",
                 codepoint_start=0,
                 codepoint_end=16,
@@ -161,6 +174,7 @@ def test_scene_analysis_script_span_candidate_requires_exact_codepoint_coverage(
             ),
             ScriptSceneSpan(
                 temporary_span_id="span_0002",
+                episode_span_id="episode_0001",
                 kind="scene",
                 codepoint_start=16,
                 codepoint_end=len(text),
@@ -177,6 +191,16 @@ def test_scene_analysis_script_span_candidate_requires_exact_codepoint_coverage(
     )
     candidate.validate_for_text(text)
 
+    missing_scene_membership = candidate.model_dump(mode="json")
+    missing_scene_membership["episodes"][0]["scene_span_ids"] = ["span_0001"]
+    with pytest.raises(ValidationError):
+        ScriptSpanCandidate.model_validate(missing_scene_membership)
+
+    incomplete_episode_coverage = candidate.model_dump(mode="json")
+    incomplete_episode_coverage["episodes"][0]["codepoint_end"] = len(text) - 1
+    with pytest.raises(ValidationError):
+        ScriptSpanCandidate.model_validate(incomplete_episode_coverage)
+
     with pytest.raises(ValidationError):
         ScriptSpanCandidate(
             source_version_id=SOURCE_ID,
@@ -188,9 +212,21 @@ def test_scene_analysis_script_span_candidate_requires_exact_codepoint_coverage(
                 codepoint_end=len(text),
                 covered_codepoints=len(text),
             ),
+            episodes=[
+                ScriptEpisodeSpan(
+                    temporary_episode_id="episode_0001",
+                    position=1,
+                    codepoint_start=0,
+                    codepoint_end=len(text),
+                    heading=None,
+                    evidence=None,
+                    scene_span_ids=["span_0001", "span_0002"],
+                )
+            ],
             spans=[
                 ScriptSceneSpan(
                     temporary_span_id="span_0001",
+                    episode_span_id="episode_0001",
                     kind="scene",
                     codepoint_start=0,
                     codepoint_end=15,
@@ -204,6 +240,7 @@ def test_scene_analysis_script_span_candidate_requires_exact_codepoint_coverage(
                 ),
                 ScriptSceneSpan(
                     temporary_span_id="span_0002",
+                    episode_span_id="episode_0001",
                     kind="scene",
                     codepoint_start=16,
                     codepoint_end=len(text),
@@ -296,6 +333,7 @@ def test_scene_analysis_scene_fact_is_style_blind_and_bound_to_script_spans() ->
         [
             ScriptSceneSpan(
                 temporary_span_id="span_0001",
+                episode_span_id="episode_0001",
                 kind="scene",
                 codepoint_start=0,
                 codepoint_end=len(text),
@@ -334,9 +372,21 @@ async def test_scene_analysis_harness_materializes_evidence_hash_after_anchor_va
             codepoint_end=len(text),
             covered_codepoints=len(text),
         ),
+        episodes=[
+            ScriptEpisodeSpan(
+                temporary_episode_id="episode_0001",
+                position=1,
+                codepoint_start=0,
+                codepoint_end=len(text),
+                heading=None,
+                evidence=None,
+                scene_span_ids=["span_0001"],
+            )
+        ],
         spans=[
             ScriptSceneSpan(
                 temporary_span_id="span_0001",
+                episode_span_id="episode_0001",
                 kind="scene",
                 codepoint_start=0,
                 codepoint_end=len(text),

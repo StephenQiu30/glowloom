@@ -163,6 +163,9 @@ def _materialize_evidence_hashes(
 ) -> None:
     evidence: list[SourceEvidenceSpan | IdentityMentionRef] = []
     if isinstance(candidate, ScriptSpanCandidate):
+        evidence.extend(
+            episode.evidence for episode in candidate.episodes if episode.evidence is not None
+        )
         evidence.extend(span.evidence for span in candidate.spans)
     elif isinstance(candidate, SceneFactCandidate):
         for scene in candidate.scenes:

@@ -45,8 +45,38 @@ class CandidateReviewIssue(StrictSceneAnalysisModel):
     evidence: list[SourceEvidenceSpan]
 
 
+class ScriptEpisodeSpan(StrictSceneAnalysisModel):
+    temporary_episode_id: str = Field(pattern=r"^episode_[a-z0-9_]{1,80}$")
+    position: int = Field(ge=1)
+    codepoint_start: int = Field(ge=0)
+    codepoint_end: int = Field(gt=0)
+    heading: str | None
+    evidence: SourceEvidenceSpan | None
+    scene_span_ids: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_episode(self) -> ScriptEpisodeSpan:
+        if self.codepoint_end <= self.codepoint_start:
+            raise ValueError("episode span range must be increasing")
+        if (self.heading is None) != (self.evidence is None):
+            raise ValueError("episode heading and evidence must be present together")
+        if self.heading is not None and not self.heading.strip():
+            raise ValueError("episode heading must not be empty")
+        if self.evidence is not None and (
+            self.evidence.source_start < self.codepoint_start
+            or self.evidence.source_end > self.codepoint_end
+        ):
+            raise ValueError("episode heading evidence is outside the span")
+        if len(self.scene_span_ids) != len(set(self.scene_span_ids)) or any(
+            not value.startswith("span_") for value in self.scene_span_ids
+        ):
+            raise ValueError("episode scene span keys must be unique")
+        return self
+
+
 class ScriptSceneSpan(StrictSceneAnalysisModel):
     temporary_span_id: str = Field(pattern=r"^span_[a-z0-9_]{1,80}$")
+    episode_span_id: str = Field(pattern=r"^episode_[a-z0-9_]{1,80}$")
     kind: Literal["scene"]
     codepoint_start: int = Field(ge=0)
     codepoint_end: int = Field(gt=0)
@@ -77,6 +107,7 @@ class ScriptSpanCandidate(StrictSceneAnalysisModel):
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     codepoint_count: int = Field(gt=0)
     coverage: ScriptSpanCoverageProof
+    episodes: list[ScriptEpisodeSpan] = Field(min_length=1)
     spans: list[ScriptSceneSpan] = Field(min_length=1)
     review_issues: list[CandidateReviewIssue]
 
@@ -88,15 +119,49 @@ class ScriptSpanCandidate(StrictSceneAnalysisModel):
             or self.coverage.covered_codepoints != self.codepoint_count
         ):
             raise ValueError("script span coverage proof does not match the source")
+        previous_episode_end = 0
+        episode_keys: set[str] = set()
+        expected_scene_keys: dict[str, list[str]] = {}
+        episode_bounds: dict[str, tuple[int, int]] = {}
+        for index, episode in enumerate(self.episodes, start=1):
+            if (
+                episode.temporary_episode_id in episode_keys
+                or episode.position != index
+                or episode.codepoint_start != previous_episode_end
+            ):
+                raise ValueError("episode spans must be unique, ordered, and contiguous")
+            episode_keys.add(episode.temporary_episode_id)
+            expected_scene_keys[episode.temporary_episode_id] = episode.scene_span_ids
+            episode_bounds[episode.temporary_episode_id] = (
+                episode.codepoint_start,
+                episode.codepoint_end,
+            )
+            previous_episode_end = episode.codepoint_end
+        if previous_episode_end != self.codepoint_count:
+            raise ValueError("episode spans must cover the entire source")
+
         previous_end = 0
         keys: set[str] = set()
+        supplied_scene_keys: dict[str, list[str]] = {
+            key: [] for key in expected_scene_keys
+        }
         for span in self.spans:
-            if span.temporary_span_id in keys or span.codepoint_start != previous_end:
+            bounds = episode_bounds.get(span.episode_span_id)
+            if (
+                span.temporary_span_id in keys
+                or span.codepoint_start != previous_end
+                or bounds is None
+                or span.codepoint_start < bounds[0]
+                or span.codepoint_end > bounds[1]
+            ):
                 raise ValueError("script spans must be unique, ordered, and contiguous")
             keys.add(span.temporary_span_id)
+            supplied_scene_keys[span.episode_span_id].append(span.temporary_span_id)
             previous_end = span.codepoint_end
         if previous_end != self.codepoint_count:
             raise ValueError("script spans must cover the entire source")
+        if supplied_scene_keys != expected_scene_keys:
+            raise ValueError("every scene span must belong to exactly one episode")
         return self
 
     def validate_for_text(self, text: str) -> None:
@@ -104,6 +169,11 @@ class ScriptSpanCandidate(StrictSceneAnalysisModel):
             raise ValueError("script span source length drifted")
         if hashlib.sha256(text.encode("utf-8")).hexdigest() != self.source_hash:
             raise ValueError("script span source hash drifted")
+        for episode in self.episodes:
+            if episode.evidence is not None:
+                episode.evidence.validate_for_text(text)
+                if episode.heading != episode.evidence.exact_anchor:
+                    raise ValueError("episode heading evidence does not match its heading")
         for span in self.spans:
             span.evidence.validate_for_text(text)
 
