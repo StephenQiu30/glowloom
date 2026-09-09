@@ -16,7 +16,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const SchemaVersion = "storygraph-scene-production"
+const (
+	SchemaVersion      = "storygraph-scene-production"
+	ProductionSchemaID = "storygraph-production"
+)
 
 var (
 	hashPattern     = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -313,7 +316,7 @@ func DecodeSnapshot(raw []byte) (Snapshot, error) {
 }
 
 func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
-	if snapshot.SchemaVersion != SchemaVersion || snapshot.Nodes == nil || snapshot.Edges == nil {
+	if !oneOf(snapshot.SchemaVersion, SchemaVersion, ProductionSchemaID) || snapshot.Nodes == nil || snapshot.Edges == nil {
 		return CanonicalSnapshot{}, errors.New("invalid StoryGraph snapshot envelope")
 	}
 	nodes := append(make([]Node, 0, len(snapshot.Nodes)), snapshot.Nodes...)
@@ -390,7 +393,7 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		SchemaVersion string `json:"schema_version"`
 		Nodes         any    `json:"nodes"`
 		Edges         any    `json:"edges"`
-	}{SchemaVersion, topologyNodes, topologyEdges})
+	}{snapshot.SchemaVersion, topologyNodes, topologyEdges})
 	if err != nil {
 		return CanonicalSnapshot{}, err
 	}
@@ -398,11 +401,11 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		SchemaVersion string `json:"schema_version"`
 		Nodes         []Node `json:"nodes"`
 		Edges         []Edge `json:"edges"`
-	}{SchemaVersion, nodes, edges})
+	}{snapshot.SchemaVersion, nodes, edges})
 	if err != nil {
 		return CanonicalSnapshot{}, err
 	}
-	return CanonicalSnapshot{SchemaVersion: SchemaVersion, Nodes: nodes, Edges: edges, TopologyHash: topologyHash, ContentHash: contentHash}, nil
+	return CanonicalSnapshot{SchemaVersion: snapshot.SchemaVersion, Nodes: nodes, Edges: edges, TopologyHash: topologyHash, ContentHash: contentHash}, nil
 }
 
 func validateEdgeEndpoints(nodes []Node, edges []Edge) error {

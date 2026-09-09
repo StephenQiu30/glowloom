@@ -111,6 +111,7 @@
 目标：把已发布 OwnerVersion 投影为无环 storygraph-production，并提供有界关系、反查和影响查询。
 
 - [ ] Red：Owner 污染源、环、跨项目 ref、current/latest、Head CAS、事务中断、无界查询和 Search 故障。
+- [x] 固定 `storygraph-production` P0 Coverage Proof、七类精确 Owner Collection 与确定性 OwnerSetHash；拒绝缺集合、跨项目、`current/latest`、Agent Candidate、集合根漂移和图节点越界。
 - [ ] 实现 OwnerVersion-first Compiler、StoryGraphVersion/Head、typed node/edge、Receipt 与原子发布。
 - [ ] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query。
 - [ ] 证明 Query 零写入且不依赖 Elasticsearch 正常。
