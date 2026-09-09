@@ -36,15 +36,46 @@ func (reader *DecisionReader) GetHumanGateDecision(
 		result.Decision.SubjectHash != result.Task.SubjectHash || len(result.Decision.DecisionPayloadHash) != 64 {
 		return domain.HumanGateReviewDecision{}, errors.New("review decision and human task have drifted")
 	}
-	return domain.HumanGateReviewDecision{
+	decision := domain.HumanGateReviewDecision{
 		WorkspaceID: result.Task.WorkspaceID, ProjectID: result.Task.ProjectID,
 		WorkflowRunID: result.Task.WorkflowRunID, NodeRunID: result.Task.NodeRunID,
 		HumanTaskID: result.Task.ID, ReviewDecisionID: result.Decision.ID,
 		SubjectType:     result.Task.SubjectType,
 		SubjectRevision: result.Decision.SubjectRevision, SubjectHash: result.Decision.SubjectHash,
 		Decision: result.Decision.Decision, DecisionPayloadHash: result.Decision.DecisionPayloadHash,
-		ChangeRequest: structureIdentityChangeRequest(result.Decision.ChangeRequest),
-	}, nil
+	}
+	if decision.SubjectType == "production_world_gate_input" {
+		decision.ProductionWorldChangeRequest = productionWorldChangeRequest(result.Decision.ChangeRequest)
+	} else {
+		decision.ChangeRequest = structureIdentityChangeRequest(result.Decision.ChangeRequest)
+	}
+	return decision, nil
+}
+
+func productionWorldChangeRequest(value *reviewdomain.ChangeRequest) *domain.ProductionWorldChangeRequest {
+	if value == nil {
+		return nil
+	}
+	result := &domain.ProductionWorldChangeRequest{
+		IssueRefs: append([]string(nil), value.IssueRefs...),
+		ChangeSpec: domain.ProductionWorldRepairChange{
+			Operation: value.ChangeSpec.Operation, TargetKeys: append([]string(nil), value.ChangeSpec.TargetKeys...),
+			AffectedScopeKeys: append([]string(nil), value.ChangeSpec.AffectedScopeKeys...),
+		},
+		ReasonCode: value.ReasonCode,
+	}
+	result.EvidenceRefs = make([]domain.HumanGateEvidenceRef, len(value.EvidenceRefs))
+	for index, evidence := range value.EvidenceRefs {
+		result.EvidenceRefs[index] = domain.HumanGateEvidenceRef{
+			SourceVersionID: evidence.SourceVersionID, SourceStart: evidence.SourceStart,
+			SourceEnd: evidence.SourceEnd, TextHash: evidence.TextHash,
+		}
+	}
+	if value.UserNote != nil {
+		note := *value.UserNote
+		result.UserNote = &note
+	}
+	return result
 }
 
 func structureIdentityChangeRequest(value *reviewdomain.ChangeRequest) *domain.StructureIdentityChangeRequest {

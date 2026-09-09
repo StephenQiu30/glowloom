@@ -97,7 +97,8 @@ func (coordinator *HumanGateCoordinator) ensureRepair(
 	decision domain.HumanGateReviewDecision,
 	coordination domain.HumanGateCoordination,
 ) (domain.HumanGateCoordination, error) {
-	if decision.Decision != "changes_requested" || decision.SubjectType != "structure_identity_gate_input" ||
+	if decision.Decision != "changes_requested" ||
+		(decision.SubjectType != "structure_identity_gate_input" && decision.SubjectType != "production_world_gate_input") ||
 		coordination.WorkflowResumeStatus != "completed" ||
 		coordination.RepairWorkflowRunID != "" {
 		return coordination, nil
@@ -134,10 +135,15 @@ func (coordinator *HumanGateCoordinator) resolveDecision(
 		!validHumanGateDecision(decision.Decision) {
 		return domain.HumanGateReviewDecision{}, errors.New("human gate review decision has drifted")
 	}
-	if (decision.Decision == "changes_requested") != (decision.ChangeRequest != nil) {
+	hasStructureRepair := decision.ChangeRequest != nil
+	hasProductionWorldRepair := decision.ProductionWorldChangeRequest != nil
+	if (decision.Decision == "changes_requested") != (hasStructureRepair || hasProductionWorldRepair) ||
+		(hasStructureRepair && hasProductionWorldRepair) {
 		return domain.HumanGateReviewDecision{}, errors.New("human gate repair decision has drifted")
 	}
-	if decision.Decision == "changes_requested" && decision.SubjectType == "" {
+	if decision.Decision == "changes_requested" &&
+		!((decision.SubjectType == "structure_identity_gate_input" && hasStructureRepair) ||
+			(decision.SubjectType == "production_world_gate_input" && hasProductionWorldRepair)) {
 		return domain.HumanGateReviewDecision{}, errors.New("human gate repair subject has drifted")
 	}
 	return decision, nil

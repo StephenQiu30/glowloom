@@ -86,6 +86,39 @@ func TestHumanGateCoordinatorStartsOneBoundedRepairAfterChangesResume(t *testing
 	}
 }
 
+func TestHumanGateCoordinatorStartsProductionWorldRepairAfterChangesResume(t *testing.T) {
+	decision := workflowdomain.HumanGateReviewDecision{
+		WorkspaceID: "workspace-world", ProjectID: "project-world", WorkflowRunID: "run-world", NodeRunID: "node-world",
+		HumanTaskID: "task-world", ReviewDecisionID: "decision-world", SubjectRevision: 1,
+		SubjectHash: strings.Repeat("e", 64), Decision: "changes_requested",
+		SubjectType:         "production_world_gate_input",
+		DecisionPayloadHash: strings.Repeat("f", 64),
+		ProductionWorldChangeRequest: &workflowdomain.ProductionWorldChangeRequest{
+			ChangeSpec: workflowdomain.ProductionWorldRepairChange{
+				Operation: workflowdomain.ProductionWorldRepairReviseInteraction,
+			},
+		},
+	}
+	statuses := &humanGateStatusRepository{status: workflowdomain.HumanGateCoordination{
+		ReviewDecisionID: decision.ReviewDecisionID, DecisionStatus: "recorded",
+		OwnerApplyStatus: "not_required", WorkflowResumeStatus: "completed",
+	}}
+	repairs := &humanGateRepairService{run: workflowdomain.WorkflowRun{ID: "repair-world"}}
+	coordinator := workflowapp.NewHumanGateCoordinator(
+		&humanGateDecisionReader{decision: decision},
+		&humanGateSignalService{intent: workflowdomain.SignalIntent{Status: "completed"}, statuses: statuses},
+		statuses,
+		repairs,
+	)
+	result, err := coordinator.ResumeHumanGate(
+		context.Background(), workflowapp.Actor{UserID: "reviewer-1", TokenVersion: 1}, decision.ReviewDecisionID,
+	)
+	if err != nil || result.RepairWorkflowRunID != "repair-world" || repairs.calls != 1 ||
+		repairs.decision.ProductionWorldChangeRequest == nil || repairs.decision.ChangeRequest != nil {
+		t.Fatalf("Production World repair coordination=%#v decision=%#v calls=%d err=%v", result, repairs.decision, repairs.calls, err)
+	}
+}
+
 type humanGateDecisionReader struct {
 	decision   workflowdomain.HumanGateReviewDecision
 	decisionID string

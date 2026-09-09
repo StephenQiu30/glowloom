@@ -102,6 +102,7 @@
   - [x] 固定 Gate 2 ChangeRequest 的 operation/reason/evidence/issue/closure 合同，并机械映射唯一 Workflow root；该内部合同不单独开放决议。
   - [x] 固定 Backend/Agent 共用的 stage-specific repair directive、精确 base Candidate 与 Skill 约束；Evidence 必须非空，`user_note` 仅审计且不进入 Agent 输入。
   - [x] 在 Agent 输出后与 Backend Attempt 接受前双重执行闭包保持检查；拒绝闭包外变化、业务 key 集变化和 no-op repair。
+  - [x] 让 Review 按 `production_world_gate_input` 重载冻结 Gate/Candidate/六视图并持久化 typed ChangeRequest，Coordinator 与 Rerun 服务按该决议选择唯一制作阶段 root；在 stage directive 注入接通以前仍不公开决议入口。
   - [ ] 在 Review 持久化时重算合同，向受影响生产阶段注入有界 repair directive，启动 repair Run 后再开放决议。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 

@@ -304,7 +304,7 @@ func validChangeRequestForDecision(decision string, value *domain.ChangeRequest)
 	if value == nil {
 		return true
 	}
-	if len(value.IssueRefs) == 0 || len(value.EvidenceRefs) == 0 || value.ChangeSpec.Operation == "" ||
+	if len(value.EvidenceRefs) == 0 || value.ChangeSpec.Operation == "" ||
 		len(value.ChangeSpec.TargetKeys) == 0 || len(value.ChangeSpec.AffectedScopeKeys) == 0 ||
 		value.ReasonCode == "" || (value.UserNote != nil && len([]rune(*value.UserNote)) > 1000) {
 		return false

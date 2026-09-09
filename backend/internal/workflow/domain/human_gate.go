@@ -8,6 +8,7 @@ type HumanGateReviewDecision struct {
 	SubjectHash, Decision                            string
 	DecisionPayloadHash                              string
 	ChangeRequest                                    *StructureIdentityChangeRequest
+	ProductionWorldChangeRequest                     *ProductionWorldChangeRequest
 }
 
 type HumanGateCoordination struct {

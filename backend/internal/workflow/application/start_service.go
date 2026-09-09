@@ -108,10 +108,13 @@ func (service *StartService) RerunFromHumanGate(
 	actor Actor,
 	decision domain.HumanGateReviewDecision,
 ) (domain.WorkflowRun, error) {
-	if decision.Decision != "changes_requested" || decision.SubjectType != "structure_identity_gate_input" ||
-		decision.ChangeRequest == nil || decision.WorkflowRunID == "" ||
+	hasStructureRepair := decision.SubjectType == "structure_identity_gate_input" && decision.ChangeRequest != nil
+	hasProductionWorldRepair := decision.SubjectType == "production_world_gate_input" &&
+		decision.ProductionWorldChangeRequest != nil
+	if decision.Decision != "changes_requested" || hasStructureRepair == hasProductionWorldRepair ||
+		decision.WorkflowRunID == "" ||
 		decision.ReviewDecisionID == "" || len(decision.DecisionPayloadHash) != 64 {
-		return domain.WorkflowRun{}, invalid("Invalid structure identity repair decision")
+		return domain.WorkflowRun{}, invalid("Invalid human gate repair decision")
 	}
 	source, err := service.loadRerunSource(ctx, decision.WorkflowRunID)
 	if err != nil {
@@ -120,7 +123,12 @@ func (service *StartService) RerunFromHumanGate(
 	if source.Run.Status != "NEEDS_ATTENTION" || source.Run.ProgressStage != "human_gate:changes_requested" {
 		return domain.WorkflowRun{}, ErrRepairSourcePending
 	}
-	rootNodeID, err := domain.StructureIdentityRepairRootNode(source.Nodes, *decision.ChangeRequest)
+	rootNodeID := ""
+	if hasStructureRepair {
+		rootNodeID, err = domain.StructureIdentityRepairRootNode(source.Nodes, *decision.ChangeRequest)
+	} else {
+		rootNodeID, err = domain.ProductionWorldRepairRootNode(source.Nodes, *decision.ProductionWorldChangeRequest)
+	}
 	if err != nil {
 		return domain.WorkflowRun{}, invalid(err.Error())
 	}

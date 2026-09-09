@@ -182,39 +182,48 @@ func loadProductionWorldReviewSubject(
 	task model.HumanTask,
 	mapped domain.HumanTask,
 ) (json.RawMessage, error) {
+	_, _, encoded, err := loadProductionWorldReviewFacts(transaction, task, mapped)
+	return encoded, err
+}
+
+func loadProductionWorldReviewFacts(
+	transaction *gorm.DB,
+	task model.HumanTask,
+	mapped domain.HumanTask,
+) (workflowdomain.ProductionWorldGateInput, workflowdomain.ProductionWorldReviewDetail, json.RawMessage, error) {
 	var subject model.WorkflowHumanGateInput
 	if err := transaction.First(&subject, "id = ?", task.SubjectID).Error; err != nil {
-		return nil, normalizeNotFound(err)
+		return workflowdomain.ProductionWorldGateInput{}, workflowdomain.ProductionWorldReviewDetail{}, nil, normalizeNotFound(err)
 	}
 	gate, _, err := workflowdomain.DecodeProductionWorldGateInput(json.RawMessage(subject.Input))
 	if err != nil || subject.WorkspaceID != task.WorkspaceID || subject.ProjectID != task.ProjectID ||
 		subject.WorkflowRunID != task.WorkflowRunID || subject.NodeRunID != task.NodeRunID ||
 		subject.InputHash != task.SubjectHash || gate.InputHash != task.SubjectHash || task.SubjectRevision != 1 {
-		return nil, errors.New("Production World review subject has drifted")
+		return workflowdomain.ProductionWorldGateInput{}, workflowdomain.ProductionWorldReviewDetail{}, nil, errors.New("Production World review subject has drifted")
 	}
 	candidateID, err := uuid.Parse(gate.Subject.ProductionWorldCandidate.CandidateRevisionID)
 	if err != nil || !slices.Contains(mapped.CandidateIDs, candidateID.String()) {
-		return nil, errors.New("Production World review Candidate binding has drifted")
+		return workflowdomain.ProductionWorldGateInput{}, workflowdomain.ProductionWorldReviewDetail{}, nil, errors.New("Production World review Candidate binding has drifted")
 	}
 	var revision model.StageCandidateRevision
 	if err = transaction.First(&revision, "id = ?", candidateID).Error; err != nil {
-		return nil, normalizeNotFound(err)
+		return workflowdomain.ProductionWorldGateInput{}, workflowdomain.ProductionWorldReviewDetail{}, nil, normalizeNotFound(err)
 	}
 	frozen := gate.Subject.ProductionWorldCandidate
 	if revision.WorkspaceID != task.WorkspaceID || revision.OriginKind != "aggregate" ||
 		revision.RevisionNo != frozen.CandidateRevision || revision.CandidateRevisionHash != frozen.CandidateRevisionHash ||
 		revision.CandidateContentHash != frozen.CandidateContentHash {
-		return nil, errors.New("Production World review Candidate revision has drifted")
+		return workflowdomain.ProductionWorldGateInput{}, workflowdomain.ProductionWorldReviewDetail{}, nil, errors.New("Production World review Candidate revision has drifted")
 	}
 	candidate, _, err := worlddomain.DecodeProductionWorldCandidate(json.RawMessage(revision.Candidate))
 	if err != nil {
-		return nil, errors.New("Production World review Candidate has drifted")
+		return workflowdomain.ProductionWorldGateInput{}, workflowdomain.ProductionWorldReviewDetail{}, nil, errors.New("Production World review Candidate has drifted")
 	}
-	_, encoded, err := workflowdomain.NewProductionWorldReviewDetail(gate, candidate)
+	detail, encoded, err := workflowdomain.NewProductionWorldReviewDetail(gate, candidate)
 	if err != nil {
-		return nil, err
+		return workflowdomain.ProductionWorldGateInput{}, workflowdomain.ProductionWorldReviewDetail{}, nil, err
 	}
-	return encoded, nil
+	return gate, detail, encoded, nil
 }
 
 func (store *Store) GetDecision(ctx context.Context, actor application.Actor, decisionID string) (domain.DecisionResult, error) {
@@ -754,7 +763,7 @@ func validateAndEncodeDecisionPayload(
 	task model.HumanTask,
 	decision domain.ReviewDecision,
 ) (datatypes.JSON, error) {
-	if task.SubjectType != "structure_identity_gate_input" {
+	if task.SubjectType != "structure_identity_gate_input" && task.SubjectType != "production_world_gate_input" {
 		if decision.ChangeRequest != nil {
 			return nil, invalid("Change request is not supported by this human task")
 		}
@@ -767,7 +776,44 @@ func validateAndEncodeDecisionPayload(
 		return datatypes.JSON([]byte(`{}`)), nil
 	}
 	if decision.ChangeRequest == nil {
-		return nil, invalid("Structure identity changes require a typed change request")
+		return nil, invalid("Human gate changes require a typed change request")
+	}
+	if task.SubjectType == "production_world_gate_input" {
+		mapped, mapErr := taskDomain(task)
+		if mapErr != nil {
+			return nil, mapErr
+		}
+		gate, detail, _, loadErr := loadProductionWorldReviewFacts(transaction, task, mapped)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		change := workflowdomain.ProductionWorldChangeRequest{
+			IssueRefs: append([]string(nil), decision.ChangeRequest.IssueRefs...),
+			ChangeSpec: workflowdomain.ProductionWorldRepairChange{
+				Operation:         decision.ChangeRequest.ChangeSpec.Operation,
+				TargetKeys:        append([]string(nil), decision.ChangeRequest.ChangeSpec.TargetKeys...),
+				AffectedScopeKeys: append([]string(nil), decision.ChangeRequest.ChangeSpec.AffectedScopeKeys...),
+			},
+			ReasonCode: decision.ChangeRequest.ReasonCode,
+			UserNote:   decision.ChangeRequest.UserNote,
+		}
+		change.EvidenceRefs = make([]workflowdomain.HumanGateEvidenceRef, len(decision.ChangeRequest.EvidenceRefs))
+		for index, evidence := range decision.ChangeRequest.EvidenceRefs {
+			change.EvidenceRefs[index] = workflowdomain.HumanGateEvidenceRef{
+				SourceVersionID: evidence.SourceVersionID, SourceStart: evidence.SourceStart,
+				SourceEnd: evidence.SourceEnd, TextHash: evidence.TextHash,
+			}
+		}
+		if validationErr := workflowdomain.ValidateProductionWorldChangeRequest(gate, detail, change); validationErr != nil {
+			return nil, invalid("Change request is outside the frozen Production World repair targets")
+		}
+		payload, marshalErr := json.Marshal(struct {
+			ChangeRequest *domain.ChangeRequest `json:"change_request"`
+		}{ChangeRequest: decision.ChangeRequest})
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		return datatypes.JSON(payload), nil
 	}
 	var record model.WorkflowHumanGateInput
 	if err := transaction.First(&record, "id = ?", task.SubjectID).Error; err != nil {
