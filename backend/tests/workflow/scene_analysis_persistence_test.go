@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,9 +28,12 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
+	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
+	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	workflowauthoring "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/authoring"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
+	workflowreview "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/review"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
@@ -123,11 +127,12 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 5 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 6 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
-		plan.Nodes[4].Executor != "activity.structure_identity_review" {
+		plan.Nodes[4].Executor != "activity.structure_identity_review" ||
+		plan.Nodes[5].Executor != "gate.structure_identity_review" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -154,12 +159,18 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		workflowproduction.SceneAnalysisDependencies{Sources: sourceService, Candidates: sceneService},
 	)
+	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
+		Now: func() time.Time { return now }, NewID: uuid.NewString, ClaimLease: 15 * time.Minute,
+	})
 	runtimeService := workflowapp.NewRuntimeService(workflowStore, workflowapp.RuntimeConfig{
 		Now: func() time.Time { return now }, NewID: uuid.NewString, Executor: nodeExecutor,
+		HumanTasks: workflowreview.New(reviewService),
 	})
 	var final workflow.NodeActivityResult
+	var spanOutput workflow.NodeActivityResult
+	var factOutput workflow.NodeActivityResult
 	var identityOutput workflow.NodeActivityResult
-	for _, node := range plan.Nodes {
+	for _, node := range plan.Nodes[:5] {
 		final, err = runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
 			WorkflowRunID: started.ID, NodeRunID: node.NodeRunID, NodeID: node.NodeID,
 			Executor: node.Executor, Attempt: 1,
@@ -167,7 +178,12 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		if err != nil || final.Status != "SUCCEEDED" {
 			t.Fatalf("execute %s: calls=%d result=%#v err=%v", node.Executor, agentRuntime.calls, final, err)
 		}
-		if node.Executor == "activity.identity_resolution" {
+		switch node.Executor {
+		case "activity.script_span_proposal":
+			spanOutput = final
+		case "activity.scene_fact_extraction":
+			factOutput = final
+		case "activity.identity_resolution":
 			identityOutput = final
 		}
 	}
@@ -217,6 +233,58 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	})
 	if err != nil || replayed.OutputHash != final.OutputHash || agentRuntime.calls != 4 {
 		t.Fatalf("replay StructureIdentityReview node: calls=%d result=%#v err=%v", agentRuntime.calls, replayed, err)
+	}
+	gate := plan.Nodes[5]
+	gateCommand := workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: gate.NodeRunID, NodeID: gate.NodeID,
+		Executor: gate.Executor, Attempt: 1,
+	}
+	if err = runtimeService.OpenHumanGate(ctx, gateCommand); err != nil {
+		t.Fatalf("open StructureIdentity HumanTask: %v", err)
+	}
+	var gateInput model.WorkflowHumanGateInput
+	if err = database.First(&gateInput, "node_run_id = ?", gate.NodeRunID).Error; err != nil {
+		t.Fatalf("query StructureIdentity Gate input: %v", err)
+	}
+	decodedGateInput, _, decodeGateErr := workflow.DecodeStructureIdentityGateInput(json.RawMessage(gateInput.Input))
+	if decodeGateErr != nil || decodedGateInput.InputHash != gateInput.InputHash ||
+		decodedGateInput.Subject.SourceVersion.VersionID != fixture.revisionID.String() ||
+		decodedGateInput.Subject.SpanCandidate.CandidateRevisionID != spanOutput.Output.Bindings[0].ReferenceID ||
+		decodedGateInput.Subject.SceneFactCandidate.CandidateRevisionID != factOutput.Output.Bindings[0].ReferenceID ||
+		decodedGateInput.Subject.IdentityCandidate.CandidateRevisionID != identityOutput.Output.Bindings[0].ReferenceID ||
+		decodedGateInput.Subject.ReviewCandidate.CandidateRevisionID != final.Output.Bindings[0].ReferenceID {
+		t.Fatalf("persisted StructureIdentity Gate input = %#v err=%v", decodedGateInput, decodeGateErr)
+	}
+	var humanTask model.HumanTask
+	if err = database.First(&humanTask, "node_run_id = ?", gate.NodeRunID).Error; err != nil {
+		t.Fatalf("query StructureIdentity HumanTask: %v", err)
+	}
+	var taskCandidateIDs []string
+	expectedCandidateIDs := []string{
+		spanOutput.Output.Bindings[0].ReferenceID, factOutput.Output.Bindings[0].ReferenceID,
+		identityOutput.Output.Bindings[0].ReferenceID, final.Output.Bindings[0].ReferenceID,
+	}
+	slices.Sort(expectedCandidateIDs)
+	if err = json.Unmarshal(humanTask.CandidateIDs, &taskCandidateIDs); err != nil ||
+		!slices.Equal(taskCandidateIDs, expectedCandidateIDs) ||
+		humanTask.SubjectType != "structure_identity_gate_input" || humanTask.SubjectID != gateInput.ID ||
+		humanTask.SubjectRevision != 1 || humanTask.SubjectHash != gateInput.InputHash {
+		t.Fatalf("StructureIdentity HumanTask = %#v candidates=%v err=%v", humanTask, taskCandidateIDs, err)
+	}
+	if err = runtimeService.OpenHumanGate(ctx, gateCommand); err != nil {
+		t.Fatalf("replay StructureIdentity HumanTask open: %v", err)
+	}
+	var gateInputCount, humanTaskCount int64
+	if err = database.Model(&model.WorkflowHumanGateInput{}).Where("node_run_id = ?", gate.NodeRunID).
+		Count(&gateInputCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.HumanTask{}).Where("node_run_id = ?", gate.NodeRunID).
+		Count(&humanTaskCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if gateInputCount != 1 || humanTaskCount != 1 {
+		t.Fatalf("Gate replay facts: inputs=%d tasks=%d", gateInputCount, humanTaskCount)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -690,6 +758,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "facts", DefinitionKey: "agent.scene_fact_extraction", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "identities", DefinitionKey: "agent.identity_resolution", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "review", DefinitionKey: "agent.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "structure-identity-gate", DefinitionKey: "human.structure_identity_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -701,6 +770,11 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "spans-review", FromNodeID: "spans", FromPort: "candidate", ToNodeID: "review", ToPort: "spans"},
 			{ID: "facts-review", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "review", ToPort: "facts"},
 			{ID: "identities-review", FromNodeID: "identities", FromPort: "candidate", ToNodeID: "review", ToPort: "identities"},
+			{ID: "source-structure-identity-gate", FromNodeID: "source", FromPort: "source", ToNodeID: "structure-identity-gate", ToPort: "source"},
+			{ID: "spans-structure-identity-gate", FromNodeID: "spans", FromPort: "candidate", ToNodeID: "structure-identity-gate", ToPort: "spans"},
+			{ID: "facts-structure-identity-gate", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "structure-identity-gate", ToPort: "facts"},
+			{ID: "identities-structure-identity-gate", FromNodeID: "identities", FromPort: "candidate", ToNodeID: "structure-identity-gate", ToPort: "identities"},
+			{ID: "review-structure-identity-gate", FromNodeID: "review", FromPort: "candidate", ToNodeID: "structure-identity-gate", ToPort: "review"},
 		},
 	}
 }

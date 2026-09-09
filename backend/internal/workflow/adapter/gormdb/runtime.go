@@ -805,11 +805,22 @@ func (store *Store) PrepareHumanGate(
 		candidateIDs := humanGateCandidateIDs(resolved.Input)
 		var candidateSet domain.NodeInputBinding
 		candidateRevision := 0
+		structureIdentityOwnerApply := node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0"
 		productionBibleOwnerApply := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
 		episodePlanOwnerApply := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 		episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
 		storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
-		if node.Executor == "gate.generation_image_review" {
+		var structureIdentityGateRecord model.WorkflowHumanGateInput
+		var structureIdentityGate domain.StructureIdentityGateInput
+		if structureIdentityOwnerApply {
+			structureIdentityGateRecord, structureIdentityGate, resolveErr = prepareStructureIdentityGateInput(
+				transaction, run, node, resolved.Input, now,
+			)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			candidateIDs = structureIdentityCandidateIDs(structureIdentityGate)
+		} else if node.Executor == "gate.generation_image_review" {
 			if len(resolved.Input.Bindings) != 1 || resolved.Input.Bindings[0].Port != "candidates" ||
 				resolved.Input.Bindings[0].ValueType != "generation_candidate_set" ||
 				resolved.Input.Bindings[0].SourceKind != domain.NodeInputSourceNodeOutput {
@@ -863,9 +874,13 @@ func (store *Store) PrepareHumanGate(
 		} else if len(candidateIDs) == 0 {
 			return errors.New("workflow human gate has no candidate input")
 		}
-		allowedDecisions, allowedErr := humanGateAllowedDecisions(node.Executor)
-		if allowedErr != nil {
-			return allowedErr
+		allowedDecisions := structureIdentityGate.AllowedDecisions
+		if !structureIdentityOwnerApply {
+			var allowedErr error
+			allowedDecisions, allowedErr = humanGateAllowedDecisions(node.Executor)
+			if allowedErr != nil {
+				return allowedErr
+			}
 		}
 		if node.Status == "QUEUED" {
 			node.Status = "WAITING_HUMAN"
@@ -901,7 +916,10 @@ func (store *Store) PrepareHumanGate(
 		}
 		subjectType, subjectID, subjectHash := "workflow_node_output", node.ID.String(), resolved.InputHash
 		subjectRevision := node.Revision
-		if productionBibleOwnerApply {
+		if structureIdentityOwnerApply {
+			subjectType, subjectID, subjectHash = "structure_identity_gate_input", structureIdentityGateRecord.ID.String(), structureIdentityGateRecord.InputHash
+			subjectRevision = 1
+		} else if productionBibleOwnerApply {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "story_reconciliation_candidate", candidate.ReferenceID, candidate.ContentHash
 			subjectRevision = candidateRevision
@@ -937,6 +955,8 @@ func humanGateAllowedDecisions(executor string) ([]string, error) {
 	switch executor {
 	case "gate.generation_image_review":
 		return []string{"changes_requested", "rejected", "selected"}, nil
+	case "gate.structure_identity_review":
+		return []string{"approved", "changes_requested", "rejected"}, nil
 	case "gate.production_bible_review", "gate.episode_plan_review", "gate.episode_structure_review", "gate.storyboard_review":
 		return []string{"approved", "changes_requested", "rejected"}, nil
 	default:

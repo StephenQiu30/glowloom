@@ -46,6 +46,7 @@ func Catalog() []any {
 		&model.WorkflowStartReceipt{},
 		&model.WorkflowControlIntent{},
 		&model.WorkflowControlReceipt{},
+		&model.WorkflowHumanGateInput{},
 		&model.HumanTask{},
 		&model.ReviewDecision{},
 		&model.CreationProposal{},
