@@ -13,6 +13,7 @@ import {
   useReleaseHumanTaskClaimMutation,
   useDecideHumanTaskMutation,
   useResumeHumanGateMutation,
+  useStructureIdentityQuery,
 } from "@/features/review/endpoints";
 import { useWorkflowRunQuery } from "@/features/workflow/endpoints";
 import { appApiErrorMessage } from "@/lib/server-state";
@@ -28,6 +29,7 @@ import { EmptyDetail, SubjectPanel } from "./review-subject-panel";
 import { TaskStatusPanel } from "./review-status-panel";
 import { ReviewActions } from "./review-actions";
 import { WorkflowFactPanel } from "./workflow-fact-panel";
+import { StructureIdentityResultPanel } from "./structure-identity-result-panel";
 
 export function ReviewWorkbench({
   initialTaskId,
@@ -95,6 +97,26 @@ export function ReviewWorkbench({
     || resumeState.isLoading;
   const gateNode = workflowQuery.data?.nodes.find((node) => node.id === task?.node_run_id);
   const coordination = detail?.coordination;
+  const structureIdentityRequired = task?.subject_type === "structure_identity_gate_input"
+    && detail?.decision?.decision === "approved";
+  const structureIdentityReady = structureIdentityRequired
+    && coordination?.owner_apply_status === "completed"
+    && Boolean(coordination.owner_receipt_id);
+  const structureIdentityQuery = useStructureIdentityQuery(projectId, {
+    skip: !authenticated || !structureIdentityReady,
+    pollingInterval: 5_000,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
+  const structureIdentityVerified = Boolean(
+    !structureIdentityRequired
+    || (structureIdentityQuery.data
+      && detail?.decision
+      && structureIdentityQuery.data.command_receipt_id === coordination?.owner_receipt_id
+      && structureIdentityQuery.data.version.review_decision_id === detail.decision.id
+      && structureIdentityQuery.data.version.gate_input_id === task?.subject_id
+      && structureIdentityQuery.data.version.gate_input_hash === task?.subject_hash),
+  );
   const ownerEvidenceReady = coordination?.owner_apply_status === "not_required"
     || (coordination?.owner_apply_status === "completed"
       && Boolean(coordination.owner_receipt_id));
@@ -107,7 +129,8 @@ export function ReviewWorkbench({
         && gateNode?.status !== "QUEUED"
         && gateNode?.status !== "RUNNING"
         && gateNode?.status !== "RETRYING"
-        && Boolean(gateNode?.output_hash.trim()));
+        && Boolean(gateNode?.output_hash.trim()))
+    && structureIdentityVerified;
 
   function commandKey(action: string, identity: string): string {
     return `${action}:${identity}`;
@@ -381,6 +404,15 @@ export function ReviewWorkbench({
                     run={workflowQuery.data?.run}
                     verified={Boolean(workflowFactVerified)}
                   />
+
+                  {structureIdentityReady ? (
+                    <StructureIdentityResultPanel
+                      data={structureIdentityQuery.data}
+                      error={structureIdentityQuery.error}
+                      isFetching={structureIdentityQuery.isFetching}
+                      verified={structureIdentityVerified}
+                    />
+                  ) : null}
                 </div>
               )}
             </section>

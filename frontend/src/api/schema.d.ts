@@ -2595,6 +2595,8 @@ export interface components {
         StructureIdentitySnapshotResponse: {
             version: components["schemas"]["StructureIdentitySetVersionResponse"];
             receipt: components["schemas"]["StructureIdentityReceiptResponse"];
+            /** Format: uuid */
+            command_receipt_id: string;
         };
         StructureIdentityRepairOptionResponse: {
             issue_key: string;

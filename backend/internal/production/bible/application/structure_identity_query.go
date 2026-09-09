@@ -17,7 +17,7 @@ type StructureIdentityReader interface {
 		context.Context,
 		string,
 		string,
-	) (domain.StructureIdentitySetVersion, domain.StructureIdentityCollectionReceipt, error)
+	) (domain.StructureIdentitySetVersion, domain.StructureIdentityCollectionReceipt, string, error)
 }
 
 type StructureIdentityProjectReader interface {
@@ -25,8 +25,9 @@ type StructureIdentityProjectReader interface {
 }
 
 type StructureIdentitySnapshot struct {
-	Version domain.StructureIdentitySetVersion        `json:"version"`
-	Receipt domain.StructureIdentityCollectionReceipt `json:"receipt"`
+	Version          domain.StructureIdentitySetVersion        `json:"version"`
+	Receipt          domain.StructureIdentityCollectionReceipt `json:"receipt"`
+	CommandReceiptID string                                    `json:"command_receipt_id"`
 }
 
 type StructureIdentityQuery struct {
@@ -65,7 +66,7 @@ func (query *StructureIdentityQuery) GetCurrent(
 		}
 		return StructureIdentitySnapshot{}, err
 	}
-	version, receipt, err := query.versions.ReadCurrentStructureIdentity(
+	version, receipt, commandReceiptID, err := query.versions.ReadCurrentStructureIdentity(
 		ctx,
 		project.WorkspaceID,
 		projectID,
@@ -78,17 +79,21 @@ func (query *StructureIdentityQuery) GetCurrent(
 	if err != nil {
 		return StructureIdentitySnapshot{}, err
 	}
+	_, commandReceiptIDErr := uuid.Parse(commandReceiptID)
 	if version.SchemaVersion != domain.StructureIdentitySetSchemaVersion || version.ID == "" ||
 		version.WorkspaceID != project.WorkspaceID || version.ProjectID != projectID || version.Version < 1 ||
 		!validStructureIdentityHash(version.ContentHash) || version.CreatedAt.IsZero() ||
 		receipt.ID == "" || receipt.CheckpointKey != domain.StructureIdentityCheckpointKey ||
 		receipt.CollectionFamily != domain.StructureIdentityCollectionFamily ||
 		receipt.VersionID != version.ID || receipt.VersionContentHash != version.ContentHash ||
+		commandReceiptIDErr != nil ||
 		!validStructureIdentityHash(receipt.CollectionRootHash) ||
 		!validStructureIdentityHash(receipt.ReceiptContentHash) {
 		return StructureIdentitySnapshot{}, &Error{
 			Code: "formal_version_drift", Message: "Stored Structure Identity result does not match its proof", Status: 409,
 		}
 	}
-	return StructureIdentitySnapshot{Version: version, Receipt: receipt}, nil
+	return StructureIdentitySnapshot{
+		Version: version, Receipt: receipt, CommandReceiptID: commandReceiptID,
+	}, nil
 }

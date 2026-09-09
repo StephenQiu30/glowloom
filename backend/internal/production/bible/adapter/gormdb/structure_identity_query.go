@@ -17,18 +17,19 @@ import (
 func (store *Store) ReadCurrentStructureIdentity(
 	ctx context.Context,
 	workspaceID, projectID string,
-) (domain.StructureIdentitySetVersion, domain.StructureIdentityCollectionReceipt, error) {
+) (domain.StructureIdentitySetVersion, domain.StructureIdentityCollectionReceipt, string, error) {
 	workspace, err := uuid.Parse(workspaceID)
 	if err != nil {
-		return domain.StructureIdentitySetVersion{}, domain.StructureIdentityCollectionReceipt{}, application.ErrNotFound
+		return domain.StructureIdentitySetVersion{}, domain.StructureIdentityCollectionReceipt{}, "", application.ErrNotFound
 	}
 	project, err := uuid.Parse(projectID)
 	if err != nil {
-		return domain.StructureIdentitySetVersion{}, domain.StructureIdentityCollectionReceipt{}, application.ErrNotFound
+		return domain.StructureIdentitySetVersion{}, domain.StructureIdentityCollectionReceipt{}, "", application.ErrNotFound
 	}
 
 	var version domain.StructureIdentitySetVersion
 	var receipt domain.StructureIdentityCollectionReceipt
+	var commandReceiptID string
 	err = store.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		var head model.StructureIdentityScopeHead
 		if loadErr := transaction.First(
@@ -142,9 +143,32 @@ func (store *Store) ReadCurrentStructureIdentity(
 		if hashErr != nil || expectedReceiptHash != receipt.ReceiptContentHash {
 			return structureIdentityQueryDrift("Structure Identity receipt content has drifted")
 		}
+		var commandReceipt model.CommandReceipt
+		query := transaction.Where(
+			"workspace_id = ? AND operation = ? AND resource_id = ?",
+			workspace,
+			domain.StructureIdentityCommandOperation,
+			versionRecord.ID,
+		)
+		var commandReceiptCount int64
+		if countErr := query.Model(&model.CommandReceipt{}).Count(&commandReceiptCount).Error; countErr != nil {
+			return countErr
+		}
+		if commandReceiptCount != 1 || query.First(&commandReceipt).Error != nil {
+			return structureIdentityQueryDrift("Structure Identity command receipt has drifted")
+		}
+		var commandResult domain.ConfirmStructureIdentitySetResult
+		if json.Unmarshal(commandReceipt.Result, &commandResult) != nil ||
+			commandResult.CommandReceiptID != commandReceipt.ID.String() ||
+			commandResult.CommandOperation != domain.StructureIdentityCommandOperation ||
+			commandResult.Version.ID != version.ID || commandResult.Version.ContentHash != version.ContentHash ||
+			commandResult.Receipt.ID != receipt.ID || commandResult.Receipt.ReceiptContentHash != receipt.ReceiptContentHash {
+			return structureIdentityQueryDrift("Structure Identity command result has drifted")
+		}
+		commandReceiptID = commandReceipt.ID.String()
 		return nil
 	})
-	return version, receipt, err
+	return version, receipt, commandReceiptID, err
 }
 
 func structureIdentityQueryDrift(message string) error {

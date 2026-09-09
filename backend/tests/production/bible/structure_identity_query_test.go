@@ -29,19 +29,20 @@ func (query structureIdentityHTTPQuery) GetCurrent(
 }
 
 type structureIdentityQueryStore struct {
-	value   domain.StructureIdentitySetVersion
-	receipt domain.StructureIdentityCollectionReceipt
-	err     error
-	calls   int
+	value            domain.StructureIdentitySetVersion
+	receipt          domain.StructureIdentityCollectionReceipt
+	commandReceiptID string
+	err              error
+	calls            int
 }
 
 func (store *structureIdentityQueryStore) ReadCurrentStructureIdentity(
 	context.Context,
 	string,
 	string,
-) (domain.StructureIdentitySetVersion, domain.StructureIdentityCollectionReceipt, error) {
+) (domain.StructureIdentitySetVersion, domain.StructureIdentityCollectionReceipt, string, error) {
 	store.calls++
-	return store.value, store.receipt, store.err
+	return store.value, store.receipt, store.commandReceiptID, store.err
 }
 
 func TestStructureIdentityQueryRequiresCurrentAccessAndExactReceipt(t *testing.T) {
@@ -65,16 +66,17 @@ func TestStructureIdentityQueryRequiresCurrentAccessAndExactReceipt(t *testing.T
 		CollectionRootHash: structureIdentityHash("collection-root"),
 		ReceiptContentHash: structureIdentityHash("receipt"),
 	}
-	store := &structureIdentityQueryStore{value: value, receipt: receipt}
+	commandReceiptID := uuid.NewString()
+	store := &structureIdentityQueryStore{value: value, receipt: receipt, commandReceiptID: commandReceiptID}
 	projects := textQueryProject{value: projectdomain.Project{ID: projectID, WorkspaceID: workspaceID}}
 	query := app.NewStructureIdentityQuery(store, projects)
 
 	got, err := query.GetCurrent(context.Background(), app.Actor{}, projectID)
-	if err != nil || got.Version.ID != versionID || got.Receipt.ID != receipt.ID {
+	if err != nil || got.Version.ID != versionID || got.Receipt.ID != receipt.ID || got.CommandReceiptID != commandReceiptID {
 		t.Fatalf("query=%+v err=%v", got, err)
 	}
 
-	for _, mode := range []string{"scope", "version", "receipt-version", "receipt-hash", "checkpoint"} {
+	for _, mode := range []string{"scope", "version", "receipt-version", "receipt-hash", "checkpoint", "command-receipt"} {
 		t.Run(mode, func(t *testing.T) {
 			store.value, store.receipt = value, receipt
 			switch mode {
@@ -88,6 +90,8 @@ func TestStructureIdentityQueryRequiresCurrentAccessAndExactReceipt(t *testing.T
 				store.receipt.VersionContentHash = structureIdentityHash("other-version")
 			case "checkpoint":
 				store.receipt.CheckpointKey = "other_checkpoint"
+			case "command-receipt":
+				store.commandReceiptID = "not-a-receipt"
 			}
 			if _, queryErr := query.GetCurrent(context.Background(), app.Actor{}, projectID); queryErr == nil {
 				t.Fatal("drifted formal Structure Identity result returned")
@@ -129,6 +133,7 @@ func TestStructureIdentityHTTPReturnsFrozenFormalResult(t *testing.T) {
 			VersionContentHash: structureIdentityHash("formal-version"), ReviewDecisionID: uuid.NewString(),
 			CollectionRootHash: structureIdentityHash("root"), ReceiptContentHash: structureIdentityHash("receipt"),
 		},
+		CommandReceiptID: uuid.NewString(),
 	}
 	mux := http.NewServeMux()
 	biblehttp.NewStructureIdentityHandler(

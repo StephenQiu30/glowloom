@@ -4,6 +4,17 @@ import type { operations } from "./schema";
 type Envelope<T> = { data: T };
 
 type ReviewDecisionOperation = operations["decideProductionBibleReviewIssue"];
+type CurrentStructureIdentityOperation = operations["getCurrentStructureIdentity"];
+
+export function getCurrentStructureIdentity(
+  params: CurrentStructureIdentityOperation["parameters"]["path"],
+  options?: RequestOptions,
+) {
+  return request<CurrentStructureIdentityOperation["responses"][200]["content"]["application/json"]>(
+    `/api/projects/${params.project_id}/structure-identity`,
+    { method: "GET", ...(options ?? {}) },
+  );
+}
 
 export function decideProductionBibleReviewIssue(
   params: ReviewDecisionOperation["parameters"]["path"],

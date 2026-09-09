@@ -10,6 +10,7 @@ const apiMocks = vi.hoisted(() => ({
   listTasks: vi.fn(),
   me: vi.fn(),
   project: vi.fn(),
+  getStructureIdentity: vi.fn(),
   releaseClaim: vi.fn(),
   renewClaim: vi.fn(),
   resumeDecision: vi.fn(),
@@ -30,6 +31,11 @@ vi.mock("@/api/humanReviews", () => ({
 
 vi.mock("@/api/workflows", () => ({
   getWorkflowRunApiWorkflowRunsWorkflowRunIdGet: apiMocks.getWorkflowRun,
+}));
+
+vi.mock("@/api/productionBibles", async () => ({
+  ...(await vi.importActual<typeof import("@/api/productionBibles")>("@/api/productionBibles")),
+  getCurrentStructureIdentity: apiMocks.getStructureIdentity,
 }));
 
 vi.mock("@/api/identity", async () => ({
@@ -173,6 +179,96 @@ function structureSubject(): API.StructureIdentityReviewSubjectResponse {
   };
 }
 
+function structureSnapshot(): API.StructureIdentitySnapshotResponse {
+  const formalVersionId = "019ffa00-a000-7000-8000-000000000020";
+  const episodeId = "019ffa00-a000-7000-8000-000000000021";
+  const scriptVersionId = "019ffa00-a000-7000-8000-000000000022";
+  const sceneId = "019ffa00-a000-7000-8000-000000000023";
+  const identityId = "019ffa00-a000-7000-8000-000000000024";
+  return {
+    command_receipt_id: "019ffa00-a000-7000-8000-000000000011",
+    version: {
+      schema_version: "structure-identity-set-production",
+      id: formalVersionId,
+      workspace_id: workspaceId,
+      project_id: projectId,
+      version: 1,
+      parent_version_id: null,
+      gate_input_id: nodeId,
+      gate_input_hash: "a".repeat(64),
+      review_decision_id: decisionId,
+      project_episode_receipt_id: "019ffa00-a000-7000-8000-000000000025",
+      document_revision_id: "019ffa00-a000-7000-8000-000000000018",
+      span_index_id: "019ffa00-a000-7000-8000-000000000026",
+      candidate_refs: [],
+      episode_refs: [{
+        temporary_episode_id: "episode_001",
+        episode_id: episodeId,
+        episode_revision: 1,
+        position: 1,
+        script_version_id: scriptVersionId,
+        script_version: 1,
+        source_start: 0,
+        source_end: 20,
+        content_hash: "b".repeat(64),
+      }],
+      scene_refs: [{
+        temporary_episode_id: "episode_001",
+        episode_id: episodeId,
+        temporary_span_id: "span_scene_001",
+        temporary_scene_id: "scene_001",
+        scene_owner_logical_id: sceneId,
+        scope_key: `scene:${sceneId}`,
+        source_start: 0,
+        source_end: 20,
+        evidence_hash: "c".repeat(64),
+      }],
+      identities: [{
+        temporary_identity_key: "identity_character_linzou",
+        identity_key: identityId,
+        kind: "character",
+        resolution: "new",
+        reuse_identity_key: null,
+        canonical_name: "林舟",
+        aliases: ["林舟", "小林"],
+      }],
+      mention_mappings: [{
+        kind: "character",
+        temporary_scene_id: "scene_001",
+        source_start: 8,
+        source_end: 10,
+        text_hash: "d".repeat(64),
+        exact_anchor: "林舟",
+        resolution: "resolved",
+        identity_key: identityId,
+      }],
+      coverage: {
+        scene_count: 1,
+        identity_count: 1,
+        mention_count: 1,
+        resolved_count: 1,
+        unresolved_count: 0,
+        mention_universe_hash: "e".repeat(64),
+        scope_set_hash: "f".repeat(64),
+      },
+      content_hash: "1".repeat(64),
+      created_by: userId,
+      created_at: "2026-08-27T02:06:00Z",
+    },
+    receipt: {
+      id: "019ffa00-a000-7000-8000-000000000027",
+      checkpoint_key: "gate_1_structure_identity",
+      collection_family: "bible_structure_identity_set",
+      version_id: formalVersionId,
+      version_content_hash: "1".repeat(64),
+      review_decision_id: decisionId,
+      covered_scope_keys: [`scene:${sceneId}`],
+      collection_root_hash: "2".repeat(64),
+      receipt_content_hash: "3".repeat(64),
+    },
+  };
+}
+
 function workflowRun(
   nodeStatus: API.WorkflowNodeRunResponse["status"] = "SUCCEEDED",
   outputHash = "b".repeat(64),
@@ -262,6 +358,7 @@ describe("公共审核工作台", () => {
       data: { ...currentDetail, subject: currentDetail.subject ?? null },
     }));
     apiMocks.getWorkflowRun.mockResolvedValue({ data: workflowRun() });
+    apiMocks.getStructureIdentity.mockResolvedValue({ data: structureSnapshot() });
     apiMocks.resumeDecision.mockImplementation(async () => {
       const resumed = coordination({
         workflow_resume_status: "completed",
@@ -389,6 +486,31 @@ describe("公共审核工作台", () => {
     expect(await screen.findByText("原流程已结束，等待启动修复")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "启动有界修复" }));
     expect(apiMocks.resumeDecision).toHaveBeenCalledWith({ review_decision_id: decisionId });
+  });
+
+  it("Gate1 批准后以正式结构身份版本和 Owner Receipt 核对完成状态", async () => {
+    currentDetail = {
+      task: task({
+        status: "COMPLETED",
+        revision: 3,
+        subject_type: "structure_identity_gate_input",
+        subject_id: nodeId,
+      }),
+      subject: structureSubject(),
+      decision: decision(),
+      coordination: coordination({
+        workflow_resume_status: "completed",
+        workflow_signal_receipt_id: "019ffa00-a000-7000-8000-000000000015",
+      }),
+    };
+    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+
+    const result = await screen.findByRole("region", { name: "正式结构身份结果" });
+    expect(await within(result).findByText("第 1 集")).toBeInTheDocument();
+    expect(within(result).getByText("林舟")).toBeInTheDocument();
+    expect(within(result).getAllByText("1 / 1")).toHaveLength(2);
+    expect(screen.getAllByText("工作流已继续")).toHaveLength(2);
+    expect(apiMocks.getStructureIdentity).toHaveBeenCalledWith({ project_id: projectId });
   });
 
   it("从详情恢复 Claim Token，并只提交冻结候选与服务端 revision", async () => {

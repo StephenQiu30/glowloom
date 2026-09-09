@@ -7,10 +7,18 @@ import {
   decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost,
   resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost,
 } from "@/api/humanReviews";
+import { getCurrentStructureIdentity } from "@/api/productionBibles";
 import { appApi, runRequest } from "@/lib/server-state";
 
 export const reviewApi = appApi.injectEndpoints({
   endpoints: (builder) => ({
+    structureIdentity: builder.query<API.StructureIdentitySnapshotResponse, string>({
+      queryFn: (projectId) =>
+        runRequest(() => getCurrentStructureIdentity({ project_id: projectId })),
+      providesTags: (_result, _error, projectId) => [
+        { type: "StructureIdentity", id: projectId },
+      ],
+    }),
     humanTasks: builder.query<
       API.HumanTaskListEnvelope["data"],
       {
@@ -149,4 +157,5 @@ export const {
   useReleaseHumanTaskClaimMutation,
   useResumeHumanGateMutation,
   useRenewHumanTaskClaimMutation,
+  useStructureIdentityQuery,
 } = reviewApi;

@@ -65,6 +65,7 @@ export const appApi = createApi({
     "Media",
     "ScriptDocuments",
     "ProductionBible",
+    "StructureIdentity",
     "EpisodePlans",
     "HumanTasks",
     "WorkflowRuns",

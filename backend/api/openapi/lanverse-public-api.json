@@ -6752,10 +6752,11 @@
       "StructureIdentitySnapshotResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["version", "receipt"],
+        "required": ["version", "receipt", "command_receipt_id"],
         "properties": {
           "version": { "$ref": "#/components/schemas/StructureIdentitySetVersionResponse" },
-          "receipt": { "$ref": "#/components/schemas/StructureIdentityReceiptResponse" }
+          "receipt": { "$ref": "#/components/schemas/StructureIdentityReceiptResponse" },
+          "command_receipt_id": { "type": "string", "format": "uuid" }
         }
       },
       "StructureIdentityRepairOptionResponse": {
