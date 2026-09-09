@@ -400,6 +400,9 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		if err := validateProductionEvidenceRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
+		if err := validateProductionIdentityRelations(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
 	}
 
 	keys := make([]string, 0, len(nodes))

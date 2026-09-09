@@ -199,8 +199,29 @@ func (projection *productionProjection) addBibleFacts() error {
 		bindingStates[value.BindingID.String()] = append(bindingStates[value.BindingID.String()], value)
 	}
 	for _, binding := range projection.material.bindings {
+		assetRef, err := projection.nodeRef("asset:" + binding.AssetID.String())
+		if err != nil {
+			return err
+		}
+		specificationRef, err := projection.nodeRef("specification:" + binding.SpecificationID.String())
+		if err != nil {
+			return err
+		}
+		stateRefs := make([]storygraph.OwnerRef, 0, len(bindingStates[binding.ID.String()]))
+		for _, state := range bindingStates[binding.ID.String()] {
+			stateRef, stateErr := projection.nodeRef("state:" + state.AssetStateID.String())
+			if stateErr != nil {
+				return stateErr
+			}
+			stateRefs = append(stateRefs, stateRef)
+		}
+		slices.SortFunc(stateRefs, func(left, right storygraph.OwnerRef) int {
+			return strings.Compare(productionOwnerRefSortKey(left), productionOwnerRefSortKey(right))
+		})
 		node, err := newNode(storygraph.NodeTypeProductionBinding, productionOwnerRef(projection.bibleOwner, "binding:"+binding.ID.String(), binding.ContentHash), binding.IdentityKey, nil, nil,
-			projectionPayload("storygraph-production/production-binding-payload-contract", binding.ContentHash, nil))
+			projectionPayload("storygraph-production/production-binding-payload-contract", binding.ContentHash, map[string]any{
+				"asset_identity_ref": assetRef, "specification_ref": specificationRef, "state_refs": stateRefs,
+			}))
 		if err != nil {
 			return err
 		}
@@ -372,7 +393,21 @@ func (projection *productionProjection) addOccurrence(fact planningdomain.Produc
 	if err != nil {
 		return err
 	}
-	node, err := newNode(storygraph.NodeTypeOccurrence, productionOwnerRef(owner, "", ""), fragment.OccurrenceKey, mustProjectionJSON(map[string]any{"sequence_key": payload.SequenceKey}), []storygraph.EvidenceRef{evidence}, projectionPayload("storygraph-production/occurrence-payload-contract", owner.ContentHash, map[string]any{"creator_decision_ref": nil}))
+	assetRef, err := projection.nodeRef("asset:" + payload.Asset.ID)
+	if err != nil {
+		return err
+	}
+	stateRef, err := projection.nodeRef("state:" + payload.State.ID)
+	if err != nil {
+		return err
+	}
+	sceneRef, err := projection.nodeRef("planning:" + payload.Scene.ID)
+	if err != nil {
+		return err
+	}
+	node, err := newNode(storygraph.NodeTypeOccurrence, productionOwnerRef(owner, "", ""), fragment.OccurrenceKey, mustProjectionJSON(map[string]any{"sequence_key": payload.SequenceKey}), []storygraph.EvidenceRef{evidence}, projectionPayload("storygraph-production/occurrence-payload-contract", owner.ContentHash, map[string]any{
+		"asset_identity_ref": assetRef, "asset_state_ref": stateRef, "scene_ref": sceneRef, "beat_ref": nil, "creator_decision_ref": nil,
+	}))
 	if err != nil {
 		return err
 	}
@@ -514,6 +549,16 @@ func (projection *productionProjection) addNode(index string, node storygraph.No
 	projection.nodeKeys[index] = node.StoryNodeKey
 }
 
+func (projection *productionProjection) nodeRef(index string) (storygraph.OwnerRef, error) {
+	key := projection.nodeKeys[index]
+	for _, node := range projection.graph.nodes {
+		if node.StoryNodeKey == key {
+			return node.OwnerRef, nil
+		}
+	}
+	return storygraph.OwnerRef{}, errors.New("Production StoryGraph payload reference is missing")
+}
+
 func (projection *productionProjection) attachEvidence(index string, values []storygraph.EvidenceRef) {
 	key := projection.nodeKeys[index]
 	for nodeIndex := range projection.graph.nodes {
@@ -557,6 +602,10 @@ func productionOwnerRef(value storygraph.OwnerVersionIdentity, fragmentKey, frag
 		FragmentKey: fragmentKey, FragmentContentHash: fragmentHash,
 		OwnerVersionID: value.VersionID, OwnerRevision: value.Revision, OwnerContentHash: value.ContentHash,
 	}
+}
+
+func productionOwnerRefSortKey(value storygraph.OwnerRef) string {
+	return strings.Join([]string{value.OwnerKind, value.VersionFamily, value.OwnerLogicalID, value.FragmentKey, value.OwnerVersionID}, "\x00")
 }
 
 func projectionPayload(contractID, hash string, fields map[string]any) map[string]any {

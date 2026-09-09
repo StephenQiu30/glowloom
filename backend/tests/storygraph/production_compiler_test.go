@@ -128,7 +128,7 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 		}
 		return encoded
 	}
-	return storygraph.ProductionOwnerSnapshot{
+	result := storygraph.ProductionOwnerSnapshot{
 		Origin: storygraph.OwnerSnapshotOriginConfirmed, WorkspaceID: workspaceID, ProjectID: projectID,
 		SourceRevisionID: source.VersionID, SourceRevisionHash: source.ContentHash,
 		Coverage: storygraph.ProductionCoverageProof{
@@ -149,6 +149,8 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, sceneKey, storygraph.EdgeQualifier{}),
 		}},
 	}
+	addProductionIdentityRelations(t, &result)
+	return result
 }
 
 func productionHash(value string) string {
