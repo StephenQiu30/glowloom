@@ -108,13 +108,15 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 			OwnerVersionID: value.VersionID, OwnerRevision: value.Revision, OwnerContentHash: value.ContentHash}
 	}
 	sourceRef, episodeRef := ownerRef(source, ""), ownerRef(episode, "")
-	bibleRef, assetRef, planningRef := ownerRef(bible, "evidence:opening"), ownerRef(asset, ""), ownerRef(planning, "")
+	assetRef, planningRef := ownerRef(asset, ""), ownerRef(planning, "")
+	evidence := storygraph.EvidenceRef{DocumentRevisionID: source.VersionID, AbsoluteStart: 0, AbsoluteEnd: 4, TextHash: productionHash("evidence")}
+	bibleRef := ownerRef(bible, fmt.Sprintf("source-evidence:%s:%012d:%012d:%s", evidence.DocumentRevisionID, evidence.AbsoluteStart, evidence.AbsoluteEnd, evidence.TextHash))
+	bibleRef.FragmentContentHash = evidence.TextHash
 	sourceKey := mustNodeKey(t, storygraph.NodeTypeSourceRevision, sourceRef)
 	episodeKey := mustNodeKey(t, storygraph.NodeTypeEpisode, episodeRef)
 	evidenceKey := mustNodeKey(t, storygraph.NodeTypeSourceEvidence, bibleRef)
 	assetKey := mustNodeKey(t, storygraph.NodeTypeAssetIdentity, assetRef)
 	sceneKey := mustNodeKey(t, storygraph.NodeTypeScene, planningRef)
-	evidence := storygraph.EvidenceRef{DocumentRevisionID: source.VersionID, AbsoluteStart: 0, AbsoluteEnd: 4, TextHash: productionHash("evidence")}
 	payload := func(contractID, projectionHash string, fields map[string]any) json.RawMessage {
 		value := map[string]any{"payload_contract_id": contractID, "projection_hash": projectionHash}
 		for key, field := range fields {
@@ -142,7 +144,7 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 			{StoryNodeKey: sceneKey, NodeType: storygraph.NodeTypeScene, OwnerRef: planningRef, EvidenceRefs: []storygraph.EvidenceRef{evidence}, Payload: payload("storygraph-production/scene-ref-payload-contract", planningRef.OwnerContentHash, nil)},
 		}, Edges: []storygraph.Edge{
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, sourceKey, evidenceKey, storygraph.EdgeQualifier{}),
-			newEdge(t, storygraph.EdgeTypeDerivedFrom, sourceKey, episodeKey, storygraph.EdgeQualifier{}),
+			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, episodeKey, storygraph.EdgeQualifier{}),
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, assetKey, storygraph.EdgeQualifier{}),
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, sceneKey, storygraph.EdgeQualifier{}),
 		}},

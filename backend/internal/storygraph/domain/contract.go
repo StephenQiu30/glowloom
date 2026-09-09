@@ -396,6 +396,11 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 	if err := validateEdgeEndpoints(nodes, edges); err != nil {
 		return CanonicalSnapshot{}, err
 	}
+	if snapshot.SchemaVersion == ProductionSchemaID {
+		if err := validateProductionEvidenceRelations(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
+	}
 
 	keys := make([]string, 0, len(nodes))
 	for _, node := range nodes {

@@ -487,11 +487,11 @@ func (projection *productionProjection) ensureEvidenceRange(start, end int) (sto
 	if err != nil {
 		return storygraph.EvidenceRef{}, "", err
 	}
-	identity := fmt.Sprintf("%012d:%012d:%s", start, end, evidence.TextHash)
+	identity := fmt.Sprintf("%s:%012d:%012d:%s", evidence.DocumentRevisionID, start, end, evidence.TextHash)
 	if key, exists := projection.evidenceKeys[identity]; exists {
 		return evidence, key, nil
 	}
-	owner := productionOwnerRef(projection.bibleOwner, "source-range:"+identity, evidence.TextHash)
+	owner := productionOwnerRef(projection.bibleOwner, "source-evidence:"+identity, evidence.TextHash)
 	node, err := newNode(storygraph.NodeTypeSourceEvidence, owner, "", nil, nil, projectionPayload("storygraph-production/source_evidence-ref-payload-contract", evidence.TextHash, nil))
 	if err != nil {
 		return storygraph.EvidenceRef{}, "", err

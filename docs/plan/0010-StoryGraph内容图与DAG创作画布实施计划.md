@@ -116,6 +116,7 @@
   - [x] 从 Gate 2 精确 Command/Collection Receipt 通过 GORM 重读七类正式 Owner Collection，生成 P0 typed node/edge，并在单事务发布 Version、Head、CommandReceipt 与 Outbox；Version 持久保存完整 Coverage/Collection 前像，幂等回放返回同一版本，切入 production 后禁止旧编译入口降级覆盖。
   - [x] 在正式节点目录加入 `production.storygraph_projection`，把 Gate 2 `production_world_owner_set` 直接接入 production Compiler；业务幂等身份绑定 Production World Receipt，支持 Temporal 重试和 Gate 2 repair 后沿单一 Head 追加。
   - [x] 将 production Node Allowlist、Owner/Version Family、Payload Contract/discriminant、projection hash 和 Evidence policy 固定为发布前机械门；明确排除旧 Generation/Shot 媒体节点，P0 投影改用正式语义合同 ID。
+  - [x] 将 SourceEvidence 身份固定为 Source Revision/code-point range/text hash，并要求每个 Node Envelope Evidence 与唯一 `derived_from`/`supports` Edge 精确等价；禁止 Source 绕过 Evidence 直连业务事实。
   - [ ] 完成 production Schema Manifest、全部 Payload/Edge invariant 和 Prepare/Publish 漂移复验后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。
