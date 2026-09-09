@@ -131,7 +131,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 9 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 10 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
@@ -139,7 +139,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		plan.Nodes[5].Executor != "gate.structure_identity_review" ||
 		plan.Nodes[6].Executor != "activity.production_entity_derivation" ||
 		plan.Nodes[7].Executor != "activity.scene_occurrence_binding" ||
-		plan.Nodes[8].Executor != "activity.interaction_continuity_reconciliation" {
+		plan.Nodes[8].Executor != "activity.interaction_continuity_reconciliation" ||
+		plan.Nodes[9].Executor != "activity.production_world_assembly" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -164,11 +165,19 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	bibleStore := biblegorm.New(database)
 	projectService := projectapp.NewService(projectgorm.New(database), func() time.Time { return now }, uuid.NewString)
 	structureIdentityQuery := bibleapp.NewStructureIdentityQuery(bibleStore, projectService)
+	productionWorldService, err := workflowapp.NewProductionWorldAssemblyService(
+		workflowStore,
+		workflowapp.ProductionWorldAssemblyConfig{Now: func() time.Time { return now }, NewID: uuid.NewString},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
+			ProductionWorld: productionWorldService,
 		},
 	)
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
@@ -512,6 +521,130 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		continuityReads[1].StageKey != "derive_production_entities" ||
 		continuityReads[2].StageKey != "bind_scene_occurrences" {
 		t.Fatalf("Interaction/Continuity exact read set: reads=%#v err=%v", continuityReads, err)
+	}
+	productionWorldResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[9].NodeRunID, NodeID: plan.Nodes[9].NodeID,
+		Executor: plan.Nodes[9].Executor, Attempt: 1,
+	})
+	if err != nil || productionWorldResult.Status != "SUCCEEDED" ||
+		len(productionWorldResult.Output.Bindings) != 1 ||
+		productionWorldResult.Output.Bindings[0].ValueType != "production_world_candidate" {
+		t.Fatalf("assemble Production World Candidate: result=%#v err=%v", productionWorldResult, err)
+	}
+	var productionWorldRevision model.StageCandidateRevision
+	if err = database.First(
+		&productionWorldRevision,
+		"id = ?",
+		productionWorldResult.Output.Bindings[0].ReferenceID,
+	).Error; err != nil {
+		t.Fatalf("query Production World Candidate revision: %v", err)
+	}
+	productionWorld, _, err := workflow.DecodeProductionWorldCandidate(json.RawMessage(productionWorldRevision.Candidate))
+	if err != nil || productionWorld.ContentHash != productionWorldRevision.CandidateContentHash ||
+		productionWorld.UpstreamCandidates.ProductionEntity.CandidateRevisionID != productionEntityCandidate.ID ||
+		productionWorld.UpstreamCandidates.SceneOccurrence.CandidateRevisionID != sceneBindingCandidate.ID ||
+		productionWorld.UpstreamCandidates.InteractionContinuity.CandidateRevisionID != continuityCandidate.ID {
+		t.Fatalf("persisted Production World Candidate: candidate=%#v revision=%#v err=%v", productionWorld, productionWorldRevision, err)
+	}
+	var productionWorldHead model.StageCandidateHead
+	if err = database.First(
+		&productionWorldHead,
+		"stage_instance_key = ?",
+		productionWorldRevision.StageInstanceKey,
+	).Error; err != nil || productionWorldHead.CurrentRevisionID != productionWorldRevision.ID ||
+		productionWorldHead.CurrentCandidateRevisionHash != productionWorldRevision.CandidateRevisionHash {
+		t.Fatalf("Production World Candidate head: head=%#v err=%v", productionWorldHead, err)
+	}
+	var productionWorldManifest model.ShardManifest
+	if err = database.First(
+		&productionWorldManifest,
+		"workflow_run_id = ? AND node_run_id = ? AND stage = ?",
+		uuid.MustParse(started.ID), uuid.MustParse(plan.Nodes[9].NodeRunID), "assemble_production_world",
+	).Error; err != nil || productionWorldManifest.RootInputHash == "" {
+		t.Fatalf("Production World aggregate manifest: manifest=%#v err=%v", productionWorldManifest, err)
+	}
+	directCommand := workflowapp.ProductionWorldAssemblyCommand{
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[9].NodeRunID,
+		InputHash: productionWorldManifest.RootInputHash,
+		Draft: workflow.ProductionWorldCandidateDraft{
+			WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+			SourceVersion: contract.ScriptSourceVersionIdentity{
+				OwnerKind: accepted.Identity.OwnerKind, LogicalID: accepted.Identity.LogicalID,
+				VersionID: accepted.Identity.VersionID, Revision: accepted.Identity.Revision,
+				ContentHash: accepted.Identity.ContentHash, CreatedAt: accepted.Identity.CreatedAt,
+			},
+			FrozenInput:                        continuityInput,
+			ProductionEntityCandidate:          sceneAnalysisCandidateIdentity(productionEntityCandidate),
+			SceneOccurrenceCandidate:           sceneAnalysisCandidateIdentity(sceneBindingCandidate),
+			InteractionContinuityCandidate:     sceneAnalysisCandidateIdentity(continuityCandidate),
+			InteractionContinuityCandidateBody: continuityCandidate.Candidate,
+		},
+		Leaves: []contract.AggregateLeafCandidateRef{
+			sceneAnalysisAggregateLeaf(productionEntityCandidate),
+			sceneAnalysisAggregateLeaf(sceneBindingCandidate),
+			sceneAnalysisAggregateLeaf(continuityCandidate),
+		},
+	}
+	directReplay, err := productionWorldService.AssembleProductionWorld(ctx, directCommand)
+	if err != nil || directReplay.ID != productionWorldRevision.ID.String() ||
+		directReplay.CandidateRevisionHash != productionWorldRevision.CandidateRevisionHash {
+		t.Fatalf("idempotent Production World persistence: revision=%#v err=%v", directReplay, err)
+	}
+	staleReadNodeRunID := uuid.New()
+	if err = database.Create(&model.NodeRunProjection{
+		ID: staleReadNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: uuid.MustParse(started.ID),
+		NodeID: "production-world-stale-read", DefinitionKey: "production.production_world_assembly",
+		DefinitionVersion: "1.0.0", Executor: "activity.production_world_assembly",
+		RiskLevel: "low", Status: "QUEUED", Attempt: 0, Revision: 1, CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create Production World stale-read NodeRun: %v", err)
+	}
+	if err = database.Model(&model.SceneAnalysisCandidateHead{}).
+		Where("stage_instance_key = ?", continuityCandidate.StageInstanceKey).
+		Update("current_candidate_revision_hash", strings.Repeat("e", 64)).Error; err != nil {
+		t.Fatalf("drift Production World leaf Head: %v", err)
+	}
+	staleReadCommand := directCommand
+	staleReadCommand.NodeRunID = staleReadNodeRunID.String()
+	_, staleReadErr := productionWorldService.AssembleProductionWorld(ctx, staleReadCommand)
+	if err = database.Model(&model.SceneAnalysisCandidateHead{}).
+		Where("stage_instance_key = ?", continuityCandidate.StageInstanceKey).
+		Update("current_candidate_revision_hash", continuityCandidate.CandidateRevisionHash).Error; err != nil {
+		t.Fatalf("restore Production World leaf Head: %v", err)
+	}
+	if staleReadErr == nil || !strings.Contains(staleReadErr.Error(), "read set is stale") {
+		t.Fatalf("Production World stale read error = %v", staleReadErr)
+	}
+	var staleReadManifestCount int64
+	if err = database.Model(&model.ShardManifest{}).
+		Where("node_run_id = ? AND stage = ?", staleReadNodeRunID, "assemble_production_world").
+		Count(&staleReadManifestCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if staleReadManifestCount != 0 {
+		t.Fatalf("Production World stale read persisted %d manifests", staleReadManifestCount)
+	}
+	replayedProductionWorld, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: plan.Nodes[9].NodeRunID, NodeID: plan.Nodes[9].NodeID,
+		Executor: plan.Nodes[9].Executor, Attempt: 2,
+	})
+	if err != nil || replayedProductionWorld.OutputHash != productionWorldResult.OutputHash {
+		t.Fatalf("replay Production World aggregate: result=%#v err=%v", replayedProductionWorld, err)
+	}
+	var productionWorldRevisionCount, productionWorldManifestCount int64
+	if err = database.Model(&model.StageCandidateRevision{}).
+		Where("stage_instance_key = ?", productionWorldRevision.StageInstanceKey).
+		Count(&productionWorldRevisionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.ShardManifest{}).
+		Where("workflow_run_id = ? AND node_run_id = ? AND stage = ?",
+			uuid.MustParse(started.ID), uuid.MustParse(plan.Nodes[9].NodeRunID), "assemble_production_world").
+		Count(&productionWorldManifestCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if productionWorldRevisionCount != 1 || productionWorldManifestCount != 1 {
+		t.Fatalf("Production World replay facts: revisions=%d manifests=%d", productionWorldRevisionCount, productionWorldManifestCount)
 	}
 	dispatchFailureNodeRunID := uuid.New()
 	if err = database.Create(&model.NodeRunProjection{
@@ -986,6 +1119,21 @@ func seedSceneAnalysisProject(t *testing.T, create func(any) error, now time.Tim
 	return fixture
 }
 
+func sceneAnalysisCandidateIdentity(value agentapp.Candidate) contract.SceneAnalysisCandidateRevisionIdentity {
+	return contract.SceneAnalysisCandidateRevisionIdentity{
+		StageKey: value.StageKey, ShardKey: "script:full", CandidateRevisionID: value.ID,
+		CandidateRevisionHash: value.CandidateRevisionHash, SourceInvocationID: value.SourceInvocationID,
+		SourceResultHash: value.SourceResultHash,
+	}
+}
+
+func sceneAnalysisAggregateLeaf(value agentapp.Candidate) contract.AggregateLeafCandidateRef {
+	return contract.AggregateLeafCandidateRef{
+		StageInstanceKey: value.StageInstanceKey, ShardKey: "script:full",
+		CandidateRevisionID: value.ID, CandidateRevisionHash: value.CandidateRevisionHash,
+	}
+}
+
 func sceneAnalysisGraph(revisionID string) authoring.Graph {
 	return authoring.Graph{
 		Nodes: []authoring.Node{
@@ -998,6 +1146,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "production-entities", DefinitionKey: "agent.production_entity_derivation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "scene-bindings", DefinitionKey: "agent.scene_occurrence_binding", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "interaction-continuity", DefinitionKey: "agent.interaction_continuity_reconciliation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "production-world", DefinitionKey: "production.production_world_assembly", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -1026,6 +1175,12 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "identities-interaction-continuity", FromNodeID: "structure-identity-gate", FromPort: "identities", ToNodeID: "interaction-continuity", ToPort: "identities"},
 			{ID: "entities-interaction-continuity", FromNodeID: "production-entities", FromPort: "candidate", ToNodeID: "interaction-continuity", ToPort: "entities"},
 			{ID: "bindings-interaction-continuity", FromNodeID: "scene-bindings", FromPort: "candidate", ToNodeID: "interaction-continuity", ToPort: "bindings"},
+			{ID: "source-production-world", FromNodeID: "source", FromPort: "source", ToNodeID: "production-world", ToPort: "source"},
+			{ID: "facts-production-world", FromNodeID: "facts", FromPort: "candidate", ToNodeID: "production-world", ToPort: "facts"},
+			{ID: "identities-production-world", FromNodeID: "structure-identity-gate", FromPort: "identities", ToNodeID: "production-world", ToPort: "identities"},
+			{ID: "entities-production-world", FromNodeID: "production-entities", FromPort: "candidate", ToNodeID: "production-world", ToPort: "entities"},
+			{ID: "bindings-production-world", FromNodeID: "scene-bindings", FromPort: "candidate", ToNodeID: "production-world", ToPort: "bindings"},
+			{ID: "continuity-production-world", FromNodeID: "interaction-continuity", FromPort: "candidate", ToNodeID: "production-world", ToPort: "continuity"},
 		},
 	}
 }

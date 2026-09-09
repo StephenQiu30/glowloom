@@ -45,6 +45,7 @@ import (
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
+	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 )
 
 func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
@@ -192,13 +193,22 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 		storyboardgorm.New(database), storyboardgeneration.NewSelectedImageSource(selectionService),
 		storyboardapp.Config{Now: now, NewID: uuid.NewString},
 	)
+	workflowStore := workflowgorm.New(database)
+	productionWorldService, err := workflowapp.NewProductionWorldAssemblyService(
+		workflowStore,
+		workflowapp.ProductionWorldAssemblyConfig{Now: now, NewID: uuid.NewString},
+	)
+	if err != nil {
+		return fmt.Errorf("Production World assembly composition failed: %w", err)
+	}
 	activities, err := NewWorkflowRuntime(
-		workflowgorm.New(database), scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
+		workflowStore, scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
 		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations, providerService,
 		episodeSegmentationService, episodeAnalysisService,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: scriptSourceService, Candidates: sceneAnalysisService,
 			StructureIdentities: bibleapp.NewStructureIdentityQuery(bibleStore, projectService),
+			ProductionWorld:     productionWorldService,
 		},
 	)
 	if err != nil {

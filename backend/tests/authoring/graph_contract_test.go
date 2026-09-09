@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "22.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "23.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -47,6 +47,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"production.bible_materialization@1.0.0",
 		"production.episode_plan@2.0.0",
 		"production.episode_structure@1.0.0",
+		"production.production_world_assembly@1.0.0",
 		"production.storygraph_compile@1.0.0",
 	}
 	got := make([]string, 0, len(catalog.Definitions))
@@ -60,6 +61,41 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
 	}
+}
+
+func TestProductionWorldAssemblyIsDeterministicBackendWork(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantInputs := map[string]string{
+		"source": "script_source_version", "facts": "scene_fact_candidate",
+		"identities": "structure_identity_set_version", "entities": "production_entity_fragment_candidate",
+		"bindings": "scene_binding_fragment_candidate", "continuity": "continuity_fragment_candidate",
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.Key != "production.production_world_assembly" {
+			continue
+		}
+		if definition.Executor != "activity.production_world_assembly" || definition.Category != "production" ||
+			definition.CachePolicy != "by_inputs" || definition.RiskLevel != "low" ||
+			len(definition.InputPorts) != len(wantInputs) || len(definition.OutputPorts) != 1 ||
+			definition.OutputPorts[0].Key != "candidate" ||
+			definition.OutputPorts[0].ValueType != "production_world_candidate" {
+			t.Fatalf("Production World assembly contract = %#v", definition)
+		}
+		for _, port := range definition.InputPorts {
+			if !port.Required || wantInputs[port.Key] != port.ValueType {
+				t.Fatalf("Production World assembly input = %#v", port)
+			}
+			delete(wantInputs, port.Key)
+		}
+		if len(wantInputs) != 0 {
+			t.Fatalf("Production World assembly missing inputs = %v", wantInputs)
+		}
+		return
+	}
+	t.Fatal("Production World assembly is absent from the system catalog")
 }
 
 func TestReferenceAssetGenerationConsumesApprovedIntentsBeforeReturningCandidates(t *testing.T) {

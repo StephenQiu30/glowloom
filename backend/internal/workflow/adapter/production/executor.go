@@ -38,6 +38,7 @@ const (
 	productionEntityDerivationExecutor = "activity.production_entity_derivation"
 	sceneOccurrenceBindingExecutor     = "activity.scene_occurrence_binding"
 	interactionContinuityExecutor      = "activity.interaction_continuity_reconciliation"
+	productionWorldAssemblyExecutor    = "activity.production_world_assembly"
 	sourceEvidenceExecutor             = "activity.source_evidence"
 	storyAnalysisExecutor              = "activity.story_analysis"
 	storyReviewExecutor                = "activity.story_review"
@@ -75,6 +76,7 @@ type SceneAnalysisDependencies struct {
 	Sources             AcceptedScriptSource
 	Candidates          SceneAnalysisOwner
 	StructureIdentities FormalStructureIdentitySource
+	ProductionWorld     workflowapp.ProductionWorldAssembler
 }
 
 type FormalStructureIdentitySource interface {
@@ -147,6 +149,7 @@ type NodeExecutor struct {
 	scriptSources       AcceptedScriptSource
 	sceneAnalysis       SceneAnalysisOwner
 	structureIdentities FormalStructureIdentitySource
+	productionWorld     workflowapp.ProductionWorldAssembler
 	evidence            SourceEvidenceOwner
 	stories             StoryAnalysisOwner
 	storyReviews        StoryReviewOwner
@@ -186,6 +189,7 @@ func NewNodeExecutor(
 		executor.scriptSources = sceneAnalysis[0].Sources
 		executor.sceneAnalysis = sceneAnalysis[0].Candidates
 		executor.structureIdentities = sceneAnalysis[0].StructureIdentities
+		executor.productionWorld = sceneAnalysis[0].ProductionWorld
 	}
 	return executor
 }
@@ -218,6 +222,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeSceneAnalysis(ctx, command, "bind_scene_occurrences")
 	case interactionContinuityExecutor:
 		return executor.executeSceneAnalysis(ctx, command, "reconcile_interaction_continuity")
+	case productionWorldAssemblyExecutor:
+		return executor.executeProductionWorldAssembly(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -1433,6 +1439,197 @@ func (executor *NodeExecutor) executeSceneAnalysis(
 		return domain.NodeExecutorResult{}, err
 	}
 	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeProductionWorldAssembly(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	if executor.scripts == nil || executor.scriptSources == nil || executor.sceneAnalysis == nil ||
+		executor.structureIdentities == nil || executor.productionWorld == nil {
+		return domain.NodeExecutorResult{}, errors.New("Production World assembly owners are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 6 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "production_world_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production World assembly node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Production World assembly node config")
+	}
+	type expectedBinding struct {
+		valueType, sourcePort string
+	}
+	expected := map[string]expectedBinding{
+		"source":     {"script_source_version", "source"},
+		"facts":      {"scene_fact_candidate", "candidate"},
+		"identities": {"structure_identity_set_version", "identities"},
+		"entities":   {"production_entity_fragment_candidate", "candidate"},
+		"bindings":   {"scene_binding_fragment_candidate", "candidate"},
+		"continuity": {"continuity_fragment_candidate", "candidate"},
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(expected))
+	for _, binding := range input.Bindings {
+		contract, exists := expected[binding.Port]
+		if !exists || binding.ValueType != contract.valueType ||
+			binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != contract.sourcePort {
+			return domain.NodeExecutorResult{}, errors.New("Production World assembly input binding has drifted")
+		}
+		if _, duplicate := bindings[binding.Port]; duplicate {
+			return domain.NodeExecutorResult{}, errors.New("Production World assembly input binding is duplicated")
+		}
+		bindings[binding.Port] = binding
+	}
+	if len(bindings) != len(expected) {
+		return domain.NodeExecutorResult{}, errors.New("Production World assembly input set is incomplete")
+	}
+	for _, binding := range bindings {
+		if binding.ReferenceID == "" || binding.ReferenceVersion == "" ||
+			!workflowContentHashPattern.MatchString(binding.ContentHash) {
+			return domain.NodeExecutorResult{}, errors.New("Production World assembly input identity is incomplete")
+		}
+	}
+
+	actor := scriptapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	sourceBinding := bindings["source"]
+	accepted, err := executor.scriptSources.GetExact(ctx, actor, command.ProjectID, sourceBinding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	analysis, err := executor.scripts.GetRevision(ctx, actor, sourceBinding.ReferenceID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if analysis.Document.WorkspaceID != command.WorkspaceID || analysis.Document.ProjectID != command.ProjectID ||
+		accepted.Identity.ContentHash != sourceBinding.ContentHash ||
+		strconv.FormatInt(accepted.Identity.Revision, 10) != sourceBinding.ReferenceVersion ||
+		accepted.Identity.VersionID != analysis.Revision.ID || accepted.Identity.LogicalID != analysis.Document.ID ||
+		accepted.CodepointCount != analysis.Revision.CodepointCount {
+		return domain.NodeExecutorResult{}, errors.New("Production World Source identity has drifted")
+	}
+
+	stageByPort := map[string]string{
+		"facts": "extract_scene_facts", "entities": "derive_production_entities",
+		"bindings": "bind_scene_occurrences", "continuity": "reconcile_interaction_continuity",
+	}
+	candidates := make(map[string]agentapp.Candidate, len(stageByPort))
+	for port, stage := range stageByPort {
+		binding := bindings[port]
+		candidate, queryErr := executor.sceneAnalysis.GetCandidate(ctx, command.ProjectID, binding.ReferenceID)
+		if queryErr != nil {
+			return domain.NodeExecutorResult{}, queryErr
+		}
+		if candidate.WorkspaceID != command.WorkspaceID || candidate.ProjectID != command.ProjectID ||
+			candidate.StageKey != stage || candidate.CandidateType != expected[port].valueType ||
+			strconv.FormatInt(candidate.Revision, 10) != binding.ReferenceVersion ||
+			candidate.CandidateRevisionHash != binding.ContentHash {
+			return domain.NodeExecutorResult{}, errors.New("Production World upstream Candidate identity has drifted")
+		}
+		candidates[port] = candidate
+	}
+
+	identityBinding := bindings["identities"]
+	identityVersion, err := executor.structureIdentities.GetExact(
+		ctx,
+		bibleapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion},
+		command.ProjectID,
+		identityBinding.ReferenceID,
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if identityVersion.WorkspaceID != command.WorkspaceID || identityVersion.ProjectID != command.ProjectID ||
+		strconv.Itoa(identityVersion.Version) != identityBinding.ReferenceVersion ||
+		identityVersion.ContentHash != identityBinding.ContentHash ||
+		identityVersion.DocumentRevisionID != sourceBinding.ReferenceID {
+		return domain.NodeExecutorResult{}, errors.New("Production World StructureIdentitySet has drifted")
+	}
+	identityJSON, err := json.Marshal(identityVersion)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	frozenIdentities, err := agentcontract.DecodeFrozenStructureIdentitySet(identityJSON)
+	if err != nil {
+		return domain.NodeExecutorResult{}, errors.New("Production World StructureIdentitySet is invalid")
+	}
+	facts, entities := candidates["facts"], candidates["entities"]
+	sceneBindings, continuity := candidates["bindings"], candidates["continuity"]
+	frozenInput := agentcontract.InteractionContinuityInput{
+		SceneOccurrenceBindingInput: agentcontract.SceneOccurrenceBindingInput{
+			ProductionEntityDerivationInput: agentcontract.ProductionEntityDerivationInput{
+				SourceVersionID: accepted.Identity.VersionID, SourceHash: accepted.Identity.ContentHash,
+				NormalizedText:                  analysis.Revision.NormalizedText,
+				StructureIdentitySetVersionID:   identityVersion.ID,
+				StructureIdentitySetVersionHash: identityVersion.ContentHash,
+				StructureIdentitySet:            frozenIdentities,
+				SceneFactCandidateRevisionID:    facts.ID,
+				SceneFactCandidateRevisionHash:  facts.CandidateRevisionHash,
+				SceneFactCandidate:              facts.Candidate,
+			},
+			ProductionEntityCandidateRevisionID:   entities.ID,
+			ProductionEntityCandidateRevisionHash: entities.CandidateRevisionHash,
+			ProductionEntityCandidate:             entities.Candidate,
+		},
+		SceneBindingCandidateRevisionID:   sceneBindings.ID,
+		SceneBindingCandidateRevisionHash: sceneBindings.CandidateRevisionHash,
+		SceneBindingCandidate:             sceneBindings.Candidate,
+	}
+	result, err := executor.productionWorld.AssembleProductionWorld(ctx, workflowapp.ProductionWorldAssemblyCommand{
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID, InputHash: command.InputHash,
+		Draft: domain.ProductionWorldCandidateDraft{
+			WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+			SourceVersion: agentcontract.ScriptSourceVersionIdentity{
+				OwnerKind: accepted.Identity.OwnerKind, LogicalID: accepted.Identity.LogicalID,
+				VersionID: accepted.Identity.VersionID, Revision: accepted.Identity.Revision,
+				ContentHash: accepted.Identity.ContentHash, CreatedAt: accepted.Identity.CreatedAt,
+			},
+			FrozenInput:                        frozenInput,
+			ProductionEntityCandidate:          productionWorldCandidateIdentity(entities),
+			SceneOccurrenceCandidate:           productionWorldCandidateIdentity(sceneBindings),
+			InteractionContinuityCandidate:     productionWorldCandidateIdentity(continuity),
+			InteractionContinuityCandidateBody: continuity.Candidate,
+		},
+		Leaves: []agentcontract.AggregateLeafCandidateRef{
+			productionWorldAggregateLeaf(entities),
+			productionWorldAggregateLeaf(sceneBindings),
+			productionWorldAggregateLeaf(continuity),
+		},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if result.Revision < 1 || !workflowContentHashPattern.MatchString(result.CandidateRevisionHash) ||
+		!workflowContentHashPattern.MatchString(result.CandidateContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("Production World Candidate result is invalid")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "production_world_candidate", ReferenceID: result.ID,
+			ReferenceVersion: strconv.FormatInt(result.Revision, 10), ContentHash: result.CandidateRevisionHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func productionWorldCandidateIdentity(value agentapp.Candidate) agentcontract.SceneAnalysisCandidateRevisionIdentity {
+	return agentcontract.SceneAnalysisCandidateRevisionIdentity{
+		StageKey: value.StageKey, ShardKey: "script:full", CandidateRevisionID: value.ID,
+		CandidateRevisionHash: value.CandidateRevisionHash, SourceInvocationID: value.SourceInvocationID,
+		SourceResultHash: value.SourceResultHash,
+	}
+}
+
+func productionWorldAggregateLeaf(value agentapp.Candidate) agentcontract.AggregateLeafCandidateRef {
+	return agentcontract.AggregateLeafCandidateRef{
+		StageInstanceKey: value.StageInstanceKey, ShardKey: "script:full",
+		CandidateRevisionID: value.ID, CandidateRevisionHash: value.CandidateRevisionHash,
+	}
 }
 
 func (executor *NodeExecutor) executeProductionBible(
