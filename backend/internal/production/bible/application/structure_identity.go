@@ -479,6 +479,27 @@ func validateStructureIdentityReuse(current, previous []domain.StructureIdentity
 }
 
 func structureIdentityContentHash(command ConfirmStructureIdentitySetCommand, episodes []domain.EpisodeLifecycleRef, parentVersionID *string, projectRootHash string, version int) (string, error) {
+	value := domain.StructureIdentitySetVersion{
+		SchemaVersion: domain.StructureIdentitySetSchemaVersion,
+		WorkspaceID:   command.WorkspaceID, ProjectID: command.ProjectID, Version: version,
+		ParentVersionID: parentVersionID, GateInputID: command.GateInputID, GateInputHash: command.GateInputHash,
+		ReviewDecisionID: command.ReviewDecisionID, ProjectEpisodeReceiptID: command.ProjectEpisodeReceiptID,
+		DocumentRevisionID: command.DocumentRevisionID, SpanIndexID: command.SpanIndexID,
+		CandidateRefs: command.CandidateRefs, EpisodeRefs: episodes, SceneRefs: command.SceneRefs,
+		Identities: command.Identities, MentionMappings: command.MentionMappings, Coverage: command.Coverage,
+	}
+	return HashStructureIdentityVersionContent(
+		value,
+		command.DocumentRevisionHash,
+		command.SpanIndexHash,
+		projectRootHash,
+	)
+}
+
+func HashStructureIdentityVersionContent(
+	value domain.StructureIdentitySetVersion,
+	documentRevisionHash, spanIndexHash, projectRootHash string,
+) (string, error) {
 	return platformcommand.InputHash(struct {
 		SchemaVersion, WorkspaceID, ProjectID                                 string
 		Version                                                               int
@@ -493,11 +514,11 @@ func structureIdentityContentHash(command ConfirmStructureIdentitySetCommand, ep
 		MentionMappings                                                       []domain.StructureIdentityMentionMapping
 		Coverage                                                              domain.StructureIdentityCoverage
 	}{
-		domain.StructureIdentitySetSchemaVersion, command.WorkspaceID, command.ProjectID,
-		version, parentVersionID, command.GateInputID, command.GateInputHash, command.ReviewDecisionID,
-		command.ProjectEpisodeReceiptID, projectRootHash, command.DocumentRevisionID, command.DocumentRevisionHash,
-		command.SpanIndexID, command.SpanIndexHash, command.CandidateRefs, episodes, command.SceneRefs,
-		command.Identities, command.MentionMappings, command.Coverage,
+		domain.StructureIdentitySetSchemaVersion, value.WorkspaceID, value.ProjectID,
+		value.Version, value.ParentVersionID, value.GateInputID, value.GateInputHash, value.ReviewDecisionID,
+		value.ProjectEpisodeReceiptID, projectRootHash, value.DocumentRevisionID, documentRevisionHash,
+		value.SpanIndexID, spanIndexHash, value.CandidateRefs, value.EpisodeRefs, value.SceneRefs,
+		value.Identities, value.MentionMappings, value.Coverage,
 	})
 }
 

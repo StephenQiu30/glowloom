@@ -1803,6 +1803,50 @@
         }
       }
     },
+    "/api/projects/{project_id}/structure-identity": {
+      "get": {
+        "operationId": "getCurrentStructureIdentity",
+        "description": "读取 Gate 1 已发布的当前结构身份版本和精确业务 Receipt；无请求体和查询参数，不触发分析或重跑。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前权限核验后的正式结构身份结果。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StructureIdentitySnapshotResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/production-bibles/{bible_id}/review-decisions": {
       "post": {
         "operationId": "decideProductionBibleReviewIssue",
@@ -6513,6 +6557,205 @@
               "minLength": 1
             }
           }
+        }
+      },
+      "StructureIdentityCandidateRefResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage_key", "shard_key", "candidate_revision_id", "candidate_revision_hash",
+          "source_invocation_id", "source_result_hash", "skill_release_id", "skill_release_hash",
+          "stage_release_hash", "bundle_content_hash", "agent_image_digest"
+        ],
+        "properties": {
+          "stage_key": { "type": "string" },
+          "shard_key": { "type": "string" },
+          "candidate_revision_id": { "type": "string", "format": "uuid" },
+          "candidate_revision_hash": { "type": "string" },
+          "source_invocation_id": { "type": "string", "format": "uuid" },
+          "source_result_hash": { "type": "string" },
+          "skill_release_id": { "type": "string", "format": "uuid" },
+          "skill_release_hash": { "type": "string" },
+          "stage_release_hash": { "type": "string" },
+          "bundle_content_hash": { "type": "string" },
+          "agent_image_digest": { "type": "string" }
+        }
+      },
+      "StructureIdentityEpisodeRefResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "temporary_episode_id", "episode_id", "episode_revision", "position", "script_version_id",
+          "script_version", "source_start", "source_end", "content_hash"
+        ],
+        "properties": {
+          "temporary_episode_id": { "type": "string" },
+          "episode_id": { "type": "string", "format": "uuid" },
+          "episode_revision": { "type": "integer", "minimum": 1 },
+          "position": { "type": "integer", "minimum": 1 },
+          "script_version_id": { "type": "string", "format": "uuid" },
+          "script_version": { "type": "integer", "minimum": 1 },
+          "source_start": { "type": "integer", "minimum": 0 },
+          "source_end": { "type": "integer", "minimum": 1 },
+          "content_hash": { "type": "string" }
+        }
+      },
+      "StructureIdentitySceneRefResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "temporary_episode_id", "episode_id", "temporary_span_id", "temporary_scene_id",
+          "scene_owner_logical_id", "scope_key", "source_start", "source_end", "evidence_hash"
+        ],
+        "properties": {
+          "temporary_episode_id": { "type": "string" },
+          "episode_id": { "type": "string", "format": "uuid" },
+          "temporary_span_id": { "type": "string" },
+          "temporary_scene_id": { "type": "string" },
+          "scene_owner_logical_id": { "type": "string", "format": "uuid" },
+          "scope_key": { "type": "string" },
+          "source_start": { "type": "integer", "minimum": 0 },
+          "source_end": { "type": "integer", "minimum": 1 },
+          "evidence_hash": { "type": "string" }
+        }
+      },
+      "StructureIdentityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "temporary_identity_key", "identity_key", "kind", "resolution",
+          "canonical_name", "aliases"
+        ],
+        "properties": {
+          "temporary_identity_key": { "type": "string" },
+          "identity_key": { "type": "string", "format": "uuid" },
+          "kind": { "type": "string", "enum": ["character", "location", "prop"] },
+          "resolution": { "type": "string", "enum": ["new", "reuse"] },
+          "reuse_identity_key": { "type": ["string", "null"], "format": "uuid" },
+          "canonical_name": { "type": "string" },
+          "aliases": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "StructureIdentityMentionMappingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind", "temporary_scene_id", "source_start", "source_end", "text_hash", "exact_anchor",
+          "resolution", "identity_key"
+        ],
+        "properties": {
+          "kind": { "type": "string", "enum": ["character", "location", "prop"] },
+          "temporary_scene_id": { "type": "string" },
+          "source_start": { "type": "integer", "minimum": 0 },
+          "source_end": { "type": "integer", "minimum": 1 },
+          "text_hash": { "type": "string" },
+          "exact_anchor": { "type": "string" },
+          "resolution": { "type": "string", "enum": ["resolved", "unresolved"] },
+          "identity_key": { "type": ["string", "null"], "format": "uuid" }
+        }
+      },
+      "StructureIdentityCoverageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scene_count", "identity_count", "mention_count", "resolved_count", "unresolved_count",
+          "mention_universe_hash", "scope_set_hash"
+        ],
+        "properties": {
+          "scene_count": { "type": "integer", "minimum": 1 },
+          "identity_count": { "type": "integer", "minimum": 0 },
+          "mention_count": { "type": "integer", "minimum": 0 },
+          "resolved_count": { "type": "integer", "minimum": 0 },
+          "unresolved_count": { "type": "integer", "minimum": 0 },
+          "mention_universe_hash": { "type": "string" },
+          "scope_set_hash": { "type": "string" }
+        }
+      },
+      "StructureIdentitySetVersionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version", "id", "workspace_id", "project_id", "version",
+          "gate_input_id", "gate_input_hash", "review_decision_id", "project_episode_receipt_id",
+          "document_revision_id", "span_index_id", "candidate_refs", "episode_refs", "scene_refs",
+          "identities", "mention_mappings", "coverage", "content_hash", "created_by", "created_at"
+        ],
+        "properties": {
+          "schema_version": { "type": "string", "const": "structure-identity-set-production" },
+          "id": { "type": "string", "format": "uuid" },
+          "workspace_id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "version": { "type": "integer", "minimum": 1 },
+          "parent_version_id": { "type": ["string", "null"], "format": "uuid" },
+          "gate_input_id": { "type": "string", "format": "uuid" },
+          "gate_input_hash": { "type": "string" },
+          "review_decision_id": { "type": "string", "format": "uuid" },
+          "project_episode_receipt_id": { "type": "string", "format": "uuid" },
+          "document_revision_id": { "type": "string", "format": "uuid" },
+          "span_index_id": { "type": "string", "format": "uuid" },
+          "candidate_refs": {
+            "type": "array",
+            "minItems": 4,
+            "items": { "$ref": "#/components/schemas/StructureIdentityCandidateRefResponse" }
+          },
+          "episode_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/StructureIdentityEpisodeRefResponse" }
+          },
+          "scene_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/StructureIdentitySceneRefResponse" }
+          },
+          "identities": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/StructureIdentityResponse" }
+          },
+          "mention_mappings": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/StructureIdentityMentionMappingResponse" }
+          },
+          "coverage": { "$ref": "#/components/schemas/StructureIdentityCoverageResponse" },
+          "content_hash": { "type": "string" },
+          "created_by": { "type": "string", "format": "uuid" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StructureIdentityReceiptResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id", "checkpoint_key", "collection_family", "version_id", "version_content_hash",
+          "review_decision_id", "covered_scope_keys", "collection_root_hash", "receipt_content_hash"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "checkpoint_key": { "type": "string", "const": "gate_1_structure_identity" },
+          "collection_family": { "type": "string", "const": "bible_structure_identity_set" },
+          "version_id": { "type": "string", "format": "uuid" },
+          "version_content_hash": { "type": "string" },
+          "review_decision_id": { "type": "string", "format": "uuid" },
+          "covered_scope_keys": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "collection_root_hash": { "type": "string" },
+          "receipt_content_hash": { "type": "string" }
+        }
+      },
+      "StructureIdentitySnapshotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "receipt"],
+        "properties": {
+          "version": { "$ref": "#/components/schemas/StructureIdentitySetVersionResponse" },
+          "receipt": { "$ref": "#/components/schemas/StructureIdentityReceiptResponse" }
         }
       },
       "StructureIdentityRepairOptionResponse": {

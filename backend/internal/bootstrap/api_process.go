@@ -298,6 +298,10 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	storyboardService := storyboardapp.NewService(storyboardStore, storyboardapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString})
 
 	textWorldHandler := biblehttp.NewTextWorldHandler(bibleapp.NewTextWorldQuery(bibleStore, projectService), tokenVerifier)
+	structureIdentityHandler := biblehttp.NewStructureIdentityHandler(
+		bibleapp.NewStructureIdentityQuery(bibleStore, projectService),
+		tokenVerifier,
+	)
 	textIntentHandler := storyboardhttp.NewTextIntentHandler(storyboardapp.NewTextIntentQuery(storyboardStore, projectService), tokenVerifier)
 	creationStore := creationgorm.New(database)
 	creationService := creationapp.NewService(creationStore, creationapp.Config{Endpoint: configuration.CreationAgentURL, Now: time.Now, NewID: uuid.NewString})
@@ -424,6 +428,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				sceneAnalysisHandler.Register(mux)
 				bibleHandler.Register(mux)
 				textWorldHandler.Register(mux)
+				structureIdentityHandler.Register(mux)
 				textIntentHandler.Register(mux)
 				storyAnalysisRecoveryHandler.Register(mux)
 				planningHandler.Register(mux)

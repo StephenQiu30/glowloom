@@ -134,6 +134,15 @@ func TestConfirmStructureIdentitySetPublishesGateOneCheckpoint(t *testing.T) {
 		first.Receipt.CollectionFamily != bibledomain.StructureIdentityCollectionFamily || len(first.Receipt.CoveredScopeKeys) != 2 {
 		t.Fatalf("first=%#v second=%#v", first, second)
 	}
+	queried, err := bibleapp.NewStructureIdentityQuery(biblegorm.New(database), projectService).GetCurrent(
+		ctx,
+		actor,
+		projectID.String(),
+	)
+	if err != nil || queried.Version.ID != first.Version.ID || queried.Version.ContentHash != first.Version.ContentHash ||
+		queried.Receipt.ID != first.Receipt.ID || queried.Receipt.ReceiptContentHash != first.Receipt.ReceiptContentHash {
+		t.Fatalf("query current Structure Identity: result=%#v err=%v", queried, err)
+	}
 
 	assertCounts(1, 1, 1, 1, 1)
 	var outbox model.OutboxEvent
@@ -208,6 +217,18 @@ func TestConfirmStructureIdentitySetPublishesGateOneCheckpoint(t *testing.T) {
 	}
 	if assetCount != 0 || episodeStructureCount != 0 || storyGraphCount != 0 {
 		t.Fatalf("Gate 1 crossed owner boundary: assets=%d structures=%d storygraphs=%d", assetCount, episodeStructureCount, storyGraphCount)
+	}
+	if err = database.Model(&model.StructureIdentityScopeHead{}).
+		Where("project_id = ?", projectID).
+		Update("head_hash", structureIdentityHash("tampered-head")).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err = bibleapp.NewStructureIdentityQuery(biblegorm.New(database), projectService).GetCurrent(
+		ctx,
+		actor,
+		projectID.String(),
+	); err == nil {
+		t.Fatal("drifted current Structure Identity Head returned")
 	}
 }
 

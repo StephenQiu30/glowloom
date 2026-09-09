@@ -855,6 +855,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/structure-identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取 Gate 1 已发布的当前结构身份版本和精确业务 Receipt；无请求体和查询参数，不触发分析或重跑。 */
+        get: operations["getCurrentStructureIdentity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/production-bibles/{bible_id}/review-decisions": {
         parameters: {
             query?: never;
@@ -2446,6 +2463,138 @@ export interface components {
             operation: "inspect_source" | "adjust_episode_boundary" | "adjust_scene_boundary" | "separate_identity" | "merge_identity" | "resolve_mention" | "reject_mention";
             target_keys: string[];
             affected_scope_keys: string[];
+        };
+        StructureIdentityCandidateRefResponse: {
+            stage_key: string;
+            shard_key: string;
+            /** Format: uuid */
+            candidate_revision_id: string;
+            candidate_revision_hash: string;
+            /** Format: uuid */
+            source_invocation_id: string;
+            source_result_hash: string;
+            /** Format: uuid */
+            skill_release_id: string;
+            skill_release_hash: string;
+            stage_release_hash: string;
+            bundle_content_hash: string;
+            agent_image_digest: string;
+        };
+        StructureIdentityEpisodeRefResponse: {
+            temporary_episode_id: string;
+            /** Format: uuid */
+            episode_id: string;
+            episode_revision: number;
+            position: number;
+            /** Format: uuid */
+            script_version_id: string;
+            script_version: number;
+            source_start: number;
+            source_end: number;
+            content_hash: string;
+        };
+        StructureIdentitySceneRefResponse: {
+            temporary_episode_id: string;
+            /** Format: uuid */
+            episode_id: string;
+            temporary_span_id: string;
+            temporary_scene_id: string;
+            /** Format: uuid */
+            scene_owner_logical_id: string;
+            scope_key: string;
+            source_start: number;
+            source_end: number;
+            evidence_hash: string;
+        };
+        StructureIdentityResponse: {
+            temporary_identity_key: string;
+            /** Format: uuid */
+            identity_key: string;
+            /** @enum {string} */
+            kind: "character" | "location" | "prop";
+            /** @enum {string} */
+            resolution: "new" | "reuse";
+            /** Format: uuid */
+            reuse_identity_key?: string | null;
+            canonical_name: string;
+            aliases: string[];
+        };
+        StructureIdentityMentionMappingResponse: {
+            /** @enum {string} */
+            kind: "character" | "location" | "prop";
+            temporary_scene_id: string;
+            source_start: number;
+            source_end: number;
+            text_hash: string;
+            exact_anchor: string;
+            /** @enum {string} */
+            resolution: "resolved" | "unresolved";
+            /** Format: uuid */
+            identity_key: string | null;
+        };
+        StructureIdentityCoverageResponse: {
+            scene_count: number;
+            identity_count: number;
+            mention_count: number;
+            resolved_count: number;
+            unresolved_count: number;
+            mention_universe_hash: string;
+            scope_set_hash: string;
+        };
+        StructureIdentitySetVersionResponse: {
+            /** @constant */
+            schema_version: "structure-identity-set-production";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            version: number;
+            /** Format: uuid */
+            parent_version_id?: string | null;
+            /** Format: uuid */
+            gate_input_id: string;
+            gate_input_hash: string;
+            /** Format: uuid */
+            review_decision_id: string;
+            /** Format: uuid */
+            project_episode_receipt_id: string;
+            /** Format: uuid */
+            document_revision_id: string;
+            /** Format: uuid */
+            span_index_id: string;
+            candidate_refs: components["schemas"]["StructureIdentityCandidateRefResponse"][];
+            episode_refs: components["schemas"]["StructureIdentityEpisodeRefResponse"][];
+            scene_refs: components["schemas"]["StructureIdentitySceneRefResponse"][];
+            identities: components["schemas"]["StructureIdentityResponse"][];
+            mention_mappings: components["schemas"]["StructureIdentityMentionMappingResponse"][];
+            coverage: components["schemas"]["StructureIdentityCoverageResponse"];
+            content_hash: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        StructureIdentityReceiptResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            checkpoint_key: "gate_1_structure_identity";
+            /** @constant */
+            collection_family: "bible_structure_identity_set";
+            /** Format: uuid */
+            version_id: string;
+            version_content_hash: string;
+            /** Format: uuid */
+            review_decision_id: string;
+            covered_scope_keys: string[];
+            collection_root_hash: string;
+            receipt_content_hash: string;
+        };
+        StructureIdentitySnapshotResponse: {
+            version: components["schemas"]["StructureIdentitySetVersionResponse"];
+            receipt: components["schemas"]["StructureIdentityReceiptResponse"];
         };
         StructureIdentityRepairOptionResponse: {
             issue_key: string;
@@ -6126,6 +6275,37 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    getCurrentStructureIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前权限核验后的正式结构身份结果。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StructureIdentitySnapshotResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     decideProductionBibleReviewIssue: {
