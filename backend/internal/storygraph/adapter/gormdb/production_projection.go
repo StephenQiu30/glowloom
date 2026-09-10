@@ -387,7 +387,11 @@ func (projection *productionProjection) addPlanningFact(fact planningdomain.Prod
 		if json.Unmarshal(fact.Payload, &payload) != nil || json.Unmarshal(payload.Fragment, &fragment) != nil {
 			return errors.New("Planning Beat payload has drifted")
 		}
-		return projection.addOrderedSceneFact(fact, owner, payload.Scene.ID, payload.SequenceKey, fragment.Evidence, storygraph.NodeTypeNarrativeBeat, "storygraph-production/narrative_beat-ref-payload-contract")
+		if err := projection.addOrderedSceneFact(fact, owner, payload.Scene.ID, payload.SequenceKey, fragment.Evidence, storygraph.NodeTypeNarrativeBeat, "storygraph-production/narrative_beat-ref-payload-contract"); err != nil {
+			return err
+		}
+		projection.nodeKeys["beat:"+payload.Scene.ID+":"+fragment.BeatKey] = projection.nodeKeys["planning:"+fact.ID]
+		return nil
 	case "occurrence":
 		return projection.addOccurrence(fact, owner)
 	case "continuity_claim":
@@ -471,8 +475,6 @@ func (projection *productionProjection) addPlanningClaim(fact planningdomain.Pro
 	if payload.ClaimType != "interaction" {
 		return errors.New("Planning Claim type has drifted")
 	}
-	var evidence []storygraph.EvidenceRef
-	var evidenceKeys []string
 	var fragment agentcontract.InteractionFragment
 	if json.Unmarshal(payload.Fragment, &fragment) != nil {
 		return errors.New("Interaction Claim fragment has drifted")
@@ -481,12 +483,81 @@ func (projection *productionProjection) addPlanningClaim(fact planningdomain.Pro
 	if err != nil {
 		return err
 	}
-	evidence, evidenceKeys = []storygraph.EvidenceRef{value}, []string{key}
+	evidence, evidenceKeys := []storygraph.EvidenceRef{value}, []string{key}
+	if payload.ActorOccurrence == nil || payload.PropOccurrence == nil || payload.BeforeState == nil || payload.AfterState == nil {
+		return errors.New("Interaction Claim refs have drifted")
+	}
+	actorRef, err := projection.nodeRef("planning:" + payload.ActorOccurrence.ID)
+	if err != nil {
+		return err
+	}
+	propRef, err := projection.nodeRef("planning:" + payload.PropOccurrence.ID)
+	if err != nil {
+		return err
+	}
+	sceneRef, err := projection.nodeRef("planning:" + payload.SourceScene.ID)
+	if err != nil {
+		return err
+	}
+	beforeStateRef, err := projection.nodeRef("state:" + payload.BeforeState.ID)
+	if err != nil {
+		return err
+	}
+	afterStateRef, err := projection.nodeRef("state:" + payload.AfterState.ID)
+	if err != nil {
+		return err
+	}
 	contractID, contractErr := storygraph.ProductionPayloadContract(storygraph.NodeTypeContinuityClaim, payload.ClaimType)
 	if contractErr != nil {
 		return contractErr
 	}
-	node, err := newNode(storygraph.NodeTypeContinuityClaim, productionOwnerRef(owner, "", ""), "", nil, evidence, projectionPayload(contractID, owner.ContentHash, map[string]any{"claim_type": payload.ClaimType, "creator_decision_ref": nil}))
+	fields := map[string]any{
+		"claim_type": "interaction", "claim_series_key": fragment.ClaimSeriesKey,
+		"claim_revision": fragment.ClaimRevision, "predicate": fragment.Predicate,
+		"actor_occurrence_refs": []storygraph.OwnerRef{actorRef}, "prop_occurrence_ref": propRef,
+		"scene_ref": sceneRef, "valid_scope": storygraph.ClaimScope{Kind: "scene", OwnerLogicalID: sceneRef.OwnerLogicalID},
+		"story_time": fragment.StoryTimeKey, "status": "asserted", "hand": fragment.Hand,
+		"holder_before": nil, "holder_after": nil,
+		"prop_state_before": beforeStateRef, "prop_state_after": afterStateRef,
+		"creator_decision_ref": nil, "supersedes_claim_ref": nil,
+	}
+	if payload.CounterpartyOccurrence != nil {
+		counterpartyRef, refErr := projection.nodeRef("planning:" + payload.CounterpartyOccurrence.ID)
+		if refErr != nil {
+			return refErr
+		}
+		fields["counterparty_occurrence_ref"] = counterpartyRef
+	}
+	if fragment.BeatKey != nil {
+		beatRef, refErr := projection.nodeRef("beat:" + payload.SourceScene.ID + ":" + *fragment.BeatKey)
+		if refErr != nil {
+			return refErr
+		}
+		fields["beat_ref"] = beatRef
+	}
+	for field, descriptor := range map[string]*string{
+		"grip_type": fragment.GripType, "contact_point": fragment.ContactPoint, "direction": fragment.Direction,
+	} {
+		if descriptor != nil {
+			fields[field] = *descriptor
+		}
+	}
+	if fragment.RelativeScale != nil {
+		fields["relative_scale"] = fragment.RelativeScale
+	}
+	for field, identityKey := range map[string]*string{
+		"holder_before": fragment.HolderBeforeIdentityKey, "holder_after": fragment.HolderAfterIdentityKey,
+	} {
+		if identityKey == nil {
+			continue
+		}
+		holderRef, refErr := projection.assetRefByIdentityKey(*identityKey)
+		if refErr != nil {
+			return refErr
+		}
+		fields[field] = holderRef
+	}
+	node, err := newNode(storygraph.NodeTypeContinuityClaim, productionOwnerRef(owner, "", ""), "", nil, evidence, projectionPayload(contractID, owner.ContentHash, fields))
 	if err != nil {
 		return err
 	}
@@ -506,22 +577,45 @@ func (projection *productionProjection) addPlanningClaim(fact planningdomain.Pro
 			}
 		}
 	}
+	for _, holder := range []struct {
+		identityKey *string
+		role        string
+	}{{fragment.HolderBeforeIdentityKey, "holder_before"}, {fragment.HolderAfterIdentityKey, "holder_after"}} {
+		if holder.identityKey != nil {
+			assetID := projection.assetIDByIdentityKey(*holder.identityKey)
+			if err = projection.addEdge(storygraph.EdgeTypeClaimParticipant, projection.nodeKeys["asset:"+assetID], node.StoryNodeKey, storygraph.EdgeQualifier{ParticipantRole: holder.role}); err != nil {
+				return err
+			}
+		}
+	}
 	for _, anchor := range []struct {
-		ref  planningdomain.ProductionWorldPlanningFactRef
+		from string
 		role string
-	}{{payload.SourceScene, "scope_start"}, {payload.TargetScene, "scope_end"}} {
-		if err = projection.addEdge(storygraph.EdgeTypeClaimAnchor, projection.nodeKeys["planning:"+anchor.ref.ID], node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: anchor.role}); err != nil {
+	}{
+		{projection.nodeKeys["planning:"+payload.SourceScene.ID], "scene"},
+		{projection.nodeKeys["planning:"+payload.ActorOccurrence.ID], "character_occurrence"},
+		{projection.nodeKeys["planning:"+payload.PropOccurrence.ID], "prop_occurrence"},
+	} {
+		if err = projection.addEdge(storygraph.EdgeTypeClaimAnchor, anchor.from, node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: anchor.role}); err != nil {
+			return err
+		}
+	}
+	if payload.CounterpartyOccurrence != nil {
+		if err = projection.addEdge(storygraph.EdgeTypeClaimAnchor, projection.nodeKeys["planning:"+payload.CounterpartyOccurrence.ID], node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: "character_occurrence"}); err != nil {
+			return err
+		}
+	}
+	if fragment.BeatKey != nil {
+		if err = projection.addEdge(storygraph.EdgeTypeClaimAnchor, projection.nodeKeys["beat:"+payload.SourceScene.ID+":"+*fragment.BeatKey], node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: "beat"}); err != nil {
 			return err
 		}
 	}
 	for _, state := range []struct {
 		ref  *planningdomain.ExactPlanningRef
 		role string
-	}{{payload.BeforeState, "before"}, {payload.AfterState, "after"}} {
-		if state.ref != nil {
-			if err = projection.addEdge(storygraph.EdgeTypeClaimState, projection.nodeKeys["state:"+state.ref.ID], node.StoryNodeKey, storygraph.EdgeQualifier{StateRole: state.role}); err != nil {
-				return err
-			}
+	}{{payload.BeforeState, "prop_before"}, {payload.AfterState, "prop_after"}} {
+		if err = projection.addEdge(storygraph.EdgeTypeClaimState, projection.nodeKeys["state:"+state.ref.ID], node.StoryNodeKey, storygraph.EdgeQualifier{StateRole: state.role}); err != nil {
+			return err
 		}
 	}
 	return nil

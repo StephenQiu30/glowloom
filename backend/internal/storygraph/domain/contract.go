@@ -406,6 +406,9 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		if err := validateProductionContinuityRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
+		if err := validateProductionInteractionRelations(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
 		if err := validateProductionStructureRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
