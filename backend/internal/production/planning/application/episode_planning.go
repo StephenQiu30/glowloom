@@ -427,9 +427,11 @@ func buildPlanningScenes(
 	fragmentIDs := make(map[string]string, len(candidate.OrderedFragments)+len(candidate.Claims))
 	fragmentKinds := make(map[string]string, len(candidate.OrderedFragments))
 	fragmentSceneKeys := make(map[string]string, len(candidate.OrderedFragments))
+	fragmentsByKey := make(map[string]domain.EpisodeStructureFragment, len(candidate.OrderedFragments))
 	for _, fragment := range candidate.OrderedFragments {
 		fragmentIDs[fragment.TemporaryKey] = planningFragmentID(structureID, fragment.Kind, fragment.TemporaryKey)
 		fragmentKinds[fragment.TemporaryKey] = fragment.Kind
+		fragmentsByKey[fragment.TemporaryKey] = fragment
 		if fragment.Kind == "scene" {
 			fragmentSceneKeys[fragment.TemporaryKey] = fragment.TemporaryKey
 		} else if fragment.Attributes.SceneKey != nil {
@@ -587,9 +589,9 @@ func buildPlanningScenes(
 			} else if claimSceneKey != sceneKey {
 				return nil, invalid("Claim Candidate anchors must belong to one Scene")
 			}
-			role := "context"
-			if index == 0 {
-				role = "primary"
+			role, roleErr := planningClaimAnchorRole(fragmentsByKey[key], identities)
+			if roleErr != nil {
+				return nil, roleErr
 			}
 			anchors[index] = domain.PlanningClaimAnchor{Role: role, Kind: kind, FragmentID: fragmentID, TemporaryKey: key}
 		}
@@ -606,6 +608,34 @@ func buildPlanningScenes(
 		})
 	}
 	return scenes, nil
+}
+
+func planningClaimAnchorRole(
+	fragment domain.EpisodeStructureFragment,
+	identities map[string]PlanningIdentitySource,
+) (string, error) {
+	switch fragment.Kind {
+	case "scene", "beat":
+		return fragment.Kind, nil
+	case "occurrence":
+		if fragment.Attributes.OccurrenceEntityKey == nil {
+			return "", invalid("Claim Candidate occurrence anchor has no exact Identity")
+		}
+		identity, exists := identities[*fragment.Attributes.OccurrenceEntityKey]
+		if !exists {
+			return "", invalid("Claim Candidate occurrence anchor references an unknown Identity")
+		}
+		switch identity.Asset.Kind {
+		case "character":
+			return "character_occurrence", nil
+		case "prop":
+			return "prop_occurrence", nil
+		default:
+			return "", invalid("Claim Candidate occurrence anchor is not a character or prop")
+		}
+	default:
+		return "", invalid("Claim Candidate anchor kind is not semantic")
+	}
 }
 
 func planningParticipants(

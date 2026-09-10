@@ -1,7 +1,6 @@
 package observability_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,74 +8,32 @@ import (
 	"testing"
 )
 
-func TestDeadLetterTemplateDefinesFieldsBeforeFirstWriteAndRollover(t *testing.T) {
+func TestPerCommitCIDoesNotOwnELKResourcesOrFaultJourneys(t *testing.T) {
+	t.Parallel()
 	root := repositoryRoot(t)
-	var template struct {
-		Patterns []string `json:"index_patterns"`
-		Template struct {
-			Settings map[string]any `json:"settings"`
-			Mappings struct {
-				Dynamic    string `json:"dynamic"`
-				Properties map[string]struct {
-					Type string `json:"type"`
-				} `json:"properties"`
-			} `json:"mappings"`
-		} `json:"template"`
-	}
-	content := readText(t, filepath.Join(root, ".github", "ci", "observability", "elasticsearch", "dead-letter-template.json"))
-	if err := json.Unmarshal([]byte(content), &template); err != nil {
-		t.Fatal(err)
-	}
-	if len(template.Patterns) != 1 || template.Patterns[0] != "lanverse-logs-dead-letter-*" || template.Template.Mappings.Dynamic != "strict" {
-		t.Fatal("dead-letter schema must cover initial and rolled-over indices")
-	}
-	for field, want := range map[string]string{"@timestamp": "date", "schema_version": "keyword", "error_code": "keyword", "raw_sha256": "keyword", "tags": "keyword"} {
-		if template.Template.Mappings.Properties[field].Type != want {
-			t.Errorf("mapping %s must be %s", field, want)
-		}
-	}
-	if len(template.Template.Mappings.Properties) != 5 || template.Template.Settings["index.lifecycle.rollover_alias"] != "lanverse-logs-dead-letter" {
-		t.Fatal("dead-letter fields and lifecycle must remain bounded")
-	}
 	ci := readText(t, filepath.Join(root, ".github", "workflows", "ci.yml"))
-	for _, alias := range []string{"lanverse-logs-application", "lanverse-logs-dead-letter"} {
-		if strings.Count(ci, "PUT /"+alias+"-000001 ") != 2 {
-			t.Errorf("%s initial indices must support numeric rollover", alias)
+	for _, forbidden := range []string{
+		"compose.dependencies.yml", "logstash", "kibana", "elasticsearch",
+		"_index_template", "_ilm/policy", "environment_compose", "create_project_during_fault",
+	} {
+		if strings.Contains(strings.ToLower(ci), strings.ToLower(forbidden)) {
+			t.Errorf("per-commit CI still owns ELK environment acceptance via %q", forbidden)
 		}
-	}
-	if strings.Count(ci, "PUT /_index_template/lanverse-logs-dead-letter --data-binary @.github/ci/observability/elasticsearch/dead-letter-template.json") != 2 {
-		t.Fatal("both CI environments must install the dead-letter template")
 	}
 }
 
-func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t *testing.T) {
+func TestELKRuntimeUsesDirectLogstashTransportWithoutOwningInfrastructure(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
 	base := readText(t, filepath.Join(root, "docker-compose.yml"))
-	environment := readText(t, filepath.Join(root, ".github/ci/compose.dependencies.yml"))
-	kafkaInit := readText(t, filepath.Join(root, ".github", "ci", "observability", "kafka", "init.sh"))
-	logstash := readText(t, filepath.Join(root, ".github", "ci", "observability", "logstash", "pipeline", "lanverse.conf"))
-	template := readText(t, filepath.Join(root, ".github", "ci", "observability", "logstash", "template", "lanverse-logs-template.json"))
-	ciApplication := readText(t, filepath.Join(root, ".github/ci/compose.application.yml"))
-	combined := base + environment + kafkaInit + logstash + template + ciApplication
+	main := readText(t, filepath.Join(root, "backend", "cmd", "main.go"))
+	combined := base + main
 
-	for _, required := range []string{
-		"docker.elastic.co/logstash/logstash:9.4.4",
-		"docker.elastic.co/kibana/kibana:9.4.4",
-		"LOGSTASH_ADDRESS:",
-		"port => 5000",
-		"codec => json_lines",
-		"lanverse-logs-application",
-		"lanverse-logs-dead-letter",
-		"lanverse.log.application",
-		"KAFKA_USERNAME: event_worker",
-		"KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer",
-	} {
+	for _, required := range []string{"LOGSTASH_ADDRESS:", "telemetry.NewLogstashLogger("} {
 		if !strings.Contains(combined, required) {
-			t.Errorf("ELK topology is missing %q", required)
+			t.Errorf("ELK runtime contract is missing %q", required)
 		}
 	}
-
 	for _, relativePath := range []string{
 		"backend/tests/search/elasticsearch_integration_test.go",
 		"backend/tests/search/adapter/gormdb/persistence_integration_test.go",
@@ -99,23 +56,13 @@ func TestELKTopologyUsesDirectLogstashTransportWithoutFilebeatOrKafkaLogTopics(t
 		"lanverse.logs-indexer", "KAFKA_LOGSTASH", "user_logstash",
 	} {
 		if strings.Contains(strings.ToLower(combined), strings.ToLower(forbidden)) {
-			t.Errorf("direct Logstash topology still contains obsolete %q", forbidden)
+			t.Errorf("direct Logstash runtime still contains obsolete %q", forbidden)
 		}
 	}
-	for _, businessName := range []string{
-		"lanverse.business.script-version.published",
-		"lanverse.business.storygraph-version.published",
-		"lanverse.search-projector",
-		"lanverse-script-search",
-		"lanverse-storygraph-search",
-	} {
-		if strings.Contains(logstash+template, businessName) {
-			t.Errorf("log pipeline references business transport or index %q", businessName)
+	for _, environmentService := range []string{"elasticsearch", "logstash", "kibana"} {
+		if strings.Contains(base, "\n  "+environmentService+":") {
+			t.Errorf("service Compose must reuse the already-running %s environment", environmentService)
 		}
-	}
-	if strings.Contains(environment, "User:ANONYMOUS") ||
-		!strings.Contains(environment, "CONTROLLER:SASL_PLAINTEXT") {
-		t.Error("Kafka controller traffic must not bypass the authenticated ACL boundary")
 	}
 }
 
@@ -141,6 +88,24 @@ func TestSingleBackendEntrypointOwnsTheRedactingLogstashLogger(t *testing.T) {
 	}
 }
 
+func TestELKEnvironmentResourcesRemainOutsideBackendStartup(t *testing.T) {
+	t.Parallel()
+	root := repositoryRoot(t)
+	for _, path := range []string{"backend/Dockerfile", "docker-compose.yml"} {
+		source := readText(t, filepath.Join(root, path))
+		for _, forbidden := range []string{"elasticsearch-init", "kibana-init", "ELASTICSEARCH_INIT_", "KIBANA_USERNAME", "KIBANA_PASSWORD"} {
+			if strings.Contains(source, forbidden) {
+				t.Errorf("%s still owns ELK management through %q", path, forbidden)
+			}
+		}
+	}
+	for _, path := range []string{"elasticsearch/init.sh", "kibana/init.sh"} {
+		if _, err := os.Stat(filepath.Join(root, "backend/observability", path)); !os.IsNotExist(err) {
+			t.Errorf("ELK initialization script must be removed: %s (stat: %v)", path, err)
+		}
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)
@@ -157,22 +122,4 @@ func readText(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(content)
-}
-
-func TestELKEnvironmentOwnsLogResourcesOutsideBackendStartup(t *testing.T) {
-	t.Parallel()
-	root := repositoryRoot(t)
-	for _, path := range []string{"backend/Dockerfile", "docker-compose.yml", ".github/ci/compose.dependencies.yml"} {
-		source := readText(t, filepath.Join(root, path))
-		for _, forbidden := range []string{"elasticsearch-init", "kibana-init", "ELASTICSEARCH_INIT_", "KIBANA_USERNAME", "KIBANA_PASSWORD"} {
-			if strings.Contains(source, forbidden) {
-				t.Errorf("%s still owns ELK management through %q", path, forbidden)
-			}
-		}
-	}
-	for _, path := range []string{"elasticsearch/init.sh", "kibana/init.sh"} {
-		if _, err := os.Stat(filepath.Join(root, "backend/observability", path)); !os.IsNotExist(err) {
-			t.Errorf("ELK initialization script must be removed: %s (stat: %v)", path, err)
-		}
-	}
 }

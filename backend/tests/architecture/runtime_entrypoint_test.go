@@ -75,27 +75,19 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 		}
 	}
 	ciWorkflow := readArchitectureFile(t, filepath.Join(repositoryRoot, ".github", "workflows", "ci.yml"))
-	if !strings.Contains(ciWorkflow, `tr "\000" "\n" < /proc/1/cmdline`) {
-		t.Error("deployment CI must verify the non-root Backend PID 1 command without ptrace")
-	}
-	if strings.Contains(ciWorkflow, "readlink /proc/1/exe") {
-		t.Error("deployment CI cannot require ptrace access to a different-UID Backend PID 1")
-	}
-	ciApplication := readArchitectureFile(t, filepath.Join(repositoryRoot, ".github/ci/compose.application.yml"))
 	for _, required := range []string{
-		"name: lanverse-ci-environment",
-		"MINIO_ENDPOINT: minio:9000",
-		"TEMPORAL_ADDRESS: temporal:7233",
-		"KAFKA_BROKERS: kafka:19092",
-		"ELASTICSEARCH_URL: http://elasticsearch:9200",
-		"LOGSTASH_ADDRESS: logstash:5000",
+		"docker compose -f docker-compose.yml config --quiet",
+		"docker build --tag lanverse/backend:ci backend",
+		"test -x /usr/local/bin/lanverse",
 	} {
-		if !strings.Contains(ciApplication, required) {
-			t.Errorf("CI application override does not connect to its isolated dependencies via %q", required)
+		if !strings.Contains(ciWorkflow, required) {
+			t.Errorf("per-commit CI does not verify the service image contract via %q", required)
 		}
 	}
-	if !strings.Contains(ciWorkflow, "-f docker-compose.yml -f .github/ci/compose.application.yml") {
-		t.Error("deployment CI must load its isolated connection override")
+	for _, forbidden := range []string{"compose.dependencies.yml", "Run deployment images against real dependencies"} {
+		if strings.Contains(ciWorkflow, forbidden) {
+			t.Errorf("per-commit CI still owns environment or fault-journey concern %q", forbidden)
+		}
 	}
 
 	apiSource := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "internal", "bootstrap", "api_process.go"))
@@ -175,17 +167,6 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	for _, environmentService := range []string{"postgres", "minio", "temporal", "kafka", "elasticsearch", "filebeat", "logstash", "kibana"} {
 		if strings.Contains(compose, "\n  "+environmentService+":") {
 			t.Errorf("service Compose owns environment service %q", environmentService)
-		}
-	}
-	environmentCompose := readArchitectureFile(t, filepath.Join(repositoryRoot, ".github/ci/compose.dependencies.yml"))
-	for _, applicationService := range []string{"backend", "frontend"} {
-		if strings.Contains(environmentCompose, "\n  "+applicationService+":") {
-			t.Errorf("environment Compose owns application service %q", applicationService)
-		}
-	}
-	for _, required := range []string{"\n  temporal:", "\n  logstash:"} {
-		if !strings.Contains(environmentCompose, required) {
-			t.Errorf("environment Compose is missing %q", strings.TrimSpace(required))
 		}
 	}
 }

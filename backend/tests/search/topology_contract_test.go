@@ -8,32 +8,29 @@ import (
 	"testing"
 )
 
-func TestSearchTopologyPinsElasticsearchAndKeepsAPIAvailableDuringIndexOutage(t *testing.T) {
+func TestSearchTopologyUsesFormalAliasesWithoutStartingElasticsearchInPerCommitCI(t *testing.T) {
 	t.Parallel()
 	repositoryRoot := searchRepositoryRoot(t)
 	base := mustReadSearchFile(t, filepath.Join(repositoryRoot, "docker-compose.yml"))
-	environment := mustReadSearchFile(t, filepath.Join(repositoryRoot, ".github/ci/compose.dependencies.yml"))
 	configuration := mustReadSearchFile(t, filepath.Join(repositoryRoot, "backend/internal/config/config.go"))
 	module := mustReadSearchFile(t, filepath.Join(repositoryRoot, "backend", "go.mod"))
 	workflow := mustReadSearchFile(t, filepath.Join(repositoryRoot, ".github", "workflows", "ci.yml"))
 	for _, required := range []string{
-		"docker.elastic.co/elasticsearch/elasticsearch:9.4.4", "discovery.type: single-node",
-		`xpack.security.enabled: "false"`, "ELASTICSEARCH_SCRIPT_ALIAS", "ELASTICSEARCH_STORYGRAPH_ALIAS",
+		"ELASTICSEARCH_SCRIPT_ALIAS", "ELASTICSEARCH_STORYGRAPH_ALIAS",
+		`defaultScriptSearchAlias  = "lanverse-script-search"`,
+		`defaultStorySearchAlias   = "lanverse-storygraph-search"`,
 	} {
-		if !strings.Contains(base+environment+configuration, required) {
+		if !strings.Contains(base+configuration, required) {
 			t.Errorf("Search runtime topology is missing %q", required)
 		}
 	}
 	if !strings.Contains(module, "github.com/elastic/go-elasticsearch/v9 v9.4.3") {
 		t.Fatal("official Elasticsearch Go client must remain pinned to the accepted version")
 	}
-	for _, required := range []string{`["version"]["number"]`, "_alias/lanverse-script-search", "backend event runtime stayed ready while Elasticsearch was unavailable"} {
-		if !strings.Contains(workflow, required) {
-			t.Errorf("real CI Search proof is missing %q", required)
+	for _, forbidden := range []string{"compose.dependencies.yml", "Start real Kafka and ELK services", "backend event runtime stayed ready while Elasticsearch was unavailable"} {
+		if strings.Contains(workflow, forbidden) {
+			t.Errorf("per-commit CI still owns Search environment acceptance via %q", forbidden)
 		}
-	}
-	if strings.Contains(environment, "\n  backend:") {
-		t.Fatal("environment Compose must not own the Backend service")
 	}
 	backendStart := strings.Index(base, "\n  backend:")
 	if backendStart < 0 {

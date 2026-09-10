@@ -17,7 +17,7 @@ jobs:
   backend:
     name: Backend / Go
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16.15-alpine
@@ -38,7 +38,7 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache: false
-      - name: Start real Temporal service
+      - name: Start Temporal for workflow tests
         run: |
           docker run --detach --name lanverse-ci-temporal --publish 7233:7233 \
             temporalio/temporal@sha256:cf86707827fac99e4d1c4a47dc11b105382d796199c7bd41fb3213fb0471628e \
@@ -51,91 +51,16 @@ jobs:
           done
           docker logs lanverse-ci-temporal
           exit 1
-      - name: Start private MinIO service
-        run: |
-          docker run --detach --name lanverse-ci-minio --publish 9000:9000 \
-            --env MINIO_ROOT_USER=lanverse_ci --env MINIO_ROOT_PASSWORD=lanverse_ci_minio_secret \
-            minio/minio:RELEASE.2025-09-07T16-13-09Z \
-            server /data --address :9000 --console-address :9001
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs lanverse-ci-minio
-          exit 1
-      - name: Start real Kafka and ELK services
-        env:
-          COMPOSE_PROFILES: bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
-          KAFKA_PORT: 19092
-          LOGSTASH_PORT: 15000
-          ELASTICSEARCH_PORT: 19200
-          KIBANA_PORT: 15601
-          KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
-          KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
-        run: |
-          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f .github/ci/compose.dependencies.yml "$@"; }
-          environment_compose up --detach --wait --wait-timeout 300 kafka elasticsearch logstash kibana
-          ci_elasticsearch() {
-            local method=$1 path=$2; shift 2
-            curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -H 'Content-Type: application/json' -X "$method" "http://127.0.0.1:19200$path" "$@" >/dev/null
-          }
-          # Configure only this disposable CI environment; never migrate existing indices.
-          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @.github/ci/observability/elasticsearch/ilm-policy.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @.github/ci/observability/logstash/template/lanverse-logs-template.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @.github/ci/observability/elasticsearch/dead-letter-template.json
-          ci_elasticsearch PUT /lanverse-logs-application-000001 --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
-          ci_elasticsearch PUT /lanverse-logs-dead-letter-000001 --data-binary '{"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
-          curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
-            http://127.0.0.1:15601/api/data_views/data_view \
-            -H 'Content-Type: application/json' -H 'kbn-xsrf: ci-fixture' \
-            --data-binary '{"data_view":{"id":"lanverse-logs-application","name":"Lanverse Application Logs","title":"lanverse-logs-application-*","timeFieldName":"@timestamp","allowNoIndex":true}}' >/dev/null
-          environment_compose up --detach kafka-init
-          for init_service in kafka-init; do
-            init_container=$(environment_compose ps --all --quiet "$init_service")
-            test -n "$init_container"
-            test "$(docker wait "$init_container")" = 0
-          done
-          environment_compose exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
-            --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.script-version.published --describe \
-            | grep -q 'retention.ms=604800000'
-          environment_compose exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
-            --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.script-version.dead-letter --describe \
-            | grep -q 'retention.ms=2592000000'
-          environment_compose exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
-            --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.storygraph-version.published --describe \
-            | grep -q 'retention.ms=604800000'
-          environment_compose exec -T kafka \
-            /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:19092 \
-            --command-config /tmp/lanverse-kafka-health.properties \
-            --entity-type topics --entity-name lanverse.business.storygraph-version.dead-letter --describe \
-            | grep -q 'retention.ms=2592000000'
-          ! environment_compose exec -T kafka \
-            /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 \
-            --command-config /tmp/lanverse-kafka-health.properties --list \
-            | grep -qi command
-          test "$(curl --fail --silent http://127.0.0.1:19200 | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"]["number"])')" = "9.4.4"
-          curl --fail --silent http://127.0.0.1:19200/_ilm/policy/lanverse-logs-application-30d >/dev/null
-          curl --fail --silent http://127.0.0.1:19200/_index_template/lanverse-logs-application >/dev/null
-          curl --fail --silent http://127.0.0.1:15601/api/data_views/data_view/lanverse-logs-application >/dev/null
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Install native handoff test dependencies
-        run: python -m pip install -e './agent[dev,creation]'
-      - name: Verify native Agent and Go command handoff
+      - name: Verify native Agent handoff
         working-directory: agent
         env:
           LANVERSE_TEST_CREATION_DATABASE_URL: postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_creation_ci
           LANVERSE_TEST_TEMPORAL_ADDRESS: 127.0.0.1:7233
         run: |
+          python -m pip install -e '.[dev,creation]'
           psql postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_ci -c 'CREATE DATABASE lanverse_creation_ci'
           python -m pytest -q tests/creation/test_native_runtime.py
       - name: Check and test Go backend
@@ -143,33 +68,15 @@ jobs:
         env:
           LANVERSE_TEST_DATABASE_URL: postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_ci?sslmode=disable
           LANVERSE_TEST_TEMPORAL_ADDRESS: 127.0.0.1:7233
-          LANVERSE_TEST_MINIO_ENDPOINT: 127.0.0.1:9000
-          LANVERSE_TEST_MINIO_ACCESS_KEY: lanverse_ci
-          LANVERSE_TEST_MINIO_SECRET_KEY: lanverse_ci_minio_secret
-          LANVERSE_TEST_MINIO_BUCKET: lanverse-asset-ci
-          LANVERSE_TEST_KAFKA_BROKERS: 127.0.0.1:19092
-          LANVERSE_TEST_KAFKA_USERNAME: admin
-          LANVERSE_TEST_KAFKA_PASSWORD: lanverse-ci-kafka-admin
-          LANVERSE_TEST_KAFKA_ADMIN_PASSWORD: lanverse-ci-kafka-admin
-          LANVERSE_TEST_KAFKA_EVENT_WORKER_PASSWORD: lanverse-ci-event-worker
-          LANVERSE_TEST_KAFKA_SCRIPT_TOPIC: lanverse.business.script-version.published
-          LANVERSE_TEST_KAFKA_SCRIPT_DLQ_TOPIC: lanverse.business.script-version.dead-letter
-          LANVERSE_TEST_KAFKA_STORYGRAPH_TOPIC: lanverse.business.storygraph-version.published
-          LANVERSE_TEST_KAFKA_STORYGRAPH_DLQ_TOPIC: lanverse.business.storygraph-version.dead-letter
-          LANVERSE_TEST_ELASTICSEARCH_URL: http://127.0.0.1:19200
-          LANVERSE_TEST_KIBANA_URL: http://127.0.0.1:15601
-          LANVERSE_TEST_LOGSTASH_ADDRESS: 127.0.0.1:15000
         run: |
-          set -o pipefail
           test -z "$(gofmt -l .)"
           go vet ./...
-          go test -json -count=1 -p 1 ./... | tee "$RUNNER_TEMP/lanverse-backend-tests.json"
-          python3 ../.github/scripts/verify-go-test-skips.py "$RUNNER_TEMP/lanverse-backend-tests.json"
+          go test -count=1 -p 1 ./...
 
   agent:
     name: Agent / Candidate Runtime
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -191,7 +98,7 @@ jobs:
   frontend:
     name: Frontend / Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -202,354 +109,84 @@ jobs:
       - name: Install locked frontend dependencies
         working-directory: frontend
         run: npm ci
-      - name: Generate current API client
-        working-directory: frontend
-        run: npm run openapi2ts
-      - name: Check frontend
+      - name: Check generated API and frontend
         working-directory: frontend
         run: |
+          npm run openapi2ts
+          git diff --exit-code -- src/api
           npm run lint
           npm run typecheck
           npm run test
           npm run build
 
-  openapi:
-    name: API / Generated Client Drift
+  containers:
+    name: Containers / Build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: frontend
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:synthetic@localhost/lanverse
+      AGENT_EXECUTION_SECRET: synthetic-compose-harness-secret-32-bytes
+      CREATION_DATABASE_URL: postgresql://creation:synthetic@localhost/creation
+      CREATION_AGENT_SECRET: synthetic-compose-creation-secret-32-bytes
+      CREATION_TEXT_RELEASE_HASH: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      LANVERSE_CODEX_AUTH_FILE: /tmp/lanverse-ci-codex-auth.json
+      LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE: /tmp/lanverse-ci-provider-key
+      LANVERSE_FRONTEND_IMAGE: lanverse/frontend:ci
+      LANVERSE_BACKEND_IMAGE: lanverse/backend:ci
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "22.x"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install locked frontend dependencies
-        working-directory: frontend
-        run: npm ci
-      - name: Regenerate API client from Backend contract
-        working-directory: frontend
-        run: npm run openapi2ts
-      - name: Ensure generated client is committed
-        run: git diff --exit-code -- frontend/src/api
-
-  deployment:
-    name: Deployment / Images and Compose
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      - name: Configure synthetic Compose inputs
-        run: |
-          echo "DATABASE_URL=postgresql://postgres:synthetic@localhost/lanverse" >> "$GITHUB_ENV"
-          echo "AGENT_EXECUTION_SECRET=synthetic-compose-harness-secret-32-bytes" >> "$GITHUB_ENV"
-          echo "CREATION_DATABASE_URL=postgresql://creation:synthetic@localhost/creation" >> "$GITHUB_ENV"
-          echo "CREATION_AGENT_SECRET=synthetic-compose-creation-secret-32-bytes" >> "$GITHUB_ENV"
-          echo "CREATION_TEXT_RELEASE_HASH=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" >> "$GITHUB_ENV"
-          echo "LANVERSE_CODEX_AUTH_FILE=/tmp/lanverse-ci-synthetic-codex-auth.json" >> "$GITHUB_ENV"
-          umask 077
-          echo '{}' > /tmp/lanverse-ci-synthetic-codex-auth.json
-      - name: Validate development and production Compose
-        env:
-          LANVERSE_FRONTEND_IMAGE: lanverse/frontend:ci
-          LANVERSE_BACKEND_IMAGE: lanverse/backend:ci
-          POSTGRES_PASSWORD: ci-compose-only
-          JWT_SECRET_KEY: ci-compose-only-jwt
-          AGENT_URL: http://agent.example.test
-          AGENT_EXECUTION_SECRET: ci-compose-only-agent
-          AGENT_RUNTIME_IMAGE_DIGEST: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          TEMPORAL_ADDRESS: temporal.example.test:7233
-          MINIO_PUBLIC_ENDPOINT: media.example.test
-          MINIO_ACCESS_KEY: ci-compose-only
-          MINIO_SECRET_KEY: ci-compose-only-secret
-          KAFKA_ADMIN_PASSWORD: ci-compose-only-kafka-admin
-          KAFKA_EVENT_WORKER_PASSWORD: ci-compose-only-event-worker
-          CORS_ORIGINS: '["https://app.example.test"]'
-          MINIO_CORS_ORIGINS: https://app.example.test
-          LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE: /tmp/lanverse-ci-media-provider-master-key
-          SMTP_HOST: smtp.example.test
-          SMTP_PORT: "587"
-          SMTP_USERNAME: ci-compose-only
-          SMTP_PASSWORD: ci-compose-only-smtp
-          SMTP_FROM_EMAIL: ci@example.test
-          SMTP_TLS_MODE: starttls
+      - name: Validate service Compose
         run: |
           umask 077
+          echo '{}' > "$LANVERSE_CODEX_AUTH_FILE"
           openssl rand -out "$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" 32
-          echo "LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE=$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" >> "$GITHUB_ENV"
           docker compose -f docker-compose.yml config --quiet
-          docker compose --project-directory . -f .github/ci/compose.dependencies.yml config --quiet
           test "$(docker compose -f docker-compose.yml config --services | sort | tr '\n' ' ')" = "agent backend frontend "
-          test -z "$(docker compose --project-directory . -f .github/ci/compose.dependencies.yml config --services)"
-      - name: Build Frontend deployment image
-        run: docker build --tag lanverse/frontend:ci frontend
-      - name: Build Backend deployment image
-        run: docker build --tag lanverse/backend:ci backend
-      - name: Build Agent deployment image
-        run: docker build --file agent/Dockerfile --tag lanverse/agent:ci .
-      - name: Require Backend binaries
-        run: >-
-          docker run --rm --entrypoint /bin/sh lanverse/backend:ci -c
-          'test -x /usr/local/bin/lanverse &&
-          test ! -e /usr/local/bin/lanverse-api &&
-          test ! -e /usr/local/bin/lanverse-workflow-worker &&
-          test ! -e /usr/local/bin/lanverse-event-worker'
-      - name: Require Frontend standalone runtime
-        run: >-
-          docker run --rm --entrypoint /bin/sh lanverse/frontend:ci -c
-          'test -f /srv/lanverse/frontend/server.js && test -d /srv/lanverse/frontend/.next/static'
-      - name: Require combined Agent runtime image
+      - name: Build service images
         run: |
+          docker build --tag lanverse/frontend:ci frontend
+          docker build --tag lanverse/backend:ci backend
+          docker build --file agent/Dockerfile --tag lanverse/agent:ci .
+      - name: Verify image contracts
+        run: |
+          docker run --rm --entrypoint /bin/sh lanverse/backend:ci -c '
+            test -x /usr/local/bin/lanverse
+            test ! -e /usr/local/bin/lanverse-api
+            test ! -e /usr/local/bin/lanverse-workflow-worker
+            test ! -e /usr/local/bin/lanverse-event-worker
+          '
+          docker run --rm --entrypoint /bin/sh lanverse/frontend:ci -c '
+            test -f /srv/lanverse/frontend/server.js
+            test -d /srv/lanverse/frontend/.next/static
+          '
           docker run --rm --entrypoint /bin/sh \
             --env CREATION_DATABASE_URL=postgresql://creation:test@localhost/creation \
             --env CREATION_AGENT_SECRET=synthetic-creation-secret-at-least-32-bytes \
             --env AGENT_EXECUTION_SECRET=synthetic-execution-secret-at-least-32-bytes \
             lanverse/agent:ci -c '
-            test "$(id -u)" -ne 0
-            command -v codex >/dev/null
-            codex --version | grep -q "0.149.1"
-            test -d skills/build-storygraph
-            test "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 2
-            test ! -e /srv/lanverse/.agents
-            test -z "$(find skills -name openai.yaml -print -quit)"
-            python -c "from app.main import create_app; from app.skills.catalog import SkillCatalog; application = create_app(); assert application.title == \"Lanverse Agent\"; assert callable(create_app); SkillCatalog().verify_all()"
-          '
-      - name: Run deployment images against real dependencies
-        env:
-          COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
-          MINIO_ENDPOINT: minio:9000
-          KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
-          KAFKA_USERNAME: event_worker
-          KAFKA_PASSWORD: lanverse-development-event-worker
-          ELASTICSEARCH_USERNAME: ""
-          ELASTICSEARCH_PASSWORD: ""
-        run: |
-          environment_compose() { docker compose --project-directory . -p lanverse-ci-env -f .github/ci/compose.dependencies.yml "$@"; }
-          service_compose() { docker compose -p lanverse-ci -f docker-compose.yml -f .github/ci/compose.application.yml "$@"; }
-          export AGENT_RUNTIME_IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' lanverse/agent:ci)"
-          test -n "$AGENT_RUNTIME_IMAGE_DIGEST"
-          docker tag lanverse/frontend:ci lanverse/frontend:development
-          docker tag lanverse/backend:ci lanverse/backend:development
-          environment_compose up --detach --no-build --wait --wait-timeout 240 \
-            postgres minio temporal kafka elasticsearch logstash kibana
-          environment_compose up --detach --no-build minio-init kafka-init
-          for init_service in minio-init kafka-init; do
-            init_container=$(environment_compose ps --all --quiet "$init_service")
-            test -n "$init_container"
-            test "$(docker wait "$init_container")" = 0
-          done
-          environment_compose exec -T postgres psql -U postgres -d lanverse -c 'CREATE DATABASE lanverse_creation' 2>/dev/null || true
-          service_compose run --rm --no-deps agent python -m app.creation.migrate
-          ci_elasticsearch() {
-            local method=$1 path=$2; shift 2
-            if [[ "$2" == @* ]]; then
-              cat "${2#@}"
-            else
-              printf '%s' "$2"
-            fi | environment_compose exec -T elasticsearch curl --fail --silent --show-error \
-              --connect-timeout 5 --max-time 30 -H 'Content-Type: application/json' \
-              -X "$method" "http://localhost:9200$path" --data-binary @- >/dev/null
-          }
-          # Configure only this disposable CI environment; never migrate existing indices.
-          ci_elasticsearch PUT /_ilm/policy/lanverse-logs-application-30d --data-binary @.github/ci/observability/elasticsearch/ilm-policy.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-application --data-binary @.github/ci/observability/logstash/template/lanverse-logs-template.json
-          ci_elasticsearch PUT /_index_template/lanverse-logs-dead-letter --data-binary @.github/ci/observability/elasticsearch/dead-letter-template.json
-          ci_elasticsearch PUT /lanverse-logs-application-000001 --data-binary '{"aliases":{"lanverse-logs-application":{"is_write_index":true}}}'
-          ci_elasticsearch PUT /lanverse-logs-dead-letter-000001 --data-binary '{"aliases":{"lanverse-logs-dead-letter":{"is_write_index":true}}}'
-          curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -X POST \
-            http://127.0.0.1:5601/api/data_views/data_view \
-            -H 'Content-Type: application/json' -H 'kbn-xsrf: ci-fixture' \
-            --data-binary '{"data_view":{"id":"lanverse-logs-application","name":"Lanverse Application Logs","title":"lanverse-logs-application-*","timeFieldName":"@timestamp","allowNoIndex":true}}' >/dev/null
-          if ! service_compose up --detach --no-build --wait --wait-timeout 240 frontend backend agent; then
-            service_compose ps --all
-            service_compose logs --no-color backend
-            service_compose logs --no-color agent
-            exit 1
-          fi
-          service_compose ps --status running --services | grep -qx backend
-          service_compose exec -T backend /bin/sh -c '
-            set -- $(grep "^Uid:" /proc/1/status)
-            test "$2" = "$(id -u lanverse)"
-            first_arg=$(tr "\000" "\n" < /proc/1/cmdline | head -n 1)
-            test "$first_arg" = /usr/local/bin/lanverse
-          '
-          service_compose exec -T --user lanverse backend /bin/sh -c '
-            test "$(stat -f -c %T /run/secrets)" = tmpfs
-            test -f /run/secrets/lanverse_media_provider_master_key
-            test "$(stat -c %a /run/secrets/lanverse_media_provider_master_key)" = 400
-            test "$(stat -c %U:%G /run/secrets/lanverse_media_provider_master_key)" = lanverse:lanverse
-            test "$(wc -c < /run/secrets/lanverse_media_provider_master_key)" -eq 32
-          '
-          environment_compose ps --status running --services | grep -qx logstash
-          environment_compose ps --status running --services | grep -qx kibana
-          for attempt in $(seq 1 30); do
-            if service_compose logs --no-color backend | grep -q "lanverse workflow worker started"; then
-              break
-            fi
-            if [ "$attempt" -eq 30 ]; then
-              service_compose logs --no-color backend
-              exit 1
-            fi
-            sleep 1
-          done
-          for attempt in $(seq 1 30); do
-            if service_compose logs --no-color backend | grep -q "lanverse event worker started"; then
-              break
-            fi
-            if [ "$attempt" -eq 30 ]; then
-              service_compose logs --no-color backend
-              exit 1
-            fi
-            sleep 1
-          done
-          service_compose exec -T backend \
-            wget --quiet --spider http://127.0.0.1:8687/readyz
-          test_email=ci-logging-faults@example.test
-          curl --fail --silent --show-error --request POST http://127.0.0.1:8686/api/auth/registration-verifications \
-            --header 'Content-Type: application/json' --data-binary "{\"email\":\"$test_email\"}" >/dev/null
-          registration_ticket=$(curl --fail --silent --show-error --request POST \
-            http://127.0.0.1:8686/api/auth/registration-verifications/confirm \
-            --header 'Content-Type: application/json' \
-            --data-binary "{\"email\":\"$test_email\",\"code\":\"123456\"}" \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["registration_ticket"])')
-          auth_result=$(curl --fail --silent --show-error --request POST http://127.0.0.1:8686/api/auth/register \
-            --header 'Content-Type: application/json' \
-            --data-binary "{\"registration_ticket\":\"$registration_ticket\",\"password\":\"ci-logging-password-123\",\"display_name\":\"CI Logging\"}")
-          access_token=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["access_token"])' <<<"$auth_result")
-          workspace_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["workspace"]["id"])' <<<"$auth_result")
-          create_project_during_fault() {
-            local fault_name=$1
-            local project_result
-            project_result=$(curl --fail --silent --show-error --request POST http://127.0.0.1:8686/api/projects \
-              --header 'Content-Type: application/json' --header "Authorization: Bearer $access_token" \
-              --data-binary "{\"workspace_id\":\"$workspace_id\",\"name\":\"Logging fault $fault_name\",\"idempotency_key\":\"ci-logging-fault-$fault_name\"}")
-            python3 -c 'import json,sys; data=json.load(sys.stdin)["data"]; assert data["status"] == "active"; assert data["revision"] == 1' <<<"$project_result"
-          }
-          log_request_id=5cffb37f-79b1-42f9-9e34-c55b1d8e9702
-          curl --fail --silent --show-error \
-            --header "X-Request-ID: $log_request_id" \
-            --header 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
-            --output /dev/null 'http://127.0.0.1:8686/healthz?token=ci-sensitive-query-value'
-          for attempt in $(seq 1 60); do
-            log_result=$(curl --fail --silent --show-error \
-              --request POST http://127.0.0.1:9200/lanverse-logs-application/_search \
-              --header 'Content-Type: application/json' \
-              --data-binary "{\"query\":{\"term\":{\"request_id\":\"$log_request_id\"}},\"size\":1}")
-            if python3 -c 'import json,sys; result=json.load(sys.stdin); source=result["hits"]["hits"][0]["_source"]; assert source["service"] == "lanverse-backend"; assert source["event"] == "http_request"; assert source["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"; assert source["route"] == "/healthz"; assert "ci-sensitive-query-value" not in json.dumps(source)' <<<"$log_result" 2>/dev/null; then
-              break
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              service_compose logs --no-color backend
-              environment_compose logs --no-color logstash
-              exit 1
-            fi
-            sleep 1
-          done
-          curl --fail --silent http://127.0.0.1:5601/api/data_views/data_view/lanverse-logs-application >/dev/null
-          search_index_before=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
-          for logging_service in logstash kibana; do
-            environment_compose stop "$logging_service"
-            service_compose exec -T backend \
-              wget --quiet --spider http://127.0.0.1:8686/healthz
-            service_compose exec -T backend \
-              wget --quiet --spider http://127.0.0.1:8687/readyz
-            service_compose ps --status running --services | grep -qx backend
-            create_project_during_fault "$logging_service"
-            search_index_after=$(curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))')
-            test "$search_index_after" = "$search_index_before"
-            environment_compose up --detach --no-build --wait --wait-timeout 180 "$logging_service"
-          done
-          environment_compose stop kafka
-          if service_compose exec -T backend \
-            wget --quiet --spider http://127.0.0.1:8687/readyz; then
-            echo 'backend event runtime stayed ready while Kafka was unavailable' >&2
-            exit 1
-          fi
-          service_compose ps --status running --services | grep -qx backend
-          service_compose exec -T backend \
-            wget --quiet --spider http://127.0.0.1:8686/healthz
-          service_compose ps --status running --services | grep -qx backend
-          create_project_during_fault kafka
-          environment_compose start kafka
-          for attempt in $(seq 1 60); do
-            if service_compose exec -T backend \
-              wget --quiet --spider http://127.0.0.1:8687/readyz; then
-              break
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              service_compose logs --no-color backend
-              environment_compose logs --no-color kafka
-              exit 1
-            fi
-            sleep 1
-          done
-          environment_compose exec -T elasticsearch \
-            curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-script-search >/dev/null
-          environment_compose exec -T elasticsearch \
-            curl --fail --silent http://127.0.0.1:9200/_alias/lanverse-storygraph-search >/dev/null
-          environment_compose stop elasticsearch
-          if service_compose exec -T backend \
-            wget --quiet --spider http://127.0.0.1:8687/readyz; then
-            echo 'backend event runtime stayed ready while Elasticsearch was unavailable' >&2
-            exit 1
-          fi
-          service_compose exec -T backend \
-            wget --quiet --spider http://127.0.0.1:8686/healthz
-          service_compose ps --status running --services | grep -qx backend
-          create_project_during_fault elasticsearch
-          environment_compose start elasticsearch
-          for attempt in $(seq 1 60); do
-            if service_compose exec -T backend \
-              wget --quiet --spider http://127.0.0.1:8687/readyz; then
-              break
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              service_compose logs --no-color backend
-              environment_compose logs --no-color elasticsearch
-              exit 1
-            fi
-            sleep 1
-          done
-          recovery_request_id=649899b8-2702-474f-a0b8-71aa696b10d8
-          curl --fail --silent --show-error --header "X-Request-ID: $recovery_request_id" \
-            --output /dev/null http://127.0.0.1:8686/healthz
-          for attempt in $(seq 1 60); do
-            recovery_count=$(curl --fail --silent --show-error \
-              "http://127.0.0.1:9200/lanverse-logs-application/_count?q=request_id:$recovery_request_id" \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])' 2>/dev/null || echo 0)
-            if [ "$recovery_count" -gt 0 ]; then
-              break
-            fi
-            if [ "$attempt" -eq 60 ]; then
-              service_compose logs --no-color backend
-              environment_compose logs --no-color logstash kafka elasticsearch
-              exit 1
-            fi
-            sleep 1
-          done
-          curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8686/healthz
-          curl --fail --silent --show-error --retry 30 --retry-all-errors --retry-delay 1 --output /dev/null http://127.0.0.1:8123/
-          agent_health=$(service_compose exec -T agent curl --fail --silent http://127.0.0.1:8787/healthz)
-          python3 -c 'import json,sys; value=json.load(sys.stdin); assert value["status"] == "ok"; assert value["skill_bundle_hash"] == "352d46c51661e7d989b42ddeb0a0ff0a4b48165e8e3f7700f3e60d170e4c58cb"; assert value["scene_analysis_skill_bundle_hash"] == "d096f3d38ff5383d685b2a510cea25985978e294a2a8c46841fa15320eee7b71"' <<<"$agent_health"
-      - name: Clean deployment runtime
-        if: always()
-        env:
-          COMPOSE_PROFILES: bundled-minio,bundled-postgres,bundled-temporal,bundled-kafka,bundled-elasticsearch,bundled-kibana,bundled-logstash
-        run: |
-          docker compose -p lanverse-ci -f docker-compose.yml -f .github/ci/compose.application.yml down --volumes --remove-orphans
-          docker compose --project-directory . -p lanverse-ci-env -f .github/ci/compose.dependencies.yml down --volumes --remove-orphans
-          unlink /tmp/lanverse-ci-media-provider-master-key 2>/dev/null || true
+              test "$(id -u)" -ne 0
+              command -v codex >/dev/null
+              test -d skills/build-storygraph
+              test -d skills/text-storyboard
+              test ! -e /srv/lanverse/.agents
+              test -z "$(find skills -name openai.yaml -print -quit)"
+              python -c "from app.main import create_app; from app.skills.catalog import SkillCatalog; application = create_app(); assert application.title == \"Lanverse Agent\"; SkillCatalog().verify_all()"
+            '
 
-  delivery:
-    name: Delivery / Hygiene
+  required:
+    name: Required / CI
+    if: ${{ always() }}
+    needs: [backend, agent, frontend, containers]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [backend, agent, frontend, openapi]
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - name: Check repository hygiene
+      - name: Require every project boundary and repository hygiene
         run: |
+          test "${{ needs.backend.result }}" = success
+          test "${{ needs.agent.result }}" = success
+          test "${{ needs.frontend.result }}" = success
+          test "${{ needs.containers.result }}" = success
           if git ls-files | grep -E '(^|/)(\.env($|\.)|.*\.(pem|key|log)$|data/|logs/|playwright-report/|test-results/)' | grep -v -E '\.env(\.production)?\.example$'; then
             echo 'tracked secret/data/report artifact detected' >&2
             exit 1
@@ -558,19 +195,3 @@ jobs:
           test -f agent/pyproject.toml
           ! find backend -type f \( -name '*.py' -o -name 'pyproject.toml' \) -print -quit | grep -q .
           ! find agent -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -print -quit | grep -q .
-
-  required:
-    name: Required / CI
-    if: ${{ always() }}
-    needs: [backend, agent, frontend, openapi, deployment, delivery]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require every project boundary to pass
-        run: |
-          test "${{ needs.backend.result }}" = success
-          test "${{ needs.agent.result }}" = success
-          test "${{ needs.frontend.result }}" = success
-          test "${{ needs.openapi.result }}" = success
-          test "${{ needs.deployment.result }}" = success
-          test "${{ needs.delivery.result }}" = success

@@ -63,7 +63,7 @@ PostgreSQL、MinIO、Temporal、Kafka、ES 和 Logstash 直接使用本机已启
 
 Agent 使用已迁移的独立数据库、独立签名密钥和已审阅的冻结 SkillRelease 摘要，只读挂载已登录 Codex 的 `auth.json`；配置说明与恢复约束见 [Agent 单服务设计](docs/design/0021-Agent单服务架构调整设计.md) 和 [部署设计](docs/design/0020-文本解析失败诊断与受控恢复设计.md)。媒体供应商配置需要另行填写本机 root-key 文件路径。
 
-CI 的一次性依赖、连接覆盖和观测配置仅保存在 `.github/ci/`，不会被本地启动加载。本地和部署均使用根目录 `docker-compose.yml`，不再维护额外的 deploy 覆盖层。
+每次提交的 CI 只编排核心 Workflow 测试所需的空 PostgreSQL 与真实 Temporal，并执行三端质量、OpenAPI 漂移和三类服务镜像构建。Kafka、Elasticsearch、Logstash 与 MinIO 复用本机已启动环境完成阶段/发布验收，CI 不重复启动环境、创建正式资源或执行故障注入。本地和部署均使用根目录 `docker-compose.yml`。
 
 ## 验证
 

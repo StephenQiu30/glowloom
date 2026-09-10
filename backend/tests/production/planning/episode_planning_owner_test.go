@@ -123,7 +123,8 @@ func TestApplyEpisodePlanningCandidateCreatesEveryFormalFactAndReplaysReceipt(t 
 	if scene.Dialogues[0].SpeakerIdentity == nil || scene.Dialogues[0].SpeakerIdentity.AssetID != "76000000-0000-0000-0000-000000000041" ||
 		scene.Occurrences[0].State.StateKey != "base" || scene.Occurrences[1].Identity.Kind != "location" ||
 		len(scene.Claims[0].Participants) != 1 || scene.Claims[0].Participants[0].Role != "subject" ||
-		len(scene.Claims[0].Anchors) != 1 || scene.Claims[0].Anchors[0].FragmentID != scene.NarrativeUnits[0].ID {
+		len(scene.Claims[0].Anchors) != 2 || scene.Claims[0].Anchors[0].FragmentID != scene.NarrativeUnits[0].ID ||
+		scene.Claims[0].Anchors[0].Role != "beat" || scene.Claims[0].Anchors[1].Role != "character_occurrence" {
 		t.Fatalf("formal identity/state/claim refs are incomplete: %#v", scene)
 	}
 	if len(result.Set.Structures[0].Fragments) != 7 {
@@ -257,7 +258,7 @@ func episodePlanningOwnerFixture() planningapp.EpisodePlanningCandidateSource {
 		},
 		Claims: []domain.EpisodeClaimCandidate{{
 			ClaimKey: "claim:causal-door", ClaimType: "causal", ParticipantKeys: []string{"character:lin-yi"},
-			AnchorKeys: []string{"beat:first"}, Scope: "episode:76000000-0000-0000-0000-000000000011",
+			AnchorKeys: []string{"beat:first", "occurrence:character"}, Scope: "episode:76000000-0000-0000-0000-000000000011",
 			Polarity: "positive", Status: "proposed", Evidence: []bibledomain.Evidence{firstEvidence},
 		}},
 		Conflicts: []bibledomain.ReviewIssue{}, ReviewIssues: []bibledomain.ReviewIssue{},

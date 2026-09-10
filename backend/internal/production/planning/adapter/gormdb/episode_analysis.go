@@ -425,9 +425,24 @@ func (store *Store) CompleteEpisodeAnalysisInvocation(
 	}
 	applied := false
 	err = platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		var owner model.AgentInvocation
+		if err := transaction.Select("node_run_id").First(&owner, "id = ?", id).Error; err != nil {
+			return normalizeNotFound(err)
+		}
+		if owner.NodeRunID == nil {
+			return errors.New("episode analysis invocation has no NodeRun")
+		}
+		var node model.NodeRunProjection
+		if err := transaction.Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&node, "id = ?", *owner.NodeRunID).Error; err != nil {
+			return normalizeNotFound(err)
+		}
 		var invocation model.AgentInvocation
 		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&invocation, "id = ?", id).Error; err != nil {
 			return normalizeNotFound(err)
+		}
+		if invocation.NodeRunID == nil || *invocation.NodeRunID != node.ID {
+			return errors.New("episode analysis invocation NodeRun has drifted")
 		}
 		if !activeEpisodeInvocationClaim(invocation, claimVersion, now) {
 			return nil
@@ -472,9 +487,6 @@ func (store *Store) CompleteEpisodeAnalysisInvocation(
 			"completed_at": now, "updated_at": now,
 		}).Error; err != nil {
 			return err
-		}
-		if invocation.NodeRunID == nil {
-			return errors.New("episode analysis invocation has no NodeRun")
 		}
 		analyze, reconcile, err := loadEpisodeManifestPair(transaction, invocation.NodeRunID.String(), true)
 		if err != nil {

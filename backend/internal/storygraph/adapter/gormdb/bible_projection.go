@@ -423,12 +423,8 @@ func projectBibleClaims(projection *snapshotProjection, projectID uuid.UUID) err
 				return edgeErr
 			}
 		}
-		for index, anchor := range anchorNodes {
-			role := "context"
-			if index == 0 {
-				role = "primary"
-			}
-			edge, edgeErr := newEdge(storygraph.EdgeTypeClaimAnchor, anchor.StoryNodeKey, node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: role})
+		for _, anchor := range anchorNodes {
+			edge, edgeErr := newEdge(storygraph.EdgeTypeClaimAnchor, anchor.StoryNodeKey, node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: "scene"})
 			if edgeErr != nil {
 				return edgeErr
 			}
