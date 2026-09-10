@@ -147,6 +147,7 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, episodeKey, storygraph.EdgeQualifier{}),
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, assetKey, storygraph.EdgeQualifier{}),
 			newEdge(t, storygraph.EdgeTypeDerivedFrom, evidenceKey, sceneKey, storygraph.EdgeQualifier{}),
+			newEdge(t, storygraph.EdgeTypeContains, episodeKey, sceneKey, storygraph.EdgeQualifier{SequenceKey: "scene:0001"}),
 		}},
 	}
 	addProductionIdentityRelations(t, &result)

@@ -63,6 +63,9 @@ func buildProductionGraph(
 	if err := projection.addPlanningFacts(); err != nil {
 		return productionGraph{}, err
 	}
+	if err := projection.addStructuralPrecedes(); err != nil {
+		return productionGraph{}, err
+	}
 	return projection.graph, nil
 }
 
@@ -299,6 +302,47 @@ func (projection *productionProjection) addPlanningFacts() error {
 				if err := projection.addPlanningFact(fact); err != nil {
 					return err
 				}
+			}
+		}
+	}
+	return nil
+}
+
+func (projection *productionProjection) addStructuralPrecedes() error {
+	type orderedNode struct {
+		key, sequence string
+	}
+	groups := make(map[string][]orderedNode)
+	nodeTypes := make(map[string]storygraph.NodeType, len(projection.graph.nodes))
+	for _, node := range projection.graph.nodes {
+		nodeTypes[node.StoryNodeKey] = node.NodeType
+	}
+	for _, edge := range projection.graph.edges {
+		if edge.EdgeType != storygraph.EdgeTypeContains {
+			continue
+		}
+		childType := nodeTypes[edge.ToNodeKey]
+		if childType != storygraph.NodeTypeScene && childType != storygraph.NodeTypeNarrativeBeat {
+			continue
+		}
+		groupKey := edge.FromNodeKey + "\x00" + string(childType)
+		groups[groupKey] = append(groups[groupKey], orderedNode{key: edge.ToNodeKey, sequence: edge.Qualifier.SequenceKey})
+	}
+	episodes := make([]orderedNode, 0, len(projection.material.episodeRefs))
+	for _, reference := range projection.material.episodeRefs {
+		episodes = append(episodes, orderedNode{key: projection.nodeKeys["episode:"+reference.EpisodeID], sequence: fmt.Sprintf("%012d", reference.Position)})
+	}
+	groups["episodes"] = episodes
+	for _, group := range groups {
+		slices.SortFunc(group, func(left, right orderedNode) int {
+			return strings.Compare(left.sequence, right.sequence)
+		})
+		for index := 1; index < len(group); index++ {
+			if group[index-1].sequence == group[index].sequence {
+				return errors.New("Production StoryGraph sequence key is duplicated")
+			}
+			if err := projection.addEdge(storygraph.EdgeTypePrecedes, group[index-1].key, group[index].key, storygraph.EdgeQualifier{SequenceKey: group[index].sequence}); err != nil {
+				return err
 			}
 		}
 	}

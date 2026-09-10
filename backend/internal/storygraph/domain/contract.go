@@ -403,6 +403,9 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		if err := validateProductionIdentityRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
+		if err := validateProductionStructureRelations(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
 	}
 
 	keys := make([]string, 0, len(nodes))
@@ -504,7 +507,7 @@ func edgeEndpointAllowed(edgeType EdgeType, from, to NodeType, qualifier EdgeQua
 	case EdgeTypeHasState:
 		return from == NodeTypeAssetIdentity && to == NodeTypeAssetState
 	case EdgeTypePrecedes:
-		return from == to && oneOfNode(from, NodeTypeScene, NodeTypeShot)
+		return from == to && oneOfNode(from, NodeTypeEpisode, NodeTypeScene, NodeTypeNarrativeBeat, NodeTypeShot)
 	case EdgeTypeAnchorsOccurrence:
 		return oneOfNode(from, NodeTypeScene, NodeTypeNarrativeBeat) && to == NodeTypeOccurrence
 	case EdgeTypeInstantiatesOccurrence:
