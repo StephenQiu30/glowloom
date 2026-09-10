@@ -266,52 +266,8 @@ func (projection *productionProjection) addBibleClaim(claim model.ProductionWorl
 	if nodeType == storygraph.NodeTypeRelationshipClaim || nodeType == storygraph.NodeTypeForeshadowingClaim || nodeType == storygraph.NodeTypePayoffClaim {
 		contractID = "storygraph-production/narrative-claim-payload-contract"
 	}
-	fields := map[string]any{"claim_type": claim.ClaimType, "creator_decision_ref": nil}
-	var participantRefs, anchorRefs []storygraph.OwnerRef
-	if nodeType == storygraph.NodeTypeRelationshipClaim {
-		if len(subjects) == 0 {
-			return errors.New("Production Bible Relationship Claim has no subject")
-		}
-		for _, subject := range subjects {
-			ref, refErr := projection.nodeRef("asset:" + subject.AssetID)
-			if refErr != nil {
-				return refErr
-			}
-			participantRefs = append(participantRefs, ref)
-		}
-		slices.SortFunc(participantRefs, func(left, right storygraph.OwnerRef) int {
-			return strings.Compare(productionOwnerRefSortKey(left), productionOwnerRefSortKey(right))
-		})
-		for _, episode := range projection.material.episodeRefs {
-			for _, span := range basis.Evidence {
-				if span.SourceStart >= episode.SourceEnd || span.SourceEnd <= episode.SourceStart {
-					continue
-				}
-				ref, refErr := projection.nodeRef("episode:" + episode.EpisodeID)
-				if refErr != nil {
-					return refErr
-				}
-				anchorRefs = append(anchorRefs, ref)
-				break
-			}
-		}
-		if len(anchorRefs) == 0 {
-			return errors.New("Production Bible Relationship Claim has no evidenced Episode anchor")
-		}
-		slices.SortFunc(anchorRefs, func(left, right storygraph.OwnerRef) int {
-			return strings.Compare(productionOwnerRefSortKey(left), productionOwnerRefSortKey(right))
-		})
-		fields = map[string]any{
-			"claim_series_key": claim.ClaimKey, "claim_revision": claim.Revision,
-			"predicate": "relationship", "subject_ref": participantRefs[0], "object_ref": nil,
-			"participant_refs": participantRefs[1:], "anchor_refs": anchorRefs,
-			"valid_scope":      storygraph.ClaimScope{Kind: "project", OwnerLogicalID: claim.ProjectID.String()},
-			"story_time_range": nil, "polarity": "neutral", "status": "asserted",
-			"creator_decision_ref": nil, "supersedes_claim_ref": nil,
-		}
-	}
 	node, err := newNode(nodeType, productionOwnerRef(projection.bibleOwner, "claim:"+claim.ID.String(), claim.ContentHash), "", nil, evidence,
-		projectionPayload(contractID, claim.ContentHash, fields))
+		projectionPayload(contractID, claim.ContentHash, map[string]any{"claim_type": claim.ClaimType, "creator_decision_ref": nil}))
 	if err != nil {
 		return err
 	}
@@ -326,18 +282,8 @@ func (projection *productionProjection) addBibleClaim(claim model.ProductionWorl
 		}
 	}
 	if nodeType == storygraph.NodeTypeRelationshipClaim {
-		for index, subject := range subjects {
-			role := "participant"
-			if index == 0 {
-				role = "subject"
-			}
-			if err = projection.addEdge(storygraph.EdgeTypeClaimParticipant, projection.nodeKeys["asset:"+subject.AssetID], node.StoryNodeKey, storygraph.EdgeQualifier{ParticipantRole: role}); err != nil {
-				return err
-			}
-		}
-		for _, anchor := range anchorRefs {
-			key := projection.nodeKeys["episode:"+anchor.OwnerLogicalID]
-			if err = projection.addEdge(storygraph.EdgeTypeClaimAnchor, key, node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: "episode"}); err != nil {
+		for _, subject := range subjects {
+			if err = projection.addEdge(storygraph.EdgeTypeClaimParticipant, projection.nodeKeys["asset:"+subject.AssetID], node.StoryNodeKey, storygraph.EdgeQualifier{ParticipantRole: "participant"}); err != nil {
 				return err
 			}
 		}
