@@ -120,6 +120,7 @@
   - [x] 固定 AssetIdentity/Specification/AssetState、ProductionBinding 与 Occurrence 字段级 Payload；要求每个身份唯一绑定同 kind Specification 和完整 State 集，Occurrence 精确绑定该身份/状态及 Scene/可选 Beat，并与 `describes_identity`、`has_state`、`materializes`、`anchors_occurrence`、`instantiates_occurrence` Edge 机械等价。
   - [x] 禁止 production Node 保存 `label`、`business_position` 或 ref-only Payload 之外的 Owner 业务字段；Episode/Scene/Dialogue/Beat 等节点只保留内容定址引用，展示内容继续由正式 Owner typed Query 提供。
   - [x] 将 Episode、Scene 与 NarrativeBeat 的 Owner 顺序投影为确定性相邻 `precedes` 链；Scene/Dialogue/Beat 必须恰有一个结构父级，`contains` 和 `precedes` 的 SequenceKey 必须与同父级排序机械等价。
+  - [x] 固定普通 Continuity Claim 的主体、前后状态、起止锚点、有效范围、故事时间与修订 Payload；`state_persists/state_changes` 必须符合状态变化语义，并与 participant/state/anchor/supersedes Edge 机械等价。
   - [ ] 完成 production Schema Manifest、全部 Payload/Edge invariant 和 Prepare/Publish 漂移复验后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。

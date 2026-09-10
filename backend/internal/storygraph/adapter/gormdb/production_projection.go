@@ -465,31 +465,23 @@ func (projection *productionProjection) addPlanningClaim(fact planningdomain.Pro
 	if json.Unmarshal(fact.Payload, &payload) != nil {
 		return errors.New("Planning Claim payload has drifted")
 	}
+	if payload.ClaimType == "continuity" {
+		return projection.addContinuityClaim(fact, owner, payload)
+	}
+	if payload.ClaimType != "interaction" {
+		return errors.New("Planning Claim type has drifted")
+	}
 	var evidence []storygraph.EvidenceRef
 	var evidenceKeys []string
-	if payload.ClaimType == "interaction" {
-		var fragment agentcontract.InteractionFragment
-		if json.Unmarshal(payload.Fragment, &fragment) != nil {
-			return errors.New("Interaction Claim fragment has drifted")
-		}
-		value, key, err := projection.ensureEvidence(fragment.Evidence)
-		if err != nil {
-			return err
-		}
-		evidence, evidenceKeys = []storygraph.EvidenceRef{value}, []string{key}
-	} else {
-		var fragment agentcontract.ContinuityFragment
-		if json.Unmarshal(payload.Fragment, &fragment) != nil {
-			return errors.New("Continuity Claim fragment has drifted")
-		}
-		for _, span := range fragment.Evidence {
-			value, key, err := projection.ensureEvidence(span)
-			if err != nil {
-				return err
-			}
-			evidence, evidenceKeys = append(evidence, value), append(evidenceKeys, key)
-		}
+	var fragment agentcontract.InteractionFragment
+	if json.Unmarshal(payload.Fragment, &fragment) != nil {
+		return errors.New("Interaction Claim fragment has drifted")
 	}
+	value, key, err := projection.ensureEvidence(fragment.Evidence)
+	if err != nil {
+		return err
+	}
+	evidence, evidenceKeys = []storygraph.EvidenceRef{value}, []string{key}
 	contractID, contractErr := storygraph.ProductionPayloadContract(storygraph.NodeTypeContinuityClaim, payload.ClaimType)
 	if contractErr != nil {
 		return contractErr
@@ -533,6 +525,112 @@ func (projection *productionProjection) addPlanningClaim(fact planningdomain.Pro
 		}
 	}
 	return nil
+}
+
+func (projection *productionProjection) addContinuityClaim(
+	fact planningdomain.ProductionWorldPlanningFact,
+	owner storygraph.OwnerVersionIdentity,
+	payload planningdomain.PlanningClaimFactPayload,
+) error {
+	var fragment agentcontract.ContinuityFragment
+	if json.Unmarshal(payload.Fragment, &fragment) != nil || payload.BeforeState == nil || payload.AfterState == nil {
+		return errors.New("Continuity Claim fragment has drifted")
+	}
+	evidence := make([]storygraph.EvidenceRef, 0, len(fragment.Evidence))
+	evidenceKeys := make([]string, 0, len(fragment.Evidence))
+	for _, span := range fragment.Evidence {
+		value, key, err := projection.ensureEvidence(span)
+		if err != nil {
+			return err
+		}
+		evidence, evidenceKeys = append(evidence, value), append(evidenceKeys, key)
+	}
+	subjectRef, err := projection.assetRefByIdentityKey(fragment.IdentityKey)
+	if err != nil {
+		return err
+	}
+	beforeRef, err := projection.nodeRef("state:" + payload.BeforeState.ID)
+	if err != nil {
+		return err
+	}
+	afterRef, err := projection.nodeRef("state:" + payload.AfterState.ID)
+	if err != nil {
+		return err
+	}
+	startRef, err := projection.nodeRef("planning:" + payload.SourceScene.ID)
+	if err != nil {
+		return err
+	}
+	endRef, err := projection.nodeRef("planning:" + payload.TargetScene.ID)
+	if err != nil {
+		return err
+	}
+	episodeRef, err := projection.nodeRef("episode:" + fact.EpisodeID)
+	if err != nil {
+		return err
+	}
+	contractID, err := storygraph.ProductionPayloadContract(storygraph.NodeTypeContinuityClaim, "continuity")
+	if err != nil {
+		return err
+	}
+	node, err := newNode(
+		storygraph.NodeTypeContinuityClaim,
+		productionOwnerRef(owner, "", ""),
+		"",
+		nil,
+		evidence,
+		projectionPayload(contractID, owner.ContentHash, map[string]any{
+			"claim_type": "continuity", "claim_series_key": fragment.ClaimSeriesKey,
+			"claim_revision": fragment.ClaimRevision, "predicate": fragment.Transition,
+			"subject": subjectRef, "state_before": beforeRef, "state_after": afterRef,
+			"anchor_start": startRef, "anchor_end": endRef,
+			"valid_scope":      storygraph.ClaimScope{Kind: "episode", OwnerLogicalID: episodeRef.OwnerLogicalID},
+			"story_time_start": fragment.StoryTimeStart, "story_time_end": fragment.StoryTimeEnd,
+			"status": "asserted", "creator_decision_ref": nil, "supersedes_claim_ref": nil,
+		}),
+	)
+	if err != nil {
+		return err
+	}
+	projection.addNode("planning:"+fact.ID, node)
+	for _, key := range evidenceKeys {
+		if err = projection.addEdge(storygraph.EdgeTypeSupports, key, node.StoryNodeKey, storygraph.EdgeQualifier{}); err != nil {
+			return err
+		}
+	}
+	for _, relation := range []struct {
+		edgeType  storygraph.EdgeType
+		from      string
+		qualifier storygraph.EdgeQualifier
+	}{
+		{storygraph.EdgeTypeClaimParticipant, projection.nodeKeys["asset:"+projection.assetIDByIdentityKey(fragment.IdentityKey)], storygraph.EdgeQualifier{ParticipantRole: "subject"}},
+		{storygraph.EdgeTypeClaimState, projection.nodeKeys["state:"+payload.BeforeState.ID], storygraph.EdgeQualifier{StateRole: "before"}},
+		{storygraph.EdgeTypeClaimState, projection.nodeKeys["state:"+payload.AfterState.ID], storygraph.EdgeQualifier{StateRole: "after"}},
+		{storygraph.EdgeTypeClaimAnchor, projection.nodeKeys["planning:"+payload.SourceScene.ID], storygraph.EdgeQualifier{AnchorRole: "scope_start"}},
+		{storygraph.EdgeTypeClaimAnchor, projection.nodeKeys["planning:"+payload.TargetScene.ID], storygraph.EdgeQualifier{AnchorRole: "scope_end"}},
+	} {
+		if err = projection.addEdge(relation.edgeType, relation.from, node.StoryNodeKey, relation.qualifier); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (projection *productionProjection) assetIDByIdentityKey(identityKey string) string {
+	for _, asset := range projection.material.assets {
+		if asset.IdentityKey == identityKey {
+			return asset.ID.String()
+		}
+	}
+	return ""
+}
+
+func (projection *productionProjection) assetRefByIdentityKey(identityKey string) (storygraph.OwnerRef, error) {
+	assetID := projection.assetIDByIdentityKey(identityKey)
+	if assetID == "" {
+		return storygraph.OwnerRef{}, errors.New("Continuity Claim subject identity is missing")
+	}
+	return projection.nodeRef("asset:" + assetID)
 }
 
 func (projection *productionProjection) ensureBasisEvidence(basis agentcontract.ProductionSourceBasis) ([]storygraph.EvidenceRef, []string, error) {
