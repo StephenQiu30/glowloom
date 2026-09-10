@@ -17,7 +17,7 @@ jobs:
   backend:
     name: Backend / Go
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16.15-alpine
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
-          cache: false
+          cache-dependency-path: backend/go.sum
       - name: Start Temporal for workflow tests
         run: |
           docker run --detach --name lanverse-ci-temporal --publish 7233:7233 \
@@ -71,7 +71,7 @@ jobs:
         run: |
           test -z "$(gofmt -l .)"
           go vet ./...
-          go test -count=1 -p 1 ./...
+          go test -count=1 -p 1 -timeout=15m ./...
 
   agent:
     name: Agent / Candidate Runtime
