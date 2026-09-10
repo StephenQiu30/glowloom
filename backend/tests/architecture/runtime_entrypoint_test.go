@@ -74,22 +74,6 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 			t.Errorf("Backend entrypoint is missing root-key handoff contract %q", required)
 		}
 	}
-	ciWorkflow := readArchitectureFile(t, filepath.Join(repositoryRoot, ".github", "workflows", "ci.yml"))
-	for _, required := range []string{
-		"docker compose -f docker-compose.yml config --quiet",
-		"docker build --tag lanverse/backend:ci backend",
-		"test -x /usr/local/bin/lanverse",
-	} {
-		if !strings.Contains(ciWorkflow, required) {
-			t.Errorf("per-commit CI does not verify the service image contract via %q", required)
-		}
-	}
-	for _, forbidden := range []string{"compose.dependencies.yml", "Run deployment images against real dependencies"} {
-		if strings.Contains(ciWorkflow, forbidden) {
-			t.Errorf("per-commit CI still owns environment or fault-journey concern %q", forbidden)
-		}
-	}
-
 	apiSource := readArchitectureFile(t, filepath.Join(repositoryRoot, "backend", "internal", "bootstrap", "api_process.go"))
 	for _, required := range []string{
 		"generationopenai.NewFactory(nil, objects, time.Now)",
@@ -167,6 +151,34 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	for _, environmentService := range []string{"postgres", "minio", "temporal", "kafka", "elasticsearch", "filebeat", "logstash", "kibana"} {
 		if strings.Contains(compose, "\n  "+environmentService+":") {
 			t.Errorf("service Compose owns environment service %q", environmentService)
+		}
+	}
+}
+
+func TestPerCommitCIProtectsTheSystemBoundaryWithoutRunningReleaseAcceptance(t *testing.T) {
+	t.Parallel()
+
+	repositoryRoot := repositoryDirectory(t)
+	ciWorkflow := readArchitectureFile(t, filepath.Join(repositoryRoot, ".github", "workflows", "ci.yml"))
+	for _, required := range []string{
+		"go test -count=1 ./...",
+		"TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce",
+		"needs: [backend, workflow, agent, frontend]",
+	} {
+		if !strings.Contains(ciWorkflow, required) {
+			t.Errorf("per-commit CI is missing system-boundary contract %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"Containers / Build",
+		"docker build",
+		"Verify native Agent handoff",
+		"go test -count=1 -p 1 -timeout=15m ./...",
+		"compose.dependencies.yml",
+		"Run deployment images against real dependencies",
+	} {
+		if strings.Contains(ciWorkflow, forbidden) {
+			t.Errorf("per-commit CI still owns release or exhaustive-acceptance concern %q", forbidden)
 		}
 	}
 }

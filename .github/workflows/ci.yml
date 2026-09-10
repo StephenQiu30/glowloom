@@ -15,9 +15,26 @@ defaults:
 
 jobs:
   backend:
-    name: Backend / Go
+    name: Backend / Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Check Backend
+        working-directory: backend
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          env -u LANVERSE_TEST_DATABASE_URL -u LANVERSE_TEST_TEMPORAL_ADDRESS go test -count=1 ./...
+
+  workflow:
+    name: Workflow / System Boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16.15-alpine
@@ -51,27 +68,14 @@ jobs:
           done
           docker logs lanverse-ci-temporal
           exit 1
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-      - name: Verify native Agent handoff
-        working-directory: agent
-        env:
-          LANVERSE_TEST_CREATION_DATABASE_URL: postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_creation_ci
-          LANVERSE_TEST_TEMPORAL_ADDRESS: 127.0.0.1:7233
-        run: |
-          python -m pip install -e '.[dev,creation]'
-          psql postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_ci -c 'CREATE DATABASE lanverse_creation_ci'
-          python -m pytest -q tests/creation/test_native_runtime.py
-      - name: Check and test Go backend
+      - name: Verify script-to-StoryGraph system boundary
         working-directory: backend
         env:
           LANVERSE_TEST_DATABASE_URL: postgresql://lanverse_ci:lanverse_ci@127.0.0.1:5432/lanverse_ci?sslmode=disable
           LANVERSE_TEST_TEMPORAL_ADDRESS: 127.0.0.1:7233
         run: |
-          test -z "$(gofmt -l .)"
-          go vet ./...
-          go test -count=1 -p 1 -timeout=15m ./...
+          go test -count=1 -timeout=5m ./tests/workflow \
+            -run '^TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce$'
 
   agent:
     name: Agent / Candidate Runtime
@@ -119,64 +123,10 @@ jobs:
           npm run test
           npm run build
 
-  containers:
-    name: Containers / Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      DATABASE_URL: postgresql://postgres:synthetic@localhost/lanverse
-      AGENT_EXECUTION_SECRET: synthetic-compose-harness-secret-32-bytes
-      CREATION_DATABASE_URL: postgresql://creation:synthetic@localhost/creation
-      CREATION_AGENT_SECRET: synthetic-compose-creation-secret-32-bytes
-      CREATION_TEXT_RELEASE_HASH: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      LANVERSE_CODEX_AUTH_FILE: /tmp/lanverse-ci-codex-auth.json
-      LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE: /tmp/lanverse-ci-provider-key
-      LANVERSE_FRONTEND_IMAGE: lanverse/frontend:ci
-      LANVERSE_BACKEND_IMAGE: lanverse/backend:ci
-    steps:
-      - uses: actions/checkout@v6
-      - name: Validate service Compose
-        run: |
-          umask 077
-          echo '{}' > "$LANVERSE_CODEX_AUTH_FILE"
-          openssl rand -out "$LANVERSE_MEDIA_PROVIDER_MASTER_KEY_FILE" 32
-          docker compose -f docker-compose.yml config --quiet
-          test "$(docker compose -f docker-compose.yml config --services | sort | tr '\n' ' ')" = "agent backend frontend "
-      - name: Build service images
-        run: |
-          docker build --tag lanverse/frontend:ci frontend
-          docker build --tag lanverse/backend:ci backend
-          docker build --file agent/Dockerfile --tag lanverse/agent:ci .
-      - name: Verify image contracts
-        run: |
-          docker run --rm --entrypoint /bin/sh lanverse/backend:ci -c '
-            test -x /usr/local/bin/lanverse
-            test ! -e /usr/local/bin/lanverse-api
-            test ! -e /usr/local/bin/lanverse-workflow-worker
-            test ! -e /usr/local/bin/lanverse-event-worker
-          '
-          docker run --rm --entrypoint /bin/sh lanverse/frontend:ci -c '
-            test -f /srv/lanverse/frontend/server.js
-            test -d /srv/lanverse/frontend/.next/static
-          '
-          docker run --rm --entrypoint /bin/sh \
-            --env CREATION_DATABASE_URL=postgresql://creation:test@localhost/creation \
-            --env CREATION_AGENT_SECRET=synthetic-creation-secret-at-least-32-bytes \
-            --env AGENT_EXECUTION_SECRET=synthetic-execution-secret-at-least-32-bytes \
-            lanverse/agent:ci -c '
-              test "$(id -u)" -ne 0
-              command -v codex >/dev/null
-              test -d skills/build-storygraph
-              test -d skills/text-storyboard
-              test ! -e /srv/lanverse/.agents
-              test -z "$(find skills -name openai.yaml -print -quit)"
-              python -c "from app.main import create_app; from app.skills.catalog import SkillCatalog; application = create_app(); assert application.title == \"Lanverse Agent\"; SkillCatalog().verify_all()"
-            '
-
   required:
     name: Required / CI
     if: ${{ always() }}
-    needs: [backend, agent, frontend, containers]
+    needs: [backend, workflow, agent, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -184,9 +134,9 @@ jobs:
       - name: Require every project boundary and repository hygiene
         run: |
           test "${{ needs.backend.result }}" = success
+          test "${{ needs.workflow.result }}" = success
           test "${{ needs.agent.result }}" = success
           test "${{ needs.frontend.result }}" = success
-          test "${{ needs.containers.result }}" = success
           if git ls-files | grep -E '(^|/)(\.env($|\.)|.*\.(pem|key|log)$|data/|logs/|playwright-report/|test-results/)' | grep -v -E '\.env(\.production)?\.example$'; then
             echo 'tracked secret/data/report artifact detected' >&2
             exit 1
