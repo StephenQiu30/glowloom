@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
@@ -35,6 +36,7 @@ type productionSnapshotMaterial struct {
 	assets           []model.Asset
 	states           []model.AssetState
 	planningFacts    []planningdomain.ProductionWorldPlanningFact
+	rebaseRevision   int64
 }
 
 func (repo *repository) LoadProductionOwnerSnapshot(
@@ -200,12 +202,129 @@ func (repo *repository) loadProductionSnapshotMaterial(
 	if err := repo.loadProductionPlanning(ctx, state, worldCollections, &material); err != nil {
 		return material, nil, err
 	}
+	if err := repo.verifyProductionOwnerHeads(ctx, state, worldCollections, &material); err != nil {
+		return material, nil, err
+	}
 	collections, err := buildProductionOwnerCollections(state, material, worldCollections)
 	if err != nil {
 		return material, nil, err
 	}
 	_ = confirmation
 	return material, collections, nil
+}
+
+func (repo *repository) verifyProductionOwnerHeads(
+	ctx context.Context,
+	state storygraph.PublicationState,
+	worldCollections []worlddomain.CollectionCommitReceipt,
+	material *productionSnapshotMaterial,
+) error {
+	workspaceID, _ := uuid.Parse(state.WorkspaceID)
+	projectID, _ := uuid.Parse(state.ProjectID)
+	locked := func() *gorm.DB {
+		return repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"})
+	}
+
+	var sourceHead model.ScriptSourceScopeHead
+	if err := locked().First(&sourceHead, "project_id = ?", projectID).Error; err != nil {
+		return err
+	}
+	if sourceHead.WorkspaceID != workspaceID || sourceHead.DocumentLogicalID != material.revision.DocumentID ||
+		sourceHead.CurrentDocumentRevisionID != material.revision.ID || sourceHead.CurrentSpanIndexID != material.spanIndex.ID {
+		return invalidOwnerSnapshot("Script Source Owner Head has advanced beyond the Production World receipt")
+	}
+
+	var structureHead model.StructureIdentityScopeHead
+	if err := locked().First(&structureHead, "project_id = ?", projectID).Error; err != nil {
+		return err
+	}
+	if structureHead.WorkspaceID != workspaceID || structureHead.CurrentVersionID != material.structure.ID {
+		return invalidOwnerSnapshot("Structure Identity Owner Head has advanced beyond the Production World receipt")
+	}
+
+	var activeEpisodes []model.Episode
+	if err := locked().Where("project_id = ? AND status = ?", projectID, "active").Order("position").Order("id").Find(&activeEpisodes).Error; err != nil {
+		return err
+	}
+	if len(activeEpisodes) != len(material.episodeRefs) {
+		return invalidOwnerSnapshot("Project Episode Owner set has advanced beyond the Production World receipt")
+	}
+	for index, reference := range material.episodeRefs {
+		episode := activeEpisodes[index]
+		if episode.WorkspaceID != workspaceID || episode.ID.String() != reference.EpisodeID ||
+			episode.Position != reference.Position || episode.Revision != reference.EpisodeRevision ||
+			episode.CurrentScriptVersionID == nil || episode.CurrentScriptVersionID.String() != reference.ScriptVersionID {
+			return invalidOwnerSnapshot("Project Episode Owner set has advanced beyond the Production World receipt")
+		}
+		var script model.EpisodeScriptVersion
+		if err := locked().First(&script, "id = ?", reference.ScriptVersionID).Error; err != nil {
+			return err
+		}
+		if script.WorkspaceID != workspaceID || script.ProjectID != projectID || script.EpisodeID != episode.ID ||
+			script.DocumentRevisionID != material.revision.ID || script.VersionNo != reference.ScriptVersion ||
+			script.SourceStart != reference.SourceStart || script.SourceEnd != reference.SourceEnd ||
+			script.ContentHash != reference.ContentHash || script.Status != "published" {
+			return invalidOwnerSnapshot("Project Episode Owner set has advanced beyond the Production World receipt")
+		}
+	}
+
+	// Match the Production World apply order so publication never inverts Owner Head locks.
+	assetCollection := findWorldCollection(worldCollections, "asset_identity_state_set")
+	var assetHead model.AssetIdentityStateScopeHead
+	if err := locked().First(&assetHead, "project_id = ?", projectID).Error; err != nil {
+		return err
+	}
+	if assetHead.WorkspaceID != workspaceID || assetHead.ScopeRevision != assetCollection.ScopeRevision ||
+		assetHead.ScopeContentHash != assetCollection.ScopeContentHash ||
+		assetHead.MembersHash != assetCollection.MembersHash || assetHead.CollectionRootHash != assetCollection.CollectionRootHash {
+		return invalidOwnerSnapshot("Asset identity-state Owner Head has advanced beyond the Production World receipt")
+	}
+
+	bibleCollection := findWorldCollection(worldCollections, bibledomain.BibleProductionWorldFamily)
+	var bibleHead model.ProductionWorldBibleScopeHead
+	if err := locked().First(&bibleHead, "project_id = ?", projectID).Error; err != nil {
+		return err
+	}
+	if len(bibleCollection.Members) != 1 || bibleHead.WorkspaceID != workspaceID ||
+		bibleHead.CurrentVersionID.String() != bibleCollection.Members[0].VersionID ||
+		bibleHead.VersionContentHash != bibleCollection.Members[0].ContentHash ||
+		bibleHead.ScopeRevision != bibleCollection.ScopeRevision || bibleHead.MemberCount != bibleCollection.MemberCount ||
+		bibleHead.ScopeContentHash != bibleCollection.ScopeContentHash || bibleHead.MembersHash != bibleCollection.MembersHash ||
+		bibleHead.CollectionRootHash != bibleCollection.CollectionRootHash {
+		return invalidOwnerSnapshot("Production World Bible Owner Head has advanced beyond the Production World receipt")
+	}
+
+	for _, collection := range worldCollections {
+		if collection.VersionFamily != planningdomain.PlanningSceneCollectionFamily {
+			continue
+		}
+		episodeID, found := strings.CutPrefix(collection.ScopeKey, "episode:")
+		if !found {
+			return invalidOwnerSnapshot("Planning Scene Owner Head has an invalid Episode scope")
+		}
+		var planningHead model.ProductionWorldPlanningEpisodeHead
+		if err := locked().First(&planningHead, "episode_id = ?", episodeID).Error; err != nil {
+			return err
+		}
+		if planningHead.WorkspaceID != workspaceID || planningHead.ProjectID != projectID ||
+			planningHead.ScopeRevision != collection.ScopeRevision || planningHead.MemberCount != collection.MemberCount ||
+			planningHead.ScopeContentHash != collection.ScopeContentHash || planningHead.MembersHash != collection.MembersHash ||
+			planningHead.CollectionRootHash != collection.CollectionRootHash {
+			return invalidOwnerSnapshot("Planning Scene Owner Head has advanced beyond the Production World receipt")
+		}
+	}
+
+	var rebaseHead model.ProductionWorldPlanningRebaseHead
+	if err := locked().First(&rebaseHead, "project_id = ?", projectID).Error; err != nil {
+		return err
+	}
+	if rebaseHead.WorkspaceID != workspaceID || rebaseHead.ScopeKey != "project:"+state.ProjectID ||
+		rebaseHead.ScopeRevision != 1 || rebaseHead.HeadRevision != 1 || rebaseHead.MemberCount != 0 ||
+		string(rebaseHead.CurrentRootRefs) != "[]" {
+		return invalidOwnerSnapshot("Planning Structure Rebase Owner Head has advanced beyond the Production World receipt")
+	}
+	material.rebaseRevision = rebaseHead.ScopeRevision
+	return nil
 }
 
 func (repo *repository) loadProductionBibleFragments(ctx context.Context, material *productionSnapshotMaterial) error {
@@ -473,7 +592,7 @@ func buildProductionOwnerCollections(
 			return nil, err
 		}
 	}
-	if err := appendCollection("production/planning", "planning_structure_rebase_set", "project", "project:"+state.ProjectID, 1, []storygraph.OwnerVersionIdentity{}); err != nil {
+	if err := appendCollection("production/planning", "planning_structure_rebase_set", "project", "project:"+state.ProjectID, material.rebaseRevision, []storygraph.OwnerVersionIdentity{}); err != nil {
 		return nil, err
 	}
 	slices.SortFunc(collections, func(left, right storygraph.OwnerCollectionRef) int {

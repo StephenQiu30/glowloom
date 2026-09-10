@@ -1716,6 +1716,35 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if accepted.Identity.VersionID != fixture.revisionID.String() {
 		t.Fatalf("accepted Source identity = %#v", accepted.Identity)
 	}
+	var storyGraphVersionCountBeforeDrift int64
+	if err = database.Model(&model.StoryGraphVersion{}).Where("project_id = ?", fixture.projectID).
+		Count(&storyGraphVersionCountBeforeDrift).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.AssetIdentityStateScopeHead{}).Where("project_id = ?", fixture.projectID).
+		Update("collection_root_hash", sceneTextHash("advanced-asset-owner-head")).Error; err != nil {
+		t.Fatalf("advance Asset Owner Head for stale Production World acceptance: %v", err)
+	}
+	driftedProductionGraphCommand := productionGraphCommand
+	driftedProductionGraphCommand.IdempotencyKey = "production-storygraph-owner-head-drift:" + confirmedWorld.CommandReceiptID
+	_, driftErr := productionGraphService.CompileProduction(ctx, productionGraphActor, driftedProductionGraphCommand)
+	var applicationError *storygraphapp.Error
+	if !errors.As(driftErr, &applicationError) || applicationError.Code != "invalid_owner_snapshot" ||
+		applicationError.Message != "Asset identity-state Owner Head has advanced beyond the Production World receipt" {
+		t.Fatalf("stale Production World Owner Head error = %v", driftErr)
+	}
+	var storyGraphVersionCountAfterDrift int64
+	if err = database.Model(&model.StoryGraphVersion{}).Where("project_id = ?", fixture.projectID).
+		Count(&storyGraphVersionCountAfterDrift).Error; err != nil {
+		t.Fatal(err)
+	}
+	if storyGraphVersionCountAfterDrift != storyGraphVersionCountBeforeDrift {
+		t.Fatalf(
+			"stale Production World Owner Head published StoryGraph versions: before=%d after=%d",
+			storyGraphVersionCountBeforeDrift,
+			storyGraphVersionCountAfterDrift,
+		)
+	}
 }
 
 func countStoryGraphNodeType(nodes []storygraphdomain.Node, nodeType storygraphdomain.NodeType) int {
