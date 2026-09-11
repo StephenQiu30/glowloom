@@ -584,55 +584,46 @@ func validateExecuteCommand(command ExecuteCommand) error {
 }
 
 func (service *SceneAnalysisService) release(stageKey string, now time.Time) (ReleaseRecord, error) {
-	outputSchemaVersion := map[string]string{
-		"propose_script_spans":             contract.ScriptSpanCandidateSchemaVersion,
-		"extract_scene_facts":              contract.SceneFactCandidateSchemaVersion,
-		"resolve_identities":               contract.IdentityResolutionCandidateSchemaVersion,
-		"review_candidate":                 contract.StructureIdentityReviewCandidateSchemaVersion,
-		"derive_production_entities":       contract.ProductionEntityFragmentCandidateSchemaVersion,
-		"bind_scene_occurrences":           contract.SceneBindingFragmentCandidateSchemaVersion,
-		"reconcile_interaction_continuity": contract.InteractionContinuityCandidateSchemaVersion,
-	}[stageKey]
-	profileKey := "default"
-	if stageKey == "review_candidate" {
-		profileKey = "structure_identity"
+	stageReleases, err := contract.BuildSceneAnalysisStageReleases(service.config.AgentImageDigest)
+	if err != nil {
+		return ReleaseRecord{}, err
 	}
-	variant := contract.SceneAnalysisStageVariant{
-		StageKey: stageKey, ProfileKey: profileKey, LaneKey: "primary",
-		OutputSchemaVersion: outputSchemaVersion,
-	}
-	if variant.Validate() != nil {
+	stageIndex := slices.IndexFunc(stageReleases, func(candidate contract.SceneAnalysisStageRelease) bool {
+		return candidate.VariantKey.StageKey == stageKey
+	})
+	if stageIndex < 0 {
 		return ReleaseRecord{}, errors.New("unsupported Scene Analysis stage")
 	}
-	skillMaterial, _ := json.Marshal(map[string]any{
-		"contract_id": "scene-analysis-skill-release", "bundle_content_hash": contract.SceneAnalysisSkillBundleHash,
-		"agent_image_digest":  service.config.AgentImageDigest,
-		"wire_schema_version": contract.SceneAnalysisWireSchemaVersion,
-		"lane_key":            "primary",
-		"output_schema_versions": []string{
-			contract.IdentityResolutionCandidateSchemaVersion,
-			contract.SceneFactCandidateSchemaVersion,
-			contract.ScriptSpanCandidateSchemaVersion,
-			contract.StructureIdentityReviewCandidateSchemaVersion,
-			contract.ProductionEntityFragmentCandidateSchemaVersion,
-			contract.SceneBindingFragmentCandidateSchemaVersion,
-			contract.InteractionContinuityCandidateSchemaVersion,
-		},
+	stageRelease := stageReleases[stageIndex]
+	stageReleaseHashes := make([]string, len(stageReleases))
+	for index, release := range stageReleases {
+		stageReleaseHashes[index] = release.StageReleaseHash
+	}
+	core, _, err := contract.BuildSceneAnalysisDefinitionCore()
+	if err != nil {
+		return ReleaseRecord{}, err
+	}
+	skillMaterial, err := json.Marshal(struct {
+		ContractID         string   `json:"contract_id"`
+		DefinitionCoreHash string   `json:"definition_core_hash"`
+		BundleContentHash  string   `json:"bundle_content_hash"`
+		RuntimeImageDigest string   `json:"runtime_image_digest"`
+		WireSchemaHash     string   `json:"wire_schema_hash"`
+		StageReleaseHashes []string `json:"stage_release_hashes"`
+	}{
+		ContractID: "scene-analysis-skill-release-production", DefinitionCoreHash: core.DefinitionCoreHash,
+		BundleContentHash: stageRelease.BundleContentHash, RuntimeImageDigest: stageRelease.RuntimeImageDigest,
+		WireSchemaHash: stageRelease.WireSchemaHash, StageReleaseHashes: stageReleaseHashes,
 	})
+	if err != nil {
+		return ReleaseRecord{}, err
+	}
 	skillHash, err := platformcanonical.Hash(skillMaterial)
 	if err != nil {
 		return ReleaseRecord{}, err
 	}
 	skillID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("lanverse:scene-analysis:skill:"+skillHash)).String()
-	stageMaterial, _ := json.Marshal(map[string]any{
-		"contract_id": "scene-analysis-stage-release", "variant": variant,
-		"skill_release_id": skillID, "skill_release_hash": skillHash,
-		"bundle_content_hash": contract.SceneAnalysisSkillBundleHash, "agent_image_digest": service.config.AgentImageDigest,
-	})
-	stageHash, err := platformcanonical.Hash(stageMaterial)
-	if err != nil {
-		return ReleaseRecord{}, err
-	}
+	stageHash := stageRelease.StageReleaseHash
 	releaseID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("lanverse:scene-analysis:stage:"+stageHash)).String()
 	controlRecordID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("lanverse:scene-analysis:control:"+stageHash)).String()
 	controlMaterial, _ := json.Marshal(map[string]any{
@@ -644,22 +635,17 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 	if err != nil {
 		return ReleaseRecord{}, err
 	}
-	resource := map[string]string{
-		"propose_script_spans":             "references/script-spans.md",
-		"extract_scene_facts":              "references/scene-facts.md",
-		"resolve_identities":               "references/entity-reconciliation.md",
-		"review_candidate":                 "references/structure-identity-review.md",
-		"derive_production_entities":       "references/production-entities.md",
-		"bind_scene_occurrences":           "references/scene-occurrences.md",
-		"reconcile_interaction_continuity": "references/interaction-continuity.md",
-	}[stageKey]
+	loadedResources, err := contract.SceneAnalysisLoadedResourcePaths(stageRelease)
+	if err != nil {
+		return ReleaseRecord{}, err
+	}
 	return ReleaseRecord{
 		ID: releaseID,
 		Identity: contract.SceneAnalysisReleaseIdentity{
 			SkillReleaseID: skillID, SkillReleaseHash: skillHash, StageReleaseHash: stageHash,
-			BundleContentHash: contract.SceneAnalysisSkillBundleHash, AgentImageDigest: service.config.AgentImageDigest,
+			BundleContentHash: stageRelease.BundleContentHash, AgentImageDigest: stageRelease.RuntimeImageDigest,
 		},
-		Variant: variant, LoadedResources: []string{"SKILL.md", resource}, CreatedAt: now,
+		Variant: stageRelease.VariantKey, LoadedResources: loadedResources, CreatedAt: now,
 		InitialControl: contract.SceneAnalysisControlProof{
 			ControlRecordID: controlRecordID, ControlRevision: 1, Status: "approved",
 			ControlHash: controlHash, ReleaseFence: 0,

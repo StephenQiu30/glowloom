@@ -239,6 +239,33 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err = database.First(&reviewInvocation, "id = ?", candidate.SourceInvocationID).Error; err != nil {
 		t.Fatalf("query StructureIdentityReview invocation: %v", err)
 	}
+	var persistedRelease model.SceneAnalysisRelease
+	if err = database.First(&persistedRelease, "id = ?", reviewInvocation.ReleaseID).Error; err != nil {
+		t.Fatalf("query StructureIdentityReview Stage Release: %v", err)
+	}
+	stageReleases, err := contract.BuildSceneAnalysisStageReleases("sha256:" + fmt.Sprintf("%064d", 7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseIndex := slices.IndexFunc(stageReleases, func(value contract.SceneAnalysisStageRelease) bool {
+		return value.VariantKey.StageKey == "review_candidate"
+	})
+	if releaseIndex < 0 {
+		t.Fatal("StructureIdentityReview Stage Release is missing")
+	}
+	expectedRelease := stageReleases[releaseIndex]
+	expectedResources, err := contract.SceneAnalysisLoadedResourcePaths(expectedRelease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persistedResources []string
+	if err = json.Unmarshal(persistedRelease.LoadedResourcePaths, &persistedResources); err != nil ||
+		persistedRelease.StageReleaseHash != expectedRelease.StageReleaseHash ||
+		persistedRelease.BundleContentHash != expectedRelease.BundleContentHash ||
+		persistedRelease.AgentImageDigest != expectedRelease.RuntimeImageDigest ||
+		!slices.Equal(persistedResources, expectedResources) {
+		t.Fatalf("persisted formal Stage Release drifted: release=%#v resources=%v err=%v", persistedRelease, persistedResources, err)
+	}
 	var reviewPayload contract.SceneAnalysisPayload
 	var reviewInput contract.StructureIdentityReviewInput
 	if err = json.Unmarshal(reviewInvocation.Payload, &reviewPayload); err != nil {
