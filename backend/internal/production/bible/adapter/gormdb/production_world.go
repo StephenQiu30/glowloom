@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
@@ -53,15 +54,12 @@ func (repo *repository) GetProductionWorldBibleHead(ctx context.Context, workspa
 		return domain.ProductionWorldBibleHead{}, domain.ProductionWorldBibleVersion{}, err
 	}
 	head, err := domain.NewProductionWorldBibleHead(workspaceID, projectID, headRecord.HeadRevision, version, headRecord.UpdatedAt)
-	var rootRefs []domain.ProductionWorldOwnerRef
+	var rootRefs []ownercollection.VersionRef
 	rootRefErr := json.Unmarshal(headRecord.CurrentRootRefs, &rootRefs)
-	expectedRootRefs := []domain.ProductionWorldOwnerRef{{
-		OwnerKind: "production/bible", LogicalID: projectID, VersionID: version.ID,
-		Revision: version.Revision, ContentHash: version.ContentHash,
-	}}
 	if err != nil || head.CurrentVersionID != headRecord.CurrentVersionID.String() ||
-		rootRefErr != nil || !reflect.DeepEqual(rootRefs, expectedRootRefs) ||
-		head.ScopeRevision != headRecord.ScopeRevision || head.MemberCount != headRecord.MemberCount ||
+		rootRefErr != nil || !reflect.DeepEqual(rootRefs, head.CurrentVersionRefs) ||
+		head.ScopeKey != headRecord.ScopeKey || head.ScopeRevision != headRecord.ScopeRevision ||
+		head.MemberCount != headRecord.MemberCount ||
 		head.VersionContentHash != headRecord.VersionContentHash || head.ScopeContentHash != headRecord.ScopeContentHash ||
 		head.MembersHash != headRecord.MembersHash || head.CollectionRootHash != headRecord.CollectionRootHash ||
 		head.HeadContentHash != headRecord.HeadContentHash {
@@ -405,16 +403,14 @@ func productionWorldBibleHeadRecord(value domain.ProductionWorldBibleHead) (mode
 	if err != nil {
 		return model.ProductionWorldBibleScopeHead{}, err
 	}
-	rootRefs, err := json.Marshal([]domain.ProductionWorldOwnerRef{{
-		OwnerKind: "production/bible", LogicalID: value.ProjectID, VersionID: value.CurrentVersionID,
-		Revision: value.ScopeRevision, ContentHash: value.VersionContentHash,
-	}})
+	rootRefs, err := json.Marshal(value.CurrentVersionRefs)
 	if err != nil {
 		return model.ProductionWorldBibleScopeHead{}, err
 	}
 	return model.ProductionWorldBibleScopeHead{
 		ProjectID: ids[0], WorkspaceID: ids[1], CurrentVersionID: ids[2],
-		ScopeRevision: value.ScopeRevision, HeadRevision: value.HeadRevision, MemberCount: value.MemberCount,
+		ScopeKey: value.ScopeKey, ScopeRevision: value.ScopeRevision,
+		HeadRevision: value.HeadRevision, MemberCount: value.MemberCount,
 		VersionContentHash: value.VersionContentHash, ScopeContentHash: value.ScopeContentHash,
 		MembersHash: value.MembersHash, CollectionRootHash: value.CollectionRootHash,
 		CurrentRootRefs: datatypes.JSON(rootRefs), HeadContentHash: value.HeadContentHash, UpdatedAt: value.UpdatedAt,

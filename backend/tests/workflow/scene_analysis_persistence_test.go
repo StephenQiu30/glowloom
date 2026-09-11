@@ -1135,6 +1135,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || bibleResult.Head.HeadRevision != 1 || bibleResult.Head.ScopeRevision != 1 ||
 		bibleResult.Head.ScopeKey != "project:"+fixture.projectID.String() || bibleResult.Head.MemberCount != 1 ||
 		bibleResult.Head.ScopeContentHash == "" || bibleResult.Head.MembersHash == "" || bibleResult.Head.CollectionRootHash == "" ||
+		len(bibleResult.Head.CurrentVersionRefs) != 1 ||
+		bibleResult.Head.CurrentVersionRefs[0].OwnerVersionID != bibleResult.Version.ID ||
+		bibleResult.Head.CurrentVersionRefs[0].OwnerContentHash != bibleResult.Version.ContentHash ||
 		len(bibleResult.Specifications) != len(bibleSpecifications) ||
 		len(bibleResult.Bindings) != len(assetResult.Assets) || bibleResult.Version.StructureIdentitySet.VersionID != structureVersion.ID.String() {
 		t.Fatalf("apply Production World Bible owner: result=%#v err=%v", bibleResult, err)

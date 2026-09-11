@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 )
 
 const BibleProductionWorldFamily = "bible_production_world_set"
@@ -106,6 +109,7 @@ type ProductionWorldBibleHead struct {
 	MemberCount                                        int
 	VersionContentHash, ScopeContentHash               string
 	MembersHash, CollectionRootHash, HeadContentHash   string
+	CurrentVersionRefs                                 []ownercollection.VersionRef
 	UpdatedAt                                          time.Time
 }
 
@@ -301,48 +305,60 @@ func NewProductionWorldBibleVersion(value ProductionWorldBibleVersion) (Producti
 	return value, err
 }
 
+func BuildProductionWorldBibleCollection(version ProductionWorldBibleVersion) (ownercollection.Ref, error) {
+	if !validProductionWorldIDs(version.ID, version.WorkspaceID, version.ProjectID) ||
+		version.Revision < 1 || !hashPattern.MatchString(version.ContentHash) {
+		return ownercollection.Ref{}, errors.New("invalid Production World Bible Owner Version")
+	}
+	return ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: version.WorkspaceID, ProjectID: version.ProjectID,
+		OwnerKind: "production/bible", VersionFamily: BibleProductionWorldFamily,
+		ScopeKind: "project", ScopeKey: "project:" + version.ProjectID, ScopeRevision: version.Revision,
+	}, []ownercollection.VersionRef{{
+		WorkspaceID: version.WorkspaceID, ProjectID: version.ProjectID,
+		OwnerKind: "production/bible", VersionFamily: BibleProductionWorldFamily,
+		OwnerLogicalID: version.ProjectID, OwnerVersionID: version.ID,
+		OwnerRevision: version.Revision, OwnerContentHash: version.ContentHash,
+	}})
+}
+
 func NewProductionWorldBibleHead(workspaceID, projectID string, revision int64, version ProductionWorldBibleVersion, updatedAt time.Time) (ProductionWorldBibleHead, error) {
-	if !validProductionWorldIDs(workspaceID, projectID) || version.WorkspaceID != workspaceID || version.ProjectID != projectID || version.Revision != revision || revision < 1 || !hashPattern.MatchString(version.ContentHash) || updatedAt.IsZero() {
+	collection, err := BuildProductionWorldBibleCollection(version)
+	if err != nil || version.WorkspaceID != workspaceID || version.ProjectID != projectID ||
+		version.Revision != revision || updatedAt.IsZero() {
 		return ProductionWorldBibleHead{}, errors.New("invalid Production World Bible Head input")
 	}
-	member := ProductionWorldOwnerRef{OwnerKind: "production/bible", LogicalID: projectID, VersionID: version.ID, Revision: version.Revision, ContentHash: version.ContentHash}
-	scopeKey := "project:" + projectID
-	scopeHash, err := CanonicalStoryHash(struct {
-		Schema, OwnerKind, Family, ScopeKey string
-		ScopeRevision                       int64
-		RootRefs                            []ProductionWorldOwnerRef
-	}{"production-world-bible-scope", "production/bible", BibleProductionWorldFamily, scopeKey, revision, []ProductionWorldOwnerRef{member}})
-	if err != nil {
-		return ProductionWorldBibleHead{}, err
-	}
-	membersHash, err := CanonicalStoryHash(struct {
-		Schema  string
-		Members []ProductionWorldOwnerRef
-	}{"production-world-bible-members", []ProductionWorldOwnerRef{member}})
-	if err != nil {
-		return ProductionWorldBibleHead{}, err
-	}
-	collectionRootHash, err := CanonicalStoryHash(struct {
-		Schema, Family, ScopeKey, ScopeContentHash, MembersHash string
-		ScopeRevision                                           int64
-		MemberCount                                             int
-	}{"production-world-bible-collection", BibleProductionWorldFamily, scopeKey, scopeHash, membersHash, revision, 1})
-	if err != nil {
-		return ProductionWorldBibleHead{}, err
-	}
 	value := ProductionWorldBibleHead{
-		WorkspaceID: workspaceID, ProjectID: projectID, CurrentVersionID: version.ID, ScopeKey: scopeKey,
-		ScopeRevision: revision, HeadRevision: revision, MemberCount: 1,
-		VersionContentHash: version.ContentHash, ScopeContentHash: scopeHash,
-		MembersHash: membersHash, CollectionRootHash: collectionRootHash, UpdatedAt: updatedAt.UTC(),
+		WorkspaceID: workspaceID, ProjectID: projectID, CurrentVersionID: version.ID, ScopeKey: collection.ScopeKey,
+		ScopeRevision: collection.ScopeRevision, HeadRevision: revision, MemberCount: int(collection.MemberCount),
+		VersionContentHash: version.ContentHash, ScopeContentHash: collection.ScopeContentHash,
+		MembersHash: collection.MembersHash, CollectionRootHash: collection.CollectionRootHash,
+		CurrentVersionRefs: append([]ownercollection.VersionRef(nil), collection.Members...), UpdatedAt: updatedAt.UTC(),
 	}
-	value.HeadContentHash, err = CanonicalStoryHash(struct {
-		Schema, WorkspaceID, ProjectID, CurrentVersionID, ScopeKey, VersionContentHash string
-		ScopeContentHash, MembersHash, CollectionRootHash                              string
-		ScopeRevision, HeadRevision                                                    int64
-		MemberCount                                                                    int
-	}{"production-world-bible-head", workspaceID, projectID, version.ID, scopeKey, version.ContentHash,
-		scopeHash, membersHash, collectionRootHash, revision, revision, 1})
+	encoded, err := json.Marshal(struct {
+		ContractID         string                       `json:"contract_id"`
+		WorkspaceID        string                       `json:"workspace_id"`
+		ProjectID          string                       `json:"project_id"`
+		ScopeKey           string                       `json:"scope_key"`
+		ScopeRevision      int64                        `json:"scope_revision"`
+		ScopeContentHash   string                       `json:"scope_content_hash"`
+		MemberCount        int                          `json:"member_count"`
+		MembersHash        string                       `json:"members_hash"`
+		CollectionRootHash string                       `json:"collection_root_hash"`
+		CurrentVersionRefs []ownercollection.VersionRef `json:"current_root_version_refs"`
+		CurrentVersionID   string                       `json:"current_version_id"`
+		VersionContentHash string                       `json:"version_content_hash"`
+		HeadRevision       int64                        `json:"head_revision"`
+	}{
+		"production-world-bible-scope-head", value.WorkspaceID, value.ProjectID,
+		value.ScopeKey, value.ScopeRevision, value.ScopeContentHash, value.MemberCount,
+		value.MembersHash, value.CollectionRootHash, value.CurrentVersionRefs,
+		value.CurrentVersionID, value.VersionContentHash, value.HeadRevision,
+	})
+	if err != nil {
+		return ProductionWorldBibleHead{}, err
+	}
+	value.HeadContentHash, err = platformcanonical.Hash(encoded)
 	return value, err
 }
 

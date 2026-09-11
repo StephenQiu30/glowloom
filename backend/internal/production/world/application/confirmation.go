@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -326,6 +327,16 @@ func (service *ConfirmationService) buildCollectionReceipts(
 		OwnerKind: "production/bible", LogicalID: command.ProjectID, VersionID: bible.Version.ID,
 		Revision: bible.Version.Revision, ContentHash: bible.Version.ContentHash,
 	}}
+	bibleCollection, err := bibledomain.BuildProductionWorldBibleCollection(bible.Version)
+	if err != nil || bible.Head.ScopeKey != bibleCollection.ScopeKey ||
+		bible.Head.ScopeRevision != bibleCollection.ScopeRevision ||
+		bible.Head.ScopeContentHash != bibleCollection.ScopeContentHash ||
+		int64(bible.Head.MemberCount) != bibleCollection.MemberCount ||
+		bible.Head.MembersHash != bibleCollection.MembersHash ||
+		bible.Head.CollectionRootHash != bibleCollection.CollectionRootHash ||
+		!reflect.DeepEqual(bible.Head.CurrentVersionRefs, bibleCollection.Members) {
+		return nil, nil, errors.New("Production World Bible Collection has drifted")
+	}
 	inputs := []domain.CollectionCommitReceiptInput{
 		collectionReceiptInput(command, decision, "asset", assetdomain.AssetIdentityStateCollectionFamily,
 			"project", assets.Head.ScopeKey, assets.Head.ScopeRevision, assets.Head.ScopeContentHash,

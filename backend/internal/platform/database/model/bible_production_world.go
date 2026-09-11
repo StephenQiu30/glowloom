@@ -179,6 +179,7 @@ type ProductionWorldBibleScopeHead struct {
 	ProjectID                                        uuid.UUID                   `gorm:"type:uuid;primaryKey"`
 	WorkspaceID                                      uuid.UUID                   `gorm:"type:uuid;not null"`
 	CurrentVersionID                                 uuid.UUID                   `gorm:"type:uuid;not null;uniqueIndex"`
+	ScopeKey                                         string                      `gorm:"type:varchar(160);not null"`
 	ScopeRevision                                    int64                       `gorm:"not null;check:ck_scr_world_bible_scope_revision,scope_revision >= 1"`
 	HeadRevision                                     int64                       `gorm:"not null;check:ck_scr_world_bible_head_revision,head_revision >= 1"`
 	MemberCount                                      int                         `gorm:"not null;check:ck_scr_world_bible_member_count,member_count = 1"`

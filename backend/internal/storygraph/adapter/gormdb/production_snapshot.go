@@ -414,12 +414,29 @@ func (repo *repository) verifyProductionOwnerHeads(
 	if err := locked().First(&bibleHead, "project_id = ?", projectID).Error; err != nil {
 		return err
 	}
-	if len(bibleCollection.Members) != 1 || bibleHead.WorkspaceID != workspaceID ||
+	bibleOwnerVersion := bibledomain.ProductionWorldBibleVersion{
+		ID: material.bibleVersion.ID.String(), WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID,
+		Revision: material.bibleVersion.Revision, ContentHash: material.bibleVersion.ContentHash,
+	}
+	rebuiltBibleCollection, buildErr := bibledomain.BuildProductionWorldBibleCollection(bibleOwnerVersion)
+	rebuiltBibleHead, headErr := bibledomain.NewProductionWorldBibleHead(
+		state.WorkspaceID, state.ProjectID, bibleHead.HeadRevision, bibleOwnerVersion, bibleHead.UpdatedAt,
+	)
+	var bibleHeadRefs []ownercollection.VersionRef
+	refsErr := json.Unmarshal(bibleHead.CurrentRootRefs, &bibleHeadRefs)
+	if buildErr != nil || headErr != nil || refsErr != nil || len(bibleCollection.Members) != 1 ||
+		bibleHead.WorkspaceID != workspaceID ||
 		bibleHead.CurrentVersionID.String() != bibleCollection.Members[0].VersionID ||
 		bibleHead.VersionContentHash != bibleCollection.Members[0].ContentHash ||
 		bibleHead.ScopeRevision != bibleCollection.ScopeRevision || bibleHead.MemberCount != bibleCollection.MemberCount ||
 		bibleHead.ScopeContentHash != bibleCollection.ScopeContentHash || bibleHead.MembersHash != bibleCollection.MembersHash ||
-		bibleHead.CollectionRootHash != bibleCollection.CollectionRootHash {
+		bibleHead.CollectionRootHash != bibleCollection.CollectionRootHash ||
+		bibleHead.ScopeKey != rebuiltBibleHead.ScopeKey || bibleHead.ScopeRevision != rebuiltBibleHead.ScopeRevision ||
+		bibleHead.ScopeContentHash != rebuiltBibleHead.ScopeContentHash || bibleHead.MemberCount != rebuiltBibleHead.MemberCount ||
+		bibleHead.MembersHash != rebuiltBibleHead.MembersHash ||
+		bibleHead.CollectionRootHash != rebuiltBibleCollection.CollectionRootHash ||
+		bibleHead.HeadContentHash != rebuiltBibleHead.HeadContentHash ||
+		!reflect.DeepEqual(bibleHeadRefs, rebuiltBibleHead.CurrentVersionRefs) {
 		return invalidOwnerSnapshot("Production World Bible Owner Head has advanced beyond the Production World receipt")
 	}
 
