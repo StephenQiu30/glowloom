@@ -164,6 +164,7 @@
 - [x] 建立 Backend-owned SceneAnalysis DefinitionCore：只冻结七个已实际运行 P0 变体的 Bundle-independent Wire/Input/Output/Normalized Candidate、Normalizer、Invariant、Resource、Execution、Model 与 Tool Policy 前像；Release、Signature、Control、current/latest 激活引用机械拒绝，且不冒充十三 Stage 完整 Core/StageSet。
 - [x] 为七个已运行 P0 变体建立正式 StageRelease 内容身份：Backend 固定读取已安装 Skill 的 Bundle artifact，逐项绑定 Core、Wire/Input/Output/Normalizer、Prompt Compiler、实际 Reference/Rubric、Loaded Resource Set、执行/模型/工具 Policy 与运行镜像；SceneAnalysis 服务使用该 Hash 和资源证明写入既有 GORM Release 事实，不新增字段、migration 或旁路事实源，且不冒充完整 SkillRelease/Control 审批链。
 - [ ] 把成熟 Skill 吸收流程固化为 SourceInventory → review → rewrite → eval → shadow → signature；不复制未授权运行资产。
+  - [x] 将已接受设计实际参考的 Agent Skills specification、Anthropic skill-creator 与 LibTV public Skill 固定为三条 Backend-owned SourceInventory：提交、原文件/许可证字节 Hash、SPDX/NOTICE、作者、抓取时间、预期能力、审阅人和 reference-only 处置进入同一 Canonical Root；不复制外部生产文件。
 - [ ] 上架 4–6 个不可变、版本化、可追溯许可的 PresetRelease。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3 与原子发布。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。

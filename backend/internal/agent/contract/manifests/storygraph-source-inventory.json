@@ -1,0 +1,94 @@
+{
+  "contract_id": "storygraph-external-source-inventory-production",
+  "source_inventory_hash": "bd1222e69fa436511a1238045694001e03c7d8e07a074590ca088bac825fe67b",
+  "sources": [
+    {
+      "absorption_mode": "reference_only",
+      "author": "Patrick Erichsen",
+      "expected_capability_keys": [
+        "build-production-bible",
+        "design-reference-assets",
+        "direct-storyboard",
+        "map-scene-continuity",
+        "parse-script-structure",
+        "resolve-visual-foundation",
+        "review-production"
+      ],
+      "fetched_at": "2026-09-11T15:09:16Z",
+      "intended_use": "skill_structure_and_progressive_disclosure",
+      "license": {
+        "byte_length": 11344,
+        "notice_required": true,
+        "source_url": "https://github.com/agentskills/agentskills/blob/69ef37e9424c0a7ea9dd2293b559e43ec8176379/LICENSE",
+        "spdx_id": "Apache-2.0",
+        "sha256": "993da3f8d330d69108e521636555f7783ef81d46b904394c59ec5ff651331fe5"
+      },
+      "production_file_mappings": [],
+      "repository_url": "https://github.com/agentskills/agentskills",
+      "reviewer_id": "project-owner",
+      "source_byte_length": 7166,
+      "source_commit": "69ef37e9424c0a7ea9dd2293b559e43ec8176379",
+      "source_file_sha256": "b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220",
+      "source_id": "agent-skills-specification",
+      "source_url": "https://github.com/agentskills/agentskills/blob/69ef37e9424c0a7ea9dd2293b559e43ec8176379/docs/specification.mdx",
+      "source_version": "69ef37e9424c0a7ea9dd2293b559e43ec8176379"
+    },
+    {
+      "absorption_mode": "reference_only",
+      "author": "william qian",
+      "expected_capability_keys": [
+        "build-production-bible",
+        "design-reference-assets",
+        "direct-storyboard",
+        "map-scene-continuity",
+        "parse-script-structure",
+        "resolve-visual-foundation",
+        "review-production"
+      ],
+      "fetched_at": "2026-09-11T15:09:16Z",
+      "intended_use": "eval_and_skill_quality_method",
+      "license": {
+        "byte_length": 11345,
+        "notice_required": true,
+        "source_url": "https://github.com/anthropics/skills/blob/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/skill-creator/LICENSE.txt",
+        "spdx_id": "Apache-2.0",
+        "sha256": "bc6b3af2f331cbc7fb0da1344efb2cbe5877a31498b4d70dbc7000f3405a1362"
+      },
+      "production_file_mappings": [],
+      "repository_url": "https://github.com/anthropics/skills",
+      "reviewer_id": "project-owner",
+      "source_byte_length": 33168,
+      "source_commit": "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
+      "source_file_sha256": "dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf",
+      "source_id": "anthropic-skill-creator",
+      "source_url": "https://github.com/anthropics/skills/blob/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f/skills/skill-creator/SKILL.md",
+      "source_version": "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f"
+    },
+    {
+      "absorption_mode": "reference_only",
+      "author": "haofanwang",
+      "expected_capability_keys": [
+        "design-reference-assets",
+        "direct-storyboard"
+      ],
+      "fetched_at": "2026-09-11T15:09:16Z",
+      "intended_use": "stable_session_and_artifact_reference_method",
+      "license": {
+        "byte_length": 1067,
+        "notice_required": true,
+        "source_url": "https://github.com/libtv-labs/libtv-skills/blob/c609246c1eca69f6bc129bcbb5d64c36734e4a4a/LICENSE",
+        "spdx_id": "MIT",
+        "sha256": "f9209da70e868f531222a9c2e75e195d67d8cde93ee1ec0cdb47002ffe0e0bf0"
+      },
+      "production_file_mappings": [],
+      "repository_url": "https://github.com/libtv-labs/libtv-skills",
+      "reviewer_id": "project-owner",
+      "source_byte_length": 11469,
+      "source_commit": "c609246c1eca69f6bc129bcbb5d64c36734e4a4a",
+      "source_file_sha256": "7e8ffa94928cf50af201c8fb36d094af74664e274346f4e3ee49ef097585866a",
+      "source_id": "libtv-public-skill",
+      "source_url": "https://github.com/libtv-labs/libtv-skills/blob/c609246c1eca69f6bc129bcbb5d64c36734e4a4a/skills/libtv-skill/SKILL.md",
+      "source_version": "c609246c1eca69f6bc129bcbb5d64c36734e4a4a"
+    }
+  ]
+}
