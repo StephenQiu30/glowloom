@@ -178,6 +178,7 @@
 - [x] 上架 4 个不可变、版本化、可追溯许可的 PresetRelease；首批固定为都市电影写实、古装电影写实、国漫仙侠和赛博朋克动画，全部覆盖六类 Target、默认 faithful，并绑定仓库 Skill Bundle、内容定址 QC/视觉模型能力策略及 first-party MIT NOTICE。当前只完成 Backend 内置目录与精确身份查询，不提前开放项目选择或 Gate 3。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3、Preset 切换的真实 stale 写入与原子发布。
   - [x] 实现 Backend typed `VisualFoundationWorldReadSet`：只从当前已发布且可完整复验的 production StoryGraph 投影 Gate 2 `asset_identity_state_set`、`bible_production_world_set` 与全部 Episode `planning_scene_set` roots，同时保留完整 Owner Set/StoryGraph 内容身份用于执行前 stale 校验；旧 Schema、缺根或 Owner 已变化均失败关闭。该内部 Proof 不作为 Agent 事实输入，未接入持久视觉调度或 Gate 3。
+  - [x] 实现 Backend typed `ConfirmedVisualFoundationSource`：通过正式 GORM Reader 从当前 `ProductionWorldBibleHead` 重读完整 BibleVersion，并沿其 exact Candidate Revision 引用加载 Gate 2 已应用的聚合 Candidate；重算 Bible Collection Root、Candidate Revision proof、Candidate 内容/partition/business-key root 及 Design Gap 前像，任一错配均失败关闭。该内部快照不把 StoryGraph Version 伪装成 Agent 事实，也未新增表、字段、migration、手写 SQL、视觉调度或 Gate 3。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I06 — 六类 Target 与 Provider-neutral Brief
