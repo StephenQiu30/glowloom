@@ -1,0 +1,40 @@
+{
+  "contract_id": "storygraph-external-source-mapping-production",
+  "source_inventory_hash": "bd1222e69fa436511a1238045694001e03c7d8e07a074590ca088bac825fe67b",
+  "source_review_root": "2cdd0bebd82165ef61eada4a98b17cc4b03bbd96913034aafcfaedd27f52ab44",
+  "mapped_at": "2026-09-11T15:43:17Z",
+  "mapper_id": "project-owner",
+  "mappings": [
+    {
+      "source_id": "agent-skills-specification",
+      "source_commit": "69ef37e9424c0a7ea9dd2293b559e43ec8176379",
+      "review_decision": "reference_only",
+      "classification": "reference_only",
+      "artifact_kind": "reference_knowledge",
+      "disposition_reason": "normative_specification_only",
+      "copied_production_paths": [],
+      "rewritten_production_paths": []
+    },
+    {
+      "source_id": "anthropic-skill-creator",
+      "source_commit": "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
+      "review_decision": "quarantined",
+      "classification": "reject",
+      "artifact_kind": "none",
+      "disposition_reason": "quarantined_active_agent_and_tool_instructions",
+      "copied_production_paths": [],
+      "rewritten_production_paths": []
+    },
+    {
+      "source_id": "libtv-public-skill",
+      "source_commit": "c609246c1eca69f6bc129bcbb5d64c36734e4a4a",
+      "review_decision": "quarantined",
+      "classification": "reject",
+      "artifact_kind": "none",
+      "disposition_reason": "quarantined_remote_service_and_file_transfer",
+      "copied_production_paths": [],
+      "rewritten_production_paths": []
+    }
+  ],
+  "source_mapping_root": "eebeb2de83bdaadc17d9f29e4b24d16c648ef5b5f61bb06e7f1c6b6aada24db8"
+}
