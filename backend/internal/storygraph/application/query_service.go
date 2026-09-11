@@ -135,6 +135,37 @@ func (service *QueryService) Version(ctx context.Context, actor Actor, query Ver
 	return result, nil
 }
 
+func (service *QueryService) VisualFoundationWorld(
+	ctx context.Context,
+	actor Actor,
+	projectID string,
+) (storygraph.VisualFoundationWorldReadSet, error) {
+	projectID = strings.TrimSpace(projectID)
+	if _, err := uuid.Parse(projectID); err != nil {
+		return storygraph.VisualFoundationWorldReadSet{}, invalid("Invalid Visual Foundation world query")
+	}
+	version, err := service.reader.GetCurrentVersion(ctx, actor, projectID)
+	if err != nil {
+		return storygraph.VisualFoundationWorldReadSet{}, normalizeError(err)
+	}
+	currentOwnerSetHash, err := service.reader.GetCurrentOwnerSetHash(ctx, actor, projectID)
+	if err != nil {
+		return storygraph.VisualFoundationWorldReadSet{}, normalizeError(err)
+	}
+	if currentOwnerSetHash == "" || currentOwnerSetHash != version.OwnerSetHash {
+		return storygraph.VisualFoundationWorldReadSet{}, &Error{
+			Code: "stale_production_world", Message: "Production World changed before Visual Foundation input was frozen", Status: 409,
+		}
+	}
+	result, err := storygraph.BuildVisualFoundationWorldReadSet(version)
+	if err != nil {
+		return storygraph.VisualFoundationWorldReadSet{}, &Error{
+			Code: "production_world_unavailable", Message: "Confirmed Production World is not available for Visual Foundation", Status: 409,
+		}
+	}
+	return result, nil
+}
+
 func (service *QueryService) Lens(ctx context.Context, actor Actor, query LensQuery) (SubgraphResult, error) {
 	if err := validateLensQuery(query); err != nil {
 		return SubgraphResult{}, err
