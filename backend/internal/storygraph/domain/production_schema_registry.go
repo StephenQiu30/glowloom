@@ -154,19 +154,19 @@ func productionEdgeAliasDefinitions() []ProductionEdgeAliasDefinition {
 func productionOwnerCollectionDefinitions() []ProductionOwnerCollectionDefinition {
 	type declaration struct{ phase, owner, family, scope, cardinality, empty, members string }
 	rows := []declaration{
-		{"p0", "production/script", "script_source_set", "project", "project:<project_id>; each Project exactly one Collection", "forbidden", "exactly one accepted Source Revision plus one matching SourceSpanIndexVersion; index is proof only"},
-		{"p0", "production/project", "project_episode_set", "project", "project:<project_id>; each Project exactly one Collection", "forbidden", "complete active Episode order; Episode 1..n"},
-		{"p0", "production/bible", "bible_structure_identity_set", "project", "project:<project_id>; each Project exactly one Collection", "forbidden", "exactly one Gate 1 StructureIdentitySetVersion completeness root; proof only"},
-		{"p0", "production/bible", "bible_production_world_set", "project", "project:<project_id>; each Project exactly one Collection", "forbidden", "exactly one Gate 2 ProductionBibleVersion with exact StructureIdentitySetVersion ref; complete facts and claims"},
-		{"p0", "production/planning", "planning_scene_set", "episode", "episode:<episode_owner_logical_id>; each active Episode exactly one Collection", "forbidden", "Scene 1..n; complete Dialogue, Beat, Occurrence, Continuity, and Causal Claim sets"},
-		{"p0", "production/planning", "planning_structure_rebase_set", "project", "project:<project_id>; each Project exactly one Collection", "scope_rebase_conditional", "zero normally; exactly one immutable Structure Rebase or Supersession Version for Scope Rebase; proof only"},
-		{"p0", "asset", "asset_identity_state_set", "project", "project:<project_id>; each Project exactly one Collection", "forbidden", "production-world AssetIdentity 1..n and AssetState 1..n per identity; unpublished candidates zero"},
-		{"p1", "preset", "preset_effective_set", "project", "project:<project_id>; each Project exactly one Collection", "forbidden", "exactly one EffectivePolicySnapshot and one EffectiveStyleSnapshot"},
-		{"p1", "production/reference", "reference_plan_set", "reference_plan", "reference-plan:<plan_owner_logical_id>; p1 non-empty Project exactly one active Plan and Collection", "forbidden", "exactly one ApprovedReferencePlanVersion and Target 1..n matching the Plan fragment root"},
-		{"p1", "asset", "asset_base_reference_set", "reference_plan", "same scope as reference_plan_set; exactly one Collection at p1", "receipt_bound", "fulfilled base Target AssetVersion and exactly one selected READY Artifact per version; phase-aware cardinality"},
-		{"p2", "production/reference", "reference_binding_set", "scene", "exactly one Collection per p2_scope_key; scope_key is the Scene Scope Key", "receipt_bound", "fulfilled composition Target Scene and Interaction Bindings; phase-aware cardinality"},
-		{"p2", "asset", "asset_composition_artifact_set", "scene", "same scope as reference_binding_set; exactly one Collection per p2_scope_key", "receipt_bound", "exactly one selected READY Composition Artifact per formal Scene or Interaction Binding; no unselected candidates"},
-		{"p3", "production/storyboard", "storyboard_formal_set", "scene", "exactly one Collection per p3_scope_key; scope_key is the Scene Scope Key", "forbidden", "complete formal Shot set; exactly one ShotProductionBindingVersion per Shot; zero Draft or Intent Candidates"},
+		{"p0", "production/script", "script_source_set", "project", "project:<project_id>；每 Project 恰 1 Collection", "forbidden", "精确 1 个已接受 Source Revision + 1 个匹配 SourceSpanIndexVersion；后者作校验输入但不成为 Node"},
+		{"p0", "production/project", "project_episode_set", "project", "project:<project_id>；每 Project 恰 1 Collection", "forbidden", "完整 active Episode 顺序，1..n Episode"},
+		{"p0", "production/bible", "bible_structure_identity_set", "project", "project:<project_id>；每 Project 恰 1 Collection", "forbidden", "精确 1 个 Gate 1 StructureIdentitySetVersion 完整性根；只作 Proof，不成为 Node"},
+		{"p0", "production/bible", "bible_production_world_set", "project", "project:<project_id>；每 Project 恰 1 Collection", "forbidden", "精确 1 个 Gate 2 ProductionBibleVersion 且内嵌精确 StructureIdentitySetVersion Ref；Evidence/Specification/Binding/Rule/跨集 Claim/Arc/Thread 各 0..n 且与根一致"},
+		{"p0", "production/planning", "planning_scene_set", "episode", "episode:<episode_owner_logical_id>；每 active Episode 恰 1 Collection", "forbidden", "Scene 1..n；Dialogue/Beat/Occurrence/Continuity/Causal Claim 各 0..n 且集合完整"},
+		{"p0", "production/planning", "planning_structure_rebase_set", "project", "project:<project_id>；每 Project 恰 1 Collection", "scope_rebase_conditional", "正常编译为 0；Scope Rebase 时恰 1 个已发布不可变 Structure Rebase/Supersession Version，只作 Proof，不成为 Node"},
+		{"p0", "asset", "asset_identity_state_set", "project", "project:<project_id>；每 Project 恰 1 Collection", "forbidden", "生产世界内 AssetIdentity 1..n，每个身份 AssetState 1..n；未发布候选为 0"},
+		{"p1", "preset", "preset_effective_set", "project", "project:<project_id>；每 Project 恰 1 Collection", "forbidden", "精确 1 个 EffectivePolicySnapshot + 1 个 EffectiveStyleSnapshot"},
+		{"p1", "production/reference", "reference_plan_set", "reference_plan", "reference-plan:<plan_owner_logical_id>；p1 非空的 Project 恰 1 个 active Plan 且恰 1 Collection", "forbidden", "精确 1 个 ApprovedReferencePlanVersion，Target 1..n，与 Plan fragment 根完全一致"},
+		{"p1", "asset", "asset_base_reference_set", "reference_plan", "与 reference_plan_set 同 Scope；p1 恰 1 Collection", "receipt_bound", "已履约基础 Target 的 AssetVersion 和每个版本精确 1 个 selected READY Artifact；基数见下文 phase-aware 表"},
+		{"p2", "production/reference", "reference_binding_set", "scene", "对每个 p2_scope_key 恰 1 Collection，scope_key 即该 Scene Scope Key", "receipt_bound", "已履约组合 Target 的 Scene/Interaction Binding；基数见下文 phase-aware 表"},
+		{"p2", "asset", "asset_composition_artifact_set", "scene", "与 reference_binding_set 同 Scope；每 p2_scope_key 恰 1 Collection", "receipt_bound", "每个正式 Scene/Interaction Binding 精确 1 个 selected READY Composition Artifact；不包含未选 Candidate Artifact"},
+		{"p3", "production/storyboard", "storyboard_formal_set", "scene", "对每个 p3_scope_key 恰 1 Collection，scope_key 即该 Scene Scope Key", "forbidden", "完整正式 Shot 集；每个 Shot 精确 1 个 ShotProductionBindingVersion，Draft/Intent Candidate 为 0"},
 	}
 	values := make([]ProductionOwnerCollectionDefinition, 0, len(rows))
 	for _, row := range rows {

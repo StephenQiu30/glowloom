@@ -1,5 +1,5 @@
 {
-  "schema_hash": "84e50999b9d3e5b60ffc9497661517b49f2fe17d3d31a055e21da8cc8da6090b",
+  "schema_hash": "26b73dff931d3edb543b1160a9376c6d019b5244e13eb34c6d32a5418bc8e126",
   "manifest": {
     "manifest_contract_id": "storygraph-schema-manifest-contract",
     "schema_id": "storygraph-production",
@@ -675,9 +675,9 @@
         "matrix_id": "claim-cardinality-matrix-contract",
         "row_index": 1,
         "row_payload": {
-          "anchor_cardinality": "episode|scene|beat total 1..n; equals payload",
+          "anchor_cardinality": "episode|scene|beat 合计 1..n；精确等于 payload",
           "claim_branch": "BIBLE_CLAIM|causal_claim",
-          "participant_cardinality": "subject exactly 1; object 0..1; participant 0..n; equals payload",
+          "participant_cardinality": "subject 恰 1，object 为 0..1，participant 为 0..n；精确等于 payload",
           "state_cardinality": "0"
         },
         "projection_rule_id": "storygraph-production/claim-cardinality-matrix-contract/row-1-projection-contract",
@@ -687,10 +687,10 @@
         "matrix_id": "claim-cardinality-matrix-contract",
         "row_index": 2,
         "row_payload": {
-          "anchor_cardinality": "scope_start exactly 1 plus scope_end exactly 1",
+          "anchor_cardinality": "scope_start 恰 1 + scope_end 恰 1",
           "claim_branch": "continuity_claim(claim_type=continuity)",
-          "participant_cardinality": "asset_identity subject exactly 1",
-          "state_cardinality": "before exactly 1 plus after exactly 1"
+          "participant_cardinality": "asset_identity → claim，subject 恰 1",
+          "state_cardinality": "before 恰 1 + after 恰 1"
         },
         "projection_rule_id": "storygraph-production/claim-cardinality-matrix-contract/row-2-projection-contract",
         "cardinality_rule_id": "storygraph-production/claim-cardinality-matrix-contract/row-2-cardinality-contract"
@@ -699,10 +699,10 @@
         "matrix_id": "claim-cardinality-matrix-contract",
         "row_index": 3,
         "row_payload": {
-          "anchor_cardinality": "Scene exactly 1; Beat 0..1; Character Occurrence 1..n; Prop Occurrence exactly 1",
+          "anchor_cardinality": "Scene scene 恰 1，Beat beat 0..1，Character Occurrence character_occurrence 1..n，Prop Occurrence prop_occurrence 恰 1",
           "claim_branch": "continuity_claim(claim_type=interaction)",
-          "participant_cardinality": "Character Occurrence actor 1..n; Prop Occurrence prop exactly 1; give|receive counterparty exactly 1 otherwise 0; non-null holders exactly 1",
-          "state_cardinality": "prop_before exactly 1 plus prop_after exactly 1"
+          "participant_cardinality": "Character Occurrence actor 1..n；Prop Occurrence prop 恰 1；give|receive 的 Character Occurrence counterparty 恰 1，其他为 0；非空 holder 以 AssetIdentity 投影对应 role 恰 1",
+          "state_cardinality": "prop_before 恰 1 + prop_after 恰 1"
         },
         "projection_rule_id": "storygraph-production/claim-cardinality-matrix-contract/row-3-projection-contract",
         "cardinality_rule_id": "storygraph-production/claim-cardinality-matrix-contract/row-3-cardinality-contract"
@@ -711,9 +711,9 @@
         "matrix_id": "edge-type-matrix-contract",
         "row_index": 1,
         "row_payload": {
-          "allowed_source_to_target": "episode → scene; scene → dialogue|narrative_beat",
+          "allowed_source_to_target": "episode → scene；scene → dialogue|narrative_beat",
           "edge_type": "contains",
-          "qualifier_and_cardinality": "Parent equals Target Owner parent ref; sequence_key equals Owner order key; each child exactly one parent"
+          "qualifier_and_cardinality": "Parent 必须逐字节等于 Target Owner 已发布的 parent ref，sequence_key: SequenceKey 逐字节等于 Target 在该 Parent 下的 Owner order key；每个子节点恰有 1 个结构父级"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-1-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-1-cardinality-contract"
@@ -722,9 +722,9 @@
         "matrix_id": "edge-type-matrix-contract",
         "row_index": 2,
         "row_payload": {
-          "allowed_source_to_target": "source_revision → source_evidence; source_evidence → asset_identity|SPECIFICATION|asset_state|world_rule|story_arc|plot_thread|episode|scene|dialogue|narrative_beat|occurrence",
+          "allowed_source_to_target": "source_revision → source_evidence；source_evidence → asset_identity|SPECIFICATION|asset_state|world_rule|story_arc|plot_thread|episode|scene|dialogue|narrative_beat|occurrence",
           "edge_type": "derived_from",
-          "qualifier_and_cardinality": "Evidence exactly one Source Revision; other inputs equal Envelope Evidence; creator decision permits zero where declared; structural nodes require 1..n"
+          "qualifier_and_cardinality": "无；每个 Evidence 恰 1 条 Source Revision 入边，其他目标入边集必须精确等于 Node Envelope Evidence 映射；Identity/Specification/State/WorldRule/Arc/Thread/Occurrence 有显式创作者决定时可为 0，Episode/Scene/Dialogue/Beat 必须为 1..n"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-2-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-2-cardinality-contract"
@@ -735,7 +735,7 @@
         "row_payload": {
           "allowed_source_to_target": "asset_identity → SPECIFICATION",
           "edge_type": "describes_identity",
-          "qualifier_and_cardinality": "each Specification exactly one; asset kind matches"
+          "qualifier_and_cardinality": "无；每个 Specification 恰有 1 条，Asset kind 与 Specification Type 匹配"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-3-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-3-cardinality-contract"
@@ -746,7 +746,7 @@
         "row_payload": {
           "allowed_source_to_target": "asset_identity → asset_state",
           "edge_type": "has_state",
-          "qualifier_and_cardinality": "each State exactly one; asset kind matches"
+          "qualifier_and_cardinality": "无；每个 State 恰有 1 条，kind 匹配"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-4-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-4-cardinality-contract"
@@ -755,9 +755,9 @@
         "matrix_id": "edge-type-matrix-contract",
         "row_index": 5,
         "row_payload": {
-          "allowed_source_to_target": "episode|scene|narrative_beat|shot adjacent same-type nodes",
+          "allowed_source_to_target": "episode|scene|narrative_beat|shot 各自同类型相邻节点",
           "edge_type": "precedes",
-          "qualifier_and_cardinality": "same parent or Scene scope; sequence_key equals following Owner order key; only adjacent nodes"
+          "qualifier_and_cardinality": "只连接同 Parent/同 Scene scope 按 Owner SequenceKey 排序后的相邻项；sequence_key: SequenceKey 逐字节等于 Target（后一项）的 Owner order key，非首项恰有 1 条入边，非末项恰有 1 条出边"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-5-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-5-cardinality-contract"
@@ -768,7 +768,7 @@
         "row_payload": {
           "allowed_source_to_target": "scene|narrative_beat → occurrence",
           "edge_type": "anchors_occurrence",
-          "qualifier_and_cardinality": "anchor_role=scene|beat; equals scene_ref plus beat_ref; Scene exactly one and Beat 0..1"
+          "qualifier_and_cardinality": "anchor_role=scene|beat；入边精确等于 Occurrence payload 的 scene_ref + beat_ref，Scene 恰 1、Beat 0..1"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-6-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-6-cardinality-contract"
@@ -779,7 +779,7 @@
         "row_payload": {
           "allowed_source_to_target": "asset_state → occurrence",
           "edge_type": "instantiates_occurrence",
-          "qualifier_and_cardinality": "equals asset_state_ref; exactly one"
+          "qualifier_and_cardinality": "无；入边精确等于 Occurrence payload 的 asset_state_ref，恰 1"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-7-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-7-cardinality-contract"
@@ -790,7 +790,7 @@
         "row_payload": {
           "allowed_source_to_target": "source_evidence → ANY_CLAIM",
           "edge_type": "supports",
-          "qualifier_and_cardinality": "equals Claim Envelope Evidence; creator decision permits zero"
+          "qualifier_and_cardinality": "无；入边集精确等于 Claim Node Envelope Evidence 映射；显式创作者决定可为 0"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-8-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-8-cardinality-contract"
@@ -801,7 +801,7 @@
         "row_payload": {
           "allowed_source_to_target": "asset_identity|occurrence → ANY_CLAIM",
           "edge_type": "claim_participant",
-          "qualifier_and_cardinality": "participant_role=subject|object|participant|actor|prop|counterparty|holder_before|holder_after; branch cardinality matrix"
+          "qualifier_and_cardinality": "participant_role=subject|object|participant|actor|prop|counterparty|holder_before|holder_after；分支基数见下表"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-9-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-9-cardinality-contract"
@@ -812,7 +812,7 @@
         "row_payload": {
           "allowed_source_to_target": "STRUCTURE_ANCHOR → ANY_CLAIM",
           "edge_type": "claim_anchor",
-          "qualifier_and_cardinality": "anchor_role=episode|scene|beat|character_occurrence|prop_occurrence|scope_start|scope_end; branch cardinality matrix"
+          "qualifier_and_cardinality": "anchor_role=episode|scene|beat|character_occurrence|prop_occurrence|scope_start|scope_end；分支基数见下表"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-10-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-10-cardinality-contract"
@@ -823,7 +823,7 @@
         "row_payload": {
           "allowed_source_to_target": "asset_state → continuity_claim",
           "edge_type": "claim_state",
-          "qualifier_and_cardinality": "state_role=before|after|prop_before|prop_after; branch cardinality matrix"
+          "qualifier_and_cardinality": "state_role=before|after|prop_before|prop_after；分支基数见下表"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-11-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-11-cardinality-contract"
@@ -832,9 +832,9 @@
         "matrix_id": "edge-type-matrix-contract",
         "row_index": 12,
         "row_payload": {
-          "allowed_source_to_target": "same Node Type, Claim family/discriminant, and claim_series_key: Older Claim → Newer Claim",
+          "allowed_source_to_target": "同 Node Type、同 Claim family/discriminant 与同 claim_series_key 的 Older Claim → Newer Claim",
           "edge_type": "supersedes",
-          "qualifier_and_cardinality": "equals supersedes_claim_ref 0..1; revision increments by one; no self-edge or cross-discriminant supersession"
+          "qualifier_and_cardinality": "无；每个 Newer Claim 的入边精确等于 payload supersedes_claim_ref（0..1），两个 Claim 的 owner_logical_id/story_node_key 必须不同、valid scope 兼容，且 Newer claim_revision = Older claim_revision + 1；同一 logical id 的 Owner Version 替换只表现为 Node content changed，不生成自环；continuity 与 interaction 绝不得互相 supersede"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-12-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-12-cardinality-contract"
@@ -845,7 +845,7 @@
         "row_payload": {
           "allowed_source_to_target": "world_rule|policy_snapshot|effective_style_snapshot → CONSTRAINT_TARGET",
           "edge_type": "constrains",
-          "qualifier_and_cardinality": "constraint_role=world|policy|style; equals exact constraint refs"
+          "qualifier_and_cardinality": "constraint_role=world|policy|style；source 与 role 一一对应，边集等于 target payload 的精确 constraint refs"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-13-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-13-cardinality-contract"
@@ -854,9 +854,9 @@
         "matrix_id": "edge-type-matrix-contract",
         "row_index": 14,
         "row_payload": {
-          "allowed_source_to_target": "Materialization Matrix",
+          "allowed_source_to_target": "见下方 Materialization Matrix",
           "edge_type": "materializes",
-          "qualifier_and_cardinality": "binding_role=asset|specification|state|identity_anchor|artifact; no other combinations"
+          "qualifier_and_cardinality": "binding_role=asset|specification|state|identity_anchor|artifact；不接受其他组合"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-14-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-14-cardinality-contract"
@@ -867,7 +867,7 @@
         "row_payload": {
           "allowed_source_to_target": "approved_reference_plan_version → reference_plan_target",
           "edge_type": "contains_reference_target",
-          "qualifier_and_cardinality": "sequence_key equals Plan Owner order key; each Target exactly one Plan parent"
+          "qualifier_and_cardinality": "sequence_key: SequenceKey 逐字节等于 Target 在 Plan 内的 Owner order key；Target 恰有 1 个 Plan 父级"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-15-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-15-cardinality-contract"
@@ -878,7 +878,7 @@
         "row_payload": {
           "allowed_source_to_target": "reference_plan_target → reference_plan_target",
           "edge_type": "depends_on_reference_target",
-          "qualifier_and_cardinality": "equals payload dependencies and is acyclic inside one Plan"
+          "qualifier_and_cardinality": "无；边集等于 Target payload 依赖且 Plan 内无环"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-16-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-16-cardinality-contract"
@@ -887,7 +887,7 @@
         "matrix_id": "edge-type-matrix-contract",
         "row_index": 17,
         "row_payload": {
-          "allowed_source_to_target": "Reference Planning Matrix",
+          "allowed_source_to_target": "见下方 Reference Planning Matrix",
           "edge_type": "plans_reference",
           "qualifier_and_cardinality": "reference_role=identity|specification|state|style|scene|occurrence|interaction"
         },
@@ -900,7 +900,7 @@
         "row_payload": {
           "allowed_source_to_target": "reference_plan_target → REFERENCE_RESULT",
           "edge_type": "fulfills_reference_target",
-          "qualifier_and_cardinality": "target/result type and phase-aware cardinality matrices"
+          "qualifier_and_cardinality": "无；target/result 类型与 phase-aware 基数见下表"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-18-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-18-cardinality-contract"
@@ -909,7 +909,7 @@
         "matrix_id": "edge-type-matrix-contract",
         "row_index": 19,
         "row_payload": {
-          "allowed_source_to_target": "Reference Binding Matrix",
+          "allowed_source_to_target": "见下方 Reference Binding Matrix",
           "edge_type": "binds_reference_input",
           "qualifier_and_cardinality": "reference_role=scene|occurrence|interaction|character_asset|location_asset|prop_asset"
         },
@@ -922,7 +922,7 @@
         "row_payload": {
           "allowed_source_to_target": "artifact → REFERENCE_BINDING",
           "edge_type": "binds_reference_output",
-          "qualifier_and_cardinality": "each Binding exactly one selected READY Composition Artifact"
+          "qualifier_and_cardinality": "无；每个 Binding 恰有 1 个 selected READY Composition Artifact"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-20-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-20-cardinality-contract"
@@ -933,7 +933,7 @@
         "row_payload": {
           "allowed_source_to_target": "narrative_beat → shot",
           "edge_type": "realizes",
-          "qualifier_and_cardinality": "each Shot input 1..n and equals source_beat_refs"
+          "qualifier_and_cardinality": "无；每个 Shot 入边 1..n，精确等于 Shot payload source refs"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-21-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-21-cardinality-contract"
@@ -944,7 +944,7 @@
         "row_payload": {
           "allowed_source_to_target": "occurrence|scene_reference_binding_version|interaction_reference_binding_version → shot_production_binding_version",
           "edge_type": "informs",
-          "qualifier_and_cardinality": "informs_role=occurrence|scene_reference|interaction_reference; same Scene and equals payload arrays"
+          "qualifier_and_cardinality": "informs_role=occurrence|scene_reference|interaction_reference；source 与 role 一一对应且同 Scene scope，三类入边分别精确等于 Binding payload 的 occurrence_refs[]|scene_reference_binding_refs[]|interaction_reference_binding_refs[]"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-22-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-22-cardinality-contract"
@@ -955,7 +955,7 @@
         "row_payload": {
           "allowed_source_to_target": "shot|occurrence|asset_version|REFERENCE_BINDING|effective_style_snapshot → shot_production_binding_version",
           "edge_type": "binds_input",
-          "qualifier_and_cardinality": "binding_role=shot|occurrence|asset_version|scene_reference|interaction_reference|style; equals payload"
+          "qualifier_and_cardinality": "binding_role=shot|occurrence|asset_version|scene_reference|interaction_reference|style；source 与 role 一一对应，边集等于 target payload"
         },
         "projection_rule_id": "storygraph-production/edge-type-matrix-contract/row-23-projection-contract",
         "cardinality_rule_id": "storygraph-production/edge-type-matrix-contract/row-23-cardinality-contract"
@@ -967,7 +967,7 @@
           "binding_role": "asset",
           "source": "asset_identity",
           "target": "production_binding",
-          "target_cardinality": "exactly 1"
+          "target_cardinality": "恰 1"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-1-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-1-cardinality-contract"
@@ -979,7 +979,7 @@
           "binding_role": "specification",
           "source": "SPECIFICATION",
           "target": "production_binding",
-          "target_cardinality": "exactly 1; kind matches"
+          "target_cardinality": "恰 1，kind 匹配"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-2-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-2-cardinality-contract"
@@ -991,7 +991,7 @@
           "binding_role": "state",
           "source": "asset_state",
           "target": "production_binding",
-          "target_cardinality": "1..n; equals Binding payload"
+          "target_cardinality": "1..n，精确等于 Binding payload"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-3-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-3-cardinality-contract"
@@ -1003,7 +1003,7 @@
           "binding_role": "asset",
           "source": "asset_identity",
           "target": "asset_version",
-          "target_cardinality": "exactly 1"
+          "target_cardinality": "恰 1"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-4-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-4-cardinality-contract"
@@ -1015,7 +1015,7 @@
           "binding_role": "specification",
           "source": "SPECIFICATION",
           "target": "asset_version",
-          "target_cardinality": "exactly 1; kind and purpose match"
+          "target_cardinality": "恰 1，kind/purpose 匹配"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-5-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-5-cardinality-contract"
@@ -1027,7 +1027,7 @@
           "binding_role": "state",
           "source": "asset_state",
           "target": "asset_version",
-          "target_cardinality": "exactly 1"
+          "target_cardinality": "恰 1"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-6-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-6-cardinality-contract"
@@ -1039,7 +1039,7 @@
           "binding_role": "identity_anchor",
           "source": "asset_version(purpose=character_identity_anchor)",
           "target": "asset_version(purpose=character_appearance)",
-          "target_cardinality": "Character appearance exactly 1; other purpose 0"
+          "target_cardinality": "Character appearance 恰 1，其他 purpose 为 0"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-7-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-7-cardinality-contract"
@@ -1051,7 +1051,7 @@
           "binding_role": "artifact",
           "source": "artifact",
           "target": "asset_version",
-          "target_cardinality": "exactly 1 selected READY Artifact"
+          "target_cardinality": "恰 1 selected READY Artifact"
         },
         "projection_rule_id": "storygraph-production/materialization-matrix-contract/row-8-projection-contract",
         "cardinality_rule_id": "storygraph-production/materialization-matrix-contract/row-8-cardinality-contract"
@@ -1063,7 +1063,7 @@
           "reference_role": "scene",
           "source": "scene",
           "target_binding": "scene_reference_binding_version",
-          "target_cardinality": "exactly 1"
+          "target_cardinality": "恰 1"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-1-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-1-cardinality-contract"
@@ -1074,8 +1074,8 @@
         "row_payload": {
           "reference_role": "occurrence",
           "source": "occurrence",
-          "target_binding": "scene_reference_binding_version",
-          "target_cardinality": "0..n; equals Binding payload"
+          "target_binding": "同上",
+          "target_cardinality": "0..n，精确等于 Binding payload"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-2-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-2-cardinality-contract"
@@ -1086,8 +1086,8 @@
         "row_payload": {
           "reference_role": "interaction",
           "source": "continuity_claim(claim_type=interaction)",
-          "target_binding": "scene_reference_binding_version",
-          "target_cardinality": "0..n; equals Binding payload"
+          "target_binding": "同上",
+          "target_cardinality": "0..n，精确等于 Binding payload"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-3-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-3-cardinality-contract"
@@ -1098,8 +1098,8 @@
         "row_payload": {
           "reference_role": "character_asset",
           "source": "asset_version(purpose=character_identity_anchor|character_appearance)",
-          "target_binding": "scene_reference_binding_version",
-          "target_cardinality": "0..n; equals Scene Occurrence needs"
+          "target_binding": "同上",
+          "target_cardinality": "0..n，精确等于 Scene Occurrence 需求"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-4-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-4-cardinality-contract"
@@ -1110,8 +1110,8 @@
         "row_payload": {
           "reference_role": "location_asset",
           "source": "asset_version(purpose=location_board)",
-          "target_binding": "scene_reference_binding_version",
-          "target_cardinality": "exactly 1"
+          "target_binding": "同上",
+          "target_cardinality": "恰 1"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-5-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-5-cardinality-contract"
@@ -1122,8 +1122,8 @@
         "row_payload": {
           "reference_role": "prop_asset",
           "source": "asset_version(purpose=prop_sheet)",
-          "target_binding": "scene_reference_binding_version",
-          "target_cardinality": "0..n; equals Scene Occurrence needs"
+          "target_binding": "同上",
+          "target_cardinality": "0..n，精确等于 Scene Occurrence 需求"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-6-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-6-cardinality-contract"
@@ -1135,7 +1135,7 @@
           "reference_role": "interaction",
           "source": "continuity_claim(claim_type=interaction)",
           "target_binding": "interaction_reference_binding_version",
-          "target_cardinality": "exactly 1"
+          "target_cardinality": "恰 1"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-7-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-7-cardinality-contract"
@@ -1146,8 +1146,8 @@
         "row_payload": {
           "reference_role": "character_asset",
           "source": "asset_version(purpose=character_identity_anchor|character_appearance)",
-          "target_binding": "interaction_reference_binding_version",
-          "target_cardinality": "1..n; equals actor and counterparty"
+          "target_binding": "同上",
+          "target_cardinality": "1..n，精确等于 actor/counterparty"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-8-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-8-cardinality-contract"
@@ -1158,8 +1158,8 @@
         "row_payload": {
           "reference_role": "prop_asset",
           "source": "asset_version(purpose=prop_sheet)",
-          "target_binding": "interaction_reference_binding_version",
-          "target_cardinality": "exactly 1"
+          "target_binding": "同上",
+          "target_cardinality": "恰 1"
         },
         "projection_rule_id": "storygraph-production/reference-binding-matrix-contract/row-9-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-binding-matrix-contract/row-9-cardinality-contract"
@@ -1247,8 +1247,8 @@
         "row_payload": {
           "not_generated_cardinality": "0",
           "optional_cardinality": "0..1",
-          "required_cardinality": "exactly 1",
-          "target_activation_condition": "base Target: coverage_scope_keys intersects p1_scope_keys"
+          "required_cardinality": "恰 1",
+          "target_activation_condition": "基础 Target：target.coverage_scope_keys ∩ p1_scope_keys ≠ ∅"
         },
         "projection_rule_id": "storygraph-production/reference-target-activation-matrix-contract/row-1-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-activation-matrix-contract/row-1-cardinality-contract"
@@ -1259,8 +1259,8 @@
         "row_payload": {
           "not_generated_cardinality": "0",
           "optional_cardinality": "0..1",
-          "required_cardinality": "exactly 1",
-          "target_activation_condition": "composition Target: unique Scope belongs to p2_scope_keys"
+          "required_cardinality": "恰 1",
+          "target_activation_condition": "组合 Target：唯一 Scope 属于 p2_scope_keys"
         },
         "projection_rule_id": "storygraph-production/reference-target-activation-matrix-contract/row-2-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-activation-matrix-contract/row-2-cardinality-contract"
@@ -1271,8 +1271,8 @@
         "row_payload": {
           "not_generated_cardinality": "0",
           "optional_cardinality": "0",
-          "required_cardinality": "0 even when future required",
-          "target_activation_condition": "neither activation condition"
+          "required_cardinality": "0；即使未来 required 也尚未到履约阶段",
+          "target_activation_condition": "不满足上述激活条件"
         },
         "projection_rule_id": "storygraph-production/reference-target-activation-matrix-contract/row-3-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-activation-matrix-contract/row-3-cardinality-contract"
@@ -1281,17 +1281,17 @@
         "matrix_id": "reference-target-input-compatibility-matrix-contract",
         "row_index": 1,
         "row_payload": {
-          "expected_target_coverage": "first pass: one per Character Identity in complete p1 Occurrence union; scope is its actual p1 Scene set",
-          "identity_refs": "exactly 1 Character",
+          "expected_target_coverage": "第一遍：p1_scope_keys[] 完整 Occurrence 并集中每个 Character Identity 恰 1；Scope 精确为该 Character 实际出现的 p1 Scene 集",
+          "identity_refs": "恰 1 个 Character",
           "interaction_refs": "0",
-          "occurrence_refs": "0..n matching Character and anchor State",
-          "scene_refs": "1..n matching coverage_scope_keys",
-          "specification_refs": "exactly 1 CharacterSpecification",
-          "state_refs": "exactly 1 Gate 3 selected anchor AssetState",
-          "style_refs": "exactly 1 effective style",
+          "occurrence_refs": "0..n，均为该 Character/锚点 State 在 scene[] 中的 Occurrence",
+          "scene_refs": "1..n，与 coverage_scope_keys[] 逐一对应",
+          "specification_refs": "恰 1 个描述该 Character 的 CharacterSpecification",
+          "state_refs": "恰 1 个属于该 Character 且由 Gate 3 审核选定的身份锚点 AssetState",
+          "style_refs": "恰 1，等于 constraints.effective_style_snapshot_ref",
           "target_dependencies": "0",
           "target_kind": "character_identity_anchor",
-          "target_uniqueness_key": "(target_kind, identity[0]) logical ref key"
+          "target_uniqueness_key": "(target_kind, identity[0]) 的 logical ref key"
         },
         "projection_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-1-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-1-cardinality-contract"
@@ -1300,17 +1300,17 @@
         "matrix_id": "reference-target-input-compatibility-matrix-contract",
         "row_index": 2,
         "row_payload": {
-          "expected_target_coverage": "second pass: one per actual non-anchor Character identity/specification/state triple; exact p1 Scene scope",
-          "identity_refs": "exactly 1 Character",
+          "expected_target_coverage": "第二遍：先读该 Character 唯一 Anchor Target 的 State，再为每个实际出现且不等于该 State 的 Character Identity/Specification/State 三元组生成恰 1；Scope 精确为该三元组出现的 p1 Scene 集",
+          "identity_refs": "恰 1 个 Character",
           "interaction_refs": "0",
-          "occurrence_refs": "0..n matching Character and State",
-          "scene_refs": "1..n matching coverage_scope_keys",
-          "specification_refs": "exactly 1 CharacterSpecification",
-          "state_refs": "exactly 1 Character AssetState",
-          "style_refs": "exactly 1 effective style",
-          "target_dependencies": "exactly 1 covering identity-anchor Target with fulfillment rank not lower",
+          "occurrence_refs": "0..n，均为该 Character/State 在 scene[] 中的 Occurrence",
+          "scene_refs": "1..n，与 coverage_scope_keys[] 逐一对应",
+          "specification_refs": "恰 1 个描述该 Character 的 CharacterSpecification",
+          "state_refs": "恰 1 个属于该 Character 的 AssetState",
+          "style_refs": "恰 1，等于 constraints.effective_style_snapshot_ref",
+          "target_dependencies": "恰 1 个同 Character/Specification/Style 且覆盖当前 Scope 的 character_identity_anchor Target，且依赖 fulfillment rank 不低于本 Target",
           "target_kind": "character_appearance",
-          "target_uniqueness_key": "(target_kind, identity[0], specification[0], state[0]) logical ref key"
+          "target_uniqueness_key": "(target_kind, identity[0], specification[0], state[0]) 的 logical ref key"
         },
         "projection_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-2-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-2-cardinality-contract"
@@ -1319,17 +1319,17 @@
         "matrix_id": "reference-target-input-compatibility-matrix-contract",
         "row_index": 3,
         "row_payload": {
-          "expected_target_coverage": "one per actual Location identity/specification/state triple in p1; exact Scene scope",
-          "identity_refs": "exactly 1 Location",
+          "expected_target_coverage": "p1_scope_keys[] 内每个实际出现的 Location Identity/Specification/State 三元组恰 1；Scope 精确为该三元组出现的 p1 Scene 集",
+          "identity_refs": "恰 1 个 Location",
           "interaction_refs": "0",
-          "occurrence_refs": "0..n matching Location and State",
-          "scene_refs": "1..n matching coverage_scope_keys",
-          "specification_refs": "exactly 1 LocationSpecification",
-          "state_refs": "exactly 1 Location AssetState",
-          "style_refs": "exactly 1 effective style",
+          "occurrence_refs": "0..n，均为该 Location/State 在 scene[] 中的 Occurrence",
+          "scene_refs": "1..n，与 coverage_scope_keys[] 逐一对应",
+          "specification_refs": "恰 1 个描述该 Location 的 LocationSpecification",
+          "state_refs": "恰 1 个属于该 Location 的 AssetState",
+          "style_refs": "恰 1，等于 constraints.effective_style_snapshot_ref",
           "target_dependencies": "0",
           "target_kind": "location_board",
-          "target_uniqueness_key": "(target_kind, identity[0], specification[0], state[0]) logical ref key"
+          "target_uniqueness_key": "(target_kind, identity[0], specification[0], state[0]) 的 logical ref key"
         },
         "projection_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-3-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-3-cardinality-contract"
@@ -1338,17 +1338,17 @@
         "matrix_id": "reference-target-input-compatibility-matrix-contract",
         "row_index": 4,
         "row_payload": {
-          "expected_target_coverage": "one per actual Prop identity/specification/state triple in p1; exact Scene scope",
-          "identity_refs": "exactly 1 Prop",
+          "expected_target_coverage": "p1_scope_keys[] 内每个实际出现的 Prop Identity/Specification/State 三元组恰 1；Scope 精确为该三元组出现的 p1 Scene 集",
+          "identity_refs": "恰 1 个 Prop",
           "interaction_refs": "0",
-          "occurrence_refs": "0..n matching Prop and State",
-          "scene_refs": "1..n matching coverage_scope_keys",
-          "specification_refs": "exactly 1 PropSpecification",
-          "state_refs": "exactly 1 Prop AssetState",
-          "style_refs": "exactly 1 effective style",
+          "occurrence_refs": "0..n，均为该 Prop/State 在 scene[] 中的 Occurrence",
+          "scene_refs": "1..n，与 coverage_scope_keys[] 逐一对应",
+          "specification_refs": "恰 1 个描述该 Prop 的 PropSpecification",
+          "state_refs": "恰 1 个属于该 Prop 的 AssetState",
+          "style_refs": "恰 1，等于 constraints.effective_style_snapshot_ref",
           "target_dependencies": "0",
           "target_kind": "prop_sheet",
-          "target_uniqueness_key": "(target_kind, identity[0], specification[0], state[0]) logical ref key"
+          "target_uniqueness_key": "(target_kind, identity[0], specification[0], state[0]) 的 logical ref key"
         },
         "projection_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-4-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-4-cardinality-contract"
@@ -1357,17 +1357,17 @@
         "matrix_id": "reference-target-input-compatibility-matrix-contract",
         "row_index": 5,
         "row_payload": {
-          "expected_target_coverage": "one per p1_scope_key; not_generated must be explicit",
-          "identity_refs": "1..n exact Scene production closure Identity set",
-          "interaction_refs": "complete anchored InteractionClaim set",
-          "occurrence_refs": "complete Scene Occurrence set",
-          "scene_refs": "exactly 1 matching coverage_scope_keys[0]",
-          "specification_refs": "1..n exact closure Specification set",
-          "state_refs": "1..n exact closure AssetState set",
-          "style_refs": "exactly 1 effective style",
-          "target_dependencies": "not_generated 0; otherwise 1..n exact base Targets with adequate fulfillment rank",
+          "expected_target_coverage": "每个 p1_scope_key 恰 1；不制作也必须显式保存 fulfillment=not_generated",
+          "identity_refs": "1..n，精确等于 Scene production closure 的 Identity 去重集",
+          "interaction_refs": "精确等于锚定该 Scene 的 InteractionClaim 集",
+          "occurrence_refs": "精确等于该 Scene 的完整 Occurrence 集",
+          "scene_refs": "恰 1，且对应唯一 coverage_scope_keys[0]",
+          "specification_refs": "1..n，精确等于该 closure 的 Specification 去重集",
+          "state_refs": "1..n，精确等于该 closure 的 AssetState 去重集",
+          "style_refs": "恰 1，等于 constraints.effective_style_snapshot_ref",
+          "target_dependencies": "not_generated 为 0；否则 1..n，恰为 Scene production closure 每个三元组对应的基础 Target 去重集，每个依赖 fulfillment rank 不低于本 Target",
           "target_kind": "scene_composition",
-          "target_uniqueness_key": "(target_kind, scene[0]) logical ref key"
+          "target_uniqueness_key": "(target_kind, scene[0]) 的 logical ref key"
         },
         "projection_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-5-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-5-cardinality-contract"
@@ -1376,17 +1376,17 @@
         "matrix_id": "reference-target-input-compatibility-matrix-contract",
         "row_index": 6,
         "row_payload": {
-          "expected_target_coverage": "one per confirmed InteractionClaim in p1; not_generated must be explicit",
-          "identity_refs": "2..n exact actor/counterparty/prop Identity set",
-          "interaction_refs": "exactly 1 interaction ContinuityClaim",
-          "occurrence_refs": "2..n exact actor/prop/counterparty Occurrences",
-          "scene_refs": "exactly 1 Interaction Scene matching coverage_scope_keys[0]",
-          "specification_refs": "2..n exact participant Specification set",
-          "state_refs": "2..n exact participating AssetState set",
-          "style_refs": "exactly 1 effective style",
-          "target_dependencies": "not_generated 0; otherwise 2..n exact participant base Targets with adequate fulfillment rank",
+          "expected_target_coverage": "p1_scope_keys[] 内每个已确认 InteractionClaim 恰 1；不制作也必须显式保存 fulfillment=not_generated",
+          "identity_refs": "2..n，精确等于 actor/counterparty/prop 的 Identity 去重集",
+          "interaction_refs": "恰 1 个 claim_type=interaction 的 ContinuityClaim",
+          "occurrence_refs": "2..n，精确等于 InteractionClaim 的 actor/prop/counterparty Occurrence 去重集",
+          "scene_refs": "恰 1，等于 InteractionClaim 的 Scene，且对应唯一 coverage_scope_keys[0]",
+          "specification_refs": "2..n，精确等于这些参与者的 Specification 去重集",
+          "state_refs": "2..n，精确等于参与 Occurrence 的 AssetState 去重集",
+          "style_refs": "恰 1，等于 constraints.effective_style_snapshot_ref",
+          "target_dependencies": "not_generated 为 0；否则 2..n，恰为参与三元组对应的基础 Target 去重集，每个依赖 fulfillment rank 不低于本 Target",
           "target_kind": "interaction_composition",
-          "target_uniqueness_key": "(target_kind, interaction[0]) logical ref key"
+          "target_uniqueness_key": "(target_kind, interaction[0]) 的 logical ref key"
         },
         "projection_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-6-projection-contract",
         "cardinality_rule_id": "storygraph-production/reference-target-input-compatibility-matrix-contract/row-6-cardinality-contract"
@@ -1459,8 +1459,8 @@
         "owner_kind": "asset",
         "version_family": "asset_identity_state_set",
         "scope_kind": "project",
-        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e; each Project exactly one Collection",
-        "member_completeness": "production-world AssetIdentity 1..n and AssetState 1..n per identity; unpublished candidates zero",
+        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e；每 Project 恰 1 Collection",
+        "member_completeness": "生产世界内 AssetIdentity 1..n，每个身份 AssetState 1..n；未发布候选为 0",
         "scope_key_rule_id": "storygraph-production/owner-collection/asset_identity_state_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/asset_identity_state_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/asset_identity_state_set-cardinality-contract",
@@ -1472,8 +1472,8 @@
         "owner_kind": "production/bible",
         "version_family": "bible_production_world_set",
         "scope_kind": "project",
-        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e; each Project exactly one Collection",
-        "member_completeness": "exactly one Gate 2 ProductionBibleVersion with exact StructureIdentitySetVersion ref; complete facts and claims",
+        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e；每 Project 恰 1 Collection",
+        "member_completeness": "精确 1 个 Gate 2 ProductionBibleVersion 且内嵌精确 StructureIdentitySetVersion Ref；Evidence/Specification/Binding/Rule/跨集 Claim/Arc/Thread 各 0..n 且与根一致",
         "scope_key_rule_id": "storygraph-production/owner-collection/bible_production_world_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/bible_production_world_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/bible_production_world_set-cardinality-contract",
@@ -1485,8 +1485,8 @@
         "owner_kind": "production/bible",
         "version_family": "bible_structure_identity_set",
         "scope_kind": "project",
-        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e; each Project exactly one Collection",
-        "member_completeness": "exactly one Gate 1 StructureIdentitySetVersion completeness root; proof only",
+        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e；每 Project 恰 1 Collection",
+        "member_completeness": "精确 1 个 Gate 1 StructureIdentitySetVersion 完整性根；只作 Proof，不成为 Node",
         "scope_key_rule_id": "storygraph-production/owner-collection/bible_structure_identity_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/bible_structure_identity_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/bible_structure_identity_set-cardinality-contract",
@@ -1498,8 +1498,8 @@
         "owner_kind": "production/planning",
         "version_family": "planning_scene_set",
         "scope_kind": "episode",
-        "scope_key_and_collection_cardinality": "episode:\u003cepisode_owner_logical_id\u003e; each active Episode exactly one Collection",
-        "member_completeness": "Scene 1..n; complete Dialogue, Beat, Occurrence, Continuity, and Causal Claim sets",
+        "scope_key_and_collection_cardinality": "episode:\u003cepisode_owner_logical_id\u003e；每 active Episode 恰 1 Collection",
+        "member_completeness": "Scene 1..n；Dialogue/Beat/Occurrence/Continuity/Causal Claim 各 0..n 且集合完整",
         "scope_key_rule_id": "storygraph-production/owner-collection/planning_scene_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/planning_scene_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/planning_scene_set-cardinality-contract",
@@ -1511,8 +1511,8 @@
         "owner_kind": "production/planning",
         "version_family": "planning_structure_rebase_set",
         "scope_kind": "project",
-        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e; each Project exactly one Collection",
-        "member_completeness": "zero normally; exactly one immutable Structure Rebase or Supersession Version for Scope Rebase; proof only",
+        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e；每 Project 恰 1 Collection",
+        "member_completeness": "正常编译为 0；Scope Rebase 时恰 1 个已发布不可变 Structure Rebase/Supersession Version，只作 Proof，不成为 Node",
         "scope_key_rule_id": "storygraph-production/owner-collection/planning_structure_rebase_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/planning_structure_rebase_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/planning_structure_rebase_set-cardinality-contract",
@@ -1524,8 +1524,8 @@
         "owner_kind": "production/project",
         "version_family": "project_episode_set",
         "scope_kind": "project",
-        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e; each Project exactly one Collection",
-        "member_completeness": "complete active Episode order; Episode 1..n",
+        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e；每 Project 恰 1 Collection",
+        "member_completeness": "完整 active Episode 顺序，1..n Episode",
         "scope_key_rule_id": "storygraph-production/owner-collection/project_episode_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/project_episode_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/project_episode_set-cardinality-contract",
@@ -1537,8 +1537,8 @@
         "owner_kind": "production/script",
         "version_family": "script_source_set",
         "scope_kind": "project",
-        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e; each Project exactly one Collection",
-        "member_completeness": "exactly one accepted Source Revision plus one matching SourceSpanIndexVersion; index is proof only",
+        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e；每 Project 恰 1 Collection",
+        "member_completeness": "精确 1 个已接受 Source Revision + 1 个匹配 SourceSpanIndexVersion；后者作校验输入但不成为 Node",
         "scope_key_rule_id": "storygraph-production/owner-collection/script_source_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/script_source_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/script_source_set-cardinality-contract",
@@ -1550,8 +1550,8 @@
         "owner_kind": "asset",
         "version_family": "asset_base_reference_set",
         "scope_kind": "reference_plan",
-        "scope_key_and_collection_cardinality": "same scope as reference_plan_set; exactly one Collection at p1",
-        "member_completeness": "fulfilled base Target AssetVersion and exactly one selected READY Artifact per version; phase-aware cardinality",
+        "scope_key_and_collection_cardinality": "与 reference_plan_set 同 Scope；p1 恰 1 Collection",
+        "member_completeness": "已履约基础 Target 的 AssetVersion 和每个版本精确 1 个 selected READY Artifact；基数见下文 phase-aware 表",
         "scope_key_rule_id": "storygraph-production/owner-collection/asset_base_reference_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/asset_base_reference_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/asset_base_reference_set-cardinality-contract",
@@ -1563,8 +1563,8 @@
         "owner_kind": "preset",
         "version_family": "preset_effective_set",
         "scope_kind": "project",
-        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e; each Project exactly one Collection",
-        "member_completeness": "exactly one EffectivePolicySnapshot and one EffectiveStyleSnapshot",
+        "scope_key_and_collection_cardinality": "project:\u003cproject_id\u003e；每 Project 恰 1 Collection",
+        "member_completeness": "精确 1 个 EffectivePolicySnapshot + 1 个 EffectiveStyleSnapshot",
         "scope_key_rule_id": "storygraph-production/owner-collection/preset_effective_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/preset_effective_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/preset_effective_set-cardinality-contract",
@@ -1576,8 +1576,8 @@
         "owner_kind": "production/reference",
         "version_family": "reference_plan_set",
         "scope_kind": "reference_plan",
-        "scope_key_and_collection_cardinality": "reference-plan:\u003cplan_owner_logical_id\u003e; p1 non-empty Project exactly one active Plan and Collection",
-        "member_completeness": "exactly one ApprovedReferencePlanVersion and Target 1..n matching the Plan fragment root",
+        "scope_key_and_collection_cardinality": "reference-plan:\u003cplan_owner_logical_id\u003e；p1 非空的 Project 恰 1 个 active Plan 且恰 1 Collection",
+        "member_completeness": "精确 1 个 ApprovedReferencePlanVersion，Target 1..n，与 Plan fragment 根完全一致",
         "scope_key_rule_id": "storygraph-production/owner-collection/reference_plan_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/reference_plan_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/reference_plan_set-cardinality-contract",
@@ -1589,8 +1589,8 @@
         "owner_kind": "asset",
         "version_family": "asset_composition_artifact_set",
         "scope_kind": "scene",
-        "scope_key_and_collection_cardinality": "same scope as reference_binding_set; exactly one Collection per p2_scope_key",
-        "member_completeness": "exactly one selected READY Composition Artifact per formal Scene or Interaction Binding; no unselected candidates",
+        "scope_key_and_collection_cardinality": "与 reference_binding_set 同 Scope；每 p2_scope_key 恰 1 Collection",
+        "member_completeness": "每个正式 Scene/Interaction Binding 精确 1 个 selected READY Composition Artifact；不包含未选 Candidate Artifact",
         "scope_key_rule_id": "storygraph-production/owner-collection/asset_composition_artifact_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/asset_composition_artifact_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/asset_composition_artifact_set-cardinality-contract",
@@ -1602,8 +1602,8 @@
         "owner_kind": "production/reference",
         "version_family": "reference_binding_set",
         "scope_kind": "scene",
-        "scope_key_and_collection_cardinality": "exactly one Collection per p2_scope_key; scope_key is the Scene Scope Key",
-        "member_completeness": "fulfilled composition Target Scene and Interaction Bindings; phase-aware cardinality",
+        "scope_key_and_collection_cardinality": "对每个 p2_scope_key 恰 1 Collection，scope_key 即该 Scene Scope Key",
+        "member_completeness": "已履约组合 Target 的 Scene/Interaction Binding；基数见下文 phase-aware 表",
         "scope_key_rule_id": "storygraph-production/owner-collection/reference_binding_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/reference_binding_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/reference_binding_set-cardinality-contract",
@@ -1615,8 +1615,8 @@
         "owner_kind": "production/storyboard",
         "version_family": "storyboard_formal_set",
         "scope_kind": "scene",
-        "scope_key_and_collection_cardinality": "exactly one Collection per p3_scope_key; scope_key is the Scene Scope Key",
-        "member_completeness": "complete formal Shot set; exactly one ShotProductionBindingVersion per Shot; zero Draft or Intent Candidates",
+        "scope_key_and_collection_cardinality": "对每个 p3_scope_key 恰 1 Collection，scope_key 即该 Scene Scope Key",
+        "member_completeness": "完整正式 Shot 集；每个 Shot 精确 1 个 ShotProductionBindingVersion，Draft/Intent Candidate 为 0",
         "scope_key_rule_id": "storygraph-production/owner-collection/storyboard_formal_set-scope-key-contract",
         "member_contract_id": "storygraph-production/owner-collection/storyboard_formal_set-members-contract",
         "cardinality_rule_id": "storygraph-production/owner-collection/storyboard_formal_set-cardinality-contract",
