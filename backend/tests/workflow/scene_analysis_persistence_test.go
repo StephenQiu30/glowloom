@@ -955,6 +955,23 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || !reflect.DeepEqual(replayedWorld, confirmedWorld) {
 		t.Fatalf("replay Production World confirmation: got=%#v want=%#v err=%v", replayedWorld, confirmedWorld, err)
 	}
+	visualSourceService, err := worldapp.NewVisualFoundationSourceService(
+		worldgorm.NewVisualFoundationSourceRepository(database),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualSource, err := visualSourceService.Current(
+		ctx, fixture.workspaceID.String(), fixture.projectID.String(),
+	)
+	if err != nil || visualSource.CandidateRevisionID != productionWorldRevision.ID.String() ||
+		visualSource.CandidateRevision != productionWorldRevision.RevisionNo ||
+		visualSource.CandidateRevisionHash != productionWorldRevision.CandidateRevisionHash ||
+		visualSource.CandidateContentHash != productionWorld.ContentHash ||
+		visualSource.BibleCollectionRootHash == "" || visualSource.ContentHash == "" ||
+		!reflect.DeepEqual(visualSource.Candidate.SharedProof.DesignGaps, productionWorld.SharedProof.DesignGaps) {
+		t.Fatalf("load confirmed Visual Foundation source: source=%#v err=%v", visualSource, err)
+	}
 	productionGraphNode := plan.Nodes[11]
 	productionGraphResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
 		WorkflowRunID: started.ID, NodeRunID: productionGraphNode.NodeRunID, NodeID: productionGraphNode.NodeID,
