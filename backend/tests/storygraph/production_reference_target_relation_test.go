@@ -114,6 +114,124 @@ func TestProductionReferenceTargetAcceptsAllSixTargetKinds(t *testing.T) {
 	}
 }
 
+func TestProductionSceneCompositionRejectsIncompleteClosure(t *testing.T) {
+	tests := map[string]func(*storygraph.ProductionOwnerSnapshot, *storygraph.Node){
+		"Scene occurrence omitted": func(value *storygraph.ProductionOwnerSnapshot, target *storygraph.Node) {
+			occurrence := productionOccurrenceByAssetKind(t, value, "location")
+			removeProductionTargetOwnerRef(t, target, "occurrence", occurrence.OwnerRef)
+			value.Graph.Edges = removeProductionEdge(value.Graph.Edges, func(edge storygraph.Edge) bool {
+				return edge.EdgeType == storygraph.EdgeTypePlansReference && edge.FromNodeKey == occurrence.StoryNodeKey && edge.ToNodeKey == target.StoryNodeKey
+			})
+		},
+		"Scene interaction omitted": func(value *storygraph.ProductionOwnerSnapshot, target *storygraph.Node) {
+			interaction := productionInteractionNode(t, value)
+			removeProductionTargetOwnerRef(t, target, "interaction", interaction.OwnerRef)
+			value.Graph.Edges = removeProductionEdge(value.Graph.Edges, func(edge storygraph.Edge) bool {
+				return edge.EdgeType == storygraph.EdgeTypePlansReference && edge.FromNodeKey == interaction.StoryNodeKey && edge.ToNodeKey == target.StoryNodeKey
+			})
+		},
+		"base Target dependency omitted": func(value *storygraph.ProductionOwnerSnapshot, target *storygraph.Node) {
+			dependency := productionNodeByFragment(t, value, storygraph.NodeTypeReferencePlanTarget, "target:location-board")
+			removeProductionOwnerRefFromPayload(t, target, "depends_on_target_refs", dependency.OwnerRef)
+			value.Graph.Edges = removeProductionEdge(value.Graph.Edges, func(edge storygraph.Edge) bool {
+				return edge.EdgeType == storygraph.EdgeTypeDependsOnReferenceTarget && edge.FromNodeKey == dependency.StoryNodeKey && edge.ToNodeKey == target.StoryNodeKey
+			})
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			value := productionInteractionRelationFixture(t)
+			addProductionLocationRelation(t, &value)
+			addProductionAllKindReferencePlan(t, &value)
+			target := productionNodeByFragment(t, &value, storygraph.NodeTypeReferencePlanTarget, "target:scene-composition")
+			mutate(&value, target)
+			if _, err := storygraph.Canonicalize(value.Graph); err == nil {
+				t.Fatal("incomplete Scene Composition closure was accepted")
+			}
+		})
+	}
+}
+
+func TestProductionInteractionCompositionRejectsNonParticipantClosure(t *testing.T) {
+	value := productionInteractionRelationFixture(t)
+	addProductionLocationRelation(t, &value)
+	addProductionAllKindReferencePlan(t, &value)
+	target := productionNodeByFragment(t, &value, storygraph.NodeTypeReferencePlanTarget, "target:interaction-composition")
+	location := productionAssetNodeByKind(t, &value, storygraph.NodeTypeAssetIdentity, "location")
+	specification := productionAssetNodeByKind(t, &value, storygraph.NodeTypeLocationSpecification, "location")
+	state := productionAssetNodeByKind(t, &value, storygraph.NodeTypeAssetState, "location")
+	occurrence := productionOccurrenceByAssetKind(t, &value, "location")
+	dependency := productionNodeByFragment(t, &value, storygraph.NodeTypeReferencePlanTarget, "target:location-board")
+	for field, node := range map[string]*storygraph.Node{
+		"identity": location, "specification": specification, "state": state, "occurrence": occurrence,
+	} {
+		addProductionTargetOwnerRef(t, target, field, node.OwnerRef)
+	}
+	addProductionOwnerRefToPayload(t, target, "depends_on_target_refs", dependency.OwnerRef)
+	value.Graph.Edges = append(value.Graph.Edges,
+		newEdge(t, storygraph.EdgeTypePlansReference, location.StoryNodeKey, target.StoryNodeKey, storygraph.EdgeQualifier{ReferenceRole: "identity"}),
+		newEdge(t, storygraph.EdgeTypePlansReference, specification.StoryNodeKey, target.StoryNodeKey, storygraph.EdgeQualifier{ReferenceRole: "specification"}),
+		newEdge(t, storygraph.EdgeTypePlansReference, state.StoryNodeKey, target.StoryNodeKey, storygraph.EdgeQualifier{ReferenceRole: "state"}),
+		newEdge(t, storygraph.EdgeTypePlansReference, occurrence.StoryNodeKey, target.StoryNodeKey, storygraph.EdgeQualifier{ReferenceRole: "occurrence"}),
+		newEdge(t, storygraph.EdgeTypeDependsOnReferenceTarget, dependency.StoryNodeKey, target.StoryNodeKey, storygraph.EdgeQualifier{}),
+	)
+	if _, err := storygraph.Canonicalize(value.Graph); err == nil {
+		t.Fatal("non-participant Interaction Composition closure was accepted")
+	}
+}
+
+func removeProductionTargetOwnerRef(t *testing.T, target *storygraph.Node, field string, removed storygraph.OwnerRef) {
+	t.Helper()
+	mutateProductionPayload(t, target, func(payload map[string]any) {
+		ownerRefs := payload["target_owner_refs"].(map[string]any)
+		raw, err := json.Marshal(ownerRefs[field])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var refs []storygraph.OwnerRef
+		if err = json.Unmarshal(raw, &refs); err != nil {
+			t.Fatal(err)
+		}
+		result := make([]storygraph.OwnerRef, 0, len(refs))
+		for _, ref := range refs {
+			if !productionOwnerRefsEqual(ref, removed) {
+				result = append(result, ref)
+			}
+		}
+		ownerRefs[field] = result
+	})
+}
+
+func addProductionTargetOwnerRef(t *testing.T, target *storygraph.Node, field string, added storygraph.OwnerRef) {
+	t.Helper()
+	mutateProductionPayload(t, target, func(payload map[string]any) {
+		ownerRefs := payload["target_owner_refs"].(map[string]any)
+		ownerRefs[field] = appendSortedProductionOwnerRef(t, ownerRefs[field], added)
+	})
+}
+
+func addProductionOwnerRefToPayload(t *testing.T, target *storygraph.Node, field string, added storygraph.OwnerRef) {
+	t.Helper()
+	mutateProductionPayload(t, target, func(payload map[string]any) {
+		payload[field] = appendSortedProductionOwnerRef(t, payload[field], added)
+	})
+}
+
+func appendSortedProductionOwnerRef(t *testing.T, value any, added storygraph.OwnerRef) []storygraph.OwnerRef {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var refs []storygraph.OwnerRef
+	if err = json.Unmarshal(raw, &refs); err != nil {
+		t.Fatal(err)
+	}
+	refs = append(refs, added)
+	sortProductionOwnerRefs(refs)
+	return refs
+}
+
 func productionReferenceTargetFixture(t *testing.T) (storygraph.ProductionOwnerSnapshot, *storygraph.Node) {
 	t.Helper()
 	value, _ := productionAssetVersionFixture(t)

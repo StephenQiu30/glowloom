@@ -79,7 +79,7 @@ func TestProductionInteractionReferenceBindingAcceptsExactTargetClosure(t *testi
 	}
 }
 
-func TestProductionInteractionReferenceBindingRejectsTargetOutsideClaimClosure(t *testing.T) {
+func TestProductionInteractionReferenceTargetRejectsOutsideClaimClosure(t *testing.T) {
 	value, binding := productionInteractionReferenceBindingFixture(t)
 	target := productionNodeByFragment(t, &value, storygraph.NodeTypeReferencePlanTarget, "target:interaction-composition")
 	location := productionAssetNodeByKind(t, &value, storygraph.NodeTypeAssetIdentity, "location")
@@ -131,11 +131,8 @@ func TestProductionInteractionReferenceBindingRejectsTargetOutsideClaimClosure(t
 	withoutBinding.Graph.Edges = removeProductionEdge(withoutBinding.Graph.Edges, func(edge storygraph.Edge) bool {
 		return edge.FromNodeKey == binding.StoryNodeKey || edge.ToNodeKey == binding.StoryNodeKey
 	})
-	if _, err := storygraph.Canonicalize(withoutBinding.Graph); err != nil {
-		t.Fatalf("expanded Target fixture is not independently valid: %v", err)
-	}
-	if _, err := storygraph.Canonicalize(value.Graph); err == nil {
-		t.Fatal("Interaction Reference Binding accepted a Target outside its Claim participant closure")
+	if _, err := storygraph.Canonicalize(withoutBinding.Graph); err == nil {
+		t.Fatal("Interaction Composition Target accepted inputs outside its Claim participant closure")
 	}
 }
 

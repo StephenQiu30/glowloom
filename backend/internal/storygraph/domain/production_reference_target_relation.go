@@ -96,6 +96,11 @@ func validateProductionReferenceTargetRelations(nodes []Node, edges []Edge) erro
 			return err
 		}
 	}
+	for _, resolution := range resolutions {
+		if err := validateProductionCompositionTargetClosure(nodes, resolution, resolutions, refIndex, bindingTriples); err != nil {
+			return err
+		}
+	}
 	return validateProductionReferenceTargetEdges(edges, nodeByKey, expected)
 }
 
@@ -367,6 +372,259 @@ func validateProductionReferenceTargetDependencies(
 		}
 	}
 	return nil
+}
+
+type productionCompositionTriple struct {
+	asset, specification, state string
+}
+
+type productionCompositionClosure struct {
+	identities     map[string]struct{}
+	specifications map[string]struct{}
+	states         map[string]struct{}
+	assetKinds     map[string]string
+	scenes         map[string]struct{}
+	occurrences    map[string]struct{}
+	interactions   map[string]struct{}
+	triples        map[string]productionCompositionTriple
+}
+
+func validateProductionCompositionTargetClosure(
+	nodes []Node,
+	target productionReferenceTargetResolution,
+	targets map[string]productionReferenceTargetResolution,
+	refIndex map[string][]Node,
+	bindingTriples map[string]struct{},
+) error {
+	if !oneOf(target.payload.TargetKind, "scene_composition", "interaction_composition") {
+		return nil
+	}
+	closure := newProductionCompositionClosure()
+	var err error
+	if target.payload.TargetKind == "scene_composition" {
+		closure, err = buildProductionSceneCompositionClosure(nodes, target.ownerNodes.scene[0], refIndex, bindingTriples)
+	} else {
+		closure, err = buildProductionInteractionCompositionClosure(nodes, target.ownerNodes.interaction[0], refIndex, bindingTriples)
+	}
+	if err != nil || !productionNodeSetEquals(closure.identities, target.ownerNodes.identity) ||
+		!productionNodeSetEquals(closure.specifications, target.ownerNodes.specification) ||
+		!productionNodeSetEquals(closure.states, target.ownerNodes.state) ||
+		!productionNodeSetEquals(closure.scenes, target.ownerNodes.scene) ||
+		!productionNodeSetEquals(closure.occurrences, target.ownerNodes.occurrence) ||
+		!productionNodeSetEquals(closure.interactions, target.ownerNodes.interaction) {
+		return errors.New("reference_target_input_mismatch")
+	}
+	return validateProductionCompositionDependencies(target, targets, refIndex, closure.triples)
+}
+
+func newProductionCompositionClosure() productionCompositionClosure {
+	return productionCompositionClosure{
+		identities: make(map[string]struct{}), specifications: make(map[string]struct{}), states: make(map[string]struct{}),
+		assetKinds: make(map[string]string),
+		scenes:     make(map[string]struct{}), occurrences: make(map[string]struct{}), interactions: make(map[string]struct{}),
+		triples: make(map[string]productionCompositionTriple),
+	}
+}
+
+func buildProductionSceneCompositionClosure(
+	nodes []Node,
+	scene Node,
+	refIndex map[string][]Node,
+	bindingTriples map[string]struct{},
+) (productionCompositionClosure, error) {
+	closure := newProductionCompositionClosure()
+	closure.scenes[scene.StoryNodeKey] = struct{}{}
+	sceneRef, err := productionOwnerNodeRefFromOwner(scene.OwnerRef)
+	if err != nil {
+		return productionCompositionClosure{}, err
+	}
+	for _, node := range nodes {
+		switch node.NodeType {
+		case NodeTypeOccurrence:
+			var payload productionOccurrencePayload
+			if decodeStrictObject(node.Payload, &payload) != nil {
+				return productionCompositionClosure{}, errors.New("reference_target_input_mismatch")
+			}
+			if productionRefsEqual(payload.SceneRef, sceneRef) {
+				if err := addProductionOccurrenceToClosure(&closure, node, nodes, refIndex, bindingTriples); err != nil {
+					return productionCompositionClosure{}, err
+				}
+			}
+		case NodeTypeContinuityClaim:
+			var branch struct {
+				ClaimType string `json:"claim_type"`
+			}
+			if json.Unmarshal(node.Payload, &branch) != nil || branch.ClaimType != "interaction" {
+				continue
+			}
+			var payload productionInteractionPayload
+			if decodeStrictObject(node.Payload, &payload) != nil {
+				return productionCompositionClosure{}, errors.New("reference_target_input_mismatch")
+			}
+			if productionRefsEqual(payload.SceneRef, sceneRef) {
+				closure.interactions[node.StoryNodeKey] = struct{}{}
+			}
+		}
+	}
+	locationTriples := make(map[string]struct{})
+	for _, triple := range closure.triples {
+		if closure.assetKinds[triple.asset] == "location" {
+			locationTriples[productionBindingTripleKey(triple.asset, triple.specification, triple.state)] = struct{}{}
+		}
+	}
+	if len(locationTriples) != 1 {
+		return productionCompositionClosure{}, errors.New("reference_target_input_mismatch")
+	}
+	return closure, nil
+}
+
+func buildProductionInteractionCompositionClosure(
+	nodes []Node,
+	interaction Node,
+	refIndex map[string][]Node,
+	bindingTriples map[string]struct{},
+) (productionCompositionClosure, error) {
+	closure := newProductionCompositionClosure()
+	var payload productionInteractionPayload
+	if decodeStrictObject(interaction.Payload, &payload) != nil || payload.ClaimType != "interaction" {
+		return productionCompositionClosure{}, errors.New("reference_target_input_mismatch")
+	}
+	scene, err := resolveProductionNodeRef(refIndex, payload.SceneRef, NodeTypeScene)
+	if err != nil {
+		return productionCompositionClosure{}, errors.New("reference_target_input_mismatch")
+	}
+	closure.scenes[scene.StoryNodeKey] = struct{}{}
+	closure.interactions[interaction.StoryNodeKey] = struct{}{}
+	participantRefs := append([]productionOwnerNodeRef(nil), payload.ActorOccurrenceRefs...)
+	participantRefs = append(participantRefs, payload.PropOccurrenceRef)
+	if payload.CounterpartyOccurrenceRef != nil {
+		participantRefs = append(participantRefs, *payload.CounterpartyOccurrenceRef)
+	}
+	for _, ref := range participantRefs {
+		occurrence, resolveErr := resolveProductionNodeRef(refIndex, ref, NodeTypeOccurrence)
+		if resolveErr != nil || addProductionOccurrenceToClosure(&closure, occurrence, nodes, refIndex, bindingTriples) != nil {
+			return productionCompositionClosure{}, errors.New("reference_target_input_mismatch")
+		}
+	}
+	return closure, nil
+}
+
+func addProductionOccurrenceToClosure(
+	closure *productionCompositionClosure,
+	occurrence Node,
+	nodes []Node,
+	refIndex map[string][]Node,
+	bindingTriples map[string]struct{},
+) error {
+	var payload productionOccurrencePayload
+	if decodeStrictObject(occurrence.Payload, &payload) != nil {
+		return errors.New("reference_target_input_mismatch")
+	}
+	asset, assetErr := resolveProductionNodeRef(refIndex, payload.AssetIdentityRef, NodeTypeAssetIdentity)
+	state, stateErr := resolveProductionNodeRef(refIndex, payload.AssetStateRef, NodeTypeAssetState)
+	if assetErr != nil || stateErr != nil {
+		return errors.New("reference_target_input_mismatch")
+	}
+	var assetPayload productionAuditableAssetPayload
+	if decodeStrictObject(asset.Payload, &assetPayload) != nil {
+		return errors.New("reference_target_input_mismatch")
+	}
+	var specifications []Node
+	for _, node := range nodes {
+		if slices.Contains([]NodeType{NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification}, node.NodeType) &&
+			productionBindingTripleExists(bindingTriples, asset.StoryNodeKey, node.StoryNodeKey, state.StoryNodeKey) {
+			specifications = append(specifications, node)
+		}
+	}
+	if len(specifications) != 1 {
+		return errors.New("ambiguous_production_binding")
+	}
+	specification := specifications[0]
+	closure.identities[asset.StoryNodeKey] = struct{}{}
+	closure.assetKinds[asset.StoryNodeKey] = assetPayload.AssetKind
+	closure.specifications[specification.StoryNodeKey] = struct{}{}
+	closure.states[state.StoryNodeKey] = struct{}{}
+	closure.occurrences[occurrence.StoryNodeKey] = struct{}{}
+	key := productionBindingTripleKey(asset.StoryNodeKey, specification.StoryNodeKey, state.StoryNodeKey)
+	closure.triples[key] = productionCompositionTriple{asset: asset.StoryNodeKey, specification: specification.StoryNodeKey, state: state.StoryNodeKey}
+	return nil
+}
+
+func validateProductionCompositionDependencies(
+	target productionReferenceTargetResolution,
+	targets map[string]productionReferenceTargetResolution,
+	refIndex map[string][]Node,
+	triples map[string]productionCompositionTriple,
+) error {
+	if target.payload.Fulfillment == "not_generated" {
+		return nil
+	}
+	expected := make(map[string]struct{}, len(triples))
+	for _, triple := range triples {
+		var matches []productionReferenceTargetResolution
+		for _, candidate := range targets {
+			if candidate.planKey == target.planKey && productionBaseReferenceTargetKind(candidate.payload.TargetKind) &&
+				len(candidate.ownerNodes.identity) == 1 && candidate.ownerNodes.identity[0].StoryNodeKey == triple.asset &&
+				len(candidate.ownerNodes.specification) == 1 && candidate.ownerNodes.specification[0].StoryNodeKey == triple.specification &&
+				len(candidate.ownerNodes.state) == 1 && candidate.ownerNodes.state[0].StoryNodeKey == triple.state &&
+				productionStringsIntersect(candidate.payload.CoverageScopeKeys, target.payload.CoverageScopeKeys) {
+				matches = append(matches, candidate)
+			}
+		}
+		if len(matches) != 1 {
+			return errors.New("reference_target_input_mismatch")
+		}
+		expected[matches[0].node.StoryNodeKey] = struct{}{}
+	}
+	observed := make(map[string]struct{}, len(target.payload.DependsOnTargetRefs))
+	for _, ref := range target.payload.DependsOnTargetRefs {
+		node, err := resolveProductionNodeRef(refIndex, ref, NodeTypeReferencePlanTarget)
+		if err != nil {
+			return errors.New("reference_target_input_mismatch")
+		}
+		observed[node.StoryNodeKey] = struct{}{}
+	}
+	if !productionStringSetEquals(expected, observed) {
+		return errors.New("reference_target_input_mismatch")
+	}
+	return nil
+}
+
+func productionNodeSetEquals(expected map[string]struct{}, observed []Node) bool {
+	if len(expected) != len(observed) {
+		return false
+	}
+	for _, node := range observed {
+		if _, exists := expected[node.StoryNodeKey]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func productionStringSetEquals(left, right map[string]struct{}) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for value := range left {
+		if _, exists := right[value]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func productionStringsIntersect(left, right []string) bool {
+	values := make(map[string]struct{}, len(left))
+	for _, value := range left {
+		values[value] = struct{}{}
+	}
+	for _, value := range right {
+		if _, exists := values[value]; exists {
+			return true
+		}
+	}
+	return false
 }
 
 func addProductionReferenceTargetInputEdges(expected map[productionRelationEdge]struct{}, value productionReferenceTargetResolution) {
