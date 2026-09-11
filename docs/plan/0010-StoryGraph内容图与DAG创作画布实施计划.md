@@ -131,6 +131,7 @@
   - [x] 固定单一 Approved Reference Plan 内六类 Target 的字段闭集、输入类型/基数、Scene Scope、ProductionBinding、业务唯一键与 fulfillment rank；每个 Target 必须有唯一 Plan 父级，且 `plans_reference`、`constrains`、`depends_on_reference_target` Edge 与 Payload 精确等价。
   - [x] 固定 `SceneReferenceBindingVersion` 字段闭集，并要求 Scene/Occurrence/Interaction、Character/Location/Prop AssetVersion 三元组、基础 Target 依赖、Composition Artifact、Scene Composition Target 与 Constraint 逐项等价；`binds_reference_input|output`、`fulfills_reference_target` 和 `constrains` Edge 必须精确投影 Payload。
   - [x] 固定 `InteractionReferenceBindingVersion` 字段闭集，并要求唯一 InteractionClaim、actor/prop/counterparty Occurrence 闭包、Character/Prop AssetVersion、基础 Target 依赖、Composition Artifact、Interaction Composition Target 与 Constraint 逐项等价；全部 Reference Binding Edge 必须精确投影 Payload。
+  - [x] 固定正式 `Shot` 字段闭集，要求 `source_beat_refs[1..n]` 排序去重且全部属于同一 Scene，`realizes` Edge 与来源 Beat 精确等价；同 Scene Shot 必须形成无分叉、无环、SequenceKey 严格递增的完整 `precedes` 链。
   - [x] 固定跨 Owner 共用的 `OwnerVersionRef`、Scope、Member 与 Collection Root 内容寻址算法，并让 production Compiler 实际复用；StoryGraph 编译前像不再写入投影时间戳或另一套字段名/Schema 包装。
   - [x] 让各正式 Owner Writer 逐一改用同一 Root 算法，再由完整 Owner Apply Receipt 形成 `VerifiedCoverageProof`；Compiler 逐 Receipt 对账正式 Collection Root、成员、Checkpoint 与 Coverage Scope 并持久化完整可重算前像，不把 Receipt Hash 与 Collection Root 混为一谈。
     - [x] `production/script` 在接受 Source Revision 时以匹配的 SourceSpanIndexVersion 生成精确 `script_source_set`，持久化共享成员前像与 Root；Compiler 同事务重读正式 Receipt 并重算全等。
