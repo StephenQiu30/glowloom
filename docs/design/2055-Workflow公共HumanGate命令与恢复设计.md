@@ -330,8 +330,7 @@ Gate 2 不创建 Preset、Reference Plan、AssetVersion、Generation Target、St
 Gate3VisualFoundationScopeSubjectProduction
 ├── confirmed_production_world_read_set_root
 ├── preset_version_ref / project_preset_binding_candidate_ref
-├── effective_style_candidate_revision_ref
-├── effective_policy_candidate_revision_ref
+├── visual_foundation_candidate_revision_ref
 ├── reference_plan_candidate_revision_ref
 ├── design_gap_decision_manifest_ref
 ├── world_adaptation_mapping_refs[]
@@ -347,6 +346,8 @@ approved 调用 `ConfirmVisualFoundationAndReferencePlanCommand`，在同一事�
 - Backend 重算 expected Target business key 集与 Candidate Plan 全等；
 - source fact → world adaptation mapping 和 typed override 完整进入审计；
 - 分别写 Owner Collection/Command Receipts 与 Outbox。
+
+Gate 3 之前只有一个已持久化 VisualFoundationCandidate Revision；不存在独立的 EffectiveStyleCandidate 或 EffectivePolicyCandidate，也不预留正式 Snapshot Ref。Subject 和命令必须重读该精确 Revision/hash/候选内容，批准事务再从同一候选发布两个 Effective Snapshot，避免 Reference Plan 输入依赖未来 Owner。
 
 Gate 3 不调用 Provider、不生成图片、不选择 Candidate。Preset 不支持 Target kind/view role 时必须在 Gate Input/Review View 中形成 `preset_capability_missing` semantic blocker；Task 可以开放 changes_requested/rejected，但 `allowed_decisions[]` 必须移除 approved。用户通过 changes_requested 改 Preset/Scope并取得新 Candidate/Task，不能 approved 后静默 fallback。
 

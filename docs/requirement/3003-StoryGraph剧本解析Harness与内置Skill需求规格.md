@@ -102,7 +102,7 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 | review_candidate | profile-bound candidate + rubric | ReviewCandidate | Apply、选择媒体、自由修复 |
 | repair_candidate | candidate + typed issues + allowlist | 新 CandidateRevision | 原地 patch、越界字段修改 |
 | resolve_visual_foundation | Gate 2 versions + WorldPresetRelease | VisualFoundationCandidate | 改写剧情事实、Provider 调用 |
-| plan_reference_assets | foundation + production world + Backend seed inventory | ReferencePlanCandidate | 删除/增加/改名 expected Target、改写 Owner Ref、媒体生成 |
+| plan_reference_assets | exact VisualFoundationCandidate revision/hash/content + production world + Backend seed inventory | ReferencePlanCandidate | 删除/增加/改名 expected Target、改写 Owner Ref、预 Gate 3 Effective Snapshot、媒体生成 |
 | compile_reference_brief | approved plan + exact dependencies | strict ReferenceBriefCandidate | 自由 prompt、Secret、latest |
 | review_reference_artifact | Bundle ref + restricted media reads | VisionReviewCandidate | 选择 Bundle、写 Asset、Provider 调用 |
 | direct_storyboard | ProductionPacketVersion | StoryboardCandidate | needs_asset、联网搜索、正式 Shot 写入 |

@@ -449,6 +449,8 @@ Agent 的 `script_structure_proposal_production` 只使用临时 span keys 和�
 
 `plan_reference_assets` 的 Normalizer 采用同一边界：Input 中的 seed inventory 是 Backend 从正式 StoryGraph 编译的不可变前像，Agent 不能将它作为可编辑 Target 数组。Character Anchor 的最终 State 只有 Candidate 返回后才可确定，因此 Input 冻结 Identity-only Anchor key 与完整实际 State options；其他固定种子保存 Backend 已知业务键和完整 production closure。Normalizer 校验 Anchor option 后生成最终 expected key set，把 Candidate 的 fulfillment/用途提案投影到 Backend-owned Owner Ref、coverage、constraints 与 dependencies，并执行 set equality。Candidate 内容可以进入 Human Review，但在 Gate 3 原子发布前不形成正式 Reference Plan Owner。
 
+该 Stage 的视觉输入固定为已持久化 `VisualFoundationCandidate` 的精确 Revision/hash 与严格候选快照。Backend 从 Candidate Repository 重读并逐字节校验后才可编译 Invocation；Python Harness 只消费快照，不查询数据库。Gate 3 前不存在可供引用的 EffectiveStyleSnapshot/EffectivePolicySnapshot，二者在批准事务中由同一 VisualFoundationCandidate 发布。
+
 ### 8.2 Scene Fact 与 Identity
 
 SceneFact 必须 style-blind，使用 `RawMentionRef`、`StateClue` 和 `InteractionFact`；Candidate Evidence 保留 SourceSpanIndexVersion 与四元组，直到 Gate 2 才由 Bible Owner 物化正式 `source_evidence`。普通 upstream ref 不能替代 Evidence。
