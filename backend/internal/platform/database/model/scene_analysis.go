@@ -19,14 +19,14 @@ var (
 
 type SceneAnalysisRelease struct {
 	ID                  uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	StageKey            string         `gorm:"type:varchar(64);not null;uniqueIndex:uq_agt_scene_release_variant,priority:1;check:ck_agt_scene_release_stage,stage_key IN ('propose_script_spans','extract_scene_facts','resolve_identities','review_candidate','derive_production_entities','bind_scene_occurrences','reconcile_interaction_continuity')"`
+	StageKey            string         `gorm:"type:varchar(64);not null;uniqueIndex:uq_agt_scene_release_variant,priority:1;check:ck_agt_scene_release_stage,stage_key IN ('propose_script_spans','extract_scene_facts','resolve_identities','review_candidate','derive_production_entities','bind_scene_occurrences','reconcile_interaction_continuity','resolve_visual_foundation')"`
 	ProfileKey          string         `gorm:"type:varchar(64);not null;uniqueIndex:uq_agt_scene_release_variant,priority:2;check:ck_agt_scene_release_profile,(stage_key = 'review_candidate' AND profile_key = 'structure_identity') OR (stage_key <> 'review_candidate' AND profile_key = 'default')"`
 	SkillReleaseID      uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_agt_scene_release_variant,priority:3"`
 	SkillReleaseHash    string         `gorm:"type:char(64);not null;check:ck_agt_scene_release_skill_hash,char_length(skill_release_hash) = 64"`
 	StageReleaseHash    string         `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_scene_release_stage_hash,char_length(stage_release_hash) = 64"`
 	BundleContentHash   string         `gorm:"type:char(64);not null;check:ck_agt_scene_release_bundle_hash,char_length(bundle_content_hash) = 64"`
 	AgentImageDigest    string         `gorm:"type:varchar(71);not null"`
-	ModelCapability     string         `gorm:"type:varchar(40);not null;check:ck_agt_scene_release_capability,model_capability = 'structured_text'"`
+	ModelCapability     string         `gorm:"type:varchar(40);not null;check:ck_agt_scene_release_capability,model_capability IN ('structured_text','vision')"`
 	LoadedResourcePaths datatypes.JSON `gorm:"type:jsonb;not null;check:ck_agt_scene_release_resources,jsonb_typeof(loaded_resource_paths) = 'array'"`
 	CreatedAt           time.Time      `gorm:"type:timestamptz;not null"`
 }
@@ -64,11 +64,11 @@ type SceneAnalysisInvocationRecord struct {
 	ControlHash       string               `gorm:"type:char(64);not null;check:ck_agt_scene_invocation_control_hash,char_length(control_hash) = 64"`
 	ReleaseFence      int64                `gorm:"not null;check:ck_agt_scene_invocation_fence,release_fence >= 0"`
 	WireSchemaID      string               `gorm:"type:varchar(64);not null;check:ck_agt_scene_invocation_wire,wire_schema_id = 'storygraph-stage-wire-production'"`
-	StageKey          string               `gorm:"type:varchar(64);not null;uniqueIndex:uq_agt_scene_invocation_node_input,priority:3;check:ck_agt_scene_invocation_stage,stage_key IN ('propose_script_spans','extract_scene_facts','resolve_identities','review_candidate','derive_production_entities','bind_scene_occurrences','reconcile_interaction_continuity')"`
+	StageKey          string               `gorm:"type:varchar(64);not null;uniqueIndex:uq_agt_scene_invocation_node_input,priority:3;check:ck_agt_scene_invocation_stage,stage_key IN ('propose_script_spans','extract_scene_facts','resolve_identities','review_candidate','derive_production_entities','bind_scene_occurrences','reconcile_interaction_continuity','resolve_visual_foundation')"`
 	ProfileKey        string               `gorm:"type:varchar(64);not null;check:ck_agt_scene_invocation_profile,(stage_key = 'review_candidate' AND profile_key = 'structure_identity') OR (stage_key <> 'review_candidate' AND profile_key = 'default')"`
 	StageInstanceKey  string               `gorm:"type:char(64);not null;uniqueIndex;check:ck_agt_scene_invocation_key,char_length(stage_instance_key) = 64"`
 	InputHash         string               `gorm:"type:char(64);not null;uniqueIndex:uq_agt_scene_invocation_node_input,priority:4;check:ck_agt_scene_invocation_input_hash,char_length(input_hash) = 64"`
-	SourceVersionID   uuid.UUID            `gorm:"type:uuid;not null"`
+	SourceVersionID   *uuid.UUID           `gorm:"type:uuid;check:ck_agt_scene_invocation_source,(stage_key = 'resolve_visual_foundation' AND source_version_id IS NULL) OR (stage_key <> 'resolve_visual_foundation' AND source_version_id IS NOT NULL)"`
 	SourceHash        string               `gorm:"type:char(64);not null;check:ck_agt_scene_invocation_source_hash,char_length(source_hash) = 64"`
 	ShardManifestID   uuid.UUID            `gorm:"type:uuid;not null"`
 	ShardManifestHash string               `gorm:"type:char(64);not null;check:ck_agt_scene_invocation_manifest_hash,char_length(shard_manifest_hash) = 64"`
@@ -83,7 +83,7 @@ type SceneAnalysisInvocationRecord struct {
 	WorkflowRun       WorkflowRun          `gorm:"foreignKey:WorkflowRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	NodeRun           NodeRunProjection    `gorm:"foreignKey:NodeRunID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	Release           SceneAnalysisRelease `gorm:"foreignKey:ReleaseID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
-	SourceVersion     DocumentRevision     `gorm:"foreignKey:SourceVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SourceVersion     *DocumentRevision    `gorm:"foreignKey:SourceVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (SceneAnalysisInvocationRecord) TableName() string { return "agt_scene_analysis_invocations" }
@@ -174,7 +174,7 @@ type SceneAnalysisCandidateRevision struct {
 	ProjectID             uuid.UUID                     `gorm:"type:uuid;not null;index:ix_agt_scene_candidate_project_created,priority:1"`
 	StageInstanceKey      string                        `gorm:"type:char(64);not null;uniqueIndex:uq_agt_scene_candidate_stage_revision,priority:1;check:ck_agt_scene_candidate_key,char_length(stage_instance_key) = 64"`
 	RevisionNo            int64                         `gorm:"not null;uniqueIndex:uq_agt_scene_candidate_stage_revision,priority:2;check:ck_agt_scene_candidate_revision,revision_no >= 1"`
-	CandidateType         string                        `gorm:"type:varchar(80);not null;check:ck_agt_scene_candidate_type,candidate_type IN ('script_span_candidate','scene_fact_candidate','identity_resolution_candidate','structure_identity_review_candidate','production_entity_fragment_candidate','scene_binding_fragment_candidate','continuity_fragment_candidate')"`
+	CandidateType         string                        `gorm:"type:varchar(80);not null;check:ck_agt_scene_candidate_type,candidate_type IN ('script_span_candidate','scene_fact_candidate','identity_resolution_candidate','structure_identity_review_candidate','production_entity_fragment_candidate','scene_binding_fragment_candidate','continuity_fragment_candidate','visual_foundation_candidate')"`
 	SourceInvocationID    uuid.UUID                     `gorm:"type:uuid;not null;uniqueIndex"`
 	SourceResultID        uuid.UUID                     `gorm:"type:uuid;not null;uniqueIndex"`
 	SourceResultHash      string                        `gorm:"type:char(64);not null;check:ck_agt_scene_candidate_result_hash,char_length(source_result_hash) = 64"`

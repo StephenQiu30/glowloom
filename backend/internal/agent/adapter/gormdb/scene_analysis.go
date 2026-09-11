@@ -19,7 +19,10 @@ import (
 )
 
 type SceneAnalysisStore struct{ database *gorm.DB }
-type sceneAnalysisRepository struct{ database *gorm.DB }
+type sceneAnalysisRepository struct {
+	database                  *gorm.DB
+	visualFoundationValidator VisualFoundationInputValidator
+}
 
 func NewSceneAnalysisStore(database *gorm.DB) *SceneAnalysisStore {
 	return &SceneAnalysisStore{database: database}
@@ -281,7 +284,7 @@ func (repo *sceneAnalysisRepository) validateResultReadSet(
 	source := request.Payload.SourceRefs[0]
 	sourceVersionID, versionErr := uuid.Parse(source.VersionID)
 	documentID, documentErr := uuid.Parse(source.LogicalID)
-	if versionErr != nil || documentErr != nil || invocation.SourceVersionID != sourceVersionID ||
+	if versionErr != nil || documentErr != nil || invocation.SourceVersionID == nil || *invocation.SourceVersionID != sourceVersionID ||
 		invocation.SourceHash != source.ContentHash {
 		return staleSceneAnalysisReadSet()
 	}
@@ -651,7 +654,7 @@ func sceneAnalysisInvocationRecord(value agentapp.InvocationRecord) (model.Scene
 		ControlHash: invocation.Control.ControlHash, ReleaseFence: invocation.Control.ReleaseFence,
 		WireSchemaID: invocation.WireSchemaVersion, StageKey: invocation.Payload.Variant.StageKey,
 		ProfileKey: invocation.Payload.Variant.ProfileKey, StageInstanceKey: invocation.StageInstanceKey(),
-		InputHash: invocation.InputHash, SourceVersionID: parsed[7], SourceHash: value.SourceHash,
+		InputHash: invocation.InputHash, SourceVersionID: &parsed[7], SourceHash: value.SourceHash,
 		ShardManifestID: parsed[8], ShardManifestHash: value.Manifest.ManifestHash,
 		ShardKey: invocation.Payload.Shard.ShardKey, Payload: datatypes.JSON(payload), Budget: datatypes.JSON(budget),
 		Status: "queued", CreatedAt: value.CreatedAt, UpdatedAt: value.CreatedAt,
@@ -774,6 +777,9 @@ func (repo *sceneAnalysisRepository) invocationDomain(
 	ctx context.Context,
 	record model.SceneAnalysisInvocationRecord,
 ) (agentapp.InvocationRecord, error) {
+	if record.SourceVersionID == nil {
+		return agentapp.InvocationRecord{}, errors.New("persisted Scene Analysis invocation lacks its source version")
+	}
 	var release model.SceneAnalysisRelease
 	if err := repo.database.WithContext(ctx).First(&release, "id = ?", record.ReleaseID).Error; err != nil {
 		return agentapp.InvocationRecord{}, err

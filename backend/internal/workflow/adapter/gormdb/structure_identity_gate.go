@@ -243,7 +243,7 @@ func loadStructureIdentityCandidate(
 		binding.ContentHash != record.CandidateRevisionHash || invocation.ID != record.SourceInvocationID ||
 		invocation.WorkspaceID != run.WorkspaceID || invocation.ProjectID != run.ProjectID ||
 		invocation.WorkflowRunID != run.ID || invocation.StageKey != stageKey || invocation.ShardKey != "script:full" ||
-		invocation.SourceVersionID.String() != source.VersionID || invocation.SourceHash != source.ContentHash ||
+		invocation.SourceVersionID == nil || invocation.SourceVersionID.String() != source.VersionID || invocation.SourceHash != source.ContentHash ||
 		invocation.Status != "accepted" {
 		return structureIdentityCandidate{}, errors.New("structure identity Gate Candidate lineage has drifted")
 	}

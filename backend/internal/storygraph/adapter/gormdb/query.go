@@ -82,6 +82,42 @@ func (store *Store) GetCurrentOwnerSetHash(ctx context.Context, actor storygraph
 	return ownerSetHash, err
 }
 
+// GetCurrentVisualFoundationWorld is the authorization-free worker query for a
+// Backend-owned invocation transaction. Public callers must use QueryService.
+func (store *Store) GetCurrentVisualFoundationWorld(
+	ctx context.Context,
+	workspaceID string,
+	projectID string,
+) (storygraph.VisualFoundationWorldReadSet, error) {
+	workspace, workspaceErr := uuid.Parse(workspaceID)
+	project, projectErr := uuid.Parse(projectID)
+	if workspaceErr != nil || projectErr != nil || workspace == uuid.Nil || project == uuid.Nil {
+		return storygraph.VisualFoundationWorldReadSet{}, errors.New("invalid Visual Foundation worker scope")
+	}
+	var head model.StoryGraphHead
+	if err := store.database.WithContext(ctx).Where(
+		"workspace_id = ? AND project_id = ?", workspace, project,
+	).First(&head).Error; err != nil {
+		return storygraph.VisualFoundationWorldReadSet{}, normalizeNotFound(err)
+	}
+	version, err := store.versionForProject(ctx, workspace, project, head.CurrentVersionID)
+	if err != nil {
+		return storygraph.VisualFoundationWorldReadSet{}, err
+	}
+	if version.VersionNo != head.Revision || version.ContentHash != head.CurrentContentHash {
+		return storygraph.VisualFoundationWorldReadSet{}, errors.New("StoryGraph head does not match its current immutable version")
+	}
+	repo := &repository{database: store.database}
+	ownerSetHash, err := store.currentProductionOwnerSetHash(ctx, repo, workspace, project)
+	if err != nil {
+		return storygraph.VisualFoundationWorldReadSet{}, err
+	}
+	if ownerSetHash == "" || ownerSetHash != version.OwnerSetHash {
+		return storygraph.VisualFoundationWorldReadSet{}, errors.New("Production World changed before Visual Foundation Candidate acceptance")
+	}
+	return storygraph.BuildVisualFoundationWorldReadSet(version)
+}
+
 func (store *Store) currentProductionOwnerSetHash(
 	ctx context.Context,
 	repo *repository,

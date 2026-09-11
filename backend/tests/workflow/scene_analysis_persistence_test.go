@@ -1071,6 +1071,93 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		len(visualInput.DesignGaps) != 0 || len(visualInput.ReferenceAttachments) != 0 {
 		t.Fatalf("compile faithful Visual Foundation input: input=%#v err=%v", visualInput, err)
 	}
+	visualNodeRunID := uuid.New()
+	if err = database.Create(&model.NodeRunProjection{
+		ID: visualNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: uuid.MustParse(started.ID),
+		NodeID: "visual-foundation", DefinitionKey: "resolve_visual_foundation",
+		DefinitionVersion: "2026.09.12", Executor: "activity.resolve_visual_foundation",
+		RiskLevel: "external_ai", Status: "RUNNING", Attempt: 1, Revision: 1,
+		CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed Visual Foundation node projection: %v", err)
+	}
+	visualStore, err := agentgorm.NewVisualFoundationStore(
+		database,
+		workflowgorm.ValidateCurrentVisualFoundationInput,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualRuntime := &deterministicVisualFoundationRuntime{now: now}
+	visualService, err := agentapp.NewVisualFoundationExecutionService(
+		visualStore,
+		visualRuntime,
+		dispatchSigner,
+		agentapp.VisualFoundationExecutionConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 7),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualCandidate, err := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: visualInput,
+		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
+	})
+	if err != nil || visualCandidate.StageKey != contract.VisualFoundationStageKey ||
+		visualCandidate.CandidateType != "visual_foundation_candidate" ||
+		visualCandidate.ProjectID != fixture.projectID.String() || visualRuntime.calls != 1 {
+		t.Fatalf("persist Visual Foundation Candidate: candidate=%#v calls=%d err=%v", visualCandidate, visualRuntime.calls, err)
+	}
+	replayedVisualCandidate, err := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: visualInput,
+		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
+	})
+	if err != nil || replayedVisualCandidate.ID != visualCandidate.ID ||
+		replayedVisualCandidate.CandidateRevisionHash != visualCandidate.CandidateRevisionHash || visualRuntime.calls != 1 {
+		t.Fatalf("replay Visual Foundation Candidate: got=%#v want=%#v calls=%d err=%v", replayedVisualCandidate, visualCandidate, visualRuntime.calls, err)
+	}
+	var visualRelease model.SceneAnalysisRelease
+	if err = database.First(&visualRelease, "stage_key = ?", contract.VisualFoundationStageKey).Error; err != nil ||
+		visualRelease.ModelCapability != "vision" {
+		t.Fatalf("persisted Visual Foundation Release: release=%#v err=%v", visualRelease, err)
+	}
+	var visualInvocation model.SceneAnalysisInvocationRecord
+	if err = database.First(&visualInvocation, "id = ?", visualCandidate.SourceInvocationID).Error; err != nil ||
+		visualInvocation.StageKey != contract.VisualFoundationStageKey || visualInvocation.SourceVersionID != nil ||
+		visualInvocation.SourceHash != visualInput.ProductionWorldOwnerSetHash || visualInvocation.Status != "accepted" {
+		t.Fatalf("persisted Visual Foundation Invocation: invocation=%#v err=%v", visualInvocation, err)
+	}
+	var visualAttempt model.SceneAnalysisAttempt
+	if err = database.First(&visualAttempt, "invocation_id = ?", visualInvocation.ID).Error; err != nil {
+		t.Fatalf("persisted Visual Foundation Attempt: %v", err)
+	}
+	for _, check := range []struct {
+		model any
+		query string
+		value any
+	}{
+		{&model.ShardManifest{}, "id = ?", visualInvocation.ShardManifestID},
+		{&model.SceneAnalysisAttempt{}, "invocation_id = ?", visualInvocation.ID},
+		{&model.SceneAnalysisDispatchAuthorization{}, "attempt_id = ?", visualAttempt.ID},
+		{&model.SceneAnalysisResult{}, "attempt_id = ?", visualAttempt.ID},
+		{&model.SceneAnalysisCandidateRevision{}, "source_invocation_id = ?", visualInvocation.ID},
+		{&model.SceneAnalysisCandidateHead{}, "stage_instance_key = ?", visualInvocation.StageInstanceKey},
+	} {
+		var count int64
+		if countErr := database.Model(check.model).Where(check.query, check.value).Count(&count).Error; countErr != nil || count != 1 {
+			t.Fatalf("Visual Foundation persistence %T count=%d err=%v", check.model, count, countErr)
+		}
+	}
+	driftedVisualInput := visualInput
+	driftedVisualInput.ProductionWorldOwnerSetHash = sceneTextHash("drifted-visual-owner-set")
+	if _, driftErr := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: driftedVisualInput,
+		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
+	}); agentapp.ErrorCode(driftErr) != "stale_visual_foundation_input" || visualRuntime.calls != 1 {
+		t.Fatalf("drifted Visual Foundation input: calls=%d err=%v", visualRuntime.calls, driftErr)
+	}
 	impact, err := productionQueries.Lens(ctx, productionGraphActor, storygraphapp.LensQuery{
 		ProjectID: fixture.projectID.String(), VersionRef: storygraphapp.VersionRefCurrent,
 		Lens: "impact", ScopeKind: storygraphapp.ScopeStoryNode, ScopeID: sceneNodeKey, Depth: 4, Limit: 200,
@@ -2019,6 +2106,11 @@ type deterministicSceneAnalysisRuntime struct {
 	productionRepairNote  bool
 }
 
+type deterministicVisualFoundationRuntime struct {
+	now   time.Time
+	calls int
+}
+
 type failOnceSceneAnalysisRuntime struct {
 	calls    int
 	delegate deterministicSceneAnalysisRuntime
@@ -2082,6 +2174,63 @@ func (runtime *readSetDriftSceneAnalysisRuntime) InvokeSceneAnalysis(
 		}
 	}
 	return result, nil
+}
+
+func (runtime *deterministicVisualFoundationRuntime) Invoke(
+	_ context.Context,
+	invocation contract.VisualFoundationInvocation,
+	authorization contract.SceneAnalysisDispatchAuthorization,
+) (contract.VisualFoundationAttemptResult, error) {
+	runtime.calls++
+	input := invocation.Payload.StageInput
+	candidate, err := json.Marshal(contract.VisualFoundationCandidate{
+		WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID,
+		ProductionWorldOwnerSetHash: input.ProductionWorldOwnerSetHash,
+		PresetReleaseContentHash:    input.PresetRelease.ContentHash, ApplicationMode: input.ApplicationMode,
+		TypedOverridesHash: input.TypedOverridesHash, ReferenceAttachmentsHash: input.ReferenceAttachmentsHash,
+		FidelityInvariants: append([]string(nil), input.FidelityInvariants...),
+		StylePolicy: contract.VisualFoundationPolicy{
+			PaletteRules: []string{"neutral_city_palette"}, MaterialRules: []string{"grounded_material_response"},
+			LightingRules: []string{"motivated_cinematic_light"}, CameraRules: []string{"grounded_cinematic_camera"},
+			ForbiddenChanges: append([]string(nil), input.FidelityInvariants...),
+		},
+		WorldAdaptations: []contract.WorldAdaptationProposal{},
+		WorldConflicts:   []contract.VisualWorldConflict{}, CreativeFillProposals: []contract.CreativeFillProposal{},
+	})
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	outputHash, err := contract.ProductionCanonicalHash(candidate)
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	diagnostics := []contract.SceneAnalysisDiagnostic{}
+	diagnosticsJSON, err := json.Marshal(diagnostics)
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	diagnosticHash, err := contract.ProductionCanonicalHash(diagnosticsJSON)
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	result := contract.VisualFoundationAttemptResult{
+		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
+		Kind: "storygraph_stage", WireSchemaVersion: invocation.WireSchemaVersion,
+		Variant: invocation.Payload.Variant, StageRelease: invocation.StageRelease, Control: invocation.Control,
+		ClaimVersion: authorization.ClaimVersion, DispatchAuthorizationHash: authorization.Hash,
+		Status: "accepted", CandidateType: "visual_foundation_candidate", Candidate: candidate,
+		InputHash: invocation.InputHash, OutputHash: &outputHash,
+		Diagnostics: diagnostics, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now.Add(time.Minute),
+		Executor: contract.VisualFoundationExecutor{
+			RuntimeClass: "vision", RuntimeImageDigest: invocation.StageRelease.AgentImageDigest,
+			HarnessVersion: "visual-foundation-harness", Model: "deterministic-visual-foundation",
+		},
+	}
+	result.ResultHash, err = result.ComputeResultHash()
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
 }
 
 func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
