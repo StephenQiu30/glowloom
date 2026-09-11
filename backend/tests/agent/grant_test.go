@@ -102,3 +102,42 @@ func TestSceneAnalysisDispatchAuthorizationBindsAttemptClaimInputReleaseAndImage
 		t.Fatal("Scene Analysis grant remained valid at its expiry")
 	}
 }
+
+func TestVisualFoundationDispatchAuthorizationBindsAttemptClaimInputReleaseAndImage(t *testing.T) {
+	invocation := validVisualFoundationInvocation(t)
+	now := time.Unix(1_700_000_000, 0).UTC()
+	clock := now
+	signer, err := grant.NewSigner("a-strong-agent-execution-secret-123", func() time.Time { return clock })
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorization, err := signer.IssueVisualFoundationDispatchAuthorization(invocation, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte(authorization.Value))
+	if authorization.Hash != hex.EncodeToString(digest[:]) || authorization.ExpiresAt.IsZero() {
+		t.Fatalf("Visual Foundation authorization is not content addressed: %#v", authorization)
+	}
+	if err = signer.VerifyVisualFoundationDispatchAuthorization(authorization.Value, invocation, 1); err != nil {
+		t.Fatal(err)
+	}
+	changedAttempt := invocation
+	changedAttempt.AttemptID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	if err = signer.VerifyVisualFoundationDispatchAuthorization(authorization.Value, changedAttempt, 1); err == nil {
+		t.Fatal("Visual Foundation authorization accepted a different attempt")
+	}
+	changedImage := invocation
+	changedImage.StageRelease.AgentImageDigest = "sha256:" + strings.Repeat("9", 64)
+	changedImage.InputHash, err = changedImage.ComputeInputHash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = signer.VerifyVisualFoundationDispatchAuthorization(authorization.Value, changedImage, 1); err == nil {
+		t.Fatal("Visual Foundation authorization accepted a different runtime image")
+	}
+	clock = now.Add(grant.TTL)
+	if err = signer.VerifyVisualFoundationDispatchAuthorization(authorization.Value, invocation, 1); err == nil {
+		t.Fatal("Visual Foundation authorization remained valid at its expiry")
+	}
+}

@@ -3,12 +3,18 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"strings"
 
+	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 )
 
@@ -16,6 +22,95 @@ const maxResultBytes = 16 << 20
 
 type GrantIssuer interface {
 	Issue(contract.StageInvocation, int, int64) (string, error)
+}
+
+func (client *HTTP) InvokeVisualFoundation(
+	ctx context.Context,
+	invocation contract.VisualFoundationInvocation,
+	authorization contract.SceneAnalysisDispatchAuthorization,
+	media []agentapp.VisualFoundationMedia,
+) (contract.VisualFoundationAttemptResult, error) {
+	if err := invocation.Validate(); err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	if err := authorization.Validate(); err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	if len(media) != len(invocation.Payload.MediaAttachments) {
+		return contract.VisualFoundationAttemptResult{}, fmt.Errorf("Visual Foundation media set is incomplete")
+	}
+	runtime, err := client.runtimes.Resolve(invocation.StageRelease.BundleContentHash)
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	if runtime.ImageDigest != invocation.StageRelease.AgentImageDigest {
+		return contract.VisualFoundationAttemptResult{}, contract.ErrSkillBundleUnavailable
+	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	encoded, err := json.Marshal(invocation)
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	invocationPart, err := writer.CreateFormField("invocation")
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	if _, err = invocationPart.Write(encoded); err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	for index, value := range media {
+		attachment := invocation.Payload.MediaAttachments[index]
+		digest := sha256.Sum256(value.Contents)
+		if value.AttachmentID != attachment.AttachmentID || value.MediaType != attachment.MediaType ||
+			int64(len(value.Contents)) != attachment.ByteLength ||
+			hex.EncodeToString(digest[:]) != attachment.ContentHash {
+			return contract.VisualFoundationAttemptResult{}, fmt.Errorf("Visual Foundation media content drifted")
+		}
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{
+			"name": "media", "filename": value.AttachmentID,
+		}))
+		header.Set("Content-Type", value.MediaType)
+		part, createErr := writer.CreatePart(header)
+		if createErr != nil {
+			return contract.VisualFoundationAttemptResult{}, createErr
+		}
+		if _, createErr = part.Write(value.Contents); createErr != nil {
+			return contract.VisualFoundationAttemptResult{}, createErr
+		}
+	}
+	if err = writer.Close(); err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	endpoint := strings.TrimRight(runtime.BaseURL, "/") + "/internal/storygraph/visual-foundation/invocations"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body.Bytes()))
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("X-Lanverse-Dispatch-Authorization", authorization.Value)
+	response, err := client.client.Do(request)
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, fmt.Errorf("Visual Foundation outcome unknown: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return contract.VisualFoundationAttemptResult{}, fmt.Errorf("Visual Foundation returned HTTP %d", response.StatusCode)
+	}
+	resultBytes, err := io.ReadAll(io.LimitReader(response.Body, maxResultBytes+1))
+	if err != nil || len(resultBytes) > maxResultBytes {
+		return contract.VisualFoundationAttemptResult{}, errorsOrLimit(err)
+	}
+	result, err := contract.DecodeVisualFoundationAttemptResult(resultBytes)
+	if err != nil {
+		return contract.VisualFoundationAttemptResult{}, fmt.Errorf("decode Visual Foundation result: %w", err)
+	}
+	if err = result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash); err != nil {
+		return contract.VisualFoundationAttemptResult{}, err
+	}
+	return result, nil
 }
 
 func (client *HTTP) InvokeSceneAnalysis(

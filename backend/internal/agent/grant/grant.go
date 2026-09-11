@@ -97,18 +97,7 @@ func (signer *Signer) IssueSceneAnalysisDispatchAuthorization(
 	if err := claims.ValidateFor(invocation, claimVersion, signer.now().UTC().Unix()); err != nil {
 		return contract.SceneAnalysisDispatchAuthorization{}, err
 	}
-	payload, err := json.Marshal(claims)
-	if err != nil {
-		return contract.SceneAnalysisDispatchAuthorization{}, err
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	value := encoded + "." + signer.sceneAnalysisDispatchSignature(payload)
-	digest := sha256.Sum256([]byte(value))
-	authorization := contract.SceneAnalysisDispatchAuthorization{
-		Value: value, Hash: hex.EncodeToString(digest[:]), ClaimVersion: claimVersion,
-		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
-	}
-	return authorization, authorization.Validate()
+	return signer.encodeSceneAnalysisDispatchAuthorization(claims)
 }
 
 func (signer *Signer) VerifySceneAnalysisDispatchAuthorization(
@@ -119,25 +108,94 @@ func (signer *Signer) VerifySceneAnalysisDispatchAuthorization(
 	if err := invocation.Validate(); err != nil {
 		return err
 	}
-	parts := strings.Split(value, ".")
-	if len(parts) != 2 {
-		return errors.New("invalid Scene Analysis dispatch authorization signature")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	claims, err := signer.decodeSceneAnalysisDispatchAuthorization(value)
 	if err != nil {
-		return errors.New("invalid Scene Analysis dispatch authorization payload")
-	}
-	if !hmac.Equal([]byte(parts[1]), []byte(signer.sceneAnalysisDispatchSignature(payload))) {
-		return errors.New("invalid Scene Analysis dispatch authorization signature")
-	}
-	var claims contract.SceneAnalysisDispatchAuthorizationClaims
-	if err = json.Unmarshal(payload, &claims); err != nil {
-		return errors.New("invalid Scene Analysis dispatch authorization payload")
+		return err
 	}
 	if err = claims.ValidateFor(invocation, claimVersion, signer.now().UTC().Unix()); err != nil {
 		return errors.New("dispatch authorization does not authorize Scene Analysis invocation")
 	}
 	return nil
+}
+
+func (signer *Signer) IssueVisualFoundationDispatchAuthorization(
+	invocation contract.VisualFoundationInvocation,
+	claimVersion int64,
+) (contract.SceneAnalysisDispatchAuthorization, error) {
+	if err := invocation.Validate(); err != nil {
+		return contract.SceneAnalysisDispatchAuthorization{}, err
+	}
+	claims := contract.SceneAnalysisDispatchAuthorizationClaims{
+		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
+		InputHash: invocation.InputHash, SkillReleaseID: invocation.StageRelease.SkillReleaseID,
+		SkillReleaseHash:  invocation.StageRelease.SkillReleaseHash,
+		StageReleaseHash:  invocation.StageRelease.StageReleaseHash,
+		BundleContentHash: invocation.StageRelease.BundleContentHash,
+		ControlHash:       invocation.Control.ControlHash, ReleaseFence: invocation.Control.ReleaseFence,
+		ClaimVersion:     claimVersion,
+		AgentImageDigest: invocation.StageRelease.AgentImageDigest,
+		ExpiresAt:        signer.now().UTC().Add(TTL).Unix(),
+	}
+	if err := claims.ValidateForVisualFoundation(invocation, claimVersion, signer.now().UTC().Unix()); err != nil {
+		return contract.SceneAnalysisDispatchAuthorization{}, err
+	}
+	return signer.encodeSceneAnalysisDispatchAuthorization(claims)
+}
+
+func (signer *Signer) VerifyVisualFoundationDispatchAuthorization(
+	value string,
+	invocation contract.VisualFoundationInvocation,
+	claimVersion int64,
+) error {
+	if err := invocation.Validate(); err != nil {
+		return err
+	}
+	claims, err := signer.decodeSceneAnalysisDispatchAuthorization(value)
+	if err != nil {
+		return err
+	}
+	if err = claims.ValidateForVisualFoundation(invocation, claimVersion, signer.now().UTC().Unix()); err != nil {
+		return errors.New("dispatch authorization does not authorize Visual Foundation invocation")
+	}
+	return nil
+}
+
+func (signer *Signer) encodeSceneAnalysisDispatchAuthorization(
+	claims contract.SceneAnalysisDispatchAuthorizationClaims,
+) (contract.SceneAnalysisDispatchAuthorization, error) {
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		return contract.SceneAnalysisDispatchAuthorization{}, err
+	}
+	encoded := base64.RawURLEncoding.EncodeToString(payload)
+	value := encoded + "." + signer.sceneAnalysisDispatchSignature(payload)
+	digest := sha256.Sum256([]byte(value))
+	authorization := contract.SceneAnalysisDispatchAuthorization{
+		Value: value, Hash: hex.EncodeToString(digest[:]), ClaimVersion: claims.ClaimVersion,
+		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
+	}
+	return authorization, authorization.Validate()
+}
+
+func (signer *Signer) decodeSceneAnalysisDispatchAuthorization(
+	value string,
+) (contract.SceneAnalysisDispatchAuthorizationClaims, error) {
+	parts := strings.Split(value, ".")
+	if len(parts) != 2 {
+		return contract.SceneAnalysisDispatchAuthorizationClaims{}, errors.New("invalid Scene Analysis dispatch authorization signature")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return contract.SceneAnalysisDispatchAuthorizationClaims{}, errors.New("invalid Scene Analysis dispatch authorization payload")
+	}
+	if !hmac.Equal([]byte(parts[1]), []byte(signer.sceneAnalysisDispatchSignature(payload))) {
+		return contract.SceneAnalysisDispatchAuthorizationClaims{}, errors.New("invalid Scene Analysis dispatch authorization signature")
+	}
+	var claims contract.SceneAnalysisDispatchAuthorizationClaims
+	if err = json.Unmarshal(payload, &claims); err != nil {
+		return contract.SceneAnalysisDispatchAuthorizationClaims{}, errors.New("invalid Scene Analysis dispatch authorization payload")
+	}
+	return claims, nil
 }
 
 func (signer *Signer) sceneAnalysisDispatchSignature(payload []byte) string {
