@@ -49,6 +49,10 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	platformschema "github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
+	presetgorm "github.com/StephenQiu30/lanverse/backend/internal/preset/adapter/gormdb"
+	presethttp "github.com/StephenQiu30/lanverse/backend/internal/preset/adapter/httpapi"
+	presetapp "github.com/StephenQiu30/lanverse/backend/internal/preset/application"
+	presetcatalog "github.com/StephenQiu30/lanverse/backend/internal/preset/catalog"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	biblehttp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/httpapi"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
@@ -166,6 +170,10 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 
 	projectStore := projectgorm.New(database)
 	projectService := projectapp.NewService(projectStore, func() time.Time { return time.Now().UTC() }, uuid.NewString)
+	presetSelectionService := presetapp.NewProjectSelectionService(
+		presetgorm.NewProjectSelectionStore(database), presetcatalog.FindCuratedRelease,
+		func() time.Time { return time.Now().UTC() }, uuid.NewString,
+	)
 	costStore := costgorm.New(database)
 	costConfig := costapp.Config{Now: func() time.Time { return time.Now().UTC() }, NewID: uuid.NewString}
 	costService := costapp.NewService(costStore, costConfig)
@@ -186,6 +194,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	logger.Info("Media Provider configuration ready", "secret_store_available", providerSecrets.Available(),
 		"connection_presets", len(providerCatalogView.Connections), "model_presets", len(providerCatalogView.Models))
 	tokenVerifier := authentication.NewVerifier(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, func() time.Time { return time.Now().UTC() })
+	presetHandler := presethttp.New(presetcatalog.CuratedReleases, presetSelectionService, projectService, tokenVerifier)
 	tokenIssuer := authentication.NewIssuer(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, configuration.AccessTokenTTL, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	verificationCode := authentication.RandomNumericCode
 	var verificationSender identityapp.VerificationSender = identityverification.ConfiguredSender{}
@@ -431,6 +440,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				identityHandler.Register(mux)
 				mediaHandler.Register(mux)
 				projectHandler.Register(mux)
+				presetHandler.Register(mux)
 				costHandler.Register(mux)
 				scriptHandler.Register(mux)
 				sceneAnalysisHandler.Register(mux)

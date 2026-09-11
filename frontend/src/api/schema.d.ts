@@ -517,6 +517,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 返回 Backend 内置、内容定址的策展 Preset Release；不接受 current/latest，也不读取 Provider 配置。 */
+        get: operations["listPresets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -549,6 +566,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["updateProject"];
+        trace?: never;
+    };
+    "/api/projects/{project_id}/preset-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        /** @description 按当前项目读权限返回 Preset Selection Current Head 指向的精确不可变版本。 */
+        get: operations["getProjectPresetSelection"];
+        /** @description 以 expected_revision CAS 和 idempotency_key 原子发布新的 Project Preset Selection；重复同一命令返回原结果。 */
+        put: operations["selectProjectPreset"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/projects/{project_id}/archive": {
@@ -1648,6 +1685,120 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PresetContentRef: {
+            owner: string;
+            key: string;
+            content_hash: string;
+        };
+        PresetProvenance: {
+            /** @enum {string} */
+            origin: "first_party" | "open_source";
+            /** Format: uri */
+            source_url: string;
+            license_spdx: string;
+            notice_path: string;
+        };
+        PresetCapability: {
+            target_kind: string;
+            view_roles: string[];
+        };
+        PresetWorldDesignBasis: {
+            era: string;
+            region: string;
+            civilization_language: string;
+            technology_or_magic_language: string;
+            architecture_language: string;
+            wardrobe_language: string;
+            prop_language: string;
+            material_system: string;
+            motifs: string[];
+            anachronism_constraints: string[];
+        };
+        PresetVisualGrammar: {
+            medium: string;
+            realism: string;
+            shape_language: string;
+            proportion: string;
+            palette: string;
+            linework: string;
+            texture: string;
+            material_rendering: string;
+            lighting: string;
+            contrast: string;
+            composition: string;
+            camera: string;
+            negative_constraints: string[];
+        };
+        PresetWorldAdaptationRule: {
+            rule_key: string;
+            source_fact_kind: string;
+            design_domain: string;
+            directive: string;
+            preserved_invariant_keys: string[];
+            impact_scope_kinds: string[];
+            /** @constant */
+            requires_human_decision: true;
+        };
+        PresetPurposeProfile: {
+            target_kind: string;
+            design_focus: string[];
+            forbidden_changes: string[];
+        };
+        PresetRelease: {
+            /** @constant */
+            contract_id: "preset-release-production";
+            key: string;
+            release: string;
+            label: string;
+            category: string;
+            description: string;
+            default_mode: components["schemas"]["ProjectPresetApplicationMode"];
+            provenance: components["schemas"]["PresetProvenance"];
+            capability_manifest: components["schemas"]["PresetCapability"][];
+            world_design_basis: components["schemas"]["PresetWorldDesignBasis"];
+            visual_grammar: components["schemas"]["PresetVisualGrammar"];
+            fidelity_invariants: string[];
+            world_adaptation_rules: components["schemas"]["PresetWorldAdaptationRule"][];
+            purpose_profiles: components["schemas"]["PresetPurposeProfile"][];
+            skill_release_refs: components["schemas"]["PresetContentRef"][];
+            qc_policy_ref: components["schemas"]["PresetContentRef"];
+            model_capability_policy_ref: components["schemas"]["PresetContentRef"];
+            content_hash: string;
+        };
+        /** @enum {string} */
+        ProjectPresetApplicationMode: "faithful" | "world_adaptation";
+        ProjectPresetReleaseRef: {
+            key: string;
+            release: string;
+            content_hash: string;
+        };
+        ProjectPresetSelection: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            contract_id: "project-preset-selection-production";
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            revision: number;
+            parent_selection_id: string | null;
+            parent_content_hash: string | null;
+            preset_release: components["schemas"]["ProjectPresetReleaseRef"];
+            application_mode: components["schemas"]["ProjectPresetApplicationMode"];
+            /** Format: uuid */
+            selected_by: string;
+            /** Format: date-time */
+            selected_at: string;
+            content_hash: string;
+        };
+        ProjectPresetSelectionRequest: {
+            preset_key: string;
+            preset_release: string;
+            application_mode: components["schemas"]["ProjectPresetApplicationMode"];
+            expected_revision: number;
+            idempotency_key: string;
+        };
         CreationResumeResponse: {
             /** Format: uuid */
             run_id: string;
@@ -5934,6 +6085,32 @@ export interface operations {
             };
         };
     };
+    listPresets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 精确 Preset Release 目录 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            items: components["schemas"]["PresetRelease"][];
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
     listProjects: {
         parameters: {
             query?: never;
@@ -6029,6 +6206,68 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    getProjectPresetSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前项目 Preset Selection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProjectPresetSelection"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    selectProjectPreset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectPresetSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Project Preset Selection 已发布或幂等重放 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProjectPresetSelection"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
         };
     };
     archiveProject: {

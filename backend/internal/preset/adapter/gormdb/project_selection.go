@@ -11,6 +11,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
+	commandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/adapter/gormdb"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	presetapp "github.com/StephenQiu30/lanverse/backend/internal/preset/application"
@@ -72,6 +74,22 @@ func (repository *projectSelectionRepository) VerifySelectionAccess(
 		return &presetapp.ProjectSelectionError{Code: "project_preset_selection_forbidden", Message: "Project Preset selection is forbidden"}
 	}
 	return nil
+}
+
+func (repository *projectSelectionRepository) FindReceipt(
+	ctx context.Context,
+	workspaceID string,
+	operation string,
+	idempotencyKey string,
+) (platformcommand.Receipt, error) {
+	return commandgorm.Find(ctx, repository.database, workspaceID, operation, idempotencyKey)
+}
+
+func (repository *projectSelectionRepository) EnsureReceipt(
+	ctx context.Context,
+	receipt platformcommand.Receipt,
+) (platformcommand.Receipt, error) {
+	return commandgorm.Ensure(ctx, repository.database, receipt)
 }
 
 func (repository *projectSelectionRepository) CurrentProjectSelection(

@@ -1226,6 +1226,51 @@
         }
       }
     },
+    "/api/presets": {
+      "get": {
+        "operationId": "listPresets",
+        "description": "返回 Backend 内置、内容定址的策展 Preset Release；不接受 current/latest，也不读取 Provider 配置。",
+        "responses": {
+          "200": {
+            "description": "精确 Preset Release 目录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "items"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PresetRelease"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/projects": {
       "get": {
         "operationId": "listProjects",
@@ -1274,6 +1319,103 @@
         "responses": {
           "200": {
             "description": "项目已删除"
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/preset-selection": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/project_id"
+        }
+      ],
+      "get": {
+        "operationId": "getProjectPresetSelection",
+        "description": "按当前项目读权限返回 Preset Selection Current Head 指向的精确不可变版本。",
+        "responses": {
+          "200": {
+            "description": "当前项目 Preset Selection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProjectPresetSelection"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "selectProjectPreset",
+        "description": "以 expected_revision CAS 和 idempotency_key 原子发布新的 Project Preset Selection；重复同一命令返回原结果。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectPresetSelectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project Preset Selection 已发布或幂等重放",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProjectPresetSelection"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -3470,6 +3612,502 @@
   },
   "components": {
     "schemas": {
+      "PresetContentRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "owner",
+          "key",
+          "content_hash"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "PresetProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "origin",
+          "source_url",
+          "license_spdx",
+          "notice_path"
+        ],
+        "properties": {
+          "origin": {
+            "type": "string",
+            "enum": [
+              "first_party",
+              "open_source"
+            ]
+          },
+          "source_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "license_spdx": {
+            "type": "string"
+          },
+          "notice_path": {
+            "type": "string"
+          }
+        }
+      },
+      "PresetCapability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_kind",
+          "view_roles"
+        ],
+        "properties": {
+          "target_kind": {
+            "type": "string"
+          },
+          "view_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PresetWorldDesignBasis": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "era",
+          "region",
+          "civilization_language",
+          "technology_or_magic_language",
+          "architecture_language",
+          "wardrobe_language",
+          "prop_language",
+          "material_system",
+          "motifs",
+          "anachronism_constraints"
+        ],
+        "properties": {
+          "era": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "civilization_language": {
+            "type": "string"
+          },
+          "technology_or_magic_language": {
+            "type": "string"
+          },
+          "architecture_language": {
+            "type": "string"
+          },
+          "wardrobe_language": {
+            "type": "string"
+          },
+          "prop_language": {
+            "type": "string"
+          },
+          "material_system": {
+            "type": "string"
+          },
+          "motifs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "anachronism_constraints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PresetVisualGrammar": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "medium",
+          "realism",
+          "shape_language",
+          "proportion",
+          "palette",
+          "linework",
+          "texture",
+          "material_rendering",
+          "lighting",
+          "contrast",
+          "composition",
+          "camera",
+          "negative_constraints"
+        ],
+        "properties": {
+          "medium": {
+            "type": "string"
+          },
+          "realism": {
+            "type": "string"
+          },
+          "shape_language": {
+            "type": "string"
+          },
+          "proportion": {
+            "type": "string"
+          },
+          "palette": {
+            "type": "string"
+          },
+          "linework": {
+            "type": "string"
+          },
+          "texture": {
+            "type": "string"
+          },
+          "material_rendering": {
+            "type": "string"
+          },
+          "lighting": {
+            "type": "string"
+          },
+          "contrast": {
+            "type": "string"
+          },
+          "composition": {
+            "type": "string"
+          },
+          "camera": {
+            "type": "string"
+          },
+          "negative_constraints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PresetWorldAdaptationRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_key",
+          "source_fact_kind",
+          "design_domain",
+          "directive",
+          "preserved_invariant_keys",
+          "impact_scope_kinds",
+          "requires_human_decision"
+        ],
+        "properties": {
+          "rule_key": {
+            "type": "string"
+          },
+          "source_fact_kind": {
+            "type": "string"
+          },
+          "design_domain": {
+            "type": "string"
+          },
+          "directive": {
+            "type": "string"
+          },
+          "preserved_invariant_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "impact_scope_kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requires_human_decision": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "PresetPurposeProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_kind",
+          "design_focus",
+          "forbidden_changes"
+        ],
+        "properties": {
+          "target_kind": {
+            "type": "string"
+          },
+          "design_focus": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "forbidden_changes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PresetRelease": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contract_id",
+          "key",
+          "release",
+          "label",
+          "category",
+          "description",
+          "default_mode",
+          "provenance",
+          "capability_manifest",
+          "world_design_basis",
+          "visual_grammar",
+          "fidelity_invariants",
+          "world_adaptation_rules",
+          "purpose_profiles",
+          "skill_release_refs",
+          "qc_policy_ref",
+          "model_capability_policy_ref",
+          "content_hash"
+        ],
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "const": "preset-release-production"
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,63}$"
+          },
+          "release": {
+            "type": "string",
+            "pattern": "^[0-9]{4}\\.(0[1-9]|1[0-2])\\.(0[1-9]|[12][0-9]|3[01])$"
+          },
+          "label": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "default_mode": {
+            "$ref": "#/components/schemas/ProjectPresetApplicationMode"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/PresetProvenance"
+          },
+          "capability_manifest": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetCapability"
+            }
+          },
+          "world_design_basis": {
+            "$ref": "#/components/schemas/PresetWorldDesignBasis"
+          },
+          "visual_grammar": {
+            "$ref": "#/components/schemas/PresetVisualGrammar"
+          },
+          "fidelity_invariants": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "world_adaptation_rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetWorldAdaptationRule"
+            }
+          },
+          "purpose_profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetPurposeProfile"
+            }
+          },
+          "skill_release_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetContentRef"
+            }
+          },
+          "qc_policy_ref": {
+            "$ref": "#/components/schemas/PresetContentRef"
+          },
+          "model_capability_policy_ref": {
+            "$ref": "#/components/schemas/PresetContentRef"
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ProjectPresetApplicationMode": {
+        "type": "string",
+        "enum": [
+          "faithful",
+          "world_adaptation"
+        ]
+      },
+      "ProjectPresetReleaseRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "release",
+          "content_hash"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "release": {
+            "type": "string"
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ProjectPresetSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "contract_id",
+          "workspace_id",
+          "project_id",
+          "revision",
+          "parent_selection_id",
+          "parent_content_hash",
+          "preset_release",
+          "application_mode",
+          "selected_by",
+          "selected_at",
+          "content_hash"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contract_id": {
+            "type": "string",
+            "const": "project-preset-selection-production"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "parent_selection_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent_content_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preset_release": {
+            "$ref": "#/components/schemas/ProjectPresetReleaseRef"
+          },
+          "application_mode": {
+            "$ref": "#/components/schemas/ProjectPresetApplicationMode"
+          },
+          "selected_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ProjectPresetSelectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preset_key",
+          "preset_release",
+          "application_mode",
+          "expected_revision",
+          "idempotency_key"
+        ],
+        "properties": {
+          "preset_key": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64
+          },
+          "preset_release": {
+            "type": "string",
+            "pattern": "^[0-9]{4}\\.(0[1-9]|1[0-2])\\.(0[1-9]|[12][0-9]|3[01])$"
+          },
+          "application_mode": {
+            "$ref": "#/components/schemas/ProjectPresetApplicationMode"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
       "CreationResumeResponse": {
         "type": "object",
         "additionalProperties": false,

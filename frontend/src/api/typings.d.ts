@@ -101,6 +101,14 @@ declare global {
     type MediaVersionResponse = components["schemas"]["MediaVersionResponse"];
     type NarrativeBlockResponse = components["schemas"]["NarrativeBlockResponse"];
     type PaginatedProjects = components["schemas"]["PaginatedProjects"];
+    type PresetCapability = components["schemas"]["PresetCapability"];
+    type PresetContentRef = components["schemas"]["PresetContentRef"];
+    type PresetProvenance = components["schemas"]["PresetProvenance"];
+    type PresetPurposeProfile = components["schemas"]["PresetPurposeProfile"];
+    type PresetRelease = components["schemas"]["PresetRelease"];
+    type PresetVisualGrammar = components["schemas"]["PresetVisualGrammar"];
+    type PresetWorldAdaptationRule = components["schemas"]["PresetWorldAdaptationRule"];
+    type PresetWorldDesignBasis = components["schemas"]["PresetWorldDesignBasis"];
     type ProductionBibleConfirmRequest = components["schemas"]["ProductionBibleConfirmRequest"];
     type ProductionBibleCreateRequest = components["schemas"]["ProductionBibleCreateRequest"];
     type ProductionBibleEntityResponse = components["schemas"]["ProductionBibleEntityResponse"];
@@ -140,6 +148,10 @@ declare global {
     type ProductionWorldStoryTimeRangeResponse = components["schemas"]["ProductionWorldStoryTimeRangeResponse"];
     type ProfileUpdateRequest = components["schemas"]["ProfileUpdateRequest"];
     type ProjectCreateRequest = components["schemas"]["ProjectCreateRequest"];
+    type ProjectPresetApplicationMode = components["schemas"]["ProjectPresetApplicationMode"];
+    type ProjectPresetReleaseRef = components["schemas"]["ProjectPresetReleaseRef"];
+    type ProjectPresetSelection = components["schemas"]["ProjectPresetSelection"];
+    type ProjectPresetSelectionRequest = components["schemas"]["ProjectPresetSelectionRequest"];
     type ProjectResponse = components["schemas"]["ProjectResponse"];
     type PublishImportCommitRequest = components["schemas"]["PublishImportCommitRequest"];
     type RegisterRequest = components["schemas"]["RegisterRequest"];

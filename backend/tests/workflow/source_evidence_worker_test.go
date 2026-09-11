@@ -91,6 +91,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
 		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 0,
+		IdempotencyKey: "select-project-preset-1",
 	})
 	if err != nil || selectedPreset.Revision != 1 {
 		t.Fatalf("freeze Project Preset selection: selection=%#v err=%v", selectedPreset, err)
@@ -102,7 +103,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	replayedPreset, err := presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
-		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 1,
+		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 0,
+		IdempotencyKey: "select-project-preset-1",
 	})
 	if err != nil || replayedPreset.ID != selectedPreset.ID {
 		t.Fatalf("replay same Project Preset selection: selection=%#v err=%v", replayedPreset, err)
@@ -111,8 +113,23 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
 		PresetRelease: "2026.09.12", ApplicationMode: "world_adaptation", ExpectedRevision: 0,
+		IdempotencyKey: "select-project-preset-1",
+	}); !presetapp.IsProjectSelectionIdempotencyConflict(err) {
+		t.Fatalf("reuse Project Preset selection idempotency key: %v", err)
+	}
+	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
+		PresetRelease: "2026.09.12", ApplicationMode: "world_adaptation", ExpectedRevision: 0,
+		IdempotencyKey: "select-project-preset-stale",
 	}); !presetapp.IsProjectSelectionConflict(err) {
 		t.Fatalf("stale Project Preset selection CAS: %v", err)
+	}
+	var presetReceiptCount int64
+	if err = database.Model(&model.CommandReceipt{}).
+		Where("workspace_id = ? AND operation = ?", fixture.workspaceID, presetapp.ProjectSelectionOperation).
+		Count(&presetReceiptCount).Error; err != nil || presetReceiptCount != 1 {
+		t.Fatalf("Project Preset selection receipt count=%d err=%v", presetReceiptCount, err)
 	}
 	text := "第1集\n林一😀进入大厅。\n\n场景二\n钟声响起。\n\n第二集\n林一回头，乙回答。\n\n第12集\n终章。"
 	digest := sha256.Sum256([]byte(text))
