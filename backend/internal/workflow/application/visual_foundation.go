@@ -20,6 +20,7 @@ var visualFoundationHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 type FaithfulVisualFoundationInputCommand struct {
 	World         storygraphdomain.VisualFoundationWorldReadSet
 	Source        worlddomain.ConfirmedVisualFoundationSource
+	Selection     presetdomain.ProjectSelection
 	PresetRelease presetdomain.Release
 }
 
@@ -122,6 +123,19 @@ func validateFaithfulVisualFoundationSources(command FaithfulVisualFoundationInp
 	}
 	if len(command.Source.Candidate.SharedProof.DesignGaps) != 0 {
 		return errors.New("Visual Foundation Design Gaps require an explicit visual-domain mapping")
+	}
+	selectionJSON, err := json.Marshal(command.Selection)
+	if err != nil {
+		return errors.New("invalid Project Preset selection for Visual Foundation")
+	}
+	selection, _, err := presetdomain.DecodeProjectSelection(selectionJSON)
+	if err != nil || !reflect.DeepEqual(selection, command.Selection) ||
+		selection.WorkspaceID != world.WorkspaceID || selection.ProjectID != world.ProjectID ||
+		selection.ApplicationMode != "faithful" ||
+		selection.PresetRelease.Key != command.PresetRelease.Key ||
+		selection.PresetRelease.Release != command.PresetRelease.Release ||
+		selection.PresetRelease.ContentHash != command.PresetRelease.ContentHash {
+		return errors.New("Project Preset selection has drifted before Visual Foundation input compilation")
 	}
 	rebuiltRelease, _, err := presetdomain.NewRelease(command.PresetRelease.ReleaseInput)
 	if err != nil || !reflect.DeepEqual(rebuiltRelease, command.PresetRelease) || command.PresetRelease.DefaultMode != "faithful" {

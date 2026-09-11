@@ -31,6 +31,8 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	presetgorm "github.com/StephenQiu30/lanverse/backend/internal/preset/adapter/gormdb"
+	presetapp "github.com/StephenQiu30/lanverse/backend/internal/preset/application"
 	presetcatalog "github.com/StephenQiu30/lanverse/backend/internal/preset/catalog"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
@@ -1060,9 +1062,22 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || !found {
 		t.Fatalf("load curated Visual Foundation Preset: found=%v err=%v", found, err)
 	}
+	presetSelectionService := presetapp.NewProjectSelectionService(
+		presetgorm.NewProjectSelectionStore(database), presetcatalog.FindCuratedRelease,
+		func() time.Time { return now }, uuid.NewString,
+	)
+	visualSelection, err := presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		SelectedBy: fixture.userID.String(), PresetKey: visualPreset.Key,
+		PresetRelease: visualPreset.Release, ApplicationMode: "faithful", ExpectedRevision: 0,
+		IdempotencyKey: "scene-analysis-visual-preset",
+	})
+	if err != nil {
+		t.Fatalf("freeze Visual Foundation Project Preset selection: %v", err)
+	}
 	visualInput, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
 		workflowapp.FaithfulVisualFoundationInputCommand{
-			World: visualWorld, Source: visualSource, PresetRelease: visualPreset,
+			World: visualWorld, Source: visualSource, Selection: visualSelection, PresetRelease: visualPreset,
 		},
 	)
 	if err != nil || visualInput.ProductionWorldOwnerSetHash != productionGraph.Version.OwnerSetHash ||
@@ -1157,6 +1172,20 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
 	}); agentapp.ErrorCode(driftErr) != "stale_visual_foundation_input" || visualRuntime.calls != 1 {
 		t.Fatalf("drifted Visual Foundation input: calls=%d err=%v", visualRuntime.calls, driftErr)
+	}
+	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		SelectedBy: fixture.userID.String(), PresetKey: "xianxia-animation",
+		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 1,
+		IdempotencyKey: "scene-analysis-visual-preset-switch",
+	}); err != nil {
+		t.Fatalf("switch Project Preset selection before stale validation: %v", err)
+	}
+	if _, selectionDriftErr := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: visualInput,
+		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
+	}); agentapp.ErrorCode(selectionDriftErr) != "stale_visual_foundation_input" || visualRuntime.calls != 1 {
+		t.Fatalf("switched Project Preset selection: calls=%d err=%v", visualRuntime.calls, selectionDriftErr)
 	}
 	impact, err := productionQueries.Lens(ctx, productionGraphActor, storygraphapp.LensQuery{
 		ProjectID: fixture.projectID.String(), VersionRef: storygraphapp.VersionRefCurrent,

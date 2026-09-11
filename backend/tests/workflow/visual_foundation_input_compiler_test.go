@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -19,10 +20,11 @@ import (
 func TestCompileFaithfulVisualFoundationInputFromConfirmedWorld(t *testing.T) {
 	candidate, source, world := faithfulVisualFoundationSources(t, false)
 	release := curatedFaithfulRelease(t)
+	selection := frozenProjectSelection(t, candidate.WorkspaceID, candidate.ProjectID, release)
 
 	input, canonical, err := workflowapp.CompileFaithfulVisualFoundationInput(
 		workflowapp.FaithfulVisualFoundationInputCommand{
-			World: world, Source: source, PresetRelease: release,
+			World: world, Source: source, Selection: selection, PresetRelease: release,
 		},
 	)
 	if err != nil {
@@ -49,6 +51,7 @@ func TestCompileFaithfulVisualFoundationInputFromConfirmedWorld(t *testing.T) {
 func TestCompileFaithfulVisualFoundationInputRejectsUnprovenOrUnresolvedWorld(t *testing.T) {
 	_, source, world := faithfulVisualFoundationSources(t, false)
 	release := curatedFaithfulRelease(t)
+	selection := frozenProjectSelection(t, world.WorkspaceID, world.ProjectID, release)
 
 	driftedRoot := world
 	for index := range driftedRoot.ConfirmedWorldRoots {
@@ -57,14 +60,14 @@ func TestCompileFaithfulVisualFoundationInputRejectsUnprovenOrUnresolvedWorld(t 
 		}
 	}
 	if _, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
-		workflowapp.FaithfulVisualFoundationInputCommand{World: driftedRoot, Source: source, PresetRelease: release},
+		workflowapp.FaithfulVisualFoundationInputCommand{World: driftedRoot, Source: source, Selection: selection, PresetRelease: release},
 	); err == nil {
 		t.Fatal("compiled a Visual Foundation input from a Bible root outside the confirmed Gate 2 source")
 	}
 
 	_, sourceWithGap, worldWithGap := faithfulVisualFoundationSources(t, true)
 	if _, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
-		workflowapp.FaithfulVisualFoundationInputCommand{World: worldWithGap, Source: sourceWithGap, PresetRelease: release},
+		workflowapp.FaithfulVisualFoundationInputCommand{World: worldWithGap, Source: sourceWithGap, Selection: selection, PresetRelease: release},
 	); err == nil {
 		t.Fatal("compiled the MVP faithful input while a Design Gap still requires an explicit visual-domain mapping")
 	}
@@ -72,9 +75,19 @@ func TestCompileFaithfulVisualFoundationInputRejectsUnprovenOrUnresolvedWorld(t 
 	driftedRelease := release
 	driftedRelease.ContentHash = strings.Repeat("e", 64)
 	if _, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
-		workflowapp.FaithfulVisualFoundationInputCommand{World: world, Source: source, PresetRelease: driftedRelease},
+		workflowapp.FaithfulVisualFoundationInputCommand{World: world, Source: source, Selection: selection, PresetRelease: driftedRelease},
 	); err == nil {
 		t.Fatal("compiled a Visual Foundation input from a drifted Preset release")
+	}
+
+	driftedSelection := selection
+	driftedSelection.PresetRelease.ContentHash = strings.Repeat("d", 64)
+	if _, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
+		workflowapp.FaithfulVisualFoundationInputCommand{
+			World: world, Source: source, Selection: driftedSelection, PresetRelease: release,
+		},
+	); err == nil {
+		t.Fatal("compiled a Visual Foundation input from a drifted Project Preset selection")
 	}
 }
 
@@ -143,4 +156,25 @@ func curatedFaithfulRelease(t *testing.T) presetdomain.Release {
 		t.Fatalf("load curated faithful Preset release: found=%v err=%v", found, err)
 	}
 	return release
+}
+
+func frozenProjectSelection(
+	t *testing.T,
+	workspaceID string,
+	projectID string,
+	release presetdomain.Release,
+) presetdomain.ProjectSelection {
+	t.Helper()
+	selection, _, err := presetdomain.NewProjectSelection(uuid.NewString(), presetdomain.ProjectSelectionInput{
+		WorkspaceID: workspaceID, ProjectID: projectID, Revision: 1,
+		PresetRelease: presetdomain.ProjectSelectionRelease{
+			Key: release.Key, Release: release.Release, ContentHash: release.ContentHash,
+		},
+		ApplicationMode: "faithful", SelectedBy: uuid.NewString(),
+		SelectedAt: time.Date(2026, time.September, 12, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return selection
 }

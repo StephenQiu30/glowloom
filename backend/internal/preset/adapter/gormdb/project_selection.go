@@ -26,6 +26,22 @@ func NewProjectSelectionStore(database *gorm.DB) *ProjectSelectionStore {
 	return &ProjectSelectionStore{database: database}
 }
 
+func (store *ProjectSelectionStore) Current(
+	ctx context.Context,
+	workspaceID string,
+	projectID string,
+) (presetdomain.ProjectSelection, error) {
+	if store == nil || store.database == nil {
+		return presetdomain.ProjectSelection{}, presetapp.ErrProjectSelectionNotFound
+	}
+	return (&projectSelectionRepository{database: store.database}).CurrentProjectSelection(
+		ctx,
+		workspaceID,
+		projectID,
+		false,
+	)
+}
+
 func (store *ProjectSelectionStore) WithinSerializableTransaction(
 	ctx context.Context,
 	operation func(presetapp.ProjectSelectionRepository) error,
