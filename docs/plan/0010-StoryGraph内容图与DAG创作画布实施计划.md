@@ -166,6 +166,7 @@
 - [ ] 把成熟 Skill 吸收流程固化为 SourceInventory → review → rewrite → eval → shadow → signature；不复制未授权运行资产。
   - [x] 将已接受设计实际参考的 Agent Skills specification、Anthropic skill-creator 与 LibTV public Skill 固定为三条 Backend-owned SourceInventory：提交、原文件/许可证字节 Hash、SPDX/NOTICE、作者、抓取时间、预期能力、审阅人和 reference-only 处置进入同一 Canonical Root；不复制外部生产文件。
   - [x] 对同一固定 SourceInventory 建立 Backend-owned SourceReview：七类禁止风险、逐来源 finding、审核时间/人和处置进入同一 Canonical Root；规范文档仅 reference-only，包含主动 Agent/工具指令的 skill-creator 与包含远程会话/上传下载的 LibTV Skill quarantined，三者均禁止进入改写队列、生产 Bundle 或运行时执行。
+  - [x] 以 SourceReview Root 建立 Backend-owned SourceMapping：唯一通过初审的规范固定为 reference-only/reference knowledge，两项 quarantined Skill 固定为 reject；逐项绑定来源 commit、审查结论和处置原因，copied/rewrite 生产路径均为空并由负例禁止绕过。
 - [ ] 上架 4–6 个不可变、版本化、可追溯许可的 PresetRelease。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3 与原子发布。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
