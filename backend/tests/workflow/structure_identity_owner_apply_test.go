@@ -172,12 +172,20 @@ func (owner *structureIdentityBibleOwner) ConfirmStructureIdentitySet(
 		ReviewDecisionID: command.ReviewDecisionID, ProjectEpisodeReceiptID: command.ProjectEpisodeReceiptID,
 		ContentHash: strings.Repeat("9", 64), CreatedBy: actor.UserID, CreatedAt: time.Now().UTC(),
 	}
+	collection, err := bibledomain.BuildStructureIdentityCollection(version)
+	if err != nil {
+		return bibledomain.ConfirmStructureIdentitySetResult{}, err
+	}
+	receipt, err := bibledomain.NewStructureIdentityCollectionReceipt(
+		uuid.NewString(), uuid.NewString(), "workflow-structure-identity", command.ReviewDecisionID,
+		collection, []string{"scene:owner-apply"}, time.Now().UTC(), actor.UserID,
+	)
+	if err != nil {
+		return bibledomain.ConfirmStructureIdentitySetResult{}, err
+	}
 	return bibledomain.ConfirmStructureIdentitySetResult{
-		Version: version,
-		Receipt: bibledomain.StructureIdentityCollectionReceipt{
-			ID: uuid.NewString(), CheckpointKey: bibledomain.StructureIdentityCheckpointKey,
-			CollectionFamily: bibledomain.StructureIdentityCollectionFamily, VersionID: versionID,
-		},
+		Version:          version,
+		Receipt:          receipt,
 		CommandReceiptID: commandReceiptID, CommandOperation: bibledomain.StructureIdentityCommandOperation,
 	}, nil
 }

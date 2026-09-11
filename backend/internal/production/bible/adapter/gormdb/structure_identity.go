@@ -298,9 +298,22 @@ func (repo *repository) GetStructureIdentityHead(
 	if err != nil {
 		return application.StructureIdentityHead{}, false, err
 	}
-	return application.StructureIdentityHead{
-		CurrentVersionID: head.CurrentVersionID.String(), HeadRevision: head.HeadRevision, HeadHash: head.HeadHash,
-	}, true, nil
+	var refs []ownercollection.VersionRef
+	if json.Unmarshal(head.CurrentVersionRefs, &refs) != nil {
+		return application.StructureIdentityHead{}, false, errors.New("Structure Identity Scope Head refs have drifted")
+	}
+	collection, buildErr := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: head.WorkspaceID.String(), ProjectID: head.ProjectID.String(),
+		OwnerKind: "production/bible", VersionFamily: domain.StructureIdentityCollectionFamily,
+		ScopeKind: "project", ScopeKey: head.ScopeKey, ScopeRevision: head.ScopeRevision,
+	}, refs)
+	rebuilt, headErr := domain.NewStructureIdentityScopeHead(collection, head.CurrentVersionID.String(), head.HeadRevision, head.UpdatedAt)
+	if buildErr != nil || headErr != nil || head.ScopeContentHash != rebuilt.ScopeContentHash ||
+		head.MemberCount != rebuilt.MemberCount || head.MembersHash != rebuilt.MembersHash ||
+		head.CollectionRootHash != rebuilt.CollectionRootHash || head.HeadContentHash != rebuilt.HeadContentHash {
+		return application.StructureIdentityHead{}, false, errors.New("Structure Identity Scope Head has drifted")
+	}
+	return rebuilt, true, nil
 }
 
 func (repo *repository) GetStructureIdentityVersion(
@@ -348,35 +361,42 @@ func (repo *repository) SaveStructureIdentityHead(
 		return err
 	}
 	record := model.StructureIdentityScopeHead{
-		ProjectID: project, WorkspaceID: workspace, CurrentVersionID: version,
-		HeadRevision: head.HeadRevision, HeadHash: head.HeadHash, UpdatedAt: now,
+		ProjectID: project, WorkspaceID: workspace, ScopeKey: head.ScopeKey,
+		ScopeRevision: head.ScopeRevision, ScopeContentHash: head.ScopeContentHash,
+		MemberCount: head.MemberCount, MembersHash: head.MembersHash, CollectionRootHash: head.CollectionRootHash,
+		CurrentVersionID: version, HeadRevision: head.HeadRevision, HeadContentHash: head.HeadContentHash, UpdatedAt: now,
 	}
+	refs, err := json.Marshal(head.CurrentVersionRefs)
+	if err != nil {
+		return err
+	}
+	record.CurrentVersionRefs = datatypes.JSON(refs)
 	return repo.database.WithContext(ctx).Omit(clause.Associations).Save(&record).Error
 }
 
 func (repo *repository) CreateStructureIdentityCollectionReceipt(
 	ctx context.Context,
 	value domain.StructureIdentityCollectionReceipt,
-	workspaceID, projectID string,
-	now time.Time,
 ) error {
-	id, err := uuid.Parse(value.ID)
-	if err != nil {
-		return err
+	if len(value.Members) != 1 {
+		return errors.New("Structure Identity Collection Receipt scope has drifted")
 	}
-	workspace, err := uuid.Parse(workspaceID)
-	if err != nil {
-		return err
+	rebuiltCollection, buildErr := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID, OwnerKind: value.OwnerKind,
+		VersionFamily: value.CollectionFamily, ScopeKind: value.ScopeKind, ScopeKey: value.ScopeKey,
+		ScopeRevision: value.ScopeRevision,
+	}, value.Members)
+	rebuiltReceipt, receiptErr := domain.NewStructureIdentityCollectionReceipt(
+		value.ID, value.CommandID, value.IdempotencyKey, value.ReviewDecisionID,
+		rebuiltCollection, value.CoveredScopeKeys, value.CommittedAt, value.CommittedBy,
+	)
+	if buildErr != nil || receiptErr != nil || !reflect.DeepEqual(rebuiltReceipt, value) {
+		return errors.New("Structure Identity Collection Receipt has drifted")
 	}
-	project, err := uuid.Parse(projectID)
-	if err != nil {
-		return err
-	}
-	version, err := uuid.Parse(value.VersionID)
-	if err != nil {
-		return err
-	}
-	review, err := uuid.Parse(value.ReviewDecisionID)
+	ids, err := parseStructureIdentityUUIDs(
+		value.ID, value.CommandID, value.WorkspaceID, value.ProjectID,
+		value.Members[0].OwnerVersionID, value.ReviewDecisionID, value.CommittedBy,
+	)
 	if err != nil {
 		return err
 	}
@@ -384,24 +404,37 @@ func (repo *repository) CreateStructureIdentityCollectionReceipt(
 	if err != nil {
 		return err
 	}
-	members, err := json.Marshal([]map[string]string{{"version_id": value.VersionID, "content_hash": value.VersionContentHash}})
+	members, err := json.Marshal(value.Members)
+	if err != nil {
+		return err
+	}
+	committed, err := json.Marshal(value.CommittedOwnerVersionRefs)
 	if err != nil {
 		return err
 	}
 	record := model.StructureIdentityCollectionReceipt{
-		ID: id, WorkspaceID: workspace, ProjectID: project, VersionID: version, ReviewDecisionID: review,
-		CheckpointKey: value.CheckpointKey, CollectionFamily: value.CollectionFamily,
-		CoveredScopeKeys: datatypes.JSON(scopes), Members: datatypes.JSON(members),
-		CollectionRootHash: value.CollectionRootHash, ReceiptContentHash: value.ReceiptContentHash,
-		CreatedAt: now,
+		ID: ids[0], CommandID: ids[1], IdempotencyKey: value.IdempotencyKey,
+		WorkspaceID: ids[2], ProjectID: ids[3], VersionID: ids[4], ReviewDecisionID: ids[5],
+		CheckpointKey: value.CheckpointKey, OwnerKind: value.OwnerKind, CollectionFamily: value.CollectionFamily,
+		ScopeKind: value.ScopeKind, ScopeKey: value.ScopeKey, ScopeRevision: value.ScopeRevision,
+		ScopeContentHash: value.ScopeContentHash, CoveredScopeKeys: datatypes.JSON(scopes),
+		Members: datatypes.JSON(members), MemberCount: value.MemberCount, MembersHash: value.MembersHash,
+		CollectionRootHash: value.CollectionRootHash, CommittedOwnerRefs: datatypes.JSON(committed),
+		ReceiptContentHash: value.ReceiptContentHash, CommittedBy: ids[6], CommittedAt: value.CommittedAt,
 	}
-	// The user who committed the command owns the receipt; ReviewDecision is provenance only.
-	var versionRecord model.StructureIdentitySetVersion
-	if err = repo.database.WithContext(ctx).Select("created_by").First(&versionRecord, "id = ?", version).Error; err != nil {
-		return err
-	}
-	record.CreatedBy = versionRecord.CreatedBy
 	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error
+}
+
+func parseStructureIdentityUUIDs(values ...string) ([]uuid.UUID, error) {
+	result := make([]uuid.UUID, len(values))
+	for index, value := range values {
+		parsed, err := uuid.Parse(value)
+		if err != nil {
+			return nil, err
+		}
+		result[index] = parsed
+	}
+	return result, nil
 }
 
 func (repo *repository) CreateStructureIdentityCommandReceipt(ctx context.Context, receipt platformcommand.Receipt) error {

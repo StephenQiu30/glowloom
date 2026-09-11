@@ -29,6 +29,7 @@ type productionSnapshotMaterial struct {
 	sourceHead       model.ScriptSourceScopeHead
 	sourceReceipt    model.ScriptSourceCollectionReceipt
 	structure        model.StructureIdentitySetVersion
+	structureHead    model.StructureIdentityScopeHead
 	structureReceipt model.StructureIdentityCollectionReceipt
 	bibleVersion     model.ProductionWorldBibleVersion
 	bibleEvidence    []model.ProductionWorldEvidence
@@ -275,11 +276,13 @@ func (repo *repository) verifyProductionOwnerHeads(
 	material.sourceHead = sourceHead
 	material.sourceReceipt = sourceReceipt
 
-	var structureHead model.StructureIdentityScopeHead
-	if err := locked().First(&structureHead, "project_id = ?", projectID).Error; err != nil {
+	if err := locked().First(&material.structureHead, "project_id = ?", projectID).Error; err != nil {
 		return err
 	}
-	if structureHead.WorkspaceID != workspaceID || structureHead.CurrentVersionID != material.structure.ID {
+	if err := verifyStructureIdentityOwnerProof(state, material); err != nil {
+		return err
+	}
+	if material.structureHead.WorkspaceID != workspaceID || material.structureHead.CurrentVersionID != material.structure.ID {
 		return invalidOwnerSnapshot("Structure Identity Owner Head has advanced beyond the Production World receipt")
 	}
 
@@ -450,6 +453,93 @@ func (repo *repository) verifyProductionOwnerHeads(
 		return invalidOwnerSnapshot("Planning Structure Rebase Owner Head has advanced beyond the Production World receipt")
 	}
 	material.rebaseRevision = rebaseHead.ScopeRevision
+	return nil
+}
+
+func verifyStructureIdentityOwnerProof(
+	state storygraph.PublicationState,
+	material *productionSnapshotMaterial,
+) error {
+	version := bibledomain.StructureIdentitySetVersion{
+		SchemaVersion: bibledomain.StructureIdentitySetSchemaVersion,
+		ID:            material.structure.ID.String(),
+		WorkspaceID:   material.structure.WorkspaceID.String(),
+		ProjectID:     material.structure.ProjectID.String(),
+		Version:       material.structure.Version,
+		ContentHash:   material.structure.ContentHash,
+	}
+	collection, err := bibledomain.BuildStructureIdentityCollection(version)
+	if err != nil || collection.WorkspaceID != state.WorkspaceID || collection.ProjectID != state.ProjectID {
+		return invalidOwnerSnapshot("Structure Identity Collection has drifted")
+	}
+	var headRefs []ownercollection.VersionRef
+	if json.Unmarshal(material.structureHead.CurrentVersionRefs, &headRefs) != nil {
+		return invalidOwnerSnapshot("Structure Identity Head refs have drifted")
+	}
+	rebuiltHead, err := bibledomain.NewStructureIdentityScopeHead(
+		collection,
+		material.structure.ID.String(),
+		material.structureHead.HeadRevision,
+		material.structureHead.UpdatedAt,
+	)
+	if err != nil || material.structureHead.ScopeKey != rebuiltHead.ScopeKey ||
+		material.structureHead.ScopeRevision != rebuiltHead.ScopeRevision ||
+		material.structureHead.ScopeContentHash != rebuiltHead.ScopeContentHash ||
+		material.structureHead.MemberCount != rebuiltHead.MemberCount ||
+		material.structureHead.MembersHash != rebuiltHead.MembersHash ||
+		material.structureHead.CollectionRootHash != rebuiltHead.CollectionRootHash ||
+		material.structureHead.HeadContentHash != rebuiltHead.HeadContentHash ||
+		!reflect.DeepEqual(headRefs, rebuiltHead.CurrentVersionRefs) {
+		return invalidOwnerSnapshot("Structure Identity Head has drifted")
+	}
+	var members, committed []ownercollection.VersionRef
+	var scopes []string
+	if json.Unmarshal(material.structureReceipt.Members, &members) != nil ||
+		json.Unmarshal(material.structureReceipt.CommittedOwnerRefs, &committed) != nil ||
+		json.Unmarshal(material.structureReceipt.CoveredScopeKeys, &scopes) != nil {
+		return invalidOwnerSnapshot("Structure Identity Receipt JSON has drifted")
+	}
+	rebuiltReceipt, err := bibledomain.NewStructureIdentityCollectionReceipt(
+		material.structureReceipt.ID.String(),
+		material.structureReceipt.CommandID.String(),
+		material.structureReceipt.IdempotencyKey,
+		material.structureReceipt.ReviewDecisionID.String(),
+		collection,
+		scopes,
+		material.structureReceipt.CommittedAt,
+		material.structureReceipt.CommittedBy.String(),
+	)
+	if err != nil || material.structureReceipt.WorkspaceID.String() != state.WorkspaceID ||
+		material.structureReceipt.ProjectID.String() != state.ProjectID ||
+		material.structureReceipt.VersionID != material.structure.ID ||
+		material.structureReceipt.ReviewDecisionID != material.structure.ReviewDecisionID ||
+		material.structureReceipt.CheckpointKey != rebuiltReceipt.CheckpointKey ||
+		material.structureReceipt.OwnerKind != rebuiltReceipt.OwnerKind ||
+		material.structureReceipt.CollectionFamily != rebuiltReceipt.CollectionFamily ||
+		material.structureReceipt.ScopeKind != rebuiltReceipt.ScopeKind ||
+		material.structureReceipt.ScopeKey != rebuiltReceipt.ScopeKey ||
+		material.structureReceipt.ScopeRevision != rebuiltReceipt.ScopeRevision ||
+		material.structureReceipt.ScopeContentHash != rebuiltReceipt.ScopeContentHash ||
+		material.structureReceipt.MemberCount != rebuiltReceipt.MemberCount ||
+		material.structureReceipt.MembersHash != rebuiltReceipt.MembersHash ||
+		material.structureReceipt.CollectionRootHash != rebuiltReceipt.CollectionRootHash ||
+		material.structureReceipt.ReceiptContentHash != rebuiltReceipt.ReceiptContentHash ||
+		!reflect.DeepEqual(members, rebuiltReceipt.Members) ||
+		!reflect.DeepEqual(committed, rebuiltReceipt.CommittedOwnerVersionRefs) {
+		return invalidOwnerSnapshot("Structure Identity Receipt has drifted")
+	}
+	var sceneRefs []bibledomain.StructureIdentitySceneRef
+	if json.Unmarshal(material.structure.SceneRefs, &sceneRefs) != nil || len(sceneRefs) == 0 {
+		return invalidOwnerSnapshot("Structure Identity scope proof has drifted")
+	}
+	expectedScopes := make([]string, len(sceneRefs))
+	for index, scene := range sceneRefs {
+		expectedScopes[index] = scene.ScopeKey
+	}
+	slices.Sort(expectedScopes)
+	if !slices.Equal(scopes, expectedScopes) {
+		return invalidOwnerSnapshot("Structure Identity scope proof has drifted")
+	}
 	return nil
 }
 
@@ -742,10 +832,13 @@ func buildProductionOwnerCollections(
 	if collections[len(collections)-1].CollectionRootHash != material.episodeReceipt.CollectionRootHash {
 		return nil, invalidOwnerSnapshot("Project Episode Collection root has drifted")
 	}
-	if err := appendCollection("production/bible", "bible_structure_identity_set", "project", "project:"+state.ProjectID, int64(material.structure.Version), []storygraph.OwnerVersionIdentity{
+	if err := appendCollection("production/bible", bibledomain.StructureIdentityCollectionFamily, "project", "project:"+state.ProjectID, material.structureHead.ScopeRevision, []storygraph.OwnerVersionIdentity{
 		identity("production/bible", "bible_structure_identity_set", state.ProjectID, material.structure.ID.String(), int64(material.structure.Version), material.structure.ContentHash, material.structure.CreatedAt),
 	}); err != nil {
 		return nil, err
+	}
+	if collections[len(collections)-1].CollectionRootHash != material.structureReceipt.CollectionRootHash {
+		return nil, invalidOwnerSnapshot("Structure Identity Collection root has drifted")
 	}
 	bibleCollection := findWorldCollection(worldCollections, "bible_production_world_set")
 	if err := appendCollection("production/bible", "bible_production_world_set", "project", "project:"+state.ProjectID, bibleCollection.ScopeRevision, []storygraph.OwnerVersionIdentity{

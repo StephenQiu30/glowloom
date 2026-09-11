@@ -326,7 +326,9 @@ func (applier *Applier) applyStructureIdentity(
 		version.GateInputID != material.GateInputID || version.GateInputHash != material.GateInput.InputHash ||
 		version.ReviewDecisionID != application.ReviewDecisionID || version.ProjectEpisodeReceiptID != projectResult.ID ||
 		bibleResult.CommandOperation != bibledomain.StructureIdentityCommandOperation ||
-		bibleResult.CommandReceiptID == "" || bibleResult.Receipt.VersionID != version.ID ||
+		bibleResult.CommandReceiptID == "" || len(bibleResult.Receipt.Members) != 1 ||
+		bibleResult.Receipt.Members[0].OwnerVersionID != version.ID ||
+		bibleResult.Receipt.Members[0].OwnerContentHash != version.ContentHash ||
 		bibleResult.Receipt.CheckpointKey != bibledomain.StructureIdentityCheckpointKey ||
 		bibleResult.Receipt.CollectionFamily != bibledomain.StructureIdentityCollectionFamily {
 		return domain.HumanGateOwnerResult{}, errors.New("Structure Identity owner result does not match Workflow Gate")

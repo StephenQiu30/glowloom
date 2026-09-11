@@ -103,18 +103,6 @@ type EpisodeLifecycleRef struct {
 	ContentHash        string `json:"content_hash"`
 }
 
-type StructureIdentityCollectionReceipt struct {
-	ID                 string   `json:"id"`
-	CheckpointKey      string   `json:"checkpoint_key"`
-	CollectionFamily   string   `json:"collection_family"`
-	VersionID          string   `json:"version_id"`
-	VersionContentHash string   `json:"version_content_hash"`
-	ReviewDecisionID   string   `json:"review_decision_id"`
-	CoveredScopeKeys   []string `json:"covered_scope_keys"`
-	CollectionRootHash string   `json:"collection_root_hash"`
-	ReceiptContentHash string   `json:"receipt_content_hash"`
-}
-
 type ConfirmStructureIdentitySetResult struct {
 	Version          StructureIdentitySetVersion        `json:"version"`
 	Receipt          StructureIdentityCollectionReceipt `json:"receipt"`

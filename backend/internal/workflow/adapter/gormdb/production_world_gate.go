@@ -16,6 +16,8 @@ import (
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -244,12 +246,33 @@ func validateProductionWorldFormalReadSet(
 	if err = database.First(&identityHead, "project_id = ?", run.ProjectID).Error; err != nil {
 		return normalizeNotFound(err)
 	}
+	identityCollection, buildErr := bibledomain.BuildStructureIdentityCollection(bibledomain.StructureIdentitySetVersion{
+		SchemaVersion: bibledomain.StructureIdentitySetSchemaVersion,
+		ID:            identityVersion.ID.String(), WorkspaceID: identityVersion.WorkspaceID.String(), ProjectID: identityVersion.ProjectID.String(),
+		Version: identityVersion.Version, ContentHash: identityVersion.ContentHash,
+	})
+	var identityHeadRefs []ownercollection.VersionRef
+	if json.Unmarshal(identityHead.CurrentVersionRefs, &identityHeadRefs) != nil {
+		return errors.New("Production World Gate StructureIdentitySet Head refs have drifted")
+	}
+	rebuiltIdentityHead, headErr := bibledomain.NewStructureIdentityScopeHead(
+		identityCollection,
+		identityVersion.ID.String(),
+		identityHead.HeadRevision,
+		identityHead.UpdatedAt,
+	)
 	if identityVersion.WorkspaceID != run.WorkspaceID || identityVersion.ProjectID != run.ProjectID ||
 		candidate.StructureIdentitySetVersion.Revision != int64(identityVersion.Version) ||
 		candidate.StructureIdentitySetVersion.ContentHash != identityVersion.ContentHash ||
 		identityHead.WorkspaceID != run.WorkspaceID || identityHead.CurrentVersionID != identityVersion.ID ||
-		identityHead.HeadRevision != int64(identityVersion.Version) ||
-		identityHead.HeadHash != identityVersion.ContentHash {
+		buildErr != nil || headErr != nil || identityHead.ScopeKey != rebuiltIdentityHead.ScopeKey ||
+		identityHead.ScopeRevision != rebuiltIdentityHead.ScopeRevision ||
+		identityHead.ScopeContentHash != rebuiltIdentityHead.ScopeContentHash ||
+		identityHead.MemberCount != rebuiltIdentityHead.MemberCount ||
+		identityHead.MembersHash != rebuiltIdentityHead.MembersHash ||
+		identityHead.CollectionRootHash != rebuiltIdentityHead.CollectionRootHash ||
+		identityHead.HeadContentHash != rebuiltIdentityHead.HeadContentHash ||
+		!reflect.DeepEqual(identityHeadRefs, rebuiltIdentityHead.CurrentVersionRefs) {
 		return errors.New("Production World Gate StructureIdentitySet Head has drifted")
 	}
 	return nil

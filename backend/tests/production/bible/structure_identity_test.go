@@ -169,13 +169,17 @@ func TestConfirmStructureIdentitySetPublishesGateOneCheckpoint(t *testing.T) {
 	failing := command
 	failing.GateInputID, failing.GateInputHash = uuid.NewString(), structureIdentityHash("next-gate")
 	failing.ReviewDecisionID = uuid.NewString()
-	failing.ExpectedHeadRevision, failing.ExpectedHeadHash = 1, first.Version.ContentHash
+	var currentHead model.StructureIdentityScopeHead
+	if err = database.First(&currentHead, "project_id = ?", projectID).Error; err != nil {
+		t.Fatal(err)
+	}
+	failing.ExpectedHeadRevision, failing.ExpectedHeadHash = 1, currentHead.HeadContentHash
 	failing.IdempotencyKey = "gate-1-bible-receipt-failure:" + projectID.String()
 	failing.Identities = append([]bibledomain.StructureIdentity(nil), command.Identities...)
 	reuseKey := failing.Identities[0].IdentityKey
 	failing.Identities[0].Resolution, failing.Identities[0].ReuseIdentityKey = "reuse", &reuseKey
 	generatedVersionID, generatedCollectionID := uuid.NewString(), uuid.NewString()
-	ids := []string{generatedVersionID, generatedCollectionID, episodes.ID, uuid.NewString()}
+	ids := []string{generatedVersionID, generatedCollectionID, uuid.NewString(), episodes.ID, uuid.NewString()}
 	failingService := bibleapp.NewService(biblegorm.New(database), bibleapp.Config{
 		Now: func() time.Time { return now.Add(time.Minute) },
 		NewID: func() string {
@@ -192,7 +196,8 @@ func TestConfirmStructureIdentitySetPublishesGateOneCheckpoint(t *testing.T) {
 	if err = database.First(&head, "project_id = ?", projectID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if head.CurrentVersionID.String() != first.Version.ID || head.HeadRevision != 1 || head.HeadHash != first.Version.ContentHash {
+	if head.CurrentVersionID.String() != first.Version.ID || head.HeadRevision != 1 ||
+		head.HeadContentHash != currentHead.HeadContentHash || head.CollectionRootHash != first.Receipt.CollectionRootHash {
 		t.Fatalf("failed transaction changed Head: %#v", head)
 	}
 	for _, generatedID := range []string{generatedVersionID, generatedCollectionID} {

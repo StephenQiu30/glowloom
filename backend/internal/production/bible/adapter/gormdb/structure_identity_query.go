@@ -3,13 +3,14 @@ package gormdb
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"slices"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 )
@@ -54,7 +55,17 @@ func (store *Store) ReadCurrentStructureIdentity(
 		if err != nil {
 			return err
 		}
-		if head.HeadRevision != int64(version.Version) || head.HeadHash != version.ContentHash {
+		collection, buildErr := domain.BuildStructureIdentityCollection(version)
+		var headRefs []ownercollection.VersionRef
+		if json.Unmarshal(head.CurrentVersionRefs, &headRefs) != nil {
+			return structureIdentityQueryDrift("Structure Identity Head refs have drifted")
+		}
+		rebuiltHead, headErr := domain.NewStructureIdentityScopeHead(collection, version.ID, head.HeadRevision, head.UpdatedAt)
+		if buildErr != nil || headErr != nil || head.ScopeKey != rebuiltHead.ScopeKey ||
+			head.ScopeRevision != rebuiltHead.ScopeRevision || head.ScopeContentHash != rebuiltHead.ScopeContentHash ||
+			head.MemberCount != rebuiltHead.MemberCount || head.MembersHash != rebuiltHead.MembersHash ||
+			head.CollectionRootHash != rebuiltHead.CollectionRootHash || head.HeadContentHash != rebuiltHead.HeadContentHash ||
+			!reflect.DeepEqual(headRefs, rebuiltHead.CurrentVersionRefs) {
 			return structureIdentityQueryDrift("Structure Identity Head has drifted")
 		}
 
@@ -69,31 +80,32 @@ func (store *Store) ReadCurrentStructureIdentity(
 			return normalizeNotFound(loadErr)
 		}
 		var scopes []string
-		var members []struct {
-			VersionID   string `json:"version_id"`
-			ContentHash string `json:"content_hash"`
-		}
+		var members, committed []ownercollection.VersionRef
 		if json.Unmarshal(receiptRecord.CoveredScopeKeys, &scopes) != nil ||
-			json.Unmarshal(receiptRecord.Members, &members) != nil || len(members) != 1 {
+			json.Unmarshal(receiptRecord.Members, &members) != nil ||
+			json.Unmarshal(receiptRecord.CommittedOwnerRefs, &committed) != nil || len(members) != 1 {
 			return structureIdentityQueryDrift("Structure Identity receipt has drifted")
 		}
-		receipt = domain.StructureIdentityCollectionReceipt{
-			ID: receiptRecord.ID.String(), CheckpointKey: receiptRecord.CheckpointKey,
-			CollectionFamily: receiptRecord.CollectionFamily, VersionID: receiptRecord.VersionID.String(),
-			VersionContentHash: members[0].ContentHash, ReviewDecisionID: receiptRecord.ReviewDecisionID.String(),
-			CoveredScopeKeys: scopes, CollectionRootHash: receiptRecord.CollectionRootHash,
-			ReceiptContentHash: receiptRecord.ReceiptContentHash,
-		}
-		if members[0].VersionID != version.ID || receipt.VersionID != version.ID ||
-			receipt.VersionContentHash != version.ContentHash || receipt.ReviewDecisionID != version.ReviewDecisionID ||
-			receipt.CheckpointKey != domain.StructureIdentityCheckpointKey ||
-			receipt.CollectionFamily != domain.StructureIdentityCollectionFamily {
+		receipt, buildErr = domain.NewStructureIdentityCollectionReceipt(
+			receiptRecord.ID.String(), receiptRecord.CommandID.String(), receiptRecord.IdempotencyKey,
+			receiptRecord.ReviewDecisionID.String(), collection, scopes,
+			receiptRecord.CommittedAt, receiptRecord.CommittedBy.String(),
+		)
+		if buildErr != nil || receiptRecord.VersionID.String() != version.ID ||
+			receiptRecord.CheckpointKey != receipt.CheckpointKey || receiptRecord.OwnerKind != receipt.OwnerKind ||
+			receiptRecord.CollectionFamily != receipt.CollectionFamily || receiptRecord.ScopeKind != receipt.ScopeKind ||
+			receiptRecord.ScopeKey != receipt.ScopeKey || receiptRecord.ScopeRevision != receipt.ScopeRevision ||
+			receiptRecord.ScopeContentHash != receipt.ScopeContentHash || receiptRecord.MemberCount != receipt.MemberCount ||
+			receiptRecord.MembersHash != receipt.MembersHash || receiptRecord.CollectionRootHash != receipt.CollectionRootHash ||
+			receiptRecord.ReceiptContentHash != receipt.ReceiptContentHash || !reflect.DeepEqual(members, receipt.Members) ||
+			!reflect.DeepEqual(committed, receipt.CommittedOwnerVersionRefs) || receipt.ReviewDecisionID != version.ReviewDecisionID {
 			return structureIdentityQueryDrift("Structure Identity receipt does not match its version")
 		}
 		expectedScopes := make([]string, len(version.SceneRefs))
 		for index, scene := range version.SceneRefs {
 			expectedScopes[index] = scene.ScopeKey
 		}
+		slices.Sort(expectedScopes)
 		if !slices.Equal(receipt.CoveredScopeKeys, expectedScopes) {
 			return structureIdentityQueryDrift("Structure Identity receipt scope has drifted")
 		}
@@ -120,28 +132,6 @@ func (store *Store) ReadCurrentStructureIdentity(
 		)
 		if hashErr != nil || expectedVersionHash != version.ContentHash {
 			return structureIdentityQueryDrift("Structure Identity version content has drifted")
-		}
-		expectedCollectionRoot, hashErr := platformcommand.InputHash(struct {
-			Family, VersionID, VersionHash string
-			CoveredScopeKeys               []string
-		}{domain.StructureIdentityCollectionFamily, version.ID, version.ContentHash, expectedScopes})
-		if hashErr != nil || expectedCollectionRoot != receipt.CollectionRootHash {
-			return structureIdentityQueryDrift("Structure Identity collection root has drifted")
-		}
-		expectedReceiptHash, hashErr := platformcommand.InputHash(struct {
-			CheckpointKey, Family, VersionID, VersionHash, ReviewDecisionID, CollectionRootHash string
-			CoveredScopeKeys                                                                    []string
-		}{
-			domain.StructureIdentityCheckpointKey,
-			domain.StructureIdentityCollectionFamily,
-			version.ID,
-			version.ContentHash,
-			version.ReviewDecisionID,
-			receipt.CollectionRootHash,
-			expectedScopes,
-		})
-		if hashErr != nil || expectedReceiptHash != receipt.ReceiptContentHash {
-			return structureIdentityQueryDrift("Structure Identity receipt content has drifted")
 		}
 		var commandReceipt model.CommandReceipt
 		query := transaction.Where(

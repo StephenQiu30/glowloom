@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/google/uuid"
 
@@ -86,12 +87,20 @@ func (query *StructureIdentityQuery) GetCurrent(
 		return StructureIdentitySnapshot{}, err
 	}
 	_, commandReceiptIDErr := uuid.Parse(commandReceiptID)
+	collection, collectionErr := domain.BuildStructureIdentityCollection(version)
+	rebuiltReceipt, receiptErr := domain.NewStructureIdentityCollectionReceipt(
+		receipt.ID, receipt.CommandID, receipt.IdempotencyKey, receipt.ReviewDecisionID,
+		collection, receipt.CoveredScopeKeys, receipt.CommittedAt, receipt.CommittedBy,
+	)
 	if version.SchemaVersion != domain.StructureIdentitySetSchemaVersion || version.ID == "" ||
 		version.WorkspaceID != project.WorkspaceID || version.ProjectID != projectID || version.Version < 1 ||
 		!validStructureIdentityHash(version.ContentHash) || version.CreatedAt.IsZero() ||
 		receipt.ID == "" || receipt.CheckpointKey != domain.StructureIdentityCheckpointKey ||
 		receipt.CollectionFamily != domain.StructureIdentityCollectionFamily ||
-		receipt.VersionID != version.ID || receipt.VersionContentHash != version.ContentHash ||
+		receipt.OwnerKind != "production/bible" || receipt.WorkspaceID != version.WorkspaceID || receipt.ProjectID != version.ProjectID ||
+		collectionErr != nil || receipt.CollectionRootHash != collection.CollectionRootHash ||
+		!reflect.DeepEqual(receipt.Members, collection.Members) ||
+		receiptErr != nil || !reflect.DeepEqual(receipt, rebuiltReceipt) ||
 		commandReceiptIDErr != nil ||
 		!validStructureIdentityHash(receipt.CollectionRootHash) ||
 		!validStructureIdentityHash(receipt.ReceiptContentHash) {

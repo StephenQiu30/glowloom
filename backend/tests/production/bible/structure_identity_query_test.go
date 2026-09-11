@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	biblehttp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/httpapi"
 	app "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -82,24 +83,16 @@ func TestStructureIdentityQueryReadsOnlyRequestedFormalVersion(t *testing.T) {
 func TestStructureIdentityQueryRequiresCurrentAccessAndExactReceipt(t *testing.T) {
 	workspaceID, projectID, versionID, decisionID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
 	value := domain.StructureIdentitySetVersion{
-		SchemaVersion: domain.StructureIdentitySetSchemaVersion,
-		ID:            versionID,
-		WorkspaceID:   workspaceID,
-		ProjectID:     projectID,
-		Version:       1,
-		ContentHash:   structureIdentityHash("formal-version"),
-		CreatedAt:     time.Now().UTC(),
+		SchemaVersion:    domain.StructureIdentitySetSchemaVersion,
+		ID:               versionID,
+		WorkspaceID:      workspaceID,
+		ProjectID:        projectID,
+		Version:          1,
+		ContentHash:      structureIdentityHash("formal-version"),
+		ReviewDecisionID: decisionID,
+		CreatedAt:        time.Now().UTC(),
 	}
-	receipt := domain.StructureIdentityCollectionReceipt{
-		ID:                 uuid.NewString(),
-		CheckpointKey:      domain.StructureIdentityCheckpointKey,
-		CollectionFamily:   domain.StructureIdentityCollectionFamily,
-		VersionID:          versionID,
-		VersionContentHash: value.ContentHash,
-		ReviewDecisionID:   decisionID,
-		CollectionRootHash: structureIdentityHash("collection-root"),
-		ReceiptContentHash: structureIdentityHash("receipt"),
-	}
+	receipt := structureIdentityQueryReceipt(t, value)
 	commandReceiptID := uuid.NewString()
 	store := &structureIdentityQueryStore{value: value, receipt: receipt, commandReceiptID: commandReceiptID}
 	projects := textQueryProject{value: projectdomain.Project{ID: projectID, WorkspaceID: workspaceID}}
@@ -113,15 +106,20 @@ func TestStructureIdentityQueryRequiresCurrentAccessAndExactReceipt(t *testing.T
 	for _, mode := range []string{"scope", "version", "receipt-version", "receipt-hash", "checkpoint", "command-receipt"} {
 		t.Run(mode, func(t *testing.T) {
 			store.value, store.receipt = value, receipt
+			store.receipt.Members = append([]ownercollection.VersionRef(nil), receipt.Members...)
+			store.receipt.CommittedOwnerVersionRefs = append(
+				[]ownercollection.VersionRef(nil), receipt.CommittedOwnerVersionRefs...,
+			)
+			store.receipt.CoveredScopeKeys = append([]string(nil), receipt.CoveredScopeKeys...)
 			switch mode {
 			case "scope":
 				store.value.ProjectID = uuid.NewString()
 			case "version":
 				store.value.Version = 0
 			case "receipt-version":
-				store.receipt.VersionID = uuid.NewString()
+				store.receipt.Members[0].OwnerVersionID = uuid.NewString()
 			case "receipt-hash":
-				store.receipt.VersionContentHash = structureIdentityHash("other-version")
+				store.receipt.Members[0].OwnerContentHash = structureIdentityHash("other-version")
 			case "checkpoint":
 				store.receipt.CheckpointKey = "other_checkpoint"
 			case "command-receipt":
@@ -155,18 +153,14 @@ func TestStructureIdentityQueryRequiresCurrentAccessAndExactReceipt(t *testing.T
 
 func TestStructureIdentityHTTPReturnsFrozenFormalResult(t *testing.T) {
 	projectID, versionID := uuid.NewString(), uuid.NewString()
+	version := domain.StructureIdentitySetVersion{
+		SchemaVersion: domain.StructureIdentitySetSchemaVersion,
+		ID:            versionID, ProjectID: projectID, WorkspaceID: uuid.NewString(), Version: 1,
+		ContentHash: structureIdentityHash("formal-version"), ReviewDecisionID: uuid.NewString(), CreatedAt: time.Now().UTC(),
+	}
 	result := app.StructureIdentitySnapshot{
-		Version: domain.StructureIdentitySetVersion{
-			SchemaVersion: domain.StructureIdentitySetSchemaVersion,
-			ID:            versionID, ProjectID: projectID, WorkspaceID: uuid.NewString(), Version: 1,
-			ContentHash: structureIdentityHash("formal-version"), CreatedAt: time.Now().UTC(),
-		},
-		Receipt: domain.StructureIdentityCollectionReceipt{
-			ID: uuid.NewString(), CheckpointKey: domain.StructureIdentityCheckpointKey,
-			CollectionFamily: domain.StructureIdentityCollectionFamily, VersionID: versionID,
-			VersionContentHash: structureIdentityHash("formal-version"), ReviewDecisionID: uuid.NewString(),
-			CollectionRootHash: structureIdentityHash("root"), ReceiptContentHash: structureIdentityHash("receipt"),
-		},
+		Version:          version,
+		Receipt:          structureIdentityQueryReceipt(t, version),
 		CommandReceiptID: uuid.NewString(),
 	}
 	mux := http.NewServeMux()
@@ -189,7 +183,8 @@ func TestStructureIdentityHTTPReturnsFrozenFormalResult(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Data.Version.ID != versionID || payload.Data.Receipt.VersionID != versionID {
+	if payload.Data.Version.ID != versionID || len(payload.Data.Receipt.Members) != 1 ||
+		payload.Data.Receipt.Members[0].OwnerVersionID != versionID {
 		t.Fatalf("response=%+v", payload.Data)
 	}
 
@@ -202,4 +197,23 @@ func TestStructureIdentityHTTPReturnsFrozenFormalResult(t *testing.T) {
 	if invalid.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("query parameter status=%d body=%s", invalid.Code, invalid.Body.String())
 	}
+}
+
+func structureIdentityQueryReceipt(
+	t *testing.T,
+	version domain.StructureIdentitySetVersion,
+) domain.StructureIdentityCollectionReceipt {
+	t.Helper()
+	collection, err := domain.BuildStructureIdentityCollection(version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := domain.NewStructureIdentityCollectionReceipt(
+		uuid.NewString(), uuid.NewString(), "structure-identity-query", version.ReviewDecisionID,
+		collection, []string{"scene:query"}, time.Now().UTC(), uuid.NewString(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return receipt
 }

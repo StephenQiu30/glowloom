@@ -131,7 +131,8 @@
   - [ ] 让各正式 Owner Writer 逐一改用同一 Root 算法，再由完整 Owner Apply Receipt 形成 `VerifiedCoverageProof`；未完成前不得把 Receipt Hash 与重算 Collection Root 误报为等价。
     - [x] `production/script` 在接受 Source Revision 时以匹配的 SourceSpanIndexVersion 生成精确 `script_source_set`，持久化共享成员前像与 Root；Compiler 同事务重读正式 Receipt 并重算全等。
     - [x] `production/project` 在 Gate 1 第一条 Owner 命令中发布不可变 Episode Version、逐 Scope 完整 Membership、线性 Scope Head 与 `project_episode_lifecycle_confirmed / project_episode_set` Receipt；Bible、Production World 和 Compiler 只接受该正式 Receipt 并重算全等。
-    - [ ] 切换 Bible Structure、Bible/Planning/Asset Writer，并补齐相应 Receipt 对账。
+    - [x] `production/bible` 在 Gate 1 第二条 Owner 命令中把既有不可变 `StructureIdentitySetVersion` 发布为精确 `bible_structure_identity_set`；Head、Collection Receipt、Gate 2 与 Compiler 均重算同一共享 Root，不再保留自定义成员或 Receipt Hash 算法。
+    - [ ] 切换 Bible Production World、Planning/Asset Writer，并补齐相应 Receipt 对账。
   - [ ] 完成 production Schema Manifest 与剩余 Payload/Edge invariant 后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。

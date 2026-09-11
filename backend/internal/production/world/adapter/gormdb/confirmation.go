@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
@@ -224,6 +226,9 @@ func (transaction *confirmationTransaction) validateStructureIdentity(
 		Where("project_id = ? AND version_id = ?", projectID, versionID).First(&collection).Error; err != nil {
 		return err
 	}
+	if validateStructureIdentityOwnerRecords(workspaceID, projectID, version, head, collection) != nil {
+		return application.ErrProductionWorldConfirmationConflict
+	}
 	var projectReceipt model.ProjectEpisodeCollectionReceipt
 	if err := transaction.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
 		First(&projectReceipt, "id = ?", version.ProjectEpisodeReceiptID).Error; err != nil {
@@ -252,9 +257,7 @@ func (transaction *confirmationTransaction) validateStructureIdentity(
 	ref := command.Candidate.StructureIdentitySetVersion
 	if version.WorkspaceID != workspaceID || version.ProjectID != projectID || version.ReviewDecisionID == uuid.Nil ||
 		int64(version.Version) != ref.Revision || version.ContentHash != ref.ContentHash ||
-		head.WorkspaceID != workspaceID || head.CurrentVersionID != version.ID || head.HeadRevision != ref.Revision ||
-		head.HeadHash != ref.ContentHash || collection.WorkspaceID != workspaceID ||
-		collection.CollectionRootHash == "" || collection.ReceiptContentHash == "" ||
+		head.WorkspaceID != workspaceID || head.CurrentVersionID != version.ID ||
 		receiptErr != nil || projectReceipt.WorkspaceID != workspaceID || projectReceipt.ProjectID != projectID ||
 		projectReceipt.DecisionCheckpointID != projectdomain.ProjectEpisodeCheckpoint ||
 		projectReceipt.OwnerKind != "production/project" || projectReceipt.VersionFamily != projectdomain.ProjectEpisodeCollectionFamily ||
@@ -267,6 +270,72 @@ func (transaction *confirmationTransaction) validateStructureIdentity(
 		!reflect.DeepEqual(committedProjectMembers, rebuiltProjectReceipt.CommittedOwnerVersionRefs) ||
 		!reflect.DeepEqual(coveredProjectScopes, rebuiltProjectReceipt.CoveredScopeKeys) {
 		return application.ErrProductionWorldConfirmationConflict
+	}
+	return nil
+}
+
+func validateStructureIdentityOwnerRecords(
+	workspaceID, projectID uuid.UUID,
+	version model.StructureIdentitySetVersion,
+	head model.StructureIdentityScopeHead,
+	receipt model.StructureIdentityCollectionReceipt,
+) error {
+	domainVersion := bibledomain.StructureIdentitySetVersion{
+		SchemaVersion: bibledomain.StructureIdentitySetSchemaVersion,
+		ID:            version.ID.String(), WorkspaceID: version.WorkspaceID.String(), ProjectID: version.ProjectID.String(),
+		Version: version.Version, ContentHash: version.ContentHash,
+	}
+	collection, err := bibledomain.BuildStructureIdentityCollection(domainVersion)
+	if err != nil {
+		return err
+	}
+	var headRefs []ownercollection.VersionRef
+	if json.Unmarshal(head.CurrentVersionRefs, &headRefs) != nil {
+		return errors.New("Structure Identity Head refs have drifted")
+	}
+	rebuiltHead, err := bibledomain.NewStructureIdentityScopeHead(collection, version.ID.String(), head.HeadRevision, head.UpdatedAt)
+	if err != nil || head.WorkspaceID != workspaceID || head.ProjectID != projectID ||
+		head.ScopeKey != rebuiltHead.ScopeKey || head.ScopeRevision != rebuiltHead.ScopeRevision ||
+		head.ScopeContentHash != rebuiltHead.ScopeContentHash || head.MemberCount != rebuiltHead.MemberCount ||
+		head.MembersHash != rebuiltHead.MembersHash || head.CollectionRootHash != rebuiltHead.CollectionRootHash ||
+		head.CurrentVersionID != version.ID || head.HeadContentHash != rebuiltHead.HeadContentHash ||
+		!reflect.DeepEqual(headRefs, rebuiltHead.CurrentVersionRefs) {
+		return errors.New("Structure Identity Head has drifted")
+	}
+	var members, committed []ownercollection.VersionRef
+	var scopes []string
+	if json.Unmarshal(receipt.Members, &members) != nil ||
+		json.Unmarshal(receipt.CommittedOwnerRefs, &committed) != nil ||
+		json.Unmarshal(receipt.CoveredScopeKeys, &scopes) != nil {
+		return errors.New("Structure Identity Receipt JSON has drifted")
+	}
+	rebuiltReceipt, err := bibledomain.NewStructureIdentityCollectionReceipt(
+		receipt.ID.String(), receipt.CommandID.String(), receipt.IdempotencyKey,
+		receipt.ReviewDecisionID.String(), collection, scopes, receipt.CommittedAt, receipt.CommittedBy.String(),
+	)
+	if err != nil || receipt.WorkspaceID != workspaceID || receipt.ProjectID != projectID ||
+		receipt.VersionID != version.ID || receipt.ReviewDecisionID != version.ReviewDecisionID ||
+		receipt.CheckpointKey != rebuiltReceipt.CheckpointKey || receipt.OwnerKind != rebuiltReceipt.OwnerKind ||
+		receipt.CollectionFamily != rebuiltReceipt.CollectionFamily || receipt.ScopeKind != rebuiltReceipt.ScopeKind ||
+		receipt.ScopeKey != rebuiltReceipt.ScopeKey || receipt.ScopeRevision != rebuiltReceipt.ScopeRevision ||
+		receipt.ScopeContentHash != rebuiltReceipt.ScopeContentHash || receipt.MemberCount != rebuiltReceipt.MemberCount ||
+		receipt.MembersHash != rebuiltReceipt.MembersHash || receipt.CollectionRootHash != rebuiltReceipt.CollectionRootHash ||
+		receipt.ReceiptContentHash != rebuiltReceipt.ReceiptContentHash ||
+		!reflect.DeepEqual(members, rebuiltReceipt.Members) ||
+		!reflect.DeepEqual(committed, rebuiltReceipt.CommittedOwnerVersionRefs) {
+		return errors.New("Structure Identity Receipt has drifted")
+	}
+	var sceneRefs []bibledomain.StructureIdentitySceneRef
+	if json.Unmarshal(version.SceneRefs, &sceneRefs) != nil || len(sceneRefs) == 0 {
+		return errors.New("Structure Identity scope proof has drifted")
+	}
+	expectedScopes := make([]string, len(sceneRefs))
+	for index, scene := range sceneRefs {
+		expectedScopes[index] = scene.ScopeKey
+	}
+	slices.Sort(expectedScopes)
+	if !slices.Equal(scopes, expectedScopes) {
+		return errors.New("Structure Identity scope proof has drifted")
 	}
 	return nil
 }

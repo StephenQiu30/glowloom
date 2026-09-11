@@ -674,6 +674,10 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		WorkflowRunID: started.ID, NodeRunID: productionWorldGate.NodeRunID, NodeID: productionWorldGate.NodeID,
 		Executor: productionWorldGate.Executor, Attempt: 1,
 	}
+	var currentStructureHead model.StructureIdentityScopeHead
+	if err = database.First(&currentStructureHead, "project_id = ?", fixture.projectID).Error; err != nil {
+		t.Fatalf("load StructureIdentity Head before Gate 2 drift check: %v", err)
+	}
 	if err = database.Model(&model.StructureIdentityScopeHead{}).
 		Where("project_id = ?", fixture.projectID).
 		Update("head_hash", strings.Repeat("f", 64)).Error; err != nil {
@@ -682,7 +686,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	staleGateErr := runtimeService.OpenHumanGate(ctx, productionWorldGateCommand)
 	if err = database.Model(&model.StructureIdentityScopeHead{}).
 		Where("project_id = ?", fixture.projectID).
-		Update("head_hash", structureVersion.ContentHash).Error; err != nil {
+		Update("head_hash", currentStructureHead.HeadContentHash).Error; err != nil {
 		t.Fatalf("restore StructureIdentity Head before Gate 2: %v", err)
 	}
 	if staleGateErr == nil || !strings.Contains(staleGateErr.Error(), "StructureIdentitySet Head has drifted") {
@@ -1723,6 +1727,26 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		Count(&storyGraphVersionCountBeforeDrift).Error; err != nil {
 		t.Fatal(err)
 	}
+	var structureReceipt model.StructureIdentityCollectionReceipt
+	if err = database.First(&structureReceipt, "version_id = ?", structureVersion.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Table(structureReceipt.TableName()).Where("id = ?", structureReceipt.ID).
+		Update("collection_root_hash", sceneTextHash("drifted-structure-identity-receipt")).Error; err != nil {
+		t.Fatalf("drift Structure Identity Receipt before StoryGraph acceptance: %v", err)
+	}
+	driftedStructureReceiptCommand := productionGraphCommand
+	driftedStructureReceiptCommand.IdempotencyKey = "production-storygraph-structure-receipt-drift:" + confirmedWorld.CommandReceiptID
+	_, driftErr := productionGraphService.CompileProduction(ctx, productionGraphActor, driftedStructureReceiptCommand)
+	var applicationError *storygraphapp.Error
+	if !errors.As(driftErr, &applicationError) || applicationError.Code != "invalid_owner_snapshot" ||
+		applicationError.Message != "Structure Identity Receipt has drifted" {
+		t.Fatalf("drifted Structure Identity Receipt error = %v", driftErr)
+	}
+	if err = database.Table(structureReceipt.TableName()).Where("id = ?", structureReceipt.ID).
+		Update("collection_root_hash", structureReceipt.CollectionRootHash).Error; err != nil {
+		t.Fatalf("restore Structure Identity Receipt: %v", err)
+	}
 	var projectEpisodeHead model.ProjectEpisodeScopeHead
 	if err = database.First(&projectEpisodeHead, "project_id = ?", fixture.projectID).Error; err != nil {
 		t.Fatal(err)
@@ -1733,8 +1757,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	}
 	driftedProjectEpisodeCommand := productionGraphCommand
 	driftedProjectEpisodeCommand.IdempotencyKey = "production-storygraph-project-episode-head-drift:" + confirmedWorld.CommandReceiptID
-	_, driftErr := productionGraphService.CompileProduction(ctx, productionGraphActor, driftedProjectEpisodeCommand)
-	var applicationError *storygraphapp.Error
+	_, driftErr = productionGraphService.CompileProduction(ctx, productionGraphActor, driftedProjectEpisodeCommand)
 	if !errors.As(driftErr, &applicationError) || applicationError.Code != "invalid_owner_snapshot" ||
 		applicationError.Message != "Project Episode Owner Head has advanced beyond the Production World receipt" {
 		t.Fatalf("stale Project Episode Owner Head error = %v", driftErr)

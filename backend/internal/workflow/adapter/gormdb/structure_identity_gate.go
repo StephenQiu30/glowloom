@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ import (
 	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
+	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
 )
 
@@ -437,10 +440,29 @@ func structureIdentityBibleHead(database *gorm.DB, projectID uuid.UUID) (domain.
 	if err != nil {
 		return domain.HumanGateExpectedHead{}, err
 	}
-	if head.ProjectID != projectID || head.HeadRevision < 1 || len(head.HeadHash) != 64 {
+	var version model.StructureIdentitySetVersion
+	if err = database.First(&version, "id = ?", head.CurrentVersionID).Error; err != nil {
+		return domain.HumanGateExpectedHead{}, err
+	}
+	collection, buildErr := bibledomain.BuildStructureIdentityCollection(bibledomain.StructureIdentitySetVersion{
+		SchemaVersion: bibledomain.StructureIdentitySetSchemaVersion,
+		ID:            version.ID.String(), WorkspaceID: version.WorkspaceID.String(), ProjectID: version.ProjectID.String(),
+		Version: version.Version, ContentHash: version.ContentHash,
+	})
+	var refs []ownercollection.VersionRef
+	if json.Unmarshal(head.CurrentVersionRefs, &refs) != nil {
+		return domain.HumanGateExpectedHead{}, errors.New("structure identity Bible Head refs have drifted")
+	}
+	rebuilt, headErr := bibledomain.NewStructureIdentityScopeHead(collection, version.ID.String(), head.HeadRevision, head.UpdatedAt)
+	if buildErr != nil || headErr != nil || head.ProjectID != projectID || version.ProjectID != projectID ||
+		head.CurrentVersionID != version.ID || head.ScopeKey != rebuilt.ScopeKey ||
+		head.ScopeRevision != rebuilt.ScopeRevision || head.ScopeContentHash != rebuilt.ScopeContentHash ||
+		head.MemberCount != rebuilt.MemberCount || head.MembersHash != rebuilt.MembersHash ||
+		head.CollectionRootHash != rebuilt.CollectionRootHash || head.HeadContentHash != rebuilt.HeadContentHash ||
+		!reflect.DeepEqual(refs, rebuilt.CurrentVersionRefs) {
 		return domain.HumanGateExpectedHead{}, errors.New("structure identity Bible Head has drifted")
 	}
-	result.Revision, result.ContentHash = head.HeadRevision, head.HeadHash
+	result.Revision, result.ContentHash = head.HeadRevision, head.HeadContentHash
 	return result, nil
 }
 

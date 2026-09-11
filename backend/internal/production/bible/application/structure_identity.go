@@ -37,10 +37,7 @@ type StructureIdentitySource struct {
 	CodepointCount                                                   int
 }
 
-type StructureIdentityHead struct {
-	CurrentVersionID, HeadHash string
-	HeadRevision               int64
-}
+type StructureIdentityHead = domain.StructureIdentityScopeHead
 
 type StructureIdentityEpisodeCheckpoint struct {
 	GateInputID, GateInputHash, ReviewDecisionID string
@@ -77,7 +74,7 @@ type StructureIdentityRepository interface {
 	GetStructureIdentityVersion(context.Context, string) (domain.StructureIdentitySetVersion, error)
 	CreateStructureIdentityVersion(context.Context, domain.StructureIdentitySetVersion) error
 	SaveStructureIdentityHead(context.Context, string, string, StructureIdentityHead, time.Time) error
-	CreateStructureIdentityCollectionReceipt(context.Context, domain.StructureIdentityCollectionReceipt, string, string, time.Time) error
+	CreateStructureIdentityCollectionReceipt(context.Context, domain.StructureIdentityCollectionReceipt) error
 	CreateStructureIdentityCommandReceipt(context.Context, platformcommand.Receipt) error
 	AppendStructureIdentityAudit(context.Context, StructureIdentityAudit) error
 	AppendStructureIdentityOutbox(context.Context, StructureIdentityOutbox) error
@@ -148,7 +145,7 @@ func (service *Service) ConfirmStructureIdentitySet(
 			return loadErr
 		}
 		if (!found && (command.ExpectedHeadRevision != 0 || command.ExpectedHeadHash != "")) ||
-			(found && (head.HeadRevision != command.ExpectedHeadRevision || head.HeadHash != command.ExpectedHeadHash)) {
+			(found && (head.HeadRevision != command.ExpectedHeadRevision || head.HeadContentHash != command.ExpectedHeadHash)) {
 			return conflict("Production Bible structure identity Head has changed")
 		}
 		var parentVersionID *string
@@ -185,7 +182,14 @@ func (service *Service) ConfirmStructureIdentitySet(
 		if createErr := repository.CreateStructureIdentityVersion(ctx, result.Version); createErr != nil {
 			return createErr
 		}
-		newHead := StructureIdentityHead{CurrentVersionID: versionID, HeadRevision: int64(versionNumber), HeadHash: contentHash}
+		collection, buildErr := domain.BuildStructureIdentityCollection(result.Version)
+		if buildErr != nil {
+			return buildErr
+		}
+		newHead, buildErr := domain.NewStructureIdentityScopeHead(collection, versionID, int64(versionNumber), now)
+		if buildErr != nil {
+			return buildErr
+		}
 		if saveErr := repository.SaveStructureIdentityHead(ctx, command.WorkspaceID, command.ProjectID, newHead, now); saveErr != nil {
 			return saveErr
 		}
@@ -194,30 +198,16 @@ func (service *Service) ConfirmStructureIdentitySet(
 		for index, scene := range command.SceneRefs {
 			scopes[index] = scene.ScopeKey
 		}
-		collectionRootHash, hashErr := platformcommand.InputHash(struct {
-			Family, VersionID, VersionHash string
-			CoveredScopeKeys               []string
-		}{domain.StructureIdentityCollectionFamily, versionID, contentHash, scopes})
-		if hashErr != nil {
-			return hashErr
+		slices.Sort(scopes)
+		collectionReceiptID, ownerCommandID := service.config.NewID(), service.config.NewID()
+		result.Receipt, buildErr = domain.NewStructureIdentityCollectionReceipt(
+			collectionReceiptID, ownerCommandID, command.IdempotencyKey, command.ReviewDecisionID,
+			collection, scopes, now, actor.UserID,
+		)
+		if buildErr != nil {
+			return buildErr
 		}
-		collectionReceiptID := service.config.NewID()
-		receiptContentHash, hashErr := platformcommand.InputHash(struct {
-			CheckpointKey, Family, VersionID, VersionHash, ReviewDecisionID, CollectionRootHash string
-			CoveredScopeKeys                                                                    []string
-		}{domain.StructureIdentityCheckpointKey, domain.StructureIdentityCollectionFamily, versionID, contentHash, command.ReviewDecisionID, collectionRootHash, scopes})
-		if hashErr != nil {
-			return hashErr
-		}
-		result.Receipt = domain.StructureIdentityCollectionReceipt{
-			ID: collectionReceiptID, CheckpointKey: domain.StructureIdentityCheckpointKey,
-			CollectionFamily: domain.StructureIdentityCollectionFamily, VersionID: versionID,
-			VersionContentHash: contentHash, ReviewDecisionID: command.ReviewDecisionID,
-			CoveredScopeKeys: scopes, CollectionRootHash: collectionRootHash, ReceiptContentHash: receiptContentHash,
-		}
-		if createErr := repository.CreateStructureIdentityCollectionReceipt(
-			ctx, result.Receipt, command.WorkspaceID, command.ProjectID, now,
-		); createErr != nil {
+		if createErr := repository.CreateStructureIdentityCollectionReceipt(ctx, result.Receipt); createErr != nil {
 			return createErr
 		}
 		commandReceiptID := service.config.NewID()
@@ -236,14 +226,14 @@ func (service *Service) ConfirmStructureIdentitySet(
 		if auditErr := repository.AppendStructureIdentityAudit(ctx, StructureIdentityAudit{
 			WorkspaceID: command.WorkspaceID, ActorID: actor.UserID, ProjectID: command.ProjectID,
 			VersionID: versionID, ReviewDecisionID: command.ReviewDecisionID, Version: versionNumber,
-			CollectionRootHash: collectionRootHash, OccurredAt: now,
+			CollectionRootHash: collection.CollectionRootHash, OccurredAt: now,
 		}); auditErr != nil {
 			return auditErr
 		}
 		payload, encodeErr := json.Marshal(map[string]any{
 			"schema": domain.StructureIdentitySetSchemaVersion, "version_id": versionID,
 			"version": versionNumber, "content_hash": contentHash, "collection_receipt_id": collectionReceiptID,
-			"collection_root_hash": collectionRootHash,
+			"collection_root_hash": collection.CollectionRootHash,
 		})
 		if encodeErr != nil {
 			return encodeErr
