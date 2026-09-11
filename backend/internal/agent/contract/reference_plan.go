@@ -231,7 +231,10 @@ func (value ReferencePlanInput) Validate() error {
 		return err
 	}
 	fixed, sceneScopes, err := validateReferencePlanFixedSeeds(value, anchors, appearances)
-	if err != nil || !slices.Equal(sceneScopes, value.P1ScopeKeys) {
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(sceneScopes, value.P1ScopeKeys) {
 		return errors.New("invalid Reference Plan fixed target seed inventory")
 	}
 	for key := range anchors {
