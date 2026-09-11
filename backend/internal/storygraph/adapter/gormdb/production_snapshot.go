@@ -452,10 +452,31 @@ func (repo *repository) verifyProductionOwnerHeads(
 		if err := locked().First(&planningHead, "episode_id = ?", episodeID).Error; err != nil {
 			return err
 		}
-		if planningHead.WorkspaceID != workspaceID || planningHead.ProjectID != projectID ||
-			planningHead.ScopeRevision != collection.ScopeRevision || planningHead.MemberCount != collection.MemberCount ||
-			planningHead.ScopeContentHash != collection.ScopeContentHash || planningHead.MembersHash != collection.MembersHash ||
-			planningHead.CollectionRootHash != collection.CollectionRootHash {
+		facts := make([]planningdomain.ProductionWorldPlanningFact, 0, collection.MemberCount)
+		for _, fact := range material.planningFacts {
+			if fact.EpisodeID == episodeID {
+				facts = append(facts, fact)
+			}
+		}
+		rebuiltCollection, buildErr := planningdomain.BuildProductionWorldPlanningCollection(
+			state.WorkspaceID, state.ProjectID, episodeID, planningHead.ScopeRevision, facts,
+		)
+		rebuiltHead, headErr := planningdomain.NewProductionWorldPlanningEpisodeHead(
+			state.WorkspaceID, state.ProjectID, episodeID, planningHead.ScopeRevision, facts, planningHead.UpdatedAt,
+		)
+		var planningHeadRefs []ownercollection.VersionRef
+		refsErr := json.Unmarshal(planningHead.CurrentRootRefs, &planningHeadRefs)
+		if buildErr != nil || headErr != nil || refsErr != nil ||
+			collection.OwnerKind != "production/planning" || collection.ScopeKind != "episode" ||
+			collection.ScopeKey != rebuiltCollection.ScopeKey || collection.ScopeRevision != rebuiltCollection.ScopeRevision ||
+			collection.ScopeContentHash != rebuiltCollection.ScopeContentHash || collection.MemberCount != int(rebuiltCollection.MemberCount) ||
+			collection.MembersHash != rebuiltCollection.MembersHash || collection.CollectionRootHash != rebuiltCollection.CollectionRootHash ||
+			planningHead.WorkspaceID != workspaceID || planningHead.ProjectID != projectID ||
+			planningHead.EpisodeID.String() != episodeID || planningHead.ScopeRevision != rebuiltHead.ScopeRevision ||
+			planningHead.HeadRevision != rebuiltHead.HeadRevision || planningHead.MemberCount != rebuiltHead.MemberCount ||
+			planningHead.ScopeContentHash != rebuiltHead.ScopeContentHash || planningHead.MembersHash != rebuiltHead.MembersHash ||
+			planningHead.CollectionRootHash != rebuiltHead.CollectionRootHash || planningHead.HeadContentHash != rebuiltHead.HeadContentHash ||
+			!reflect.DeepEqual(planningHeadRefs, rebuiltHead.CurrentVersionRefs) {
 			return invalidOwnerSnapshot("Planning Scene Owner Head has advanced beyond the Production World receipt")
 		}
 	}

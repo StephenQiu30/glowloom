@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 )
@@ -77,14 +78,10 @@ func (repo *repository) GetProductionWorldPlanningHead(
 	head, err := domain.NewProductionWorldPlanningEpisodeHead(
 		workspaceID, projectID, episodeID, record.ScopeRevision, facts, record.UpdatedAt,
 	)
-	var rootRefs []domain.ProductionWorldPlanningFactRef
+	var rootRefs []ownercollection.VersionRef
 	rootRefErr := json.Unmarshal(record.CurrentRootRefs, &rootRefs)
-	expectedRootRefs := make([]domain.ProductionWorldPlanningFactRef, len(head.Members))
-	for index, member := range head.Members {
-		expectedRootRefs[index] = member.Fact
-	}
 	if err != nil || head.HeadRevision != record.HeadRevision || head.MemberCount != record.MemberCount ||
-		rootRefErr != nil || !reflect.DeepEqual(rootRefs, expectedRootRefs) ||
+		rootRefErr != nil || !reflect.DeepEqual(rootRefs, head.CurrentVersionRefs) ||
 		head.ScopeContentHash != record.ScopeContentHash || head.MembersHash != record.MembersHash || head.CollectionRootHash != record.CollectionRootHash ||
 		head.HeadContentHash != record.HeadContentHash {
 		return domain.ProductionWorldPlanningEpisodeHead{}, errors.New("Production World Planning Head has drifted")
@@ -196,11 +193,7 @@ func (repo *repository) SaveProductionWorldPlanningHead(ctx context.Context, hea
 	if err != nil {
 		return err
 	}
-	rootRefs := make([]domain.ProductionWorldPlanningFactRef, len(head.Members))
-	for index, member := range head.Members {
-		rootRefs[index] = member.Fact
-	}
-	refs, err := json.Marshal(rootRefs)
+	refs, err := json.Marshal(head.CurrentVersionRefs)
 	if err != nil {
 		return err
 	}

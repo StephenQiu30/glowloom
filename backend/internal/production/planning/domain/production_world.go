@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 )
 
 const PlanningSceneCollectionFamily = "planning_scene_set"
@@ -97,10 +99,44 @@ type ProductionWorldPlanningEpisodeHead struct {
 	WorkspaceID, ProjectID, EpisodeID, ScopeKey string
 	ScopeRevision, HeadRevision                 int64
 	Members                                     []ProductionWorldPlanningMember
+	CurrentVersionRefs                          []ownercollection.VersionRef
 	MemberCount                                 int
 	ScopeContentHash, MembersHash               string
 	CollectionRootHash, HeadContentHash         string
 	UpdatedAt                                   time.Time
+}
+
+func BuildProductionWorldPlanningCollection(
+	workspaceID, projectID, episodeID string,
+	revision int64,
+	facts []ProductionWorldPlanningFact,
+) (ownercollection.Ref, error) {
+	if !planningUUIDs(workspaceID, projectID, episodeID) || revision < 1 || len(facts) == 0 {
+		return ownercollection.Ref{}, errors.New("invalid Production World Planning Collection input")
+	}
+	facts = append([]ProductionWorldPlanningFact(nil), facts...)
+	slices.SortFunc(facts, func(left, right ProductionWorldPlanningFact) int {
+		return strings.Compare(left.BusinessKey, right.BusinessKey)
+	})
+	members := make([]ownercollection.VersionRef, len(facts))
+	for index, fact := range facts {
+		if ValidateProductionWorldPlanningFact(fact) != nil || fact.WorkspaceID != workspaceID ||
+			fact.ProjectID != projectID || fact.EpisodeID != episodeID ||
+			(index > 0 && facts[index-1].BusinessKey == fact.BusinessKey) {
+			return ownercollection.Ref{}, errors.New("invalid Production World Planning Collection member set")
+		}
+		members[index] = ownercollection.VersionRef{
+			WorkspaceID: workspaceID, ProjectID: projectID,
+			OwnerKind: "production/planning", VersionFamily: PlanningSceneCollectionFamily,
+			OwnerLogicalID: fact.BusinessKey, OwnerVersionID: fact.ID,
+			OwnerRevision: int64(fact.Revision), OwnerContentHash: fact.ContentHash,
+		}
+	}
+	return ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: workspaceID, ProjectID: projectID,
+		OwnerKind: "production/planning", VersionFamily: PlanningSceneCollectionFamily,
+		ScopeKind: "episode", ScopeKey: "episode:" + episodeID, ScopeRevision: revision,
+	}, members)
 }
 
 func NewProductionWorldPlanningFact(id, workspaceID, projectID, episodeID, kind, businessKey string, revision int, payload json.RawMessage, createdBy string, createdAt time.Time) (ProductionWorldPlanningFact, error) {
@@ -154,6 +190,10 @@ func NewProductionWorldPlanningEpisodeHead(workspaceID, projectID, episodeID str
 	if !planningUUIDs(workspaceID, projectID, episodeID) || revision < 1 || len(facts) == 0 || updatedAt.IsZero() {
 		return ProductionWorldPlanningEpisodeHead{}, errors.New("invalid Production World Planning Episode input")
 	}
+	collection, err := BuildProductionWorldPlanningCollection(workspaceID, projectID, episodeID, revision, facts)
+	if err != nil {
+		return ProductionWorldPlanningEpisodeHead{}, err
+	}
 	facts = append([]ProductionWorldPlanningFact(nil), facts...)
 	slices.SortFunc(facts, func(left, right ProductionWorldPlanningFact) int {
 		if compared := strings.Compare(left.Kind, right.Kind); compared != 0 {
@@ -177,36 +217,32 @@ func NewProductionWorldPlanningEpisodeHead(workspaceID, projectID, episodeID str
 			}{"production-world-planning-member", ref}),
 		}
 	}
-	membersHash := planningHash(struct {
-		Schema  string
-		Members []ProductionWorldPlanningMember
-	}{"production-world-planning-members", members})
-	scopeKey := "episode:" + episodeID
-	rootRefs := make([]ProductionWorldPlanningFactRef, len(members))
-	for index, member := range members {
-		rootRefs[index] = member.Fact
-	}
-	scopeHash := planningHash(struct {
-		Schema, OwnerKind, Family, ScopeKey string
-		ScopeRevision                       int64
-		RootRefs                            []ProductionWorldPlanningFactRef
-	}{"production-world-planning-scope", "production/planning", PlanningSceneCollectionFamily, scopeKey, revision, rootRefs})
-	rootHash := planningHash(struct {
-		Schema, Family, ScopeKey, ScopeContentHash, MembersHash string
-		ScopeRevision                                           int64
-		MemberCount                                             int
-	}{"production-world-planning-collection", PlanningSceneCollectionFamily, scopeKey, scopeHash, membersHash, revision, len(members)})
 	value := ProductionWorldPlanningEpisodeHead{
 		WorkspaceID: workspaceID, ProjectID: projectID, EpisodeID: episodeID,
-		ScopeKey: scopeKey, ScopeRevision: revision, HeadRevision: revision,
-		Members: members, MemberCount: len(members), ScopeContentHash: scopeHash, MembersHash: membersHash,
-		CollectionRootHash: rootHash, UpdatedAt: updatedAt.UTC(),
+		ScopeKey: collection.ScopeKey, ScopeRevision: collection.ScopeRevision, HeadRevision: revision,
+		Members: members, CurrentVersionRefs: append([]ownercollection.VersionRef(nil), collection.Members...),
+		MemberCount: int(collection.MemberCount), ScopeContentHash: collection.ScopeContentHash,
+		MembersHash: collection.MembersHash, CollectionRootHash: collection.CollectionRootHash,
+		UpdatedAt: updatedAt.UTC(),
 	}
 	value.HeadContentHash = planningHash(struct {
-		Schema, WorkspaceID, ProjectID, EpisodeID, ScopeKey, ScopeContentHash, MembersHash, CollectionRootHash string
-		ScopeRevision, HeadRevision                                                                            int64
-		MemberCount                                                                                            int
-	}{"production-world-planning-head", workspaceID, projectID, episodeID, scopeKey, scopeHash, membersHash, rootHash, revision, revision, len(members)})
+		ContractID         string                       `json:"contract_id"`
+		WorkspaceID        string                       `json:"workspace_id"`
+		ProjectID          string                       `json:"project_id"`
+		EpisodeID          string                       `json:"episode_id"`
+		ScopeKey           string                       `json:"scope_key"`
+		ScopeRevision      int64                        `json:"scope_revision"`
+		ScopeContentHash   string                       `json:"scope_content_hash"`
+		MemberCount        int                          `json:"member_count"`
+		MembersHash        string                       `json:"members_hash"`
+		CollectionRootHash string                       `json:"collection_root_hash"`
+		CurrentVersionRefs []ownercollection.VersionRef `json:"current_root_version_refs"`
+		HeadRevision       int64                        `json:"head_revision"`
+	}{
+		"production-world-planning-scope-head", value.WorkspaceID, value.ProjectID, value.EpisodeID,
+		value.ScopeKey, value.ScopeRevision, value.ScopeContentHash, value.MemberCount,
+		value.MembersHash, value.CollectionRootHash, value.CurrentVersionRefs, value.HeadRevision,
+	})
 	return value, nil
 }
 

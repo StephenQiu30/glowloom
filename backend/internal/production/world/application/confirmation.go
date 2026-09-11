@@ -351,17 +351,31 @@ func (service *ConfirmationService) buildCollectionReceipts(
 	}
 	for _, scope := range command.Candidate.SharedProof.PlanningEpisodeScopes {
 		head := headByEpisode[scope.EpisodeID]
-		members := make([]domain.CollectionMemberRef, len(head.Members))
-		for index, member := range head.Members {
-			members[index] = domain.CollectionMemberRef{
-				OwnerKind: "production/planning", LogicalID: member.Fact.BusinessKey,
-				VersionID: member.Fact.ID, Revision: int64(member.Fact.Revision), ContentHash: member.Fact.ContentHash,
+		facts := make([]planningdomain.ProductionWorldPlanningFact, 0, len(head.Members))
+		for _, fact := range planning.Facts {
+			if fact.EpisodeID == scope.EpisodeID {
+				facts = append(facts, fact)
 			}
 		}
-		sortCollectionRefs(members)
+		collection, buildErr := planningdomain.BuildProductionWorldPlanningCollection(
+			command.WorkspaceID, command.ProjectID, scope.EpisodeID, head.ScopeRevision, facts,
+		)
+		if buildErr != nil || head.ScopeKey != collection.ScopeKey || head.ScopeRevision != collection.ScopeRevision ||
+			head.ScopeContentHash != collection.ScopeContentHash || head.MemberCount != int(collection.MemberCount) ||
+			head.MembersHash != collection.MembersHash || head.CollectionRootHash != collection.CollectionRootHash ||
+			!reflect.DeepEqual(head.CurrentVersionRefs, collection.Members) {
+			return nil, nil, errors.New("Production World Planning Collection has drifted")
+		}
+		members := make([]domain.CollectionMemberRef, len(collection.Members))
+		for index, member := range collection.Members {
+			members[index] = domain.CollectionMemberRef{
+				OwnerKind: member.OwnerKind, LogicalID: member.OwnerLogicalID,
+				VersionID: member.OwnerVersionID, Revision: member.OwnerRevision, ContentHash: member.OwnerContentHash,
+			}
+		}
 		inputs = append(inputs, collectionReceiptInput(command, decision, "production/planning",
-			planningdomain.PlanningSceneCollectionFamily, "episode", head.ScopeKey, head.ScopeRevision,
-			head.ScopeContentHash, head.MembersHash, head.CollectionRootHash, members,
+			planningdomain.PlanningSceneCollectionFamily, "episode", collection.ScopeKey, collection.ScopeRevision,
+			collection.ScopeContentHash, collection.MembersHash, collection.CollectionRootHash, members,
 			append([]string(nil), scope.SceneScopeKeys...), now, service.newID()))
 	}
 	receipts := make([]domain.CollectionCommitReceipt, len(inputs))
