@@ -12,6 +12,10 @@ from app.modules.storygraph.scene_analysis_bundle import (
     SCENE_ANALYSIS_SKILL_BUNDLE_HASH,
     SceneAnalysisBundle,
 )
+from app.modules.storygraph.visual_foundation_bundle import (
+    VISUAL_FOUNDATION_SKILL_BUNDLE_HASH,
+    VisualFoundationBundle,
+)
 from app.modules.text_storyboard.harness import RELEASE_HASH, TextSkill
 
 
@@ -42,6 +46,10 @@ def _scene_analysis(root: Path | None) -> SceneAnalysisBundle:
     return SceneAnalysisBundle(root)
 
 
+def _visual_foundation(root: Path | None) -> VisualFoundationBundle:
+    return VisualFoundationBundle(root)
+
+
 def _text_storyboard(root: Path | None) -> TextSkill:
     from app.modules.text_storyboard import harness as text_harness
 
@@ -56,6 +64,10 @@ def _verify_storygraph(value: object) -> str:
 
 def _verify_scene_analysis(value: object) -> str:
     return cast(SceneAnalysisBundle, value).verify_installed_bundle()
+
+
+def _verify_visual_foundation(value: object) -> str:
+    return cast(VisualFoundationBundle, value).verify_installed_bundle()
 
 
 def _verify_text_storyboard(value: object) -> str:
@@ -81,6 +93,13 @@ class SkillCatalog:
                 expected_hash=SCENE_ANALYSIS_SKILL_BUNDLE_HASH,
                 factory=_scene_analysis,
                 verifier=_verify_scene_analysis,
+            ),
+            SkillRegistration(
+                key="visual_foundation",
+                bundle="build-storygraph",
+                expected_hash=VISUAL_FOUNDATION_SKILL_BUNDLE_HASH,
+                factory=_visual_foundation,
+                verifier=_verify_visual_foundation,
             ),
             SkillRegistration(
                 key="text_storyboard",

@@ -12,6 +12,7 @@ def test_catalog_declares_the_current_agent_skill_capabilities() -> None:
     assert [(item.key, item.bundle) for item in catalog.registrations()] == [
         ("storygraph", "build-storygraph"),
         ("scene_analysis", "build-storygraph"),
+        ("visual_foundation", "build-storygraph"),
         ("text_storyboard", "text-storyboard"),
     ]
 
@@ -19,7 +20,12 @@ def test_catalog_declares_the_current_agent_skill_capabilities() -> None:
 def test_catalog_verifies_every_installed_skill_release() -> None:
     catalog = SkillCatalog(REPOSITORY_ROOT)
     verified = catalog.verify_all()
-    assert set(verified) == {"storygraph", "scene_analysis", "text_storyboard"}
+    assert set(verified) == {
+        "storygraph",
+        "scene_analysis",
+        "visual_foundation",
+        "text_storyboard",
+    }
     assert all(len(value) == 64 for value in verified.values())
 
 
