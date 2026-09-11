@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,7 @@ import (
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
@@ -105,21 +107,88 @@ func (repo *repository) GetEpisodeLifecycleReceipt(
 	if err != nil {
 		return application.StructureIdentityEpisodeCheckpoint{}, application.ErrNotFound
 	}
-	var receipt model.CommandReceipt
-	if err = repo.database.WithContext(ctx).First(&receipt, "id = ?", id).Error; err != nil {
+	var receiptRecord model.ProjectEpisodeCollectionReceipt
+	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).First(&receiptRecord, "id = ?", id).Error; err != nil {
 		return application.StructureIdentityEpisodeCheckpoint{}, normalizeNotFound(err)
 	}
-	if receipt.WorkspaceID != workspace || receipt.ResourceID != project || receipt.Operation != "project.confirm_episode_lifecycle" {
+	if receiptRecord.WorkspaceID != workspace || receiptRecord.ProjectID != project ||
+		receiptRecord.DecisionCheckpointID != projectdomain.ProjectEpisodeCheckpoint ||
+		receiptRecord.OwnerKind != "production/project" || receiptRecord.VersionFamily != projectdomain.ProjectEpisodeCollectionFamily ||
+		receiptRecord.ScopeKind != "project" || receiptRecord.ScopeKey != "project:"+projectID {
 		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle receipt is not the required checkpoint")
 	}
+	var members, committed []ownercollection.VersionRef
+	var covered []string
+	if json.Unmarshal(receiptRecord.Members, &members) != nil || json.Unmarshal(receiptRecord.CommittedOwnerVersionRefs, &committed) != nil ||
+		json.Unmarshal(receiptRecord.CoveredScopeKeys, &covered) != nil {
+		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle receipt JSON has drifted")
+	}
+	collection, buildErr := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: workspaceID, ProjectID: projectID, OwnerKind: receiptRecord.OwnerKind,
+		VersionFamily: receiptRecord.VersionFamily, ScopeKind: receiptRecord.ScopeKind,
+		ScopeKey: receiptRecord.ScopeKey, ScopeRevision: receiptRecord.ScopeRevision,
+	}, members)
+	if buildErr != nil || collection.ScopeContentHash != receiptRecord.ScopeContentHash ||
+		collection.MemberCount != receiptRecord.MemberCount || collection.MembersHash != receiptRecord.MembersHash ||
+		collection.CollectionRootHash != receiptRecord.CollectionRootHash {
+		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle collection has drifted")
+	}
+	rebuiltReceipt, buildErr := projectdomain.NewProjectEpisodeCollectionReceipt(
+		receiptID, receiptRecord.CommandID.String(), receiptRecord.IdempotencyKey,
+		receiptRecord.ReviewDecisionID.String(), collection, receiptRecord.CommittedAt,
+		receiptRecord.CommittedBy.String(),
+	)
+	if buildErr != nil || !reflect.DeepEqual(rebuiltReceipt.Members, members) ||
+		!reflect.DeepEqual(rebuiltReceipt.CoveredScopeKeys, covered) ||
+		!reflect.DeepEqual(rebuiltReceipt.CommittedOwnerVersionRefs, committed) ||
+		rebuiltReceipt.ReceiptContentHash != receiptRecord.ReceiptContentHash {
+		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle receipt has drifted")
+	}
+	var receipt model.CommandReceipt
+	if err = repo.database.WithContext(ctx).Where(
+		"workspace_id = ? AND operation = ? AND idempotency_key = ?",
+		workspace, "project.confirm_episode_lifecycle", receiptRecord.IdempotencyKey,
+	).First(&receipt).Error; err != nil {
+		return application.StructureIdentityEpisodeCheckpoint{}, normalizeNotFound(err)
+	}
 	var result projectdomain.EpisodeLifecycleSet
-	if err = json.Unmarshal(receipt.Result, &result); err != nil || result.ID != receiptID ||
+	if err = json.Unmarshal(receipt.Result, &result); err != nil || result.ID != receiptID || result.CommandReceiptID != receipt.ID.String() ||
 		result.WorkspaceID != workspaceID || result.ProjectID != projectID ||
-		result.SchemaVersion != projectdomain.EpisodeLifecycleSetSchemaVersion || len(result.Episodes) == 0 {
+		result.SchemaVersion != projectdomain.EpisodeLifecycleSetSchemaVersion || len(result.Episodes) == 0 ||
+		result.ReviewDecisionID != receiptRecord.ReviewDecisionID.String() ||
+		result.ScopeRevision != collection.ScopeRevision || result.ScopeContentHash != collection.ScopeContentHash ||
+		result.MemberCount != collection.MemberCount || result.MembersHash != collection.MembersHash ||
+		result.CollectionRootHash != collection.CollectionRootHash || result.ReceiptContentHash != receiptRecord.ReceiptContentHash ||
+		receipt.WorkspaceID != workspace || receipt.ResourceID != project || receipt.Operation != "project.confirm_episode_lifecycle" {
 		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle receipt is invalid")
 	}
+	var headRecord model.ProjectEpisodeScopeHead
+	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).First(&headRecord, "project_id = ?", project).Error; err != nil {
+		return application.StructureIdentityEpisodeCheckpoint{}, normalizeNotFound(err)
+	}
+	var headRefs []ownercollection.VersionRef
+	if json.Unmarshal(headRecord.CurrentVersionRefs, &headRefs) != nil {
+		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle Head refs have drifted")
+	}
+	rebuiltHead, buildErr := projectdomain.NewProjectEpisodeScopeHead(collection, headRecord.HeadRevision, headRecord.UpdatedAt)
+	if buildErr != nil || headRecord.WorkspaceID != workspace || headRecord.ScopeKey != rebuiltHead.ScopeKey ||
+		headRecord.ScopeRevision != rebuiltHead.ScopeRevision || headRecord.ScopeContentHash != rebuiltHead.ScopeContentHash ||
+		headRecord.MemberCount != rebuiltHead.MemberCount || headRecord.MembersHash != rebuiltHead.MembersHash ||
+		headRecord.CollectionRootHash != rebuiltHead.CollectionRootHash || headRecord.HeadContentHash != rebuiltHead.HeadContentHash ||
+		!reflect.DeepEqual(headRefs, rebuiltHead.CurrentVersionRefs) {
+		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle Head has drifted")
+	}
+	var membershipRecords []model.ProjectEpisodeMembership
+	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).Where(
+		"project_id = ? AND scope_revision = ?", project, collection.ScopeRevision,
+	).Order("position").Find(&membershipRecords).Error; err != nil {
+		return application.StructureIdentityEpisodeCheckpoint{}, err
+	}
+	if len(membershipRecords) != len(result.Episodes) {
+		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle membership set has drifted")
+	}
 	var activeEpisodes []model.Episode
-	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+	if err = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
 		Where("project_id = ? AND status = ?", project, "active").Order("position").Order("id").Find(&activeEpisodes).Error; err != nil {
 		return application.StructureIdentityEpisodeCheckpoint{}, err
 	}
@@ -127,6 +196,10 @@ func (repo *repository) GetEpisodeLifecycleReceipt(
 		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle active set has drifted")
 	}
 	refs := make([]domain.EpisodeLifecycleRef, len(result.Episodes))
+	membersByEpisode := make(map[string]ownercollection.VersionRef, len(members))
+	for _, member := range members {
+		membersByEpisode[member.OwnerLogicalID] = member
+	}
 	previousEnd := 0
 	for index, value := range result.Episodes {
 		if value.Position != index+1 || value.SourceStart != previousEnd || value.SourceEnd <= value.SourceStart ||
@@ -138,7 +211,7 @@ func (repo *repository) GetEpisodeLifecycleReceipt(
 			return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle identity is invalid")
 		}
 		var episode model.Episode
-		if parseErr = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).First(&episode, "id = ?", episodeID).Error; parseErr != nil {
+		if parseErr = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).First(&episode, "id = ?", episodeID).Error; parseErr != nil {
 			return application.StructureIdentityEpisodeCheckpoint{}, normalizeNotFound(parseErr)
 		}
 		scriptID, parseErr := uuid.Parse(value.ScriptVersionID)
@@ -148,6 +221,38 @@ func (repo *repository) GetEpisodeLifecycleReceipt(
 		var script model.EpisodeScriptVersion
 		if parseErr = repo.database.WithContext(ctx).First(&script, "id = ?", scriptID).Error; parseErr != nil {
 			return application.StructureIdentityEpisodeCheckpoint{}, normalizeNotFound(parseErr)
+		}
+		membership := membershipRecords[index]
+		member, memberExists := membersByEpisode[value.EpisodeID]
+		var ownerVersion model.ProjectEpisodeVersion
+		if !memberExists {
+			return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode immutable Version is missing")
+		}
+		if parseErr = repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).First(&ownerVersion, "id = ?", member.OwnerVersionID).Error; parseErr != nil {
+			return application.StructureIdentityEpisodeCheckpoint{}, normalizeNotFound(parseErr)
+		}
+		ownerValue := projectdomain.EpisodeOwnerVersion{
+			ID: ownerVersion.ID.String(), WorkspaceID: ownerVersion.WorkspaceID.String(), ProjectID: ownerVersion.ProjectID.String(),
+			EpisodeID: ownerVersion.EpisodeID.String(), Revision: ownerVersion.Revision,
+			Status: ownerVersion.Status, Position: ownerVersion.Position, SequenceKey: ownerVersion.SequenceKey,
+			Name: ownerVersion.Name, TargetDurationMS: ownerVersion.TargetDurationMS,
+			SourceVersionID: ownerVersion.SourceVersionID.String(), ScriptVersionID: ownerVersion.ScriptVersionID.String(),
+			SourceStart: ownerVersion.SourceStart, SourceEnd: ownerVersion.SourceEnd,
+			ScriptContentHash: ownerVersion.ScriptContentHash, ContentHash: ownerVersion.ContentHash,
+			CreatedBy: ownerVersion.CreatedBy.String(), CreatedAt: ownerVersion.CreatedAt,
+		}
+		if ownerVersion.ParentVersionID != nil {
+			parentID := ownerVersion.ParentVersionID.String()
+			ownerValue.ParentVersionID = &parentID
+		}
+		ownerValue.ParentContentHash = ownerVersion.ParentContentHash
+		rebuiltOwner, ownerErr := projectdomain.NewEpisodeOwnerVersion(ownerValue)
+		if ownerErr != nil || rebuiltOwner.ContentHash != ownerVersion.ContentHash ||
+			member.OwnerRevision != ownerVersion.Revision || member.OwnerContentHash != ownerVersion.ContentHash ||
+			membership.WorkspaceID != workspace || membership.ProjectID != project || membership.ScopeRevision != collection.ScopeRevision ||
+			membership.Position != value.Position || membership.EpisodeID != episodeID || membership.EpisodeVersionID != ownerVersion.ID ||
+			membership.VersionContentHash != ownerVersion.ContentHash {
+			return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode immutable Version has drifted")
 		}
 		if episode.WorkspaceID != workspace || episode.ProjectID != project || episode.Status != "active" ||
 			episode.Revision != value.EpisodeRevision || episode.Position != value.Position || episode.CurrentScriptVersionID == nil ||
@@ -164,15 +269,6 @@ func (repo *repository) GetEpisodeLifecycleReceipt(
 			SourceStart: value.SourceStart, SourceEnd: value.SourceEnd, ContentHash: value.ContentHash,
 		}
 		previousEnd = value.SourceEnd
-	}
-	recomputedRoot, err := platformcommand.InputHash(struct {
-		SchemaVersion   string                       `json:"schema_version"`
-		SourceVersionID string                       `json:"source_version_id"`
-		SourceHash      string                       `json:"source_hash"`
-		Episodes        []domain.EpisodeLifecycleRef `json:"episodes"`
-	}{projectdomain.EpisodeLifecycleSetSchemaVersion, result.SourceVersionID, result.SourceHash, refs})
-	if err != nil || recomputedRoot != result.CollectionRootHash {
-		return application.StructureIdentityEpisodeCheckpoint{}, errors.New("Project Episode lifecycle collection root has drifted")
 	}
 	return application.StructureIdentityEpisodeCheckpoint{
 		GateInputID: result.GateInputID, GateInputHash: result.GateInputHash,

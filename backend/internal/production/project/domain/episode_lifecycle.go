@@ -51,6 +51,7 @@ type EpisodeLifecycleEpisodeRef struct {
 type EpisodeLifecycleSet struct {
 	SchemaVersion      string                       `json:"schema_version"`
 	ID                 string                       `json:"id"`
+	CommandReceiptID   string                       `json:"command_receipt_id"`
 	WorkspaceID        string                       `json:"workspace_id"`
 	ProjectID          string                       `json:"project_id"`
 	GateInputID        string                       `json:"gate_input_id"`
@@ -61,6 +62,11 @@ type EpisodeLifecycleSet struct {
 	ProjectRevision    int                          `json:"project_revision"`
 	ActiveOrderHash    string                       `json:"active_order_hash"`
 	Episodes           []EpisodeLifecycleEpisodeRef `json:"episodes"`
+	ScopeRevision      int64                        `json:"scope_revision"`
+	ScopeContentHash   string                       `json:"scope_content_hash"`
+	MemberCount        int64                        `json:"member_count"`
+	MembersHash        string                       `json:"members_hash"`
 	CollectionRootHash string                       `json:"collection_root_hash"`
+	ReceiptContentHash string                       `json:"receipt_content_hash"`
 	CreatedAt          time.Time                    `json:"created_at"`
 }

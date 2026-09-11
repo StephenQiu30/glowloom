@@ -1,11 +1,15 @@
 package model
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
+
+var ErrImmutableProjectEpisodeOwner = errors.New("Project Episode Owner fact is immutable")
 
 type EpisodePlan struct {
 	ID                    uuid.UUID        `gorm:"type:uuid;primaryKey"`
@@ -81,6 +85,114 @@ type EpisodeScriptVersion struct {
 }
 
 func (EpisodeScriptVersion) TableName() string { return "scr_episode_versions" }
+
+type ProjectEpisodeVersion struct {
+	ID                uuid.UUID            `gorm:"type:uuid;primaryKey"`
+	WorkspaceID       uuid.UUID            `gorm:"type:uuid;not null"`
+	ProjectID         uuid.UUID            `gorm:"type:uuid;not null;index:ix_prj_episode_versions_project_created,priority:1"`
+	EpisodeID         uuid.UUID            `gorm:"type:uuid;not null;uniqueIndex:uq_prj_episode_owner_revision,priority:1"`
+	Revision          int64                `gorm:"not null;uniqueIndex:uq_prj_episode_owner_revision,priority:2;check:ck_prj_episode_owner_revision,revision >= 1"`
+	ParentVersionID   *uuid.UUID           `gorm:"type:uuid"`
+	ParentContentHash *string              `gorm:"type:char(64);check:ck_prj_episode_owner_parent_hash,parent_content_hash IS NULL OR char_length(parent_content_hash) = 64"`
+	Status            string               `gorm:"type:varchar(20);not null;check:ck_prj_episode_owner_status,status IN ('active','archived')"`
+	Position          int                  `gorm:"not null;check:ck_prj_episode_owner_position,position >= 1"`
+	SequenceKey       string               `gorm:"type:varchar(20);not null"`
+	Name              string               `gorm:"type:varchar(120);not null"`
+	TargetDurationMS  int                  `gorm:"not null;check:ck_prj_episode_owner_duration,target_duration_ms > 0"`
+	SourceVersionID   uuid.UUID            `gorm:"type:uuid;not null"`
+	ScriptVersionID   uuid.UUID            `gorm:"type:uuid;not null"`
+	SourceStart       int                  `gorm:"not null;check:ck_prj_episode_owner_source_start,source_start >= 0"`
+	SourceEnd         int                  `gorm:"not null;check:ck_prj_episode_owner_source_end,source_end > source_start"`
+	ScriptContentHash string               `gorm:"type:char(64);not null;check:ck_prj_episode_owner_script_hash,char_length(script_content_hash) = 64"`
+	ContentHash       string               `gorm:"type:char(64);not null;uniqueIndex;check:ck_prj_episode_owner_hash,char_length(content_hash) = 64"`
+	CreatedBy         uuid.UUID            `gorm:"type:uuid;not null"`
+	CreatedAt         time.Time            `gorm:"type:timestamptz;not null;index:ix_prj_episode_versions_project_created,priority:2,sort:desc"`
+	Workspace         Workspace            `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project           Project              `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Episode           Episode              `gorm:"foreignKey:EpisodeID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	SourceVersion     DocumentRevision     `gorm:"foreignKey:SourceVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ScriptVersion     EpisodeScriptVersion `gorm:"foreignKey:ScriptVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Creator           UserAccount          `gorm:"foreignKey:CreatedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProjectEpisodeVersion) TableName() string            { return "prj_episode_versions" }
+func (*ProjectEpisodeVersion) BeforeUpdate(*gorm.DB) error { return ErrImmutableProjectEpisodeOwner }
+func (*ProjectEpisodeVersion) BeforeDelete(*gorm.DB) error { return ErrImmutableProjectEpisodeOwner }
+
+type ProjectEpisodeMembership struct {
+	ID                 uuid.UUID             `gorm:"type:uuid;primaryKey"`
+	WorkspaceID        uuid.UUID             `gorm:"type:uuid;not null"`
+	ProjectID          uuid.UUID             `gorm:"type:uuid;not null;uniqueIndex:uq_prj_episode_membership_position,priority:1;uniqueIndex:uq_prj_episode_membership_episode,priority:1"`
+	ScopeRevision      int64                 `gorm:"not null;uniqueIndex:uq_prj_episode_membership_position,priority:2;uniqueIndex:uq_prj_episode_membership_episode,priority:2;check:ck_prj_episode_membership_revision,scope_revision >= 1"`
+	Position           int                   `gorm:"not null;uniqueIndex:uq_prj_episode_membership_position,priority:3;check:ck_prj_episode_membership_position,position >= 1"`
+	EpisodeID          uuid.UUID             `gorm:"type:uuid;not null;uniqueIndex:uq_prj_episode_membership_episode,priority:3"`
+	EpisodeVersionID   uuid.UUID             `gorm:"type:uuid;not null;index:ix_prj_episode_memberships_version"`
+	VersionContentHash string                `gorm:"type:char(64);not null;check:ck_prj_episode_membership_hash,char_length(version_content_hash) = 64"`
+	CreatedAt          time.Time             `gorm:"type:timestamptz;not null"`
+	Workspace          Workspace             `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project            Project               `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Episode            Episode               `gorm:"foreignKey:EpisodeID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	EpisodeVersion     ProjectEpisodeVersion `gorm:"foreignKey:EpisodeVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProjectEpisodeMembership) TableName() string            { return "prj_episode_memberships" }
+func (*ProjectEpisodeMembership) BeforeUpdate(*gorm.DB) error { return ErrImmutableProjectEpisodeOwner }
+func (*ProjectEpisodeMembership) BeforeDelete(*gorm.DB) error { return ErrImmutableProjectEpisodeOwner }
+
+type ProjectEpisodeScopeHead struct {
+	ProjectID          uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	WorkspaceID        uuid.UUID      `gorm:"type:uuid;not null"`
+	ScopeKey           string         `gorm:"type:varchar(160);not null"`
+	ScopeRevision      int64          `gorm:"not null;check:ck_prj_episode_head_scope_revision,scope_revision >= 1"`
+	ScopeContentHash   string         `gorm:"type:char(64);not null"`
+	MemberCount        int64          `gorm:"not null;check:ck_prj_episode_head_member_count,member_count >= 1"`
+	MembersHash        string         `gorm:"type:char(64);not null"`
+	CollectionRootHash string         `gorm:"type:char(64);not null"`
+	CurrentVersionRefs datatypes.JSON `gorm:"type:jsonb;not null;check:ck_prj_episode_head_refs,jsonb_typeof(current_version_refs) = 'array'"`
+	HeadRevision       int64          `gorm:"not null;check:ck_prj_episode_head_revision,head_revision >= 1"`
+	HeadContentHash    string         `gorm:"type:char(64);not null"`
+	UpdatedAt          time.Time      `gorm:"type:timestamptz;not null"`
+	Workspace          Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project            Project        `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProjectEpisodeScopeHead) TableName() string { return "prj_episode_scope_heads" }
+
+type ProjectEpisodeCollectionReceipt struct {
+	ID                        uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	CommandID                 uuid.UUID      `gorm:"type:uuid;not null"`
+	IdempotencyKey            string         `gorm:"type:varchar(200);not null"`
+	WorkspaceID               uuid.UUID      `gorm:"type:uuid;not null"`
+	ProjectID                 uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:uq_prj_episode_collection_receipt,priority:2"`
+	DecisionCheckpointID      string         `gorm:"type:varchar(80);not null;uniqueIndex:uq_prj_episode_collection_receipt,priority:1"`
+	ReviewDecisionID          uuid.UUID      `gorm:"type:uuid;not null"`
+	OwnerKind                 string         `gorm:"type:varchar(80);not null;uniqueIndex:uq_prj_episode_collection_receipt,priority:3"`
+	VersionFamily             string         `gorm:"type:varchar(80);not null;uniqueIndex:uq_prj_episode_collection_receipt,priority:4"`
+	ScopeKind                 string         `gorm:"type:varchar(40);not null;uniqueIndex:uq_prj_episode_collection_receipt,priority:5"`
+	ScopeKey                  string         `gorm:"type:varchar(160);not null;uniqueIndex:uq_prj_episode_collection_receipt,priority:6"`
+	ScopeRevision             int64          `gorm:"not null;check:ck_prj_episode_collection_scope_revision,scope_revision >= 1"`
+	ScopeContentHash          string         `gorm:"type:char(64);not null"`
+	Members                   datatypes.JSON `gorm:"type:jsonb;not null;check:ck_prj_episode_collection_members,jsonb_typeof(members) = 'array'"`
+	MemberCount               int64          `gorm:"not null;check:ck_prj_episode_collection_count,member_count >= 1"`
+	MembersHash               string         `gorm:"type:char(64);not null"`
+	CollectionRootHash        string         `gorm:"type:char(64);not null;uniqueIndex:uq_prj_episode_collection_receipt,priority:7"`
+	CoveredScopeKeys          datatypes.JSON `gorm:"type:jsonb;not null;check:ck_prj_episode_collection_scopes,jsonb_typeof(covered_scope_keys) = 'array'"`
+	CommittedOwnerVersionRefs datatypes.JSON `gorm:"type:jsonb;not null;check:ck_prj_episode_collection_refs,jsonb_typeof(committed_owner_version_refs) = 'array'"`
+	ReceiptContentHash        string         `gorm:"type:char(64);not null;uniqueIndex"`
+	CommittedAt               time.Time      `gorm:"type:timestamptz;not null"`
+	CommittedBy               uuid.UUID      `gorm:"type:uuid;not null"`
+	Workspace                 Workspace      `gorm:"foreignKey:WorkspaceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Project                   Project        `gorm:"foreignKey:ProjectID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Reviewer                  UserAccount    `gorm:"foreignKey:CommittedBy;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ProjectEpisodeCollectionReceipt) TableName() string { return "prj_episode_collection_receipts" }
+func (*ProjectEpisodeCollectionReceipt) BeforeUpdate(*gorm.DB) error {
+	return ErrImmutableProjectEpisodeOwner
+}
+func (*ProjectEpisodeCollectionReceipt) BeforeDelete(*gorm.DB) error {
+	return ErrImmutableProjectEpisodeOwner
+}
 
 type EpisodeStructure struct {
 	ID              uuid.UUID            `gorm:"type:uuid;primaryKey"`

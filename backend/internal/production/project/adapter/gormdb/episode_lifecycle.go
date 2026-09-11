@@ -2,6 +2,7 @@ package gormdb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 )
@@ -146,6 +148,24 @@ func (repo *repository) NextEpisodeLifecycleScriptVersion(ctx context.Context, e
 	return latest.VersionNo + 1, nil
 }
 
+func (repo *repository) GetEpisodeLifecycleScriptVersion(
+	ctx context.Context,
+	versionID string,
+) (domain.EpisodeLifecycleScriptVersion, error) {
+	id, err := uuid.Parse(versionID)
+	if err != nil {
+		return domain.EpisodeLifecycleScriptVersion{}, application.ErrNotFound
+	}
+	var record model.EpisodeScriptVersion
+	if err = repo.database.WithContext(ctx).First(&record, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.EpisodeLifecycleScriptVersion{}, application.ErrNotFound
+		}
+		return domain.EpisodeLifecycleScriptVersion{}, err
+	}
+	return episodeLifecycleScriptVersionDomain(record), nil
+}
+
 func (repo *repository) CreateEpisodeLifecycleEpisode(
 	ctx context.Context,
 	value domain.EpisodeLifecycleEpisode,
@@ -192,6 +212,128 @@ func (repo *repository) CreateEpisodeLifecycleScriptVersion(
 
 func (repo *repository) SaveEpisodeLifecycleProject(ctx context.Context, value domain.Project) error {
 	return repo.Save(ctx, value)
+}
+
+func (repo *repository) FindEpisodeOwnerVersion(
+	ctx context.Context,
+	episodeID string,
+) (domain.EpisodeOwnerVersion, bool, error) {
+	id, err := uuid.Parse(episodeID)
+	if err != nil {
+		return domain.EpisodeOwnerVersion{}, false, application.ErrNotFound
+	}
+	var record model.ProjectEpisodeVersion
+	err = repo.database.WithContext(ctx).Where("episode_id = ?", id).Order("revision DESC").First(&record).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return domain.EpisodeOwnerVersion{}, false, nil
+	}
+	if err != nil {
+		return domain.EpisodeOwnerVersion{}, false, err
+	}
+	return projectEpisodeVersionDomain(record), true, nil
+}
+
+func (repo *repository) CreateEpisodeOwnerVersion(ctx context.Context, value domain.EpisodeOwnerVersion) error {
+	record, err := projectEpisodeVersionRecord(value)
+	if err != nil {
+		return err
+	}
+	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error
+}
+
+func (repo *repository) CreateProjectEpisodeMemberships(
+	ctx context.Context,
+	values []domain.ProjectEpisodeMembership,
+) error {
+	records := make([]model.ProjectEpisodeMembership, len(values))
+	for index, value := range values {
+		record, err := projectEpisodeMembershipRecord(value)
+		if err != nil {
+			return err
+		}
+		records[index] = record
+	}
+	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&records).Error
+}
+
+func (repo *repository) GetProjectEpisodeScopeHead(
+	ctx context.Context,
+	projectID string,
+	forUpdate bool,
+) (domain.ProjectEpisodeScopeHead, bool, error) {
+	id, err := uuid.Parse(projectID)
+	if err != nil {
+		return domain.ProjectEpisodeScopeHead{}, false, application.ErrNotFound
+	}
+	query := repo.database.WithContext(ctx)
+	if forUpdate {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var record model.ProjectEpisodeScopeHead
+	err = query.First(&record, "project_id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return domain.ProjectEpisodeScopeHead{}, false, nil
+	}
+	if err != nil {
+		return domain.ProjectEpisodeScopeHead{}, false, err
+	}
+	var refs []ownercollection.VersionRef
+	if json.Unmarshal(record.CurrentVersionRefs, &refs) != nil {
+		return domain.ProjectEpisodeScopeHead{}, false, errors.New("Project Episode Scope Head refs have drifted")
+	}
+	return domain.ProjectEpisodeScopeHead{
+		WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(), ScopeKey: record.ScopeKey,
+		ScopeRevision: record.ScopeRevision, ScopeContentHash: record.ScopeContentHash,
+		MemberCount: record.MemberCount, MembersHash: record.MembersHash, CollectionRootHash: record.CollectionRootHash,
+		CurrentVersionRefs: refs, HeadRevision: record.HeadRevision, HeadContentHash: record.HeadContentHash,
+		UpdatedAt: record.UpdatedAt.UTC(),
+	}, true, nil
+}
+
+func (repo *repository) CreateProjectEpisodeScopeHead(ctx context.Context, value domain.ProjectEpisodeScopeHead) error {
+	record, err := projectEpisodeScopeHeadRecord(value)
+	if err != nil {
+		return err
+	}
+	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error
+}
+
+func (repo *repository) AdvanceProjectEpisodeScopeHead(
+	ctx context.Context,
+	value domain.ProjectEpisodeScopeHead,
+	expectedRevision int64,
+	expectedHash string,
+) error {
+	record, err := projectEpisodeScopeHeadRecord(value)
+	if err != nil {
+		return err
+	}
+	result := repo.database.WithContext(ctx).Model(&model.ProjectEpisodeScopeHead{}).
+		Where("project_id = ? AND head_revision = ? AND head_content_hash = ?", record.ProjectID, expectedRevision, expectedHash).
+		Updates(map[string]any{
+			"scope_revision": record.ScopeRevision, "scope_content_hash": record.ScopeContentHash,
+			"member_count": record.MemberCount, "members_hash": record.MembersHash,
+			"collection_root_hash": record.CollectionRootHash, "current_version_refs": record.CurrentVersionRefs,
+			"head_revision": record.HeadRevision, "head_content_hash": record.HeadContentHash, "updated_at": record.UpdatedAt,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return errors.New("Project Episode Scope Head CAS conflict")
+	}
+	return nil
+}
+
+func (repo *repository) CreateProjectEpisodeCollectionReceipt(
+	ctx context.Context,
+	value domain.ProjectEpisodeCollectionReceipt,
+) error {
+	record, err := projectEpisodeCollectionReceiptRecord(value)
+	if err != nil {
+		return err
+	}
+	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&record).Error
 }
 
 func episodeLifecycleEpisodeRecord(value domain.EpisodeLifecycleEpisode) (model.Episode, error) {
@@ -269,6 +411,127 @@ func episodeLifecycleScriptVersionDomain(
 		Content: record.Content, ContentHash: record.ContentHash, Status: record.Status,
 		CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
+}
+
+func projectEpisodeVersionRecord(value domain.EpisodeOwnerVersion) (model.ProjectEpisodeVersion, error) {
+	ids, err := parseEpisodeOwnerUUIDs(
+		value.ID, value.WorkspaceID, value.ProjectID, value.EpisodeID,
+		value.SourceVersionID, value.ScriptVersionID, value.CreatedBy,
+	)
+	if err != nil {
+		return model.ProjectEpisodeVersion{}, err
+	}
+	var parentID *uuid.UUID
+	if value.ParentVersionID != nil {
+		parsed, parseErr := uuid.Parse(*value.ParentVersionID)
+		if parseErr != nil {
+			return model.ProjectEpisodeVersion{}, parseErr
+		}
+		parentID = &parsed
+	}
+	return model.ProjectEpisodeVersion{
+		ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], EpisodeID: ids[3], Revision: value.Revision,
+		ParentVersionID: parentID, ParentContentHash: value.ParentContentHash,
+		Status: value.Status, Position: value.Position, SequenceKey: value.SequenceKey,
+		Name: value.Name, TargetDurationMS: value.TargetDurationMS,
+		SourceVersionID: ids[4], ScriptVersionID: ids[5], SourceStart: value.SourceStart, SourceEnd: value.SourceEnd,
+		ScriptContentHash: value.ScriptContentHash, ContentHash: value.ContentHash,
+		CreatedBy: ids[6], CreatedAt: value.CreatedAt,
+	}, nil
+}
+
+func projectEpisodeVersionDomain(value model.ProjectEpisodeVersion) domain.EpisodeOwnerVersion {
+	var parentID *string
+	if value.ParentVersionID != nil {
+		encoded := value.ParentVersionID.String()
+		parentID = &encoded
+	}
+	return domain.EpisodeOwnerVersion{
+		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
+		EpisodeID: value.EpisodeID.String(), Revision: value.Revision,
+		ParentVersionID: parentID, ParentContentHash: value.ParentContentHash,
+		Status: value.Status, Position: value.Position, SequenceKey: value.SequenceKey,
+		Name: value.Name, TargetDurationMS: value.TargetDurationMS,
+		SourceVersionID: value.SourceVersionID.String(), ScriptVersionID: value.ScriptVersionID.String(),
+		SourceStart: value.SourceStart, SourceEnd: value.SourceEnd, ScriptContentHash: value.ScriptContentHash,
+		ContentHash: value.ContentHash, CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt.UTC(),
+	}
+}
+
+func projectEpisodeMembershipRecord(value domain.ProjectEpisodeMembership) (model.ProjectEpisodeMembership, error) {
+	ids, err := parseEpisodeOwnerUUIDs(value.ID, value.WorkspaceID, value.ProjectID, value.EpisodeID, value.EpisodeVersionID)
+	if err != nil {
+		return model.ProjectEpisodeMembership{}, err
+	}
+	return model.ProjectEpisodeMembership{
+		ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], ScopeRevision: value.ScopeRevision,
+		Position: value.Position, EpisodeID: ids[3], EpisodeVersionID: ids[4],
+		VersionContentHash: value.VersionContentHash, CreatedAt: value.CreatedAt,
+	}, nil
+}
+
+func projectEpisodeScopeHeadRecord(value domain.ProjectEpisodeScopeHead) (model.ProjectEpisodeScopeHead, error) {
+	ids, err := parseEpisodeOwnerUUIDs(value.ProjectID, value.WorkspaceID)
+	if err != nil {
+		return model.ProjectEpisodeScopeHead{}, err
+	}
+	refs, err := json.Marshal(value.CurrentVersionRefs)
+	if err != nil {
+		return model.ProjectEpisodeScopeHead{}, err
+	}
+	return model.ProjectEpisodeScopeHead{
+		ProjectID: ids[0], WorkspaceID: ids[1], ScopeKey: value.ScopeKey,
+		ScopeRevision: value.ScopeRevision, ScopeContentHash: value.ScopeContentHash,
+		MemberCount: value.MemberCount, MembersHash: value.MembersHash, CollectionRootHash: value.CollectionRootHash,
+		CurrentVersionRefs: refs, HeadRevision: value.HeadRevision, HeadContentHash: value.HeadContentHash,
+		UpdatedAt: value.UpdatedAt,
+	}, nil
+}
+
+func projectEpisodeCollectionReceiptRecord(
+	value domain.ProjectEpisodeCollectionReceipt,
+) (model.ProjectEpisodeCollectionReceipt, error) {
+	ids, err := parseEpisodeOwnerUUIDs(
+		value.ID, value.CommandID, value.WorkspaceID, value.ProjectID, value.ReviewDecisionID, value.CommittedBy,
+	)
+	if err != nil {
+		return model.ProjectEpisodeCollectionReceipt{}, err
+	}
+	members, err := json.Marshal(value.Members)
+	if err != nil {
+		return model.ProjectEpisodeCollectionReceipt{}, err
+	}
+	covered, err := json.Marshal(value.CoveredScopeKeys)
+	if err != nil {
+		return model.ProjectEpisodeCollectionReceipt{}, err
+	}
+	committed, err := json.Marshal(value.CommittedOwnerVersionRefs)
+	if err != nil {
+		return model.ProjectEpisodeCollectionReceipt{}, err
+	}
+	return model.ProjectEpisodeCollectionReceipt{
+		ID: ids[0], CommandID: ids[1], IdempotencyKey: value.IdempotencyKey,
+		WorkspaceID: ids[2], ProjectID: ids[3], DecisionCheckpointID: domain.ProjectEpisodeCheckpoint,
+		ReviewDecisionID: ids[4], OwnerKind: "production/project", VersionFamily: domain.ProjectEpisodeCollectionFamily,
+		ScopeKind: "project", ScopeKey: "project:" + value.ProjectID,
+		ScopeRevision: value.ScopeRevision, ScopeContentHash: value.ScopeContentHash,
+		Members: members, MemberCount: value.MemberCount, MembersHash: value.MembersHash,
+		CollectionRootHash: value.CollectionRootHash, CoveredScopeKeys: covered,
+		CommittedOwnerVersionRefs: committed, ReceiptContentHash: value.ReceiptContentHash,
+		CommittedAt: value.CommittedAt, CommittedBy: ids[5],
+	}, nil
+}
+
+func parseEpisodeOwnerUUIDs(values ...string) ([]uuid.UUID, error) {
+	result := make([]uuid.UUID, len(values))
+	for index, value := range values {
+		parsed, err := uuid.Parse(value)
+		if err != nil {
+			return nil, err
+		}
+		result[index] = parsed
+	}
+	return result, nil
 }
 
 var _ application.EpisodeLifecycleTransactionManager = (*Store)(nil)

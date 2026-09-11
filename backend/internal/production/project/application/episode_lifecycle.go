@@ -41,10 +41,18 @@ type EpisodeLifecycleRepository interface {
 		context.Context, string, string, int, int, string,
 	) (domain.EpisodeLifecycleScriptVersion, bool, error)
 	NextEpisodeLifecycleScriptVersion(context.Context, string) (int, error)
+	GetEpisodeLifecycleScriptVersion(context.Context, string) (domain.EpisodeLifecycleScriptVersion, error)
 	CreateEpisodeLifecycleEpisode(context.Context, domain.EpisodeLifecycleEpisode) error
 	SaveEpisodeLifecycleEpisode(context.Context, domain.EpisodeLifecycleEpisode) error
 	CreateEpisodeLifecycleScriptVersion(context.Context, domain.EpisodeLifecycleScriptVersion) error
 	SaveEpisodeLifecycleProject(context.Context, domain.Project) error
+	FindEpisodeOwnerVersion(context.Context, string) (domain.EpisodeOwnerVersion, bool, error)
+	CreateEpisodeOwnerVersion(context.Context, domain.EpisodeOwnerVersion) error
+	CreateProjectEpisodeMemberships(context.Context, []domain.ProjectEpisodeMembership) error
+	GetProjectEpisodeScopeHead(context.Context, string, bool) (domain.ProjectEpisodeScopeHead, bool, error)
+	CreateProjectEpisodeScopeHead(context.Context, domain.ProjectEpisodeScopeHead) error
+	AdvanceProjectEpisodeScopeHead(context.Context, domain.ProjectEpisodeScopeHead, int64, string) error
+	CreateProjectEpisodeCollectionReceipt(context.Context, domain.ProjectEpisodeCollectionReceipt) error
 	FindReceipt(context.Context, string, string, string) (platformcommand.Receipt, error)
 	CreateReceipt(context.Context, platformcommand.Receipt) error
 	AppendAudit(context.Context, AuditEvent) error
@@ -134,6 +142,7 @@ func (service *Service) ConfirmEpisodeLifecycle(
 		changed := false
 		sourceRunes := []rune(source.NormalizedText)
 		refs := make([]domain.EpisodeLifecycleEpisodeRef, len(command.EpisodeSpans))
+		activeOwnerMaterials := make([]episodeOwnerMaterial, 0, len(command.EpisodeSpans))
 		for index, span := range command.EpisodeSpans {
 			episode, exists := byPosition[span.Position]
 			name := strings.TrimSpace(span.Heading)
@@ -204,7 +213,9 @@ func (service *Service) ConfirmEpisodeLifecycle(
 				ScriptVersionID: scriptVersion.ID, ScriptVersion: scriptVersion.VersionNo,
 				SourceStart: span.SourceStart, SourceEnd: span.SourceEnd, ContentHash: scriptVersion.ContentHash,
 			}
+			activeOwnerMaterials = append(activeOwnerMaterials, episodeOwnerMaterial{episode: episode, script: scriptVersion})
 		}
+		archivedOwnerMaterials := make([]episodeOwnerMaterial, 0)
 		for _, episode := range episodes {
 			if episode.Position <= len(command.EpisodeSpans) || episode.Status != "active" {
 				continue
@@ -213,6 +224,14 @@ func (service *Service) ConfirmEpisodeLifecycle(
 			if saveErr := repository.SaveEpisodeLifecycleEpisode(ctx, episode); saveErr != nil {
 				return saveErr
 			}
+			if episode.CurrentScriptVersionID == nil {
+				return errors.New("Project Episode archive has no Script Version")
+			}
+			scriptVersion, scriptErr := repository.GetEpisodeLifecycleScriptVersion(ctx, *episode.CurrentScriptVersionID)
+			if scriptErr != nil {
+				return scriptErr
+			}
+			archivedOwnerMaterials = append(archivedOwnerMaterials, episodeOwnerMaterial{episode: episode, script: scriptVersion})
 			changed = true
 		}
 		if changed {
@@ -226,22 +245,25 @@ func (service *Service) ConfirmEpisodeLifecycle(
 		if hashErr != nil {
 			return hashErr
 		}
-		collectionRootHash, hashErr := platformcommand.InputHash(struct {
-			SchemaVersion   string                              `json:"schema_version"`
-			SourceVersionID string                              `json:"source_version_id"`
-			SourceHash      string                              `json:"source_hash"`
-			Episodes        []domain.EpisodeLifecycleEpisodeRef `json:"episodes"`
-		}{domain.EpisodeLifecycleSetSchemaVersion, source.VersionID, source.ContentHash, refs})
-		if hashErr != nil {
-			return hashErr
+		ownerReceipt, publishErr := publishProjectEpisodeOwner(
+			ctx, repository, actor, command, project.Revision,
+			activeOwnerMaterials, archivedOwnerMaterials, now, service.newID,
+		)
+		if publishErr != nil {
+			return publishErr
 		}
+		commandReceiptID := service.newID()
 		result = domain.EpisodeLifecycleSet{
-			SchemaVersion: domain.EpisodeLifecycleSetSchemaVersion, ID: service.newID(),
-			WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID,
+			SchemaVersion: domain.EpisodeLifecycleSetSchemaVersion, ID: ownerReceipt.ID,
+			CommandReceiptID: commandReceiptID,
+			WorkspaceID:      command.WorkspaceID, ProjectID: command.ProjectID,
 			GateInputID: command.GateInputID, GateInputHash: command.GateInputHash,
 			ReviewDecisionID: command.ReviewDecisionID, SourceVersionID: source.VersionID, SourceHash: source.ContentHash,
 			ProjectRevision: project.Revision, ActiveOrderHash: resultOrderHash,
-			Episodes: refs, CollectionRootHash: collectionRootHash, CreatedAt: now,
+			Episodes: refs, ScopeRevision: ownerReceipt.ScopeRevision, ScopeContentHash: ownerReceipt.ScopeContentHash,
+			MemberCount: ownerReceipt.MemberCount, MembersHash: ownerReceipt.MembersHash,
+			CollectionRootHash: ownerReceipt.CollectionRootHash, ReceiptContentHash: ownerReceipt.ReceiptContentHash,
+			CreatedAt: now,
 		}
 		encoded, encodeErr := platformcommand.Result(result)
 		if encodeErr != nil {
@@ -253,13 +275,13 @@ func (service *Service) ConfirmEpisodeLifecycle(
 			Revision: project.Revision, OccurredAt: now,
 			Metadata: map[string]any{
 				"review_decision_id":   command.ReviewDecisionID,
-				"collection_root_hash": collectionRootHash,
+				"collection_root_hash": ownerReceipt.CollectionRootHash,
 			},
 		}); auditErr != nil {
 			return auditErr
 		}
 		return repository.CreateReceipt(ctx, platformcommand.Receipt{
-			ID: result.ID, WorkspaceID: command.WorkspaceID, Operation: confirmEpisodeLifecycleOperation,
+			ID: commandReceiptID, WorkspaceID: command.WorkspaceID, Operation: confirmEpisodeLifecycleOperation,
 			IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: command.ProjectID,
 			Result: encoded, CreatedBy: actor.UserID, CreatedAt: now,
 		})

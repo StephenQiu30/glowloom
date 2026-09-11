@@ -1723,14 +1723,33 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		Count(&storyGraphVersionCountBeforeDrift).Error; err != nil {
 		t.Fatal(err)
 	}
+	var projectEpisodeHead model.ProjectEpisodeScopeHead
+	if err = database.First(&projectEpisodeHead, "project_id = ?", fixture.projectID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.ProjectEpisodeScopeHead{}).Where("project_id = ?", fixture.projectID).
+		Update("collection_root_hash", sceneTextHash("advanced-project-episode-owner-head")).Error; err != nil {
+		t.Fatalf("advance Project Episode Owner Head for stale Production World acceptance: %v", err)
+	}
+	driftedProjectEpisodeCommand := productionGraphCommand
+	driftedProjectEpisodeCommand.IdempotencyKey = "production-storygraph-project-episode-head-drift:" + confirmedWorld.CommandReceiptID
+	_, driftErr := productionGraphService.CompileProduction(ctx, productionGraphActor, driftedProjectEpisodeCommand)
+	var applicationError *storygraphapp.Error
+	if !errors.As(driftErr, &applicationError) || applicationError.Code != "invalid_owner_snapshot" ||
+		applicationError.Message != "Project Episode Owner Head has advanced beyond the Production World receipt" {
+		t.Fatalf("stale Project Episode Owner Head error = %v", driftErr)
+	}
+	if err = database.Model(&model.ProjectEpisodeScopeHead{}).Where("project_id = ?", fixture.projectID).
+		Update("collection_root_hash", projectEpisodeHead.CollectionRootHash).Error; err != nil {
+		t.Fatalf("restore Project Episode Owner Head: %v", err)
+	}
 	if err = database.Model(&model.AssetIdentityStateScopeHead{}).Where("project_id = ?", fixture.projectID).
 		Update("collection_root_hash", sceneTextHash("advanced-asset-owner-head")).Error; err != nil {
 		t.Fatalf("advance Asset Owner Head for stale Production World acceptance: %v", err)
 	}
 	driftedProductionGraphCommand := productionGraphCommand
 	driftedProductionGraphCommand.IdempotencyKey = "production-storygraph-owner-head-drift:" + confirmedWorld.CommandReceiptID
-	_, driftErr := productionGraphService.CompileProduction(ctx, productionGraphActor, driftedProductionGraphCommand)
-	var applicationError *storygraphapp.Error
+	_, driftErr = productionGraphService.CompileProduction(ctx, productionGraphActor, driftedProductionGraphCommand)
 	if !errors.As(driftErr, &applicationError) || applicationError.Code != "invalid_owner_snapshot" ||
 		applicationError.Message != "Asset identity-state Owner Head has advanced beyond the Production World receipt" {
 		t.Fatalf("stale Production World Owner Head error = %v", driftErr)

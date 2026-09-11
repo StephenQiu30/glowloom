@@ -16,6 +16,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
+	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 	scriptdomain "github.com/StephenQiu30/lanverse/backend/internal/production/script/domain"
 	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
@@ -37,6 +38,9 @@ type productionSnapshotMaterial struct {
 	bindingStates    []model.ProductionWorldBindingState
 	episodes         []model.Episode
 	episodeRefs      []bibledomain.EpisodeLifecycleRef
+	episodeVersions  []model.ProjectEpisodeVersion
+	episodeHead      model.ProjectEpisodeScopeHead
+	episodeReceipt   model.ProjectEpisodeCollectionReceipt
 	assets           []model.Asset
 	states           []model.AssetState
 	planningFacts    []planningdomain.ProductionWorldPlanningFact
@@ -279,12 +283,73 @@ func (repo *repository) verifyProductionOwnerHeads(
 		return invalidOwnerSnapshot("Structure Identity Owner Head has advanced beyond the Production World receipt")
 	}
 
+	var projectReceipt model.ProjectEpisodeCollectionReceipt
+	if err := locked().First(&projectReceipt, "id = ?", material.structure.ProjectEpisodeReceiptID).Error; err != nil {
+		return err
+	}
+	var projectMembers, committedProjectMembers []ownercollection.VersionRef
+	var coveredProjectScopes []string
+	if json.Unmarshal(projectReceipt.Members, &projectMembers) != nil ||
+		json.Unmarshal(projectReceipt.CommittedOwnerVersionRefs, &committedProjectMembers) != nil ||
+		json.Unmarshal(projectReceipt.CoveredScopeKeys, &coveredProjectScopes) != nil {
+		return invalidOwnerSnapshot("Project Episode Collection Receipt JSON has drifted")
+	}
+	projectCollection, buildErr := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID, OwnerKind: projectReceipt.OwnerKind,
+		VersionFamily: projectReceipt.VersionFamily, ScopeKind: projectReceipt.ScopeKind,
+		ScopeKey: projectReceipt.ScopeKey, ScopeRevision: projectReceipt.ScopeRevision,
+	}, projectMembers)
+	if buildErr != nil {
+		return invalidOwnerSnapshot("Project Episode Collection has drifted")
+	}
+	rebuiltProjectReceipt, receiptErr := projectdomain.NewProjectEpisodeCollectionReceipt(
+		projectReceipt.ID.String(), projectReceipt.CommandID.String(), projectReceipt.IdempotencyKey,
+		projectReceipt.ReviewDecisionID.String(), projectCollection, projectReceipt.CommittedAt,
+		projectReceipt.CommittedBy.String(),
+	)
+	if receiptErr != nil || projectReceipt.WorkspaceID != workspaceID || projectReceipt.ProjectID != projectID ||
+		projectReceipt.DecisionCheckpointID != projectdomain.ProjectEpisodeCheckpoint ||
+		projectReceipt.OwnerKind != "production/project" || projectReceipt.VersionFamily != projectdomain.ProjectEpisodeCollectionFamily ||
+		projectReceipt.ScopeKind != "project" || projectReceipt.ScopeKey != "project:"+state.ProjectID ||
+		projectReceipt.ScopeContentHash != projectCollection.ScopeContentHash ||
+		projectReceipt.MemberCount != projectCollection.MemberCount || projectReceipt.MembersHash != projectCollection.MembersHash ||
+		projectReceipt.CollectionRootHash != projectCollection.CollectionRootHash ||
+		projectReceipt.ReceiptContentHash != rebuiltProjectReceipt.ReceiptContentHash ||
+		!reflect.DeepEqual(projectMembers, rebuiltProjectReceipt.Members) ||
+		!reflect.DeepEqual(committedProjectMembers, rebuiltProjectReceipt.CommittedOwnerVersionRefs) ||
+		!reflect.DeepEqual(coveredProjectScopes, rebuiltProjectReceipt.CoveredScopeKeys) {
+		return invalidOwnerSnapshot("Project Episode Collection Receipt has drifted")
+	}
+	var projectHead model.ProjectEpisodeScopeHead
+	if err := locked().First(&projectHead, "project_id = ?", projectID).Error; err != nil {
+		return err
+	}
+	var projectHeadRefs []ownercollection.VersionRef
+	if json.Unmarshal(projectHead.CurrentVersionRefs, &projectHeadRefs) != nil {
+		return invalidOwnerSnapshot("Project Episode Scope Head refs have drifted")
+	}
+	rebuiltProjectHead, headErr := projectdomain.NewProjectEpisodeScopeHead(projectCollection, projectHead.HeadRevision, projectHead.UpdatedAt)
+	if headErr != nil || projectHead.WorkspaceID != workspaceID || projectHead.ScopeKey != rebuiltProjectHead.ScopeKey ||
+		projectHead.ScopeRevision != rebuiltProjectHead.ScopeRevision || projectHead.ScopeContentHash != rebuiltProjectHead.ScopeContentHash ||
+		projectHead.MemberCount != rebuiltProjectHead.MemberCount || projectHead.MembersHash != rebuiltProjectHead.MembersHash ||
+		projectHead.CollectionRootHash != rebuiltProjectHead.CollectionRootHash || projectHead.HeadContentHash != rebuiltProjectHead.HeadContentHash ||
+		!reflect.DeepEqual(projectHeadRefs, rebuiltProjectHead.CurrentVersionRefs) {
+		return invalidOwnerSnapshot("Project Episode Owner Head has advanced beyond the Production World receipt")
+	}
+	var memberships []model.ProjectEpisodeMembership
+	if err := locked().Where("project_id = ? AND scope_revision = ?", projectID, projectHead.ScopeRevision).Order("position").Find(&memberships).Error; err != nil {
+		return err
+	}
 	var activeEpisodes []model.Episode
 	if err := locked().Where("project_id = ? AND status = ?", projectID, "active").Order("position").Order("id").Find(&activeEpisodes).Error; err != nil {
 		return err
 	}
-	if len(activeEpisodes) != len(material.episodeRefs) {
+	if len(activeEpisodes) != len(material.episodeRefs) || len(memberships) != len(material.episodeRefs) {
 		return invalidOwnerSnapshot("Project Episode Owner set has advanced beyond the Production World receipt")
+	}
+	membersByEpisode := make(map[string]ownercollection.VersionRef, len(projectMembers))
+	for _, member := range projectMembers {
+		membersByEpisode[member.OwnerLogicalID] = member
 	}
 	for index, reference := range material.episodeRefs {
 		episode := activeEpisodes[index]
@@ -303,7 +368,31 @@ func (repo *repository) verifyProductionOwnerHeads(
 			script.ContentHash != reference.ContentHash || script.Status != "published" {
 			return invalidOwnerSnapshot("Project Episode Owner set has advanced beyond the Production World receipt")
 		}
+		membership := memberships[index]
+		member, exists := membersByEpisode[reference.EpisodeID]
+		if !exists || membership.WorkspaceID != workspaceID || membership.ProjectID != projectID ||
+			membership.Position != reference.Position || membership.EpisodeID != episode.ID ||
+			membership.EpisodeVersionID.String() != member.OwnerVersionID || membership.VersionContentHash != member.OwnerContentHash {
+			return invalidOwnerSnapshot("Project Episode membership has drifted")
+		}
+		var ownerVersion model.ProjectEpisodeVersion
+		if err := locked().First(&ownerVersion, "id = ?", membership.EpisodeVersionID).Error; err != nil {
+			return err
+		}
+		rebuiltOwner, ownerErr := rebuildProjectEpisodeVersion(ownerVersion)
+		if ownerErr != nil || rebuiltOwner.ContentHash != ownerVersion.ContentHash ||
+			ownerVersion.WorkspaceID != workspaceID || ownerVersion.ProjectID != projectID || ownerVersion.EpisodeID != episode.ID ||
+			ownerVersion.Revision != int64(reference.EpisodeRevision) || ownerVersion.Status != "active" ||
+			ownerVersion.Position != reference.Position || ownerVersion.SourceVersionID != material.revision.ID ||
+			ownerVersion.ScriptVersionID != script.ID || ownerVersion.SourceStart != reference.SourceStart ||
+			ownerVersion.SourceEnd != reference.SourceEnd || ownerVersion.ScriptContentHash != reference.ContentHash ||
+			member.OwnerRevision != ownerVersion.Revision || member.OwnerContentHash != ownerVersion.ContentHash {
+			return invalidOwnerSnapshot("Project Episode immutable Version has drifted")
+		}
+		material.episodeVersions = append(material.episodeVersions, ownerVersion)
 	}
+	material.episodeHead = projectHead
+	material.episodeReceipt = projectReceipt
 
 	// Match the Production World apply order so publication never inverts Owner Head locks.
 	assetCollection := findWorldCollection(worldCollections, "asset_identity_state_set")
@@ -588,6 +677,24 @@ func planningFact(id, workspaceID, projectID, episodeID uuid.UUID, kind, key str
 	}
 }
 
+func rebuildProjectEpisodeVersion(value model.ProjectEpisodeVersion) (projectdomain.EpisodeOwnerVersion, error) {
+	var parentVersionID *string
+	if value.ParentVersionID != nil {
+		parent := value.ParentVersionID.String()
+		parentVersionID = &parent
+	}
+	return projectdomain.NewEpisodeOwnerVersion(projectdomain.EpisodeOwnerVersion{
+		ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
+		EpisodeID: value.EpisodeID.String(), Revision: value.Revision,
+		ParentVersionID: parentVersionID, ParentContentHash: value.ParentContentHash,
+		Status: value.Status, Position: value.Position, SequenceKey: value.SequenceKey,
+		Name: value.Name, TargetDurationMS: value.TargetDurationMS,
+		SourceVersionID: value.SourceVersionID.String(), ScriptVersionID: value.ScriptVersionID.String(),
+		SourceStart: value.SourceStart, SourceEnd: value.SourceEnd, ScriptContentHash: value.ScriptContentHash,
+		ContentHash: value.ContentHash, CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt,
+	})
+}
+
 func findWorldCollection(values []worlddomain.CollectionCommitReceipt, family string) worlddomain.CollectionCommitReceipt {
 	for _, value := range values {
 		if value.VersionFamily == family {
@@ -625,12 +732,15 @@ func buildProductionOwnerCollections(
 	if collections[len(collections)-1].CollectionRootHash != material.sourceReceipt.CollectionRootHash {
 		return nil, invalidOwnerSnapshot("Script Source Collection root has drifted")
 	}
-	episodeMembers := make([]storygraph.OwnerVersionIdentity, len(material.episodeRefs))
-	for index, reference := range material.episodeRefs {
-		episodeMembers[index] = identity("production/project", "project_episode_set", reference.EpisodeID, reference.EpisodeID, int64(reference.EpisodeRevision), reference.ContentHash, material.episodes[index].CreatedAt)
+	episodeMembers := make([]storygraph.OwnerVersionIdentity, len(material.episodeVersions))
+	for index, version := range material.episodeVersions {
+		episodeMembers[index] = identity("production/project", projectdomain.ProjectEpisodeCollectionFamily, version.EpisodeID.String(), version.ID.String(), version.Revision, version.ContentHash, version.CreatedAt)
 	}
-	if err := appendCollection("production/project", "project_episode_set", "project", "project:"+state.ProjectID, int64(material.structure.Version), episodeMembers); err != nil {
+	if err := appendCollection("production/project", projectdomain.ProjectEpisodeCollectionFamily, "project", "project:"+state.ProjectID, material.episodeHead.ScopeRevision, episodeMembers); err != nil {
 		return nil, err
+	}
+	if collections[len(collections)-1].CollectionRootHash != material.episodeReceipt.CollectionRootHash {
+		return nil, invalidOwnerSnapshot("Project Episode Collection root has drifted")
 	}
 	if err := appendCollection("production/bible", "bible_structure_identity_set", "project", "project:"+state.ProjectID, int64(material.structure.Version), []storygraph.OwnerVersionIdentity{
 		identity("production/bible", "bible_structure_identity_set", state.ProjectID, material.structure.ID.String(), int64(material.structure.Version), material.structure.ContentHash, material.structure.CreatedAt),

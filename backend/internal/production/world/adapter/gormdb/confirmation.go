@@ -18,10 +18,12 @@ import (
 	commandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/adapter/gormdb"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
+	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/world/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	workflowdomain "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -222,19 +224,48 @@ func (transaction *confirmationTransaction) validateStructureIdentity(
 		Where("project_id = ? AND version_id = ?", projectID, versionID).First(&collection).Error; err != nil {
 		return err
 	}
-	var projectReceipt model.CommandReceipt
+	var projectReceipt model.ProjectEpisodeCollectionReceipt
 	if err := transaction.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
 		First(&projectReceipt, "id = ?", version.ProjectEpisodeReceiptID).Error; err != nil {
 		return err
 	}
+	var projectMembers, committedProjectMembers []ownercollection.VersionRef
+	var coveredProjectScopes []string
+	if json.Unmarshal(projectReceipt.Members, &projectMembers) != nil ||
+		json.Unmarshal(projectReceipt.CommittedOwnerVersionRefs, &committedProjectMembers) != nil ||
+		json.Unmarshal(projectReceipt.CoveredScopeKeys, &coveredProjectScopes) != nil {
+		return application.ErrProductionWorldConfirmationConflict
+	}
+	projectCollection, collectionErr := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: workspaceID.String(), ProjectID: projectID.String(), OwnerKind: projectReceipt.OwnerKind,
+		VersionFamily: projectReceipt.VersionFamily, ScopeKind: projectReceipt.ScopeKind,
+		ScopeKey: projectReceipt.ScopeKey, ScopeRevision: projectReceipt.ScopeRevision,
+	}, projectMembers)
+	if collectionErr != nil {
+		return application.ErrProductionWorldConfirmationConflict
+	}
+	rebuiltProjectReceipt, receiptErr := projectdomain.NewProjectEpisodeCollectionReceipt(
+		projectReceipt.ID.String(), projectReceipt.CommandID.String(), projectReceipt.IdempotencyKey,
+		projectReceipt.ReviewDecisionID.String(), projectCollection, projectReceipt.CommittedAt,
+		projectReceipt.CommittedBy.String(),
+	)
 	ref := command.Candidate.StructureIdentitySetVersion
 	if version.WorkspaceID != workspaceID || version.ProjectID != projectID || version.ReviewDecisionID == uuid.Nil ||
 		int64(version.Version) != ref.Revision || version.ContentHash != ref.ContentHash ||
 		head.WorkspaceID != workspaceID || head.CurrentVersionID != version.ID || head.HeadRevision != ref.Revision ||
 		head.HeadHash != ref.ContentHash || collection.WorkspaceID != workspaceID ||
 		collection.CollectionRootHash == "" || collection.ReceiptContentHash == "" ||
-		projectReceipt.WorkspaceID != workspaceID || projectReceipt.ResourceID != projectID ||
-		projectReceipt.Operation != "project.confirm_episode_lifecycle" {
+		receiptErr != nil || projectReceipt.WorkspaceID != workspaceID || projectReceipt.ProjectID != projectID ||
+		projectReceipt.DecisionCheckpointID != projectdomain.ProjectEpisodeCheckpoint ||
+		projectReceipt.OwnerKind != "production/project" || projectReceipt.VersionFamily != projectdomain.ProjectEpisodeCollectionFamily ||
+		projectReceipt.ScopeKind != "project" || projectReceipt.ScopeKey != "project:"+projectID.String() ||
+		projectReceipt.ScopeContentHash != projectCollection.ScopeContentHash ||
+		projectReceipt.MemberCount != projectCollection.MemberCount || projectReceipt.MembersHash != projectCollection.MembersHash ||
+		projectReceipt.CollectionRootHash != projectCollection.CollectionRootHash ||
+		projectReceipt.ReceiptContentHash != rebuiltProjectReceipt.ReceiptContentHash ||
+		!reflect.DeepEqual(projectMembers, rebuiltProjectReceipt.Members) ||
+		!reflect.DeepEqual(committedProjectMembers, rebuiltProjectReceipt.CommittedOwnerVersionRefs) ||
+		!reflect.DeepEqual(coveredProjectScopes, rebuiltProjectReceipt.CoveredScopeKeys) {
 		return application.ErrProductionWorldConfirmationConflict
 	}
 	return nil
