@@ -1,0 +1,81 @@
+{
+  "success_cases": [
+    {
+      "name": "unicode_and_utf16_order",
+      "input": {
+        "\ue000": "bmp",
+        "\ud800\udc00": "astral",
+        "e\u0301": "A\u030a\ud83d\ude00<>&/\u2028\u2029\b\t\n\f\r\u000f\"\\"
+      },
+      "canonical_json": "{\"é\":\"Å😀<>&/\u2028\u2029\\b\\t\\n\\f\\r\\u000f\\\"\\\\\",\"𐀀\":\"astral\",\"\":\"bmp\"}",
+      "sha256": "7f73960fc5cbcc1e8dd6ed43ba23e0df4d2df955c142ee6ba23ffea532cfb1c1"
+    },
+    {
+      "name": "integer_boundaries",
+      "input": {
+        "zero": 0,
+        "min": -9007199254740991,
+        "max": 9007199254740991
+      },
+      "canonical_json": "{\"max\":9007199254740991,\"min\":-9007199254740991,\"zero\":0}",
+      "sha256": "b7b2401ddca2165824e98c61890c0aaec470258d3119dd265d02be9438bf47e6"
+    }
+  ],
+  "failure_cases": [
+    {
+      "name": "floating_point",
+      "raw_json": "{\"value\":1.5}",
+      "error_code": "integer_required"
+    },
+    {
+      "name": "integer_exponent",
+      "raw_json": "{\"value\":1e0}",
+      "error_code": "integer_required"
+    },
+    {
+      "name": "integer_above_safe_range",
+      "raw_json": "{\"value\":9007199254740992}",
+      "error_code": "integer_out_of_range"
+    },
+    {
+      "name": "integer_below_safe_range",
+      "raw_json": "{\"value\":-9007199254740992}",
+      "error_code": "integer_out_of_range"
+    },
+    {
+      "name": "duplicate_key",
+      "raw_json": "{\"value\":1,\"value\":2}",
+      "error_code": "duplicate_key"
+    },
+    {
+      "name": "escaped_duplicate_key",
+      "raw_json": "{\"x\":1,\"\\u0078\":2}",
+      "error_code": "duplicate_key"
+    },
+    {
+      "name": "normalized_duplicate_key",
+      "raw_json": "{\"é\":1,\"e\\u0301\":2}",
+      "error_code": "duplicate_normalized_key"
+    },
+    {
+      "name": "lone_high_surrogate",
+      "raw_json": "{\"value\":\"\\ud800\"}",
+      "error_code": "invalid_unicode"
+    },
+    {
+      "name": "lone_low_surrogate",
+      "raw_json": "{\"value\":\"\\udc00\"}",
+      "error_code": "invalid_unicode"
+    },
+    {
+      "name": "invalid_utf8",
+      "raw_json_hex": "7b2276616c7565223a22ff227d",
+      "error_code": "invalid_unicode"
+    },
+    {
+      "name": "trailing_document",
+      "raw_json": "{\"value\":1}{\"value\":2}",
+      "error_code": "invalid_json"
+    }
+  ]
+}

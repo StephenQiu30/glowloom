@@ -1,33 +1,42 @@
 package canonical
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"sort"
+	"strconv"
+	"unicode/utf8"
 
+	"github.com/gowebpki/jcs"
 	"golang.org/x/text/unicode/norm"
 )
 
+const maximumSafeInteger int64 = 9007199254740991
+
 // JSON implements the production content contract shared across Backend
-// domains and Agent wires. Object keys and string values are NFC normalized;
-// numbers are restricted to integers so cross-language hashes remain stable.
+// domains and Agent wires. It NFC-normalizes strings before applying RFC 8785
+// and only permits integers that are exactly representable across runtimes.
 func JSON(raw json.RawMessage) ([]byte, error) {
+	if !utf8.Valid(raw) || !validUnicodeEscapes(raw) {
+		return nil, canonicalError(errorInvalidUnicode, "Production Canonical JSON contains invalid Unicode")
+	}
 	value, err := uniqueValue(raw)
 	if err != nil {
-		return nil, err
+		return nil, wrapCanonicalError(errorInvalidJSON, err)
 	}
 	normalized, err := normalize(value)
 	if err != nil {
 		return nil, err
 	}
-	var buffer bytes.Buffer
-	if err = write(&buffer, normalized); err != nil {
-		return nil, err
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return nil, wrapCanonicalError(errorUnsupportedValue, err)
 	}
-	return buffer.Bytes(), nil
+	canonical, err := jcs.Transform(encoded)
+	if err != nil {
+		return nil, wrapCanonicalError(errorInvalidJSON, err)
+	}
+	return canonical, nil
 }
 
 func Hash(raw json.RawMessage) (string, error) {
@@ -43,8 +52,12 @@ func normalize(value any) (any, error) {
 	switch typed := value.(type) {
 	case nil, bool, json.Number:
 		if number, ok := typed.(json.Number); ok {
-			if _, err := number.Int64(); err != nil {
-				return nil, errors.New("production canonical JSON only permits integers")
+			integer, err := number.Int64()
+			if err != nil {
+				return nil, canonicalError(errorIntegerRequired, "Production Canonical JSON only permits decimal integers")
+			}
+			if integer < -maximumSafeInteger || integer > maximumSafeInteger {
+				return nil, canonicalError(errorIntegerOutOfRange, "Production Canonical JSON integer exceeds the safe range")
 			}
 		}
 		return typed, nil
@@ -65,7 +78,7 @@ func normalize(value any) (any, error) {
 		for key, item := range typed {
 			normalizedKey := norm.NFC.String(key)
 			if _, exists := result[normalizedKey]; exists {
-				return nil, errors.New("production canonical JSON contains duplicate normalized keys")
+				return nil, canonicalError(errorDuplicateNormalizedKey, "Production Canonical JSON contains duplicate normalized keys")
 			}
 			normalized, err := normalize(item)
 			if err != nil {
@@ -75,70 +88,43 @@ func normalize(value any) (any, error) {
 		}
 		return result, nil
 	default:
-		return nil, errors.New("production canonical JSON contains an unsupported value")
+		return nil, canonicalError(errorUnsupportedValue, "Production Canonical JSON contains an unsupported value")
 	}
 }
 
-func write(buffer *bytes.Buffer, value any) error {
-	switch typed := value.(type) {
-	case nil:
-		buffer.WriteString("null")
-	case bool:
-		if typed {
-			buffer.WriteString("true")
-		} else {
-			buffer.WriteString("false")
-		}
-	case json.Number:
-		buffer.WriteString(typed.String())
-	case string:
-		if err := writeString(buffer, typed); err != nil {
-			return err
-		}
-	case []any:
-		buffer.WriteByte('[')
-		for index, item := range typed {
-			if index > 0 {
-				buffer.WriteByte(',')
+func validUnicodeEscapes(raw []byte) bool {
+	inString := false
+	for index := 0; index < len(raw); index++ {
+		switch raw[index] {
+		case '"':
+			inString = !inString
+		case '\\':
+			if !inString || index+1 >= len(raw) {
+				continue
 			}
-			if err := write(buffer, item); err != nil {
-				return err
+			index++
+			if raw[index] != 'u' || index+4 >= len(raw) {
+				continue
 			}
-		}
-		buffer.WriteByte(']')
-	case map[string]any:
-		keys := make([]string, 0, len(typed))
-		for key := range typed {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		buffer.WriteByte('{')
-		for index, key := range keys {
-			if index > 0 {
-				buffer.WriteByte(',')
+			first, err := strconv.ParseUint(string(raw[index+1:index+5]), 16, 16)
+			if err != nil {
+				continue
 			}
-			if err := writeString(buffer, key); err != nil {
-				return err
-			}
-			buffer.WriteByte(':')
-			if err := write(buffer, typed[key]); err != nil {
-				return err
+			index += 4
+			switch {
+			case first >= 0xd800 && first <= 0xdbff:
+				if index+6 >= len(raw) || raw[index+1] != '\\' || raw[index+2] != 'u' {
+					return false
+				}
+				second, parseErr := strconv.ParseUint(string(raw[index+3:index+7]), 16, 16)
+				if parseErr != nil || second < 0xdc00 || second > 0xdfff {
+					return false
+				}
+				index += 6
+			case first >= 0xdc00 && first <= 0xdfff:
+				return false
 			}
 		}
-		buffer.WriteByte('}')
-	default:
-		return errors.New("production canonical JSON contains an unsupported value")
 	}
-	return nil
-}
-
-func writeString(buffer *bytes.Buffer, value string) error {
-	var encoded bytes.Buffer
-	encoder := json.NewEncoder(&encoded)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(value); err != nil {
-		return err
-	}
-	buffer.Write(bytes.TrimSpace(encoded.Bytes()))
-	return nil
+	return true
 }

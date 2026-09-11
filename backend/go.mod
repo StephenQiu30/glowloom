@@ -11,6 +11,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
+	github.com/gowebpki/jcs v1.0.1
 	github.com/minio/minio-go/v7 v7.3.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/rs/cors v1.11.1

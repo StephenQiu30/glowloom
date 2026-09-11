@@ -10,10 +10,11 @@ import (
 // Decode rejects ambiguous keys before decoding a closed wire contract.
 // JSON keeps the same canonical bytes for every previously valid value.
 func Decode(raw []byte, target any) error {
-	if _, err := uniqueValue(raw); err != nil {
+	canonical, err := JSON(raw)
+	if err != nil {
 		return err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder := json.NewDecoder(bytes.NewReader(canonical))
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(target)
 }
@@ -31,7 +32,7 @@ func uniqueValue(raw []byte) (any, error) {
 }
 func readValue(d *json.Decoder, depth int) (any, error) {
 	if depth > 128 {
-		return nil, errors.New("JSON nesting exceeds limit")
+		return nil, canonicalError(errorNestingLimit, "Production Canonical JSON nesting exceeds limit")
 	}
 	token, err := d.Token()
 	if err != nil {
@@ -54,7 +55,7 @@ func readValue(d *json.Decoder, depth int) (any, error) {
 				return nil, errors.New("invalid JSON key")
 			}
 			if _, exists := value[key]; exists {
-				return nil, errors.New("JSON contains duplicate keys")
+				return nil, canonicalError(errorDuplicateKey, "Production Canonical JSON contains duplicate keys")
 			}
 			item, e := readValue(d, depth+1)
 			if e != nil {
