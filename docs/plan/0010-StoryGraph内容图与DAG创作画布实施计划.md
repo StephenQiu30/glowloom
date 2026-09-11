@@ -165,6 +165,7 @@
 - [x] 为七个已运行 P0 变体建立正式 StageRelease 内容身份：Backend 固定读取已安装 Skill 的 Bundle artifact，逐项绑定 Core、Wire/Input/Output/Normalizer、Prompt Compiler、实际 Reference/Rubric、Loaded Resource Set、执行/模型/工具 Policy 与运行镜像；SceneAnalysis 服务使用该 Hash 和资源证明写入既有 GORM Release 事实，不新增字段、migration 或旁路事实源，且不冒充完整 SkillRelease/Control 审批链。
 - [ ] 把成熟 Skill 吸收流程固化为 SourceInventory → review → rewrite → eval → shadow → signature；不复制未授权运行资产。
   - [x] 将已接受设计实际参考的 Agent Skills specification、Anthropic skill-creator 与 LibTV public Skill 固定为三条 Backend-owned SourceInventory：提交、原文件/许可证字节 Hash、SPDX/NOTICE、作者、抓取时间、预期能力、审阅人和 reference-only 处置进入同一 Canonical Root；不复制外部生产文件。
+  - [x] 对同一固定 SourceInventory 建立 Backend-owned SourceReview：七类禁止风险、逐来源 finding、审核时间/人和处置进入同一 Canonical Root；规范文档仅 reference-only，包含主动 Agent/工具指令的 skill-creator 与包含远程会话/上传下载的 LibTV Skill quarantined，三者均禁止进入改写队列、生产 Bundle 或运行时执行。
 - [ ] 上架 4–6 个不可变、版本化、可追溯许可的 PresetRelease。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3 与原子发布。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
