@@ -400,13 +400,13 @@
 
 ### `VP-I05` — Skill 供应链、4–6 Preset、视觉基础与 Gate 3
 
-- 状态：未开始
-- Git 基线/提交：待记录
-- Red 命令与失败：待记录
-- Green/定向验证：待记录
-- 全量 CI：待记录
-- 真实输入/产物/事实对账：待记录
-- 未覆盖条件与残余风险：待记录
+- 状态：进行中；仅完成 Backend `PresetRelease` 严格领域合同，不表示 Preset Inventory、Skill Release、视觉执行或 Gate 3 已实现。
+- Git 基线/提交：基线 `2c1f50e8343a66728329bcd4bf2778849131f74a`；本切片随本记录所在提交交付。
+- Red 命令与失败：`go test ./tests/preset -count=1` 首先因 `backend/internal/preset/domain` 不存在而编译失败；Red 固定缺 NOTICE、六类能力或 Purpose Profile、错误视图角色、非内容定址引用、数字发布序号、非法日历日期、未知字段与 Hash 漂移必须拒绝。
+- Green/定向验证：`go test ./tests/preset -count=1`、`go vet ./internal/preset/... ./tests/preset`、`go test -race ./tests/preset -count=1` 与 `go test ./tests/architecture -count=1` 通过。Backend 以 Production Canonical JSON 计算排除自身的 Release Content Hash，严格 round-trip 六类 Target/Purpose、World Design Basis、Visual Grammar、Provenance 与 Skill/QC/Model Policy 内容引用。
+- 全量 CI：Backend 通过 `test -z "$(gofmt -l .)"`、`go vet ./...` 与无外部环境变量的 `go test -count=1 ./...`；固定 `lanverse_test` 与本机 Homebrew Temporal `127.0.0.1:7233` 的有界恢复旅程真实通过（58.644 秒），未启动或重启环境。Frontend OpenAPI 无漂移、ESLint、TypeScript、25 files/73 tests 和生产构建通过。Agent Ruff lint/format、Pyright 与 Pytest `204 passed, 60 skipped` 通过；跳过项均明确要求隔离 PostgreSQL、本机 Temporal 或真实 Codex CLI，未冒充已执行。
+- 真实输入/产物/事实对账：本切片只建立无数据库依赖的不可变领域值合同；未创建表、migration、替代 SQL 事实源或兼容入口，也未启动/重启任何本机环境服务。
+- 未覆盖条件与残余风险：尚未建立真实 NOTICE 文件存在性/许可清单检查、4–6 个 Release Inventory、SourceInventory/Skill Release 供应链、持久 Owner/API、Visual Foundation、Reference Plan、expected target set 与 Gate 3，因此 `VPR-PRE-001–009` 和 `VPA-SUP/REL/VIS` 均保持未验收。
 
 ### `VP-I06` — 六类 Target 与 Provider-neutral Brief
 

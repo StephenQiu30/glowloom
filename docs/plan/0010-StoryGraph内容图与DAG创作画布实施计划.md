@@ -156,6 +156,7 @@
 目标：建立可审计 Skill/Release 供应链和首批策展 Preset，使用户从正式制作世界选择视觉基底并批准 Reference Plan。
 
 - [ ] Red：许可缺失、NOTICE 缺失、路径逃逸、注入、Bundle 漂移、Release 撤销、十三 Stage 集不完整、Preset 污染 P0 和非法 Gate 3 批准。
+- [x] 固定 Backend-owned `PresetRelease` 严格合同：语义化日期发布号、六类 Purpose/视图能力、World Design Basis、Visual Grammar、可追溯来源/许可/NOTICE 路径、内容定址 Skill/QC/Model Policy 引用与 Canonical Hash；未知字段、缺项、非法日期和 Hash 漂移失败关闭。
 - [ ] 把成熟 Skill 吸收流程固化为 SourceInventory → review → rewrite → eval → shadow → signature；不复制未授权运行资产。
 - [ ] 上架 4–6 个不可变、版本化、可追溯许可的 PresetRelease。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3 与原子发布。
