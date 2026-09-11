@@ -31,6 +31,7 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	presetcatalog "github.com/StephenQiu30/lanverse/backend/internal/preset/catalog"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -1048,6 +1049,27 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	})
 	if err != nil || currentProductionGraph.Stale || currentProductionGraph.Version.ID != productionGraph.Version.ID {
 		t.Fatalf("query current Production StoryGraph: result=%#v err=%v", currentProductionGraph, err)
+	}
+	visualWorld, err := productionQueries.VisualFoundationWorld(
+		ctx, productionGraphActor, fixture.projectID.String(),
+	)
+	if err != nil {
+		t.Fatalf("query confirmed Visual Foundation world: %v", err)
+	}
+	visualPreset, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.12")
+	if err != nil || !found {
+		t.Fatalf("load curated Visual Foundation Preset: found=%v err=%v", found, err)
+	}
+	visualInput, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
+		workflowapp.FaithfulVisualFoundationInputCommand{
+			World: visualWorld, Source: visualSource, PresetRelease: visualPreset,
+		},
+	)
+	if err != nil || visualInput.ProductionWorldOwnerSetHash != productionGraph.Version.OwnerSetHash ||
+		visualInput.PresetRelease.ContentHash != visualPreset.ContentHash ||
+		visualInput.ApplicationMode != "faithful" || len(visualInput.ConfirmedWorldRoots) != 3 ||
+		len(visualInput.DesignGaps) != 0 || len(visualInput.ReferenceAttachments) != 0 {
+		t.Fatalf("compile faithful Visual Foundation input: input=%#v err=%v", visualInput, err)
 	}
 	impact, err := productionQueries.Lens(ctx, productionGraphActor, storygraphapp.LensQuery{
 		ProjectID: fixture.projectID.String(), VersionRef: storygraphapp.VersionRefCurrent,
