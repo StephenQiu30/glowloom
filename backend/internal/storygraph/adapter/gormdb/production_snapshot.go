@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	assetdomain "github.com/StephenQiu30/lanverse/backend/internal/asset/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -403,9 +404,47 @@ func (repo *repository) verifyProductionOwnerHeads(
 	if err := locked().First(&assetHead, "project_id = ?", projectID).Error; err != nil {
 		return err
 	}
-	if assetHead.WorkspaceID != workspaceID || assetHead.ScopeRevision != assetCollection.ScopeRevision ||
-		assetHead.ScopeContentHash != assetCollection.ScopeContentHash ||
-		assetHead.MembersHash != assetCollection.MembersHash || assetHead.CollectionRootHash != assetCollection.CollectionRootHash {
+	assets := make([]assetdomain.Asset, len(material.assets))
+	for index, value := range material.assets {
+		assets[index] = assetdomain.Asset{
+			ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
+			Kind: value.Kind, IdentityKey: value.IdentityKey, Revision: value.Revision,
+			ContentHash: value.ContentHash, CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt.UTC(),
+		}
+	}
+	states := make([]assetdomain.AssetState, len(material.states))
+	for index, value := range material.states {
+		state, stateErr := assetdomain.NewAssetState(assetdomain.AssetStateInput{
+			ID: value.ID.String(), WorkspaceID: value.WorkspaceID.String(), ProjectID: value.ProjectID.String(),
+			AssetID: value.AssetID.String(), StateKey: value.StateKey, Label: value.Label, Revision: value.Revision,
+			Snapshot: json.RawMessage(value.Snapshot), CreatedBy: value.CreatedBy.String(), CreatedAt: value.CreatedAt.UTC(),
+		})
+		if stateErr != nil || state.ContentHash != value.ContentHash {
+			return invalidOwnerSnapshot("AssetState Owner Version has drifted")
+		}
+		states[index] = state
+	}
+	rebuiltAssetCollection, assetBuildErr := assetdomain.BuildIdentityStateCollection(
+		state.WorkspaceID, state.ProjectID, assetHead.ScopeRevision, assets, states,
+	)
+	rebuiltAssetHead, assetHeadErr := assetdomain.NewIdentityStateCollectionHead(
+		state.WorkspaceID, state.ProjectID, assetHead.ScopeRevision, assets, states, assetHead.UpdatedAt,
+	)
+	var assetHeadRefs []ownercollection.VersionRef
+	assetRefsErr := json.Unmarshal(assetHead.CurrentRootRefs, &assetHeadRefs)
+	if assetBuildErr != nil || assetHeadErr != nil || assetRefsErr != nil || assetCollection.OwnerKind != "asset" ||
+		assetCollection.ScopeKind != "project" || assetCollection.ScopeKey != rebuiltAssetCollection.ScopeKey ||
+		assetCollection.ScopeRevision != rebuiltAssetCollection.ScopeRevision ||
+		assetCollection.ScopeContentHash != rebuiltAssetCollection.ScopeContentHash ||
+		assetCollection.MemberCount != int(rebuiltAssetCollection.MemberCount) ||
+		assetCollection.MembersHash != rebuiltAssetCollection.MembersHash ||
+		assetCollection.CollectionRootHash != rebuiltAssetCollection.CollectionRootHash ||
+		assetHead.WorkspaceID != workspaceID || assetHead.ProjectID != projectID ||
+		assetHead.ScopeRevision != rebuiltAssetHead.ScopeRevision || assetHead.HeadRevision != rebuiltAssetHead.HeadRevision ||
+		assetHead.MemberCount != rebuiltAssetHead.MemberCount || assetHead.ScopeContentHash != rebuiltAssetHead.ScopeContentHash ||
+		assetHead.MembersHash != rebuiltAssetHead.MembersHash || assetHead.CollectionRootHash != rebuiltAssetHead.CollectionRootHash ||
+		assetHead.HeadContentHash != rebuiltAssetHead.HeadContentHash ||
+		!reflect.DeepEqual(assetHeadRefs, rebuiltAssetHead.CurrentVersionRefs) {
 		return invalidOwnerSnapshot("Asset identity-state Owner Head has advanced beyond the Production World receipt")
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 )
 
 const AssetIdentityStateCollectionFamily = "asset_identity_state_set"
@@ -25,18 +26,103 @@ type IdentityStateMember struct {
 }
 
 type IdentityStateCollectionHead struct {
-	WorkspaceID        string                `json:"workspace_id"`
-	ProjectID          string                `json:"project_id"`
-	ScopeKey           string                `json:"scope_key"`
-	ScopeRevision      int64                 `json:"scope_revision"`
-	ScopeContentHash   string                `json:"scope_content_hash"`
-	Members            []IdentityStateMember `json:"members"`
-	MemberCount        int                   `json:"member_count"`
-	MembersHash        string                `json:"members_hash"`
-	CollectionRootHash string                `json:"collection_root_hash"`
-	HeadRevision       int64                 `json:"head_revision"`
-	HeadContentHash    string                `json:"head_content_hash"`
-	UpdatedAt          time.Time             `json:"updated_at"`
+	WorkspaceID        string                       `json:"workspace_id"`
+	ProjectID          string                       `json:"project_id"`
+	ScopeKey           string                       `json:"scope_key"`
+	ScopeRevision      int64                        `json:"scope_revision"`
+	ScopeContentHash   string                       `json:"scope_content_hash"`
+	Members            []IdentityStateMember        `json:"members"`
+	CurrentVersionRefs []ownercollection.VersionRef `json:"current_root_version_refs"`
+	MemberCount        int                          `json:"member_count"`
+	MembersHash        string                       `json:"members_hash"`
+	CollectionRootHash string                       `json:"collection_root_hash"`
+	HeadRevision       int64                        `json:"head_revision"`
+	HeadContentHash    string                       `json:"head_content_hash"`
+	UpdatedAt          time.Time                    `json:"updated_at"`
+}
+
+func BuildIdentityStateCollection(
+	workspaceID, projectID string,
+	revision int64,
+	assets []Asset,
+	states []AssetState,
+) (ownercollection.Ref, error) {
+	if _, err := uuid.Parse(workspaceID); err != nil {
+		return ownercollection.Ref{}, errors.New("invalid Asset collection workspace")
+	}
+	if _, err := uuid.Parse(projectID); err != nil || revision < 1 || len(assets) == 0 || len(states) == 0 {
+		return ownercollection.Ref{}, errors.New("invalid Asset collection input")
+	}
+	assets = append([]Asset(nil), assets...)
+	slices.SortFunc(assets, func(left, right Asset) int {
+		if compared := strings.Compare(left.IdentityKey, right.IdentityKey); compared != 0 {
+			return compared
+		}
+		return strings.Compare(left.ID, right.ID)
+	})
+	assetByID := make(map[string]Asset, len(assets))
+	stateCountByAsset := make(map[string]int, len(assets))
+	logicalIDs := make(map[string]struct{}, len(assets)+len(states))
+	members := make([]ownercollection.VersionRef, 0, len(assets)+len(states))
+	for _, asset := range assets {
+		if ValidateAsset(asset) != nil || asset.WorkspaceID != workspaceID || asset.ProjectID != projectID {
+			return ownercollection.Ref{}, errors.New("invalid Asset collection identity set")
+		}
+		if _, exists := assetByID[asset.ID]; exists {
+			return ownercollection.Ref{}, errors.New("duplicate Asset collection identity")
+		}
+		if _, exists := logicalIDs[asset.IdentityKey]; exists {
+			return ownercollection.Ref{}, errors.New("duplicate Asset collection logical identity")
+		}
+		assetByID[asset.ID] = asset
+		logicalIDs[asset.IdentityKey] = struct{}{}
+		members = append(members, ownercollection.VersionRef{
+			WorkspaceID: workspaceID, ProjectID: projectID,
+			OwnerKind: "asset", VersionFamily: AssetIdentityStateCollectionFamily,
+			OwnerLogicalID: asset.IdentityKey, OwnerVersionID: asset.ID,
+			OwnerRevision: int64(asset.Revision), OwnerContentHash: asset.ContentHash,
+		})
+	}
+	states = append([]AssetState(nil), states...)
+	slices.SortFunc(states, func(left, right AssetState) int {
+		if compared := strings.Compare(left.StateKey, right.StateKey); compared != 0 {
+			return compared
+		}
+		return strings.Compare(left.ID, right.ID)
+	})
+	seenStateIDs := make(map[string]struct{}, len(states))
+	for _, state := range states {
+		asset, exists := assetByID[state.AssetID]
+		if ValidateAssetState(state) != nil || !exists || state.WorkspaceID != workspaceID ||
+			state.ProjectID != projectID || state.AssetID != asset.ID {
+			return ownercollection.Ref{}, errors.New("invalid Asset collection state set")
+		}
+		if _, exists = seenStateIDs[state.ID]; exists {
+			return ownercollection.Ref{}, errors.New("duplicate Asset collection state")
+		}
+		if _, exists = logicalIDs[state.StateKey]; exists {
+			return ownercollection.Ref{}, errors.New("duplicate Asset collection logical identity")
+		}
+		seenStateIDs[state.ID] = struct{}{}
+		logicalIDs[state.StateKey] = struct{}{}
+		stateCountByAsset[state.AssetID]++
+		members = append(members, ownercollection.VersionRef{
+			WorkspaceID: workspaceID, ProjectID: projectID,
+			OwnerKind: "asset", VersionFamily: AssetIdentityStateCollectionFamily,
+			OwnerLogicalID: state.StateKey, OwnerVersionID: state.ID,
+			OwnerRevision: int64(state.Revision), OwnerContentHash: state.ContentHash,
+		})
+	}
+	for assetID := range assetByID {
+		if stateCountByAsset[assetID] == 0 {
+			return ownercollection.Ref{}, errors.New("Asset collection identity has no state")
+		}
+	}
+	return ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: workspaceID, ProjectID: projectID,
+		OwnerKind: "asset", VersionFamily: AssetIdentityStateCollectionFamily,
+		ScopeKind: "project", ScopeKey: "project:" + projectID, ScopeRevision: revision,
+	}, members)
 }
 
 func NewIdentityStateMember(asset Asset, state AssetState) (IdentityStateMember, error) {
@@ -79,16 +165,26 @@ func ValidateIdentityStateMember(value IdentityStateMember) error {
 func NewIdentityStateCollectionHead(
 	workspaceID, projectID string,
 	revision int64,
-	members []IdentityStateMember,
+	assets []Asset,
+	states []AssetState,
 	updatedAt time.Time,
 ) (IdentityStateCollectionHead, error) {
-	if _, err := uuid.Parse(workspaceID); err != nil {
-		return IdentityStateCollectionHead{}, errors.New("invalid Asset collection workspace")
-	}
-	if _, err := uuid.Parse(projectID); err != nil || revision < 1 || len(members) == 0 || updatedAt.IsZero() {
+	collection, err := BuildIdentityStateCollection(workspaceID, projectID, revision, assets, states)
+	if err != nil || updatedAt.IsZero() {
 		return IdentityStateCollectionHead{}, errors.New("invalid Asset collection input")
 	}
-	members = append([]IdentityStateMember(nil), members...)
+	assetByID := make(map[string]Asset, len(assets))
+	for _, asset := range assets {
+		assetByID[asset.ID] = asset
+	}
+	members := make([]IdentityStateMember, len(states))
+	for index, state := range states {
+		member, memberErr := NewIdentityStateMember(assetByID[state.AssetID], state)
+		if memberErr != nil {
+			return IdentityStateCollectionHead{}, memberErr
+		}
+		members[index] = member
+	}
 	slices.SortFunc(members, func(left, right IdentityStateMember) int {
 		if result := strings.Compare(left.IdentityKey, right.IdentityKey); result != 0 {
 			return result
@@ -101,44 +197,83 @@ func NewIdentityStateCollectionHead(
 			return IdentityStateCollectionHead{}, errors.New("invalid Asset collection member set")
 		}
 	}
-	scopeKey := "project:" + projectID
-	scopeHash, err := identityStateHash("asset-identity-state-scope", struct {
-		WorkspaceID, ProjectID, Family, ScopeKey string
-		ScopeRevision                            int64
-		Members                                  []IdentityStateMember
-	}{workspaceID, projectID, AssetIdentityStateCollectionFamily, scopeKey, revision, members})
-	if err != nil {
-		return IdentityStateCollectionHead{}, err
-	}
-	membersHash, err := identityStateHash("asset-identity-state-members", members)
-	if err != nil {
-		return IdentityStateCollectionHead{}, err
-	}
-	collectionRootHash, err := identityStateHash("asset-identity-state-collection", struct {
-		ScopeKey, ScopeContentHash, MembersHash string
-		ScopeRevision                           int64
-		MemberCount                             int
-	}{scopeKey, scopeHash, membersHash, revision, len(members)})
-	if err != nil {
-		return IdentityStateCollectionHead{}, err
-	}
 	value := IdentityStateCollectionHead{
-		WorkspaceID: workspaceID, ProjectID: projectID, ScopeKey: scopeKey,
-		ScopeRevision: revision, ScopeContentHash: scopeHash, Members: members,
-		MemberCount: len(members), MembersHash: membersHash, CollectionRootHash: collectionRootHash,
-		HeadRevision: revision, UpdatedAt: updatedAt.UTC(),
+		WorkspaceID: workspaceID, ProjectID: projectID, ScopeKey: collection.ScopeKey,
+		ScopeRevision: collection.ScopeRevision, ScopeContentHash: collection.ScopeContentHash, Members: members,
+		CurrentVersionRefs: append([]ownercollection.VersionRef(nil), collection.Members...),
+		MemberCount:        int(collection.MemberCount), MembersHash: collection.MembersHash,
+		CollectionRootHash: collection.CollectionRootHash,
+		HeadRevision:       revision, UpdatedAt: updatedAt.UTC(),
 	}
-	headHash, err := identityStateHash("asset-identity-state-head", struct {
-		WorkspaceID, ProjectID, ScopeKey, ScopeContentHash, MembersHash, CollectionRootHash string
-		ScopeRevision, HeadRevision                                                         int64
-		MemberCount                                                                         int
-	}{value.WorkspaceID, value.ProjectID, value.ScopeKey, value.ScopeContentHash, value.MembersHash,
-		value.CollectionRootHash, value.ScopeRevision, value.HeadRevision, value.MemberCount})
+	value.HeadContentHash, err = identityStateHeadHash(value)
 	if err != nil {
 		return IdentityStateCollectionHead{}, err
 	}
-	value.HeadContentHash = headHash
 	return value, nil
+}
+
+func ValidateIdentityStateCollectionHead(value IdentityStateCollectionHead) error {
+	collection, err := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID,
+		OwnerKind: "asset", VersionFamily: AssetIdentityStateCollectionFamily,
+		ScopeKind: "project", ScopeKey: value.ScopeKey, ScopeRevision: value.ScopeRevision,
+	}, value.CurrentVersionRefs)
+	if err != nil || value.ScopeKey != "project:"+value.ProjectID || value.HeadRevision != value.ScopeRevision ||
+		value.MemberCount != int(collection.MemberCount) || value.ScopeContentHash != collection.ScopeContentHash ||
+		value.MembersHash != collection.MembersHash || value.CollectionRootHash != collection.CollectionRootHash ||
+		value.UpdatedAt.IsZero() {
+		return errors.New("Asset identity-state Head has drifted")
+	}
+	refsByID := make(map[string]ownercollection.VersionRef, len(value.CurrentVersionRefs))
+	for _, ref := range value.CurrentVersionRefs {
+		if _, exists := refsByID[ref.OwnerVersionID]; exists {
+			return errors.New("Asset identity-state Head has duplicate Version identity")
+		}
+		refsByID[ref.OwnerVersionID] = ref
+	}
+	assetIDs := make(map[string]struct{}, len(value.Members))
+	stateIDs := make(map[string]struct{}, len(value.Members))
+	for _, member := range value.Members {
+		assetRef, assetExists := refsByID[member.AssetID]
+		stateRef, stateExists := refsByID[member.AssetStateID]
+		if ValidateIdentityStateMember(member) != nil || !assetExists || !stateExists ||
+			assetRef.OwnerLogicalID != member.IdentityKey || assetRef.OwnerContentHash != member.AssetContentHash ||
+			stateRef.OwnerLogicalID != member.StateKey || stateRef.OwnerContentHash != member.StateContentHash {
+			return errors.New("Asset identity-state Head membership has drifted")
+		}
+		assetIDs[member.AssetID] = struct{}{}
+		if _, exists := stateIDs[member.AssetStateID]; exists {
+			return errors.New("Asset identity-state Head has duplicate State membership")
+		}
+		stateIDs[member.AssetStateID] = struct{}{}
+	}
+	if len(refsByID) != len(assetIDs)+len(stateIDs) {
+		return errors.New("Asset identity-state Head Version coverage has drifted")
+	}
+	headHash, err := identityStateHeadHash(value)
+	if err != nil || headHash != value.HeadContentHash {
+		return errors.New("Asset identity-state Head content has drifted")
+	}
+	return nil
+}
+
+func identityStateHeadHash(value IdentityStateCollectionHead) (string, error) {
+	return identityStateHash("asset-identity-state-scope-head", struct {
+		WorkspaceID        string                       `json:"workspace_id"`
+		ProjectID          string                       `json:"project_id"`
+		ScopeKey           string                       `json:"scope_key"`
+		ScopeRevision      int64                        `json:"scope_revision"`
+		ScopeContentHash   string                       `json:"scope_content_hash"`
+		MemberCount        int                          `json:"member_count"`
+		MembersHash        string                       `json:"members_hash"`
+		CollectionRootHash string                       `json:"collection_root_hash"`
+		CurrentVersionRefs []ownercollection.VersionRef `json:"current_root_version_refs"`
+		HeadRevision       int64                        `json:"head_revision"`
+	}{
+		value.WorkspaceID, value.ProjectID, value.ScopeKey, value.ScopeRevision,
+		value.ScopeContentHash, value.MemberCount, value.MembersHash, value.CollectionRootHash,
+		value.CurrentVersionRefs, value.HeadRevision,
+	})
 }
 
 func identityStateHash(schema string, value any) (string, error) {

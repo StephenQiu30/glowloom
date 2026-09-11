@@ -15,6 +15,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/asset/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/asset/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 )
 
 func NewProductionWorldRepository(database *gorm.DB) application.ProductionWorldAssetRepository {
@@ -45,9 +46,9 @@ func (repo *repository) GetIdentityStateHead(
 	if record.WorkspaceID != workspaceUUID {
 		return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state Head workspace has drifted")
 	}
-	var cachedMembers []domain.IdentityStateMember
-	if err := json.Unmarshal(record.CurrentRootRefs, &cachedMembers); err != nil {
-		return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state Head members have drifted")
+	var currentVersionRefs []ownercollection.VersionRef
+	if err := json.Unmarshal(record.CurrentRootRefs, &currentVersionRefs); err != nil {
+		return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state Head refs have drifted")
 	}
 	var membershipRecords []model.AssetIdentityStateMembership
 	if err := repo.database.WithContext(ctx).
@@ -56,6 +57,9 @@ func (repo *repository) GetIdentityStateHead(
 		return domain.IdentityStateCollectionHead{}, err
 	}
 	members := make([]domain.IdentityStateMember, len(membershipRecords))
+	assets := make([]domain.Asset, 0, len(membershipRecords))
+	states := make([]domain.AssetState, len(membershipRecords))
+	seenAssets := make(map[uuid.UUID]struct{}, len(membershipRecords))
 	for index, membership := range membershipRecords {
 		if membership.WorkspaceID != workspaceUUID || membership.Position != index+1 {
 			return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state membership has drifted")
@@ -69,16 +73,37 @@ func (repo *repository) GetIdentityStateHead(
 		if domain.ValidateIdentityStateMember(members[index]) != nil {
 			return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state membership has drifted")
 		}
-	}
-	if !reflect.DeepEqual(cachedMembers, members) {
-		return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state Head cache has drifted")
+		var assetRecord model.Asset
+		if err := repo.database.WithContext(ctx).First(&assetRecord, "id = ?", membership.AssetID).Error; err != nil {
+			return domain.IdentityStateCollectionHead{}, err
+		}
+		asset := productionWorldAssetDomain(assetRecord)
+		if domain.ValidateAsset(asset) != nil || asset.WorkspaceID != workspaceID || asset.ProjectID != projectID ||
+			asset.IdentityKey != membership.IdentityKey || asset.ContentHash != membership.AssetContentHash {
+			return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state membership identity has drifted")
+		}
+		if _, exists := seenAssets[assetRecord.ID]; !exists {
+			seenAssets[assetRecord.ID] = struct{}{}
+			assets = append(assets, asset)
+		}
+		var stateRecord model.AssetState
+		if err := repo.database.WithContext(ctx).First(&stateRecord, "id = ?", membership.AssetStateID).Error; err != nil {
+			return domain.IdentityStateCollectionHead{}, err
+		}
+		state, stateErr := productionWorldAssetStateDomain(stateRecord)
+		if stateErr != nil || state.WorkspaceID != workspaceID || state.ProjectID != projectID ||
+			state.AssetID != asset.ID || state.StateKey != membership.StateKey || state.ContentHash != membership.StateContentHash {
+			return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state membership State has drifted")
+		}
+		states[index] = state
 	}
 	head, err := domain.NewIdentityStateCollectionHead(
-		record.WorkspaceID.String(), record.ProjectID.String(), record.ScopeRevision, members, record.UpdatedAt,
+		record.WorkspaceID.String(), record.ProjectID.String(), record.ScopeRevision, assets, states, record.UpdatedAt,
 	)
 	if err != nil || head.ScopeContentHash != record.ScopeContentHash || head.MemberCount != record.MemberCount ||
 		head.MembersHash != record.MembersHash || head.CollectionRootHash != record.CollectionRootHash ||
-		head.HeadRevision != record.HeadRevision || head.HeadContentHash != record.HeadContentHash {
+		head.HeadRevision != record.HeadRevision || head.HeadContentHash != record.HeadContentHash ||
+		!reflect.DeepEqual(head.Members, members) || !reflect.DeepEqual(head.CurrentVersionRefs, currentVersionRefs) {
 		return domain.IdentityStateCollectionHead{}, errors.New("Asset identity-state Head has drifted")
 	}
 	return head, nil
@@ -261,14 +286,11 @@ func productionWorldIdentityStateHeadRecord(
 ) (model.AssetIdentityStateScopeHead, error) {
 	workspaceID, workspaceErr := uuid.Parse(value.WorkspaceID)
 	projectID, projectErr := uuid.Parse(value.ProjectID)
-	refs, refsErr := json.Marshal(value.Members)
+	refs, refsErr := json.Marshal(value.CurrentVersionRefs)
 	if workspaceErr != nil || projectErr != nil || refsErr != nil {
 		return model.AssetIdentityStateScopeHead{}, errors.New("invalid Asset identity-state Head")
 	}
-	rebuilt, err := domain.NewIdentityStateCollectionHead(
-		value.WorkspaceID, value.ProjectID, value.ScopeRevision, value.Members, value.UpdatedAt,
-	)
-	if err != nil || !reflect.DeepEqual(rebuilt, value) {
+	if domain.ValidateIdentityStateCollectionHead(value) != nil {
 		return model.AssetIdentityStateScopeHead{}, errors.New("Asset identity-state Head has drifted")
 	}
 	return model.AssetIdentityStateScopeHead{

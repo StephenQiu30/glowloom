@@ -96,7 +96,6 @@ func (owner *ProductionWorldAssetOwner) ApplyProductionWorldAssets(
 	now := owner.now().UTC()
 	assets := make([]domain.Asset, 0, len(command.Identities))
 	states := make([]domain.AssetState, 0)
-	members := make([]domain.IdentityStateMember, 0)
 	for _, identity := range command.Identities {
 		asset, err := owner.ensureProductionWorldAsset(ctx, repository, command, identity, now)
 		if err != nil {
@@ -108,16 +107,12 @@ func (owner *ProductionWorldAssetOwner) ApplyProductionWorldAssets(
 			if stateErr != nil {
 				return ApplyProductionWorldAssetsResult{}, stateErr
 			}
-			member, memberErr := domain.NewIdentityStateMember(asset, state)
-			if memberErr != nil {
-				return ApplyProductionWorldAssetsResult{}, memberErr
-			}
-			states, members = append(states, state), append(members, member)
+			states = append(states, state)
 		}
 	}
 	if headErr == nil {
 		preview, previewErr := domain.NewIdentityStateCollectionHead(
-			command.WorkspaceID, command.ProjectID, head.ScopeRevision, members, head.UpdatedAt,
+			command.WorkspaceID, command.ProjectID, head.ScopeRevision, assets, states, head.UpdatedAt,
 		)
 		if previewErr != nil {
 			return ApplyProductionWorldAssetsResult{}, previewErr
@@ -127,7 +122,7 @@ func (owner *ProductionWorldAssetOwner) ApplyProductionWorldAssets(
 		}
 	}
 	nextHead, err := domain.NewIdentityStateCollectionHead(
-		command.WorkspaceID, command.ProjectID, command.ExpectedHeadRevision+1, members, now,
+		command.WorkspaceID, command.ProjectID, command.ExpectedHeadRevision+1, assets, states, now,
 	)
 	if err != nil {
 		return ApplyProductionWorldAssetsResult{}, err

@@ -72,7 +72,7 @@ func TestProductionWorldAssetOwnerPublishesOneIdentityWithMultipleStatesInCaller
 		t.Fatalf("apply Production World Assets: %v", err)
 	}
 	if len(result.Assets) != 1 || len(result.States) != 2 || result.Assets[0].ID != result.States[0].AssetID ||
-		result.Assets[0].ID != result.States[1].AssetID || result.Head.MemberCount != 2 ||
+		result.Assets[0].ID != result.States[1].AssetID || result.Head.MemberCount != 3 ||
 		result.Head.HeadRevision != 1 || len(result.Head.CollectionRootHash) != 64 {
 		t.Fatalf("Production World Asset result = %#v", result)
 	}
@@ -125,7 +125,7 @@ func TestProductionWorldAssetOwnerPublishesOneIdentityWithMultipleStatesInCaller
 		)
 		return applyErr
 	})
-	if err != nil || advancedResult.Head.HeadRevision != 2 || advancedResult.Head.MemberCount != 3 ||
+	if err != nil || advancedResult.Head.HeadRevision != 2 || advancedResult.Head.MemberCount != 4 ||
 		len(advancedResult.Assets) != 1 || len(advancedResult.States) != 3 ||
 		advancedResult.Assets[0].ID != initialAssetID {
 		t.Fatalf("advance Production World Assets: result=%#v err=%v", advancedResult, err)

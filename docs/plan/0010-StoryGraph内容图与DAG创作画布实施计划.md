@@ -134,7 +134,7 @@
     - [x] `production/bible` 在 Gate 1 第二条 Owner 命令中把既有不可变 `StructureIdentitySetVersion` 发布为精确 `bible_structure_identity_set`；Head、Collection Receipt、Gate 2 与 Compiler 均重算同一共享 Root，不再保留自定义成员或 Receipt Hash 算法。
     - [x] `production/bible` 在 Gate 2 发布 `bible_production_world_set` 时以精确 Bible Version 生成共享 Root；Head 保存完整 VersionRef，Coordinator 在生成 Gate 2 Receipt 前重算全等，Compiler 再从正式 Version/Head/Receipt 对账。
     - [x] `production/planning` 在 Gate 2 按每个 active Episode 的正式 Scene/Dialogue/Beat/Occurrence/Claim Fact 生成共享 `planning_scene_set` Root；Head 保存完整 VersionRef，Coordinator 与 Compiler 均从正式 Fact 重建 Collection/Head/Receipt 并全等对账。
-    - [ ] 切换 Asset Writer，并补齐相应 Receipt 对账。
+    - [x] `asset` 在 Gate 2 将正式 AssetIdentity 与每个 AssetState 共同纳入共享 `asset_identity_state_set` Root；Head 保存完整 VersionRef，Coordinator 与 Compiler 均从正式 Version 重建 Collection/Head/Receipt 并全等对账。
   - [ ] 完成 production Schema Manifest 与剩余 Payload/Edge invariant 后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。

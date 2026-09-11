@@ -322,7 +322,25 @@ func (service *ConfirmationService) buildCollectionReceipts(
 	now time.Time,
 ) ([]domain.CollectionCommitReceipt, []domain.CollectionMemberRef, error) {
 	allScopes := append([]string(nil), command.Candidate.SharedProof.ScopeKeys...)
-	assetMembers := assetCollectionRefs(assets)
+	assetCollection, err := assetdomain.BuildIdentityStateCollection(
+		command.WorkspaceID, command.ProjectID, assets.Head.ScopeRevision, assets.Assets, assets.States,
+	)
+	if err != nil || assets.Head.ScopeKey != assetCollection.ScopeKey ||
+		assets.Head.ScopeRevision != assetCollection.ScopeRevision ||
+		assets.Head.ScopeContentHash != assetCollection.ScopeContentHash ||
+		assets.Head.MemberCount != int(assetCollection.MemberCount) ||
+		assets.Head.MembersHash != assetCollection.MembersHash ||
+		assets.Head.CollectionRootHash != assetCollection.CollectionRootHash ||
+		!reflect.DeepEqual(assets.Head.CurrentVersionRefs, assetCollection.Members) {
+		return nil, nil, errors.New("Asset identity-state Collection has drifted")
+	}
+	assetMembers := make([]domain.CollectionMemberRef, len(assetCollection.Members))
+	for index, member := range assetCollection.Members {
+		assetMembers[index] = domain.CollectionMemberRef{
+			OwnerKind: member.OwnerKind, LogicalID: member.OwnerLogicalID,
+			VersionID: member.OwnerVersionID, Revision: member.OwnerRevision, ContentHash: member.OwnerContentHash,
+		}
+	}
 	bibleMembers := []domain.CollectionMemberRef{{
 		OwnerKind: "production/bible", LogicalID: command.ProjectID, VersionID: bible.Version.ID,
 		Revision: bible.Version.Revision, ContentHash: bible.Version.ContentHash,
@@ -339,8 +357,8 @@ func (service *ConfirmationService) buildCollectionReceipts(
 	}
 	inputs := []domain.CollectionCommitReceiptInput{
 		collectionReceiptInput(command, decision, "asset", assetdomain.AssetIdentityStateCollectionFamily,
-			"project", assets.Head.ScopeKey, assets.Head.ScopeRevision, assets.Head.ScopeContentHash,
-			assets.Head.MembersHash, assets.Head.CollectionRootHash, assetMembers, allScopes, now, service.newID()),
+			"project", assetCollection.ScopeKey, assetCollection.ScopeRevision, assetCollection.ScopeContentHash,
+			assetCollection.MembersHash, assetCollection.CollectionRootHash, assetMembers, allScopes, now, service.newID()),
 		collectionReceiptInput(command, decision, "production/bible", bibledomain.BibleProductionWorldFamily,
 			"project", bible.Head.ScopeKey, bible.Head.ScopeRevision, bible.Head.ScopeContentHash,
 			bible.Head.MembersHash, bible.Head.CollectionRootHash, bibleMembers, allScopes, now, service.newID()),
@@ -470,20 +488,6 @@ func collectionReceiptInput(
 		CoveredScopeKeys: coveredScopes, ReviewDecisionAuditRef: decision,
 		CommittedAt: now, CommittedBy: command.ActorID,
 	}
-}
-
-func assetCollectionRefs(result assetapp.ApplyProductionWorldAssetsResult) []domain.CollectionMemberRef {
-	refs := make([]domain.CollectionMemberRef, 0, len(result.Assets)+len(result.States))
-	for _, value := range result.Assets {
-		refs = append(refs, domain.CollectionMemberRef{OwnerKind: "asset", LogicalID: value.IdentityKey,
-			VersionID: value.ID, Revision: int64(value.Revision), ContentHash: value.ContentHash})
-	}
-	for _, value := range result.States {
-		refs = append(refs, domain.CollectionMemberRef{OwnerKind: "asset", LogicalID: value.StateKey,
-			VersionID: value.ID, Revision: int64(value.Revision), ContentHash: value.ContentHash})
-	}
-	sortCollectionRefs(refs)
-	return refs
 }
 
 func sortCollectionRefs(values []domain.CollectionMemberRef) {
