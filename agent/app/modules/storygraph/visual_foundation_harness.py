@@ -45,6 +45,7 @@ class VisualFoundationHarness:
         self.image_inputs = self._bind_images(media_bindings)
         configured = os.getenv("CODEX_BIN", "").strip()
         self._codex_bin = configured or shutil.which("codex") or "codex"
+        self.model_name = "codex-cli-default"
 
     def _bind_images(
         self,

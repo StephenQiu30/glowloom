@@ -8,8 +8,13 @@ from app.harness.scene_analysis_schemas import (
     SceneAnalysisInvocation,
 )
 from app.harness.schemas import StoryGraphStageInvocation
+from app.harness.visual_foundation_schemas import VisualFoundationInvocation
 from app.modules.storygraph.harness import StoryGraphHarness
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
+from app.modules.storygraph.visual_foundation_harness import (
+    VisualFoundationHarness,
+    VisualFoundationMediaBinding,
+)
 from app.modules.text_storyboard.harness import TextHarness, TextResult, TextTask
 from app.skills.runtime import SkillRuntime
 
@@ -35,6 +40,18 @@ class HarnessService:
             return value, harness.model_name
         finally:
             await harness.aclose()
+
+    async def visual_foundation(
+        self,
+        invocation: VisualFoundationInvocation,
+        media_bindings: tuple[VisualFoundationMediaBinding, ...],
+    ) -> tuple[BaseModel, str]:
+        harness = VisualFoundationHarness(
+            invocation.payload.stage_input,
+            media_bindings=media_bindings,
+            skill_catalog=self.skill_runtime.catalog,
+        )
+        return await harness.execute(), harness.model_name
 
     async def text_storyboard(self, task: TextTask) -> TextResult:
         harness = TextHarness(skill_catalog=self.skill_runtime.catalog)

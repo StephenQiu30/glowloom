@@ -36,6 +36,8 @@ idna==3.19
     #   httpx
 nexus-rpc==1.4.0
     # via temporalio
+pillow==12.3.0
+    # via lanverse-agent-runtime
 protobuf==7.36.1
     # via temporalio
 psycopg==3.3.5
@@ -50,6 +52,8 @@ pydantic-core==2.46.4
     # via pydantic
 python-dotenv==1.2.3
     # via uvicorn
+python-multipart==0.0.32
+    # via lanverse-agent-runtime
 pyyaml==6.0.3
     # via uvicorn
 starlette==1.6.0

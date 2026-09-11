@@ -16,6 +16,10 @@ from app.harness.schemas import (
     StoryGraphExecutionGrantClaims,
     StoryGraphStageInvocation,
 )
+from app.harness.visual_foundation_schemas import (
+    VisualFoundationInvocation,
+    validate_visual_foundation_dispatch_authorization,
+)
 
 MAX_TTL_SECONDS = 300
 SCENE_ANALYSIS_DISPATCH_AUTHORIZATION_DOMAIN = (
@@ -82,6 +86,47 @@ def verify_scene_analysis_dispatch_authorization(
     secret: str,
     invocation: SceneAnalysisInvocation,
 ) -> SceneAnalysisDispatchAuthorizationEvidence:
+    claims, evidence, now = _verify_dispatch_authorization(value, secret)
+    try:
+        claims.validate_for(
+            invocation,
+            now_unix=now,
+        )
+    except ValueError as error:
+        raise InvalidSceneAnalysisDispatchAuthorization(
+            "dispatch authorization does not authorize invocation"
+        ) from error
+    return evidence
+
+
+def verify_visual_foundation_dispatch_authorization(
+    value: str,
+    secret: str,
+    invocation: VisualFoundationInvocation,
+) -> SceneAnalysisDispatchAuthorizationEvidence:
+    claims, evidence, now = _verify_dispatch_authorization(value, secret)
+    try:
+        validate_visual_foundation_dispatch_authorization(
+            claims,
+            invocation,
+            claim_version=claims.claim_version,
+            now_unix=now,
+        )
+    except ValueError as error:
+        raise InvalidSceneAnalysisDispatchAuthorization(
+            "dispatch authorization does not authorize invocation"
+        ) from error
+    return evidence
+
+
+def _verify_dispatch_authorization(
+    value: str,
+    secret: str,
+) -> tuple[
+    SceneAnalysisDispatchAuthorizationClaims,
+    SceneAnalysisDispatchAuthorizationEvidence,
+    int,
+]:
     if len(secret.encode("utf-8")) < 32:
         raise InvalidSceneAnalysisDispatchAuthorization(
             "agent execution secret must contain at least 32 bytes"
@@ -117,21 +162,16 @@ def verify_scene_analysis_dispatch_authorization(
             "invalid dispatch authorization payload"
         ) from error
     now = int(time.time())
-    try:
-        claims.validate_for(
-            invocation,
-            now_unix=now,
-        )
-    except ValueError as error:
-        raise InvalidSceneAnalysisDispatchAuthorization(
-            "dispatch authorization does not authorize invocation"
-        ) from error
     if claims.expires_at > now + MAX_TTL_SECONDS:
         raise InvalidSceneAnalysisDispatchAuthorization(
             "dispatch authorization expiry exceeds the maximum TTL"
         )
-    return SceneAnalysisDispatchAuthorizationEvidence(
-        claim_version=claims.claim_version,
-        authorization_hash=hashlib.sha256(value.encode("utf-8")).hexdigest(),
-        expires_at=claims.expires_at,
+    return (
+        claims,
+        SceneAnalysisDispatchAuthorizationEvidence(
+            claim_version=claims.claim_version,
+            authorization_hash=hashlib.sha256(value.encode("utf-8")).hexdigest(),
+            expires_at=claims.expires_at,
+        ),
+        now,
     )

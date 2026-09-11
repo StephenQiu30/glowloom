@@ -27,6 +27,7 @@ async def healthz(catalog: Annotated[SkillCatalog, Depends(get_skill_catalog)]) 
         "service": "lanverse-agent",
         "skill_bundle_hash": verified["storygraph"],
         "scene_analysis_skill_bundle_hash": verified["scene_analysis"],
+        "visual_foundation_skill_bundle_hash": verified["visual_foundation"],
         "text_storyboard_skill_bundle_hash": verified["text_storyboard"],
     }
 

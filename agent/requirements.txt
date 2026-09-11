@@ -21,6 +21,8 @@ httptools==0.8.0
     # via uvicorn
 idna==3.19
     # via anyio
+pillow==12.3.0
+    # via lanverse-agent-runtime
 pydantic==2.13.4
     # via
     #   fastapi
@@ -29,6 +31,8 @@ pydantic-core==2.46.4
     # via pydantic
 python-dotenv==1.2.3
     # via uvicorn
+python-multipart==0.0.32
+    # via lanverse-agent-runtime
 pyyaml==6.0.3
     # via uvicorn
 starlette==1.6.0
