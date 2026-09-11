@@ -127,6 +127,8 @@
   - [x] 固定 Production Schema Manifest 与 Payload Contract Hash Root 的元合同解码边界：所有字段闭集且 required，nullable 元数据显式保留，数组按冻结键排序去重，Matrix row 必须匹配所属联合类型，派生 Rule ID、Payload Union 覆盖、Property 类型/格式/数组排序来源和 Canonical Hash 均机械校验；该边界明确不冒充完整 Registry fixture 或发布许可。
   - [x] 修正 Production Canonical JSON 基础合同：Go 使用成熟 RFC 8785 实现，Go/Python 共同冻结 UTF-16 key order、NFC、最小转义、安全整数与失败码；浮点、指数表示、越界整数、重复/归一化重复键、非法 surrogate/UTF-8 和尾随文档均一致拒绝，不保留旧错误 Hash 的双算或兼容读取。
   - [x] 由 Backend 声明式生成完整 Production Schema Registry：机械展开 31 个 Node、32 条 Payload Union、25 个 Payload Contract、7 个 Edge Alias、65 条 Matrix、13 个 Owner Collection、4 条 Coverage、13 个 Checkpoint 和 22 条 Exclusion；每个 Payload Hash 与最终 Schema Hash 均从 Canonical bytes 实算，并以同一共享 fixture 由 Go/Python 独立重算。
+  - [x] 固定跨 Owner 共用的 `OwnerVersionRef`、Scope、Member 与 Collection Root 内容寻址算法，并让 production Compiler 实际复用；StoryGraph 编译前像不再写入投影时间戳或另一套字段名/Schema 包装。
+  - [ ] 让 Script Source、Project Episode、Bible Structure、Bible/Planning/Asset Owner Writer 逐一改用同一 Root 算法，再由完整 Owner Apply Receipt 形成 `VerifiedCoverageProof`；未完成前不得把 Receipt Hash 与重算 Collection Root 误报为等价。
   - [ ] 完成 production Schema Manifest 与剩余 Payload/Edge invariant 后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。

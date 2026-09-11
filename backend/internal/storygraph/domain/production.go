@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	"github.com/google/uuid"
 )
 
@@ -18,11 +19,11 @@ type OwnerVersionIdentity struct {
 	ProjectID     string    `json:"project_id"`
 	OwnerKind     string    `json:"owner_kind"`
 	VersionFamily string    `json:"version_family"`
-	LogicalID     string    `json:"logical_id"`
-	VersionID     string    `json:"version_id"`
-	Revision      int64     `json:"revision"`
-	ContentHash   string    `json:"content_hash"`
-	CreatedAt     time.Time `json:"created_at"`
+	LogicalID     string    `json:"owner_logical_id"`
+	VersionID     string    `json:"owner_version_id"`
+	Revision      int64     `json:"owner_revision"`
+	ContentHash   string    `json:"owner_content_hash"`
+	CreatedAt     time.Time `json:"-"`
 }
 
 type OwnerCollectionRef struct {
@@ -95,10 +96,12 @@ func BuildOwnerCollectionRef(value OwnerCollectionRef) (OwnerCollectionRef, erro
 		!validProductionScope(value.WorkspaceID, value.ProjectID) || (!definition.AllowEmpty && len(value.Members) == 0) {
 		return OwnerCollectionRef{}, errors.New("invalid StoryGraph Owner Collection")
 	}
-	members := append([]OwnerVersionIdentity(nil), value.Members...)
+	members := make([]OwnerVersionIdentity, len(value.Members))
+	copy(members, value.Members)
 	slices.SortFunc(members, func(left, right OwnerVersionIdentity) int {
 		return strings.Compare(productionOwnerKey(left), productionOwnerKey(right))
 	})
+	contractMembers := make([]ownercollection.VersionRef, len(members))
 	for index := range members {
 		member := members[index]
 		if err := validateProductionOwnerIdentity(member, value); err != nil ||
@@ -106,31 +109,27 @@ func BuildOwnerCollectionRef(value OwnerCollectionRef) (OwnerCollectionRef, erro
 			return OwnerCollectionRef{}, errors.New("invalid StoryGraph Owner Collection member set")
 		}
 		members[index].CreatedAt = member.CreatedAt.UTC()
+		contractMembers[index] = ownercollection.VersionRef{
+			WorkspaceID: member.WorkspaceID, ProjectID: member.ProjectID,
+			OwnerKind: member.OwnerKind, VersionFamily: member.VersionFamily,
+			OwnerLogicalID: member.LogicalID, OwnerVersionID: member.VersionID,
+			OwnerRevision: member.Revision, OwnerContentHash: member.ContentHash,
+		}
 	}
-	membersHash, err := canonicalValueHash(members)
+	contract, err := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID,
+		OwnerKind: value.OwnerKind, VersionFamily: value.VersionFamily,
+		ScopeKind: value.ScopeKind, ScopeKey: value.ScopeKey, ScopeRevision: value.ScopeRevision,
+	}, contractMembers)
 	if err != nil {
-		return OwnerCollectionRef{}, err
+		return OwnerCollectionRef{}, fmt.Errorf("build StoryGraph Owner Collection: %w", err)
 	}
 	value.Members = members
-	value.MemberCount = len(members)
-	value.MembersHash = membersHash
-	value.ScopeContentHash, err = canonicalValueHash(struct {
-		Schema, WorkspaceID, ProjectID, OwnerKind, VersionFamily, ScopeKind, ScopeKey string
-		ScopeRevision                                                                 int64
-		Members                                                                       []OwnerVersionIdentity
-	}{"storygraph-production-owner-scope", value.WorkspaceID, value.ProjectID, value.OwnerKind,
-		value.VersionFamily, value.ScopeKind, value.ScopeKey, value.ScopeRevision, members})
-	if err != nil {
-		return OwnerCollectionRef{}, err
-	}
-	value.CollectionRootHash, err = canonicalValueHash(struct {
-		Schema, WorkspaceID, ProjectID, OwnerKind, VersionFamily, ScopeKind, ScopeKey string
-		ScopeRevision, MemberCount                                                    int64
-		ScopeContentHash, MembersHash                                                 string
-	}{"storygraph-production-owner-collection", value.WorkspaceID, value.ProjectID, value.OwnerKind,
-		value.VersionFamily, value.ScopeKind, value.ScopeKey, value.ScopeRevision, int64(value.MemberCount),
-		value.ScopeContentHash, value.MembersHash})
-	return value, err
+	value.MemberCount = int(contract.MemberCount)
+	value.MembersHash = contract.MembersHash
+	value.ScopeContentHash = contract.ScopeContentHash
+	value.CollectionRootHash = contract.CollectionRootHash
+	return value, nil
 }
 
 func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledProductionOwnerSnapshot, error) {
@@ -263,7 +262,7 @@ func validProductionScope(workspaceID, projectID string) bool {
 }
 
 func productionOwnerKey(value OwnerVersionIdentity) string {
-	return value.OwnerKind + "\x00" + value.LogicalID + "\x00" + value.VersionID
+	return value.OwnerKind + "\x00" + value.VersionFamily + "\x00" + value.LogicalID + "\x00" + value.VersionID
 }
 
 func productionOwnerVersionKey(ownerKind, logicalID, versionID string) string {

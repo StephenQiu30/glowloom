@@ -38,6 +38,30 @@ func TestCompileProductionOwnerSnapshotFreezesP0OwnerCollections(t *testing.T) {
 	}
 }
 
+func TestProductionOwnerCollectionUsesExactOwnerVersionRefWire(t *testing.T) {
+	collection := productionOwnerSnapshotFixture(t).OwnerCollections[0]
+	encoded, err := json.Marshal(collection.Members[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"workspace_id", "project_id", "owner_kind", "version_family",
+		"owner_logical_id", "owner_version_id", "owner_revision", "owner_content_hash",
+	}
+	if len(fields) != len(want) {
+		t.Fatalf("OwnerVersionRef wire fields drifted: %s", encoded)
+	}
+	for _, key := range want {
+		if _, exists := fields[key]; !exists {
+			t.Fatalf("OwnerVersionRef wire field %q is missing: %s", key, encoded)
+		}
+	}
+}
+
 func TestCompileProductionOwnerSnapshotRejectsIncompleteOrPollutedReadSet(t *testing.T) {
 	tests := map[string]func(*storygraph.ProductionOwnerSnapshot){
 		"missing collection": func(value *storygraph.ProductionOwnerSnapshot) {
