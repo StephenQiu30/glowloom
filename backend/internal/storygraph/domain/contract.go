@@ -159,31 +159,39 @@ func DeriveStoryNodeKey(nodeType NodeType, owner OwnerRef) (string, error) {
 type EdgeType string
 
 const (
-	EdgeTypeContains               EdgeType = "contains"
-	EdgeTypeDerivedFrom            EdgeType = "derived_from"
-	EdgeTypeDescribesIdentity      EdgeType = "describes_identity"
-	EdgeTypeHasState               EdgeType = "has_state"
-	EdgeTypePrecedes               EdgeType = "precedes"
-	EdgeTypeAnchorsOccurrence      EdgeType = "anchors_occurrence"
-	EdgeTypeInstantiatesOccurrence EdgeType = "instantiates_occurrence"
-	EdgeTypeRealizes               EdgeType = "realizes"
-	EdgeTypeInforms                EdgeType = "informs"
-	EdgeTypeConstrains             EdgeType = "constrains"
-	EdgeTypeMaterializes           EdgeType = "materializes"
-	EdgeTypeBindsInput             EdgeType = "binds_input"
-	EdgeTypeFeedsGeneration        EdgeType = "feeds_generation"
-	EdgeTypeBindsOutput            EdgeType = "binds_output"
-	EdgeTypeSupports               EdgeType = "supports"
-	EdgeTypeClaimParticipant       EdgeType = "claim_participant"
-	EdgeTypeClaimAnchor            EdgeType = "claim_anchor"
-	EdgeTypeClaimState             EdgeType = "claim_state"
-	EdgeTypeSupersedes             EdgeType = "supersedes"
+	EdgeTypeContains                 EdgeType = "contains"
+	EdgeTypeDerivedFrom              EdgeType = "derived_from"
+	EdgeTypeDescribesIdentity        EdgeType = "describes_identity"
+	EdgeTypeHasState                 EdgeType = "has_state"
+	EdgeTypePrecedes                 EdgeType = "precedes"
+	EdgeTypeAnchorsOccurrence        EdgeType = "anchors_occurrence"
+	EdgeTypeInstantiatesOccurrence   EdgeType = "instantiates_occurrence"
+	EdgeTypeRealizes                 EdgeType = "realizes"
+	EdgeTypeInforms                  EdgeType = "informs"
+	EdgeTypeConstrains               EdgeType = "constrains"
+	EdgeTypeMaterializes             EdgeType = "materializes"
+	EdgeTypeContainsReferenceTarget  EdgeType = "contains_reference_target"
+	EdgeTypeDependsOnReferenceTarget EdgeType = "depends_on_reference_target"
+	EdgeTypePlansReference           EdgeType = "plans_reference"
+	EdgeTypeFulfillsReferenceTarget  EdgeType = "fulfills_reference_target"
+	EdgeTypeBindsReferenceInput      EdgeType = "binds_reference_input"
+	EdgeTypeBindsReferenceOutput     EdgeType = "binds_reference_output"
+	EdgeTypeBindsInput               EdgeType = "binds_input"
+	EdgeTypeFeedsGeneration          EdgeType = "feeds_generation"
+	EdgeTypeBindsOutput              EdgeType = "binds_output"
+	EdgeTypeSupports                 EdgeType = "supports"
+	EdgeTypeClaimParticipant         EdgeType = "claim_participant"
+	EdgeTypeClaimAnchor              EdgeType = "claim_anchor"
+	EdgeTypeClaimState               EdgeType = "claim_state"
+	EdgeTypeSupersedes               EdgeType = "supersedes"
 )
 
 var edgeTypes = []EdgeType{
 	EdgeTypeContains, EdgeTypeDerivedFrom, EdgeTypeDescribesIdentity, EdgeTypeHasState, EdgeTypePrecedes,
 	EdgeTypeAnchorsOccurrence, EdgeTypeInstantiatesOccurrence, EdgeTypeRealizes, EdgeTypeInforms, EdgeTypeConstrains,
-	EdgeTypeMaterializes, EdgeTypeBindsInput, EdgeTypeFeedsGeneration, EdgeTypeBindsOutput, EdgeTypeSupports,
+	EdgeTypeMaterializes, EdgeTypeContainsReferenceTarget, EdgeTypeDependsOnReferenceTarget, EdgeTypePlansReference,
+	EdgeTypeFulfillsReferenceTarget, EdgeTypeBindsReferenceInput, EdgeTypeBindsReferenceOutput,
+	EdgeTypeBindsInput, EdgeTypeFeedsGeneration, EdgeTypeBindsOutput, EdgeTypeSupports,
 	EdgeTypeClaimParticipant, EdgeTypeClaimAnchor, EdgeTypeSupersedes,
 	EdgeTypeClaimState,
 }
@@ -193,6 +201,9 @@ type EdgeQualifier struct {
 	ParticipantRole string `json:"participant_role,omitempty"`
 	AnchorRole      string `json:"anchor_role,omitempty"`
 	StateRole       string `json:"state_role,omitempty"`
+	ConstraintRole  string `json:"constraint_role,omitempty"`
+	ReferenceRole   string `json:"reference_role,omitempty"`
+	InformsRole     string `json:"informs_role,omitempty"`
 	SequenceKey     string `json:"sequence_key,omitempty"`
 }
 
@@ -202,28 +213,53 @@ func (value EdgeQualifier) validate(edgeType EdgeType) error {
 	}
 	switch edgeType {
 	case EdgeTypeMaterializes:
-		if !oneOf(value.BindingRole, "specification", "state", "asset", "asset_version") || value.ParticipantRole != "" || value.AnchorRole != "" || value.StateRole != "" || value.SequenceKey != "" {
+		if !oneOf(value.BindingRole, "specification", "state", "asset", "asset_version", "identity_anchor", "artifact") || value.hasFieldsOtherThan("binding") {
 			return errors.New("invalid materializes qualifier")
 		}
+	case EdgeTypeBindsInput:
+		if value == (EdgeQualifier{}) {
+			return nil
+		}
+		if !oneOf(value.BindingRole, "shot", "occurrence", "asset_version", "scene_reference", "interaction_reference", "style") || value.hasFieldsOtherThan("binding") {
+			return errors.New("invalid binds input qualifier")
+		}
 	case EdgeTypeClaimParticipant:
-		if !oneOf(value.ParticipantRole, "subject", "object", "participant", "actor", "prop", "counterparty", "holder_before", "holder_after") || value.BindingRole != "" || value.AnchorRole != "" || value.StateRole != "" || value.SequenceKey != "" {
+		if !oneOf(value.ParticipantRole, "subject", "object", "participant", "actor", "prop", "counterparty", "holder_before", "holder_after") || value.hasFieldsOtherThan("participant") {
 			return errors.New("invalid claim participant qualifier")
 		}
 	case EdgeTypeClaimAnchor:
-		if !oneOf(value.AnchorRole, "episode", "scene", "beat", "character_occurrence", "prop_occurrence", "scope_start", "scope_end") || value.BindingRole != "" || value.ParticipantRole != "" || value.StateRole != "" || value.SequenceKey != "" {
+		if !oneOf(value.AnchorRole, "episode", "scene", "beat", "character_occurrence", "prop_occurrence", "scope_start", "scope_end") || value.hasFieldsOtherThan("anchor") {
 			return errors.New("invalid claim anchor qualifier")
 		}
 	case EdgeTypeClaimState:
-		if !oneOf(value.StateRole, "before", "after", "prop_before", "prop_after") || value.BindingRole != "" || value.ParticipantRole != "" || value.AnchorRole != "" || value.SequenceKey != "" {
+		if !oneOf(value.StateRole, "before", "after", "prop_before", "prop_after") || value.hasFieldsOtherThan("state") {
 			return errors.New("invalid claim state qualifier")
 		}
 	case EdgeTypeAnchorsOccurrence:
-		if (value.AnchorRole != "" && !oneOf(value.AnchorRole, "scene", "beat")) || value.BindingRole != "" || value.ParticipantRole != "" || value.StateRole != "" || value.SequenceKey != "" {
+		if (value.AnchorRole != "" && !oneOf(value.AnchorRole, "scene", "beat")) || (value.AnchorRole != "" && value.hasFieldsOtherThan("anchor")) || (value.AnchorRole == "" && value != (EdgeQualifier{})) {
 			return errors.New("invalid occurrence anchor qualifier")
 		}
-	case EdgeTypeContains, EdgeTypePrecedes:
-		if value.BindingRole != "" || value.ParticipantRole != "" || value.AnchorRole != "" || value.StateRole != "" {
+	case EdgeTypeContains, EdgeTypePrecedes, EdgeTypeContainsReferenceTarget:
+		if value.hasFieldsOtherThan("sequence") {
 			return errors.New("invalid sequence qualifier")
+		}
+	case EdgeTypeConstrains:
+		if value == (EdgeQualifier{}) {
+			return nil
+		}
+		if !oneOf(value.ConstraintRole, "world", "policy", "style") || value.hasFieldsOtherThan("constraint") {
+			return errors.New("invalid constraint qualifier")
+		}
+	case EdgeTypePlansReference, EdgeTypeBindsReferenceInput:
+		if !oneOf(value.ReferenceRole, "identity", "specification", "state", "style", "scene", "occurrence", "interaction", "character_asset", "location_asset", "prop_asset") || value.hasFieldsOtherThan("reference") {
+			return errors.New("invalid reference qualifier")
+		}
+	case EdgeTypeInforms:
+		if value == (EdgeQualifier{}) {
+			return nil
+		}
+		if !oneOf(value.InformsRole, "occurrence", "scene_reference", "interaction_reference") || value.hasFieldsOtherThan("informs") {
+			return errors.New("invalid informs qualifier")
 		}
 	default:
 		if value != (EdgeQualifier{}) {
@@ -231,6 +267,29 @@ func (value EdgeQualifier) validate(edgeType EdgeType) error {
 		}
 	}
 	return nil
+}
+
+func (value EdgeQualifier) hasFieldsOtherThan(kind string) bool {
+	copy := value
+	switch kind {
+	case "binding":
+		copy.BindingRole = ""
+	case "participant":
+		copy.ParticipantRole = ""
+	case "anchor":
+		copy.AnchorRole = ""
+	case "state":
+		copy.StateRole = ""
+	case "constraint":
+		copy.ConstraintRole = ""
+	case "reference":
+		copy.ReferenceRole = ""
+	case "informs":
+		copy.InformsRole = ""
+	case "sequence":
+		copy.SequenceKey = ""
+	}
+	return copy != (EdgeQualifier{})
 }
 
 func DeriveEdgeKey(edgeType EdgeType, fromNodeKey, toNodeKey string, qualifier EdgeQualifier) (string, error) {
@@ -397,6 +456,9 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		return CanonicalSnapshot{}, err
 	}
 	if snapshot.SchemaVersion == ProductionSchemaID {
+		if err := validateProductionEdgeEndpoints(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
 		if err := validateProductionEvidenceRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
@@ -524,20 +586,43 @@ func edgeEndpointAllowed(edgeType EdgeType, from, to NodeType, qualifier EdgeQua
 	case EdgeTypeRealizes:
 		return from == NodeTypeNarrativeBeat && to == NodeTypeShot
 	case EdgeTypeInforms:
-		return from == NodeTypeOccurrence && to == NodeTypeShot
+		return from == NodeTypeOccurrence && to == NodeTypeShot ||
+			oneOfNode(from, NodeTypeOccurrence, NodeTypeSceneReferenceBindingVersion, NodeTypeInteractionReferenceBindingVersion) &&
+				to == NodeTypeShotProductionBindingVersion
 	case EdgeTypeConstrains:
-		return oneOfNode(from, NodeTypeWorldRule, NodeTypeEffectiveStyleSnapshot, NodeTypePolicySnapshot) && oneOfNode(to, NodeTypeShot, NodeTypeGenerationTarget)
+		return oneOfNode(from, NodeTypeWorldRule, NodeTypeEffectiveStyleSnapshot, NodeTypePolicySnapshot) &&
+			oneOfNode(to, NodeTypeShot, NodeTypeGenerationTarget, NodeTypeReferencePlanTarget, NodeTypeAssetVersion,
+				NodeTypeSceneReferenceBindingVersion, NodeTypeInteractionReferenceBindingVersion, NodeTypeShotProductionBindingVersion)
 	case EdgeTypeMaterializes:
-		if to != NodeTypeProductionBinding {
-			return false
+		if to == NodeTypeProductionBinding {
+			return from == NodeTypeAssetIdentity && qualifier.BindingRole == "asset" ||
+				from == NodeTypeAssetState && qualifier.BindingRole == "state" ||
+				oneOfNode(from, NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification) && qualifier.BindingRole == "specification" ||
+				from == NodeTypeAssetVersion && qualifier.BindingRole == "asset_version"
 		}
-		expected := map[string][]NodeType{
-			"specification": {NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification},
-			"state":         {NodeTypeAssetState}, "asset": {NodeTypeAssetIdentity}, "asset_version": {NodeTypeAssetVersion},
-		}
-		return slices.Contains(expected[qualifier.BindingRole], from)
+		return to == NodeTypeAssetVersion && (from == NodeTypeAssetIdentity && qualifier.BindingRole == "asset" ||
+			from == NodeTypeAssetState && qualifier.BindingRole == "state" ||
+			oneOfNode(from, NodeTypeCharacterSpecification, NodeTypeLocationSpecification, NodeTypePropSpecification) && qualifier.BindingRole == "specification" ||
+			from == NodeTypeAssetVersion && qualifier.BindingRole == "identity_anchor" ||
+			from == NodeTypeArtifact && qualifier.BindingRole == "artifact")
+	case EdgeTypeContainsReferenceTarget:
+		return from == NodeTypeApprovedReferencePlanVersion && to == NodeTypeReferencePlanTarget
+	case EdgeTypeDependsOnReferenceTarget:
+		return from == NodeTypeReferencePlanTarget && to == NodeTypeReferencePlanTarget
+	case EdgeTypePlansReference:
+		return oneOfNode(from, NodeTypeAssetIdentity, NodeTypeCharacterSpecification, NodeTypeLocationSpecification,
+			NodeTypePropSpecification, NodeTypeAssetState, NodeTypeEffectiveStyleSnapshot, NodeTypeScene,
+			NodeTypeOccurrence, NodeTypeContinuityClaim) && to == NodeTypeReferencePlanTarget
+	case EdgeTypeFulfillsReferenceTarget:
+		return from == NodeTypeReferencePlanTarget && oneOfNode(to, NodeTypeAssetVersion, NodeTypeSceneReferenceBindingVersion, NodeTypeInteractionReferenceBindingVersion)
+	case EdgeTypeBindsReferenceInput:
+		return oneOfNode(from, NodeTypeScene, NodeTypeOccurrence, NodeTypeContinuityClaim, NodeTypeAssetVersion) &&
+			oneOfNode(to, NodeTypeSceneReferenceBindingVersion, NodeTypeInteractionReferenceBindingVersion)
+	case EdgeTypeBindsReferenceOutput:
+		return from == NodeTypeArtifact && oneOfNode(to, NodeTypeSceneReferenceBindingVersion, NodeTypeInteractionReferenceBindingVersion)
 	case EdgeTypeBindsInput:
-		return oneOfNode(from, NodeTypeShot, NodeTypeOccurrence, NodeTypeAssetVersion) && to == NodeTypeShotProductionBindingVersion
+		return oneOfNode(from, NodeTypeShot, NodeTypeOccurrence, NodeTypeAssetVersion, NodeTypeSceneReferenceBindingVersion,
+			NodeTypeInteractionReferenceBindingVersion, NodeTypeEffectiveStyleSnapshot) && to == NodeTypeShotProductionBindingVersion
 	case EdgeTypeFeedsGeneration:
 		return from == NodeTypeShotProductionBindingVersion && to == NodeTypeGenerationTarget ||
 			from == NodeTypeGenerationTarget && to == NodeTypeArtifact
