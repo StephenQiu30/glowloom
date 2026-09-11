@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -255,4 +256,163 @@ func (value VisualFoundationInvocation) StageInstanceKey() string {
 		return ""
 	}
 	return hash
+}
+
+func (value SceneAnalysisDispatchAuthorizationClaims) ValidateForVisualFoundation(
+	invocation VisualFoundationInvocation,
+	claimVersion, nowUnix int64,
+) error {
+	if claimVersion < 1 || value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
+		value.InputHash != invocation.InputHash || value.SkillReleaseID != invocation.StageRelease.SkillReleaseID ||
+		value.SkillReleaseHash != invocation.StageRelease.SkillReleaseHash ||
+		value.StageReleaseHash != invocation.StageRelease.StageReleaseHash ||
+		value.BundleContentHash != invocation.StageRelease.BundleContentHash ||
+		value.ControlHash != invocation.Control.ControlHash ||
+		value.ReleaseFence != invocation.Control.ReleaseFence || value.ClaimVersion != claimVersion ||
+		value.AgentImageDigest != invocation.StageRelease.AgentImageDigest || value.ExpiresAt <= nowUnix {
+		return errors.New("invalid Visual Foundation dispatch authorization claims")
+	}
+	return nil
+}
+
+type VisualFoundationExecutor struct {
+	RuntimeClass       string `json:"runtime_class"`
+	RuntimeImageDigest string `json:"runtime_image_digest"`
+	HarnessVersion     string `json:"harness_version"`
+	Model              string `json:"model"`
+}
+
+type VisualFoundationAttemptResult struct {
+	InvocationID              string                       `json:"invocation_id"`
+	AttemptID                 string                       `json:"attempt_id"`
+	Kind                      string                       `json:"kind"`
+	WireSchemaVersion         string                       `json:"wire_schema_version"`
+	Variant                   VisualFoundationStageVariant `json:"variant"`
+	StageRelease              SceneAnalysisReleaseIdentity `json:"stage_release"`
+	Control                   SceneAnalysisControlProof    `json:"control"`
+	ClaimVersion              int64                        `json:"claim_version"`
+	DispatchAuthorizationHash string                       `json:"dispatch_authorization_hash"`
+	Status                    string                       `json:"status"`
+	CandidateType             string                       `json:"candidate_type"`
+	Candidate                 json.RawMessage              `json:"candidate"`
+	InputHash                 string                       `json:"input_hash"`
+	OutputHash                *string                      `json:"output_hash"`
+	Diagnostics               []SceneAnalysisDiagnostic    `json:"diagnostics"`
+	DiagnosticHash            string                       `json:"diagnostic_hash"`
+	CompletedAt               time.Time                    `json:"completed_at"`
+	Executor                  VisualFoundationExecutor     `json:"executor"`
+	Error                     *SceneAnalysisResultError    `json:"error"`
+	ResultHash                string                       `json:"result_hash"`
+}
+
+func DecodeVisualFoundationAttemptResult(raw []byte) (VisualFoundationAttemptResult, error) {
+	var value VisualFoundationAttemptResult
+	if err := decodeStrict(raw, &value); err != nil || value.validateShape() != nil {
+		return VisualFoundationAttemptResult{}, errors.New("invalid Visual Foundation Attempt Result")
+	}
+	return value, nil
+}
+
+func (value VisualFoundationAttemptResult) ValidateFor(
+	invocation VisualFoundationInvocation,
+	claimVersion int64,
+	dispatchAuthorizationHash string,
+) error {
+	if err := value.validateShape(); err != nil {
+		return err
+	}
+	if value.InvocationID != invocation.InvocationID || value.AttemptID != invocation.AttemptID ||
+		value.Variant != invocation.Payload.Variant || value.StageRelease != invocation.StageRelease ||
+		value.Control != invocation.Control || value.ClaimVersion != claimVersion ||
+		value.DispatchAuthorizationHash != dispatchAuthorizationHash || value.InputHash != invocation.InputHash ||
+		value.Executor.RuntimeImageDigest != invocation.StageRelease.AgentImageDigest {
+		return errors.New("Visual Foundation result identity does not match invocation")
+	}
+	if value.Status == "accepted" {
+		candidate, _, err := DecodeVisualFoundationCandidate(value.Candidate)
+		if err != nil || candidate.ValidateFor(invocation.Payload.StageInput) != nil {
+			return errors.New("invalid accepted Visual Foundation Candidate")
+		}
+	}
+	return nil
+}
+
+func (value VisualFoundationAttemptResult) validateShape() error {
+	for _, identifier := range []string{value.InvocationID, value.AttemptID} {
+		if _, err := uuid.Parse(identifier); err != nil {
+			return errors.New("invalid Visual Foundation result identity")
+		}
+	}
+	if value.Kind != "storygraph_stage" || value.WireSchemaVersion != SceneAnalysisWireSchemaVersion ||
+		value.Variant.Validate() != nil || value.StageRelease.Validate() != nil || value.Control.Validate() != nil ||
+		value.ClaimVersion < 1 || !hashPattern.MatchString(value.DispatchAuthorizationHash) ||
+		value.CandidateType != "visual_foundation_candidate" || !hashPattern.MatchString(value.InputHash) ||
+		value.CompletedAt.IsZero() || value.Diagnostics == nil || !hashPattern.MatchString(value.DiagnosticHash) ||
+		value.Executor.RuntimeClass != "vision" ||
+		value.Executor.RuntimeImageDigest != value.StageRelease.AgentImageDigest ||
+		value.Executor.HarnessVersion != "visual-foundation-harness" ||
+		strings.TrimSpace(value.Executor.Model) == "" || len(value.Executor.Model) > 200 {
+		return errors.New("invalid Visual Foundation result")
+	}
+	for _, diagnostic := range value.Diagnostics {
+		if !candidateReviewCodePattern.MatchString(diagnostic.Code) || !validVisualText(diagnostic.Summary, 800) {
+			return errors.New("invalid Visual Foundation diagnostic")
+		}
+	}
+	computedResultHash, err := value.ComputeResultHash()
+	if err != nil || !hashPattern.MatchString(value.ResultHash) || computedResultHash != value.ResultHash {
+		return errors.New("Visual Foundation result hash mismatch")
+	}
+	diagnostics, err := json.Marshal(value.Diagnostics)
+	if err != nil {
+		return err
+	}
+	diagnosticHash, err := ProductionCanonicalHash(diagnostics)
+	if err != nil || diagnosticHash != value.DiagnosticHash {
+		return errors.New("Visual Foundation diagnostic hash mismatch")
+	}
+	switch value.Status {
+	case "accepted":
+		if value.OutputHash == nil || !jsonObject(value.Candidate) || value.Error != nil {
+			return errors.New("accepted Visual Foundation result is incomplete")
+		}
+		outputHash, hashErr := ProductionCanonicalHash(value.Candidate)
+		if hashErr != nil || outputHash != *value.OutputHash {
+			return errors.New("Visual Foundation output hash mismatch")
+		}
+		if _, _, decodeErr := DecodeVisualFoundationCandidate(value.Candidate); decodeErr != nil {
+			return errors.New("invalid Visual Foundation Candidate")
+		}
+	case "rejected", "outcome_unknown":
+		expectedRetry := "never"
+		if value.Status == "outcome_unknown" {
+			expectedRetry = "same_release"
+		}
+		if value.OutputHash != nil || len(value.Candidate) != 0 && string(value.Candidate) != "null" ||
+			value.Error == nil || value.Error.RetryClass != expectedRetry ||
+			!candidateReviewCodePattern.MatchString(value.Error.Code) ||
+			!validVisualText(value.Error.SafeSummary, 800) {
+			return errors.New("failed Visual Foundation result has invalid semantics")
+		}
+	default:
+		return errors.New("invalid Visual Foundation result status")
+	}
+	return nil
+}
+
+func (value VisualFoundationAttemptResult) ComputeResultHash() (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	var root map[string]json.RawMessage
+	if err = json.Unmarshal(encoded, &root); err != nil {
+		return "", err
+	}
+	delete(root, "result_hash")
+	material, err := json.Marshal(root)
+	if err != nil {
+		return "", err
+	}
+	return ProductionCanonicalHash(material)
 }

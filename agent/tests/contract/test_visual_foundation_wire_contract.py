@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -11,20 +12,26 @@ from pydantic import ValidationError
 
 from app.harness.scene_analysis_schemas import (
     SceneAnalysisControlProof,
+    SceneAnalysisDispatchAuthorizationClaims,
     SceneAnalysisExecutionBudget,
     SceneAnalysisReleaseIdentity,
+    SceneAnalysisResultError,
 )
 from app.harness.visual_foundation_schemas import (
+    VisualFoundationAttemptResult,
+    VisualFoundationExecutor,
     VisualFoundationInvocation,
     VisualFoundationMediaAttachment,
     VisualFoundationPayload,
     VisualFoundationScope,
     VisualFoundationShard,
     VisualFoundationStageVariant,
+    validate_visual_foundation_dispatch_authorization,
 )
 from app.modules.storygraph.bundle import SKILL_BUNDLE_HASH
 from app.modules.storygraph.visual_foundation_contract import VisualFoundationInput
-from tests.contract.test_visual_foundation_contract import digest, valid_input
+from app.protocol.canonical import production_canonical_hash
+from tests.contract.test_visual_foundation_contract import digest, valid_candidate, valid_input
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 INVOCATION_FIXTURE = REPOSITORY_ROOT.joinpath(
@@ -33,6 +40,13 @@ INVOCATION_FIXTURE = REPOSITORY_ROOT.joinpath(
     "fixtures",
     "agent",
     "storygraph-visual-foundation-invocation.json",
+)
+RESULT_FIXTURE = REPOSITORY_ROOT.joinpath(
+    "backend",
+    "tests",
+    "fixtures",
+    "agent",
+    "storygraph-visual-foundation-result.json",
 )
 
 
@@ -102,6 +116,57 @@ def valid_invocation() -> VisualFoundationInvocation:
     )
 
 
+def valid_dispatch_claims(
+    invocation: VisualFoundationInvocation,
+) -> SceneAnalysisDispatchAuthorizationClaims:
+    return SceneAnalysisDispatchAuthorizationClaims(
+        invocation_id=invocation.invocation_id,
+        attempt_id=invocation.attempt_id,
+        input_hash=invocation.input_hash,
+        skill_release_id=invocation.stage_release.skill_release_id,
+        skill_release_hash=invocation.stage_release.skill_release_hash,
+        stage_release_hash=invocation.stage_release.stage_release_hash,
+        bundle_content_hash=invocation.stage_release.bundle_content_hash,
+        control_hash=invocation.control.control_hash,
+        release_fence=invocation.control.release_fence,
+        claim_version=1,
+        agent_image_digest=invocation.stage_release.agent_image_digest,
+        expires_at=200,
+    )
+
+
+def valid_accepted_result(
+    invocation: VisualFoundationInvocation,
+) -> VisualFoundationAttemptResult:
+    candidate = valid_candidate(invocation.payload.stage_input)
+    return VisualFoundationAttemptResult.build(
+        invocation_id=invocation.invocation_id,
+        attempt_id=invocation.attempt_id,
+        kind="storygraph_stage",
+        wire_schema_version="storygraph-stage-wire-production",
+        variant=invocation.payload.variant,
+        stage_release=invocation.stage_release,
+        control=invocation.control,
+        claim_version=1,
+        dispatch_authorization_hash=digest("visual-dispatch"),
+        status="accepted",
+        candidate_type="visual_foundation_candidate",
+        candidate=candidate,
+        input_hash=invocation.input_hash,
+        output_hash=production_canonical_hash(candidate),
+        diagnostics=[],
+        diagnostic_hash=production_canonical_hash([]),
+        completed_at=datetime(2026, 9, 12, tzinfo=UTC),
+        executor=VisualFoundationExecutor(
+            runtime_class="vision",
+            runtime_image_digest=invocation.stage_release.agent_image_digest,
+            harness_version="visual-foundation-harness",
+            model="codex-cli-default",
+        ),
+        error=None,
+    )
+
+
 def test_visual_foundation_invocation_freezes_project_media_and_input_hash() -> None:
     invocation = valid_invocation()
     fixture = json.loads(INVOCATION_FIXTURE.read_text(encoding="utf-8"))
@@ -142,3 +207,95 @@ def test_visual_foundation_invocation_rejects_unknown_or_drifting_input(
 
     with pytest.raises(ValidationError):
         VisualFoundationInvocation.model_validate(payload)
+
+
+def test_visual_foundation_dispatch_authorization_binds_attempt_and_expiry() -> None:
+    invocation = valid_invocation()
+    claims = valid_dispatch_claims(invocation)
+
+    validate_visual_foundation_dispatch_authorization(
+        claims, invocation, claim_version=1, now_unix=100
+    )
+    with pytest.raises(ValueError):
+        validate_visual_foundation_dispatch_authorization(
+            claims, invocation, claim_version=1, now_unix=200
+        )
+
+
+def test_visual_foundation_attempt_result_validates_candidate_and_terminal_states() -> None:
+    invocation = valid_invocation()
+    authorization_hash = digest("visual-dispatch")
+    accepted = valid_accepted_result(invocation)
+    fixture = json.loads(RESULT_FIXTURE.read_text(encoding="utf-8"))
+
+    assert fixture == {
+        "authorization_claims": valid_dispatch_claims(invocation).model_dump(mode="json"),
+        "attempt_result": accepted.model_dump(mode="json"),
+    }
+    assert accepted.output_hash == (
+        "3c89f9503800ac661d25bc41ee15127ee392ad32601329442c04177ac192c7eb"
+    )
+    assert accepted.result_hash == (
+        "997aa3a163f60141a2a7a2a4c35dcf9ffbb99c318385303d1307da319a5b58f9"
+    )
+    accepted.validate_for(invocation, 1, authorization_hash)
+    assert accepted.result_hash == accepted.compute_result_hash()
+
+    unsafe = accepted.model_dump(mode="json")
+    unsafe["candidate"]["approved"] = True
+    unsafe["output_hash"] = production_canonical_hash(unsafe["candidate"])
+    unsafe["result_hash"] = production_canonical_hash(
+        {key: value for key, value in unsafe.items() if key != "result_hash"}
+    )
+    with pytest.raises((ValidationError, ValueError)):
+        result = VisualFoundationAttemptResult.model_validate(unsafe)
+        result.validate_for(invocation, 1, authorization_hash)
+
+    terminal_states = (
+        (
+            "rejected",
+            SceneAnalysisResultError(
+                code="model_failed",
+                safe_summary="视觉候选未生成。",
+                retry_class="never",
+            ),
+        ),
+        (
+            "outcome_unknown",
+            SceneAnalysisResultError(
+                code="model_failed",
+                safe_summary="视觉候选未生成。",
+                retry_class="same_release",
+            ),
+        ),
+    )
+    for status, result_error in terminal_states:
+        result = VisualFoundationAttemptResult.build(
+            invocation_id=accepted.invocation_id,
+            attempt_id=accepted.attempt_id,
+            kind=accepted.kind,
+            wire_schema_version=accepted.wire_schema_version,
+            variant=accepted.variant,
+            stage_release=accepted.stage_release,
+            control=accepted.control,
+            claim_version=accepted.claim_version,
+            dispatch_authorization_hash=accepted.dispatch_authorization_hash,
+            status=status,
+            candidate_type=accepted.candidate_type,
+            candidate=None,
+            input_hash=accepted.input_hash,
+            output_hash=None,
+            diagnostics=accepted.diagnostics,
+            diagnostic_hash=accepted.diagnostic_hash,
+            completed_at=accepted.completed_at,
+            executor=accepted.executor,
+            error=result_error,
+        )
+        result.validate_for(invocation, 1, authorization_hash)
+
+
+def test_visual_foundation_attempt_result_rejects_unknown_fields() -> None:
+    payload: Any = valid_accepted_result(valid_invocation()).model_dump(mode="json")
+    payload["unexpected"] = True
+    with pytest.raises(ValidationError):
+        VisualFoundationAttemptResult.model_validate(payload)
