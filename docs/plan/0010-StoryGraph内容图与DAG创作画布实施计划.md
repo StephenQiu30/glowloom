@@ -161,6 +161,7 @@
 - [x] 从 Agent 实际 Pydantic Model 生成七个已实现生产 Stage 的 Candidate Schema Hash，并由 Go/Python 共享严格、可重算的 Schema Manifest；Stage Key、Profile、Candidate Type、现有 Wire Schema Version 或任一 Schema 字段漂移均失败关闭。
 - [x] 从 Agent 实际 Pydantic Invocation、Dispatch Authorization Claims 与 Attempt Result 生成统一 Wire Schema Hash，并由 Go/Python 共享严格、可重算的 Wire Schema Manifest；未知字段、子 Schema 或根 Hash 漂移均失败关闭。
 - [x] 从 Agent 七个实际 Pydantic Stage Input 生成逐变体 Input Contract/Schema Hash，并由 Go/Python 共享严格、可重算的 Input Schema Manifest；输入变体必须与现有 Candidate Registry 一一对齐，不接受 current/latest 或运行激活字段。
+- [x] 建立 Backend-owned SceneAnalysis DefinitionCore：只冻结七个已实际运行 P0 变体的 Bundle-independent Wire/Input/Output/Normalized Candidate、Normalizer、Invariant、Resource、Execution、Model 与 Tool Policy 前像；Release、Signature、Control、current/latest 激活引用机械拒绝，且不冒充十三 Stage 完整 Core/StageSet。
 - [ ] 把成熟 Skill 吸收流程固化为 SourceInventory → review → rewrite → eval → shadow → signature；不复制未授权运行资产。
 - [ ] 上架 4–6 个不可变、版本化、可追溯许可的 PresetRelease。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3 与原子发布。
