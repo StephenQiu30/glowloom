@@ -124,6 +124,7 @@
   - [x] 固定 Interaction Claim 的 Character/Prop Occurrence、Scene/Beat、holder、Prop State、手别与几何描述 Payload；十类动作必须符合持有/交接/状态转换矩阵，并与 participant/anchor/state/supersedes Edge 机械等价。
   - [x] 让 Production Bible Owner 显式保存 Relationship/Foreshadowing/Payoff Claim 的 participant role、predicate、anchor、valid scope、story time、polarity/status 与逐次 supersedes；Agent Candidate、GORM Owner、StoryGraph Payload/Edge 使用同一严格合同，Compiler 不从 Evidence 推断关系。
   - [x] 在同一串行化发布事务中重读并共享锁定 Script Source、Episode、Structure Identity、Asset/State、Production Bible、逐 Episode Planning 与空 Rebase 当前 Head；任一 Head 已越过 Gate 2 Production World Receipt 时拒绝发布且零写入。
+  - [x] 固定 Production Schema Manifest 与 Payload Contract Hash Root 的元合同解码边界：所有字段闭集且 required，nullable 元数据显式保留，数组按冻结键排序去重，Matrix row 必须匹配所属联合类型，派生 Rule ID、Payload Union 覆盖、Property 类型/格式/数组排序来源和 Canonical Hash 均机械校验；该边界明确不冒充完整 Registry fixture 或发布许可。
   - [ ] 完成 production Schema Manifest 与剩余 Payload/Edge invariant 后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。
