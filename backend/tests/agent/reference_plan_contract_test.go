@@ -88,6 +88,26 @@ func TestReferencePlanInputRejectsMutableOrIncompleteSeedInventory(t *testing.T)
 	if err := input.Validate(); err == nil {
 		t.Fatal("incomplete Character State seed inventory was accepted")
 	}
+
+	input = referencePlanInput(t)
+	input.VisualFoundationCandidate.ProductionWorldOwnerSetHash = referencePlanHash("other-owner-set")
+	if err := input.Validate(); err == nil {
+		t.Fatal("Visual Foundation Candidate lineage drift was accepted")
+	}
+}
+
+func TestReferencePlanInputRejectsPreGateEffectiveStyleSnapshot(t *testing.T) {
+	input := referencePlanInput(t)
+	var value map[string]any
+	if err := json.Unmarshal(mustJSON(t, input), &value); err != nil {
+		t.Fatal(err)
+	}
+	value["effective_style_snapshot_ref"] = referencePlanOwnerRef(
+		input.WorkspaceID, input.ProjectID, "preset", "preset_effective_set", "style-1",
+	)
+	if _, _, err := contract.DecodeReferencePlanInput(mustJSON(t, value)); err == nil {
+		t.Fatal("pre-Gate 3 EffectiveStyleSnapshot ref was accepted")
+	}
 }
 
 func TestReferencePlanCandidateRejectsUnknownFields(t *testing.T) {
@@ -118,7 +138,14 @@ func referencePlanInput(t *testing.T) contract.ReferencePlanInput {
 	locationSpec := referencePlanOwnerRef(workspaceID, projectID, "production/bible", "bible_production_world_set", "location-spec-1")
 	locationState := referencePlanOwnerRef(workspaceID, projectID, "asset", "asset_identity_state_set", "location-state-1")
 	locationOccurrence := referencePlanOwnerRef(workspaceID, projectID, "production/planning", "planning_scene_set", "location-occurrence-1")
-	style := referencePlanOwnerRef(workspaceID, projectID, "preset", "preset_effective_set", "style-1")
+	visualInput, _, err := contract.DecodeVisualFoundationInput(visualFoundationInputJSON(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualCandidate, _, err := contract.DecodeVisualFoundationCandidate(visualFoundationCandidateJSON(t, visualInput))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	anchorKey := referencePlanBusinessKey("character_identity_anchor", "character-1")
 	appearanceAKey := referencePlanBusinessKey("character_appearance", "character-1", "character-spec-1", "state-a")
@@ -133,7 +160,7 @@ func referencePlanInput(t *testing.T) contract.ReferencePlanInput {
 		P1ScopeKeys:                           []string{"scene:00000000-0000-0000-0000-000000000101", "scene:00000000-0000-0000-0000-000000000102"},
 		VisualFoundationCandidateRevisionID:   "00000000-0000-0000-0000-000000000201",
 		VisualFoundationCandidateRevisionHash: referencePlanHash("foundation-revision"),
-		EffectiveStyleSnapshotRef:             style,
+		VisualFoundationCandidate:             visualCandidate,
 		CharacterSeeds: []contract.ReferencePlanCharacterSeed{{
 			AnchorBusinessKey: anchorKey, IdentityRef: character, SpecificationRef: characterSpec,
 			CoverageScopeKeys: []string{"scene:00000000-0000-0000-0000-000000000101", "scene:00000000-0000-0000-0000-000000000102"},

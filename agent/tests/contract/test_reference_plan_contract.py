@@ -61,6 +61,28 @@ def test_reference_plan_candidate_rejects_provider_field() -> None:
         ReferencePlanCandidate.model_validate(payload)
 
 
+def test_reference_plan_input_rejects_foundation_lineage_drift() -> None:
+    payload = valid_input()
+    payload["visual_foundation_candidate"]["production_world_owner_set_hash"] = digest(
+        "other-owner-set"
+    )
+    with pytest.raises(ValidationError):
+        ReferencePlanInput.model_validate(payload)
+
+
+def test_reference_plan_input_rejects_pre_gate_effective_style_snapshot() -> None:
+    payload = valid_input()
+    payload["effective_style_snapshot_ref"] = owner_ref(
+        payload["workspace_id"],
+        payload["project_id"],
+        "preset",
+        "preset_effective_set",
+        "style-1",
+    )
+    with pytest.raises(ValidationError):
+        ReferencePlanInput.model_validate(payload)
+
+
 def valid_input() -> dict[str, Any]:
     workspace_id = "00000000-0000-0000-0000-000000000010"
     project_id = "00000000-0000-0000-0000-000000000001"
@@ -129,8 +151,8 @@ def valid_input() -> dict[str, Any]:
         "p1_scope_keys": [scene_scope_a, scene_scope_b],
         "visual_foundation_candidate_revision_id": "00000000-0000-0000-0000-000000000201",
         "visual_foundation_candidate_revision_hash": digest("foundation-revision"),
-        "effective_style_snapshot_ref": owner_ref(
-            workspace_id, project_id, "preset", "preset_effective_set", "style-1"
+        "visual_foundation_candidate": foundation_candidate(
+            workspace_id, project_id, digest("owner-set")
         ),
         "character_seeds": [
             {
@@ -323,6 +345,39 @@ def purpose_profiles() -> list[dict[str, Any]]:
             "forbidden_changes": ["story_fact"],
         },
     ]
+
+
+def foundation_candidate(workspace_id: str, project_id: str, owner_set_hash: str) -> dict[str, Any]:
+    return {
+        "workspace_id": workspace_id,
+        "project_id": project_id,
+        "production_world_owner_set_hash": owner_set_hash,
+        "preset_release_content_hash": digest("preset"),
+        "application_mode": "faithful",
+        "typed_overrides_hash": digest("typed-overrides"),
+        "reference_attachments_hash": digest("reference-attachments"),
+        "fidelity_invariants": [
+            "character_identity",
+            "holder_relation",
+            "scene_continuity",
+            "story_fact",
+        ],
+        "style_policy": {
+            "palette_rules": ["muted_jade_and_ink"],
+            "material_rules": ["grounded_material_identity"],
+            "lighting_rules": ["motivated_soft_cinematic"],
+            "camera_rules": ["grounded_cinematic"],
+            "forbidden_changes": [
+                "character_identity",
+                "holder_relation",
+                "scene_continuity",
+                "story_fact",
+            ],
+        },
+        "world_adaptations": [],
+        "world_conflicts": [],
+        "creative_fill_proposals": [],
+    }
 
 
 def owner_ref(

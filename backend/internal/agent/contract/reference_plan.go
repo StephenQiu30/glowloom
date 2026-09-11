@@ -20,7 +20,7 @@ const (
 	ReferencePlanSchemaSetContractID = "storygraph-reference-plan-schema-set-production"
 	ReferencePlanInputContractID     = "reference-plan-input-production"
 	ReferencePlanCandidateContractID = "reference-plan-candidate-production"
-	ReferencePlanInputSchemaHash     = "fa7d1a9ea2dceaa999573a6b7b6f85e83cacdc17826e50cdf6ff8984b48aea94"
+	ReferencePlanInputSchemaHash     = "cb02abe281b1fdcd08bf01ae2ed4dd681c9a09d07676c391c5b7f1f45883c8cd"
 	ReferencePlanCandidateSchemaHash = "5aabb9ddcc340f43dc712cba37c6120a3500fc5946a9b6df28ab2c69ec03770b"
 )
 
@@ -114,7 +114,7 @@ type ReferencePlanInput struct {
 	P1ScopeKeys                           []string                       `json:"p1_scope_keys"`
 	VisualFoundationCandidateRevisionID   string                         `json:"visual_foundation_candidate_revision_id"`
 	VisualFoundationCandidateRevisionHash string                         `json:"visual_foundation_candidate_revision_hash"`
-	EffectiveStyleSnapshotRef             ReferencePlanOwnerRef          `json:"effective_style_snapshot_ref"`
+	VisualFoundationCandidate             VisualFoundationCandidate      `json:"visual_foundation_candidate"`
 	CharacterSeeds                        []ReferencePlanCharacterSeed   `json:"character_seeds"`
 	FixedTargetSeeds                      []ReferencePlanFixedTargetSeed `json:"fixed_target_seeds"`
 	PurposeProfiles                       []ReferencePlanPurposeProfile  `json:"purpose_profiles"`
@@ -218,8 +218,11 @@ func (value ReferencePlanInput) Validate() error {
 		!hashPattern.MatchString(value.ReferenceTargetSeedRoot) ||
 		validateReferencePlanScopes(value.P1ScopeKeys) != nil ||
 		value.CharacterSeeds == nil || len(value.FixedTargetSeeds) == 0 || value.PurposeProfiles == nil ||
-		validateReferencePlanOwnerRef(value.EffectiveStyleSnapshotRef, value.WorkspaceID, value.ProjectID) != nil ||
-		value.EffectiveStyleSnapshotRef.OwnerKind != "preset" || value.EffectiveStyleSnapshotRef.VersionFamily != "preset_effective_set" ||
+		value.VisualFoundationCandidate.validateShape() != nil ||
+		value.VisualFoundationCandidate.WorkspaceID != value.WorkspaceID ||
+		value.VisualFoundationCandidate.ProjectID != value.ProjectID ||
+		value.VisualFoundationCandidate.ProductionWorldOwnerSetHash != value.ProductionWorldOwnerSetHash ||
+		value.VisualFoundationCandidate.ApplicationMode == "faithful" && len(value.VisualFoundationCandidate.WorldAdaptations) != 0 ||
 		validateReferencePlanPurposeProfiles(value.PurposeProfiles) != nil {
 		return errors.New("invalid Reference Plan input")
 	}

@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from app.modules.storygraph.scene_analysis_candidates import StrictSceneAnalysisModel
+from app.modules.storygraph.visual_foundation_contract import VisualFoundationCandidate
 from app.protocol.canonical import production_canonical_hash, production_canonical_json
 
 ReferenceTargetKind = Literal[
@@ -118,7 +119,7 @@ class ReferencePlanInput(StrictSceneAnalysisModel):
     p1_scope_keys: list[str] = Field(min_length=1)
     visual_foundation_candidate_revision_id: UUID
     visual_foundation_candidate_revision_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    effective_style_snapshot_ref: ReferencePlanOwnerRef
+    visual_foundation_candidate: VisualFoundationCandidate
     character_seeds: list[ReferencePlanCharacterSeed]
     fixed_target_seeds: list[ReferencePlanFixedTargetSeed] = Field(min_length=1)
     purpose_profiles: list[ReferencePlanPurposeProfile] = Field(min_length=6, max_length=6)
@@ -128,12 +129,17 @@ class ReferencePlanInput(StrictSceneAnalysisModel):
     def validate_frozen_seeds(self) -> ReferencePlanInput:
         workspace_id, project_id = str(self.workspace_id), str(self.project_id)
         _validate_scopes(self.p1_scope_keys)
-        _validate_ref(self.effective_style_snapshot_ref, workspace_id, project_id)
         if (
-            self.effective_style_snapshot_ref.owner_kind != "preset"
-            or self.effective_style_snapshot_ref.version_family != "preset_effective_set"
+            str(self.visual_foundation_candidate.workspace_id) != workspace_id
+            or str(self.visual_foundation_candidate.project_id) != project_id
+            or self.visual_foundation_candidate.production_world_owner_set_hash
+            != self.production_world_owner_set_hash
+            or (
+                self.visual_foundation_candidate.application_mode == "faithful"
+                and self.visual_foundation_candidate.world_adaptations
+            )
         ):
-            raise ValueError("Reference Plan style ref is not an EffectiveStyleSnapshot")
+            raise ValueError("Reference Plan Visual Foundation Candidate lineage drifted")
         if [profile.target_kind for profile in self.purpose_profiles] != REFERENCE_TARGET_KINDS:
             raise ValueError("Reference Plan PurposeProfiles are incomplete or unordered")
         for profile in self.purpose_profiles:
