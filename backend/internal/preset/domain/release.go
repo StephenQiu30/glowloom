@@ -45,6 +45,13 @@ var releaseViewRoles = map[string][]string{
 	"scene_composition":         {"composition_master"},
 }
 
+var fidelityInvariantKeys = []string{
+	"character_identity",
+	"holder_relation",
+	"scene_continuity",
+	"story_fact",
+}
+
 type Provenance struct {
 	Origin      string `json:"origin"`
 	SourceURL   string `json:"source_url"`
@@ -92,6 +99,16 @@ type PurposeProfile struct {
 	ForbiddenChanges []string `json:"forbidden_changes"`
 }
 
+type WorldAdaptationRule struct {
+	RuleKey                string   `json:"rule_key"`
+	SourceFactKind         string   `json:"source_fact_kind"`
+	DesignDomain           string   `json:"design_domain"`
+	Directive              string   `json:"directive"`
+	PreservedInvariantKeys []string `json:"preserved_invariant_keys"`
+	ImpactScopeKinds       []string `json:"impact_scope_kinds"`
+	RequiresHumanDecision  bool     `json:"requires_human_decision"`
+}
+
 type ContentRef struct {
 	Owner       string `json:"owner"`
 	Key         string `json:"key"`
@@ -99,20 +116,22 @@ type ContentRef struct {
 }
 
 type ReleaseInput struct {
-	Key                      string           `json:"key"`
-	Release                  string           `json:"release"`
-	Label                    string           `json:"label"`
-	Category                 string           `json:"category"`
-	Description              string           `json:"description"`
-	DefaultMode              string           `json:"default_mode"`
-	Provenance               Provenance       `json:"provenance"`
-	CapabilityManifest       []Capability     `json:"capability_manifest"`
-	WorldDesignBasis         WorldDesignBasis `json:"world_design_basis"`
-	VisualGrammar            VisualGrammar    `json:"visual_grammar"`
-	PurposeProfiles          []PurposeProfile `json:"purpose_profiles"`
-	SkillReleaseRefs         []ContentRef     `json:"skill_release_refs"`
-	QCPolicyRef              ContentRef       `json:"qc_policy_ref"`
-	ModelCapabilityPolicyRef ContentRef       `json:"model_capability_policy_ref"`
+	Key                      string                `json:"key"`
+	Release                  string                `json:"release"`
+	Label                    string                `json:"label"`
+	Category                 string                `json:"category"`
+	Description              string                `json:"description"`
+	DefaultMode              string                `json:"default_mode"`
+	Provenance               Provenance            `json:"provenance"`
+	CapabilityManifest       []Capability          `json:"capability_manifest"`
+	WorldDesignBasis         WorldDesignBasis      `json:"world_design_basis"`
+	VisualGrammar            VisualGrammar         `json:"visual_grammar"`
+	FidelityInvariants       []string              `json:"fidelity_invariants"`
+	WorldAdaptationRules     []WorldAdaptationRule `json:"world_adaptation_rules"`
+	PurposeProfiles          []PurposeProfile      `json:"purpose_profiles"`
+	SkillReleaseRefs         []ContentRef          `json:"skill_release_refs"`
+	QCPolicyRef              ContentRef            `json:"qc_policy_ref"`
+	ModelCapabilityPolicyRef ContentRef            `json:"model_capability_policy_ref"`
 }
 
 type Release struct {
@@ -191,10 +210,35 @@ func validateReleaseInput(value ReleaseInput) error {
 		!stableText(value.Label) || !releaseKeyPattern.MatchString(value.Category) || !stableText(value.Description) ||
 		!slices.Contains([]string{"faithful", "world_adaptation"}, value.DefaultMode) || validateProvenance(value.Provenance) != nil ||
 		validateCapabilities(value.CapabilityManifest) != nil || validateWorldDesignBasis(value.WorldDesignBasis) != nil ||
-		validateVisualGrammar(value.VisualGrammar) != nil || validatePurposeProfiles(value.PurposeProfiles) != nil ||
+		validateVisualGrammar(value.VisualGrammar) != nil || !slices.Equal(value.FidelityInvariants, fidelityInvariantKeys) ||
+		validateWorldAdaptationRules(value.WorldAdaptationRules) != nil || validatePurposeProfiles(value.PurposeProfiles) != nil ||
 		validateContentRefs(value.SkillReleaseRefs, true) != nil || validateContentRef(value.QCPolicyRef) != nil ||
 		validateContentRef(value.ModelCapabilityPolicyRef) != nil {
 		return errors.New("invalid Preset release contract")
+	}
+	return nil
+}
+
+func validateWorldAdaptationRules(values []WorldAdaptationRule) error {
+	designDomains := []string{"architecture", "civilization", "material", "prop", "technology_or_magic", "wardrobe"}
+	impactScopes := map[string]struct{}{
+		"asset": {}, "interaction": {}, "reference_plan": {}, "scene": {}, "storyboard": {},
+	}
+	if len(values) == 0 {
+		return errors.New("Preset release must declare world adaptation rules")
+	}
+	for index, value := range values {
+		if !releaseKeyPattern.MatchString(value.RuleKey) || index > 0 && values[index-1].RuleKey >= value.RuleKey ||
+			!slices.Contains(designDomains, value.SourceFactKind) || !slices.Contains(designDomains, value.DesignDomain) ||
+			!stableText(value.Directive) || !slices.Equal(value.PreservedInvariantKeys, fidelityInvariantKeys) ||
+			!value.RequiresHumanDecision || !sortedStableStrings(value.ImpactScopeKinds, true) {
+			return errors.New("invalid Preset world adaptation rule")
+		}
+		for _, scope := range value.ImpactScopeKinds {
+			if _, exists := impactScopes[scope]; !exists {
+				return errors.New("invalid Preset world adaptation scope")
+			}
+		}
 	}
 	return nil
 }

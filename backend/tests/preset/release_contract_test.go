@@ -13,7 +13,8 @@ func TestPresetReleaseRoundTripsAnImmutableSixPurposeContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new Preset release: %v", err)
 	}
-	if release.ContractID != preset.ReleaseContractID || len(release.ContentHash) != 64 || len(release.CapabilityManifest) != 6 || len(release.PurposeProfiles) != 6 {
+	if release.ContractID != preset.ReleaseContractID || len(release.ContentHash) != 64 || len(release.CapabilityManifest) != 6 ||
+		len(release.PurposeProfiles) != 6 || len(release.FidelityInvariants) != 4 || len(release.WorldAdaptationRules) != 1 {
 		t.Fatalf("unexpected Preset release: %#v", release)
 	}
 	decoded, canonical, err := preset.DecodeRelease(encoded)
@@ -35,6 +36,19 @@ func TestPresetReleaseRejectsIncompleteCapabilityAndGovernance(t *testing.T) {
 		"invalid Skill hash":      func(value *preset.ReleaseInput) { value.SkillReleaseRefs[0].ContentHash = "latest" },
 		"numeric release prefix":  func(value *preset.ReleaseInput) { value.Release = "v" + "1" },
 		"invalid release date":    func(value *preset.ReleaseInput) { value.Release = "2026.02.31" },
+		"missing fidelity invariant": func(value *preset.ReleaseInput) {
+			value.FidelityInvariants = value.FidelityInvariants[:3]
+		},
+		"missing adaptation rule": func(value *preset.ReleaseInput) { value.WorldAdaptationRules = nil },
+		"adaptation changes identity": func(value *preset.ReleaseInput) {
+			value.WorldAdaptationRules[0].PreservedInvariantKeys = []string{"holder_relation", "scene_continuity", "story_fact"}
+		},
+		"automatic adaptation": func(value *preset.ReleaseInput) {
+			value.WorldAdaptationRules[0].RequiresHumanDecision = false
+		},
+		"invalid adaptation scope": func(value *preset.ReleaseInput) {
+			value.WorldAdaptationRules[0].ImpactScopeKinds = []string{"script_source"}
+		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -116,6 +130,15 @@ func validPresetReleaseInput() preset.ReleaseInput {
 			Palette: "motivated_neutral", Linework: "none", Texture: "material_specific", MaterialRendering: "physically_plausible",
 			Lighting: "motivated_practical", Contrast: "controlled", Composition: "narrative_clarity", Camera: "grounded_cinematic",
 			NegativeConstraints: []string{"artist_name", "protected_ip_imitation"},
+		},
+		FidelityInvariants: []string{"character_identity", "holder_relation", "scene_continuity", "story_fact"},
+		WorldAdaptationRules: []preset.WorldAdaptationRule{
+			{
+				RuleKey: "translate-technology-language", SourceFactKind: "technology_or_magic",
+				DesignDomain: "technology_or_magic", Directive: "translate_expression_without_changing_function_or_outcome",
+				PreservedInvariantKeys: []string{"character_identity", "holder_relation", "scene_continuity", "story_fact"},
+				ImpactScopeKinds:       []string{"asset", "interaction", "scene"}, RequiresHumanDecision: true,
+			},
 		},
 		PurposeProfiles:  profiles,
 		SkillReleaseRefs: []preset.ContentRef{{Owner: "agent/skill", Key: "build-storygraph", ContentHash: presetTestHash("skill")}},
