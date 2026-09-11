@@ -53,8 +53,18 @@ class VisualFoundationHarness:
         attachments = self.stage_input.reference_attachments
         supplied_ids = [value.attachment_id for value in media_bindings]
         expected_ids = [value.attachment_id for value in attachments]
+        manifest = self.bundle.manifest
         if supplied_ids != expected_ids or len(supplied_ids) != len(set(supplied_ids)):
             raise CodexMediaInvalid("Visual Foundation media bindings do not match the input")
+        if len(media_bindings) > manifest.max_image_inputs:
+            raise CodexMediaInvalid("Visual Foundation image count exceeds its execution budget")
+        if any(
+            value.byte_length < 1 or value.byte_length > manifest.max_image_bytes
+            for value in media_bindings
+        ):
+            raise CodexMediaInvalid("Visual Foundation image exceeds its byte budget")
+        if sum(value.byte_length for value in media_bindings) > manifest.max_total_image_bytes:
+            raise CodexMediaInvalid("Visual Foundation images exceed their aggregate byte budget")
         images: list[CodexImageInput] = []
         for attachment, binding in zip(attachments, media_bindings, strict=True):
             images.append(

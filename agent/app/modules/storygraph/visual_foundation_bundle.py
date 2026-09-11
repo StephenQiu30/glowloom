@@ -18,6 +18,9 @@ class VisualFoundationBundleManifest:
     max_model_calls: int = 1
     max_execution_seconds: int = 120
     max_output_bytes: int = 131072
+    max_image_inputs: int = 8
+    max_image_bytes: int = 10 * 1024 * 1024
+    max_total_image_bytes: int = 32 * 1024 * 1024
     allowed_tools: tuple[str, ...] = ()
 
 
