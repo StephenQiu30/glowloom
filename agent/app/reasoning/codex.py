@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import os
 import signal
 import stat
 import tempfile
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -41,6 +44,19 @@ class CodexRuntimeUnavailable(CodexExecutionError):
     pass
 
 
+class CodexMediaInvalid(CodexExecutionError):
+    pass
+
+
+@dataclass(frozen=True)
+class CodexImageInput:
+    sort_key: str
+    path: Path
+    content_hash: str
+    byte_length: int
+    media_type: str
+
+
 _CODEX_DELEGATED_AGENT_FEATURE = "multi_agent_" + "v" + "2"
 
 _DISABLED_FEATURES = (
@@ -65,6 +81,12 @@ _DISABLED_FEATURES = (
 )
 
 _SAFE_ITEM_TYPES = {"agent_message", "error", "reasoning"}
+
+_IMAGE_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
 
 def structured_diagnostic(stdout: bytes, stderr: bytes) -> str:
@@ -110,6 +132,7 @@ async def run_codex_process(
     timeout_seconds: float,
     max_output_bytes: int | None = None,
     strict_output_schema: bool = False,
+    image_inputs: Sequence[CodexImageInput] = (),
 ) -> BaseModel:
     if timeout_seconds <= 0:
         raise CodexDeadlineExceeded("Agent execution deadline is exhausted")
@@ -126,6 +149,7 @@ async def run_codex_process(
             ),
             encoding="utf-8",
         )
+        staged_images = _stage_image_inputs(root, image_inputs)
         command = [
             codex_bin,
             "exec",
@@ -146,6 +170,8 @@ async def run_codex_process(
         ]
         for feature in _DISABLED_FEATURES:
             command.extend(["--disable", feature])
+        for staged_image in staged_images:
+            command.extend(["--image", str(staged_image)])
         command.append("-")
         try:
             process = await asyncio.create_subprocess_exec(
@@ -161,11 +187,21 @@ async def run_codex_process(
         try:
             stdout, stderr = await asyncio.wait_for(
                 (
-                    process.communicate(_prompt_with_guidance(guidance, prompt).encode("utf-8"))
+                    process.communicate(
+                        _prompt_with_guidance(
+                            guidance,
+                            prompt,
+                            has_images=bool(staged_images),
+                        ).encode("utf-8")
+                    )
                     if max_output_bytes is None
                     else communicate_bounded(
                         process,
-                        _prompt_with_guidance(guidance, prompt).encode("utf-8"),
+                        _prompt_with_guidance(
+                            guidance,
+                            prompt,
+                            has_images=bool(staged_images),
+                        ).encode("utf-8"),
                         max_output_bytes,
                     )
                 ),
@@ -334,13 +370,70 @@ def decode_structured_output(raw: str) -> Any:
     )
 
 
-def _prompt_with_guidance(guidance: str, prompt: str) -> str:
+def _prompt_with_guidance(guidance: str, prompt: str, *, has_images: bool = False) -> str:
+    executor = "structured vision" if has_images else "structured-text"
+    allowed_input = " and attached image inputs" if has_images else ""
     return (
-        "You are a restricted structured-text executor. No tools are authorized or available. "
-        "Use only the immutable task input, explicit project guidance, and output schema supplied "
-        "by the harness. Never read files, run commands, call networks, or perform side effects."
+        f"You are a restricted {executor} executor. No tools are authorized or available. "
+        "Use only the immutable task input, explicit project guidance, output schema supplied by "
+        f"the harness{allowed_input}. Never read files, run commands, call networks, or perform "
+        "side effects."
         f"\n\n# Project guidance\n{guidance}\n\n# Frozen stage input\n{prompt}"
     )
+
+
+def _stage_image_inputs(root: Path, image_inputs: Sequence[CodexImageInput]) -> tuple[Path, ...]:
+    keys = [value.sort_key for value in image_inputs]
+    if keys != sorted(set(keys)) or any(not value or value != value.strip() for value in keys):
+        raise CodexMediaInvalid("Codex image inputs must have canonical sorted keys")
+
+    staged: list[Path] = []
+    for index, image in enumerate(image_inputs):
+        extension = _IMAGE_EXTENSIONS.get(image.media_type)
+        if (
+            extension is None
+            or image.byte_length < 1
+            or len(image.content_hash) != 64
+            or any(character not in "0123456789abcdef" for character in image.content_hash)
+            or not image.path.is_absolute()
+        ):
+            raise CodexMediaInvalid("Codex image declaration is invalid")
+        destination = root / f"input-{index:03d}{extension}"
+        try:
+            flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
+            with os.fdopen(os.open(image.path, flags), "rb") as source:
+                info = os.fstat(source.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size != image.byte_length:
+                    raise CodexMediaInvalid("Codex image file identity drifted")
+                digest = hashlib.sha256()
+                prefix = b""
+                with destination.open("xb") as output:
+                    while chunk := source.read(65536):
+                        if len(prefix) < 12:
+                            prefix = (prefix + chunk)[:12]
+                        digest.update(chunk)
+                        output.write(chunk)
+            if not _matches_media_type(prefix, image.media_type):
+                raise CodexMediaInvalid("Codex image media type does not match its bytes")
+            if digest.hexdigest() != image.content_hash:
+                raise CodexMediaInvalid("Codex image content hash drifted")
+            destination.chmod(0o400)
+        except CodexMediaInvalid:
+            raise
+        except OSError as error:
+            raise CodexMediaInvalid("Codex image input is unavailable") from error
+        staged.append(destination)
+    return tuple(staged)
+
+
+def _matches_media_type(prefix: bytes, media_type: str) -> bool:
+    if media_type == "image/jpeg":
+        return prefix.startswith(b"\xff\xd8\xff")
+    if media_type == "image/png":
+        return prefix.startswith(b"\x89PNG\r\n\x1a\n")
+    if media_type == "image/webp":
+        return prefix.startswith(b"RIFF") and prefix[8:12] == b"WEBP"
+    return False
 
 
 def unauthorized_item_type(stdout: bytes) -> str | None:
