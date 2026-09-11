@@ -156,7 +156,7 @@
 目标：建立可审计 Skill/Release 供应链和首批策展 Preset，使用户从正式制作世界选择视觉基底并批准 Reference Plan。
 
 - [ ] Red：许可缺失、NOTICE 缺失、路径逃逸、注入、Bundle 漂移、Release 撤销、十三 Stage 集不完整、Preset 污染 P0 和非法 Gate 3 批准。
-- [x] 固定 Backend-owned `PresetRelease` 严格合同：语义化日期发布号、六类 Purpose/视图能力、World Design Basis、Visual Grammar、可追溯来源/许可/NOTICE 路径、内容定址 Skill/QC/Model Policy 引用与 Canonical Hash；未知字段、缺项、非法日期和 Hash 漂移失败关闭。
+- [x] 固定 Backend-owned `PresetRelease` 严格合同：语义化日期发布号、六类 Purpose/视图能力、World Design Basis、Visual Grammar、可追溯来源/许可/NOTICE 路径、内容定址 Skill/QC/Model Policy 引用与 Canonical Hash；角色身份/持有关系/场景连续性/剧情事实四项 fidelity invariant 和逐规则 world adaptation 人工决议边界进入同一内容前像，未知字段、缺项、非法日期、自动改编和 Hash 漂移失败关闭。
 - [x] 让仓库内唯一 `build-storygraph` Skill 生成严格 `BundleContentManifest`：固定全部资源、逐文件长度/SHA-256、项目自有来源、MIT NOTICE、文件系统隔离证明与 Canonical Bundle Hash；旧 StoryGraph 和生产 SceneAnalysis 共用同一内容身份。
 - [x] 从 Agent 实际 Pydantic Model 生成七个已实现生产 Stage 的 Candidate Schema Hash，并由 Go/Python 共享严格、可重算的 Schema Manifest；Stage Key、Profile、Candidate Type、现有 Wire Schema Version 或任一 Schema 字段漂移均失败关闭。
 - [x] 从 Agent 实际 Pydantic Invocation、Dispatch Authorization Claims 与 Attempt Result 生成统一 Wire Schema Hash，并由 Go/Python 共享严格、可重算的 Wire Schema Manifest；未知字段、子 Schema 或根 Hash 漂移均失败关闭。
