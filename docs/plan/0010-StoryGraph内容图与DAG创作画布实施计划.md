@@ -136,6 +136,7 @@
     - [x] `production/planning` 在 Gate 2 按每个 active Episode 的正式 Scene/Dialogue/Beat/Occurrence/Claim Fact 生成共享 `planning_scene_set` Root；Head 保存完整 VersionRef，Coordinator 与 Compiler 均从正式 Fact 重建 Collection/Head/Receipt 并全等对账。
     - [x] `asset` 在 Gate 2 将正式 AssetIdentity 与每个 AssetState 共同纳入共享 `asset_identity_state_set` Root；Head 保存完整 VersionRef，Coordinator 与 Compiler 均从正式 Version 重建 Collection/Head/Receipt 并全等对账。
     - [x] Backend 从 Source、Project Episode、Gate 1 与 Gate 2 的正式 Receipt 机械生成 P0 `VerifiedCoverageProof`：Gate 1/Gate 2 覆盖并集分别精确等于 `p0_scope_keys[]`，六个非空 Collection 各有 Receipt 与成员命中，合法空 Rebase Collection 无伪造 Receipt；Schema Manifest、Coverage、稳定 Key 派生 ID、七个 Root 和 OwnerSetHash 进入同一编译前像，Graph 两个 Hash 按该前像重算，GORM 写入和读取均执行闭集解码与离线重放校验。
+  - [x] 让 P0 `world_rule|story_arc|plot_thread` 严格执行 Manifest 的 auditable Bible fact 闭集合同，并让 `causal_claim` 与其他 Narrative Claim 共用字段、participant/anchor/supersedes 双向等价门；未知业务字段、伪造 Creator Decision 与关系缺口均拒绝发布。
   - [ ] 完成 production Schema Manifest 与剩余 Payload/Edge invariant 后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。

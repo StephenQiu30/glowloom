@@ -53,33 +53,79 @@ func TestProductionNarrativeClaimAcceptsExactOwnerFacts(t *testing.T) {
 		"relationship":  storygraph.NodeTypeRelationshipClaim,
 		"foreshadowing": storygraph.NodeTypeForeshadowingClaim,
 		"payoff":        storygraph.NodeTypePayoffClaim,
+		"causal":        storygraph.NodeTypeCausalClaim,
 	} {
 		t.Run(name, func(t *testing.T) {
 			value := productionNarrativeClaimRelationFixture(t)
 			claim := productionNarrativeClaimNode(t, &value)
-			if nodeType != claim.NodeType {
-				oldKey := claim.StoryNodeKey
-				claim.NodeType = nodeType
-				claim.StoryNodeKey = mustNodeKey(t, nodeType, claim.OwnerRef)
-				for index := range value.Graph.Edges {
-					edge := &value.Graph.Edges[index]
-					if edge.FromNodeKey == oldKey {
-						edge.FromNodeKey = claim.StoryNodeKey
-					}
-					if edge.ToNodeKey == oldKey {
-						edge.ToNodeKey = claim.StoryNodeKey
-					}
-					var err error
-					edge.EdgeKey, err = storygraph.DeriveEdgeKey(edge.EdgeType, edge.FromNodeKey, edge.ToNodeKey, edge.Qualifier)
-					if err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
+			setProductionNarrativeClaimType(t, &value, claim, nodeType)
 			if _, err := storygraph.CompileProductionOwnerSnapshot(value); err != nil {
 				t.Fatalf("exact Production Narrative Claim was rejected: %v", err)
 			}
 		})
+	}
+}
+
+func TestProductionCausalClaimRejectsPayloadAndEdgeDrift(t *testing.T) {
+	for name, mutate := range map[string]func(*storygraph.ProductionOwnerSnapshot, *storygraph.Node){
+		"unknown payload field": func(_ *storygraph.ProductionOwnerSnapshot, claim *storygraph.Node) {
+			mutateProductionPayload(t, claim, func(payload map[string]any) {
+				payload["statement"] = "不得复制 Planning 正文"
+			})
+		},
+		"missing anchor edge": func(value *storygraph.ProductionOwnerSnapshot, claim *storygraph.Node) {
+			value.Graph.Edges = removeProductionEdge(value.Graph.Edges, func(edge storygraph.Edge) bool {
+				return edge.EdgeType == storygraph.EdgeTypeClaimAnchor && edge.ToNodeKey == claim.StoryNodeKey
+			})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := productionNarrativeClaimRelationFixture(t)
+			claim := productionNarrativeClaimNode(t, &value)
+			setProductionNarrativeClaimType(t, &value, claim, storygraph.NodeTypeCausalClaim)
+			mutate(&value, claim)
+			if _, err := storygraph.CompileProductionOwnerSnapshot(value); err == nil {
+				t.Fatal("invalid Production Causal Claim was accepted")
+			}
+		})
+	}
+}
+
+func setProductionNarrativeClaimType(
+	t *testing.T,
+	value *storygraph.ProductionOwnerSnapshot,
+	claim *storygraph.Node,
+	nodeType storygraph.NodeType,
+) {
+	t.Helper()
+	if nodeType == claim.NodeType {
+		return
+	}
+	oldKey := claim.StoryNodeKey
+	if nodeType == storygraph.NodeTypeCausalClaim {
+		owner := productionNodeByType(t, value, storygraph.NodeTypeScene).OwnerRef
+		owner.FragmentKey = "causal-claim:opening-conflict"
+		owner.FragmentContentHash = productionHash(owner.FragmentKey)
+		claim.OwnerRef = owner
+		mutateProductionPayload(t, claim, func(payload map[string]any) {
+			payload["projection_hash"] = owner.FragmentContentHash
+		})
+	}
+	claim.NodeType = nodeType
+	claim.StoryNodeKey = mustNodeKey(t, nodeType, claim.OwnerRef)
+	for index := range value.Graph.Edges {
+		edge := &value.Graph.Edges[index]
+		if edge.FromNodeKey == oldKey {
+			edge.FromNodeKey = claim.StoryNodeKey
+		}
+		if edge.ToNodeKey == oldKey {
+			edge.ToNodeKey = claim.StoryNodeKey
+		}
+		var err error
+		edge.EdgeKey, err = storygraph.DeriveEdgeKey(edge.EdgeType, edge.FromNodeKey, edge.ToNodeKey, edge.Qualifier)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

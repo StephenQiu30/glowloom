@@ -23,6 +23,11 @@ type productionNodeDefinition struct {
 	evidencePolicy   string
 }
 
+type productionAuditableBibleFactPayload struct {
+	productionProjectionPayload
+	CreatorDecisionRef json.RawMessage `json:"creator_decision_ref"`
+}
+
 var productionNodeDefinitions = map[NodeType]productionNodeDefinition{
 	NodeTypeSourceRevision:                     productionNode("production/script", productionEvidenceNone, []string{"script_source_set"}, "storygraph-production/source_revision-ref-payload-contract"),
 	NodeTypeSourceEvidence:                     productionNode("production/bible", productionEvidenceRoot, []string{"bible_production_world_set"}, "storygraph-production/source_evidence-ref-payload-contract"),
@@ -126,6 +131,13 @@ func validateProductionNode(node Node) error {
 		var strictPayload productionProjectionPayload
 		if err = decodeStrictObject(node.Payload, &strictPayload); err != nil {
 			return fmt.Errorf("Production StoryGraph node %s copies Owner business content", node.StoryNodeKey)
+		}
+	}
+	if oneOfNode(node.NodeType, NodeTypeWorldRule, NodeTypeStoryArc, NodeTypePlotThread) {
+		var strictPayload productionAuditableBibleFactPayload
+		if err = decodeStrictObject(node.Payload, &strictPayload); err != nil ||
+			validateProductionAuditRef(node, strictPayload.CreatorDecisionRef) != nil {
+			return fmt.Errorf("Production StoryGraph node %s has an invalid auditable Bible fact payload", node.StoryNodeKey)
 		}
 	}
 	creatorDecision := payload["creator_decision_ref"]

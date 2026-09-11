@@ -144,5 +144,6 @@ func validateProductionNarrativeClaimRelations(nodes []Node, edges []Edge) error
 }
 
 func narrativeClaimNode(value NodeType) bool {
-	return value == NodeTypeRelationshipClaim || value == NodeTypeForeshadowingClaim || value == NodeTypePayoffClaim
+	return value == NodeTypeRelationshipClaim || value == NodeTypeForeshadowingClaim ||
+		value == NodeTypePayoffClaim || value == NodeTypeCausalClaim
 }
