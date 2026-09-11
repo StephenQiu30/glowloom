@@ -157,6 +157,7 @@
 
 - [ ] Red：许可缺失、NOTICE 缺失、路径逃逸、注入、Bundle 漂移、Release 撤销、十三 Stage 集不完整、Preset 污染 P0 和非法 Gate 3 批准。
 - [x] 固定 Backend-owned `PresetRelease` 严格合同：语义化日期发布号、六类 Purpose/视图能力、World Design Basis、Visual Grammar、可追溯来源/许可/NOTICE 路径、内容定址 Skill/QC/Model Policy 引用与 Canonical Hash；角色身份/持有关系/场景连续性/剧情事实四项 fidelity invariant 和逐规则 world adaptation 人工决议边界进入同一内容前像，未知字段、缺项、非法日期、自动改编和 Hash 漂移失败关闭。
+- [x] 固定整体 Preset Release 切换的 Backend 影响闭包：Script/P0 Candidate、正式 Identity/Specification/AssetState/Scene/Interaction 与 ProductionWorld 必须保留；Visual Foundation、Reference Plan/Brief/Bundle/Selection、AssetVersion/Binding、Production Packet 与 Storyboard 必须携带统一 cause/scope/action 进入 stale 集。当前仅完成确定性合同，项目选择持久化与真实 stale 写入仍属于 Gate 3 实现。
 - [x] 让仓库内唯一 `build-storygraph` Skill 生成严格 `BundleContentManifest`：固定全部资源、逐文件长度/SHA-256、项目自有来源、MIT NOTICE、文件系统隔离证明与 Canonical Bundle Hash；旧 StoryGraph 和生产 SceneAnalysis 共用同一内容身份。
 - [x] 从 Agent 实际 Pydantic Model 生成七个已实现生产 Stage 的 Candidate Schema Hash，并由 Go/Python 共享严格、可重算的 Schema Manifest；Stage Key、Profile、Candidate Type、现有 Wire Schema Version 或任一 Schema 字段漂移均失败关闭。
 - [x] 从 Agent 实际 Pydantic Invocation、Dispatch Authorization Claims 与 Attempt Result 生成统一 Wire Schema Hash，并由 Go/Python 共享严格、可重算的 Wire Schema Manifest；未知字段、子 Schema 或根 Hash 漂移均失败关闭。
@@ -168,7 +169,7 @@
   - [x] 对同一固定 SourceInventory 建立 Backend-owned SourceReview：七类禁止风险、逐来源 finding、审核时间/人和处置进入同一 Canonical Root；规范文档仅 reference-only，包含主动 Agent/工具指令的 skill-creator 与包含远程会话/上传下载的 LibTV Skill quarantined，三者均禁止进入改写队列、生产 Bundle 或运行时执行。
   - [x] 以 SourceReview Root 建立 Backend-owned SourceMapping：唯一通过初审的规范固定为 reference-only/reference knowledge，两项 quarantined Skill 固定为 reject；逐项绑定来源 commit、审查结论和处置原因，copied/rewrite 生产路径均为空并由负例禁止绕过。
 - [ ] 上架 4–6 个不可变、版本化、可追溯许可的 PresetRelease。
-- [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3 与原子发布。
+- [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3、Preset 切换的真实 stale 写入与原子发布。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I06 — 六类 Target 与 Provider-neutral Brief
