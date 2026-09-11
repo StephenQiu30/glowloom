@@ -158,6 +158,7 @@
 - [ ] Red：许可缺失、NOTICE 缺失、路径逃逸、注入、Bundle 漂移、Release 撤销、十三 Stage 集不完整、Preset 污染 P0 和非法 Gate 3 批准。
 - [x] 固定 Backend-owned `PresetRelease` 严格合同：语义化日期发布号、六类 Purpose/视图能力、World Design Basis、Visual Grammar、可追溯来源/许可/NOTICE 路径、内容定址 Skill/QC/Model Policy 引用与 Canonical Hash；未知字段、缺项、非法日期和 Hash 漂移失败关闭。
 - [x] 让仓库内唯一 `build-storygraph` Skill 生成严格 `BundleContentManifest`：固定全部资源、逐文件长度/SHA-256、项目自有来源、MIT NOTICE、文件系统隔离证明与 Canonical Bundle Hash；旧 StoryGraph 和生产 SceneAnalysis 共用同一内容身份。
+- [x] 从 Agent 实际 Pydantic Model 生成七个已实现生产 Stage 的 Candidate Schema Hash，并由 Go/Python 共享严格、可重算的 Schema Manifest；Stage Key、Profile、Candidate Type、现有 Wire Schema Version 或任一 Schema 字段漂移均失败关闭。
 - [ ] 把成熟 Skill 吸收流程固化为 SourceInventory → review → rewrite → eval → shadow → signature；不复制未授权运行资产。
 - [ ] 上架 4–6 个不可变、版本化、可追溯许可的 PresetRelease。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3 与原子发布。
