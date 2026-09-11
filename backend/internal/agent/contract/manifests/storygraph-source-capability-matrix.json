@@ -1,0 +1,20 @@
+{
+  "contract_id": "storygraph-external-source-capability-matrix-production",
+  "source_mapping_root": "eebeb2de83bdaadc17d9f29e4b24d16c648ef5b5f61bb06e7f1c6b6aada24db8",
+  "allowed_capabilities": [
+    "build-production-bible",
+    "design-reference-assets",
+    "direct-storyboard",
+    "map-scene-continuity",
+    "parse-script-structure",
+    "resolve-visual-foundation",
+    "review-production"
+  ],
+  "rewrite_mappings": [],
+  "runtime_policy": {
+    "external_skill_download": false,
+    "network_discovery": false,
+    "source_project_path_loading": false
+  },
+  "capability_matrix_root": "ef64a03a3ecf4ef137538998359123ef12db8e9606d99522f98f402e52d6c01b"
+}
