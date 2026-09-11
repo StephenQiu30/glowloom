@@ -73,6 +73,18 @@ func TestProductionShotAcceptsExactBeatAndOrderRelations(t *testing.T) {
 
 func productionShotFixture(t *testing.T) (storygraph.ProductionOwnerSnapshot, []*storygraph.Node) {
 	t.Helper()
+	value, _ := productionShotBindingFixture(t)
+	shots := make([]*storygraph.Node, 0, 3)
+	for index := range value.Graph.Nodes {
+		if value.Graph.Nodes[index].NodeType == storygraph.NodeTypeShot {
+			shots = append(shots, &value.Graph.Nodes[index])
+		}
+	}
+	return value, shots
+}
+
+func productionShotBaseFixture(t *testing.T) (storygraph.ProductionOwnerSnapshot, []*storygraph.Node) {
+	t.Helper()
 	value, _ := productionInteractionReferenceBindingFixture(t)
 	scene := *productionNodeByType(t, &value, storygraph.NodeTypeScene)
 	evidence := *productionNodeByType(t, &value, storygraph.NodeTypeSourceEvidence)
