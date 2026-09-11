@@ -127,6 +127,7 @@
   - [x] 固定 Production Schema Manifest 与 Payload Contract Hash Root 的元合同解码边界：所有字段闭集且 required，nullable 元数据显式保留，数组按冻结键排序去重，Matrix row 必须匹配所属联合类型，派生 Rule ID、Payload Union 覆盖、Property 类型/格式/数组排序来源和 Canonical Hash 均机械校验；该边界明确不冒充完整 Registry fixture 或发布许可。
   - [x] 修正 Production Canonical JSON 基础合同：Go 使用成熟 RFC 8785 实现，Go/Python 共同冻结 UTF-16 key order、NFC、最小转义、安全整数与失败码；浮点、指数表示、越界整数、重复/归一化重复键、非法 surrogate/UTF-8 和尾随文档均一致拒绝，不保留旧错误 Hash 的双算或兼容读取。
   - [x] 由 Backend 声明式生成完整 Production Schema Registry：机械展开 31 个 Node、32 条 Payload Union、25 个 Payload Contract、7 个 Edge Alias、65 条 Matrix、13 个 Owner Collection、4 条 Coverage、13 个 Checkpoint 和 22 条 Exclusion；每个 Payload Hash 与最终 Schema Hash 均从 Canonical bytes 实算，并以同一共享 fixture 由 Go/Python 独立重算。
+  - [x] 固定基础 `AssetVersion` 字段闭集、Purpose/Identity/Specification/State 的合法 ProductionBinding、基础 Artifact、Reference Target 输入与 Constraint 等价关系；身份锚点和形象变体必须通过精确 Target 依赖关联，并与 `materializes`、`fulfills_reference_target`、`constrains` Edge 机械等价。
   - [x] 固定跨 Owner 共用的 `OwnerVersionRef`、Scope、Member 与 Collection Root 内容寻址算法，并让 production Compiler 实际复用；StoryGraph 编译前像不再写入投影时间戳或另一套字段名/Schema 包装。
   - [x] 让各正式 Owner Writer 逐一改用同一 Root 算法，再由完整 Owner Apply Receipt 形成 `VerifiedCoverageProof`；Compiler 逐 Receipt 对账正式 Collection Root、成员、Checkpoint 与 Coverage Scope 并持久化完整可重算前像，不把 Receipt Hash 与 Collection Root 混为一谈。
     - [x] `production/script` 在接受 Source Revision 时以匹配的 SourceSpanIndexVersion 生成精确 `script_source_set`，持久化共享成员前像与 Root；Compiler 同事务重读正式 Receipt 并重算全等。
