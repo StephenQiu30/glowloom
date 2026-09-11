@@ -109,8 +109,8 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	}
 	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		SelectedBy: fixture.userID.String(), PresetKey: "ancient-cinematic-realism",
-		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 0,
+		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
+		PresetRelease: "2026.09.12", ApplicationMode: "world_adaptation", ExpectedRevision: 0,
 	}); !presetapp.IsProjectSelectionConflict(err) {
 		t.Fatalf("stale Project Preset selection CAS: %v", err)
 	}
