@@ -102,7 +102,7 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 | review_candidate | profile-bound candidate + rubric | ReviewCandidate | Apply、选择媒体、自由修复 |
 | repair_candidate | candidate + typed issues + allowlist | 新 CandidateRevision | 原地 patch、越界字段修改 |
 | resolve_visual_foundation | Gate 2 versions + WorldPresetRelease | VisualFoundationCandidate | 改写剧情事实、Provider 调用 |
-| plan_reference_assets | foundation + production world | ReferencePlanCandidate | 删除 expected Target、媒体生成 |
+| plan_reference_assets | foundation + production world + Backend seed inventory | ReferencePlanCandidate | 删除/增加/改名 expected Target、改写 Owner Ref、媒体生成 |
 | compile_reference_brief | approved plan + exact dependencies | strict ReferenceBriefCandidate | 自由 prompt、Secret、latest |
 | review_reference_artifact | Bundle ref + restricted media reads | VisionReviewCandidate | 选择 Bundle、写 Asset、Provider 调用 |
 | direct_storyboard | ProductionPacketVersion | StoryboardCandidate | needs_asset、联网搜索、正式 Shot 写入 |
@@ -133,7 +133,7 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 |---|---|---|
 | VPA-VIS-001 | WorldPresetRelease 只在 resolve_visual_foundation 及其下游出现；对同一 P0 输入切换 Preset 不得改变 span、scene fact、identity 或 production entity Candidate hash。 | Metamorphic |
 | VPA-VIS-002 | VisualFoundationCandidate 分开输出 fidelity invariants、world adaptations、palette/material/light/camera rules 与 forbidden changes。 | Strict schema |
-| VPA-VIS-003 | ReferencePlanCandidate 必须覆盖 Backend 提供的 expected target keys，类型只允许六类；只能补充规格，不能删除、改名或合并 Target。 | Set equality |
+| VPA-VIS-003 | ReferencePlanCandidate 必须覆盖 Backend seed inventory 经合法 Anchor State 选择后机械派生的 expected target keys，类型只允许六类；只能补充 fulfillment 与 PurposeProfile 允许的规格，不能删除、增加、改名、合并 Target，不能改写 Owner Ref、coverage、constraints 或依赖。 | Seed root + Set equality |
 | VPA-VIS-004 | ReferenceBriefCandidate 使用六类判别 union 和固定 view roles；只表达 Provider-neutral 视觉要求，不含自由 Provider 参数、密钥或执行命令。 | Schema |
 | VPA-VIS-005 | character_anchor 与 character_appearance 输出 front/profile/back；后者显式继承 anchor identity 与批准变化。 | Contract |
 | VPA-VIS-006 | location 输出 empty_establishing/spatial_orientation/material_scale_detail；prop 输出 front/side/back/state_detail。 | Contract |

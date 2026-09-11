@@ -97,7 +97,7 @@
 | VPR-PRE-002 | P0 SceneFact、Identity 与 ProductionWorld 提取完全 style-blind；WorldPreset 只能从 Gate 2 正式结果之后参与。 | Mutation |
 | VPR-PRE-003 | WorldPreset 同时包含 fidelity invariant 与 world adaptation rule；改编风格不得改变角色身份、剧情事实、持有关系和场景连续性。 | Contract + Adversarial |
 | VPR-PRE-004 | ReferenceTargetKind 严格只允许 character_anchor、character_appearance、location、prop、interaction、scene_composition 六类。 | Schema |
-| VPR-PRE-005 | plan_reference_assets 先从正式制作世界机械计算 expected target set，再由 Agent 提出规格；Agent 不得删除必需 Target。 | Set equality |
+| VPR-PRE-005 | plan_reference_assets 先从正式制作世界机械冻结 Anchor/State/固定 Target seed inventory；Agent 只选择合法 Anchor State 并提出 fulfillment/用途规格，Backend 再机械计算最终 expected target set 与依赖。Agent 不得删除、增加、改名、合并 Target 或改写 Owner Ref。 | Seed root + Set equality |
 | VPR-PRE-006 | Gate 3 Subject 固定绑定 WorldPresetRelease、VisualFoundationCandidate、ReferencePlanCandidate、expected target set 和 Gate 2 正式版本。 | Contract |
 | VPR-PRE-007 | Gate 3 接受在一个命令中原子发布 VisualFoundationVersion 和 ReferencePlanVersion；Preset 选择作为前者内容的一部分冻结。 | Integration |
 | VPR-PRE-008 | 没有可用图片生成能力时允许保存 Draft Plan，但 Gate 3 不显示 approve；不得在 Gate 3 调用 Provider 或生成图片。 | Capability negative |

@@ -426,7 +426,7 @@ StoryGraphStageAttemptResultProduction {
 | `review_candidate` | profile-bound `text`；impact closure | 精确目标 Candidate Revision、Backend deterministic gate issues、当前 Variant Rubric | `production_review_candidate_production`：排序 ReviewIssue 与建议 | 输出整体 Gate pass/fail、降级 mechanical blocker、Human Decision |
 | `repair_candidate` | profile-bound `text`；单 issue/typed allowlist | 目标 revision/hash、review revision/hash、当前 Variant 允许 keys/fields、只读邻接 | `candidate_repair_patch_production` 严格联合 | 改 Evidence、stable ID、已确认 Owner Ref、Artifact bytes |
 | `resolve_visual_foundation` | `vision`；Project/design-gap closure | Confirmed World roots、PresetVersion、typed overrides、合法参考附件 | `visual_foundation_candidate_production`：Style/Policy、冲突、source→design mapping、creative-fill 提案 | 改写 P0、未冻结网络参考、静默世界改编 |
-| `plan_reference_assets` | `text`；Project scope + expected-key batches | Confirmed World、Foundation candidate、p1 scopes、Backend expected target keys | `reference_plan_candidate_production`：required/optional/not_generated、依赖和用途 | 从名称猜资产、漏 Target 表达不生成、直接调用 Provider |
+| `plan_reference_assets` | `text`；单次 Project scope + Backend seed inventory | Confirmed World、Foundation candidate、p1 scopes、Backend 冻结的 Anchor/State/固定 Target 种子与 PurposeProfile | `reference_plan_candidate_production`：Anchor State 选择，以及最终 Target 的 required/optional/not_generated、受限用途和机械依赖回显 | 从名称猜资产、改写 Owner Ref、漏 Target 表达不生成、直接调用 Provider |
 | `compile_reference_brief` | `text`；每个 Approved Target | Gate 3 snapshots/plan、精确 Identity/Spec/State/Scene/Occurrence/Interaction、Target contract 要求的全部已选依赖（允许空集时必须显式） | `reference_brief_candidate_production` 六用途严格联合 | 缺少必需已选依赖、当前指针、额外人物/道具、生成图片 |
 | `review_reference_artifact` | `vision`；每 Target/Candidate Artifact | Target/Brief、Artifact digest/rights/lineage、Style、精确基础依赖与只读 bytes | `vision_review_candidate_production` 五类审查结果 | CandidateSelection、发布 AssetVersion/Binding、修图或 Provider 调用 |
 | `direct_storyboard` | `vision`；每 Scene | 一个精确 SceneProductionPacket 及其内容定址参考附件 | `storyboard_candidate_production`；精确字段由 `VP-D08` 固定 | `needs_asset`、搜索项目资产、触发参考生成、自由 current/latest |
@@ -446,6 +446,8 @@ Agent 的 `script_structure_proposal_production` 只使用临时 span keys 和�
 - 将 normalizer contract id/hash、normalized candidate contract/schema hash、映射和 Agent Attempt Result ref/hash 一并纳入 Candidate Revision hash。
 
 预留不发布正式 Scene、Owner Version 或 Receipt。Gate 1 冻结该映射；Gate 2 Planning Scene 必须逐字节复用。split/merge/delete 产生新 structure revision 和显式 scope rebase，不按标题或数组位置重算旧 ID。其他 Stage 也先以 output Schema 验证模型 Body，再由冻结 normalizer 产生 Revision 内容；当 normalizer 仅做 canonical sort/validation 时，两份内容可逐字节等价，但两个 Contract 身份仍不得隐式混用。
+
+`plan_reference_assets` 的 Normalizer 采用同一边界：Input 中的 seed inventory 是 Backend 从正式 StoryGraph 编译的不可变前像，Agent 不能将它作为可编辑 Target 数组。Character Anchor 的最终 State 只有 Candidate 返回后才可确定，因此 Input 冻结 Identity-only Anchor key 与完整实际 State options；其他固定种子保存 Backend 已知业务键和完整 production closure。Normalizer 校验 Anchor option 后生成最终 expected key set，把 Candidate 的 fulfillment/用途提案投影到 Backend-owned Owner Ref、coverage、constraints 与 dependencies，并执行 set equality。Candidate 内容可以进入 Human Review，但在 Gate 3 原子发布前不形成正式 Reference Plan Owner。
 
 ### 8.2 Scene Fact 与 Identity
 

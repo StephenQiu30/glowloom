@@ -81,7 +81,7 @@
 - [ ] `VPR-PRE-002`（`VP-I05`）：P0 SceneFact、Identity 与 ProductionWorld 提取完全 style-blind；WorldPreset 只能从 Gate 2 正式结果之后参与。 最低证据：Mutation。
 - [x] `VPR-PRE-003`（`VP-I05`）：WorldPreset 同时包含 fidelity invariant 与 world adaptation rule；改编风格不得改变角色身份、剧情事实、持有关系和场景连续性。 最低证据：Contract + Adversarial。`PresetRelease` 内容前像严格包含 `character_identity`、`holder_relation`、`scene_continuity`、`story_fact` 完整不变量集；每条改编规则必须逐项保留同一集合、限定 asset/interaction/reference_plan/scene/storyboard 影响范围并强制 Human Decision，删减不变量、自动改编或越界到 script_source 均失败关闭。
 - [ ] `VPR-PRE-004`（`VP-I05`）：ReferenceTargetKind 严格只允许 character_anchor、character_appearance、location、prop、interaction、scene_composition 六类。 最低证据：Schema。
-- [ ] `VPR-PRE-005`（`VP-I05`）：plan_reference_assets 先从正式制作世界机械计算 expected target set，再由 Agent 提出规格；Agent 不得删除必需 Target。 最低证据：Set equality。Backend 两遍 expected-set 编译器已从精确 Owner Set、P1 实际 Occurrence/Interaction 与候选 Anchor State 重算六类业务键，并拒绝缺失、多余、Scope/Occurrence 漂移及无实际 Occurrence 的 Target；`plan_reference_assets` Agent 节点和 Gate 3 消费尚未接通，因此整体条款保持未勾选。
+- [ ] `VPR-PRE-005`（`VP-I05`）：plan_reference_assets 先从正式制作世界机械冻结 Anchor/State/固定 Target seed inventory；Agent 只选择合法 Anchor State 并提出 fulfillment/用途规格，Backend 再机械计算最终 expected target set 与依赖。Agent 不得删除、增加、改名、合并 Target 或改写 Owner Ref。 最低证据：Seed root + Set equality。Backend 两遍 expected-set 编译器已从精确 Owner Set、P1 实际 Occurrence/Interaction 与候选 Anchor State 重算六类业务键，并拒绝缺失、多余、Scope/Occurrence 漂移及无实际 Occurrence 的 Target；严格 Agent 合同、Normalizer、Workflow 节点和 Gate 3 消费尚未接通，因此整体条款保持未勾选。
 - [ ] `VPR-PRE-006`（`VP-I05`）：Gate 3 Subject 固定绑定 WorldPresetRelease、VisualFoundationCandidate、ReferencePlanCandidate、expected target set 和 Gate 2 正式版本。 最低证据：Contract。
 - [ ] `VPR-PRE-007`（`VP-I05`）：Gate 3 接受在一个命令中原子发布 VisualFoundationVersion 和 ReferencePlanVersion；Preset 选择作为前者内容的一部分冻结。 最低证据：Integration。
 - [ ] `VPR-PRE-008`（`VP-I05`）：没有可用图片生成能力时允许保存 Draft Plan，但 Gate 3 不显示 approve；不得在 Gate 3 调用 Provider 或生成图片。 最低证据：Capability negative。
@@ -234,7 +234,7 @@
 - [ ] `VPA-P0-007`（`VP-I03`）：P0 Candidate 中的所有临时 ID 只能在同一 Candidate graph 内引用；Backend Apply 负责机械分配与返回正式 identity map。 最低证据：Integration。
 - [ ] `VPA-VIS-001`（`VP-I05`）：WorldPresetRelease 只在 resolve_visual_foundation 及其下游出现；对同一 P0 输入切换 Preset 不得改变 span、scene fact、identity 或 production entity Candidate hash。 最低证据：Metamorphic。
 - [x] `VPA-VIS-002`（`VP-I05`）：VisualFoundationCandidate 分开输出 fidelity invariants、world adaptations、palette/material/light/camera rules 与 forbidden changes。 最低证据：Strict schema。Go/Python 共享 Schema Manifest 已固定严格 Input/Candidate；候选还显式输出 world conflicts 与逐 Design Gap creative fill，未知字段、自动批准、守恒集合删减、事实/规则/Scene scope 发明、Gap 缺失和 faithful 模式改编均失败关闭。运行时、持久化与 Workflow/Temporal 生产节点已有独立系统边界证据；本条仍只验收严格候选合同，不表示 Gate 3 已完成。
-- [ ] `VPA-VIS-003`（`VP-I05`）：ReferencePlanCandidate 必须覆盖 Backend 提供的 expected target keys，类型只允许六类；只能补充规格，不能删除、改名或合并 Target。 最低证据：Set equality。
+- [ ] `VPA-VIS-003`（`VP-I05`）：ReferencePlanCandidate 必须覆盖 Backend seed inventory 经合法 Anchor State 选择后机械派生的 expected target keys，类型只允许六类；只能补充 fulfillment 与 PurposeProfile 允许的规格，不能删除、增加、改名、合并 Target，不能改写 Owner Ref、coverage、constraints 或依赖。 最低证据：Seed root + Set equality。
 - [ ] `VPA-VIS-004`（`VP-I06`）：ReferenceBriefCandidate 使用六类判别 union 和固定 view roles；只表达 Provider-neutral 视觉要求，不含自由 Provider 参数、密钥或执行命令。 最低证据：Schema。
 - [ ] `VPA-VIS-005`（`VP-I06`）：character_anchor 与 character_appearance 输出 front/profile/back；后者显式继承 anchor identity 与批准变化。 最低证据：Contract。
 - [ ] `VPA-VIS-006`（`VP-I06`）：location 输出 empty_establishing/spatial_orientation/material_scale_detail；prop 输出 front/side/back/state_detail。 最低证据：Contract。
