@@ -471,6 +471,9 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		if err := validateProductionAssetVersionRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
+		if err := validateProductionSceneReferenceBindingRelations(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
 		if err := validateProductionNarrativeClaimRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
