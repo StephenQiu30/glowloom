@@ -14,6 +14,7 @@ from app.modules.storygraph.scene_analysis_candidates import (
     ScriptSpanCandidate,
     StructureIdentityReviewCandidate,
 )
+from app.modules.storygraph.visual_foundation_contract import VisualFoundationCandidate
 from app.protocol.canonical import production_canonical_hash
 
 SceneAnalysisCandidateType = Literal[
@@ -24,6 +25,7 @@ SceneAnalysisCandidateType = Literal[
     "production_entity_fragment_candidate",
     "scene_binding_fragment_candidate",
     "continuity_fragment_candidate",
+    "visual_foundation_candidate",
 ]
 
 
@@ -53,6 +55,12 @@ SCENE_ANALYSIS_REGISTRY: dict[tuple[str, str], SceneAnalysisStageSpec] = {
         candidate_model=IdentityResolutionCandidate,
         output_schema_version="identity-resolution-candidate-production",
         references=("entity-reconciliation.md",),
+    ),
+    ("resolve_visual_foundation", "default"): SceneAnalysisStageSpec(
+        candidate_type="visual_foundation_candidate",
+        candidate_model=VisualFoundationCandidate,
+        output_schema_version="visual-foundation-candidate-production",
+        references=("visual-identity.md",),
     ),
     ("review_candidate", "structure_identity"): SceneAnalysisStageSpec(
         candidate_type="structure_identity_review_candidate",

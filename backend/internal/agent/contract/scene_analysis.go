@@ -44,6 +44,7 @@ func (value SceneAnalysisStageVariant) Validate() error {
 		"derive_production_entities\x00default":       ProductionEntityFragmentCandidateSchemaVersion,
 		"bind_scene_occurrences\x00default":           SceneBindingFragmentCandidateSchemaVersion,
 		"reconcile_interaction_continuity\x00default": InteractionContinuityCandidateSchemaVersion,
+		"resolve_visual_foundation\x00default":        VisualFoundationCandidateSchemaVersion,
 	}[value.StageKey+"\x00"+value.ProfileKey]
 	if value.LaneKey != "primary" ||
 		expectedSchema == "" || value.OutputSchemaVersion != expectedSchema {

@@ -32,6 +32,7 @@ var sceneAnalysisInputSchemas = []SceneAnalysisInputSchema{
 	{StageKey: "propose_script_spans", ProfileKey: "default", InputContractID: "script-span-proposal-input-production", SchemaHash: "80b9dcfad4a869820686cce5e63bf21ddfef6db0ab8684d39871452c1e142696"},
 	{StageKey: "reconcile_interaction_continuity", ProfileKey: "default", InputContractID: "interaction-continuity-input-production", SchemaHash: "4bbf30524119fcf2d74de34942207980e6cfe95634ec309fa9ecd62a348139ea"},
 	{StageKey: "resolve_identities", ProfileKey: "default", InputContractID: "identity-resolution-input-production", SchemaHash: "80e96d4dbc18fcf727c98bbb3e9b54b1b846f7b39df342b7e3518f4df55eeb2f"},
+	{StageKey: VisualFoundationStageKey, ProfileKey: "default", InputContractID: VisualFoundationInputContractID, SchemaHash: VisualFoundationInputSchemaHash},
 	{StageKey: "review_candidate", ProfileKey: "structure_identity", InputContractID: "structure-identity-review-input-production", SchemaHash: "2d738a97a051aacd164558eac74564100ed7b12546dd397015ed3e2f0f25c9e0"},
 }
 

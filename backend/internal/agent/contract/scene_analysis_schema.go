@@ -33,6 +33,7 @@ var sceneAnalysisCandidateSchemas = []SceneAnalysisCandidateSchema{
 	{StageKey: "propose_script_spans", ProfileKey: "default", CandidateType: "script_span_candidate", OutputSchemaVersion: ScriptSpanCandidateSchemaVersion, SchemaHash: "93dfffd5337ba9f2fe8d4376eb0aaf6d86676aa7888c53c8224646b54f2df59e"},
 	{StageKey: "reconcile_interaction_continuity", ProfileKey: "default", CandidateType: "continuity_fragment_candidate", OutputSchemaVersion: InteractionContinuityCandidateSchemaVersion, SchemaHash: "80750bfd0349ccee72006dad00494d181d76ab4fb4ae4e74c8b71faab9ba1806"},
 	{StageKey: "resolve_identities", ProfileKey: "default", CandidateType: "identity_resolution_candidate", OutputSchemaVersion: IdentityResolutionCandidateSchemaVersion, SchemaHash: "0e7cdc46d4bdd4335b962166eb783e4789551cd83de634da1b0736729e86552a"},
+	{StageKey: VisualFoundationStageKey, ProfileKey: "default", CandidateType: "visual_foundation_candidate", OutputSchemaVersion: VisualFoundationCandidateSchemaVersion, SchemaHash: VisualFoundationCandidateSchemaHash},
 	{StageKey: "review_candidate", ProfileKey: "structure_identity", CandidateType: "structure_identity_review_candidate", OutputSchemaVersion: StructureIdentityReviewCandidateSchemaVersion, SchemaHash: "8668ace7b898b3136034b1904c2acfa27489064b05a6736c3145f254e3df7281"},
 }
 

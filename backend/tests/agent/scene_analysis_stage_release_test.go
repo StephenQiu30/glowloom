@@ -25,7 +25,7 @@ func TestSceneAnalysisStageReleasesBindCoreBundleAndLoadedResources(t *testing.T
 
 	imageDigest := "sha256:" + strings.Repeat("7", 64)
 	releases, err := contract.BuildSceneAnalysisStageReleases(imageDigest)
-	if err != nil || len(releases) != 7 {
+	if err != nil || len(releases) != 8 {
 		t.Fatalf("build Scene Analysis Stage Releases: count=%d err=%v", len(releases), err)
 	}
 	core, _, err := contract.BuildSceneAnalysisDefinitionCore()
@@ -55,6 +55,21 @@ func TestSceneAnalysisStageReleasesBindCoreBundleAndLoadedResources(t *testing.T
 		if err != nil || len(paths) != 2 || paths[0] != "SKILL.md" {
 			t.Fatalf("Stage Release loaded-resource proof is invalid: %v err=%v", paths, err)
 		}
+	}
+	visualIndex := slices.IndexFunc(releases, func(candidate contract.SceneAnalysisStageRelease) bool {
+		return candidate.VariantKey.StageKey == "resolve_visual_foundation"
+	})
+	if visualIndex < 0 {
+		t.Fatal("Visual Foundation Stage Release is missing")
+	}
+	visual := releases[visualIndex]
+	paths, err := contract.SceneAnalysisLoadedResourcePaths(visual)
+	if err != nil || !slices.Equal(paths, []string{"SKILL.md", "references/visual-identity.md"}) ||
+		visual.CapabilityKey != "resolve-visual-foundation" || visual.Lane != "preset_visual" ||
+		visual.RuntimeClass != "vision" || visual.InputContractID != contract.VisualFoundationInputContractID ||
+		visual.OutputContractID != "visual_foundation_candidate" ||
+		visual.PromptCompilerHash == releases[0].PromptCompilerHash {
+		t.Fatalf("unexpected Visual Foundation Stage Release: %#v paths=%v err=%v", visual, paths, err)
 	}
 
 	changed, err := contract.BuildSceneAnalysisStageReleases("sha256:" + strings.Repeat("8", 64))

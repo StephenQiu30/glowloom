@@ -14,6 +14,11 @@ from app.harness.scene_analysis_schemas import (
     ScriptSpanProposalInput,
     StructureIdentityReviewInput,
 )
+from app.harness.visual_foundation_schemas import (
+    VisualFoundationAttemptResult,
+    VisualFoundationInvocation,
+)
+from app.modules.storygraph.visual_foundation_contract import VisualFoundationInput
 from app.protocol.canonical import production_canonical_hash
 
 WIRE_SCHEMA_ID = "storygraph-stage-wire-production"
@@ -27,6 +32,14 @@ _WIRE_SCHEMAS: tuple[tuple[str, type[BaseModel]], ...] = (
     ),
     ("storygraph-stage-attempt-result-production", SceneAnalysisAttemptResult),
     ("storygraph-stage-invocation-production", SceneAnalysisInvocation),
+    (
+        "storygraph-visual-foundation-stage-attempt-result-production",
+        VisualFoundationAttemptResult,
+    ),
+    (
+        "storygraph-visual-foundation-stage-invocation-production",
+        VisualFoundationInvocation,
+    ),
 )
 
 _INPUT_SCHEMAS: tuple[tuple[str, str, str, type[BaseModel]], ...] = (
@@ -65,6 +78,12 @@ _INPUT_SCHEMAS: tuple[tuple[str, str, str, type[BaseModel]], ...] = (
         "default",
         "identity-resolution-input-production",
         IdentityResolutionInput,
+    ),
+    (
+        "resolve_visual_foundation",
+        "default",
+        "visual-foundation-input-production",
+        VisualFoundationInput,
     ),
     (
         "review_candidate",

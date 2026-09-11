@@ -91,8 +91,12 @@ func BuildSceneAnalysisStageReleases(runtimeImageDigest string) ([]SceneAnalysis
 			referenceRefs = []BundleFile{}
 			rubricRefs = []BundleFile{resource}
 		}
+		harness := "scene-analysis-harness"
+		if variant.VariantKey.StageKey == VisualFoundationStageKey {
+			harness = "visual-foundation-harness"
+		}
 		promptCompiler := sceneAnalysisPromptCompiler{
-			ContractID: "scene-analysis-prompt-compiler-production", Harness: "scene-analysis-harness",
+			ContractID: "scene-analysis-prompt-compiler-production", Harness: harness,
 			GuidanceOrder: []string{entrypoint.Path, resource.Path}, WireSchemaHash: core.WireSchemaHash,
 			OutputSchemaHash: variant.OutputSchemaHash,
 		}

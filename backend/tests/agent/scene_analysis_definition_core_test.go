@@ -3,6 +3,7 @@ package agent_test
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -15,8 +16,23 @@ func TestSceneAnalysisDefinitionCoreFreezesOnlyPreReleaseContracts(t *testing.T)
 		t.Fatalf("build Scene Analysis Definition Core: %v", err)
 	}
 	if core.ContractID != contract.SceneAnalysisDefinitionCoreContractID ||
-		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 7 {
+		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 8 {
 		t.Fatalf("unexpected Scene Analysis Definition Core: %#v", core)
+	}
+	visualIndex := slices.IndexFunc(core.VariantContracts, func(candidate contract.SceneAnalysisDefinitionVariant) bool {
+		return candidate.VariantKey.StageKey == "resolve_visual_foundation"
+	})
+	if visualIndex < 0 {
+		t.Fatal("Visual Foundation Definition variant is missing")
+	}
+	visual := core.VariantContracts[visualIndex]
+	if visual.VariantKey.ProfileKey != "default" || visual.CapabilityKey != "resolve-visual-foundation" ||
+		visual.Lane != "preset_visual" || visual.RuntimeClass != "vision" ||
+		visual.InputContractID != contract.VisualFoundationInputContractID ||
+		visual.InputSchemaHash != contract.VisualFoundationInputSchemaHash ||
+		visual.OutputContractID != "visual_foundation_candidate" ||
+		visual.OutputSchemaHash != contract.VisualFoundationCandidateSchemaHash {
+		t.Fatalf("unexpected Visual Foundation Definition variant: %#v", visual)
 	}
 	for _, forbidden := range []string{"stage_release", "skill_release", "signature", "control", "current", "latest"} {
 		if bytes.Contains(encoded, []byte(forbidden)) {
@@ -45,7 +61,7 @@ func TestSceneAnalysisDefinitionCoreRejectsIncompleteOrMutableContracts(t *testi
 
 	tests := map[string]func(map[string]any){
 		"unknown release field": func(value map[string]any) { value["stage_release_hash"] = strings.Repeat("a", 64) },
-		"missing variant":       func(value map[string]any) { value["variant_contracts"] = variants[:6] },
+		"missing variant":       func(value map[string]any) { value["variant_contracts"] = variants[:len(variants)-1] },
 		"mutable resource ref": func(value map[string]any) {
 			value["variant_contracts"].([]any)[0].(map[string]any)["resource_policy_ref"] = "current"
 		},

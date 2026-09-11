@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 from app.harness.scene_analysis_schema_manifest import (
     scene_analysis_wire_schema_manifest,
@@ -18,5 +19,13 @@ FIXTURE = REPOSITORY_ROOT.joinpath(
 
 
 def test_scene_analysis_wire_schema_manifest_matches_the_backend_fixture() -> None:
-    expected = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    assert scene_analysis_wire_schema_manifest() == expected
+    manifest = scene_analysis_wire_schema_manifest()
+    assert manifest == json.loads(FIXTURE.read_text(encoding="utf-8"))
+    schemas = cast(list[dict[str, str]], manifest["schemas"])
+    assert [schema["contract_id"] for schema in schemas] == [
+        "storygraph-dispatch-authorization-claims-production",
+        "storygraph-stage-attempt-result-production",
+        "storygraph-stage-invocation-production",
+        "storygraph-visual-foundation-stage-attempt-result-production",
+        "storygraph-visual-foundation-stage-invocation-production",
+    ]
