@@ -30,6 +30,9 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	presetgorm "github.com/StephenQiu30/lanverse/backend/internal/preset/adapter/gormdb"
+	presetapp "github.com/StephenQiu30/lanverse/backend/internal/preset/application"
+	presetcatalog "github.com/StephenQiu30/lanverse/backend/internal/preset/catalog"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -80,6 +83,37 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		t.Fatalf("persist system catalog: %v", err)
 	}
 	fixture := seedCompilerProject(t, func(value any) error { return database.Create(value).Error }, now)
+	presetSelectionService := presetapp.NewProjectSelectionService(
+		presetgorm.NewProjectSelectionStore(database), presetcatalog.FindCuratedRelease,
+		func() time.Time { return now }, uuid.NewString,
+	)
+	selectedPreset, err := presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
+		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 0,
+	})
+	if err != nil || selectedPreset.Revision != 1 {
+		t.Fatalf("freeze Project Preset selection: selection=%#v err=%v", selectedPreset, err)
+	}
+	currentPreset, err := presetSelectionService.Current(ctx, fixture.workspaceID.String(), fixture.projectID.String())
+	if err != nil || currentPreset.ID != selectedPreset.ID || currentPreset.ContentHash != selectedPreset.ContentHash {
+		t.Fatalf("read current Project Preset selection: selection=%#v err=%v", currentPreset, err)
+	}
+	replayedPreset, err := presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
+		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 1,
+	})
+	if err != nil || replayedPreset.ID != selectedPreset.ID {
+		t.Fatalf("replay same Project Preset selection: selection=%#v err=%v", replayedPreset, err)
+	}
+	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		SelectedBy: fixture.userID.String(), PresetKey: "ancient-cinematic-realism",
+		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 0,
+	}); !presetapp.IsProjectSelectionConflict(err) {
+		t.Fatalf("stale Project Preset selection CAS: %v", err)
+	}
 	text := "第1集\n林一😀进入大厅。\n\n场景二\n钟声响起。\n\n第二集\n林一回头，乙回答。\n\n第12集\n终章。"
 	digest := sha256.Sum256([]byte(text))
 	fixture.normalizedHash = hex.EncodeToString(digest[:])

@@ -18,6 +18,8 @@ func Catalog() []any {
 		&model.RegistrationVerification{},
 		&model.AuthSession{},
 		&model.Project{},
+		&model.ProjectPresetSelection{},
+		&model.ProjectPresetSelectionHead{},
 		&model.CommandReceipt{},
 		&model.CreationRun{},
 		&model.CreationCommandOutbox{},
