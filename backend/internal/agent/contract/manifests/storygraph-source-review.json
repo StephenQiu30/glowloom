@@ -1,0 +1,87 @@
+{
+  "contract_id": "storygraph-external-source-review-production",
+  "source_inventory_hash": "bd1222e69fa436511a1238045694001e03c7d8e07a074590ca088bac825fe67b",
+  "review_basis": "fixed_source_and_license_bytes",
+  "reviewed_at": "2026-09-11T15:25:21Z",
+  "reviewer_id": "project-owner",
+  "reviews": [
+    {
+      "source_id": "agent-skills-specification",
+      "source_commit": "69ef37e9424c0a7ea9dd2293b559e43ec8176379",
+      "source_file_sha256": "b9079c0c10b7930e8c6a20ff2bc10cda2a3343c55185120e3f1116a1a529b220",
+      "license_sha256": "993da3f8d330d69108e521636555f7783ef81d46b904394c59ec5ff651331fe5",
+      "risks": {
+        "license_unclear": false,
+        "redistribution_prohibited": false,
+        "embedded_credentials": false,
+        "implicit_network_access": false,
+        "instruction_injection": false,
+        "excess_tool_authority": false,
+        "untraceable_source": false
+      },
+      "findings": [
+        "executable_resource_examples",
+        "network_requirement_examples",
+        "normative_specification",
+        "tool_declaration_examples"
+      ],
+      "decision": "reference_only",
+      "rewrite_queue_allowed": false,
+      "production_bundle_allowed": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "source_id": "anthropic-skill-creator",
+      "source_commit": "41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f",
+      "source_file_sha256": "dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf",
+      "license_sha256": "bc6b3af2f331cbc7fb0da1344efb2cbe5877a31498b4d70dbc7000f3405a1362",
+      "risks": {
+        "license_unclear": false,
+        "redistribution_prohibited": false,
+        "embedded_credentials": false,
+        "implicit_network_access": false,
+        "instruction_injection": true,
+        "excess_tool_authority": true,
+        "untraceable_source": false
+      },
+      "findings": [
+        "active_agent_instructions",
+        "browser_review_instructions",
+        "filesystem_write_instructions",
+        "skill_installation_instructions",
+        "subagent_execution_instructions"
+      ],
+      "decision": "quarantined",
+      "rewrite_queue_allowed": false,
+      "production_bundle_allowed": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "source_id": "libtv-public-skill",
+      "source_commit": "c609246c1eca69f6bc129bcbb5d64c36734e4a4a",
+      "source_file_sha256": "7e8ffa94928cf50af201c8fb36d094af74664e274346f4e3ee49ef097585866a",
+      "license_sha256": "f9209da70e868f531222a9c2e75e195d67d8cde93ee1ec0cdb47002ffe0e0bf0",
+      "risks": {
+        "license_unclear": false,
+        "redistribution_prohibited": false,
+        "embedded_credentials": false,
+        "implicit_network_access": true,
+        "instruction_injection": false,
+        "excess_tool_authority": true,
+        "untraceable_source": false
+      },
+      "findings": [
+        "executable_script_calls",
+        "external_network_service",
+        "external_session_control",
+        "local_file_upload",
+        "remote_artifact_download"
+      ],
+      "decision": "quarantined",
+      "rewrite_queue_allowed": false,
+      "production_bundle_allowed": false,
+      "runtime_execution_allowed": false
+    }
+  ],
+  "source_review_root": "2cdd0bebd82165ef61eada4a98b17cc4b03bbd96913034aafcfaedd27f52ab44"
+}
