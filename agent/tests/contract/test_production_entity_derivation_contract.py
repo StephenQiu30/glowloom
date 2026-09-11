@@ -4,7 +4,7 @@ import copy
 import json
 from pathlib import Path
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -348,6 +348,82 @@ def test_production_entity_candidate_accepts_creator_decision_without_source_evi
 
     candidate = ProductionEntityFragmentCandidate.model_validate(raw)
     candidate.validate_for(stage_input)
+
+
+def test_production_entity_candidate_requires_explicit_narrative_claim_facts() -> None:
+    stage_input = _input()
+    raw = _candidate()
+    scene = stage_input.structure_identity_set.scene_refs[0]
+    raw["world_claims"] = [
+        {
+            "claim_key": "claim_linzhou_protects_home",
+            "claim_type": "relationship",
+            "participants": [{"role": "subject", "identity_key": "character:linzhou"}],
+            "statement": "林舟守护故乡。",
+            "narrative": {
+                "claim_series_key": "claim_linzhou_protects_home",
+                "predicate": "protects",
+                "anchors": [{"role": "scene", "target_key": scene.scope_key}],
+                "valid_scope": {
+                    "kind": "scene",
+                    "owner_logical_id": scene.scope_key,
+                },
+                "story_time_range": None,
+                "polarity": "positive",
+                "status": "asserted",
+            },
+            "basis": copy.deepcopy(cast(list[dict[str, Any]], raw["entities"])[0]["basis"]),
+        }
+    ]
+
+    candidate = ProductionEntityFragmentCandidate.model_validate(raw)
+    candidate.validate_for(stage_input)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["missing_narrative", "missing_subject", "unknown_identity", "unknown_anchor", "scope_drift"],
+)
+def test_production_entity_candidate_rejects_incomplete_narrative_claim_facts(
+    mutation: str,
+) -> None:
+    stage_input = _input()
+    raw = _candidate()
+    scene = stage_input.structure_identity_set.scene_refs[0]
+    claim: dict[str, Any] = {
+        "claim_key": "claim_linzhou_protects_home",
+        "claim_type": "relationship",
+        "participants": [{"role": "subject", "identity_key": "character:linzhou"}],
+        "statement": "林舟守护故乡。",
+        "narrative": {
+            "claim_series_key": "claim_linzhou_protects_home",
+            "predicate": "protects",
+            "anchors": [{"role": "scene", "target_key": scene.scope_key}],
+            "valid_scope": {
+                "kind": "scene",
+                "owner_logical_id": scene.scope_key,
+            },
+            "story_time_range": None,
+            "polarity": "positive",
+            "status": "asserted",
+        },
+        "basis": copy.deepcopy(cast(list[dict[str, Any]], raw["entities"])[0]["basis"]),
+    }
+    raw["world_claims"] = [claim]
+    if mutation == "missing_narrative":
+        claim["narrative"] = None
+    elif mutation == "missing_subject":
+        claim["participants"][0]["role"] = "participant"
+    elif mutation == "unknown_identity":
+        claim["participants"][0]["identity_key"] = "character:unknown"
+    elif mutation == "unknown_anchor":
+        claim["narrative"]["anchors"][0]["target_key"] = f"scene:{uuid4()}"
+    else:
+        claim["narrative"]["valid_scope"]["owner_logical_id"] = str(uuid4())
+
+    with pytest.raises((ValidationError, ValueError)):
+        candidate = ProductionEntityFragmentCandidate.model_validate(raw)
+        candidate.validate_for(stage_input)
 
 
 def test_production_entity_stage_has_its_own_schema_and_skill_resource() -> None:

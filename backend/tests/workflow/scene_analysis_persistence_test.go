@@ -947,8 +947,10 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		productionGraphResult.Output.Bindings[0].ReferenceID != productionGraph.Version.ID ||
 		productionGraphResult.Output.Bindings[0].ContentHash != productionGraph.Version.ContentHash ||
 		countStoryGraphNodeType(productionGraph.Version.Nodes, storygraphdomain.NodeTypeOccurrence) == 0 ||
+		countStoryGraphNodeType(productionGraph.Version.Nodes, storygraphdomain.NodeTypeRelationshipClaim) == 0 ||
 		countStoryGraphNodeType(productionGraph.Version.Nodes, storygraphdomain.NodeTypeContinuityClaim) == 0 ||
 		countStoryGraphEdgeType(productionGraph.Version.Edges, storygraphdomain.EdgeTypeClaimParticipant) == 0 ||
+		countStoryGraphEdgeType(productionGraph.Version.Edges, storygraphdomain.EdgeTypeClaimAnchor) == 0 ||
 		countStoryGraphEdgeType(productionGraph.Version.Edges, storygraphdomain.EdgeTypeClaimState) == 0 {
 		t.Fatalf("compile confirmed Production World StoryGraph: result=%#v err=%v", productionGraph, err)
 	}
@@ -1098,7 +1100,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	for index, claim := range productionWorld.Bible.WorldClaims {
 		bibleClaims[index] = bibleapp.ProductionWorldClaimInput{
 			ClaimKey: claim.ClaimKey, ClaimType: claim.ClaimType, Statement: claim.Statement,
-			SubjectIdentityKeys: claim.SubjectIdentityKeys, Basis: claim.Basis,
+			Participants: claim.Participants, Narrative: claim.Narrative, Basis: claim.Basis,
 		}
 	}
 	bibleOwner := bibleapp.NewProductionWorldBibleOwner(func() time.Time { return now }, uuid.NewString)
@@ -2197,7 +2199,29 @@ func buildProductionEntityCandidate(input contract.ProductionEntityDerivationInp
 	if len(entities) > 0 {
 		worldClaims = append(worldClaims, contract.ProductionWorldClaimFragment{
 			ClaimKey: "claim_primary_identity_exists", ClaimType: "world_rule",
-			SubjectIdentityKeys: []string{entities[0].IdentityKey}, Statement: "主要叙事身份存在于当前制作世界。",
+			Participants: []contract.ProductionWorldClaimParticipant{{Role: "subject", IdentityKey: entities[0].IdentityKey}},
+			Statement:    "主要叙事身份存在于当前制作世界。", Narrative: nil,
+			Basis: entities[0].Basis,
+		})
+	}
+	if len(entities) > 1 && len(input.StructureIdentitySet.SceneRefs) > 0 {
+		participants := []contract.ProductionWorldClaimParticipant{
+			{Role: "subject", IdentityKey: entities[0].IdentityKey},
+			{Role: "object", IdentityKey: entities[1].IdentityKey},
+		}
+		slices.SortFunc(participants, func(left, right contract.ProductionWorldClaimParticipant) int {
+			return strings.Compare(left.IdentityKey+"\x00"+left.Role, right.IdentityKey+"\x00"+right.Role)
+		})
+		scene := input.StructureIdentitySet.SceneRefs[0]
+		worldClaims = append(worldClaims, contract.ProductionWorldClaimFragment{
+			ClaimKey: "claim_primary_identity_relationship", ClaimType: "relationship",
+			Participants: participants, Statement: "主要制作身份在首个场景中形成叙事关系。",
+			Narrative: &contract.ProductionWorldNarrativeClaim{
+				ClaimSeriesKey: "claim_primary_identity_relationship", Predicate: "relates_to",
+				Anchors:    []contract.ProductionWorldClaimAnchor{{Role: "scene", TargetKey: scene.ScopeKey}},
+				ValidScope: contract.ProductionWorldClaimScope{Kind: "scene", OwnerLogicalID: scene.ScopeKey},
+				Polarity:   "neutral", Status: "asserted",
+			},
 			Basis: entities[0].Basis,
 		})
 	}

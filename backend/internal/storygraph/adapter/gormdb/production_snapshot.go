@@ -356,14 +356,9 @@ func (repo *repository) loadProductionBibleFragments(ctx context.Context, materi
 		material.specifications = append(material.specifications, value)
 	}
 	for _, reference := range claimRefs {
-		var value model.ProductionWorldClaim
-		if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).First(&value, "id = ?", reference.ID).Error; err != nil {
+		if err := repo.loadProductionBibleClaimChain(ctx, material, reference); err != nil {
 			return err
 		}
-		if value.ContentHash != reference.ContentHash || value.Revision != reference.Revision || value.ClaimKey != reference.BusinessKey {
-			return invalidOwnerSnapshot("Production World Claim ref has drifted")
-		}
-		material.bibleClaims = append(material.bibleClaims, value)
 	}
 	for _, reference := range bindingRefs {
 		var value model.ProductionWorldBinding
@@ -384,6 +379,53 @@ func (repo *repository) loadProductionBibleFragments(ctx context.Context, materi
 			return err
 		}
 	}
+	return nil
+}
+
+func (repo *repository) loadProductionBibleClaimChain(ctx context.Context, material *productionSnapshotMaterial, reference bibledomain.ProductionWorldFragmentRef) error {
+	for _, existing := range material.bibleClaims {
+		if existing.ID.String() == reference.ID {
+			if existing.ContentHash != reference.ContentHash || existing.Revision != reference.Revision || existing.ClaimKey != reference.BusinessKey || existing.ClaimType != reference.Kind {
+				return invalidOwnerSnapshot("Production World Claim chain has drifted")
+			}
+			return nil
+		}
+	}
+	var value model.ProductionWorldClaim
+	if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).First(&value, "id = ?", reference.ID).Error; err != nil {
+		return err
+	}
+	if value.WorkspaceID != material.bibleVersion.WorkspaceID || value.ProjectID != material.bibleVersion.ProjectID ||
+		value.ContentHash != reference.ContentHash || value.Revision != reference.Revision || value.ClaimKey != reference.BusinessKey || value.ClaimType != reference.Kind {
+		return invalidOwnerSnapshot("Production World Claim ref has drifted")
+	}
+	var narrative *bibledomain.ProductionWorldNarrativeClaim
+	if err := json.Unmarshal(value.Narrative, &narrative); err != nil {
+		return invalidOwnerSnapshot("Production World Narrative Claim has drifted")
+	}
+	material.bibleClaims = append(material.bibleClaims, value)
+	if narrative != nil && narrative.SupersedesClaim != nil {
+		if narrative.SupersedesClaim.ID == value.ID.String() || narrative.SupersedesClaim.Kind != value.ClaimType ||
+			narrative.SupersedesClaim.BusinessKey != value.ClaimKey || narrative.SupersedesClaim.Revision != value.Revision-1 {
+			return invalidOwnerSnapshot("Production World Narrative Claim predecessor has drifted")
+		}
+		if err := repo.loadProductionBibleClaimChain(ctx, material, *narrative.SupersedesClaim); err != nil {
+			return err
+		}
+	}
+	for _, existing := range material.bibleEvidence {
+		if existing.ID == value.EvidenceID {
+			return nil
+		}
+	}
+	var evidence model.ProductionWorldEvidence
+	if err := repo.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).First(&evidence, "id = ?", value.EvidenceID).Error; err != nil {
+		return err
+	}
+	if evidence.WorkspaceID != value.WorkspaceID || evidence.ProjectID != value.ProjectID || evidence.ContentHash != value.EvidenceHash || evidence.SubjectKey != value.ClaimKey {
+		return invalidOwnerSnapshot("Production World Claim Evidence has drifted")
+	}
+	material.bibleEvidence = append(material.bibleEvidence, evidence)
 	return nil
 }
 

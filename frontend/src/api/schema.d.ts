@@ -2776,10 +2776,42 @@ export interface components {
         };
         ProductionWorldClaimResponse: {
             claim_key: string;
-            claim_type: string;
-            subject_identity_keys: string[];
+            /** @enum {string} */
+            claim_type: "world_rule" | "relationship" | "foreshadowing" | "payoff" | "story_arc" | "plot_thread";
+            participants: components["schemas"]["ProductionWorldClaimParticipantResponse"][];
             statement: string;
+            narrative: components["schemas"]["ProductionWorldNarrativeClaimResponse"] | null;
             basis: components["schemas"]["ProductionWorldSourceBasisResponse"];
+        };
+        ProductionWorldClaimParticipantResponse: {
+            /** @enum {string} */
+            role: "subject" | "object" | "participant";
+            identity_key: string;
+        };
+        ProductionWorldClaimAnchorResponse: {
+            /** @enum {string} */
+            role: "episode" | "scene" | "beat";
+            target_key: string;
+        };
+        ProductionWorldClaimScopeResponse: {
+            /** @enum {string} */
+            kind: "project" | "episode" | "scene" | "beat";
+            owner_logical_id: string;
+        };
+        ProductionWorldStoryTimeRangeResponse: {
+            start_key: string;
+            end_key: string;
+        };
+        ProductionWorldNarrativeClaimResponse: {
+            claim_series_key: string;
+            predicate: string;
+            anchors: components["schemas"]["ProductionWorldClaimAnchorResponse"][];
+            valid_scope: components["schemas"]["ProductionWorldClaimScopeResponse"];
+            story_time_range: components["schemas"]["ProductionWorldStoryTimeRangeResponse"] | null;
+            /** @enum {string} */
+            polarity: "positive" | "negative" | "neutral";
+            /** @enum {string} */
+            status: "asserted" | "negated";
         };
         ProductionWorldDesignGapResponse: {
             gap_key: string;

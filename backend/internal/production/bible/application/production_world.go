@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -30,7 +31,8 @@ type ProductionWorldSpecificationInput struct {
 
 type ProductionWorldClaimInput struct {
 	ClaimKey, ClaimType, Statement string
-	SubjectIdentityKeys            []string
+	Participants                   []agentcontract.ProductionWorldClaimParticipant
+	Narrative                      *agentcontract.ProductionWorldNarrativeClaim
 	Basis                          agentcontract.ProductionSourceBasis
 }
 
@@ -239,25 +241,34 @@ func (owner *ProductionWorldBibleOwner) buildProductionWorldClaims(ctx context.C
 	}
 	result, created := make([]domain.ProductionWorldClaim, 0, len(command.Claims)), []domain.ProductionWorldClaim{}
 	for _, input := range command.Claims {
-		subjects := make([]domain.ProductionWorldClaimSubject, len(input.SubjectIdentityKeys))
-		for index, key := range input.SubjectIdentityKeys {
-			asset := assets[key]
-			subjects[index] = domain.ProductionWorldClaimSubject{IdentityKey: key, AssetID: asset.ID, AssetContentHash: asset.ContentHash}
+		participants := make([]domain.ProductionWorldClaimParticipant, len(input.Participants))
+		for index, item := range input.Participants {
+			asset := assets[item.IdentityKey]
+			participants[index] = domain.ProductionWorldClaimParticipant{Role: item.Role, IdentityKey: item.IdentityKey, AssetID: asset.ID, AssetContentHash: asset.ContentHash}
 		}
+		narrative := productionWorldNarrativeClaim(input.Narrative)
 		basis := evidenceByKey[input.ClaimKey]
 		existing, err := repo.ListProductionWorldClaims(ctx, command.ProjectID, input.ClaimKey, true)
 		if err != nil {
 			return nil, nil, err
 		}
-		candidate, err := domain.NewProductionWorldClaim(owner.newID(), command.WorkspaceID, command.ProjectID, input.ClaimKey, input.ClaimType, input.Statement, nextClaimRevision(existing), subjects, domain.FragmentRef(basis.ID, "source_evidence", basis.SubjectKey, basis.ContentHash, basis.Revision), command.ActorID, now)
+		evidenceRef := domain.FragmentRef(basis.ID, "source_evidence", basis.SubjectKey, basis.ContentHash, basis.Revision)
+		if len(existing) > 0 && productionWorldClaimInputMatches(existing[len(existing)-1], input, participants, narrative, evidenceRef) {
+			result = append(result, existing[len(existing)-1])
+			continue
+		}
+		revision := nextClaimRevision(existing)
+		if narrative != nil && revision > 1 {
+			previous := existing[len(existing)-1]
+			reference := domain.FragmentRef(previous.ID, previous.ClaimType, previous.ClaimKey, previous.ContentHash, previous.Revision)
+			narrative.SupersedesClaim = &reference
+		}
+		candidate, err := domain.NewProductionWorldClaim(owner.newID(), command.WorkspaceID, command.ProjectID, input.ClaimKey, input.ClaimType, input.Statement, revision, participants, narrative, evidenceRef, command.ActorID, now)
 		if err != nil {
 			return nil, nil, err
 		}
-		value, reused := reuseClaim(existing, candidate.ContentHash)
-		if !reused {
-			value, created = candidate, append(created, candidate)
-		}
-		result = append(result, value)
+		created = append(created, candidate)
+		result = append(result, candidate)
 	}
 	return result, created, nil
 }
@@ -327,13 +338,30 @@ func validateProductionWorldBibleCommand(command ApplyProductionWorldBibleComman
 	}
 	previous = ""
 	for _, item := range command.Claims {
-		if item.ClaimKey <= previous || !validProductionWorldBasis(item.Basis) || !slices.IsSorted(item.SubjectIdentityKeys) {
+		if item.ClaimKey <= previous || !validProductionWorldBasis(item.Basis) || len(item.Participants) == 0 {
 			return errors.New("Production World Bible Claims are not canonical")
 		}
-		for index, key := range item.SubjectIdentityKeys {
-			if assetKeys[key] == "" || (index > 0 && item.SubjectIdentityKeys[index-1] == key) {
-				return errors.New("Production World Bible Claim has unknown subject")
+		previousParticipant, subjects, objects := "", 0, 0
+		seenIdentities := make(map[string]struct{}, len(item.Participants))
+		for _, participant := range item.Participants {
+			key := participant.IdentityKey + "\x00" + participant.Role
+			if key <= previousParticipant || assetKeys[participant.IdentityKey] == "" || !slices.Contains([]string{"subject", "object", "participant"}, participant.Role) {
+				return errors.New("Production World Bible Claim has invalid participants")
 			}
+			if _, exists := seenIdentities[participant.IdentityKey]; exists {
+				return errors.New("Production World Bible Claim repeats a participant identity")
+			}
+			seenIdentities[participant.IdentityKey] = struct{}{}
+			if participant.Role == "subject" {
+				subjects++
+			}
+			if participant.Role == "object" {
+				objects++
+			}
+			previousParticipant = key
+		}
+		if subjects != 1 || objects > 1 || !validProductionWorldClaimInputNarrative(item) {
+			return errors.New("Production World Bible Claim semantics are invalid")
 		}
 		keys = append(keys, "world_claim:"+item.ClaimKey)
 		previous = item.ClaimKey
@@ -440,14 +468,6 @@ func reuseSpecification(values []domain.ProductionWorldSpecification, hash strin
 	}
 	return domain.ProductionWorldSpecification{}, false
 }
-func reuseClaim(values []domain.ProductionWorldClaim, hash string) (domain.ProductionWorldClaim, bool) {
-	for _, v := range values {
-		if v.ContentHash == hash {
-			return v, true
-		}
-	}
-	return domain.ProductionWorldClaim{}, false
-}
 func reuseBinding(values []domain.ProductionWorldBinding, hash string) (domain.ProductionWorldBinding, bool) {
 	for _, v := range values {
 		if v.ContentHash == hash {
@@ -455,6 +475,55 @@ func reuseBinding(values []domain.ProductionWorldBinding, hash string) (domain.P
 		}
 	}
 	return domain.ProductionWorldBinding{}, false
+}
+
+func productionWorldNarrativeClaim(value *agentcontract.ProductionWorldNarrativeClaim) *domain.ProductionWorldNarrativeClaim {
+	if value == nil {
+		return nil
+	}
+	anchors := make([]domain.ProductionWorldClaimAnchor, len(value.Anchors))
+	for index, anchor := range value.Anchors {
+		anchors[index] = domain.ProductionWorldClaimAnchor{Role: anchor.Role, TargetKey: anchor.TargetKey}
+	}
+	result := &domain.ProductionWorldNarrativeClaim{
+		ClaimSeriesKey: value.ClaimSeriesKey,
+		Predicate:      value.Predicate,
+		Anchors:        anchors,
+		ValidScope: domain.ProductionWorldClaimScope{
+			Kind: value.ValidScope.Kind, OwnerLogicalID: value.ValidScope.OwnerLogicalID,
+		},
+		Polarity: value.Polarity,
+		Status:   value.Status,
+	}
+	if value.StoryTimeRange != nil {
+		result.StoryTimeRange = &domain.ProductionWorldStoryTimeRange{
+			StartKey: value.StoryTimeRange.StartKey, EndKey: value.StoryTimeRange.EndKey,
+		}
+	}
+	return result
+}
+
+func productionWorldClaimInputMatches(existing domain.ProductionWorldClaim, input ProductionWorldClaimInput, participants []domain.ProductionWorldClaimParticipant, narrative *domain.ProductionWorldNarrativeClaim, evidence domain.ProductionWorldFragmentRef) bool {
+	existingNarrative := existing.Narrative
+	if existingNarrative != nil {
+		copyValue := *existingNarrative
+		copyValue.SupersedesClaim = nil
+		existingNarrative = &copyValue
+	}
+	return existing.ClaimKey == input.ClaimKey && existing.ClaimType == input.ClaimType &&
+		existing.Statement == strings.TrimSpace(input.Statement) && reflect.DeepEqual(existing.Participants, participants) &&
+		reflect.DeepEqual(existingNarrative, narrative) && existing.Evidence == evidence
+}
+
+func validProductionWorldClaimInputNarrative(value ProductionWorldClaimInput) bool {
+	narrativeType := slices.Contains([]string{"relationship", "foreshadowing", "payoff"}, value.ClaimType)
+	if narrativeType != (value.Narrative != nil) {
+		return false
+	}
+	if !narrativeType {
+		return slices.Contains([]string{"world_rule", "story_arc", "plot_thread"}, value.ClaimType)
+	}
+	return value.Narrative.ClaimSeriesKey == value.ClaimKey
 }
 func productionWorldEvidenceRefs(values []domain.ProductionWorldEvidence) []domain.ProductionWorldFragmentRef {
 	result := make([]domain.ProductionWorldFragmentRef, len(values))

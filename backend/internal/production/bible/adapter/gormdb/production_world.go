@@ -138,11 +138,11 @@ func (repo *repository) ListProductionWorldClaims(ctx context.Context, projectID
 		if err != nil {
 			return nil, err
 		}
-		for _, subject := range value.Subjects {
+		for _, participant := range value.Participants {
 			var asset model.Asset
-			if err = repo.database.WithContext(ctx).Where("id = ?", subject.AssetID).First(&asset).Error; err != nil ||
-				asset.ProjectID != record.ProjectID || asset.IdentityKey != subject.IdentityKey || asset.ContentHash != subject.AssetContentHash {
-				return nil, errors.New("Production World Claim subject has drifted")
+			if err = repo.database.WithContext(ctx).Where("id = ?", participant.AssetID).First(&asset).Error; err != nil ||
+				asset.ProjectID != record.ProjectID || asset.IdentityKey != participant.IdentityKey || asset.ContentHash != participant.AssetContentHash {
+				return nil, errors.New("Production World Claim participant has drifted")
 			}
 		}
 		result[i] = value
@@ -315,22 +315,27 @@ func productionWorldSpecificationDomain(record model.ProductionWorldSpecificatio
 
 func productionWorldClaimRecord(value domain.ProductionWorldClaim) (model.ProductionWorldClaim, error) {
 	ids, err := productionWorldIDs(value.ID, value.WorkspaceID, value.ProjectID, value.Evidence.ID, value.CreatedBy)
-	subjects, jsonErr := json.Marshal(value.Subjects)
-	if err != nil || jsonErr != nil {
+	participants, participantErr := json.Marshal(value.Participants)
+	narrative, narrativeErr := json.Marshal(value.Narrative)
+	if err != nil || participantErr != nil || narrativeErr != nil {
 		return model.ProductionWorldClaim{}, errors.New("invalid Production World Claim record")
 	}
-	rebuilt, rebuildErr := domain.NewProductionWorldClaim(value.ID, value.WorkspaceID, value.ProjectID, value.ClaimKey, value.ClaimType, value.Statement, value.Revision, value.Subjects, value.Evidence, value.CreatedBy, value.CreatedAt)
+	rebuilt, rebuildErr := domain.NewProductionWorldClaim(value.ID, value.WorkspaceID, value.ProjectID, value.ClaimKey, value.ClaimType, value.Statement, value.Revision, value.Participants, value.Narrative, value.Evidence, value.CreatedBy, value.CreatedAt)
 	if rebuildErr != nil || !reflect.DeepEqual(rebuilt, value) {
 		return model.ProductionWorldClaim{}, errors.New("Production World Claim has drifted")
 	}
-	return model.ProductionWorldClaim{ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], EvidenceID: ids[3], CreatedBy: ids[4], ClaimKey: value.ClaimKey, ClaimType: value.ClaimType, Statement: value.Statement, Revision: value.Revision, Subjects: datatypes.JSON(subjects), EvidenceHash: value.Evidence.ContentHash, ContentHash: value.ContentHash, CreatedAt: value.CreatedAt}, nil
+	return model.ProductionWorldClaim{ID: ids[0], WorkspaceID: ids[1], ProjectID: ids[2], EvidenceID: ids[3], CreatedBy: ids[4], ClaimKey: value.ClaimKey, ClaimType: value.ClaimType, Statement: value.Statement, Revision: value.Revision, Participants: datatypes.JSON(participants), Narrative: datatypes.JSON(narrative), EvidenceHash: value.Evidence.ContentHash, ContentHash: value.ContentHash, CreatedAt: value.CreatedAt}, nil
 }
 func productionWorldClaimDomain(record model.ProductionWorldClaim, evidence model.ProductionWorldEvidence) (domain.ProductionWorldClaim, error) {
-	var subjects []domain.ProductionWorldClaimSubject
-	if err := json.Unmarshal(record.Subjects, &subjects); err != nil {
+	var participants []domain.ProductionWorldClaimParticipant
+	var narrative *domain.ProductionWorldNarrativeClaim
+	if err := json.Unmarshal(record.Participants, &participants); err != nil {
 		return domain.ProductionWorldClaim{}, err
 	}
-	value, err := domain.NewProductionWorldClaim(record.ID.String(), record.WorkspaceID.String(), record.ProjectID.String(), record.ClaimKey, record.ClaimType, record.Statement, record.Revision, subjects, domain.FragmentRef(evidence.ID.String(), "source_evidence", evidence.SubjectKey, evidence.ContentHash, evidence.Revision), record.CreatedBy.String(), record.CreatedAt)
+	if err := json.Unmarshal(record.Narrative, &narrative); err != nil {
+		return domain.ProductionWorldClaim{}, err
+	}
+	value, err := domain.NewProductionWorldClaim(record.ID.String(), record.WorkspaceID.String(), record.ProjectID.String(), record.ClaimKey, record.ClaimType, record.Statement, record.Revision, participants, narrative, domain.FragmentRef(evidence.ID.String(), "source_evidence", evidence.SubjectKey, evidence.ContentHash, evidence.Revision), record.CreatedBy.String(), record.CreatedAt)
 	if err != nil || value.ContentHash != record.ContentHash || record.EvidenceHash != evidence.ContentHash {
 		return domain.ProductionWorldClaim{}, errors.New("persisted Production World Claim has drifted")
 	}

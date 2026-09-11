@@ -7132,13 +7132,85 @@
       "ProductionWorldClaimResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["claim_key", "claim_type", "subject_identity_keys", "statement", "basis"],
+        "required": ["claim_key", "claim_type", "participants", "statement", "narrative", "basis"],
         "properties": {
           "claim_key": { "type": "string" },
-          "claim_type": { "type": "string" },
-          "subject_identity_keys": { "type": "array", "items": { "type": "string" } },
+          "claim_type": {
+            "type": "string",
+            "enum": ["world_rule", "relationship", "foreshadowing", "payoff", "story_arc", "plot_thread"]
+          },
+          "participants": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldClaimParticipantResponse" }
+          },
           "statement": { "type": "string" },
+          "narrative": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ProductionWorldNarrativeClaimResponse" },
+              { "type": "null" }
+            ]
+          },
           "basis": { "$ref": "#/components/schemas/ProductionWorldSourceBasisResponse" }
+        }
+      },
+      "ProductionWorldClaimParticipantResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "identity_key"],
+        "properties": {
+          "role": { "type": "string", "enum": ["subject", "object", "participant"] },
+          "identity_key": { "type": "string" }
+        }
+      },
+      "ProductionWorldClaimAnchorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "target_key"],
+        "properties": {
+          "role": { "type": "string", "enum": ["episode", "scene", "beat"] },
+          "target_key": { "type": "string" }
+        }
+      },
+      "ProductionWorldClaimScopeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "owner_logical_id"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["project", "episode", "scene", "beat"] },
+          "owner_logical_id": { "type": "string" }
+        }
+      },
+      "ProductionWorldStoryTimeRangeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start_key", "end_key"],
+        "properties": {
+          "start_key": { "type": "string" },
+          "end_key": { "type": "string" }
+        }
+      },
+      "ProductionWorldNarrativeClaimResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_series_key", "predicate", "anchors", "valid_scope", "story_time_range", "polarity", "status"
+        ],
+        "properties": {
+          "claim_series_key": { "type": "string" },
+          "predicate": { "type": "string" },
+          "anchors": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ProductionWorldClaimAnchorResponse" }
+          },
+          "valid_scope": { "$ref": "#/components/schemas/ProductionWorldClaimScopeResponse" },
+          "story_time_range": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ProductionWorldStoryTimeRangeResponse" },
+              { "type": "null" }
+            ]
+          },
+          "polarity": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+          "status": { "type": "string", "enum": ["asserted", "negated"] }
         }
       },
       "ProductionWorldDesignGapResponse": {

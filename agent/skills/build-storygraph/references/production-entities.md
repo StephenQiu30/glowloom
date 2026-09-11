@@ -15,6 +15,14 @@ the frozen SceneFacts, or a `user_supplied` creator-decision proposal. Do not tu
 style preferences, presets, reference images, or visual conventions into source evidence. Preserve
 uncertainty as a DesignGap or ReviewIssue.
 
+Every world claim has an ordered, unique `participants` list with exactly one `subject`, at most one
+`object`, and any remaining `participant` roles. A `relationship`, `foreshadowing`, or `payoff`
+claim must also provide `narrative`: its stable series key equals `claim_key`, its predicate is a
+lowercase semantic key, and its ordered anchors point only to frozen Episode/Scene keys or a Beat key
+under a frozen Scene. Declare the exact `valid_scope`, optional Owner-defined story-time range,
+polarity, and assertion status. `world_rule`, `story_arc`, and `plot_thread` must set `narrative` to
+null. Never infer a participant role, structural anchor, or scope from overlapping Evidence.
+
 When `production_world_repair` is present, treat its `base_candidate` as the complete frozen starting
 point and its Evidence as the only new factual basis. Return a complete strict Candidate, but change
 only the target Entity or State keys authorized by `change_spec` and `closure`. Preserve every

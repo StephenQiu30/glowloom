@@ -261,7 +261,7 @@ func (service *ConfirmationService) applyBible(
 	for index, value := range command.Candidate.Bible.WorldClaims {
 		claims[index] = bibleapp.ProductionWorldClaimInput{
 			ClaimKey: value.ClaimKey, ClaimType: value.ClaimType, Statement: value.Statement,
-			SubjectIdentityKeys: value.SubjectIdentityKeys, Basis: value.Basis,
+			Participants: value.Participants, Narrative: value.Narrative, Basis: value.Basis,
 		}
 	}
 	head := expected[expectedHeadKey("production/bible", bibledomain.BibleProductionWorldFamily, "project:"+command.ProjectID)]

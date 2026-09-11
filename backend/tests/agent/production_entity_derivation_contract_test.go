@@ -83,6 +83,82 @@ func TestProductionEntityDerivationAcceptsExactlyOneAuditableSourceBasis(t *test
 	}
 }
 
+func TestProductionEntityDerivationRequiresExplicitNarrativeClaimFacts(t *testing.T) {
+	input, candidate := productionEntityContractFixture(t)
+	scene := input.StructureIdentitySet.SceneRefs[0]
+	candidate.WorldClaims = []contract.ProductionWorldClaimFragment{{
+		ClaimKey:  "claim_linzhou_protects_home",
+		ClaimType: "relationship",
+		Participants: []contract.ProductionWorldClaimParticipant{{
+			Role: "subject", IdentityKey: "character:linzhou",
+		}},
+		Statement: "林舟守护故乡。",
+		Narrative: &contract.ProductionWorldNarrativeClaim{
+			ClaimSeriesKey: "claim_linzhou_protects_home",
+			Predicate:      "protects",
+			Anchors: []contract.ProductionWorldClaimAnchor{{
+				Role: "scene", TargetKey: scene.ScopeKey,
+			}},
+			ValidScope: contract.ProductionWorldClaimScope{
+				Kind: "scene", OwnerLogicalID: scene.ScopeKey,
+			},
+			Polarity: "positive",
+			Status:   "asserted",
+		},
+		Basis: candidate.Entities[0].Basis,
+	}}
+	encoded, err := json.Marshal(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = contract.ValidateProductionEntityFragmentCandidate(encoded, input); err != nil {
+		t.Fatalf("valid explicit Narrative Claim rejected: %v", err)
+	}
+
+	tests := map[string]func(*contract.ProductionWorldClaimFragment){
+		"missing narrative facts": func(value *contract.ProductionWorldClaimFragment) {
+			value.Narrative = nil
+		},
+		"missing subject role": func(value *contract.ProductionWorldClaimFragment) {
+			value.Participants[0].Role = "participant"
+		},
+		"same identity in multiple roles": func(value *contract.ProductionWorldClaimFragment) {
+			value.Participants = append(value.Participants, contract.ProductionWorldClaimParticipant{
+				Role: "object", IdentityKey: value.Participants[0].IdentityKey,
+			})
+		},
+		"unknown identity": func(value *contract.ProductionWorldClaimFragment) {
+			value.Participants[0].IdentityKey = "character:unknown"
+		},
+		"unknown anchor": func(value *contract.ProductionWorldClaimFragment) {
+			value.Narrative.Anchors[0].TargetKey = "scene:" + uuid.NewString()
+		},
+		"scope identity drift": func(value *contract.ProductionWorldClaimFragment) {
+			value.Narrative.ValidScope.OwnerLogicalID = uuid.NewString()
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			invalid := candidate
+			invalid.WorldClaims = append([]contract.ProductionWorldClaimFragment(nil), candidate.WorldClaims...)
+			claim := invalid.WorldClaims[0]
+			claim.Participants = append([]contract.ProductionWorldClaimParticipant(nil), claim.Participants...)
+			narrative := *claim.Narrative
+			narrative.Anchors = append([]contract.ProductionWorldClaimAnchor(nil), narrative.Anchors...)
+			claim.Narrative = &narrative
+			mutate(&claim)
+			invalid.WorldClaims[0] = claim
+			raw, marshalErr := json.Marshal(invalid)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			if validationErr := contract.ValidateProductionEntityFragmentCandidate(raw, input); validationErr == nil {
+				t.Fatal("invalid explicit Narrative Claim was accepted")
+			}
+		})
+	}
+}
+
 func TestProductionEntityDerivationStageRejectsFormalIdentityDrift(t *testing.T) {
 	input, _ := productionEntityContractFixture(t)
 	encoded, err := json.Marshal(input)

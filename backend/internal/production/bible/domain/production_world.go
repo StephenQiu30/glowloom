@@ -41,14 +41,36 @@ type ProductionWorldSpecification struct {
 	CreatedAt                                                       time.Time
 }
 
-type ProductionWorldClaimSubject struct {
-	IdentityKey, AssetID, AssetContentHash string
+type ProductionWorldClaimParticipant struct {
+	Role, IdentityKey, AssetID, AssetContentHash string
+}
+
+type ProductionWorldClaimAnchor struct {
+	Role, TargetKey string
+}
+
+type ProductionWorldClaimScope struct {
+	Kind, OwnerLogicalID string
+}
+
+type ProductionWorldStoryTimeRange struct {
+	StartKey, EndKey string
+}
+
+type ProductionWorldNarrativeClaim struct {
+	ClaimSeriesKey, Predicate string
+	Anchors                   []ProductionWorldClaimAnchor
+	ValidScope                ProductionWorldClaimScope
+	StoryTimeRange            *ProductionWorldStoryTimeRange
+	Polarity, Status          string
+	SupersedesClaim           *ProductionWorldFragmentRef
 }
 
 type ProductionWorldClaim struct {
 	ID, WorkspaceID, ProjectID, ClaimKey, ClaimType, Statement string
 	Revision                                                   int
-	Subjects                                                   []ProductionWorldClaimSubject
+	Participants                                               []ProductionWorldClaimParticipant
+	Narrative                                                  *ProductionWorldNarrativeClaim
 	Evidence                                                   ProductionWorldFragmentRef
 	ContentHash, CreatedBy                                     string
 	CreatedAt                                                  time.Time
@@ -123,30 +145,113 @@ func NewProductionWorldSpecification(id, workspaceID, projectID, specificationKe
 	return value, err
 }
 
-func NewProductionWorldClaim(id, workspaceID, projectID, claimKey, claimType, statement string, revision int, subjects []ProductionWorldClaimSubject, evidence ProductionWorldFragmentRef, createdBy string, createdAt time.Time) (ProductionWorldClaim, error) {
+func NewProductionWorldClaim(id, workspaceID, projectID, claimKey, claimType, statement string, revision int, participants []ProductionWorldClaimParticipant, narrative *ProductionWorldNarrativeClaim, evidence ProductionWorldFragmentRef, createdBy string, createdAt time.Time) (ProductionWorldClaim, error) {
 	if !validProductionWorldIDs(id, workspaceID, projectID, createdBy) || !keyPattern.MatchString(claimKey) || !strings.HasPrefix(claimKey, "claim_") ||
-		!oneOf(claimType, "world_rule", "relationship", "story_arc", "plot_thread") || strings.TrimSpace(statement) == "" || revision < 1 ||
-		evidence.Kind != "source_evidence" || evidence.BusinessKey != claimKey || !validProductionWorldFragmentRef(evidence) || len(subjects) == 0 || createdAt.IsZero() {
+		!oneOf(claimType, "world_rule", "relationship", "foreshadowing", "payoff", "story_arc", "plot_thread") || strings.TrimSpace(statement) == "" || revision < 1 ||
+		evidence.Kind != "source_evidence" || evidence.BusinessKey != claimKey || !validProductionWorldFragmentRef(evidence) || len(participants) == 0 || createdAt.IsZero() {
 		return ProductionWorldClaim{}, errors.New("invalid Production World Claim input")
 	}
-	subjects = append([]ProductionWorldClaimSubject(nil), subjects...)
-	slices.SortFunc(subjects, func(left, right ProductionWorldClaimSubject) int {
-		return strings.Compare(left.IdentityKey, right.IdentityKey)
+	participants = append([]ProductionWorldClaimParticipant(nil), participants...)
+	slices.SortFunc(participants, func(left, right ProductionWorldClaimParticipant) int {
+		return strings.Compare(left.IdentityKey+"\x00"+left.Role, right.IdentityKey+"\x00"+right.Role)
 	})
-	for index, subject := range subjects {
-		if !keyPattern.MatchString(subject.IdentityKey) || !validProductionWorldUUID(subject.AssetID) || !hashPattern.MatchString(subject.AssetContentHash) ||
-			(index > 0 && subjects[index-1].IdentityKey == subject.IdentityKey) {
-			return ProductionWorldClaim{}, errors.New("invalid Production World Claim subject")
+	subjects, objects := 0, 0
+	seenIdentities := make(map[string]struct{}, len(participants))
+	for index, participant := range participants {
+		if !oneOf(participant.Role, "subject", "object", "participant") || !keyPattern.MatchString(participant.IdentityKey) ||
+			!validProductionWorldUUID(participant.AssetID) || !hashPattern.MatchString(participant.AssetContentHash) ||
+			(index > 0 && participants[index-1].IdentityKey == participant.IdentityKey && participants[index-1].Role == participant.Role) {
+			return ProductionWorldClaim{}, errors.New("invalid Production World Claim participant")
+		}
+		if _, exists := seenIdentities[participant.IdentityKey]; exists {
+			return ProductionWorldClaim{}, errors.New("duplicate Production World Claim participant identity")
+		}
+		seenIdentities[participant.IdentityKey] = struct{}{}
+		if participant.Role == "subject" {
+			subjects++
+		}
+		if participant.Role == "object" {
+			objects++
 		}
 	}
-	value := ProductionWorldClaim{ID: id, WorkspaceID: workspaceID, ProjectID: projectID, ClaimKey: claimKey, ClaimType: claimType, Statement: strings.TrimSpace(statement), Revision: revision, Subjects: subjects, Evidence: evidence, CreatedBy: createdBy, CreatedAt: createdAt.UTC()}
+	if subjects != 1 || objects > 1 || validateProductionWorldNarrative(claimKey, claimType, revision, narrative) != nil {
+		return ProductionWorldClaim{}, errors.New("invalid Production World Claim semantics")
+	}
+	narrative = cloneProductionWorldNarrative(narrative)
+	value := ProductionWorldClaim{ID: id, WorkspaceID: workspaceID, ProjectID: projectID, ClaimKey: claimKey, ClaimType: claimType, Statement: strings.TrimSpace(statement), Revision: revision, Participants: participants, Narrative: narrative, Evidence: evidence, CreatedBy: createdBy, CreatedAt: createdAt.UTC()}
 	var err error
 	value.ContentHash, err = CanonicalStoryHash(struct {
 		Schema, ClaimKey, ClaimType, Statement string
-		Subjects                               []ProductionWorldClaimSubject
+		Revision                               int
+		Participants                           []ProductionWorldClaimParticipant
+		Narrative                              *ProductionWorldNarrativeClaim
 		Evidence                               ProductionWorldFragmentRef
-	}{"production-world-claim", claimKey, claimType, value.Statement, subjects, evidence})
+	}{"production-world-claim", claimKey, claimType, value.Statement, revision, participants, narrative, evidence})
 	return value, err
+}
+
+func validateProductionWorldNarrative(claimKey, claimType string, revision int, value *ProductionWorldNarrativeClaim) error {
+	isNarrative := oneOf(claimType, "relationship", "foreshadowing", "payoff")
+	if isNarrative != (value != nil) {
+		return errors.New("Production World Narrative Claim facts are incomplete")
+	}
+	if !isNarrative {
+		return nil
+	}
+	if value.ClaimSeriesKey != claimKey || !predicatePattern.MatchString(value.Predicate) || len(value.Anchors) == 0 ||
+		!oneOf(value.ValidScope.Kind, "project", "episode", "scene", "beat") || !validProductionWorldStableKey(value.ValidScope.OwnerLogicalID) ||
+		!oneOf(value.Polarity, "positive", "negative", "neutral") || !oneOf(value.Status, "asserted", "negated") {
+		return errors.New("invalid Production World Narrative Claim")
+	}
+	previous := ""
+	for _, anchor := range value.Anchors {
+		key := anchor.TargetKey + "\x00" + anchor.Role
+		if key <= previous || !oneOf(anchor.Role, "episode", "scene", "beat") || !validProductionWorldStableKey(anchor.TargetKey) || !strings.HasPrefix(anchor.TargetKey, anchor.Role+":") {
+			return errors.New("invalid Production World Narrative Claim anchor")
+		}
+		previous = key
+	}
+	if value.StoryTimeRange != nil && (!validProductionWorldStableKey(value.StoryTimeRange.StartKey) || !validProductionWorldStableKey(value.StoryTimeRange.EndKey) || value.StoryTimeRange.StartKey > value.StoryTimeRange.EndKey) {
+		return errors.New("invalid Production World Narrative Claim story time")
+	}
+	if revision == 1 {
+		if value.SupersedesClaim != nil {
+			return errors.New("initial Production World Narrative Claim supersedes another claim")
+		}
+	} else if value.SupersedesClaim == nil || !validProductionWorldFragmentRef(*value.SupersedesClaim) ||
+		value.SupersedesClaim.Kind != claimType || value.SupersedesClaim.BusinessKey != claimKey || value.SupersedesClaim.Revision != revision-1 {
+		return errors.New("revised Production World Narrative Claim has an invalid predecessor")
+	}
+	return nil
+}
+
+func cloneProductionWorldNarrative(value *ProductionWorldNarrativeClaim) *ProductionWorldNarrativeClaim {
+	if value == nil {
+		return nil
+	}
+	result := *value
+	result.Anchors = append([]ProductionWorldClaimAnchor(nil), value.Anchors...)
+	if value.StoryTimeRange != nil {
+		rangeValue := *value.StoryTimeRange
+		result.StoryTimeRange = &rangeValue
+	}
+	if value.SupersedesClaim != nil {
+		reference := *value.SupersedesClaim
+		result.SupersedesClaim = &reference
+	}
+	return &result
+}
+
+func validProductionWorldStableKey(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	for _, character := range value {
+		if character <= 0x1f || character == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func NewProductionWorldBinding(id, workspaceID, projectID, identityKey string, revision int, asset, specification ProductionWorldFragmentRef, states []ProductionWorldStateRef, createdBy string, createdAt time.Time) (ProductionWorldBinding, error) {

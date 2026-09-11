@@ -17,6 +17,8 @@ const ProductionEntityFragmentCandidateSchemaVersion = "production-entity-fragme
 var (
 	productionSemanticKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,120}$`)
 	productionScopePattern       = regexp.MustCompile(`^scene:[0-9a-f-]{36}$`)
+	productionPredicatePattern   = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	productionBeatAnchorPattern  = regexp.MustCompile(`^beat:[0-9a-f-]{36}:beat_[a-z0-9_]{1,120}$`)
 )
 
 type FrozenStructureIdentityCandidateRef struct {
@@ -287,12 +289,43 @@ type ProductionEntityFragment struct {
 	States             []ProductionStateFragment `json:"states"`
 }
 
+type ProductionWorldClaimParticipant struct {
+	Role        string `json:"role"`
+	IdentityKey string `json:"identity_key"`
+}
+
+type ProductionWorldClaimAnchor struct {
+	Role      string `json:"role"`
+	TargetKey string `json:"target_key"`
+}
+
+type ProductionWorldClaimScope struct {
+	Kind           string `json:"kind"`
+	OwnerLogicalID string `json:"owner_logical_id"`
+}
+
+type ProductionWorldStoryTimeRange struct {
+	StartKey string `json:"start_key"`
+	EndKey   string `json:"end_key"`
+}
+
+type ProductionWorldNarrativeClaim struct {
+	ClaimSeriesKey string                         `json:"claim_series_key"`
+	Predicate      string                         `json:"predicate"`
+	Anchors        []ProductionWorldClaimAnchor   `json:"anchors"`
+	ValidScope     ProductionWorldClaimScope      `json:"valid_scope"`
+	StoryTimeRange *ProductionWorldStoryTimeRange `json:"story_time_range"`
+	Polarity       string                         `json:"polarity"`
+	Status         string                         `json:"status"`
+}
+
 type ProductionWorldClaimFragment struct {
-	ClaimKey            string                `json:"claim_key"`
-	ClaimType           string                `json:"claim_type"`
-	SubjectIdentityKeys []string              `json:"subject_identity_keys"`
-	Statement           string                `json:"statement"`
-	Basis               ProductionSourceBasis `json:"basis"`
+	ClaimKey     string                            `json:"claim_key"`
+	ClaimType    string                            `json:"claim_type"`
+	Participants []ProductionWorldClaimParticipant `json:"participants"`
+	Statement    string                            `json:"statement"`
+	Narrative    *ProductionWorldNarrativeClaim    `json:"narrative"`
+	Basis        ProductionSourceBasis             `json:"basis"`
 }
 
 type ProductionDesignGap struct {
@@ -333,8 +366,10 @@ func ValidateProductionEntityFragmentCandidate(raw json.RawMessage, input Produc
 		return errors.New("Production Entity Candidate lineage drifted")
 	}
 	expected := make(map[string]string, len(input.StructureIdentitySet.Identities))
+	formalIdentities := make(map[string]struct{}, len(input.StructureIdentitySet.Identities))
 	for _, identity := range input.StructureIdentitySet.Identities {
 		expected[identity.IdentityKey] = identity.Kind
+		formalIdentities[identity.IdentityKey] = struct{}{}
 	}
 	allowedScopes := make(map[string]struct{}, len(input.StructureIdentitySet.SceneRefs))
 	for _, scene := range input.StructureIdentitySet.SceneRefs {
@@ -405,13 +440,19 @@ func ValidateProductionEntityFragmentCandidate(raw json.RawMessage, input Produc
 	previous = ""
 	for _, claim := range value.WorldClaims {
 		if claim.ClaimKey <= previous || !strings.HasPrefix(claim.ClaimKey, "claim_") ||
-			!slices.Contains([]string{"world_rule", "relationship", "story_arc", "plot_thread"}, claim.ClaimType) ||
-			len(claim.SubjectIdentityKeys) == 0 || !sortedUnique(claim.SubjectIdentityKeys) || strings.TrimSpace(claim.Statement) == "" ||
+			!slices.Contains([]string{"world_rule", "relationship", "foreshadowing", "payoff", "story_arc", "plot_thread"}, claim.ClaimType) ||
+			strings.TrimSpace(claim.Statement) == "" ||
 			validateProductionBasis(claim.Basis, input.NormalizedText, evidenceUniverse) != nil {
 			return errors.New("invalid Production Entity world claim")
 		}
-		for _, identity := range claim.SubjectIdentityKeys {
-			if _, exists := subjects[identity]; !exists {
+		if err := validateProductionWorldClaimParticipants(claim.Participants, formalIdentities); err != nil {
+			return err
+		}
+		if err := validateProductionWorldNarrativeClaim(claim, input); err != nil {
+			return err
+		}
+		for _, participant := range claim.Participants {
+			if _, exists := subjects[participant.IdentityKey]; !exists {
 				return errors.New("Production Entity world claim references an unknown identity")
 			}
 		}
@@ -435,6 +476,139 @@ func ValidateProductionEntityFragmentCandidate(raw json.RawMessage, input Produc
 		previous = issue.IssueKey
 	}
 	return nil
+}
+
+func validateProductionWorldClaimParticipants(values []ProductionWorldClaimParticipant, identities map[string]struct{}) error {
+	if len(values) == 0 {
+		return errors.New("Production Entity world claim has no participants")
+	}
+	previous, subjects, objects := "", 0, 0
+	seenIdentities := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		key := value.IdentityKey + "\x00" + value.Role
+		if key <= previous || !slices.Contains([]string{"subject", "object", "participant"}, value.Role) {
+			return errors.New("Production Entity world claim participants are not canonical")
+		}
+		if _, exists := identities[value.IdentityKey]; !exists {
+			return errors.New("Production Entity world claim references an unknown identity")
+		}
+		if _, exists := seenIdentities[value.IdentityKey]; exists {
+			return errors.New("Production Entity world claim repeats a participant identity")
+		}
+		seenIdentities[value.IdentityKey] = struct{}{}
+		if value.Role == "subject" {
+			subjects++
+		}
+		if value.Role == "object" {
+			objects++
+		}
+		previous = key
+	}
+	if subjects != 1 || objects > 1 {
+		return errors.New("Production Entity world claim participant roles are invalid")
+	}
+	return nil
+}
+
+func validateProductionWorldNarrativeClaim(claim ProductionWorldClaimFragment, input ProductionEntityDerivationInput) error {
+	narrativeType := slices.Contains([]string{"relationship", "foreshadowing", "payoff"}, claim.ClaimType)
+	if narrativeType != (claim.Narrative != nil) {
+		return errors.New("Production Entity Narrative Claim facts are incomplete")
+	}
+	if !narrativeType {
+		return nil
+	}
+	narrative := claim.Narrative
+	if narrative.ClaimSeriesKey != claim.ClaimKey || !productionPredicatePattern.MatchString(narrative.Predicate) ||
+		len(narrative.Anchors) == 0 || !slices.Contains([]string{"positive", "negative", "neutral"}, narrative.Polarity) ||
+		!slices.Contains([]string{"asserted", "negated"}, narrative.Status) {
+		return errors.New("invalid Production Entity Narrative Claim")
+	}
+	episodes := make(map[string]struct{}, len(input.StructureIdentitySet.EpisodeRefs))
+	scenes := make(map[string]struct{}, len(input.StructureIdentitySet.SceneRefs))
+	for _, episode := range input.StructureIdentitySet.EpisodeRefs {
+		episodes[episode.EpisodeID] = struct{}{}
+	}
+	for _, scene := range input.StructureIdentitySet.SceneRefs {
+		scenes[scene.SceneOwnerLogicalID] = struct{}{}
+	}
+	previous := ""
+	for _, anchor := range narrative.Anchors {
+		key := anchor.TargetKey + "\x00" + anchor.Role
+		if key <= previous || !validProductionClaimAnchor(anchor, episodes, scenes) {
+			return errors.New("invalid Production Entity Narrative Claim anchor")
+		}
+		previous = key
+	}
+	if !validProductionClaimScope(narrative.ValidScope, input.StructureIdentitySet.ProjectID, episodes, scenes, narrative.Anchors) {
+		return errors.New("invalid Production Entity Narrative Claim scope")
+	}
+	if narrative.StoryTimeRange != nil && (!validProductionStableKey(narrative.StoryTimeRange.StartKey) ||
+		!validProductionStableKey(narrative.StoryTimeRange.EndKey) || narrative.StoryTimeRange.StartKey > narrative.StoryTimeRange.EndKey) {
+		return errors.New("invalid Production Entity Narrative Claim story time")
+	}
+	return nil
+}
+
+func validProductionClaimAnchor(value ProductionWorldClaimAnchor, episodes, scenes map[string]struct{}) bool {
+	switch value.Role {
+	case "episode":
+		if !strings.HasPrefix(value.TargetKey, "episode:") {
+			return false
+		}
+		_, exists := episodes[strings.TrimPrefix(value.TargetKey, "episode:")]
+		return exists
+	case "scene":
+		if !strings.HasPrefix(value.TargetKey, "scene:") {
+			return false
+		}
+		_, exists := scenes[strings.TrimPrefix(value.TargetKey, "scene:")]
+		return exists
+	case "beat":
+		if !productionBeatAnchorPattern.MatchString(value.TargetKey) {
+			return false
+		}
+		parts := strings.SplitN(strings.TrimPrefix(value.TargetKey, "beat:"), ":", 2)
+		_, exists := scenes[parts[0]]
+		return exists
+	default:
+		return false
+	}
+}
+
+func validProductionClaimScope(value ProductionWorldClaimScope, projectID string, episodes, scenes map[string]struct{}, anchors []ProductionWorldClaimAnchor) bool {
+	switch value.Kind {
+	case "project":
+		return value.OwnerLogicalID == projectID
+	case "episode":
+		_, exists := episodes[value.OwnerLogicalID]
+		return exists
+	case "scene":
+		if !strings.HasPrefix(value.OwnerLogicalID, "scene:") {
+			return false
+		}
+		_, exists := scenes[strings.TrimPrefix(value.OwnerLogicalID, "scene:")]
+		return exists
+	case "beat":
+		for _, anchor := range anchors {
+			if anchor.Role == "beat" && anchor.TargetKey == value.OwnerLogicalID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validProductionStableKey(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	for _, character := range value {
+		if character <= 0x1f || character == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func validateProductionBasis(value ProductionSourceBasis, text string, universe map[string]struct{}) error {

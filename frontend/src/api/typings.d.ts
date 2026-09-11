@@ -112,7 +112,10 @@ declare global {
     type ProductionBibleWorldEntryResponse = components["schemas"]["ProductionBibleWorldEntryResponse"];
     type ProductionWorldCandidateReviewIssueResponse = components["schemas"]["ProductionWorldCandidateReviewIssueResponse"];
     type ProductionWorldCandidateRevisionResponse = components["schemas"]["ProductionWorldCandidateRevisionResponse"];
+    type ProductionWorldClaimAnchorResponse = components["schemas"]["ProductionWorldClaimAnchorResponse"];
+    type ProductionWorldClaimParticipantResponse = components["schemas"]["ProductionWorldClaimParticipantResponse"];
     type ProductionWorldClaimResponse = components["schemas"]["ProductionWorldClaimResponse"];
+    type ProductionWorldClaimScopeResponse = components["schemas"]["ProductionWorldClaimScopeResponse"];
     type ProductionWorldContinuityClaimResponse = components["schemas"]["ProductionWorldContinuityClaimResponse"];
     type ProductionWorldContinuityLedgerResponse = components["schemas"]["ProductionWorldContinuityLedgerResponse"];
     type ProductionWorldContinuityReviewResponse = components["schemas"]["ProductionWorldContinuityReviewResponse"];
@@ -122,6 +125,7 @@ declare global {
     type ProductionWorldEvidenceSpanResponse = components["schemas"]["ProductionWorldEvidenceSpanResponse"];
     type ProductionWorldInteractionGeometryEvidenceResponse = components["schemas"]["ProductionWorldInteractionGeometryEvidenceResponse"];
     type ProductionWorldInteractionResponse = components["schemas"]["ProductionWorldInteractionResponse"];
+    type ProductionWorldNarrativeClaimResponse = components["schemas"]["ProductionWorldNarrativeClaimResponse"];
     type ProductionWorldOccurrenceResponse = components["schemas"]["ProductionWorldOccurrenceResponse"];
     type ProductionWorldPartitionRootsResponse = components["schemas"]["ProductionWorldPartitionRootsResponse"];
     type ProductionWorldPositiveRationalResponse = components["schemas"]["ProductionWorldPositiveRationalResponse"];
@@ -133,6 +137,7 @@ declare global {
     type ProductionWorldSemanticSlotResponse = components["schemas"]["ProductionWorldSemanticSlotResponse"];
     type ProductionWorldSourceBasisResponse = components["schemas"]["ProductionWorldSourceBasisResponse"];
     type ProductionWorldStateResponse = components["schemas"]["ProductionWorldStateResponse"];
+    type ProductionWorldStoryTimeRangeResponse = components["schemas"]["ProductionWorldStoryTimeRangeResponse"];
     type ProfileUpdateRequest = components["schemas"]["ProfileUpdateRequest"];
     type ProjectCreateRequest = components["schemas"]["ProjectCreateRequest"];
     type ProjectResponse = components["schemas"]["ProjectResponse"];

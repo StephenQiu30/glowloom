@@ -66,6 +66,9 @@ func buildProductionGraph(
 	if err := projection.addStructuralPrecedes(); err != nil {
 		return productionGraph{}, err
 	}
+	if err := projection.addBibleClaims(); err != nil {
+		return productionGraph{}, err
+	}
 	return projection.graph, nil
 }
 
@@ -240,7 +243,22 @@ func (projection *productionProjection) addBibleFacts() error {
 			}
 		}
 	}
-	for _, claim := range projection.material.bibleClaims {
+	return nil
+}
+
+func (projection *productionProjection) addBibleClaims() error {
+	evidenceByID := make(map[string]model.ProductionWorldEvidence, len(projection.material.bibleEvidence))
+	for _, value := range projection.material.bibleEvidence {
+		evidenceByID[value.ID.String()] = value
+	}
+	claims := append([]model.ProductionWorldClaim(nil), projection.material.bibleClaims...)
+	slices.SortFunc(claims, func(left, right model.ProductionWorldClaim) int {
+		if left.ClaimKey != right.ClaimKey {
+			return strings.Compare(left.ClaimKey, right.ClaimKey)
+		}
+		return left.Revision - right.Revision
+	})
+	for _, claim := range claims {
 		if err := projection.addBibleClaim(claim, evidenceByID[claim.EvidenceID.String()]); err != nil {
 			return err
 		}
@@ -250,8 +268,10 @@ func (projection *productionProjection) addBibleFacts() error {
 
 func (projection *productionProjection) addBibleClaim(claim model.ProductionWorldClaim, evidenceRecord model.ProductionWorldEvidence) error {
 	var basis agentcontract.ProductionSourceBasis
-	var subjects []bibledomain.ProductionWorldClaimSubject
-	if json.Unmarshal(evidenceRecord.Basis, &basis) != nil || json.Unmarshal(claim.Subjects, &subjects) != nil {
+	var participants []bibledomain.ProductionWorldClaimParticipant
+	var narrative *bibledomain.ProductionWorldNarrativeClaim
+	if json.Unmarshal(evidenceRecord.Basis, &basis) != nil || json.Unmarshal(claim.Participants, &participants) != nil ||
+		json.Unmarshal(claim.Narrative, &narrative) != nil {
 		return errors.New("Production Bible Claim has drifted")
 	}
 	evidence, evidenceKeys, err := projection.ensureBasisEvidence(basis)
@@ -260,35 +280,113 @@ func (projection *productionProjection) addBibleClaim(claim model.ProductionWorl
 	}
 	nodeType := map[string]storygraph.NodeType{
 		"world_rule": storygraph.NodeTypeWorldRule, "relationship": storygraph.NodeTypeRelationshipClaim,
+		"foreshadowing": storygraph.NodeTypeForeshadowingClaim, "payoff": storygraph.NodeTypePayoffClaim,
 		"story_arc": storygraph.NodeTypeStoryArc, "plot_thread": storygraph.NodeTypePlotThread,
 	}[claim.ClaimType]
 	contractID := "storygraph-production/auditable-bible-fact-payload-contract"
-	if nodeType == storygraph.NodeTypeRelationshipClaim || nodeType == storygraph.NodeTypeForeshadowingClaim || nodeType == storygraph.NodeTypePayoffClaim {
+	fields := map[string]any{"creator_decision_ref": productionCreatorDecisionRef(claim, evidenceRecord, basis)}
+	if narrative != nil {
 		contractID = "storygraph-production/narrative-claim-payload-contract"
+		fields, err = projection.narrativeClaimPayload(claim, participants, *narrative, fields["creator_decision_ref"])
+		if err != nil {
+			return err
+		}
 	}
 	node, err := newNode(nodeType, productionOwnerRef(projection.bibleOwner, "claim:"+claim.ID.String(), claim.ContentHash), "", nil, evidence,
-		projectionPayload(contractID, claim.ContentHash, map[string]any{"claim_type": claim.ClaimType, "creator_decision_ref": nil}))
+		projectionPayload(contractID, claim.ContentHash, fields))
 	if err != nil {
 		return err
 	}
 	projection.addNode("bible-claim:"+claim.ID.String(), node)
 	for _, key := range evidenceKeys {
 		edgeType := storygraph.EdgeTypeDerivedFrom
-		if nodeType == storygraph.NodeTypeRelationshipClaim {
+		if narrative != nil {
 			edgeType = storygraph.EdgeTypeSupports
 		}
 		if err = projection.addEdge(edgeType, key, node.StoryNodeKey, storygraph.EdgeQualifier{}); err != nil {
 			return err
 		}
 	}
-	if nodeType == storygraph.NodeTypeRelationshipClaim {
-		for _, subject := range subjects {
-			if err = projection.addEdge(storygraph.EdgeTypeClaimParticipant, projection.nodeKeys["asset:"+subject.AssetID], node.StoryNodeKey, storygraph.EdgeQualifier{ParticipantRole: "participant"}); err != nil {
+	if narrative != nil {
+		for _, participant := range participants {
+			if err = projection.addEdge(storygraph.EdgeTypeClaimParticipant, projection.nodeKeys["asset:"+participant.AssetID], node.StoryNodeKey, storygraph.EdgeQualifier{ParticipantRole: participant.Role}); err != nil {
+				return err
+			}
+		}
+		for _, anchor := range narrative.Anchors {
+			if err = projection.addEdge(storygraph.EdgeTypeClaimAnchor, projection.nodeKeys[anchor.TargetKey], node.StoryNodeKey, storygraph.EdgeQualifier{AnchorRole: anchor.Role}); err != nil {
+				return err
+			}
+		}
+		if narrative.SupersedesClaim != nil {
+			if err = projection.addEdge(storygraph.EdgeTypeSupersedes, projection.nodeKeys["bible-claim:"+narrative.SupersedesClaim.ID], node.StoryNodeKey, storygraph.EdgeQualifier{}); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func (projection *productionProjection) narrativeClaimPayload(claim model.ProductionWorldClaim, participants []bibledomain.ProductionWorldClaimParticipant, narrative bibledomain.ProductionWorldNarrativeClaim, creatorDecision any) (map[string]any, error) {
+	var subjectRef storygraph.OwnerRef
+	var objectRef *storygraph.OwnerRef
+	participantRefs := make([]storygraph.OwnerRef, 0)
+	for _, participant := range participants {
+		ref, err := projection.nodeRef("asset:" + participant.AssetID)
+		if err != nil {
+			return nil, err
+		}
+		switch participant.Role {
+		case "subject":
+			subjectRef = ref
+		case "object":
+			copyRef := ref
+			objectRef = &copyRef
+		case "participant":
+			participantRefs = append(participantRefs, ref)
+		}
+	}
+	slices.SortFunc(participantRefs, func(left, right storygraph.OwnerRef) int {
+		return strings.Compare(productionOwnerRefSortKey(left), productionOwnerRefSortKey(right))
+	})
+	anchorRefs := make([]storygraph.OwnerRef, 0, len(narrative.Anchors))
+	for _, anchor := range narrative.Anchors {
+		ref, err := projection.nodeRef(anchor.TargetKey)
+		if err != nil {
+			return nil, err
+		}
+		anchorRefs = append(anchorRefs, ref)
+	}
+	slices.SortFunc(anchorRefs, func(left, right storygraph.OwnerRef) int {
+		return strings.Compare(productionOwnerRefSortKey(left), productionOwnerRefSortKey(right))
+	})
+	var supersedes *storygraph.OwnerRef
+	if narrative.SupersedesClaim != nil {
+		ref, err := projection.nodeRef("bible-claim:" + narrative.SupersedesClaim.ID)
+		if err != nil {
+			return nil, err
+		}
+		supersedes = &ref
+	}
+	return map[string]any{
+		"claim_series_key": narrative.ClaimSeriesKey, "claim_revision": claim.Revision,
+		"predicate": narrative.Predicate, "subject_ref": subjectRef, "object_ref": objectRef,
+		"participant_refs": participantRefs, "anchor_refs": anchorRefs,
+		"valid_scope":      storygraph.ClaimScope{Kind: narrative.ValidScope.Kind, OwnerLogicalID: narrative.ValidScope.OwnerLogicalID},
+		"story_time_range": narrative.StoryTimeRange, "polarity": narrative.Polarity, "status": narrative.Status,
+		"creator_decision_ref": creatorDecision, "supersedes_claim_ref": supersedes,
+	}, nil
+}
+
+func productionCreatorDecisionRef(claim model.ProductionWorldClaim, evidence model.ProductionWorldEvidence, basis agentcontract.ProductionSourceBasis) any {
+	if basis.CreatorDecisionProposal == nil {
+		return nil
+	}
+	return map[string]any{
+		"workspace_id": claim.WorkspaceID.String(), "project_id": claim.ProjectID.String(),
+		"audit_owner_kind": "production/bible", "audit_id": evidence.ID.String(),
+		"audit_revision": evidence.Revision, "audit_content_hash": evidence.ContentHash,
+	}
 }
 
 func (projection *productionProjection) addPlanningFacts() error {
@@ -370,6 +468,7 @@ func (projection *productionProjection) addPlanningFact(fact planningdomain.Prod
 		}
 		projection.addNode("planning:"+fact.ID, node)
 		projection.nodeKeys["scene-logical:"+payload.SceneOwnerLogicalID] = node.StoryNodeKey
+		projection.nodeKeys["scene:"+payload.SceneOwnerLogicalID] = node.StoryNodeKey
 		if err = projection.addEdge(storygraph.EdgeTypeContains, projection.nodeKeys["episode:"+fact.EpisodeID], node.StoryNodeKey, storygraph.EdgeQualifier{SequenceKey: payload.StoryTimeKey}); err != nil {
 			return err
 		}
@@ -391,6 +490,13 @@ func (projection *productionProjection) addPlanningFact(fact planningdomain.Prod
 			return err
 		}
 		projection.nodeKeys["beat:"+payload.Scene.ID+":"+fragment.BeatKey] = projection.nodeKeys["planning:"+fact.ID]
+		var scenePayload planningdomain.SceneFactPayload
+		for _, candidate := range projection.material.planningFacts {
+			if candidate.ID == payload.Scene.ID && json.Unmarshal(candidate.Payload, &scenePayload) == nil {
+				projection.nodeKeys["beat:"+scenePayload.SceneOwnerLogicalID+":"+fragment.BeatKey] = projection.nodeKeys["planning:"+fact.ID]
+				break
+			}
+		}
 		return nil
 	case "occurrence":
 		return projection.addOccurrence(fact, owner)

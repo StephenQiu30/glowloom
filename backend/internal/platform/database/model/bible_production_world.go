@@ -72,10 +72,11 @@ type ProductionWorldClaim struct {
 	EvidenceID   uuid.UUID               `gorm:"type:uuid;not null"`
 	CreatedBy    uuid.UUID               `gorm:"type:uuid;not null"`
 	ClaimKey     string                  `gorm:"type:varchar(100);not null;uniqueIndex:uq_scr_world_claim_revision,priority:2;uniqueIndex:uq_scr_world_claim_content,priority:2"`
-	ClaimType    string                  `gorm:"type:varchar(24);not null;check:ck_scr_world_claim_type,claim_type IN ('world_rule','relationship','story_arc','plot_thread')"`
+	ClaimType    string                  `gorm:"type:varchar(24);not null;check:ck_scr_world_claim_type,claim_type IN ('world_rule','relationship','foreshadowing','payoff','story_arc','plot_thread')"`
 	Statement    string                  `gorm:"type:text;not null"`
 	Revision     int                     `gorm:"not null;uniqueIndex:uq_scr_world_claim_revision,priority:3;check:ck_scr_world_claim_revision,revision >= 1"`
-	Subjects     datatypes.JSON          `gorm:"type:jsonb;not null;check:ck_scr_world_claim_subjects,jsonb_typeof(subjects) = 'array'"`
+	Participants datatypes.JSON          `gorm:"column:subjects;type:jsonb;not null;check:ck_scr_world_claim_subjects,jsonb_typeof(subjects) = 'array'"`
+	Narrative    datatypes.JSON          `gorm:"type:jsonb;check:ck_scr_world_claim_narrative,narrative IS NULL OR narrative = 'null'::jsonb OR jsonb_typeof(narrative) = 'object'"`
 	EvidenceHash string                  `gorm:"type:char(64);not null"`
 	ContentHash  string                  `gorm:"type:char(64);not null;uniqueIndex:uq_scr_world_claim_content,priority:3"`
 	CreatedAt    time.Time               `gorm:"type:timestamptz;not null"`

@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	keyPattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9_.:-]{0,99}$`)
-	statePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_]{0,79}$`)
-	hashPattern  = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	keyPattern       = regexp.MustCompile(`^[a-z0-9][a-z0-9_.:-]{0,99}$`)
+	statePattern     = regexp.MustCompile(`^[a-z0-9][a-z0-9_]{0,79}$`)
+	hashPattern      = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	predicatePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 )
 
 func DecodeAndValidateCandidate(raw json.RawMessage, normalizedText string) (Candidate, error) {

@@ -23,7 +23,7 @@ const (
 	SceneFactCandidateSchemaVersion               = "scene-fact-candidate-production"
 	IdentityResolutionCandidateSchemaVersion      = "identity-resolution-candidate-production"
 	StructureIdentityReviewCandidateSchemaVersion = "structure-identity-review-candidate-production"
-	SceneAnalysisSkillBundleHash                  = "f917388e00b4daf3ff9c866b95ec0bdd31bc7cde4dea0e7680305e4b212c3828"
+	SceneAnalysisSkillBundleHash                  = "0e0a7b34960b4ed35b4a2ce008ac84172cfe195d5798293dec134b946fb52f1c"
 )
 
 var structureIdentityRepairIssuePattern = regexp.MustCompile(`^issue_[a-z0-9_]{1,80}$`)

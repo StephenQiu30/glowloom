@@ -614,8 +614,13 @@ func productionWorldCrossRefs(value ProductionWorldCandidate) []ProductionWorldC
 		}
 	}
 	for _, claim := range value.Bible.WorldClaims {
-		for _, identity := range claim.SubjectIdentityKeys {
-			add("world_claim:"+claim.ClaimKey, "subjects", "asset_identity:"+identity)
+		for _, participant := range claim.Participants {
+			add("world_claim:"+claim.ClaimKey, "claim_"+participant.Role, "asset_identity:"+participant.IdentityKey)
+		}
+		if claim.Narrative != nil {
+			for _, anchor := range claim.Narrative.Anchors {
+				add("world_claim:"+claim.ClaimKey, "claim_anchor", anchor.TargetKey)
+			}
 		}
 	}
 	for _, identity := range value.Asset.Identities {

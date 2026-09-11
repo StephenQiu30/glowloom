@@ -636,17 +636,79 @@ class ProductionEntityFragment(StrictSceneAnalysisModel):
         return self
 
 
+class ProductionWorldClaimParticipant(StrictSceneAnalysisModel):
+    role: Literal["subject", "object", "participant"]
+    identity_key: str = Field(min_length=1)
+
+
+class ProductionWorldClaimAnchor(StrictSceneAnalysisModel):
+    role: Literal["episode", "scene", "beat"]
+    target_key: str = Field(min_length=1)
+
+
+class ProductionWorldClaimScope(StrictSceneAnalysisModel):
+    kind: Literal["project", "episode", "scene", "beat"]
+    owner_logical_id: str = Field(min_length=1)
+
+
+class ProductionWorldStoryTimeRange(StrictSceneAnalysisModel):
+    start_key: str = Field(min_length=1)
+    end_key: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_ordering(self) -> ProductionWorldStoryTimeRange:
+        if self.start_key > self.end_key or any(
+            ord(character) <= 0x1F or ord(character) == 0x7F
+            for value in (self.start_key, self.end_key)
+            for character in value
+        ):
+            raise ValueError("production Narrative Claim story time is invalid")
+        return self
+
+
+class ProductionWorldNarrativeClaim(StrictSceneAnalysisModel):
+    claim_series_key: str = Field(pattern=r"^claim_[a-z0-9_]{1,120}$")
+    predicate: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
+    anchors: list[ProductionWorldClaimAnchor] = Field(min_length=1)
+    valid_scope: ProductionWorldClaimScope
+    story_time_range: ProductionWorldStoryTimeRange | None
+    polarity: Literal["positive", "negative", "neutral"]
+    status: Literal["asserted", "negated"]
+
+    @model_validator(mode="after")
+    def validate_anchors(self) -> ProductionWorldNarrativeClaim:
+        keys = [(value.target_key, value.role) for value in self.anchors]
+        if keys != sorted(set(keys)):
+            raise ValueError("production Narrative Claim anchors must be sorted and unique")
+        return self
+
+
 class ProductionWorldClaimFragment(StrictSceneAnalysisModel):
     claim_key: str = Field(pattern=r"^claim_[a-z0-9_]{1,120}$")
-    claim_type: Literal["world_rule", "relationship", "story_arc", "plot_thread"]
-    subject_identity_keys: list[str] = Field(min_length=1)
+    claim_type: Literal[
+        "world_rule", "relationship", "foreshadowing", "payoff", "story_arc", "plot_thread"
+    ]
+    participants: list[ProductionWorldClaimParticipant] = Field(min_length=1)
     statement: str = Field(min_length=1)
+    narrative: ProductionWorldNarrativeClaim | None
     basis: ProductionSourceBasis
 
     @model_validator(mode="after")
-    def validate_subjects(self) -> ProductionWorldClaimFragment:
-        if self.subject_identity_keys != sorted(set(self.subject_identity_keys)):
-            raise ValueError("production world claim subjects must be sorted and unique")
+    def validate_claim(self) -> ProductionWorldClaimFragment:
+        keys = [(value.identity_key, value.role) for value in self.participants]
+        if keys != sorted(set(keys)):
+            raise ValueError("production world claim participants must be sorted and unique")
+        identities = [value.identity_key for value in self.participants]
+        if len(identities) != len(set(identities)):
+            raise ValueError("production world claim participant identities must be unique")
+        roles = [value.role for value in self.participants]
+        if roles.count("subject") != 1 or roles.count("object") > 1:
+            raise ValueError("production world claim participant roles are invalid")
+        narrative_type = self.claim_type in {"relationship", "foreshadowing", "payoff"}
+        if narrative_type != (self.narrative is not None):
+            raise ValueError("production Narrative Claim facts are incomplete")
+        if self.narrative is not None and self.narrative.claim_series_key != self.claim_key:
+            raise ValueError("production Narrative Claim series must equal its stable claim key")
         return self
 
 
@@ -744,8 +806,43 @@ class ProductionEntityFragmentCandidate(StrictSceneAnalysisModel):
                     if slot.design_gap_key is not None and slot.design_gap_key not in gap_keys:
                         raise ValueError("production state references an unknown DesignGap")
         for claim in self.world_claims:
-            if not set(claim.subject_identity_keys).issubset(expected_identities):
+            if not {item.identity_key for item in claim.participants}.issubset(expected_identities):
                 raise ValueError("production world claim references an unknown formal identity")
+            if claim.narrative is not None:
+                episode_ids = {
+                    str(item.episode_id) for item in value.structure_identity_set.episode_refs
+                }
+                scene_ids = {
+                    str(item.scene_owner_logical_id)
+                    for item in value.structure_identity_set.scene_refs
+                }
+                for anchor in claim.narrative.anchors:
+                    if not self._valid_claim_anchor(anchor, episode_ids, scene_ids):
+                        raise ValueError(
+                            "production Narrative Claim references an unknown formal anchor"
+                        )
+                scope = claim.narrative.valid_scope
+                scope_valid = (
+                    (
+                        scope.kind == "project"
+                        and scope.owner_logical_id == str(value.structure_identity_set.project_id)
+                    )
+                    or (scope.kind == "episode" and scope.owner_logical_id in episode_ids)
+                    or (
+                        scope.kind == "scene"
+                        and scope.owner_logical_id.startswith("scene:")
+                        and scope.owner_logical_id.removeprefix("scene:") in scene_ids
+                    )
+                    or (
+                        scope.kind == "beat"
+                        and any(
+                            anchor.role == "beat" and anchor.target_key == scope.owner_logical_id
+                            for anchor in claim.narrative.anchors
+                        )
+                    )
+                )
+                if not scope_valid:
+                    raise ValueError("production Narrative Claim scope is not formal")
             self._validate_basis(claim.basis, value.normalized_text, evidence_universe)
         for gap in self.design_gaps:
             if gap.subject_key not in subject_keys or not set(
@@ -768,6 +865,23 @@ class ProductionEntityFragmentCandidate(StrictSceneAnalysisModel):
             ProductionEntityFragmentCandidate._validate_evidence(
                 evidence, normalized_text, evidence_universe
             )
+
+    @staticmethod
+    def _valid_claim_anchor(
+        value: ProductionWorldClaimAnchor,
+        episode_ids: set[str],
+        scene_ids: set[str],
+    ) -> bool:
+        if value.role == "episode":
+            return value.target_key.removeprefix(
+                "episode:"
+            ) in episode_ids and value.target_key.startswith("episode:")
+        if value.role == "scene":
+            return value.target_key.removeprefix(
+                "scene:"
+            ) in scene_ids and value.target_key.startswith("scene:")
+        match = re.fullmatch(r"beat:([0-9a-f-]{36}):(beat_[a-z0-9_]{1,120})", value.target_key)
+        return match is not None and match.group(1) in scene_ids
 
     @staticmethod
     def _validate_evidence(
