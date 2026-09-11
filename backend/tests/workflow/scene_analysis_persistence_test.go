@@ -34,6 +34,7 @@ import (
 	presetgorm "github.com/StephenQiu30/lanverse/backend/internal/preset/adapter/gormdb"
 	presetapp "github.com/StephenQiu30/lanverse/backend/internal/preset/application"
 	presetcatalog "github.com/StephenQiu30/lanverse/backend/internal/preset/catalog"
+	presetdomain "github.com/StephenQiu30/lanverse/backend/internal/preset/domain"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -103,6 +104,10 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("accept Script Source: %v", err)
 	}
+	presetStore := presetgorm.NewProjectSelectionStore(database)
+	visualPreset, visualSelection, presetSelectionService := freezeVisualFoundationPreset(
+		t, ctx, presetStore, fixture, now, "scene-analysis-visual-preset",
+	)
 
 	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
@@ -149,7 +154,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 12 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 14 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
@@ -160,7 +165,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		plan.Nodes[8].Executor != "activity.interaction_continuity_reconciliation" ||
 		plan.Nodes[9].Executor != "activity.production_world_assembly" ||
 		plan.Nodes[10].Executor != "gate.production_world_review" ||
-		plan.Nodes[11].Executor != "activity.production_storygraph_projection" {
+		plan.Nodes[11].Executor != "activity.production_storygraph_projection" ||
+		plan.Nodes[12].Executor != "activity.project_preset_selection" ||
+		plan.Nodes[13].Executor != "activity.resolve_visual_foundation" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -195,12 +202,43 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	productionGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
 		Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString,
 	})
+	visualSourceService, err := worldapp.NewVisualFoundationSourceService(
+		worldgorm.NewVisualFoundationSourceRepository(database),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualStore, err := agentgorm.NewVisualFoundationStore(
+		database,
+		workflowgorm.ValidateCurrentVisualFoundationInput,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualRuntime := &deterministicVisualFoundationRuntime{now: now}
+	visualService, err := agentapp.NewVisualFoundationExecutionService(
+		visualStore,
+		visualRuntime,
+		dispatchSigner,
+		agentapp.VisualFoundationExecutionConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 7),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, productionGraphService, nil, nil, nil, nil,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
 			ProductionWorld: productionWorldService,
+			VisualFoundation: &workflowproduction.VisualFoundationDependencies{
+				Selections: presetStore, FindRelease: presetcatalog.FindCuratedRelease,
+				Worlds:  storygraphapp.NewQueryService(storygraphgorm.New(database)),
+				Sources: visualSourceService, Candidates: visualService,
+			},
 		},
 	)
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
@@ -958,12 +996,6 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || !reflect.DeepEqual(replayedWorld, confirmedWorld) {
 		t.Fatalf("replay Production World confirmation: got=%#v want=%#v err=%v", replayedWorld, confirmedWorld, err)
 	}
-	visualSourceService, err := worldapp.NewVisualFoundationSourceService(
-		worldgorm.NewVisualFoundationSourceRepository(database),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	visualSource, err := visualSourceService.Current(
 		ctx, fixture.workspaceID.String(), fixture.projectID.String(),
 	)
@@ -1058,23 +1090,6 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("query confirmed Visual Foundation world: %v", err)
 	}
-	visualPreset, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.12")
-	if err != nil || !found {
-		t.Fatalf("load curated Visual Foundation Preset: found=%v err=%v", found, err)
-	}
-	presetSelectionService := presetapp.NewProjectSelectionService(
-		presetgorm.NewProjectSelectionStore(database), presetcatalog.FindCuratedRelease,
-		func() time.Time { return now }, uuid.NewString,
-	)
-	visualSelection, err := presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
-		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		SelectedBy: fixture.userID.String(), PresetKey: visualPreset.Key,
-		PresetRelease: visualPreset.Release, ApplicationMode: "faithful", ExpectedRevision: 0,
-		IdempotencyKey: "scene-analysis-visual-preset",
-	})
-	if err != nil {
-		t.Fatalf("freeze Visual Foundation Project Preset selection: %v", err)
-	}
 	visualInput, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
 		workflowapp.FaithfulVisualFoundationInputCommand{
 			World: visualWorld, Source: visualSource, Selection: visualSelection, PresetRelease: visualPreset,
@@ -1086,52 +1101,38 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		len(visualInput.DesignGaps) != 0 || len(visualInput.ReferenceAttachments) != 0 {
 		t.Fatalf("compile faithful Visual Foundation input: input=%#v err=%v", visualInput, err)
 	}
-	visualNodeRunID := uuid.New()
-	if err = database.Create(&model.NodeRunProjection{
-		ID: visualNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: uuid.MustParse(started.ID),
-		NodeID: "visual-foundation", DefinitionKey: "resolve_visual_foundation",
-		DefinitionVersion: "2026.09.12", Executor: "activity.resolve_visual_foundation",
-		RiskLevel: "external_ai", Status: "RUNNING", Attempt: 1, Revision: 1,
-		CreatedAt: now, UpdatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("seed Visual Foundation node projection: %v", err)
-	}
-	visualStore, err := agentgorm.NewVisualFoundationStore(
-		database,
-		workflowgorm.ValidateCurrentVisualFoundationInput,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	visualRuntime := &deterministicVisualFoundationRuntime{now: now}
-	visualService, err := agentapp.NewVisualFoundationExecutionService(
-		visualStore,
-		visualRuntime,
-		dispatchSigner,
-		agentapp.VisualFoundationExecutionConfig{
-			Now: func() time.Time { return now }, NewID: uuid.NewString,
-			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 7),
-		},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	visualCandidate, err := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
-		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: visualInput,
-		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
+	presetNode := plan.Nodes[12]
+	presetResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: presetNode.NodeRunID, NodeID: presetNode.NodeID,
+		Executor: presetNode.Executor, Attempt: 1,
 	})
+	if err != nil || presetResult.Status != "SUCCEEDED" || len(presetResult.Output.Bindings) != 1 ||
+		presetResult.Output.Bindings[0].ReferenceID != visualSelection.ID ||
+		presetResult.Output.Bindings[0].ContentHash != visualSelection.ContentHash {
+		t.Fatalf("freeze Project Preset selection Workflow node: result=%#v err=%v", presetResult, err)
+	}
+	visualNode := plan.Nodes[13]
+	visualResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualNode.NodeRunID, NodeID: visualNode.NodeID,
+		Executor: visualNode.Executor, Attempt: 1,
+	})
+	if err != nil || visualResult.Status != "SUCCEEDED" || len(visualResult.Output.Bindings) != 1 {
+		t.Fatalf("execute Visual Foundation Workflow node: result=%#v err=%v", visualResult, err)
+	}
+	visualCandidate, err := sceneService.GetCandidate(
+		ctx, fixture.projectID.String(), visualResult.Output.Bindings[0].ReferenceID,
+	)
 	if err != nil || visualCandidate.StageKey != contract.VisualFoundationStageKey ||
 		visualCandidate.CandidateType != "visual_foundation_candidate" ||
 		visualCandidate.ProjectID != fixture.projectID.String() || visualRuntime.calls != 1 {
 		t.Fatalf("persist Visual Foundation Candidate: candidate=%#v calls=%d err=%v", visualCandidate, visualRuntime.calls, err)
 	}
-	replayedVisualCandidate, err := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
-		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: visualInput,
-		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
+	replayedVisualResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualNode.NodeRunID, NodeID: visualNode.NodeID,
+		Executor: visualNode.Executor, Attempt: 2,
 	})
-	if err != nil || replayedVisualCandidate.ID != visualCandidate.ID ||
-		replayedVisualCandidate.CandidateRevisionHash != visualCandidate.CandidateRevisionHash || visualRuntime.calls != 1 {
-		t.Fatalf("replay Visual Foundation Candidate: got=%#v want=%#v calls=%d err=%v", replayedVisualCandidate, visualCandidate, visualRuntime.calls, err)
+	if err != nil || replayedVisualResult.OutputHash != visualResult.OutputHash || visualRuntime.calls != 1 {
+		t.Fatalf("replay Visual Foundation Workflow node: got=%#v want=%#v calls=%d err=%v", replayedVisualResult, visualResult, visualRuntime.calls, err)
 	}
 	var visualRelease model.SceneAnalysisRelease
 	if err = database.First(&visualRelease, "stage_key = ?", contract.VisualFoundationStageKey).Error; err != nil ||
@@ -1168,7 +1169,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	driftedVisualInput := visualInput
 	driftedVisualInput.ProductionWorldOwnerSetHash = sceneTextHash("drifted-visual-owner-set")
 	if _, driftErr := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
-		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: driftedVisualInput,
+		WorkflowRunID: started.ID, NodeRunID: visualNode.NodeRunID, Input: driftedVisualInput,
 		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
 	}); agentapp.ErrorCode(driftErr) != "stale_visual_foundation_input" || visualRuntime.calls != 1 {
 		t.Fatalf("drifted Visual Foundation input: calls=%d err=%v", visualRuntime.calls, driftErr)
@@ -1182,7 +1183,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		t.Fatalf("switch Project Preset selection before stale validation: %v", err)
 	}
 	if _, selectionDriftErr := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
-		WorkflowRunID: started.ID, NodeRunID: visualNodeRunID.String(), Input: visualInput,
+		WorkflowRunID: started.ID, NodeRunID: visualNode.NodeRunID, Input: visualInput,
 		MediaAttachments: []contract.VisualFoundationMediaAttachment{},
 	}); agentapp.ErrorCode(selectionDriftErr) != "stale_visual_foundation_input" || visualRuntime.calls != 1 {
 		t.Fatalf("switched Project Preset selection: calls=%d err=%v", visualRuntime.calls, selectionDriftErr)
@@ -2050,6 +2051,35 @@ func sceneAnalysisCandidateIdentity(value agentapp.Candidate) contract.SceneAnal
 	}
 }
 
+func freezeVisualFoundationPreset(
+	t *testing.T,
+	ctx context.Context,
+	store *presetgorm.ProjectSelectionStore,
+	fixture sceneAnalysisFixture,
+	now time.Time,
+	idempotencyKey string,
+) (presetdomain.Release, presetdomain.ProjectSelection, *presetapp.ProjectSelectionService) {
+	t.Helper()
+	release, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.12")
+	if err != nil || !found {
+		t.Fatalf("load curated Visual Foundation Preset: found=%v err=%v", found, err)
+	}
+	service := presetapp.NewProjectSelectionService(
+		store, presetcatalog.FindCuratedRelease,
+		func() time.Time { return now }, uuid.NewString,
+	)
+	selection, err := service.Select(ctx, presetapp.SelectProjectPresetCommand{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		SelectedBy: fixture.userID.String(), PresetKey: release.Key,
+		PresetRelease: release.Release, ApplicationMode: "faithful", ExpectedRevision: 0,
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		t.Fatalf("freeze Visual Foundation Project Preset selection: %v", err)
+	}
+	return release, selection, service
+}
+
 func sceneAnalysisAggregateLeaf(value agentapp.Candidate) contract.AggregateLeafCandidateRef {
 	return contract.AggregateLeafCandidateRef{
 		StageInstanceKey: value.StageInstanceKey, ShardKey: "script:full",
@@ -2072,6 +2102,8 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "production-world", DefinitionKey: "production.production_world_assembly", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "production-world-gate", DefinitionKey: "human.production_world_review", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "production-storygraph", DefinitionKey: "production.storygraph_projection", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "preset-selection", DefinitionKey: "production.project_preset_selection", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "visual-foundation", DefinitionKey: "agent.visual_foundation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -2108,6 +2140,9 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "continuity-production-world", FromNodeID: "interaction-continuity", FromPort: "candidate", ToNodeID: "production-world", ToPort: "continuity"},
 			{ID: "production-world-gate-input", FromNodeID: "production-world", FromPort: "candidate", ToNodeID: "production-world-gate", ToPort: "candidate"},
 			{ID: "production-world-storygraph", FromNodeID: "production-world-gate", FromPort: "world", ToNodeID: "production-storygraph", ToPort: "world"},
+			{ID: "storygraph-preset-selection", FromNodeID: "production-storygraph", FromPort: "storygraph", ToNodeID: "preset-selection", ToPort: "storygraph"},
+			{ID: "storygraph-visual-foundation", FromNodeID: "production-storygraph", FromPort: "storygraph", ToNodeID: "visual-foundation", ToPort: "storygraph"},
+			{ID: "preset-selection-visual-foundation", FromNodeID: "preset-selection", FromPort: "selection", ToNodeID: "visual-foundation", ToPort: "selection"},
 		},
 	}
 }

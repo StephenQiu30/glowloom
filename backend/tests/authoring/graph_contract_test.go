@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "25.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "26.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -33,6 +33,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"agent.story_review@1.0.0",
 		"agent.storyboard_draft@2.0.0",
 		"agent.structure_identity_review@1.0.0",
+		"agent.visual_foundation@1.0.0",
 		"generation.reference_asset@1.0.0",
 		"human.episode_plan_review@1.0.0",
 		"human.episode_plan_review@2.0.0",
@@ -49,6 +50,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"production.episode_plan@2.0.0",
 		"production.episode_structure@1.0.0",
 		"production.production_world_assembly@1.0.0",
+		"production.project_preset_selection@1.0.0",
 		"production.storygraph_compile@1.0.0",
 		"production.storygraph_projection@1.0.0",
 	}
@@ -62,6 +64,55 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Fatalf("system catalog keys = %v, want %v", got, want)
+	}
+}
+
+func TestVisualFoundationConsumesExactStoryGraphAndProjectPresetSelection(t *testing.T) {
+	catalog, err := authoring.SystemCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]struct {
+		executor, cachePolicy, riskLevel string
+		inputs                           map[string]string
+		outputKey, outputType            string
+	}{
+		"production.project_preset_selection": {
+			executor: "activity.project_preset_selection", cachePolicy: "never", riskLevel: "low",
+			inputs:    map[string]string{"storygraph": "storygraph_version"},
+			outputKey: "selection", outputType: "project_preset_selection",
+		},
+		"agent.visual_foundation": {
+			executor: "activity.resolve_visual_foundation", cachePolicy: "by_inputs", riskLevel: "external_ai",
+			inputs:    map[string]string{"storygraph": "storygraph_version", "selection": "project_preset_selection"},
+			outputKey: "candidate", outputType: "visual_foundation_candidate",
+		},
+	}
+	for _, definition := range catalog.Definitions {
+		expected, exists := want[definition.Key]
+		if !exists {
+			continue
+		}
+		if definition.Version != "1.0.0" || definition.Executor != expected.executor ||
+			definition.CachePolicy != expected.cachePolicy || definition.RiskLevel != expected.riskLevel ||
+			len(definition.InputPorts) != len(expected.inputs) || len(definition.OutputPorts) != 1 ||
+			definition.OutputPorts[0].Key != expected.outputKey ||
+			definition.OutputPorts[0].ValueType != expected.outputType || !definition.OutputPorts[0].Required {
+			t.Fatalf("%s contract = %#v", definition.Key, definition)
+		}
+		for _, port := range definition.InputPorts {
+			if !port.Required || expected.inputs[port.Key] != port.ValueType {
+				t.Fatalf("%s input = %#v", definition.Key, port)
+			}
+			delete(expected.inputs, port.Key)
+		}
+		if len(expected.inputs) != 0 {
+			t.Fatalf("%s missing inputs = %v", definition.Key, expected.inputs)
+		}
+		delete(want, definition.Key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("Visual Foundation workflow definitions are absent: %v", want)
 	}
 }
 

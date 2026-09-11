@@ -58,6 +58,13 @@ func NewWorkflowRuntime(
 			sceneAnalysis[0].StructureIdentities == nil || sceneAnalysis[0].ProductionWorld == nil)) {
 		return nil, errors.New("scene Analysis workflow dependencies must be configured together")
 	}
+	if len(sceneAnalysis) == 1 && sceneAnalysis[0].VisualFoundation != nil {
+		visual := sceneAnalysis[0].VisualFoundation
+		if visual.Selections == nil || visual.FindRelease == nil || visual.Worlds == nil ||
+			visual.Sources == nil || visual.Candidates == nil {
+			return nil, errors.New("Visual Foundation workflow dependencies must be configured together")
+		}
+	}
 	now := func() time.Time { return time.Now().UTC() }
 	humanTasks := workflowapp.HumanTaskOpener(workflowreview.New(reviews))
 	if candidateSets != nil {

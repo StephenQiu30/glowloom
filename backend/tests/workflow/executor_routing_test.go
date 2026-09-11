@@ -20,7 +20,7 @@ func (executor *recordingWorkflowExecutor) Execute(
 	return workflow.NodeExecutorResult{Status: "SUCCEEDED"}, nil
 }
 
-func TestWorkflowRouterKeepsProductionWorldAndStoryGraphInBackendOwner(t *testing.T) {
+func TestWorkflowRouterKeepsProductionWorldStoryGraphAndVisualFoundationInBackendOwner(t *testing.T) {
 	production := &recordingWorkflowExecutor{}
 	generation := &recordingWorkflowExecutor{}
 	executor, err := workflowexecution.NewNodeExecutor(production, generation)
@@ -30,6 +30,8 @@ func TestWorkflowRouterKeepsProductionWorldAndStoryGraphInBackendOwner(t *testin
 	for _, executorName := range []string{
 		"activity.production_world_assembly",
 		"activity.production_storygraph_projection",
+		"activity.project_preset_selection",
+		"activity.resolve_visual_foundation",
 	} {
 		if _, err = executor.Execute(context.Background(), workflow.NodeExecutorCommand{
 			NodeActivityCommand: workflow.NodeActivityCommand{Executor: executorName},
@@ -37,9 +39,11 @@ func TestWorkflowRouterKeepsProductionWorldAndStoryGraphInBackendOwner(t *testin
 			t.Fatalf("route %s: %v", executorName, err)
 		}
 	}
-	if len(production.executors) != 2 || len(generation.executors) != 0 ||
+	if len(production.executors) != 4 || len(generation.executors) != 0 ||
 		production.executors[0] != "activity.production_world_assembly" ||
-		production.executors[1] != "activity.production_storygraph_projection" {
+		production.executors[1] != "activity.production_storygraph_projection" ||
+		production.executors[2] != "activity.project_preset_selection" ||
+		production.executors[3] != "activity.resolve_visual_foundation" {
 		t.Fatalf("production=%v generation=%v", production.executors, generation.executors)
 	}
 }

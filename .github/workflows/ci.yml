@@ -75,7 +75,7 @@ jobs:
           LANVERSE_TEST_TEMPORAL_ADDRESS: 127.0.0.1:7233
         run: |
           go test -count=1 -timeout=5m ./tests/workflow \
-            -run '^TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce$'
+            -run '^(TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce|TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow)$'
 
   agent:
     name: Agent / Candidate Runtime

@@ -42,6 +42,38 @@ func (store *ProjectSelectionStore) Current(
 	)
 }
 
+func (store *ProjectSelectionStore) Exact(
+	ctx context.Context,
+	workspaceID string,
+	projectID string,
+	selectionID string,
+) (presetdomain.ProjectSelection, error) {
+	if store == nil || store.database == nil {
+		return presetdomain.ProjectSelection{}, presetapp.ErrProjectSelectionNotFound
+	}
+	workspace, workspaceErr := uuid.Parse(workspaceID)
+	project, projectErr := uuid.Parse(projectID)
+	selection, selectionErr := uuid.Parse(selectionID)
+	if workspaceErr != nil || projectErr != nil || selectionErr != nil ||
+		workspace == uuid.Nil || project == uuid.Nil || selection == uuid.Nil {
+		return presetdomain.ProjectSelection{}, presetapp.ErrProjectSelectionNotFound
+	}
+	var record model.ProjectPresetSelection
+	if err := store.database.WithContext(ctx).Where(
+		"id = ? AND workspace_id = ? AND project_id = ?", selection, workspace, project,
+	).First(&record).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return presetdomain.ProjectSelection{}, presetapp.ErrProjectSelectionNotFound
+		}
+		return presetdomain.ProjectSelection{}, err
+	}
+	value, _, err := presetdomain.DecodeProjectSelection(json.RawMessage(record.Selection))
+	if err != nil || !projectSelectionRecordMatchesValue(record, value) {
+		return presetdomain.ProjectSelection{}, errors.New("Project Preset selection persistence has drifted")
+	}
+	return value, nil
+}
+
 func (store *ProjectSelectionStore) WithinSerializableTransaction(
 	ctx context.Context,
 	operation func(presetapp.ProjectSelectionRepository) error,
@@ -232,6 +264,15 @@ func projectSelectionRecordMatches(
 	head model.ProjectPresetSelectionHead,
 	selection presetdomain.ProjectSelection,
 ) bool {
+	return projectSelectionRecordMatchesValue(record, selection) &&
+		head.CurrentSelectionID == record.ID && head.CurrentContentHash == record.ContentHash &&
+		head.Revision == record.Revision
+}
+
+func projectSelectionRecordMatchesValue(
+	record model.ProjectPresetSelection,
+	selection presetdomain.ProjectSelection,
+) bool {
 	parentSelectionMatches := record.ParentSelectionID == nil && selection.ParentSelectionID == nil
 	if record.ParentSelectionID != nil && selection.ParentSelectionID != nil {
 		parentSelectionMatches = record.ParentSelectionID.String() == *selection.ParentSelectionID
@@ -241,7 +282,6 @@ func projectSelectionRecordMatches(
 		record.PresetKey == selection.PresetRelease.Key && record.PresetRelease == selection.PresetRelease.Release &&
 		record.PresetContentHash == selection.PresetRelease.ContentHash && record.ApplicationMode == selection.ApplicationMode &&
 		record.ContentHash == selection.ContentHash && record.SelectedBy.String() == selection.SelectedBy &&
-		record.SelectedAt.Equal(selection.SelectedAt) && head.CurrentSelectionID == record.ID &&
-		head.CurrentContentHash == record.ContentHash && head.Revision == record.Revision &&
+		record.SelectedAt.Equal(selection.SelectedAt) &&
 		parentSelectionMatches && reflect.DeepEqual(record.ParentContentHash, selection.ParentContentHash)
 }

@@ -12,6 +12,8 @@ import (
 
 	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	presetapp "github.com/StephenQiu30/lanverse/backend/internal/preset/application"
+	presetdomain "github.com/StephenQiu30/lanverse/backend/internal/preset/domain"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
@@ -41,6 +43,8 @@ const (
 	interactionContinuityExecutor      = "activity.interaction_continuity_reconciliation"
 	productionWorldAssemblyExecutor    = "activity.production_world_assembly"
 	productionStoryGraphExecutor       = "activity.production_storygraph_projection"
+	projectPresetSelectionExecutor     = "activity.project_preset_selection"
+	visualFoundationExecutor           = "activity.resolve_visual_foundation"
 	sourceEvidenceExecutor             = "activity.source_evidence"
 	storyAnalysisExecutor              = "activity.story_analysis"
 	storyReviewExecutor                = "activity.story_review"
@@ -79,6 +83,32 @@ type SceneAnalysisDependencies struct {
 	Candidates          SceneAnalysisOwner
 	StructureIdentities FormalStructureIdentitySource
 	ProductionWorld     workflowapp.ProductionWorldAssembler
+	VisualFoundation    *VisualFoundationDependencies
+}
+
+type ProjectPresetSelectionSource interface {
+	Current(context.Context, string, string) (presetdomain.ProjectSelection, error)
+	Exact(context.Context, string, string, string) (presetdomain.ProjectSelection, error)
+}
+
+type VisualFoundationWorldSource interface {
+	VisualFoundationWorld(context.Context, storygraphapp.Actor, string) (storygraph.VisualFoundationWorldReadSet, error)
+}
+
+type ConfirmedVisualFoundationSource interface {
+	Current(context.Context, string, string) (worlddomain.ConfirmedVisualFoundationSource, error)
+}
+
+type VisualFoundationOwner interface {
+	Execute(context.Context, agentapp.ExecuteVisualFoundationCommand) (agentapp.Candidate, error)
+}
+
+type VisualFoundationDependencies struct {
+	Selections  ProjectPresetSelectionSource
+	FindRelease presetapp.CuratedReleaseFinder
+	Worlds      VisualFoundationWorldSource
+	Sources     ConfirmedVisualFoundationSource
+	Candidates  VisualFoundationOwner
 }
 
 type FormalStructureIdentitySource interface {
@@ -153,6 +183,7 @@ type NodeExecutor struct {
 	sceneAnalysis       SceneAnalysisOwner
 	structureIdentities FormalStructureIdentitySource
 	productionWorld     workflowapp.ProductionWorldAssembler
+	visualFoundation    *VisualFoundationDependencies
 	evidence            SourceEvidenceOwner
 	stories             StoryAnalysisOwner
 	storyReviews        StoryReviewOwner
@@ -193,6 +224,7 @@ func NewNodeExecutor(
 		executor.sceneAnalysis = sceneAnalysis[0].Candidates
 		executor.structureIdentities = sceneAnalysis[0].StructureIdentities
 		executor.productionWorld = sceneAnalysis[0].ProductionWorld
+		executor.visualFoundation = sceneAnalysis[0].VisualFoundation
 	}
 	return executor
 }
@@ -229,6 +261,10 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeProductionWorldAssembly(ctx, command)
 	case productionStoryGraphExecutor:
 		return executor.executeProductionStoryGraph(ctx, command)
+	case projectPresetSelectionExecutor:
+		return executor.executeProjectPresetSelection(ctx, command)
+	case visualFoundationExecutor:
+		return executor.executeVisualFoundation(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -923,6 +959,173 @@ func (executor *NodeExecutor) executeProductionStoryGraph(
 		return domain.NodeExecutorResult{}, err
 	}
 	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeProjectPresetSelection(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	dependencies := executor.visualFoundation
+	if dependencies == nil || dependencies.Selections == nil || dependencies.Worlds == nil {
+		return domain.NodeExecutorResult{}, errors.New("Project Preset selection workflow sources are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "selection" ||
+		command.OutputPorts[0].ValueType != "project_preset_selection" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Project Preset selection node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Project Preset selection node config")
+	}
+	storyGraphBinding := input.Bindings[0]
+	if !validVisualFoundationInputBinding(storyGraphBinding, "storygraph", "storygraph_version", "storygraph") {
+		return domain.NodeExecutorResult{}, errors.New("Project Preset selection StoryGraph input has drifted")
+	}
+	actor := storygraphapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
+	world, err := dependencies.Worlds.VisualFoundationWorld(ctx, actor, command.ProjectID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if world.WorkspaceID != command.WorkspaceID || world.ProjectID != command.ProjectID ||
+		world.StoryGraphVersionID != storyGraphBinding.ReferenceID ||
+		world.StoryGraphContentHash != storyGraphBinding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Project Preset selection StoryGraph input has drifted")
+	}
+	selection, err := dependencies.Selections.Current(ctx, command.WorkspaceID, command.ProjectID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if selection.WorkspaceID != command.WorkspaceID || selection.ProjectID != command.ProjectID ||
+		selection.Revision < 1 || !workflowContentHashPattern.MatchString(selection.ContentHash) {
+		return domain.NodeExecutorResult{}, errors.New("current Project Preset selection has drifted")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "selection", ValueType: "project_preset_selection", ReferenceID: selection.ID,
+			ReferenceVersion: strconv.FormatInt(selection.Revision, 10), ContentHash: selection.ContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeVisualFoundation(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	dependencies := executor.visualFoundation
+	if dependencies == nil || dependencies.Selections == nil || dependencies.FindRelease == nil ||
+		dependencies.Worlds == nil || dependencies.Sources == nil || dependencies.Candidates == nil {
+		return domain.NodeExecutorResult{}, errors.New("Visual Foundation workflow sources are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 2 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "visual_foundation_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Visual Foundation node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Visual Foundation node config")
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		bindings[binding.Port] = binding
+	}
+	storyGraphBinding, storyGraphExists := bindings["storygraph"]
+	selectionBinding, selectionExists := bindings["selection"]
+	if !storyGraphExists || !selectionExists ||
+		!validVisualFoundationInputBinding(storyGraphBinding, "storygraph", "storygraph_version", "storygraph") ||
+		!validVisualFoundationInputBinding(selectionBinding, "selection", "project_preset_selection", "selection") {
+		return domain.NodeExecutorResult{}, errors.New("Visual Foundation inputs have drifted")
+	}
+	world, err := dependencies.Worlds.VisualFoundationWorld(ctx, storygraphapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, command.ProjectID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if world.WorkspaceID != command.WorkspaceID || world.ProjectID != command.ProjectID ||
+		world.StoryGraphVersionID != storyGraphBinding.ReferenceID ||
+		world.StoryGraphContentHash != storyGraphBinding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Visual Foundation StoryGraph input has drifted")
+	}
+	selection, err := dependencies.Selections.Exact(
+		ctx, command.WorkspaceID, command.ProjectID, selectionBinding.ReferenceID,
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if strconv.FormatInt(selection.Revision, 10) != selectionBinding.ReferenceVersion ||
+		selection.ContentHash != selectionBinding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Visual Foundation Project Preset selection has drifted")
+	}
+	release, found, err := dependencies.FindRelease(selection.PresetRelease.Key, selection.PresetRelease.Release)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if !found || release.ContentHash != selection.PresetRelease.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Visual Foundation Preset release is unavailable")
+	}
+	source, err := dependencies.Sources.Current(ctx, command.WorkspaceID, command.ProjectID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	visualInput, _, err := workflowapp.CompileFaithfulVisualFoundationInput(
+		workflowapp.FaithfulVisualFoundationInputCommand{
+			World: world, Source: source, Selection: selection, PresetRelease: release,
+		},
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	candidate, err := dependencies.Candidates.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID, Input: visualInput,
+		MediaAttachments: []agentcontract.VisualFoundationMediaAttachment{},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if candidate.WorkspaceID != command.WorkspaceID || candidate.ProjectID != command.ProjectID ||
+		candidate.StageKey != agentcontract.VisualFoundationStageKey ||
+		candidate.CandidateType != "visual_foundation_candidate" || candidate.Revision < 1 ||
+		!workflowContentHashPattern.MatchString(candidate.CandidateRevisionHash) {
+		return domain.NodeExecutorResult{}, errors.New("Visual Foundation Candidate does not match Workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "visual_foundation_candidate", ReferenceID: candidate.ID,
+			ReferenceVersion: strconv.FormatInt(candidate.Revision, 10), ContentHash: candidate.CandidateRevisionHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func validVisualFoundationInputBinding(
+	binding domain.NodeInputBinding,
+	port string,
+	valueType string,
+	sourcePort string,
+) bool {
+	if binding.Port != port || binding.ValueType != valueType ||
+		binding.SourceKind != domain.NodeInputSourceNodeOutput || binding.SourcePort != sourcePort ||
+		strings.TrimSpace(binding.SourceNodeID) == "" || !workflowContentHashPattern.MatchString(binding.ContentHash) {
+		return false
+	}
+	if _, err := uuid.Parse(binding.ReferenceID); err != nil {
+		return false
+	}
+	revision, err := strconv.ParseInt(binding.ReferenceVersion, 10, 64)
+	return err == nil && revision > 0
 }
 
 func (executor *NodeExecutor) executeStoryboardDraft(

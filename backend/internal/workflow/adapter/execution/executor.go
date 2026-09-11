@@ -40,6 +40,8 @@ func (executor *NodeExecutor) Execute(
 		"activity.interaction_continuity_reconciliation",
 		"activity.production_world_assembly",
 		"activity.production_storygraph_projection",
+		"activity.project_preset_selection",
+		"activity.resolve_visual_foundation",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

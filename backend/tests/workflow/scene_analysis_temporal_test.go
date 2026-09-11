@@ -22,6 +22,8 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	presetgorm "github.com/StephenQiu30/lanverse/backend/internal/preset/adapter/gormdb"
+	presetcatalog "github.com/StephenQiu30/lanverse/backend/internal/preset/catalog"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
@@ -88,6 +90,10 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	}); err != nil {
 		t.Fatalf("accept Script Source: %v", err)
 	}
+	presetStore := presetgorm.NewProjectSelectionStore(database)
+	_, visualSelection, _ := freezeVisualFoundationPreset(
+		t, ctx, presetStore, fixture, now, "structure-identity-temporal-visual-preset:"+fixture.projectID.String(),
+	)
 
 	authoringService := authoringapp.NewService(authoringStore, authoringapp.Config{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
@@ -149,12 +155,43 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	productionGraphService := storygraphapp.NewService(storygraphgorm.New(database), storygraphapp.Config{
 		Now: func() time.Time { return now.Add(2 * time.Minute) }, NewID: uuid.NewString,
 	})
+	visualSourceService, err := worldapp.NewVisualFoundationSourceService(
+		worldgorm.NewVisualFoundationSourceRepository(database),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualStore, err := agentgorm.NewVisualFoundationStore(
+		database,
+		workflowgorm.ValidateCurrentVisualFoundationInput,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visualRuntime := &deterministicVisualFoundationRuntime{now: now}
+	visualService, err := agentapp.NewVisualFoundationExecutionService(
+		visualStore,
+		visualRuntime,
+		dispatchSigner,
+		agentapp.VisualFoundationExecutionConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 8),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, productionGraphService, nil, nil, nil, nil,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: sourceService, Candidates: sceneService, StructureIdentities: structureIdentityQuery,
 			ProductionWorld: productionWorldService,
+			VisualFoundation: &workflowproduction.VisualFoundationDependencies{
+				Selections: presetStore, FindRelease: presetcatalog.FindCuratedRelease,
+				Worlds:  storygraphapp.NewQueryService(storygraphgorm.New(database)),
+				Sources: visualSourceService, Candidates: visualService,
+			},
 		},
 	)
 	reviewService := reviewapp.NewService(reviewgorm.New(database), reviewapp.Config{
@@ -680,6 +717,34 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 		productionGraphVersion.ContentHash != productionGraphOutput.Bindings[0].ContentHash ||
 		len(productionGraphVersion.CompilationInput) == 0 {
 		t.Fatalf("Temporal Production StoryGraph version = %#v", productionGraphVersion)
+	}
+	var presetNode model.NodeRunProjection
+	if err = database.Where(
+		"workflow_run_id = ? AND node_id = ?", productionWorldRepairRun.ID, "preset-selection",
+	).First(&presetNode).Error; err != nil {
+		t.Fatalf("query Temporal Project Preset selection node: %v", err)
+	}
+	presetOutput, _, _, presetOutputErr := workflow.ParseNodeOutput(json.RawMessage(presetNode.Output))
+	if presetNode.Status != "SUCCEEDED" || presetNode.OutputHash == nil || presetOutputErr != nil ||
+		len(presetOutput.Bindings) != 1 || presetOutput.Bindings[0].ReferenceID != visualSelection.ID ||
+		presetOutput.Bindings[0].ContentHash != visualSelection.ContentHash {
+		t.Fatalf("Temporal Project Preset selection output=%#v node=%#v err=%v", presetOutput, presetNode, presetOutputErr)
+	}
+	var visualNode model.NodeRunProjection
+	if err = database.Where(
+		"workflow_run_id = ? AND node_id = ?", productionWorldRepairRun.ID, "visual-foundation",
+	).First(&visualNode).Error; err != nil {
+		t.Fatalf("query Temporal Visual Foundation node: %v", err)
+	}
+	visualOutput, _, _, visualOutputErr := workflow.ParseNodeOutput(json.RawMessage(visualNode.Output))
+	if visualNode.Status != "SUCCEEDED" || visualNode.OutputHash == nil || visualOutputErr != nil ||
+		len(visualOutput.Bindings) != 1 || visualOutput.Bindings[0].ValueType != "visual_foundation_candidate" {
+		t.Fatalf("Temporal Visual Foundation output=%#v node=%#v err=%v", visualOutput, visualNode, visualOutputErr)
+	}
+	var visualCandidate model.SceneAnalysisCandidateRevision
+	if err = database.First(&visualCandidate, "id = ?", visualOutput.Bindings[0].ReferenceID).Error; err != nil ||
+		visualCandidate.CandidateType != "visual_foundation_candidate" || visualRuntime.calls == 0 {
+		t.Fatalf("Temporal Visual Foundation Candidate=%#v calls=%d err=%v", visualCandidate, visualRuntime.calls, err)
 	}
 	var productionEntityInvocation model.SceneAnalysisInvocationRecord
 	if err = database.Where(

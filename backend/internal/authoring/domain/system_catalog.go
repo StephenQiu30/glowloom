@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "25.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "26.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -101,6 +101,19 @@ func SystemCatalog() (Catalog, error) {
 			"production.storygraph_projection", "Production StoryGraph Projection", "production", "activity.production_storygraph_projection", "never", "low",
 			[]PortDefinition{requiredPort("world", "production_world_owner_set")},
 			[]PortDefinition{requiredPort("storygraph", "storygraph_version")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
+			"production.project_preset_selection", "Project Preset Selection Snapshot", "production", "activity.project_preset_selection", "never", "low",
+			[]PortDefinition{requiredPort("storygraph", "storygraph_version")},
+			[]PortDefinition{requiredPort("selection", "project_preset_selection")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
+			"agent.visual_foundation", "Visual Foundation Candidate", "agent", "activity.resolve_visual_foundation", "by_inputs", "external_ai",
+			[]PortDefinition{
+				requiredPort("storygraph", "storygraph_version"),
+				requiredPort("selection", "project_preset_selection"),
+			},
+			[]PortDefinition{requiredPort("candidate", "visual_foundation_candidate")}, emptyNodeConfig(),
 		),
 		systemNodeDefinition(
 			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",

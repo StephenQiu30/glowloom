@@ -26,6 +26,8 @@ import (
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstore"
+	presetgorm "github.com/StephenQiu30/lanverse/backend/internal/preset/adapter/gormdb"
+	presetcatalog "github.com/StephenQiu30/lanverse/backend/internal/preset/catalog"
 	biblegorm "github.com/StephenQiu30/lanverse/backend/internal/production/bible/adapter/gormdb"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	planninggorm "github.com/StephenQiu30/lanverse/backend/internal/production/planning/adapter/gormdb"
@@ -37,6 +39,8 @@ import (
 	storyboardgeneration "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/generation"
 	storyboardgorm "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/gormdb"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
+	worldgorm "github.com/StephenQiu30/lanverse/backend/internal/production/world/adapter/gormdb"
+	worldapp "github.com/StephenQiu30/lanverse/backend/internal/production/world/application"
 	quotaapp "github.com/StephenQiu30/lanverse/backend/internal/quota/application"
 	reviewgorm "github.com/StephenQiu30/lanverse/backend/internal/review/adapter/gormdb"
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
@@ -104,8 +108,9 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("workflow Agent runtime configuration failed: %w", err)
 	}
+	agentHTTPClient := agentclient.New(agentRuntimeCatalog, agentSigner, nil)
 	sceneAnalysisService, err := agentapp.NewSceneAnalysisService(
-		agentgorm.NewSceneAnalysisStore(database), agentclient.New(agentRuntimeCatalog, agentSigner, nil),
+		agentgorm.NewSceneAnalysisStore(database), agentHTTPClient,
 		agentSigner,
 		agentapp.SceneAnalysisConfig{
 			Now: now, NewID: uuid.NewString, AgentImageDigest: configuration.AgentRuntimeImageDigest,
@@ -113,6 +118,26 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	)
 	if err != nil {
 		return fmt.Errorf("workflow Scene Analysis service initialization failed: %w", err)
+	}
+	visualBroker, err := agentapp.NewVisualFoundationMediaBroker(objects, agentHTTPClient)
+	if err != nil {
+		return fmt.Errorf("workflow Visual Foundation media Broker initialization failed: %w", err)
+	}
+	visualStore, err := agentgorm.NewVisualFoundationStore(
+		database,
+		workflowgorm.ValidateCurrentVisualFoundationInput,
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Visual Foundation store initialization failed: %w", err)
+	}
+	visualFoundationService, err := agentapp.NewVisualFoundationExecutionService(
+		visualStore, visualBroker, agentSigner,
+		agentapp.VisualFoundationExecutionConfig{
+			Now: now, NewID: uuid.NewString, AgentImageDigest: configuration.AgentRuntimeImageDigest,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Visual Foundation service initialization failed: %w", err)
 	}
 	bibleStore := biblegorm.New(database)
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: now, NewID: uuid.NewString})
@@ -201,6 +226,12 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("Production World assembly composition failed: %w", err)
 	}
+	visualSourceService, err := worldapp.NewVisualFoundationSourceService(
+		worldgorm.NewVisualFoundationSourceRepository(database),
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Visual Foundation source composition failed: %w", err)
+	}
 	activities, err := NewWorkflowRuntime(
 		workflowStore, scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
 		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations, providerService,
@@ -209,6 +240,11 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 			Sources: scriptSourceService, Candidates: sceneAnalysisService,
 			StructureIdentities: bibleapp.NewStructureIdentityQuery(bibleStore, projectService),
 			ProductionWorld:     productionWorldService,
+			VisualFoundation: &workflowproduction.VisualFoundationDependencies{
+				Selections: presetgorm.NewProjectSelectionStore(database), FindRelease: presetcatalog.FindCuratedRelease,
+				Worlds:  storygraphapp.NewQueryService(storygraphgorm.New(database)),
+				Sources: visualSourceService, Candidates: visualFoundationService,
+			},
 		},
 	)
 	if err != nil {
