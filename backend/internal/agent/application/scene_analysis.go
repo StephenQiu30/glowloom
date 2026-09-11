@@ -83,6 +83,7 @@ type ReleaseRecord struct {
 	ID              string
 	Identity        contract.SceneAnalysisReleaseIdentity
 	Variant         contract.SceneAnalysisStageVariant
+	ModelCapability string
 	LoadedResources []string
 	CreatedAt       time.Time
 	InitialControl  contract.SceneAnalysisControlProof
@@ -584,7 +585,11 @@ func validateExecuteCommand(command ExecuteCommand) error {
 }
 
 func (service *SceneAnalysisService) release(stageKey string, now time.Time) (ReleaseRecord, error) {
-	stageReleases, err := contract.BuildSceneAnalysisStageReleases(service.config.AgentImageDigest)
+	return BuildStageReleaseRecord(stageKey, service.config.AgentImageDigest, now)
+}
+
+func BuildStageReleaseRecord(stageKey, agentImageDigest string, now time.Time) (ReleaseRecord, error) {
+	stageReleases, err := contract.BuildSceneAnalysisStageReleases(agentImageDigest)
 	if err != nil {
 		return ReleaseRecord{}, err
 	}
@@ -639,13 +644,18 @@ func (service *SceneAnalysisService) release(stageKey string, now time.Time) (Re
 	if err != nil {
 		return ReleaseRecord{}, err
 	}
+	modelCapability := "structured_text"
+	if stageRelease.RuntimeClass == "vision" {
+		modelCapability = "vision"
+	}
 	return ReleaseRecord{
 		ID: releaseID,
 		Identity: contract.SceneAnalysisReleaseIdentity{
 			SkillReleaseID: skillID, SkillReleaseHash: skillHash, StageReleaseHash: stageHash,
 			BundleContentHash: stageRelease.BundleContentHash, AgentImageDigest: stageRelease.RuntimeImageDigest,
 		},
-		Variant: stageRelease.VariantKey, LoadedResources: loadedResources, CreatedAt: now,
+		Variant: stageRelease.VariantKey, ModelCapability: modelCapability,
+		LoadedResources: loadedResources, CreatedAt: now,
 		InitialControl: contract.SceneAnalysisControlProof{
 			ControlRecordID: controlRecordID, ControlRevision: 1, Status: "approved",
 			ControlHash: controlHash, ReleaseFence: 0,

@@ -569,7 +569,7 @@ func sceneAnalysisReleaseRecord(value agentapp.ReleaseRecord) (model.SceneAnalys
 		ID: id, StageKey: value.Variant.StageKey, ProfileKey: value.Variant.ProfileKey,
 		SkillReleaseID: skillReleaseID, SkillReleaseHash: value.Identity.SkillReleaseHash,
 		StageReleaseHash: value.Identity.StageReleaseHash, BundleContentHash: value.Identity.BundleContentHash,
-		AgentImageDigest: value.Identity.AgentImageDigest, ModelCapability: "structured_text",
+		AgentImageDigest: value.Identity.AgentImageDigest, ModelCapability: value.ModelCapability,
 		LoadedResourcePaths: datatypes.JSON(resources), CreatedAt: value.CreatedAt,
 	}, nil
 }
