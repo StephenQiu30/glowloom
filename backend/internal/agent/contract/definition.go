@@ -1,21 +1,13 @@
 package contract
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/url"
-	"os"
-	"path/filepath"
-	"sort"
 	"strings"
-	"unicode/utf8"
 )
 
-const StoryGraphSkillBundleHash = "c9384723a9cfb3117c68f13683451e88d9379fbe9dc54e5d41d67cc8a4da2d13"
+const StoryGraphSkillBundleHash = "5b49be2fe6f0af9131f8fc02b267314c15968e9f8646456f1b75fcbfa86c16ef"
 
 var ErrSkillBundleUnavailable = errors.New("skill_bundle_unavailable")
 
@@ -99,90 +91,29 @@ func CandidateTypeForStage(stage string) (string, bool) {
 
 func StoryGraphBundlePaths() []string {
 	return []string{
+		"NOTICE.md",
 		"SKILL.md",
 		"references/continuity-review.md",
 		"references/entity-reconciliation.md",
 		"references/episode-segmentation.md",
+		"references/interaction-continuity.md",
+		"references/production-entities.md",
+		"references/scene-facts.md",
+		"references/scene-occurrences.md",
 		"references/scene-structure.md",
+		"references/script-spans.md",
 		"references/shot-detail.md",
 		"references/source-evidence.md",
 		"references/story-analysis.md",
 		"references/storyboard-table.md",
+		"references/structure-identity-review.md",
 		"references/visual-identity.md",
 	}
 }
 
-func storyGraphKnownBundlePaths() []string {
-	return append(
-		StoryGraphBundlePaths(),
-		"references/scene-facts.md",
-		"references/script-spans.md",
-		"references/structure-identity-review.md",
-		"references/production-entities.md",
-		"references/scene-occurrences.md",
-		"references/interaction-continuity.md",
-	)
-}
-
 func ComputeStoryGraphBundleHash(root string) (string, error) {
-	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return "", errors.New("invalid StoryGraph bundle root")
-	}
-	allowed := StoryGraphBundlePaths()
-	known := storyGraphKnownBundlePaths()
-	knownSet := make(map[string]struct{}, len(known))
-	for _, path := range known {
-		knownSet[path] = struct{}{}
-	}
-	actual := map[string]struct{}{}
-	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if path == root {
-			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return errors.New("StoryGraph bundle contains a symlink")
-		}
-		if !entry.Type().IsRegular() {
-			return nil
-		}
-		relative, relativeErr := filepath.Rel(root, path)
-		if relativeErr != nil || strings.HasPrefix(relative, "..") {
-			return errors.New("StoryGraph bundle path escapes root")
-		}
-		actual[filepath.ToSlash(relative)] = struct{}{}
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	if len(actual) != len(knownSet) {
-		return "", errors.New("StoryGraph bundle file set is invalid")
-	}
-	for path := range actual {
-		if _, ok := knownSet[path]; !ok {
-			return "", errors.New("StoryGraph bundle file set is invalid")
-		}
-	}
-
-	sort.Strings(allowed)
-	digest := sha256.New()
-	var length [8]byte
-	for _, relative := range allowed {
-		content, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
-		if readErr != nil || !utf8.Valid(content) {
-			return "", errors.New("StoryGraph bundle contains invalid UTF-8")
-		}
-		_, _ = digest.Write([]byte(relative))
-		_, _ = digest.Write([]byte{0})
-		binary.BigEndian.PutUint64(length[:], uint64(len(content)))
-		_, _ = digest.Write(length[:])
-		_, _ = digest.Write(content)
-	}
-	return hex.EncodeToString(digest.Sum(nil)), nil
+	manifest, _, err := BuildStoryGraphBundleManifest(root)
+	return manifest.ContentHash, err
 }
 
 type RuntimeRevision struct {

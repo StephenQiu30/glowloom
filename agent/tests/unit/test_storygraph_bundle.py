@@ -36,6 +36,12 @@ def test_bundle_fails_closed_for_missing_extra_non_utf8_and_symlink_files(tmp_pa
     bundle = StoryGraphBundle(tmp_path)
     assert bundle.compute_hash() == StoryGraphBundle(REPOSITORY_ROOT).compute_hash()
 
+    scene_facts = bundle_root / "references/scene-facts.md"
+    original_scene_facts = scene_facts.read_bytes()
+    scene_facts.write_bytes(original_scene_facts + b"\n")
+    assert bundle.compute_hash() != StoryGraphBundle(REPOSITORY_ROOT).compute_hash()
+    scene_facts.write_bytes(original_scene_facts)
+
     (bundle_root / "extra.md").write_text("extra", encoding="utf-8")
     with pytest.raises(BundleInvalid):
         bundle.compute_hash()

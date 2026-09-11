@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.modules.storygraph.skill_registry import RegistryError, stage_spec
 
-SKILL_BUNDLE_HASH = "c9384723a9cfb3117c68f13683451e88d9379fbe9dc54e5d41d67cc8a4da2d13"
+SKILL_BUNDLE_HASH = "5b49be2fe6f0af9131f8fc02b267314c15968e9f8646456f1b75fcbfa86c16ef"
 
 
 class BundleInvalid(ValueError):
@@ -30,26 +31,25 @@ class BundleManifest:
 
 class StoryGraphBundle:
     _ALLOWED_PATHS = (
+        "NOTICE.md",
         "SKILL.md",
         "references/continuity-review.md",
         "references/entity-reconciliation.md",
         "references/episode-segmentation.md",
+        "references/interaction-continuity.md",
+        "references/production-entities.md",
+        "references/scene-facts.md",
+        "references/scene-occurrences.md",
         "references/scene-structure.md",
+        "references/script-spans.md",
         "references/shot-detail.md",
         "references/source-evidence.md",
         "references/story-analysis.md",
         "references/storyboard-table.md",
+        "references/structure-identity-review.md",
         "references/visual-identity.md",
     )
-    _KNOWN_PATHS = (
-        *_ALLOWED_PATHS,
-        "references/scene-facts.md",
-        "references/script-spans.md",
-        "references/structure-identity-review.md",
-        "references/production-entities.md",
-        "references/scene-occurrences.md",
-        "references/interaction-continuity.md",
-    )
+    _KNOWN_PATHS = _ALLOWED_PATHS
 
     def __init__(self, repository_root: Path | None = None) -> None:
         root = repository_root or Path(__file__).resolve().parents[4]
@@ -76,7 +76,7 @@ class StoryGraphBundle:
         if actual != set(self._KNOWN_PATHS):
             raise BundleInvalid("StoryGraph bundle file set is invalid")
 
-        digest = hashlib.sha256()
+        files: list[dict[str, object]] = []
         for relative_path in self._ALLOWED_PATHS:
             path = self.root / relative_path
             try:
@@ -84,11 +84,40 @@ class StoryGraphBundle:
                 content.decode("utf-8")
             except (OSError, UnicodeDecodeError) as error:
                 raise BundleInvalid("StoryGraph bundle contains invalid UTF-8") from error
-            digest.update(relative_path.encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(len(content).to_bytes(8, "big"))
-            digest.update(content)
-        return digest.hexdigest()
+            files.append(
+                {
+                    "path": relative_path,
+                    "byte_length": len(content),
+                    "sha256": hashlib.sha256(content).hexdigest(),
+                }
+            )
+        notice_hash = next(str(file["sha256"]) for file in files if file["path"] == "NOTICE.md")
+        provenance_hash = _canonical_hash(
+            {
+                "contract_id": "storygraph-bundle-provenance-production",
+                "origin": "project_owned",
+                "source_url": "https://github.com/StephenQiu30/lanverse",
+                "license_spdx": "MIT",
+                "notice_hash": notice_hash,
+            }
+        )
+        isolation_hash = _canonical_hash(
+            {
+                "contract_id": "storygraph-bundle-filesystem-isolation-production",
+                "rules": ["exact_file_set", "no_symlink", "relative_posix_path", "utf8"],
+                "files": files,
+            }
+        )
+        return _canonical_hash(
+            {
+                "contract_id": "storygraph-bundle-content-production",
+                "bundle_entrypoint": "SKILL.md",
+                "bundle_file_manifest": files,
+                "provenance_manifest_hash": provenance_hash,
+                "notice_hash": notice_hash,
+                "isolation_scan_hash": isolation_hash,
+            }
+        )
 
     def verify_installed_bundle(self) -> str:
         computed = self.compute_hash()
@@ -130,3 +159,13 @@ class StoryGraphBundle:
             except (OSError, UnicodeDecodeError) as error:
                 raise BundleInvalid("StoryGraph stage reference is unavailable") from error
         return "\n\n".join(sections)
+
+
+def _canonical_hash(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()

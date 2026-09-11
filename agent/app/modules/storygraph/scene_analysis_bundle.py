@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.modules.storygraph.bundle import BundleInvalid, StoryGraphBundle
-from app.modules.storygraph.scene_analysis_registry import (
-    SCENE_ANALYSIS_REGISTRY,
-    scene_analysis_stage_spec,
-)
+from app.modules.storygraph.bundle import SKILL_BUNDLE_HASH, BundleInvalid, StoryGraphBundle
+from app.modules.storygraph.scene_analysis_registry import scene_analysis_stage_spec
 
-SCENE_ANALYSIS_SKILL_BUNDLE_HASH = (
-    "0e0a7b34960b4ed35b4a2ce008ac84172cfe195d5798293dec134b946fb52f1c"
-)
+SCENE_ANALYSIS_SKILL_BUNDLE_HASH = SKILL_BUNDLE_HASH
 
 
 @dataclass(frozen=True)
@@ -30,7 +23,6 @@ class SceneAnalysisBundleManifest:
 
 
 class SceneAnalysisBundle:
-    _BUNDLE_PATHS = StoryGraphBundle.known_paths()
     _STAGE_RESOURCE_PATHS = (
         "SKILL.md",
         "references/entity-reconciliation.md",
@@ -50,66 +42,7 @@ class SceneAnalysisBundle:
 
     def compute_hash(self) -> str:
         self._verify_root()
-        actual: set[str] = set()
-        for path in self.root.rglob("*"):
-            if path.is_symlink():
-                raise BundleInvalid("StoryGraph bundle contains a symlink")
-            if path.is_file():
-                actual.add(path.relative_to(self.root).as_posix())
-        if actual != set(StoryGraphBundle.known_paths()):
-            raise BundleInvalid("StoryGraph bundle file set is invalid")
-
-        digest = hashlib.sha256()
-        digest.update(b"lanverse.storygraph.scene-analysis.bundle\0")
-        manifest_identity = json.dumps(
-            {
-                "definition_version": self.manifest.definition_version,
-                "prompt_version": self.manifest.prompt_version,
-                "skill_bundle_version": self.manifest.skill_bundle_version,
-                "model_capability": self.manifest.model_capability,
-                "max_model_calls": self.manifest.max_model_calls,
-                "max_execution_seconds": self.manifest.max_execution_seconds,
-                "max_output_bytes": self.manifest.max_output_bytes,
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        digest.update(b"manifest-identity\0")
-        digest.update(len(manifest_identity).to_bytes(8, "big"))
-        digest.update(manifest_identity)
-        for relative_path in sorted(self._BUNDLE_PATHS):
-            path = self.root / relative_path
-            try:
-                content = path.read_bytes()
-                content.decode("utf-8")
-            except (OSError, UnicodeDecodeError) as error:
-                raise BundleInvalid("Scene Analysis bundle contains invalid UTF-8") from error
-            digest.update(relative_path.encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(len(content).to_bytes(8, "big"))
-            digest.update(content)
-        for stage, profile in sorted(SCENE_ANALYSIS_REGISTRY):
-            schema = json.dumps(
-                scene_analysis_stage_spec(stage, profile).candidate_model.model_json_schema(),
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode("utf-8")
-            identity = f"output-schema:{stage}:{profile}".encode()
-            digest.update(identity)
-            digest.update(b"\0")
-            digest.update(len(schema).to_bytes(8, "big"))
-            digest.update(schema)
-        tool_policy = json.dumps(
-            sorted(self.manifest.allowed_tools),
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        digest.update(b"allowed-tools\0")
-        digest.update(len(tool_policy).to_bytes(8, "big"))
-        digest.update(tool_policy)
-        return digest.hexdigest()
+        return StoryGraphBundle(self.repository_root).compute_hash()
 
     def verify_installed_bundle(self) -> str:
         computed = self.compute_hash()

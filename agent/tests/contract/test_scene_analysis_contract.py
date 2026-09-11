@@ -485,7 +485,7 @@ def test_scene_analysis_bundle_rejects_invalid_declared_file_sets(tmp_path: Path
         symlink.compute_hash()
 
 
-def test_scene_analysis_bundle_hash_covers_semantic_versions_and_tool_policy() -> None:
+def test_scene_analysis_bundle_hash_only_covers_shared_content_manifest() -> None:
     bundle = SceneAnalysisBundle()
     original = bundle.compute_hash()
 
@@ -494,14 +494,14 @@ def test_scene_analysis_bundle_hash_covers_semantic_versions_and_tool_policy() -
         changed_version.manifest,
         prompt_version="build-storygraph-scene-analysis-changed",
     )
-    assert changed_version.compute_hash() != original
+    assert changed_version.compute_hash() == original
 
     changed_tools = SceneAnalysisBundle()
     changed_tools.manifest = replace(
         changed_tools.manifest,
         allowed_tools=("read_media",),
     )
-    assert changed_tools.compute_hash() != original
+    assert changed_tools.compute_hash() == original
 
 
 def test_scene_analysis_wire_matches_the_shared_go_python_fixture_and_rejects_mutations() -> None:
