@@ -177,6 +177,7 @@
   - [x] 以 SourceMapping Root 固定七能力 Capability Matrix 与运行时隔离策略：每个 rewrite 必须逐项映射到批准能力及相同生产路径；当前没有来源通过 rewrite 审核，因此映射必须为空。外部 Skill 下载、联网发现和按来源项目路径加载恒为 false，并由重算合法 Root 的负例禁止绕过；eval、shadow 与独立签名仍在后续子项中完成。
 - [x] 上架 4 个不可变、版本化、可追溯许可的 PresetRelease；首批固定为都市电影写实、古装电影写实、国漫仙侠和赛博朋克动画，全部覆盖六类 Target、默认 faithful，并绑定仓库 Skill Bundle、内容定址 QC/视觉模型能力策略及 first-party MIT NOTICE。当前只完成 Backend 内置目录与精确身份查询，不提前开放项目选择或 Gate 3。
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3、Preset 切换的真实 stale 写入与原子发布。
+  - [x] 实现 Backend typed `VisualFoundationWorldReadSet`：只从当前已发布且可完整复验的 production StoryGraph 投影 Gate 2 `asset_identity_state_set`、`bible_production_world_set` 与全部 Episode `planning_scene_set` roots，同时保留完整 Owner Set/StoryGraph 内容身份用于执行前 stale 校验；旧 Schema、缺根或 Owner 已变化均失败关闭。该内部 Proof 不作为 Agent 事实输入，未接入持久视觉调度或 Gate 3。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I06 — 六类 Target 与 Provider-neutral Brief
