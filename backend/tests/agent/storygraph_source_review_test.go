@@ -96,6 +96,38 @@ func TestStoryGraphSourceReviewRejectsPolicyBypassWithValidContentRoot(t *testin
 	}
 	tests := map[string]func(map[string]any){
 		"unknown field": func(value map[string]any) { value["active"] = true },
+		"unclear license bypass": func(value map[string]any) {
+			review := value["reviews"].([]any)[0].(map[string]any)
+			review["risks"].(map[string]any)["license_unclear"] = true
+			review["findings"] = []any{
+				"executable_resource_examples", "license_unresolved", "network_requirement_examples",
+				"normative_specification", "tool_declaration_examples",
+			}
+		},
+		"prohibited redistribution bypass": func(value map[string]any) {
+			review := value["reviews"].([]any)[0].(map[string]any)
+			review["risks"].(map[string]any)["redistribution_prohibited"] = true
+			review["findings"] = []any{
+				"executable_resource_examples", "network_requirement_examples", "normative_specification",
+				"redistribution_prohibited", "tool_declaration_examples",
+			}
+		},
+		"embedded credentials bypass": func(value map[string]any) {
+			review := value["reviews"].([]any)[0].(map[string]any)
+			review["risks"].(map[string]any)["embedded_credentials"] = true
+			review["findings"] = []any{
+				"embedded_credentials", "executable_resource_examples", "network_requirement_examples",
+				"normative_specification", "tool_declaration_examples",
+			}
+		},
+		"untraceable source bypass": func(value map[string]any) {
+			review := value["reviews"].([]any)[0].(map[string]any)
+			review["risks"].(map[string]any)["untraceable_source"] = true
+			review["findings"] = []any{
+				"executable_resource_examples", "network_requirement_examples", "normative_specification",
+				"tool_declaration_examples", "untraceable_source",
+			}
+		},
 		"inventory drift": func(value map[string]any) {
 			value["source_inventory_hash"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 		},
