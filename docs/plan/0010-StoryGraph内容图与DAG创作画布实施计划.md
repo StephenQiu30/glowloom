@@ -179,6 +179,7 @@
 - [ ] 实现 resolve_visual_foundation、plan_reference_assets、expected target set、Gate 3、Preset 切换的真实 stale 写入与原子发布。
   - [x] 实现 Backend typed `VisualFoundationWorldReadSet`：只从当前已发布且可完整复验的 production StoryGraph 投影 Gate 2 `asset_identity_state_set`、`bible_production_world_set` 与全部 Episode `planning_scene_set` roots，同时保留完整 Owner Set/StoryGraph 内容身份用于执行前 stale 校验；旧 Schema、缺根或 Owner 已变化均失败关闭。该内部 Proof 不作为 Agent 事实输入，未接入持久视觉调度或 Gate 3。
   - [x] 实现 Backend typed `ConfirmedVisualFoundationSource`：通过正式 GORM Reader 从当前 `ProductionWorldBibleHead` 重读完整 BibleVersion，并沿其 exact Candidate Revision 引用加载 Gate 2 已应用的聚合 Candidate；重算 Bible Collection Root、Candidate Revision proof、Candidate 内容/partition/business-key root 及 Design Gap 前像，任一错配均失败关闭。该内部快照不把 StoryGraph Version 伪装成 Agent 事实，也未新增表、字段、migration、手写 SQL、视觉调度或 Gate 3。
+  - [x] 编译首个安全的 `faithful` Visual Foundation Input：只接受同一 Project 的 typed world read-set、Gate 2 exact Candidate 来源和可重算的策展 PresetRelease，要求 StoryGraph Bible root 与 Gate 2 Bible root 相等；将 Release 的 fidelity invariant、adaptation rules 与 Visual Grammar 冻结进严格 Agent Input，并把 override、外部附件、confirmed world fact 与 Design Gap 集显式冻结为空。当前 MVP 遇到未决 Design Gap 直接阻塞，等待正式 visual-domain mapping 合同，不按字段名猜测，也不提前接入持久调度或 Gate 3。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I06 — 六类 Target 与 Provider-neutral Brief
