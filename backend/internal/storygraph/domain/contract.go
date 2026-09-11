@@ -465,6 +465,9 @@ func Canonicalize(snapshot Snapshot) (CanonicalSnapshot, error) {
 		if err := validateProductionIdentityRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}
+		if err := validateProductionReferenceTargetRelations(nodes, edges); err != nil {
+			return CanonicalSnapshot{}, err
+		}
 		if err := validateProductionAssetVersionRelations(nodes, edges); err != nil {
 			return CanonicalSnapshot{}, err
 		}

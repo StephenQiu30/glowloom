@@ -25,18 +25,6 @@ type productionAssetVersionPayload struct {
 	Constraints                   productionConstraintRefs `json:"constraints"`
 }
 
-type productionReferenceTargetAssetInput struct {
-	TargetKind      string `json:"target_kind"`
-	Fulfillment     string `json:"fulfillment"`
-	TargetOwnerRefs struct {
-		Identity      []productionOwnerNodeRef `json:"identity"`
-		Specification []productionOwnerNodeRef `json:"specification"`
-		State         []productionOwnerNodeRef `json:"state"`
-	} `json:"target_owner_refs"`
-	DependsOnTargetRefs []productionOwnerNodeRef `json:"depends_on_target_refs"`
-	Constraints         productionConstraintRefs `json:"constraints"`
-}
-
 type productionAssetVersionResolution struct {
 	node             Node
 	payload          productionAssetVersionPayload
@@ -50,7 +38,7 @@ type productionAssetVersionResolution struct {
 	worldKeys        []string
 	anchorKey        string
 	anchorRef        *productionOwnerNodeRef
-	target           productionReferenceTargetAssetInput
+	target           productionReferenceTargetPayload
 }
 
 func validateProductionAssetVersionRelations(nodes []Node, edges []Edge) error {
@@ -134,8 +122,8 @@ func resolveProductionAssetVersion(
 	if constraintErr != nil {
 		return productionAssetVersionResolution{}, fmt.Errorf("Production StoryGraph AssetVersion %s has invalid constraints", node.StoryNodeKey)
 	}
-	var targetInput productionReferenceTargetAssetInput
-	if err := json.Unmarshal(target.Payload, &targetInput); err != nil || targetInput.TargetKind != payload.Purpose || targetInput.Fulfillment == "not_generated" ||
+	var targetInput productionReferenceTargetPayload
+	if err := decodeStrictObject(target.Payload, &targetInput); err != nil || targetInput.TargetKind != payload.Purpose || targetInput.Fulfillment == "not_generated" ||
 		!oneOf(targetInput.Fulfillment, "required", "optional") ||
 		!productionSingleRefEqual(targetInput.TargetOwnerRefs.Identity, payload.AssetIdentityRef) ||
 		!productionSingleRefEqual(targetInput.TargetOwnerRefs.Specification, payload.SpecificationRef) ||
