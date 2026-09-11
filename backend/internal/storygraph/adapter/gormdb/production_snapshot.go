@@ -13,8 +13,10 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
+	scriptdomain "github.com/StephenQiu30/lanverse/backend/internal/production/script/domain"
 	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
 	storygraph "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
@@ -23,6 +25,8 @@ import (
 type productionSnapshotMaterial struct {
 	revision         model.DocumentRevision
 	spanIndex        model.SourceSpanIndexVersion
+	sourceHead       model.ScriptSourceScopeHead
+	sourceReceipt    model.ScriptSourceCollectionReceipt
 	structure        model.StructureIdentitySetVersion
 	structureReceipt model.StructureIdentityCollectionReceipt
 	bibleVersion     model.ProductionWorldBibleVersion
@@ -233,6 +237,39 @@ func (repo *repository) verifyProductionOwnerHeads(
 		sourceHead.CurrentDocumentRevisionID != material.revision.ID || sourceHead.CurrentSpanIndexID != material.spanIndex.ID {
 		return invalidOwnerSnapshot("Script Source Owner Head has advanced beyond the Production World receipt")
 	}
+	var sourceReceipt model.ScriptSourceCollectionReceipt
+	if err := locked().Where(
+		"project_id = ? AND document_revision_id = ? AND span_index_id = ? AND head_revision = ?",
+		projectID, material.revision.ID, material.spanIndex.ID, sourceHead.HeadRevision,
+	).Order("created_at DESC").First(&sourceReceipt).Error; err != nil {
+		return err
+	}
+	var sourceMembers []ownercollection.VersionRef
+	if json.Unmarshal(sourceReceipt.Members, &sourceMembers) != nil {
+		return invalidOwnerSnapshot("Script Source Collection member set has drifted")
+	}
+	rebuiltSource, buildErr := scriptdomain.BuildSourceCollectionRef(
+		state.WorkspaceID,
+		state.ProjectID,
+		sourceHead.HeadRevision,
+		scriptdomain.SourceVersionIdentity{
+			OwnerKind: "production/script", LogicalID: material.revision.DocumentID.String(),
+			VersionID: material.revision.ID.String(), Revision: int64(material.revision.VersionNo),
+			ContentHash: material.revision.NormalizedHash, CreatedAt: material.revision.CreatedAt,
+		},
+		scriptdomain.SourceSpanIndex{
+			ID: material.spanIndex.ID.String(), WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID,
+			DocumentRevisionID: material.spanIndex.DocumentRevisionID.String(), SourceHash: material.spanIndex.SourceHash,
+			ContentHash: material.spanIndex.ContentHash,
+		},
+	)
+	if buildErr != nil || sourceReceipt.WorkspaceID != workspaceID || sourceReceipt.HeadHash != sourceHead.HeadHash ||
+		sourceReceipt.MembersHash != rebuiltSource.MembersHash || sourceReceipt.CollectionRootHash != rebuiltSource.CollectionRootHash ||
+		!reflect.DeepEqual(sourceMembers, rebuiltSource.Members) {
+		return invalidOwnerSnapshot("Script Source Collection proof has drifted")
+	}
+	material.sourceHead = sourceHead
+	material.sourceReceipt = sourceReceipt
 
 	var structureHead model.StructureIdentityScopeHead
 	if err := locked().First(&structureHead, "project_id = ?", projectID).Error; err != nil {
@@ -579,11 +616,14 @@ func buildProductionOwnerCollections(
 		return err
 	}
 	sourceMembers := []storygraph.OwnerVersionIdentity{
-		identity("production/script", "script_source_set", material.revision.DocumentID.String(), material.revision.ID.String(), int64(material.revision.VersionNo), material.revision.NormalizedHash, material.revision.CreatedAt),
-		identity("production/script", "script_source_set", "span-index:"+material.spanIndex.ID.String(), material.spanIndex.ID.String(), 1, material.spanIndex.ContentHash, material.spanIndex.CreatedAt),
+		identity("production/script", scriptdomain.SourceCollectionFamily, material.revision.DocumentID.String(), material.revision.ID.String(), int64(material.revision.VersionNo), material.revision.NormalizedHash, material.revision.CreatedAt),
+		identity("production/script", scriptdomain.SourceCollectionFamily, material.revision.DocumentID.String()+":span-index", material.spanIndex.ID.String(), int64(material.revision.VersionNo), material.spanIndex.ContentHash, material.spanIndex.CreatedAt),
 	}
-	if err := appendCollection("production/script", "script_source_set", "project", "project:"+state.ProjectID, int64(material.revision.VersionNo), sourceMembers); err != nil {
+	if err := appendCollection("production/script", scriptdomain.SourceCollectionFamily, "project", "project:"+state.ProjectID, material.sourceHead.HeadRevision, sourceMembers); err != nil {
 		return nil, err
+	}
+	if collections[len(collections)-1].CollectionRootHash != material.sourceReceipt.CollectionRootHash {
+		return nil, invalidOwnerSnapshot("Script Source Collection root has drifted")
 	}
 	episodeMembers := make([]storygraph.OwnerVersionIdentity, len(material.episodeRefs))
 	for index, reference := range material.episodeRefs {

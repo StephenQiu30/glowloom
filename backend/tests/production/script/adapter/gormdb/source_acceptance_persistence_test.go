@@ -3,6 +3,7 @@ package gormdb_test
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 )
@@ -101,6 +103,24 @@ func TestAcceptSourcePublishesIndexHeadAndReceiptsAtomically(t *testing.T) {
 	}
 	if indexCount != 1 || headCount != 1 || collectionReceiptCount != 1 {
 		t.Fatalf("source facts = index:%d head:%d receipt:%d", indexCount, headCount, collectionReceiptCount)
+	}
+	var storedCollection model.ScriptSourceCollectionReceipt
+	if err = database.First(&storedCollection, "id = ?", accepted.CollectionReceiptID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var storedMembers []ownercollection.VersionRef
+	if err = json.Unmarshal(storedCollection.Members, &storedMembers); err != nil {
+		t.Fatalf("decode stored Source Collection members: %v", err)
+	}
+	rebuiltCollection, err := ownercollection.Build(ownercollection.Scope{
+		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+		OwnerKind: "production/script", VersionFamily: "script_source_set",
+		ScopeKind: "project", ScopeKey: "project:" + fixture.projectID.String(), ScopeRevision: accepted.HeadRevision,
+	}, storedMembers)
+	if err != nil || storedCollection.MembersHash != rebuiltCollection.MembersHash ||
+		storedCollection.CollectionRootHash != rebuiltCollection.CollectionRootHash ||
+		accepted.CollectionRootHash != rebuiltCollection.CollectionRootHash {
+		t.Fatalf("stored Source Collection does not match the shared contract: %#v err=%v", rebuiltCollection, err)
 	}
 }
 

@@ -155,34 +155,21 @@ func (service *SourceService) Accept(ctx context.Context, actor Actor, command A
 			Revision: int64(analysis.Revision.VersionNo), ContentHash: analysis.Revision.NormalizedHash,
 			CreatedAt: analysis.Revision.CreatedAt.UTC(),
 		}
-		members, marshalErr := json.Marshal([]any{identity, map[string]any{
-			"owner_kind": "production/script", "logical_id": analysis.Document.ID + ":span-index",
-			"version_id": index.ID, "revision": int64(analysis.Revision.VersionNo), "content_hash": index.ContentHash,
-			"created_at": index.CreatedAt,
-		}})
+		newHeadRevision := head.HeadRevision + 1
+		collection, buildErr := domain.BuildSourceCollectionRef(workspaceID, command.ProjectID, newHeadRevision, identity, index)
+		if buildErr != nil {
+			return buildErr
+		}
+		members, marshalErr := json.Marshal(collection.Members)
 		if marshalErr != nil {
 			return marshalErr
 		}
-		membersHash, hashErr := platformcanonical.Hash(members)
-		if hashErr != nil {
-			return hashErr
-		}
-		newHeadRevision := head.HeadRevision + 1
 		headMaterial, _ := json.Marshal(map[string]any{
 			"contract_id": "script-source-head-production", "project_id": command.ProjectID,
 			"document_revision_id": analysis.Revision.ID, "span_index_id": index.ID,
-			"head_revision": newHeadRevision, "members_hash": membersHash,
+			"head_revision": newHeadRevision, "members_hash": collection.MembersHash,
 		})
 		headHash, hashErr := platformcanonical.Hash(headMaterial)
-		if hashErr != nil {
-			return hashErr
-		}
-		collectionMaterial, _ := json.Marshal(map[string]any{
-			"contract_id": "script-source-collection-production", "workspace_id": workspaceID,
-			"project_id": command.ProjectID, "head_revision": newHeadRevision, "head_hash": headHash,
-			"members": json.RawMessage(members), "members_hash": membersHash,
-		})
-		collectionRootHash, hashErr := platformcanonical.Hash(collectionMaterial)
 		if hashErr != nil {
 			return hashErr
 		}
@@ -200,7 +187,7 @@ func (service *SourceService) Accept(ctx context.Context, actor Actor, command A
 		}
 		collectionReceiptID := service.config.NewID()
 		receiptMaterial, _ := json.Marshal(map[string]any{
-			"collection_receipt_id": collectionReceiptID, "collection_root_hash": collectionRootHash,
+			"collection_receipt_id": collectionReceiptID, "collection_root_hash": collection.CollectionRootHash,
 			"source_acceptance_ref": command.IdempotencyKey,
 		})
 		receiptHash, hashErr := platformcanonical.Hash(receiptMaterial)
@@ -210,7 +197,7 @@ func (service *SourceService) Accept(ctx context.Context, actor Actor, command A
 		if createErr := repo.CreateSourceCollectionReceipt(ctx, domain.SourceCollectionReceipt{
 			ID: collectionReceiptID, WorkspaceID: workspaceID, ProjectID: command.ProjectID,
 			DocumentRevisionID: analysis.Revision.ID, SpanIndexID: index.ID, HeadRevision: newHeadRevision,
-			HeadHash: headHash, Members: members, MembersHash: membersHash, CollectionRootHash: collectionRootHash,
+			HeadHash: headHash, Members: members, MembersHash: collection.MembersHash, CollectionRootHash: collection.CollectionRootHash,
 			SourceAcceptanceRef: command.IdempotencyKey, ReceiptContentHash: receiptHash,
 			CreatedBy: actor.UserID, CreatedAt: now,
 		}); createErr != nil {
@@ -221,7 +208,7 @@ func (service *SourceService) Accept(ctx context.Context, actor Actor, command A
 			Identity: identity, SpanIndexID: index.ID, SpanIndexHash: index.ContentHash,
 			CodepointCount: index.CodepointCount, UTF8ByteCount: index.UTF8ByteCount,
 			NewlineNormalization: index.NewlineNormalization, CodepointIndexRule: index.CodepointIndexRule,
-			HeadRevision: newHeadRevision, HeadHash: headHash, CollectionRootHash: collectionRootHash,
+			HeadRevision: newHeadRevision, HeadHash: headHash, CollectionRootHash: collection.CollectionRootHash,
 			CollectionReceiptID: collectionReceiptID, CommandReceiptID: commandReceiptID,
 		}
 		result, marshalErr := json.Marshal(map[string]any{"accepted": accepted})
