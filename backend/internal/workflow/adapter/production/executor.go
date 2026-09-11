@@ -905,8 +905,8 @@ func (executor *NodeExecutor) executeProductionStoryGraph(
 	}
 	if compiled.Version.WorkspaceID != command.WorkspaceID || compiled.Version.ProjectID != command.ProjectID ||
 		compiled.Version.SchemaVersion != storygraph.ProductionSchemaID || compiled.Version.ProductionInput == nil ||
-		compiled.Version.ProductionInput.Coverage.ProductionWorldReceiptID != binding.ReferenceID ||
-		compiled.Version.ProductionInput.Coverage.ProductionWorldReceiptHash != binding.ContentHash ||
+		compiled.Version.ProductionInput.SchemaID != storygraph.ProductionSchemaID ||
+		compiled.Version.ProductionInput.Coverage.CoveragePhase != storygraph.ProductionCoverageP0 ||
 		compiled.Version.Status != "published" || compiled.Version.VersionNo < 1 ||
 		compiled.Head.CurrentVersionID != compiled.Version.ID || compiled.Head.CurrentContentHash != compiled.Version.ContentHash ||
 		compiled.Receipt.ResourceID != compiled.Version.ID || compiled.Receipt.CreatedBy != command.InitiatorUserID {

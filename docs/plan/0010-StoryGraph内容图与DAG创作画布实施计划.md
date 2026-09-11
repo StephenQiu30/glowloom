@@ -128,13 +128,14 @@
   - [x] 修正 Production Canonical JSON 基础合同：Go 使用成熟 RFC 8785 实现，Go/Python 共同冻结 UTF-16 key order、NFC、最小转义、安全整数与失败码；浮点、指数表示、越界整数、重复/归一化重复键、非法 surrogate/UTF-8 和尾随文档均一致拒绝，不保留旧错误 Hash 的双算或兼容读取。
   - [x] 由 Backend 声明式生成完整 Production Schema Registry：机械展开 31 个 Node、32 条 Payload Union、25 个 Payload Contract、7 个 Edge Alias、65 条 Matrix、13 个 Owner Collection、4 条 Coverage、13 个 Checkpoint 和 22 条 Exclusion；每个 Payload Hash 与最终 Schema Hash 均从 Canonical bytes 实算，并以同一共享 fixture 由 Go/Python 独立重算。
   - [x] 固定跨 Owner 共用的 `OwnerVersionRef`、Scope、Member 与 Collection Root 内容寻址算法，并让 production Compiler 实际复用；StoryGraph 编译前像不再写入投影时间戳或另一套字段名/Schema 包装。
-  - [ ] 让各正式 Owner Writer 逐一改用同一 Root 算法，再由完整 Owner Apply Receipt 形成 `VerifiedCoverageProof`；未完成前不得把 Receipt Hash 与重算 Collection Root 误报为等价。
+  - [x] 让各正式 Owner Writer 逐一改用同一 Root 算法，再由完整 Owner Apply Receipt 形成 `VerifiedCoverageProof`；Compiler 逐 Receipt 对账正式 Collection Root、成员、Checkpoint 与 Coverage Scope 并持久化完整可重算前像，不把 Receipt Hash 与 Collection Root 混为一谈。
     - [x] `production/script` 在接受 Source Revision 时以匹配的 SourceSpanIndexVersion 生成精确 `script_source_set`，持久化共享成员前像与 Root；Compiler 同事务重读正式 Receipt 并重算全等。
     - [x] `production/project` 在 Gate 1 第一条 Owner 命令中发布不可变 Episode Version、逐 Scope 完整 Membership、线性 Scope Head 与 `project_episode_lifecycle_confirmed / project_episode_set` Receipt；Bible、Production World 和 Compiler 只接受该正式 Receipt 并重算全等。
     - [x] `production/bible` 在 Gate 1 第二条 Owner 命令中把既有不可变 `StructureIdentitySetVersion` 发布为精确 `bible_structure_identity_set`；Head、Collection Receipt、Gate 2 与 Compiler 均重算同一共享 Root，不再保留自定义成员或 Receipt Hash 算法。
     - [x] `production/bible` 在 Gate 2 发布 `bible_production_world_set` 时以精确 Bible Version 生成共享 Root；Head 保存完整 VersionRef，Coordinator 在生成 Gate 2 Receipt 前重算全等，Compiler 再从正式 Version/Head/Receipt 对账。
     - [x] `production/planning` 在 Gate 2 按每个 active Episode 的正式 Scene/Dialogue/Beat/Occurrence/Claim Fact 生成共享 `planning_scene_set` Root；Head 保存完整 VersionRef，Coordinator 与 Compiler 均从正式 Fact 重建 Collection/Head/Receipt 并全等对账。
     - [x] `asset` 在 Gate 2 将正式 AssetIdentity 与每个 AssetState 共同纳入共享 `asset_identity_state_set` Root；Head 保存完整 VersionRef，Coordinator 与 Compiler 均从正式 Version 重建 Collection/Head/Receipt 并全等对账。
+    - [x] Backend 从 Source、Project Episode、Gate 1 与 Gate 2 的正式 Receipt 机械生成 P0 `VerifiedCoverageProof`：Gate 1/Gate 2 覆盖并集分别精确等于 `p0_scope_keys[]`，六个非空 Collection 各有 Receipt 与成员命中，合法空 Rebase Collection 无伪造 Receipt；Schema Manifest、Coverage、稳定 Key 派生 ID、七个 Root 和 OwnerSetHash 进入同一编译前像，Graph 两个 Hash 按该前像重算，GORM 写入和读取均执行闭集解码与离线重放校验。
   - [ ] 完成 production Schema Manifest 与剩余 Payload/Edge invariant 后，再关闭本项。
 - [x] 实现 DAG、上游/下游、反向证据、版本 diff 和 ImpactPreview 有界 Query；production 当前版本从最新 Gate 2 正式 Receipt 重算 OwnerSetHash，不复用旧 Bible-first stale 判断。
 - [x] 证明 Query 零写入且不依赖 Elasticsearch 正常；真实 PostgreSQL Scene impact 与 Claim evidence trace 前后 Version/Head/CommandReceipt/Outbox 均零增量。

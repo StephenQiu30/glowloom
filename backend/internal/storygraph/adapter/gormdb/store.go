@@ -245,6 +245,13 @@ func evidenceRef(revision model.DocumentRevision, start, end int) (storygraph.Ev
 }
 
 func versionRecord(value storygraph.Version) (model.StoryGraphVersion, error) {
+	if value.SchemaVersion == storygraph.ProductionSchemaID {
+		if err := storygraph.ValidateProductionVersion(value); err != nil {
+			return model.StoryGraphVersion{}, err
+		}
+	} else if value.ProductionInput != nil {
+		return model.StoryGraphVersion{}, errors.New("legacy StoryGraph Version cannot carry Production compilation input")
+	}
 	id, err := uuid.Parse(value.ID)
 	if err != nil {
 		return model.StoryGraphVersion{}, err
@@ -313,11 +320,11 @@ func versionDomain(record model.StoryGraphVersion) (storygraph.Version, error) {
 	}
 	var productionInput *storygraph.ProductionCompilationInput
 	if len(record.CompilationInput) > 0 {
-		value := new(storygraph.ProductionCompilationInput)
-		if err := json.Unmarshal(record.CompilationInput, value); err != nil {
+		value, err := storygraph.DecodeProductionCompilationInput(record.CompilationInput)
+		if err != nil {
 			return storygraph.Version{}, err
 		}
-		productionInput = value
+		productionInput = &value
 	}
 	if err := json.Unmarshal(record.Nodes, &nodes); err != nil {
 		return storygraph.Version{}, err
@@ -330,7 +337,7 @@ func versionDomain(record model.StoryGraphVersion) (storygraph.Version, error) {
 		value := record.ParentVersionID.String()
 		parentVersionID = &value
 	}
-	return storygraph.Version{
+	value := storygraph.Version{
 		ID: record.ID.String(), WorkspaceID: record.WorkspaceID.String(), ProjectID: record.ProjectID.String(),
 		VersionNo: record.VersionNo, ParentVersionID: parentVersionID, ParentContentHash: record.ParentContentHash,
 		SourceRevisionID: record.SourceRevisionID.String(), SourceRevisionHash: record.SourceRevisionHash,
@@ -338,7 +345,15 @@ func versionDomain(record model.StoryGraphVersion) (storygraph.Version, error) {
 		Nodes: nodes, Edges: edges, TopologyHash: record.TopologyHash, ContentHash: record.ContentHash,
 		Status: record.Status, PublishedAt: record.PublishedAt, CreatedBy: record.CreatedBy.String(), CreatedAt: record.CreatedAt,
 		ProductionInput: productionInput,
-	}, nil
+	}
+	if value.SchemaVersion == storygraph.ProductionSchemaID {
+		if err := storygraph.ValidateProductionVersion(value); err != nil {
+			return storygraph.Version{}, err
+		}
+	} else if value.ProductionInput != nil {
+		return storygraph.Version{}, errors.New("legacy StoryGraph Version carries Production compilation input")
+	}
+	return value, nil
 }
 
 func receiptRecord(value platformcommand.Receipt) (model.CommandReceipt, error) {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -97,12 +96,11 @@ func TestCompileProductionOwnerSnapshotRejectsIncompleteOrPollutedReadSet(t *tes
 func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnapshot {
 	t.Helper()
 	workspaceID, projectID := uuid.NewString(), uuid.NewString()
-	now := time.Date(2026, time.September, 10, 8, 0, 0, 0, time.UTC)
 	member := func(ownerKind, family, logicalID string) storygraph.OwnerVersionIdentity {
 		return storygraph.OwnerVersionIdentity{
 			WorkspaceID: workspaceID, ProjectID: projectID, OwnerKind: ownerKind,
 			VersionFamily: family, LogicalID: logicalID, VersionID: uuid.NewString(), Revision: 1,
-			ContentHash: productionHash(logicalID), CreatedAt: now,
+			ContentHash: productionHash(logicalID),
 		}
 	}
 	source := member("production/script", "script_source_set", "script")
@@ -155,10 +153,7 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 	result := storygraph.ProductionOwnerSnapshot{
 		Origin: storygraph.OwnerSnapshotOriginConfirmed, WorkspaceID: workspaceID, ProjectID: projectID,
 		SourceRevisionID: source.VersionID, SourceRevisionHash: source.ContentHash,
-		Coverage: storygraph.ProductionCoverageProof{
-			Phase: "p0", StructureIdentityReceiptID: uuid.NewString(), StructureIdentityReceiptHash: productionHash("gate-one"),
-			ProductionWorldReceiptID: uuid.NewString(), ProductionWorldReceiptHash: productionHash("gate-two"),
-		},
+		ProductionWorldConfirmationID: uuid.NewString(), ProductionWorldConfirmationHash: productionHash("gate-two"),
 		OwnerCollections: collections,
 		Graph: storygraph.Snapshot{SchemaVersion: storygraph.ProductionSchemaID, Nodes: []storygraph.Node{
 			{StoryNodeKey: sourceKey, NodeType: storygraph.NodeTypeSourceRevision, OwnerRef: sourceRef, Payload: payload("storygraph-production/source_revision-ref-payload-contract", sourceRef.OwnerContentHash, nil)},
@@ -174,6 +169,7 @@ func productionOwnerSnapshotFixture(t *testing.T) storygraph.ProductionOwnerSnap
 			newEdge(t, storygraph.EdgeTypeContains, episodeKey, sceneKey, storygraph.EdgeQualifier{SequenceKey: "scene:0001"}),
 		}},
 	}
+	result.Coverage = productionCoverageProofFixture(t, result)
 	addProductionIdentityRelations(t, &result)
 	return result
 }

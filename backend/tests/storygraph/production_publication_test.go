@@ -25,8 +25,8 @@ func TestCompileProductionPublishesExactInputAndReplaysAtomically(t *testing.T) 
 	})
 	command := storygraphapp.CompileProductionCommand{
 		ProjectID:                  snapshot.ProjectID,
-		ProductionWorldReceiptID:   snapshot.Coverage.ProductionWorldReceiptID,
-		ProductionWorldReceiptHash: snapshot.Coverage.ProductionWorldReceiptHash,
+		ProductionWorldReceiptID:   snapshot.ProductionWorldConfirmationID,
+		ProductionWorldReceiptHash: snapshot.ProductionWorldConfirmationHash,
 		IdempotencyKey:             "publish-production-storygraph",
 	}
 	actor := storygraphapp.Actor{UserID: uuid.NewString(), TokenVersion: 1}
@@ -67,8 +67,8 @@ func TestCompileProductionPublishesExactInputAndReplaysAtomically(t *testing.T) 
 	next.ProductionWorldReceiptID = uuid.NewString()
 	next.ProductionWorldReceiptHash = productionHash("next-production-world")
 	next.IdempotencyKey = "append-production-storygraph"
-	store.productionSnapshot.Coverage.ProductionWorldReceiptID = next.ProductionWorldReceiptID
-	store.productionSnapshot.Coverage.ProductionWorldReceiptHash = next.ProductionWorldReceiptHash
+	store.productionSnapshot.ProductionWorldConfirmationID = next.ProductionWorldReceiptID
+	store.productionSnapshot.ProductionWorldConfirmationHash = next.ProductionWorldReceiptHash
 	appended, err := service.CompileProduction(context.Background(), actor, next)
 	if err != nil || appended.Version.VersionNo != 2 || appended.Version.ParentVersionID == nil ||
 		*appended.Version.ParentVersionID != published.Version.ID || appended.Head.Revision != 2 ||

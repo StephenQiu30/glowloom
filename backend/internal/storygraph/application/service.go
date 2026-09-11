@@ -156,8 +156,8 @@ func (service *Service) CompileProduction(
 		if loadErr != nil {
 			return loadErr
 		}
-		if snapshot.Coverage.ProductionWorldReceiptID != command.ProductionWorldReceiptID ||
-			snapshot.Coverage.ProductionWorldReceiptHash != command.ProductionWorldReceiptHash {
+		if snapshot.ProductionWorldConfirmationID != command.ProductionWorldReceiptID ||
+			snapshot.ProductionWorldConfirmationHash != command.ProductionWorldReceiptHash {
 			return invalid("Production World receipt does not match the compiler snapshot")
 		}
 		compiled, compileErr := storygraph.CompileProductionOwnerSnapshot(snapshot)
@@ -485,7 +485,13 @@ func newProductionVersion(
 		TopologyHash: compiled.Graph.TopologyHash, ContentHash: compiled.Graph.ContentHash,
 		Status: "published", PublishedAt: now, CreatedBy: createdBy, CreatedAt: now,
 		ProductionInput: &storygraph.ProductionCompilationInput{
-			Coverage: compiled.Coverage, OwnerCollections: compiled.OwnerCollections,
+			SchemaID: compiled.SchemaID, SchemaRank: compiled.SchemaRank,
+			SchemaManifestHash: compiled.SchemaManifestHash,
+			Coverage:           compiled.Coverage, CoveragePhase: compiled.Coverage.CoveragePhase,
+			CoverageScopeManifestHash: compiled.Coverage.CoverageScopeManifestHash,
+			NodeKeyDerivationID:       compiled.NodeKeyDerivationID,
+			EdgeKeyDerivationID:       compiled.EdgeKeyDerivationID,
+			OwnerCollections:          compiled.OwnerCollections,
 		},
 	}
 }

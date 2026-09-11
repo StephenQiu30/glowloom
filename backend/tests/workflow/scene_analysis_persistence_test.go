@@ -947,6 +947,15 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	productionGraph, err := productionGraphService.CompileProduction(ctx, productionGraphActor, productionGraphCommand)
 	if err != nil || productionGraph.Version.SchemaVersion != storygraphdomain.ProductionSchemaID ||
 		productionGraph.Version.ProductionInput == nil || len(productionGraph.Version.ProductionInput.OwnerCollections) < 7 ||
+		productionGraph.Version.ProductionInput.SchemaID != storygraphdomain.ProductionSchemaID ||
+		productionGraph.Version.ProductionInput.SchemaRank != storygraphdomain.ProductionSchemaRank ||
+		len(productionGraph.Version.ProductionInput.SchemaManifestHash) != 64 ||
+		productionGraph.Version.ProductionInput.NodeKeyDerivationID != storygraphdomain.StoryNodeKeyDerivationID ||
+		productionGraph.Version.ProductionInput.EdgeKeyDerivationID != storygraphdomain.StoryEdgeKeyDerivationID ||
+		productionGraph.Version.ProductionInput.Coverage.CoveragePhase != storygraphdomain.ProductionCoverageP0 ||
+		len(productionGraph.Version.ProductionInput.Coverage.OwnerApplyReceiptRefs) < 6 ||
+		len(productionGraph.Version.ProductionInput.Coverage.CollectionRootHashes) != len(productionGraph.Version.ProductionInput.OwnerCollections) ||
+		productionGraph.Version.ProductionInput.CoverageScopeManifestHash != productionGraph.Version.ProductionInput.Coverage.CoverageScopeManifestHash ||
 		productionGraph.Head.CurrentVersionID != productionGraph.Version.ID ||
 		productionGraphResult.Output.Bindings[0].ReferenceID != productionGraph.Version.ID ||
 		productionGraphResult.Output.Bindings[0].ContentHash != productionGraph.Version.ContentHash ||

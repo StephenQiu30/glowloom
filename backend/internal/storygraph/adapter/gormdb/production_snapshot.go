@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	assetdomain "github.com/StephenQiu30/lanverse/backend/internal/asset/domain"
+	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
@@ -86,18 +87,16 @@ func (repo *repository) LoadProductionOwnerSnapshot(
 	if err != nil {
 		return storygraph.ProductionOwnerSnapshot{}, invalidOwnerSnapshot(err.Error())
 	}
+	coverage, err := buildProductionCoverageProof(state, material, collections, ownerCollections)
+	if err != nil {
+		return storygraph.ProductionOwnerSnapshot{}, invalidOwnerSnapshot(err.Error())
+	}
 	return storygraph.ProductionOwnerSnapshot{
 		Origin: storygraph.OwnerSnapshotOriginConfirmed, WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID,
 		SourceRevisionID: material.revision.ID.String(), SourceRevisionHash: material.revision.NormalizedHash,
-		Coverage: storygraph.ProductionCoverageProof{
-			Phase:                        storygraph.ProductionCoverageP0,
-			StructureIdentityReceiptID:   material.structureReceipt.ID.String(),
-			StructureIdentityReceiptHash: material.structureReceipt.ReceiptContentHash,
-			ProductionWorldReceiptID:     productionWorldReceiptID,
-			ProductionWorldReceiptHash:   productionWorldReceiptHash,
-		},
-		OwnerCollections: ownerCollections,
-		Graph:            storygraph.Snapshot{SchemaVersion: storygraph.ProductionSchemaID, Nodes: graph.nodes, Edges: graph.edges},
+		ProductionWorldConfirmationID: productionWorldReceiptID, ProductionWorldConfirmationHash: productionWorldReceiptHash,
+		Coverage: coverage, OwnerCollections: ownerCollections,
+		Graph: storygraph.Snapshot{SchemaVersion: storygraph.ProductionSchemaID, Nodes: graph.nodes, Edges: graph.edges},
 	}, nil
 }
 
@@ -273,6 +272,14 @@ func (repo *repository) verifyProductionOwnerHeads(
 		sourceReceipt.MembersHash != rebuiltSource.MembersHash || sourceReceipt.CollectionRootHash != rebuiltSource.CollectionRootHash ||
 		!reflect.DeepEqual(sourceMembers, rebuiltSource.Members) {
 		return invalidOwnerSnapshot("Script Source Collection proof has drifted")
+	}
+	receiptMaterial, _ := json.Marshal(map[string]any{
+		"collection_receipt_id": sourceReceipt.ID.String(), "collection_root_hash": rebuiltSource.CollectionRootHash,
+		"source_acceptance_ref": sourceReceipt.SourceAcceptanceRef,
+	})
+	receiptHash, hashErr := platformcanonical.Hash(receiptMaterial)
+	if hashErr != nil || receiptHash != sourceReceipt.ReceiptContentHash {
+		return invalidOwnerSnapshot("Script Source Collection Receipt has drifted")
 	}
 	material.sourceHead = sourceHead
 	material.sourceReceipt = sourceReceipt
@@ -871,14 +878,121 @@ func findWorldCollection(values []worlddomain.CollectionCommitReceipt, family st
 	return worlddomain.CollectionCommitReceipt{}
 }
 
+func buildProductionCoverageProof(
+	state storygraph.PublicationState,
+	material productionSnapshotMaterial,
+	worldReceipts []worlddomain.CollectionCommitReceipt,
+	collections []storygraph.OwnerCollectionRef,
+) (storygraph.ProductionCoverageProof, error) {
+	var p0Scopes []string
+	if err := json.Unmarshal(material.structureReceipt.CoveredScopeKeys, &p0Scopes); err != nil {
+		return storygraph.ProductionCoverageProof{}, invalidOwnerSnapshot("Structure Identity coverage has drifted")
+	}
+	projectScope := "project:" + state.ProjectID
+	receipts := make([]storygraph.ProductionOwnerApplyReceiptRef, 0, len(worldReceipts)+3)
+	appendReceipt := func(
+		checkpoint string,
+		ownerKind string,
+		family string,
+		rootHash string,
+		coveredScopes []string,
+		receiptHash string,
+		committedRef *worlddomain.CollectionMemberRef,
+	) error {
+		collection, found := productionCoverageCollection(collections, ownerKind, family, rootHash)
+		if !found || len(collection.Members) == 0 {
+			return invalidOwnerSnapshot("Owner Apply Receipt does not match a Production Collection")
+		}
+		member := collection.Members[0]
+		if committedRef != nil {
+			found = false
+			for _, candidate := range collection.Members {
+				if candidate.OwnerKind == committedRef.OwnerKind && candidate.LogicalID == committedRef.LogicalID &&
+					candidate.VersionID == committedRef.VersionID && candidate.Revision == committedRef.Revision &&
+					candidate.ContentHash == committedRef.ContentHash {
+					member, found = candidate, true
+					break
+				}
+			}
+			if !found {
+				return invalidOwnerSnapshot("Owner Apply Receipt committed Version is outside its Production Collection")
+			}
+		}
+		committed := ownercollection.VersionRef{
+			WorkspaceID: member.WorkspaceID, ProjectID: member.ProjectID,
+			OwnerKind: member.OwnerKind, VersionFamily: member.VersionFamily,
+			OwnerLogicalID: member.LogicalID, OwnerVersionID: member.VersionID,
+			OwnerRevision: member.Revision, OwnerContentHash: member.ContentHash,
+		}
+		receipts = append(receipts, storygraph.ProductionOwnerApplyReceiptRef{
+			DecisionCheckpointID: checkpoint, ReceiptScopeKey: projectScope,
+			CoveredScopeKeys: append([]string(nil), coveredScopes...),
+			OwnerKind:        ownerKind, VersionFamily: family,
+			CommittedCollectionRootHash: rootHash, CommittedOwnerVersionRef: &committed,
+			ReceiptContentHash: receiptHash,
+		})
+		return nil
+	}
+	if err := appendReceipt(
+		"source_revision_accepted", "production/script", scriptdomain.SourceCollectionFamily,
+		material.sourceReceipt.CollectionRootHash, []string{}, material.sourceReceipt.ReceiptContentHash, nil,
+	); err != nil {
+		return storygraph.ProductionCoverageProof{}, err
+	}
+	if err := appendReceipt(
+		projectdomain.ProjectEpisodeCheckpoint, "production/project", projectdomain.ProjectEpisodeCollectionFamily,
+		material.episodeReceipt.CollectionRootHash, []string{}, material.episodeReceipt.ReceiptContentHash, nil,
+	); err != nil {
+		return storygraph.ProductionCoverageProof{}, err
+	}
+	if err := appendReceipt(
+		bibledomain.StructureIdentityCheckpointKey, "production/bible", bibledomain.StructureIdentityCollectionFamily,
+		material.structureReceipt.CollectionRootHash, p0Scopes, material.structureReceipt.ReceiptContentHash, nil,
+	); err != nil {
+		return storygraph.ProductionCoverageProof{}, err
+	}
+	for _, receipt := range worldReceipts {
+		if len(receipt.CommittedOwnerVersionRefs) == 0 {
+			return storygraph.ProductionCoverageProof{}, invalidOwnerSnapshot("Production World Receipt has no committed Owner Version")
+		}
+		if err := appendReceipt(
+			worlddomain.ProductionWorldCheckpointKey, receipt.OwnerKind, receipt.VersionFamily,
+			receipt.CollectionRootHash, receipt.CoveredScopeKeys, receipt.ReceiptContentHash,
+			&receipt.CommittedOwnerVersionRefs[0],
+		); err != nil {
+			return storygraph.ProductionCoverageProof{}, err
+		}
+	}
+	return storygraph.BuildProductionCoverageProof(storygraph.ProductionCoverageProofInput{
+		WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID,
+		CoverageScopeSets:     storygraph.ProductionCoverageScopeSets{P0ScopeKeys: p0Scopes},
+		OwnerApplyReceiptRefs: receipts, OwnerCollections: collections,
+	})
+}
+
+func productionCoverageCollection(
+	collections []storygraph.OwnerCollectionRef,
+	ownerKind string,
+	family string,
+	rootHash string,
+) (storygraph.OwnerCollectionRef, bool) {
+	for _, collection := range collections {
+		if collection.OwnerKind == ownerKind && collection.VersionFamily == family &&
+			collection.CollectionRootHash == rootHash {
+			return collection, true
+		}
+	}
+	return storygraph.OwnerCollectionRef{}, false
+}
+
 func buildProductionOwnerCollections(
 	state storygraph.PublicationState,
 	material productionSnapshotMaterial,
 	worldCollections []worlddomain.CollectionCommitReceipt,
 ) ([]storygraph.OwnerCollectionRef, error) {
-	identity := func(ownerKind, family, logicalID, versionID string, revision int64, hash string, createdAt time.Time) storygraph.OwnerVersionIdentity {
+	identity := func(ownerKind, family, logicalID, versionID string, revision int64, hash string) storygraph.OwnerVersionIdentity {
 		return storygraph.OwnerVersionIdentity{WorkspaceID: state.WorkspaceID, ProjectID: state.ProjectID, OwnerKind: ownerKind,
-			VersionFamily: family, LogicalID: logicalID, VersionID: versionID, Revision: revision, ContentHash: hash, CreatedAt: createdAt.UTC()}
+			VersionFamily: family, LogicalID: logicalID, VersionID: versionID, Revision: revision, ContentHash: hash}
 	}
 	collections := make([]storygraph.OwnerCollectionRef, 0, 7)
 	appendCollection := func(ownerKind, family, scopeKind, scopeKey string, revision int64, members []storygraph.OwnerVersionIdentity) error {
@@ -890,8 +1004,8 @@ func buildProductionOwnerCollections(
 		return err
 	}
 	sourceMembers := []storygraph.OwnerVersionIdentity{
-		identity("production/script", scriptdomain.SourceCollectionFamily, material.revision.DocumentID.String(), material.revision.ID.String(), int64(material.revision.VersionNo), material.revision.NormalizedHash, material.revision.CreatedAt),
-		identity("production/script", scriptdomain.SourceCollectionFamily, material.revision.DocumentID.String()+":span-index", material.spanIndex.ID.String(), int64(material.revision.VersionNo), material.spanIndex.ContentHash, material.spanIndex.CreatedAt),
+		identity("production/script", scriptdomain.SourceCollectionFamily, material.revision.DocumentID.String(), material.revision.ID.String(), int64(material.revision.VersionNo), material.revision.NormalizedHash),
+		identity("production/script", scriptdomain.SourceCollectionFamily, material.revision.DocumentID.String()+":span-index", material.spanIndex.ID.String(), int64(material.revision.VersionNo), material.spanIndex.ContentHash),
 	}
 	if err := appendCollection("production/script", scriptdomain.SourceCollectionFamily, "project", "project:"+state.ProjectID, material.sourceHead.HeadRevision, sourceMembers); err != nil {
 		return nil, err
@@ -901,7 +1015,7 @@ func buildProductionOwnerCollections(
 	}
 	episodeMembers := make([]storygraph.OwnerVersionIdentity, len(material.episodeVersions))
 	for index, version := range material.episodeVersions {
-		episodeMembers[index] = identity("production/project", projectdomain.ProjectEpisodeCollectionFamily, version.EpisodeID.String(), version.ID.String(), version.Revision, version.ContentHash, version.CreatedAt)
+		episodeMembers[index] = identity("production/project", projectdomain.ProjectEpisodeCollectionFamily, version.EpisodeID.String(), version.ID.String(), version.Revision, version.ContentHash)
 	}
 	if err := appendCollection("production/project", projectdomain.ProjectEpisodeCollectionFamily, "project", "project:"+state.ProjectID, material.episodeHead.ScopeRevision, episodeMembers); err != nil {
 		return nil, err
@@ -910,7 +1024,7 @@ func buildProductionOwnerCollections(
 		return nil, invalidOwnerSnapshot("Project Episode Collection root has drifted")
 	}
 	if err := appendCollection("production/bible", bibledomain.StructureIdentityCollectionFamily, "project", "project:"+state.ProjectID, material.structureHead.ScopeRevision, []storygraph.OwnerVersionIdentity{
-		identity("production/bible", "bible_structure_identity_set", state.ProjectID, material.structure.ID.String(), int64(material.structure.Version), material.structure.ContentHash, material.structure.CreatedAt),
+		identity("production/bible", "bible_structure_identity_set", state.ProjectID, material.structure.ID.String(), int64(material.structure.Version), material.structure.ContentHash),
 	}); err != nil {
 		return nil, err
 	}
@@ -919,17 +1033,17 @@ func buildProductionOwnerCollections(
 	}
 	bibleCollection := findWorldCollection(worldCollections, "bible_production_world_set")
 	if err := appendCollection("production/bible", "bible_production_world_set", "project", "project:"+state.ProjectID, bibleCollection.ScopeRevision, []storygraph.OwnerVersionIdentity{
-		identity("production/bible", "bible_production_world_set", state.ProjectID, material.bibleVersion.ID.String(), material.bibleVersion.Revision, material.bibleVersion.ContentHash, material.bibleVersion.CreatedAt),
+		identity("production/bible", "bible_production_world_set", state.ProjectID, material.bibleVersion.ID.String(), material.bibleVersion.Revision, material.bibleVersion.ContentHash),
 	}); err != nil {
 		return nil, err
 	}
 	assetCollection := findWorldCollection(worldCollections, "asset_identity_state_set")
 	assetMembers := make([]storygraph.OwnerVersionIdentity, 0, len(material.assets)+len(material.states))
 	for _, value := range material.assets {
-		assetMembers = append(assetMembers, identity("asset", "asset_identity_state_set", value.IdentityKey, value.ID.String(), int64(value.Revision), value.ContentHash, value.CreatedAt))
+		assetMembers = append(assetMembers, identity("asset", "asset_identity_state_set", value.IdentityKey, value.ID.String(), int64(value.Revision), value.ContentHash))
 	}
 	for _, value := range material.states {
-		assetMembers = append(assetMembers, identity("asset", "asset_identity_state_set", value.StateKey, value.ID.String(), int64(value.Revision), value.ContentHash, value.CreatedAt))
+		assetMembers = append(assetMembers, identity("asset", "asset_identity_state_set", value.StateKey, value.ID.String(), int64(value.Revision), value.ContentHash))
 	}
 	if err := appendCollection("asset", "asset_identity_state_set", "project", "project:"+state.ProjectID, assetCollection.ScopeRevision, assetMembers); err != nil {
 		return nil, err
@@ -942,7 +1056,7 @@ func buildProductionOwnerCollections(
 		for _, reference := range worldCollection.Members {
 			for _, fact := range material.planningFacts {
 				if fact.ID == reference.VersionID {
-					members = append(members, identity("production/planning", "planning_scene_set", fact.BusinessKey, fact.ID, int64(fact.Revision), fact.ContentHash, fact.CreatedAt))
+					members = append(members, identity("production/planning", "planning_scene_set", fact.BusinessKey, fact.ID, int64(fact.Revision), fact.ContentHash))
 					break
 				}
 			}

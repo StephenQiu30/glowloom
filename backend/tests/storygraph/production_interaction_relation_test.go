@@ -197,6 +197,7 @@ func productionInteractionRelationFixture(t *testing.T) storygraph.ProductionOwn
 		newEdge(t, storygraph.EdgeTypeClaimState, propState.StoryNodeKey, claim.StoryNodeKey, storygraph.EdgeQualifier{StateRole: "prop_before"}),
 		newEdge(t, storygraph.EdgeTypeClaimState, propState.StoryNodeKey, claim.StoryNodeKey, storygraph.EdgeQualifier{StateRole: "prop_after"}),
 	)
+	value.Coverage = productionCoverageProofFixture(t, value)
 	return value
 }
 

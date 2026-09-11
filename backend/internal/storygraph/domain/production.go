@@ -6,24 +6,25 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 	"github.com/google/uuid"
 )
 
-const ProductionCoverageP0 = "p0"
+const (
+	ProductionCoverageP0 = "p0"
+	ProductionSchemaRank = 2
+)
 
 type OwnerVersionIdentity struct {
-	WorkspaceID   string    `json:"workspace_id"`
-	ProjectID     string    `json:"project_id"`
-	OwnerKind     string    `json:"owner_kind"`
-	VersionFamily string    `json:"version_family"`
-	LogicalID     string    `json:"owner_logical_id"`
-	VersionID     string    `json:"owner_version_id"`
-	Revision      int64     `json:"owner_revision"`
-	ContentHash   string    `json:"owner_content_hash"`
-	CreatedAt     time.Time `json:"-"`
+	WorkspaceID   string `json:"workspace_id"`
+	ProjectID     string `json:"project_id"`
+	OwnerKind     string `json:"owner_kind"`
+	VersionFamily string `json:"version_family"`
+	LogicalID     string `json:"owner_logical_id"`
+	VersionID     string `json:"owner_version_id"`
+	Revision      int64  `json:"owner_revision"`
+	ContentHash   string `json:"owner_content_hash"`
 }
 
 type OwnerCollectionRef struct {
@@ -41,27 +42,26 @@ type OwnerCollectionRef struct {
 	CollectionRootHash string                 `json:"collection_root_hash"`
 }
 
-type ProductionCoverageProof struct {
-	Phase                        string `json:"phase"`
-	StructureIdentityReceiptID   string `json:"structure_identity_receipt_id"`
-	StructureIdentityReceiptHash string `json:"structure_identity_receipt_hash"`
-	ProductionWorldReceiptID     string `json:"production_world_receipt_id"`
-	ProductionWorldReceiptHash   string `json:"production_world_receipt_hash"`
-}
-
 type ProductionOwnerSnapshot struct {
-	Origin             string                  `json:"origin"`
-	WorkspaceID        string                  `json:"workspace_id"`
-	ProjectID          string                  `json:"project_id"`
-	SourceRevisionID   string                  `json:"source_revision_id"`
-	SourceRevisionHash string                  `json:"source_revision_hash"`
-	Coverage           ProductionCoverageProof `json:"coverage"`
-	OwnerCollections   []OwnerCollectionRef    `json:"owner_collections"`
-	Graph              Snapshot                `json:"graph"`
+	Origin                          string                  `json:"origin"`
+	WorkspaceID                     string                  `json:"workspace_id"`
+	ProjectID                       string                  `json:"project_id"`
+	SourceRevisionID                string                  `json:"source_revision_id"`
+	SourceRevisionHash              string                  `json:"source_revision_hash"`
+	ProductionWorldConfirmationID   string                  `json:"-"`
+	ProductionWorldConfirmationHash string                  `json:"-"`
+	Coverage                        ProductionCoverageProof `json:"coverage"`
+	OwnerCollections                []OwnerCollectionRef    `json:"owner_collections"`
+	Graph                           Snapshot                `json:"graph"`
 }
 
 type CompiledProductionOwnerSnapshot struct {
 	WorkspaceID, ProjectID, SourceRevisionID, SourceRevisionHash string
+	SchemaID                                                     string
+	SchemaRank                                                   int64
+	SchemaManifestHash                                           string
+	NodeKeyDerivationID                                          string
+	EdgeKeyDerivationID                                          string
 	Coverage                                                     ProductionCoverageProof
 	OwnerCollections                                             []OwnerCollectionRef
 	OwnerHeads                                                   []OwnerHeadRef
@@ -70,8 +70,15 @@ type CompiledProductionOwnerSnapshot struct {
 }
 
 type ProductionCompilationInput struct {
-	Coverage         ProductionCoverageProof `json:"verified_coverage_proof"`
-	OwnerCollections []OwnerCollectionRef    `json:"exact_owner_collections"`
+	SchemaID                  string                  `json:"schema_id"`
+	SchemaRank                int64                   `json:"schema_rank"`
+	SchemaManifestHash        string                  `json:"schema_manifest_hash"`
+	Coverage                  ProductionCoverageProof `json:"verified_coverage_proof"`
+	CoveragePhase             string                  `json:"coverage_phase"`
+	CoverageScopeManifestHash string                  `json:"coverage_scope_manifest_hash"`
+	NodeKeyDerivationID       string                  `json:"node_key_derivation_id"`
+	EdgeKeyDerivationID       string                  `json:"edge_key_derivation_id"`
+	OwnerCollections          []OwnerCollectionRef    `json:"exact_owner_collections"`
 }
 
 type productionCollectionDefinition struct {
@@ -108,7 +115,6 @@ func BuildOwnerCollectionRef(value OwnerCollectionRef) (OwnerCollectionRef, erro
 			(index > 0 && productionOwnerKey(members[index-1]) == productionOwnerKey(member)) {
 			return OwnerCollectionRef{}, errors.New("invalid StoryGraph Owner Collection member set")
 		}
-		members[index].CreatedAt = member.CreatedAt.UTC()
 		contractMembers[index] = ownercollection.VersionRef{
 			WorkspaceID: member.WorkspaceID, ProjectID: member.ProjectID,
 			OwnerKind: member.OwnerKind, VersionFamily: member.VersionFamily,
@@ -135,11 +141,19 @@ func BuildOwnerCollectionRef(value OwnerCollectionRef) (OwnerCollectionRef, erro
 func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledProductionOwnerSnapshot, error) {
 	if snapshot.Origin != OwnerSnapshotOriginConfirmed || snapshot.Graph.SchemaVersion != ProductionSchemaID ||
 		!validProductionScope(snapshot.WorkspaceID, snapshot.ProjectID) ||
-		!validProductionCoverage(snapshot.Coverage) || !hashPattern.MatchString(snapshot.SourceRevisionHash) {
+		!hashPattern.MatchString(snapshot.ProductionWorldConfirmationHash) ||
+		!hashPattern.MatchString(snapshot.SourceRevisionHash) {
 		return CompiledProductionOwnerSnapshot{}, errors.New("invalid Production StoryGraph compilation input")
 	}
 	if _, err := uuid.Parse(snapshot.SourceRevisionID); err != nil {
 		return CompiledProductionOwnerSnapshot{}, errors.New("invalid Production StoryGraph source revision")
+	}
+	if _, err := uuid.Parse(snapshot.ProductionWorldConfirmationID); err != nil {
+		return CompiledProductionOwnerSnapshot{}, errors.New("invalid Production World confirmation identity")
+	}
+	registry, err := BuildProductionSchemaRegistry()
+	if err != nil {
+		return CompiledProductionOwnerSnapshot{}, err
 	}
 
 	collections := append([]OwnerCollectionRef(nil), snapshot.OwnerCollections...)
@@ -199,6 +213,9 @@ func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledP
 			return CompiledProductionOwnerSnapshot{}, fmt.Errorf("Production StoryGraph node %s is outside the frozen Owner Collections", node.StoryNodeKey)
 		}
 	}
+	if err = ValidateProductionCoverageProof(snapshot.WorkspaceID, snapshot.ProjectID, snapshot.Coverage, collections); err != nil {
+		return CompiledProductionOwnerSnapshot{}, err
+	}
 	heads, _, err := CanonicalOwnerHeadRefs(ownerHeads)
 	if err != nil {
 		return CompiledProductionOwnerSnapshot{}, err
@@ -208,17 +225,25 @@ func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledP
 		return CompiledProductionOwnerSnapshot{}, err
 	}
 	ownerSetHash, err := canonicalValueHash(struct {
-		SchemaID         string                  `json:"schema_id"`
-		Coverage         ProductionCoverageProof `json:"verified_coverage_proof"`
-		OwnerCollections []OwnerCollectionRef    `json:"exact_owner_collections"`
-	}{ProductionSchemaID, snapshot.Coverage, collections})
+		SchemaID           string                  `json:"schema_id"`
+		SchemaManifestHash string                  `json:"schema_manifest_hash"`
+		Coverage           ProductionCoverageProof `json:"verified_coverage_proof"`
+		OwnerCollections   []OwnerCollectionRef    `json:"exact_owner_collections"`
+	}{ProductionSchemaID, registry.SchemaHash, snapshot.Coverage, collections})
+	if err != nil {
+		return CompiledProductionOwnerSnapshot{}, err
+	}
+	graph.TopologyHash, graph.ContentHash, err = productionGraphHashes(graph, registry, snapshot.Coverage, ownerSetHash)
 	if err != nil {
 		return CompiledProductionOwnerSnapshot{}, err
 	}
 	return CompiledProductionOwnerSnapshot{
 		WorkspaceID: snapshot.WorkspaceID, ProjectID: snapshot.ProjectID,
 		SourceRevisionID: snapshot.SourceRevisionID, SourceRevisionHash: snapshot.SourceRevisionHash,
-		Coverage: snapshot.Coverage, OwnerCollections: collections, OwnerHeads: heads,
+		SchemaID: registry.Manifest.SchemaID, SchemaRank: ProductionSchemaRank,
+		SchemaManifestHash: registry.SchemaHash, NodeKeyDerivationID: registry.Manifest.NodeKeyDerivationID,
+		EdgeKeyDerivationID: registry.Manifest.EdgeKeyDerivationID,
+		Coverage:            snapshot.Coverage, OwnerCollections: collections, OwnerHeads: heads,
 		OwnerSetHash: ownerSetHash, Graph: graph,
 	}, nil
 }
@@ -226,8 +251,7 @@ func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledP
 func validateProductionOwnerIdentity(value OwnerVersionIdentity, collection OwnerCollectionRef) error {
 	if value.WorkspaceID != collection.WorkspaceID || value.ProjectID != collection.ProjectID ||
 		value.VersionFamily != collection.VersionFamily || strings.TrimSpace(value.OwnerKind) == "" ||
-		strings.TrimSpace(value.LogicalID) == "" || value.Revision < 1 || !hashPattern.MatchString(value.ContentHash) ||
-		value.CreatedAt.IsZero() {
+		strings.TrimSpace(value.LogicalID) == "" || value.Revision < 1 || !hashPattern.MatchString(value.ContentHash) {
 		return errors.New("invalid StoryGraph Owner Version identity")
 	}
 	if _, err := uuid.Parse(value.VersionID); err != nil {
@@ -238,19 +262,6 @@ func validateProductionOwnerIdentity(value OwnerVersionIdentity, collection Owne
 		return errors.New("invalid StoryGraph Owner Version kind")
 	}
 	return nil
-}
-
-func validProductionCoverage(value ProductionCoverageProof) bool {
-	if value.Phase != ProductionCoverageP0 || !hashPattern.MatchString(value.StructureIdentityReceiptHash) ||
-		!hashPattern.MatchString(value.ProductionWorldReceiptHash) {
-		return false
-	}
-	for _, identifier := range []string{value.StructureIdentityReceiptID, value.ProductionWorldReceiptID} {
-		if _, err := uuid.Parse(identifier); err != nil {
-			return false
-		}
-	}
-	return true
 }
 
 func validProductionScope(workspaceID, projectID string) bool {
