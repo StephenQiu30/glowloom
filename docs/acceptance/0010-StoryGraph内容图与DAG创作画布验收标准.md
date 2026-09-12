@@ -94,7 +94,7 @@
 - [ ] `VPR-REF-006`（`VP-I06`）：prop 必须请求 front、side、back、state_detail；多状态道具必须保持身份并展示明确状态差异。 最低证据：Contract + Vision。
 - [ ] `VPR-REF-007`（`VP-I06`）：interaction 必须请求 interaction_master，绑定已选 appearance、prop/state、姿势、握持、接触点、相对尺度和朝向。 最低证据：Contract + Vision。
 - [ ] `VPR-REF-008`（`VP-I06`）：scene_composition 必须请求 composition_master，绑定场景发生的已选角色形象、地点、道具、交互和连续性状态。 最低证据：Contract + Vision。
-- [ ] `VPR-REF-009`（`VP-I06`）：Target dependency graph 必须无环：anchor/location/prop base 先于 appearance/interaction，全部所需 base 先于 scene_composition。 最低证据：DAG property。
+- [x] `VPR-REF-009`（`VP-I06`）：Target dependency graph 必须无环：anchor/location/prop base 先于 appearance/interaction，全部所需 base 先于 scene_composition。 最低证据：DAG property。Backend `ReferenceTargetDependencyDAG` 只从同一 ApprovedReferencePlanVersion 的精确 Target Version 构建，按 canonical business key 排序并固定 `base → appearance → composition` 三波：Character Identity Anchor、Location Board、Prop Sheet 无依赖；Character Appearance 恰依赖更早的 Identity Anchor；Interaction/Scene Composition 只能依赖更早且 fulfillment rank 足够的可执行基础 Target。`not_generated` 不进入执行图且不得成为依赖，Plan 外键、重复身份、反向/同波依赖与环均失败关闭；Target 输入重排产生完全相同的节点、波次与内容 Hash。
 - [ ] `VPR-GEN-001`（`VP-I07`）：MVP 至少有一条真实图片 Provider 路径可生成六类 Target；不得因未接支付或成本模块而阻断。 最低证据：Real-provider journey。
 - [ ] `VPR-GEN-002`（`VP-I07`）：ProviderCall 以唯一 submission_token 获得一次发送权；发送后断联进入 outcome_unknown，必须先对账，禁止盲重试。 最低证据：Fault injection。
 - [ ] `VPR-GEN-003`（`VP-I07`）：Provider 输出先进入 staging；校验媒体类型、尺寸、Hash、恶意内容和目标身份后才可提升为 AssetVersion。 最低证据：Integration + Security。
@@ -460,13 +460,13 @@
 
 ### `VP-I06` — 六类 Target 与 Provider-neutral Brief
 
-- 状态：未开始
-- Git 基线/提交：待记录
-- Red 命令与失败：待记录
-- Green/定向验证：待记录
+- 状态：进行中；已完成 Approved Reference Target 的确定性依赖 DAG 与三个执行波次，Provider-neutral Brief strict union、Brief fence、Coverage Matrix 和 Target Query 尚未实现。
+- Git 基线/提交：基线 `b744cc29e210fba09286776990f594c6234567b4`；本依赖 DAG 子项随本记录所在提交交付。
+- Red 命令与失败：`go test ./tests/production/reference -run '^TestReferenceTargetDependencyDAG' -count=1` 首先因 `BuildReferenceTargetDependencyDAG` 及 DAG Schema/节点/波次合同不存在而编译失败；负例同时固定 Plan 外依赖、反向/同波次依赖、环和依赖 `not_generated` Target 必须失败关闭。
+- Green/定向验证：定向普通测试 0.387 秒、Race Detector 1.572 秒通过；架构门 1.573 秒、`go vet ./...` 与无外部集成环境变量的 `go test -count=1 ./...` 全部通过。同一组 Target 输入反转后产生完全相同的节点、波次与 Content Hash。
 - 全量 CI：待记录
-- 真实输入/产物/事实对账：待记录
-- 未覆盖条件与残余风险：待记录
+- 真实输入/产物/事实对账：Builder 只消费 Gate 3 已发布 `ReferencePlanTargetVersion`，保留其精确 Version ID、business key、fulfillment 与 Content Hash；产物只是 Provider-neutral 确定性执行图，不写 PostgreSQL、不创建 migration/Raw SQL/第二事实源，不调用 Provider，不启动或重启本机环境。
+- 未覆盖条件与残余风险：本子项只关闭 `VPR-REF-009`；六类 strict Brief/view role、冻结 read set/fence、Coverage Matrix 与 Target detail Query 仍未实现，不将 DAG 合同测试冒充媒体或浏览器验收。
 
 ### `VP-I07` — 图片执行、Bundle、确定性 QC 与 Vision Review
 

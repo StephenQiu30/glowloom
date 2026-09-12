@@ -201,6 +201,7 @@
 
 - [ ] Red：缺 Target、错误 view role、跨身份依赖、自由 Provider 参数、Secret、latest 和依赖环。
 - [ ] 实现 character_anchor、character_appearance、location、prop、interaction、scene_composition 六类 Target。
+- [x] 从 Gate 3 已批准的六类 `ReferencePlanTargetVersion` 机械生成 Provider-neutral 依赖 DAG：固定 `base → appearance → composition` 三个执行波次，输入重排得到同一内容 Hash；基础 Target 不得有依赖，Appearance 恰依赖同 Plan Anchor，Composition 只依赖更早的可执行基础 Target，`not_generated` 不进入执行图且不能被依赖。Plan 外依赖、同/后波次依赖、fulfillment rank 倒挂和环全部失败关闭；本子项不创建 Brief、GenerationExecution、Provider 调用或 SQL 表。
 - [ ] 实现 compile_reference_brief strict union、三视图/多面/状态/组合角色和冻结 read set。
 - [ ] 提供 ReferenceCoverageMatrix 与 Target detail Query。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
