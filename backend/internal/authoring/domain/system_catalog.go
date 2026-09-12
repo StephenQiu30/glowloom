@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "29.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "30.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -143,6 +143,14 @@ func SystemCatalog() (Catalog, error) {
 			"generation.reference_image_call", "Reference Image Call", "generation", "activity.reference_image_call", "never", "external_ai",
 			nil, []PortDefinition{requiredPort("receipt", "reference_call_receipt")},
 			json.RawMessage(`{"type":"object","properties":{"execution_ref":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1},"content_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"required":["id","revision","content_hash"],"additionalProperties":false},"call_key":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"required":["execution_ref","call_key"],"additionalProperties":false}`),
+		),
+		systemNodeDefinition(
+			"generation.reference_call_observation", "Reference Call Observation", "generation", "activity.reference_call_observation", "never", "external_ai",
+			[]PortDefinition{{Key: "previous", ValueType: "reference_call_receipt"}}, []PortDefinition{requiredPort("receipt", "reference_call_receipt")}, referenceObservationNodeConfig(true),
+		),
+		systemNodeDefinition(
+			"generation.reference_execution_observation", "Reference Execution Observation", "generation", "activity.reference_execution_observation", "never", "low",
+			[]PortDefinition{requiredPort("previous", "reference_call_receipt")}, []PortDefinition{requiredPort("execution", "reference_execution_observation")}, referenceObservationNodeConfig(false),
 		),
 		systemNodeDefinition(
 			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",

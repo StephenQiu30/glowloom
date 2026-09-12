@@ -29,7 +29,7 @@ func (executor *NodeExecutor) Execute(
 		return domain.NodeExecutorResult{}, errors.New("workflow executor owners are unavailable")
 	}
 	switch command.Executor {
-	case "activity.reference_image_call":
+	case "activity.reference_image_call", "activity.reference_call_observation", "activity.reference_execution_observation":
 		if executor.referenceCalls == nil {
 			return domain.NodeExecutorResult{}, errors.New("Reference call workflow owner is unavailable")
 		}

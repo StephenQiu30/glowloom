@@ -291,12 +291,17 @@ func (factory *referenceExecutionFactory) Submit(_ context.Context, input app.Re
 
 // Real TLS/JSON/PNG transport, with a private-object boundary spy. No paid
 // Provider or external storage is involved; PostgreSQL receipt writes are real.
-func referenceExecutionHTTPFactory(t *testing.T, assertCommitted func()) (*openaiadapter.Factory, *referenceExecutionHTTPObjects) {
+func referenceExecutionHTTPFactory(t *testing.T, expectedRequests, rejectedRequest int, assertCommitted func()) (*openaiadapter.Factory, *referenceExecutionHTTPObjects) {
 	t.Helper()
 	requests := 0
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		assertCommitted()
+		if requests == rejectedRequest {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		var body struct {
 			Size string `json:"size"`
 		}
@@ -323,7 +328,11 @@ func referenceExecutionHTTPFactory(t *testing.T, assertCommitted func()) (*opena
 	store := &referenceExecutionHTTPObjects{}
 	t.Cleanup(func() {
 		server.Close()
-		if requests != 1 || store.writes != 1 {
+		expectedWrites := expectedRequests
+		if rejectedRequest > 0 {
+			expectedWrites--
+		}
+		if requests != expectedRequests || store.writes != expectedWrites {
 			t.Errorf("HTTP/staging attempts=%d/%d", requests, store.writes)
 		}
 	})
@@ -358,7 +367,7 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 		})
 		return state, err
 	}
-	factory, objects := referenceExecutionHTTPFactory(t, func() {
+	factory, objects := referenceExecutionHTTPFactory(t, 1, 0, func() {
 		// The HTTP handler is independent of the execution goroutine/connection.
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
@@ -470,8 +479,7 @@ func (f referenceExecutionHTTPRoundTrip) RoundTrip(r *http.Request) (*http.Respo
 type referenceExecutionHTTPObjects struct {
 	mu         sync.Mutex
 	writes     int
-	contents   []byte
-	key        string
+	objects    map[string][]byte
 	beforeRead func() error
 }
 
@@ -482,21 +490,25 @@ func (store *referenceExecutionHTTPObjects) EnsurePrivateObject(ctx context.Cont
 	if ctx.Err() != nil || !strings.HasPrefix(key, "staging/reference/") || mime != "image/png" || len(hash) != 64 || len(contents) == 0 {
 		return errors.New("invalid staged object")
 	}
-	store.key, store.contents = key, bytes.Clone(contents)
+	if store.objects == nil {
+		store.objects = make(map[string][]byte)
+	}
+	store.objects[key] = bytes.Clone(contents)
 	return nil
 }
 
 func (store *referenceExecutionHTTPObjects) ReadVerified(ctx context.Context, key string, size int64, hash string, max int64) ([]byte, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	digest := sha256.Sum256(store.contents)
+	contents := store.objects[key]
+	digest := sha256.Sum256(contents)
 	if store.beforeRead != nil {
 		if err := store.beforeRead(); err != nil {
 			return nil, err
 		}
 	}
-	if ctx.Err() != nil || key != store.key || size != int64(len(store.contents)) || size > max || hash != hex.EncodeToString(digest[:]) {
+	if ctx.Err() != nil || contents == nil || size != int64(len(contents)) || size > max || hash != hex.EncodeToString(digest[:]) {
 		return nil, errors.New("invalid private object read")
 	}
-	return bytes.Clone(store.contents), nil
+	return bytes.Clone(contents), nil
 }

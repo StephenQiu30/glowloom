@@ -1567,6 +1567,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		t.Fatal(err)
 	}
 	var executeCommittedReference func(t *testing.T)
+	var prepareAdditionalReference func(*testing.T, referencePreparationFixture, referenceExecutionFixture) referencePreparationFixture
 	for _, row := range referenceCoverage.Rows {
 		switch {
 		case len(row.DependsOnTargetBusinessKeys) == 0 && row.Fulfillment != "not_generated":
@@ -1681,6 +1682,32 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			}
 			var execution *referenceExecutionFixture
 			var preparation *referencePreparationFixture
+			if executeCommittedReference != nil && prepareAdditionalReference == nil {
+				prepareAdditionalReference = func(t *testing.T, first referencePreparationFixture, configuration referenceExecutionFixture) referencePreparationFixture {
+					t.Helper()
+					authorization, err := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+					if err != nil {
+						t.Fatal(err)
+					}
+					command := buildCommand
+					command.AuthorizationID = authorization.HumanActionRef
+					command.AuthorizationHash = authorization.ContentHash
+					target, err := builder.BuildInitial(ctx, authorizationActor, command)
+					if err != nil {
+						t.Fatal(err)
+					}
+					executionAuthorization, err := configuration.service.AuthorizeInitial(ctx, authorizationActor, generationapp.AuthorizeInitialReferenceExecutionCommand{WorkspaceID: target.WorkspaceID, ProjectID: target.ProjectID, TargetRef: generationdomain.GenerationRevisionRef{ID: target.ID, Revision: target.Revision, ContentHash: target.ContentHash}, SelectedProviderBindingRef: configuration.command.SelectedProviderBindingRef, IdempotencyKey: "reference-group-authorize:" + target.ID})
+					if err != nil {
+						t.Fatal(err)
+					}
+					prepare := generationapp.PrepareInitialReferenceExecutionCommand{WorkspaceID: target.WorkspaceID, ProjectID: target.ProjectID, TargetRef: executionAuthorization.GenerationTargetRef, AuthorizationRef: generationdomain.GenerationActionRef{ID: executionAuthorization.HumanActionRef, ContentHash: executionAuthorization.ContentHash}, IdempotencyKey: "reference-group-prepare:" + target.ID}
+					prepared, err := first.service.PrepareInitial(ctx, authorizationActor, prepare)
+					if err != nil {
+						t.Fatal(err)
+					}
+					return referencePreparationFixture{service: first.service, command: prepare, execution: prepared}
+				}
+			}
 			if published.TargetKind == "character_identity_anchor" {
 				created := assertInitialReferenceExecutionAuthorization(t, ctx, generationgorm.New(database), generationgorm.NewProviderConfigurationStore(database), authorizationActor, published, now.Add(6*time.Minute))
 				execution = &created
@@ -1707,11 +1734,16 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 						}
 						configuration := assertInitialReferenceExecutionAuthorization(t, ctx, generationgorm.New(database), generationgorm.NewProviderConfigurationStore(database), authorizationActor, target, now.Add(6*time.Minute))
 						prepared := assertInitialReferenceExecutionPreparation(t, ctx, generationgorm.New(database), authorizationActor, target, configuration.authorization, now.Add(7*time.Minute))
+						if prepareAdditionalReference == nil {
+							t.Fatal("accepted journey has no second base Target for complete Call collection")
+						}
+						group := prepareAdditionalReference(t, prepared, configuration)
 						if err := database.Commit().Error; err != nil {
 							t.Fatal(err)
 						}
 						committed = true
 						assertReferenceStandaloneExecution(t, ctx, rootDatabase, authorizationActor, prepared, configuration, fixture.userID.String())
+						assertReferenceExecutionCollection(t, ctx, rootDatabase, authorizationActor, group, configuration)
 					}
 				}
 				assertReferenceCallExecutionPersistence(t, ctx, database, authorizationActor, prepared, *execution)

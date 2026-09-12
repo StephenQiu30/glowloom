@@ -13,6 +13,7 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformcommandgorm "github.com/StephenQiu30/lanverse/backend/internal/platform/command/adapter/gormdb"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
@@ -108,6 +109,28 @@ func (repo *repository) VerifyFrozenInputs(ctx context.Context, projectID string
 		return &application.Error{Code: "validation_failed", Message: "At least one frozen input is required", Status: 422}
 	}
 	for _, input := range inputs {
+		if input.Kind == "reference_execution" {
+			identifier, parseErr := uuid.Parse(input.ID)
+			if parseErr != nil || identifier == uuid.Nil || identifier.String() != input.ID {
+				return &application.Error{Code: "validation_failed", Message: "Invalid frozen Reference execution", Status: 422}
+			}
+			var record model.GenerationReferenceExecution
+			if err := repo.database.WithContext(ctx).Where("id = ? AND project_id = ?", input.ID, project).First(&record).Error; err != nil {
+				return normalizeNotFound(err)
+			}
+			value, err := generationdomain.DecodeReferenceExecution(json.RawMessage(record.Content))
+			if err != nil || input.Version != "1" || input.Hash != value.ContentHash || value.ID != record.ID.String() || value.WorkspaceID != record.WorkspaceID.String() || value.ProjectID != project.String() || value.ReadSet.TargetRef.ID != record.TargetID.String() || value.ReadSet.TargetRef.ContentHash != record.TargetHash || value.Revision != record.Revision || value.ContentHash != record.ContentHash || value.CreatedBy != record.CreatedBy.String() || !value.CreatedAt.Equal(record.CreatedAt) {
+				return &application.Error{Code: "resource_conflict", Message: "Frozen Reference execution has drifted", Status: 409}
+			}
+			var scope model.Project
+			if err := repo.database.WithContext(ctx).First(&scope, "id = ?", project).Error; err != nil {
+				return normalizeNotFound(err)
+			}
+			if scope.WorkspaceID != record.WorkspaceID {
+				return &application.Error{Code: "resource_conflict", Message: "Frozen Reference execution scope has drifted", Status: 409}
+			}
+			continue
+		}
 		if input.Kind != "script_revision" {
 			return &application.Error{Code: "validation_failed", Message: "Unsupported frozen input kind", Status: 422}
 		}

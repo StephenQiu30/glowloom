@@ -909,6 +909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/reference-executions/{execution_id}/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 启动已准备 Execution 的完整 Call 观察 DAG；明确失败继续收集，未知结果停止对账。收集成功不代表媒体或 Bundle/QC 合格。 */
+        post: operations["startReferenceExecutionWorkflow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/reference-executions/{execution_id}": {
         parameters: {
             query?: never;
@@ -2800,6 +2817,15 @@ export interface components {
             revision: number;
             revision_hash: string;
             content_hash: string;
+        };
+        ReferenceExecutionWorkflowStartRequest: {
+            execution_hash: string;
+            idempotency_key: string;
+        };
+        ReferenceExecutionWorkflowStartResponse: {
+            /** Format: uuid */
+            workflow_run_id: string;
+            status: components["schemas"]["WorkflowRunResponse"]["status"];
         };
         ReferenceExecutionProgressResponse: {
             execution_ref: {
@@ -7004,6 +7030,42 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["StructureIdentitySnapshotResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    startReferenceExecutionWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                execution_id: components["parameters"]["execution_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferenceExecutionWorkflowStartRequest"];
+            };
+        };
+        responses: {
+            /** @description 已接受或复用同一收集 Run。 */
+            202: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceExecutionWorkflowStartResponse"];
                     };
                 };
             };

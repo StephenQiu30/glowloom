@@ -413,6 +413,11 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	referenceExecutionHandler := generationhttp.NewReferenceExecutionHandler(
 		generationapp.NewReferenceExecutionQuery(generationgorm.New(database)), tokenVerifier,
 	)
+	referenceExecutionStart, err := workflowapp.NewReferenceExecutionStartService(generationapp.NewReferenceExecutionQuery(generationgorm.New(database)), authoringService, workflowStartService)
+	if err != nil {
+		return fmt.Errorf("Reference execution start composition failed: %w", err)
+	}
+	referenceExecutionStartHandler := workflowhttp.NewReferenceExecutionStartHandler(referenceExecutionStart, tokenVerifier)
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
 		workflowproduction.New(
 			bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService,
@@ -478,6 +483,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				reviewHandler.Register(mux)
 				referenceCoverageHandler.Register(mux)
 				referenceExecutionHandler.Register(mux)
+				referenceExecutionStartHandler.Register(mux)
 			},
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

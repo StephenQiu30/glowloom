@@ -15,6 +15,23 @@ type ReferenceCallExecutionService struct {
 	secrets  ProviderRuntimeSecrets
 }
 
+// Observe verifies a frozen Call without acquiring a send right or changing it.
+func (service *ReferenceCallExecutionService) Observe(ctx context.Context, actor Actor, command ClaimReferenceCallCommand) (domain.ReferenceCallState, error) {
+	if !validReferenceCallScope(actor, command.WorkspaceID, command.ProjectID, command.ExecutionRef, command.CallKey) || command.ExpectedRevision != 1 {
+		return domain.ReferenceCallState{}, invalid("Invalid Reference observation command")
+	}
+	var state domain.ReferenceCallState
+	err := service.dispatch.transactions.WithinReferenceCallDispatch(ctx, func(repo ReferenceCallDispatchRepository) error {
+		_, value, err := readReferenceCall(ctx, repo, actor, command.WorkspaceID, command.ProjectID, command.ExecutionRef, command.CallKey)
+		state = value
+		return err
+	})
+	if err != nil {
+		return domain.ReferenceCallState{}, err
+	}
+	return state, nil
+}
+
 // Execution transactions must own the physical commit; a nested savepoint cannot
 // authorize external IO. Dispatch-only storage tests may use a different port.
 type ReferenceCallExecutionTransactions interface {

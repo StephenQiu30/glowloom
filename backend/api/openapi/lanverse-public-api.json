@@ -1989,6 +1989,77 @@
         }
       }
     },
+    "/api/projects/{project_id}/reference-executions/{execution_id}/workflow-runs": {
+      "post": {
+        "operationId": "startReferenceExecutionWorkflow",
+        "description": "启动已准备 Execution 的完整 Call 观察 DAG；明确失败继续收集，未知结果停止对账。收集成功不代表媒体或 Bundle/QC 合格。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/execution_id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceExecutionWorkflowStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "已接受或复用同一收集 Run。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceExecutionWorkflowStartResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/projects/{project_id}/reference-executions/{execution_id}": {
       "get": {
         "operationId": "getReferenceExecutionProgress",
@@ -7528,6 +7599,42 @@
           "revision": { "type": "integer", "minimum": 1 },
           "revision_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferenceExecutionWorkflowStartRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "execution_hash",
+          "idempotency_key"
+        ],
+        "properties": {
+          "execution_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "ReferenceExecutionWorkflowStartResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workflow_run_id",
+          "status"
+        ],
+        "properties": {
+          "workflow_run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunResponse/properties/status"
+          }
         }
       },
       "ReferenceExecutionProgressResponse": {

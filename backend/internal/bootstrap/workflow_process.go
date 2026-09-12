@@ -248,7 +248,7 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("workflow Reference staged media composition failed: %w", err)
 	}
-	referenceCalls, err := workflowgeneration.NewReferenceCallNodeExecutor(referenceExecution, referenceRecovery, referenceMedia)
+	referenceCalls, err := workflowgeneration.NewReferenceObservationNodeExecutor(referenceExecution, referenceRecovery, referenceMedia, generationapp.NewReferenceExecutionQuery(referenceStore))
 	if err != nil {
 		return fmt.Errorf("workflow Reference call composition failed: %w", err)
 	}

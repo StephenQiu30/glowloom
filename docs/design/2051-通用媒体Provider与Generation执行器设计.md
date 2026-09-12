@@ -474,6 +474,12 @@ Temporal 通过系统节点 `generation.reference_image_call`（executor 为 `ac
 
 该节点是已经授权并准备的 Call 的内部执行能力，不自动授权或重建 Target/Execution。基础波次的完整准备、全部 required slot、媒体 Owner/Bundle/QC 继续按后续链路装配；单节点 SUCCEEDED 仅表示该 Call 的受控传输和回执成功，不表示业务素材已经发布。
 
+已准备 Execution 的整组收集复用 Authoring→Compiler→Start：以 exact `reference_execution` 为冻结输入，将 Job 的完整 canonical Call 集合编译成串行 `generation.reference_call_observation` 节点，最后接 `generation.reference_execution_observation` 汇总。节点通过前一个不可变 Receipt 形成真实 DAG 边，不依赖名称排序模拟依赖；每个 Call 仍有独立 Activity/投影/重试。观察节点的成功含义是“明确结果已持久化”，可以是成功媒体或明确失败，不能作为媒体合格证明；成功媒体继续校验并保留 ready/rejected 事实。未知结果停止后续调用并进入对账，暂时读取或数据库错误保留原 Call 由现有 Activity 重试，不盲目发送。汇总必须重读完整 Job、全部 Call 和输入身份，只接受完整明确结果集合，输出稳定的执行观察引用；部分失败与全部失败仍由 Generation 真实进度表示，不变成媒体成功。
+
+启动收集只消费既有授权/Target/Execution，不创建新生成轮次、配置 Provider 或补齐缺失 Call。Authoring 的冻结输入校验核对持久 Execution 的精确内容身份和项目范围，不使用任意剧本版本占位。启动期间各 Owner 命令使用稳定幂等键，重入复用已创建 Draft/Revision/Run；新的调用方不能借重复启动获得第二次发送权。此步骤不新增 Workflow 类型、消息调度、业务状态表或通用展开框架；它完成一个已准备 Target 的全部 required Call，不替代基础波次准备、六类目标或 Bundle/QC/Selection。
+
+公开启动为 `POST /api/projects/{project_id}/reference-executions/{execution_id}/workflow-runs`，请求仅含 `execution_hash`、`idempotency_key`，返回 202 与 `workflow_run_id/status`，禁止缓存。路径、当前身份、严格 JSON 和各 Owner 的权限检查均生效；完整传输结果继续从既有 Execution 进度查询读取。该入口不提供 Provider 参数、凭据或新一轮生成许可。
+
 一个 CandidateBundle 的每个 required slot 对应一个确定性 `ProviderCallKey`：
 
 ```text
