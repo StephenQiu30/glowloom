@@ -25,7 +25,7 @@ func TestSceneAnalysisStageReleasesBindCoreBundleAndLoadedResources(t *testing.T
 
 	imageDigest := "sha256:" + strings.Repeat("7", 64)
 	releases, err := contract.BuildSceneAnalysisStageReleases(imageDigest)
-	if err != nil || len(releases) != 8 {
+	if err != nil || len(releases) != 9 {
 		t.Fatalf("build Scene Analysis Stage Releases: count=%d err=%v", len(releases), err)
 	}
 	core, _, err := contract.BuildSceneAnalysisDefinitionCore()
@@ -70,6 +70,21 @@ func TestSceneAnalysisStageReleasesBindCoreBundleAndLoadedResources(t *testing.T
 		visual.OutputContractID != "visual_foundation_candidate" ||
 		visual.PromptCompilerHash == releases[0].PromptCompilerHash {
 		t.Fatalf("unexpected Visual Foundation Stage Release: %#v paths=%v err=%v", visual, paths, err)
+	}
+	referencePlanIndex := slices.IndexFunc(releases, func(candidate contract.SceneAnalysisStageRelease) bool {
+		return candidate.VariantKey.StageKey == "plan_reference_assets"
+	})
+	if referencePlanIndex < 0 {
+		t.Fatal("Reference Plan Stage Release is missing")
+	}
+	referencePlan := releases[referencePlanIndex]
+	paths, err = contract.SceneAnalysisLoadedResourcePaths(referencePlan)
+	if err != nil || !slices.Equal(paths, []string{"SKILL.md", "references/reference-planning.md"}) ||
+		referencePlan.CapabilityKey != "plan-reference-assets" || referencePlan.Lane != "preset_visual" ||
+		referencePlan.RuntimeClass != "text" || referencePlan.InputContractID != contract.ReferencePlanInputContractID ||
+		referencePlan.OutputContractID != "reference_plan_candidate" ||
+		referencePlan.PromptCompilerHash == releases[0].PromptCompilerHash {
+		t.Fatalf("unexpected Reference Plan Stage Release: %#v paths=%v err=%v", referencePlan, paths, err)
 	}
 
 	changed, err := contract.BuildSceneAnalysisStageReleases("sha256:" + strings.Repeat("8", 64))

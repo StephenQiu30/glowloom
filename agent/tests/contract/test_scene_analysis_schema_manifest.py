@@ -28,3 +28,10 @@ def test_scene_analysis_candidate_schema_manifest_matches_the_backend_fixture() 
         "output_schema_version": "visual-foundation-candidate-production",
         "schema_hash": "2c4b612079acb4874032e0e8358a272bd71cce45e6473209dda21cef29e40c4c",
     }
+    assert next(schema for schema in schemas if schema["stage_key"] == "plan_reference_assets") == {
+        "stage_key": "plan_reference_assets",
+        "profile_key": "default",
+        "candidate_type": "reference_plan_candidate",
+        "output_schema_version": "reference-plan-candidate-production",
+        "schema_hash": "5aabb9ddcc340f43dc712cba37c6120a3500fc5946a9b6df28ab2c69ec03770b",
+    }

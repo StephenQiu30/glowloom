@@ -26,10 +26,10 @@ func TestCuratedCatalogPublishesFourTraceablePresetReleases(t *testing.T) {
 	keys := make([]string, len(releases))
 	seenHashes := make(map[string]struct{}, len(releases))
 	wantHashes := map[string]string{
-		"chinese-fantasy-animation": "dcf81b28cd0da501fa47c4e8d9b9f2aa9c7fe9e1165cc012fb441be2b32a8afc",
-		"cyberpunk-animation":       "811a5a17b996b5af6ee785767bcfa52dd76c40bb4c9fd2f9589209c388b60220",
-		"period-cinematic-realism":  "1d866d54855ea76129b532e8fad3e6c32660b71694ba4564d5af42dbc45f3c1e",
-		"urban-cinematic-realism":   "a84e7a9763ae534b71a628d15c93d12033c20c0c1d7c81718602552c38ec9cf4",
+		"chinese-fantasy-animation": "63694486dc920c64d5c0d109e728c1ce1670e1384fcb38f68f20e21df3330e5a",
+		"cyberpunk-animation":       "a40c30ea7c284a7347ae6ed66c7f62014834ef375d32e8b1d609e59e55149a6c",
+		"period-cinematic-realism":  "233bcc7ea1d1a612154ca711d9fe062f9397d728e163a64f2229af42ceefcd73",
+		"urban-cinematic-realism":   "0a3953970ffa5ba4f414ef986d10638f01ba1defdd9d02765fe3a20ae0be9a0d",
 	}
 	for index, release := range releases {
 		keys[index] = release.Key

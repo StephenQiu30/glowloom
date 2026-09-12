@@ -94,6 +94,8 @@ func BuildSceneAnalysisStageReleases(runtimeImageDigest string) ([]SceneAnalysis
 		harness := "scene-analysis-harness"
 		if variant.VariantKey.StageKey == VisualFoundationStageKey {
 			harness = "visual-foundation-harness"
+		} else if variant.VariantKey.StageKey == "plan_reference_assets" {
+			harness = "reference-plan-harness"
 		}
 		promptCompiler := sceneAnalysisPromptCompiler{
 			ContractID: "scene-analysis-prompt-compiler-production", Harness: harness,

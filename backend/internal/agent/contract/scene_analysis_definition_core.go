@@ -14,7 +14,7 @@ const (
 	SceneAnalysisDefinitionCoreContractID = "storygraph-agent-definition-core-production"
 	sceneAnalysisDefinitionCoreID         = "storygraph-scene-analysis-definition-core-production"
 	sceneAnalysisDefinitionCoreVersion    = "2026.09.12"
-	sceneAnalysisWireSchemaContentHash    = "6e6f279469637292ba85fbb7eb929b2b359947b09d939fdc06163247291498fd"
+	sceneAnalysisWireSchemaContentHash    = "98fc408040f1356c3d069326fe5a9178db54ed185b785a142915141f94abeff4"
 )
 
 type SceneAnalysisPatchApplication struct {
@@ -173,6 +173,9 @@ func buildSceneAnalysisDefinitionVariant(
 		runtimeClass = "vision"
 		modelCapability = "vision"
 		invariantEnforcement = "backend-visual-foundation-attempt-result-validate-for"
+	} else if output.StageKey == "plan_reference_assets" {
+		lane = "preset_visual"
+		invariantEnforcement = "backend-reference-plan-attempt-result-validate-for"
 	}
 	resourcePolicy := sceneAnalysisResourcePolicy{
 		ContractID: "scene-analysis-loaded-resource-policy-production", BundleEntrypoint: "SKILL.md",
@@ -249,6 +252,8 @@ func sceneAnalysisCapabilityKey(stageKey string) string {
 		return "map-scene-continuity"
 	case VisualFoundationStageKey:
 		return "resolve-visual-foundation"
+	case "plan_reference_assets":
+		return "plan-reference-assets"
 	case "review_candidate":
 		return "review-production"
 	default:
@@ -262,6 +267,7 @@ func sceneAnalysisReferencePath(stageKey string) string {
 		"resolve_identities": "references/entity-reconciliation.md", "review_candidate": "references/structure-identity-review.md",
 		"derive_production_entities": "references/production-entities.md", "bind_scene_occurrences": "references/scene-occurrences.md",
 		"reconcile_interaction_continuity": "references/interaction-continuity.md",
+		"plan_reference_assets":            "references/reference-planning.md",
 		VisualFoundationStageKey:           "references/visual-identity.md",
 	}[stageKey]
 }

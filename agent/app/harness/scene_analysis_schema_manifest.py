@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.harness.reference_plan_schemas import (
+    ReferencePlanAttemptResult,
+    ReferencePlanInvocation,
+)
 from app.harness.scene_analysis_schemas import (
     IdentityResolutionInput,
     InteractionContinuityInput,
@@ -18,6 +22,7 @@ from app.harness.visual_foundation_schemas import (
     VisualFoundationAttemptResult,
     VisualFoundationInvocation,
 )
+from app.modules.storygraph.reference_plan_contract import ReferencePlanInput
 from app.modules.storygraph.visual_foundation_contract import VisualFoundationInput
 from app.protocol.canonical import production_canonical_hash
 
@@ -29,6 +34,14 @@ _WIRE_SCHEMAS: tuple[tuple[str, type[BaseModel]], ...] = (
     (
         "storygraph-dispatch-authorization-claims-production",
         SceneAnalysisDispatchAuthorizationClaims,
+    ),
+    (
+        "storygraph-reference-plan-stage-attempt-result-production",
+        ReferencePlanAttemptResult,
+    ),
+    (
+        "storygraph-reference-plan-stage-invocation-production",
+        ReferencePlanInvocation,
     ),
     ("storygraph-stage-attempt-result-production", SceneAnalysisAttemptResult),
     ("storygraph-stage-invocation-production", SceneAnalysisInvocation),
@@ -60,6 +73,12 @@ _INPUT_SCHEMAS: tuple[tuple[str, str, str, type[BaseModel]], ...] = (
         "default",
         "scene-fact-extraction-input-production",
         SceneFactExtractionInput,
+    ),
+    (
+        "plan_reference_assets",
+        "default",
+        "reference-plan-input-production",
+        ReferencePlanInput,
     ),
     (
         "propose_script_spans",

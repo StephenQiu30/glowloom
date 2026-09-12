@@ -39,6 +39,7 @@ func (value SceneAnalysisStageVariant) Validate() error {
 	expectedSchema := map[string]string{
 		"propose_script_spans\x00default":             ScriptSpanCandidateSchemaVersion,
 		"extract_scene_facts\x00default":              SceneFactCandidateSchemaVersion,
+		"plan_reference_assets\x00default":            ReferencePlanCandidateContractID,
 		"resolve_identities\x00default":               IdentityResolutionCandidateSchemaVersion,
 		"review_candidate\x00structure_identity":      StructureIdentityReviewCandidateSchemaVersion,
 		"derive_production_entities\x00default":       ProductionEntityFragmentCandidateSchemaVersion,

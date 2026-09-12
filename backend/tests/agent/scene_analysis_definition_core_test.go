@@ -16,7 +16,7 @@ func TestSceneAnalysisDefinitionCoreFreezesOnlyPreReleaseContracts(t *testing.T)
 		t.Fatalf("build Scene Analysis Definition Core: %v", err)
 	}
 	if core.ContractID != contract.SceneAnalysisDefinitionCoreContractID ||
-		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 8 {
+		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 9 {
 		t.Fatalf("unexpected Scene Analysis Definition Core: %#v", core)
 	}
 	visualIndex := slices.IndexFunc(core.VariantContracts, func(candidate contract.SceneAnalysisDefinitionVariant) bool {
@@ -33,6 +33,21 @@ func TestSceneAnalysisDefinitionCoreFreezesOnlyPreReleaseContracts(t *testing.T)
 		visual.OutputContractID != "visual_foundation_candidate" ||
 		visual.OutputSchemaHash != contract.VisualFoundationCandidateSchemaHash {
 		t.Fatalf("unexpected Visual Foundation Definition variant: %#v", visual)
+	}
+	referencePlanIndex := slices.IndexFunc(core.VariantContracts, func(candidate contract.SceneAnalysisDefinitionVariant) bool {
+		return candidate.VariantKey.StageKey == "plan_reference_assets"
+	})
+	if referencePlanIndex < 0 {
+		t.Fatal("Reference Plan Definition variant is missing")
+	}
+	referencePlan := core.VariantContracts[referencePlanIndex]
+	if referencePlan.VariantKey.ProfileKey != "default" || referencePlan.CapabilityKey != "plan-reference-assets" ||
+		referencePlan.Lane != "preset_visual" || referencePlan.RuntimeClass != "text" ||
+		referencePlan.InputContractID != contract.ReferencePlanInputContractID ||
+		referencePlan.InputSchemaHash != contract.ReferencePlanInputSchemaHash ||
+		referencePlan.OutputContractID != "reference_plan_candidate" ||
+		referencePlan.OutputSchemaHash != contract.ReferencePlanCandidateSchemaHash {
+		t.Fatalf("unexpected Reference Plan Definition variant: %#v", referencePlan)
 	}
 	for _, forbidden := range []string{"stage_release", "skill_release", "signature", "control", "current", "latest"} {
 		if bytes.Contains(encoded, []byte(forbidden)) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const StoryGraphSkillBundleHash = "8c5d2b2ea32de3907e5163d85d53955bff1bda53384a8b510d281a7d5d5ca813"
+const StoryGraphSkillBundleHash = "2642a3e6293a80d0f66e86236ce330fc33ac2cb9c3e95b182e55de8836a53bfb"
 
 var ErrSkillBundleUnavailable = errors.New("skill_bundle_unavailable")
 
@@ -98,6 +98,7 @@ func StoryGraphBundlePaths() []string {
 		"references/episode-segmentation.md",
 		"references/interaction-continuity.md",
 		"references/production-entities.md",
+		"references/reference-planning.md",
 		"references/scene-facts.md",
 		"references/scene-occurrences.md",
 		"references/scene-structure.md",
