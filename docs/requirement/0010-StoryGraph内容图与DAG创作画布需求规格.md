@@ -143,6 +143,8 @@
 
 `VPR-GEN-003` 的媒体事实边界：成功 Receipt 必须对应唯一 Generation-owned Staged Media。恢复读取、媒体校验和数据库提交不得重新生成图片；校验前 quarantined，明确无效为 rejected，完整字节校验通过后才 ready_for_review。跨项目/Call/Receipt、篡改 digest/尺寸/对象身份或非法状态跃迁均拒绝；存储暂时不可读不伪造媒体失败或成功。rights 未评估必须显式保留，禁止把 staging 当正式 Artifact 或 AssetVersion。
 
+执行进度必须从同一快照内的完整冻结 Job/Call 集合计算；单个成功、未发送、结果未知或缺少必需 Call 均不得冒充整组成功。未知结果优先阻断终态；只读查询核验当前读取权限并保留历史执行身份，不依赖最新 Head、不重新发送。接口只返回有序调用身份和状态，不返回私有媒体、发送 token 或凭据；传输完成与 Bundle/QC/Selection 完成严格区分。
+
 正式生成输入只消费 Backend Agent Owner 验证后的精确 accepted Brief Revision：当前 source facts、Candidate Head、Release Control、来源 Result、已完成 Attempt 与 Dispatch Authorization 必须闭合，且重算内容和 Revision Hash。错 scope、旧 Head、Control 撤销/隔离、来源漂移或未完成 Attempt 均不可消费；Coverage 的 accepted 展示遵守同一边界。后续出现的新 Attempt 不能替代 Candidate 已绑定的来源 Attempt。
 
 首次生成必须有独立用户授权：Backend 在同一事务校验当前项目写权限、Token Version 与 accepted Brief，再把 exact Plan/Target 和候选 Bundle 数量冻结到不可变 Command Receipt。重复命令必须重新校验当前权限与事实，不能只命中缓存就返回成功；同一 key 的输入变化必须拒绝。授权不是 Target/Execution/Provider 已启动的证明，不能用于冒充重新生成或 Provider 重试。

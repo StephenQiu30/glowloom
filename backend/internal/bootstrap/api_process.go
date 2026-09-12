@@ -39,6 +39,7 @@ import (
 	costapp "github.com/StephenQiu30/lanverse/backend/internal/cost/application"
 	generationasset "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/asset"
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
+	generationhttp "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/httpapi"
 	generationopenai "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/openai"
 	generationreview "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/review"
 	providersecret "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/secretstore"
@@ -409,6 +410,9 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 		referenceapp.NewReferenceCoverageQuery(referencegorm.NewStore(database), projectService),
 		tokenVerifier,
 	)
+	referenceExecutionHandler := generationhttp.NewReferenceExecutionHandler(
+		generationapp.NewReferenceExecutionQuery(generationgorm.New(database)), tokenVerifier,
+	)
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
 		workflowproduction.New(
 			bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService,
@@ -473,6 +477,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				workflowHandler.Register(mux)
 				reviewHandler.Register(mux)
 				referenceCoverageHandler.Register(mux)
+				referenceExecutionHandler.Register(mux)
 			},
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

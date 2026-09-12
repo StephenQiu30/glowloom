@@ -449,6 +449,13 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 		t.Fatalf("media commit not visible: %v", err)
 	}
 	var artifacts int64
+	progress, err := app.NewReferenceExecutionQuery(store).Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID)
+	if err != nil || progress.ExecutionRef != command.ExecutionRef || progress.Total != len(rows) || progress.Succeeded != 1 || progress.Terminal {
+		t.Fatalf("full execution progress: %+v %v", progress, err)
+	}
+	if address := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS"); address != "" && (progress.Status != domain.ProviderJobOutcomeUnknown || progress.OutcomeUnknown != 1) {
+		t.Fatalf("lost Call disappeared from full job: %+v", progress)
+	}
 	if err := database.Model(&model.Artifact{}).Where("project_id = ?", command.ProjectID).Count(&artifacts).Error; err != nil || artifacts != 0 {
 		t.Fatalf("staging published an Artifact: %d %v", artifacts, err)
 	}

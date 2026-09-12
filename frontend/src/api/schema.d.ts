@@ -909,6 +909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/reference-executions/{execution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取精确 Execution 完整冻结 Call 的传输进度；不触发发送、媒体读取或正式资产发布，传输成功不代表 Bundle/QC/Selection 通过。 */
+        get: operations["getReferenceExecutionProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/reference-coverage": {
         parameters: {
             query?: never;
@@ -2782,6 +2799,36 @@ export interface components {
             revision_id: string;
             revision: number;
             revision_hash: string;
+            content_hash: string;
+        };
+        ReferenceExecutionProgressResponse: {
+            execution_ref: {
+                /** Format: uuid */
+                id: string;
+                /** @constant */
+                revision: 1;
+                content_hash: string;
+            };
+            job_hash: string;
+            call_set_root: string;
+            /** @enum {string} */
+            status: "PENDING" | "RUNNING" | "OUTCOME_UNKNOWN" | "SUCCEEDED" | "PARTIAL_SUCCEEDED" | "FAILED";
+            terminal: boolean;
+            total: number;
+            pending: number;
+            dispatching: number;
+            succeeded: number;
+            failed: number;
+            outcome_unknown: number;
+            calls: {
+                call_key: string;
+                bundle_index: number;
+                slot_key: string;
+                /** @enum {string} */
+                status: "PENDING" | "DISPATCHING" | "OUTCOME_UNKNOWN" | "SUCCEEDED" | "FAILED";
+                revision: number;
+                state_hash: string;
+            }[];
             content_hash: string;
         };
         ReferenceCoverageBlockerResponse: {
@@ -5367,6 +5414,7 @@ export interface components {
     parameters: {
         workspace_id: string;
         project_id: string;
+        execution_id: string;
         target_version_id: string;
         profile_version_id: string;
         upload_session_id: string;
@@ -6956,6 +7004,38 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["StructureIdentitySnapshotResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getReferenceExecutionProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                execution_id: components["parameters"]["execution_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前读取权限核验后的完整传输进度。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceExecutionProgressResponse"];
                     };
                 };
             };

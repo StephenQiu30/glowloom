@@ -65,37 +65,44 @@ func (repo *referenceExecutionRepository) PublishReferenceProviderJob(ctx contex
 }
 
 func (repo *referenceExecutionRepository) FindReferenceProviderJob(ctx context.Context, workspace, project, executionID string) (domain.ReferenceProviderJob, []domain.ReferenceProviderCall, error) {
+	job, calls, _, err := repo.readReferenceProviderJob(ctx, workspace, project, executionID)
+	return job, calls, err
+}
+
+func (repo *referenceExecutionRepository) readReferenceProviderJob(ctx context.Context, workspace, project, executionID string) (domain.ReferenceProviderJob, []domain.ReferenceProviderCall, []domain.ReferenceCallState, error) {
 	var record model.GenerationReferenceProviderJob
 	if err := repo.database.WithContext(ctx).Where("execution_id = ? AND workspace_id = ? AND project_id = ?", executionID, workspace, project).First(&record).Error; err != nil {
-		return domain.ReferenceProviderJob{}, nil, err
+		return domain.ReferenceProviderJob{}, nil, nil, err
 	}
 	job, err := domain.DecodeReferenceProviderJob(json.RawMessage(record.Content))
 	if err != nil {
-		return domain.ReferenceProviderJob{}, nil, err
+		return domain.ReferenceProviderJob{}, nil, nil, err
 	}
 	if job.ExecutionRef.ID != record.ExecutionID.String() || job.ExecutionRef.ContentHash != record.ExecutionHash || job.CallSetRoot != record.CallSetRoot || job.ContentHash != record.ContentHash {
-		return domain.ReferenceProviderJob{}, nil, errors.New("persisted Reference Provider job identity has drifted")
+		return domain.ReferenceProviderJob{}, nil, nil, errors.New("persisted Reference Provider job identity has drifted")
 	}
 	var records []model.GenerationReferenceProviderCall
 	// Read the full membership by execution, including incorrectly scoped rows,
 	// then validate scope. Never filter a corrupt member out of the expected set.
 	limits := domain.DefaultReferenceGenerationLimits()
 	if err = repo.database.WithContext(ctx).Where("execution_id = ?", executionID).Order("bundle_index, slot_key").Limit(limits.MaxBundles*limits.MaxSlots + 1).Find(&records).Error; err != nil {
-		return domain.ReferenceProviderJob{}, nil, err
+		return domain.ReferenceProviderJob{}, nil, nil, err
 	}
 	calls := make([]domain.ReferenceProviderCall, len(records))
+	states := make([]domain.ReferenceCallState, len(records))
 	for i, item := range records {
 		call, err := domain.DecodeReferenceProviderCall(json.RawMessage(item.Content))
 		if err != nil {
-			return domain.ReferenceProviderJob{}, nil, err
+			return domain.ReferenceProviderJob{}, nil, nil, err
 		}
 		if item.WorkspaceID != record.WorkspaceID || item.ProjectID != record.ProjectID || call.ExecutionRef != job.ExecutionRef || call.CallKey != item.CallKey || call.BundleIndex != item.BundleIndex || call.SlotKey != item.SlotKey || call.CompiledRequestHash != item.CompiledRequestHash {
-			return domain.ReferenceProviderJob{}, nil, errors.New("persisted Reference Provider call identity has drifted")
+			return domain.ReferenceProviderJob{}, nil, nil, errors.New("persisted Reference Provider call identity has drifted")
 		}
-		if _, err := referenceCallStateFromRecord(item); err != nil {
-			return domain.ReferenceProviderJob{}, nil, err
+		state, err := referenceCallStateFromRecord(item)
+		if err != nil {
+			return domain.ReferenceProviderJob{}, nil, nil, err
 		}
-		calls[i] = call
+		calls[i], states[i] = call, state
 	}
 	// Canonical identity uses Go string ordering, not the database's locale.
 	sort.Slice(calls, func(i, j int) bool {
@@ -105,9 +112,9 @@ func (repo *referenceExecutionRepository) FindReferenceProviderJob(ctx context.C
 		return calls[i].SlotKey < calls[j].SlotKey
 	})
 	if err = validateReferenceProviderCallSet(job, calls); err != nil {
-		return domain.ReferenceProviderJob{}, nil, err
+		return domain.ReferenceProviderJob{}, nil, nil, err
 	}
-	return job, calls, nil
+	return job, calls, states, nil
 }
 
 func validateReferenceProviderCallSet(job domain.ReferenceProviderJob, calls []domain.ReferenceProviderCall) error {

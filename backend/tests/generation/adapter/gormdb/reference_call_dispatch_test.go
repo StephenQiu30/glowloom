@@ -304,6 +304,7 @@ func TestReferenceCallDispatchCASAndWorkspaceLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertReferenceStagedMediaStorage(t, ctx, store, receipt)
+	assertReferenceExecutionProgressStorage(t, ctx, database, application.Actor{UserID: user.String(), TokenVersion: 1}, execution)
 }
 
 func TestReferenceCallDispatchStoreRejectsInvalidTransactions(t *testing.T) {

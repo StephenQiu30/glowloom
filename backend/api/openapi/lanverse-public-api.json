@@ -1989,6 +1989,67 @@
         }
       }
     },
+    "/api/projects/{project_id}/reference-executions/{execution_id}": {
+      "get": {
+        "operationId": "getReferenceExecutionProgress",
+        "description": "读取精确 Execution 完整冻结 Call 的传输进度；不触发发送、媒体读取或正式资产发布，传输成功不代表 Bundle/QC/Selection 通过。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/execution_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前读取权限核验后的完整传输进度。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceExecutionProgressResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/projects/{project_id}/reference-coverage": {
       "get": {
         "operationId": "getReferenceCoverageMatrix",
@@ -7467,6 +7528,157 @@
           "revision": { "type": "integer", "minimum": 1 },
           "revision_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferenceExecutionProgressResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "execution_ref",
+          "job_hash",
+          "call_set_root",
+          "status",
+          "terminal",
+          "total",
+          "pending",
+          "dispatching",
+          "succeeded",
+          "failed",
+          "outcome_unknown",
+          "calls",
+          "content_hash"
+        ],
+        "properties": {
+          "execution_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "const": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "job_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "call_set_root": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RUNNING",
+              "OUTCOME_UNKNOWN",
+              "SUCCEEDED",
+              "PARTIAL_SUCCEEDED",
+              "FAILED"
+            ]
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "dispatching": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "succeeded": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "outcome_unknown": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "calls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "call_key",
+                "bundle_index",
+                "slot_key",
+                "status",
+                "revision",
+                "state_hash"
+              ],
+              "properties": {
+                "call_key": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "bundle_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                },
+                "slot_key": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9._-]{1,119}$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "PENDING",
+                    "DISPATCHING",
+                    "OUTCOME_UNKNOWN",
+                    "SUCCEEDED",
+                    "FAILED"
+                  ]
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4
+                },
+                "state_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
         }
       },
       "ReferenceCoverageBlockerResponse": {
@@ -15020,6 +15232,15 @@
       },
       "project_id": {
         "name": "project_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "execution_id": {
+        "name": "execution_id",
         "in": "path",
         "required": true,
         "schema": {

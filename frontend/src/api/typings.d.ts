@@ -159,6 +159,7 @@ declare global {
     type ReferenceCoverageMatrixResponse = components["schemas"]["ReferenceCoverageMatrixResponse"];
     type ReferenceCoverageRowResponse = components["schemas"]["ReferenceCoverageRowResponse"];
     type ReferenceCoverageSummaryResponse = components["schemas"]["ReferenceCoverageSummaryResponse"];
+    type ReferenceExecutionProgressResponse = components["schemas"]["ReferenceExecutionProgressResponse"];
     type ReferencePlanOwnerRefResponse = components["schemas"]["ReferencePlanOwnerRefResponse"];
     type ReferencePlanTargetOwnerRefsResponse = components["schemas"]["ReferencePlanTargetOwnerRefsResponse"];
     type ReferencePlanTargetVersionResponse = components["schemas"]["ReferencePlanTargetVersionResponse"];

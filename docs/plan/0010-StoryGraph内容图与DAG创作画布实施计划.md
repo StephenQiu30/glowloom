@@ -236,6 +236,7 @@
   - [x] 同一 Backend invocation 接通 preflight、真实 COMMIT 发送权、单次 Submit 和不可变观察回执；回执/状态同 CAS，历史重放不解密/重发，未知结果不释放未解决名额。生产执行拒绝外层事务，真实 PostgreSQL/TLS 跨连接证明发送前提交可见，故障矩阵与独立并发 CAS 已验证。回执内嵌现有 Call 状态，不新增表；不把传输成功当作正式 AssetVersion 或语义验收。
   - [x] 接通已准备 Reference Call 的 Temporal 节点和 Worker 启动装配：系统 Catalog 登记 `generation.reference_image_call`，不缓存、不自动授权，只调用完整 Execute；DISPATCHING 复用既有 durable polling 和冻结 deadline 恢复，unknown 转人工对账。成功输出唯一 token 定位的不可变 Receipt 引用，不代表 AssetVersion 或 Bundle 发布。
   - [ ] 将已授权基础波次的准备与完整 required Call 集合接入连续执行，完成持久 Staged Media Owner/Bundle/QC；不能以单 Call 节点成功抵扣完整波次和六类 Target 验收。
+    - [x] 补齐完整 Job 的只读执行进度：严格全量聚合、当前读取权限、同一 SQL 快照与 no-store 查询；覆盖部分失败、未知优先、损坏集合拒绝与历史读取零发送，不以传输状态抵扣 Bundle/QC。真实 PostgreSQL 验证并发提交不混入当前快照，既有剧本/Temporal 系统旅程验证未知 Call 不被单个成功掩盖。
     - [x] 接通成功 Receipt→唯一 Generation Staged Media→事务外私有字节校验→CAS ready/rejected，并由现有 Call Activity 消费；应用故障测试覆盖暂时读取失败、取消、权限撤销及完成提交失败，真实 PostgreSQL/Temporal 验证跨连接 quarantine 可见、完成持久化、提交后响应丢失重试与不重发 Provider，不提前发布 AssetVersion。完整波次、Bundle/QC、retention/pin 和正式 Owner Apply 仍按后续顺序完成。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。

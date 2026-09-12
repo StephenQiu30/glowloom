@@ -508,6 +508,8 @@ ProviderCall
 
 `GenerationProviderJobProduction` 是一个 Execution Snapshot 的本地聚合，只保存 expected `ProviderCallKeyProduction` 完整集及其 root。全部 Call 成功才是 `SUCCEEDED`；至少一个成功且其余全部明确失败是 `PARTIAL_SUCCEEDED`；全部明确失败是 `FAILED`；任一 Call 尚未解决或 `OUTCOME_UNKNOWN` 时 Job 不得假终态。Job 聚合不拥有远程发送权，也不能用“整体重试”创建第二套 Call。
 
+执行进度是上述事实的只读投影，不新增 Job 状态表或调度入口。`GET /api/projects/{project_id}/reference-executions/{execution_id}` 在同一数据库快照中核验当前读取权限、精确 Execution、Job 全集与全部 Call 状态，按 bundle index/slot key 输出有序身份、状态计数和内容 Hash。全部未发送为 PENDING；存在未知结果优先为 OUTCOME_UNKNOWN；仍有 pending/dispatching 为 RUNNING；只有完整集合均明确结束才能成为上述三个终态。缺项、重复、额外项、跨执行、回执或状态 Hash 漂移均失败关闭，不忽略损坏记录。读取历史执行不依赖最新 Provider、业务 Head 或重新编译，不触发发送、超时转移、媒体读取及正式资产发布。接口禁止 body/query selector，响应 no-store，且不暴露 token、Prompt、Provider 凭据或私有对象路径；SUCCEEDED 只说明全部传输成功，不表示媒体 QC、完整 Bundle、Vision 或 Selection 通过。
+
 首次准备在同一事务发布 Execution/Head、不可变 Job 调用清单、全部 PENDING Call 和准备回执。Call key 是上述 canonical tuple 的 SHA-256；数据库额外唯一约束 `(execution_id, bundle_index, slot_key)`，请求 Hash 变化不能为同一槽位另造一次调用。Job 的 expected keys 按 bundle index、slot key 排序，root 对完整有序 keys 数组计算；Job 引用 Execution，Execution 不反向引用 Job，避免 Hash 环。`gen_reference_provider_jobs` 与 `gen_reference_provider_calls` 由既有 GORM Catalog 管理，不复用绑定旧 Intent/PriceQuote 的调用模型。
 
 准备重放必须重编译完整 manifest，逐项重建 Job/Call 身份并核对数据库清单、scope 和元数据；缺项、多项、请求/槽位/Job root 损坏均拒绝，不补建、不重置已有调用。任何 Call 或回执写入失败回滚整个准备事务。此步骤只建立待发送事实，不授予发送权、不扣减并发/每日额度，也不代替发送后恢复和媒体验收。
