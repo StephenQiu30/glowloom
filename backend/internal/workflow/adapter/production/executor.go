@@ -45,6 +45,7 @@ const (
 	productionStoryGraphExecutor       = "activity.production_storygraph_projection"
 	projectPresetSelectionExecutor     = "activity.project_preset_selection"
 	visualFoundationExecutor           = "activity.resolve_visual_foundation"
+	referencePlanExecutor              = "activity.plan_reference_assets"
 	sourceEvidenceExecutor             = "activity.source_evidence"
 	storyAnalysisExecutor              = "activity.story_analysis"
 	storyReviewExecutor                = "activity.story_review"
@@ -84,6 +85,7 @@ type SceneAnalysisDependencies struct {
 	StructureIdentities FormalStructureIdentitySource
 	ProductionWorld     workflowapp.ProductionWorldAssembler
 	VisualFoundation    *VisualFoundationDependencies
+	ReferencePlan       *ReferencePlanDependencies
 }
 
 type ProjectPresetSelectionSource interface {
@@ -109,6 +111,32 @@ type VisualFoundationDependencies struct {
 	Worlds      VisualFoundationWorldSource
 	Sources     ConfirmedVisualFoundationSource
 	Candidates  VisualFoundationOwner
+}
+
+type ReferencePlanWorldSource interface {
+	ReferencePlanWorld(context.Context, storygraphapp.Actor, string) (storygraph.ReferencePlanWorldReadSet, error)
+}
+
+type ReferencePlanVisualFoundationSource interface {
+	ExactVisualFoundationCandidate(
+		context.Context,
+		string,
+		string,
+		string,
+		string,
+	) (workflowapp.ReferencePlanVisualFoundationCandidateRevision, error)
+}
+
+type ReferencePlanOwner interface {
+	Execute(context.Context, agentapp.ExecuteReferencePlanCommand) (agentapp.Candidate, error)
+}
+
+type ReferencePlanDependencies struct {
+	Selections  ProjectPresetSelectionSource
+	FindRelease presetapp.CuratedReleaseFinder
+	Worlds      ReferencePlanWorldSource
+	Sources     ReferencePlanVisualFoundationSource
+	Candidates  ReferencePlanOwner
 }
 
 type FormalStructureIdentitySource interface {
@@ -184,6 +212,7 @@ type NodeExecutor struct {
 	structureIdentities FormalStructureIdentitySource
 	productionWorld     workflowapp.ProductionWorldAssembler
 	visualFoundation    *VisualFoundationDependencies
+	referencePlan       *ReferencePlanDependencies
 	evidence            SourceEvidenceOwner
 	stories             StoryAnalysisOwner
 	storyReviews        StoryReviewOwner
@@ -225,6 +254,7 @@ func NewNodeExecutor(
 		executor.structureIdentities = sceneAnalysis[0].StructureIdentities
 		executor.productionWorld = sceneAnalysis[0].ProductionWorld
 		executor.visualFoundation = sceneAnalysis[0].VisualFoundation
+		executor.referencePlan = sceneAnalysis[0].ReferencePlan
 	}
 	return executor
 }
@@ -265,6 +295,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeProjectPresetSelection(ctx, command)
 	case visualFoundationExecutor:
 		return executor.executeVisualFoundation(ctx, command)
+	case referencePlanExecutor:
+		return executor.executeReferencePlan(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -980,7 +1012,7 @@ func (executor *NodeExecutor) executeProjectPresetSelection(
 		return domain.NodeExecutorResult{}, errors.New("invalid Project Preset selection node config")
 	}
 	storyGraphBinding := input.Bindings[0]
-	if !validVisualFoundationInputBinding(storyGraphBinding, "storygraph", "storygraph_version", "storygraph") {
+	if !validVersionedInputBinding(storyGraphBinding, "storygraph", "storygraph_version", "storygraph") {
 		return domain.NodeExecutorResult{}, errors.New("Project Preset selection StoryGraph input has drifted")
 	}
 	actor := storygraphapp.Actor{UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion}
@@ -1040,8 +1072,8 @@ func (executor *NodeExecutor) executeVisualFoundation(
 	storyGraphBinding, storyGraphExists := bindings["storygraph"]
 	selectionBinding, selectionExists := bindings["selection"]
 	if !storyGraphExists || !selectionExists ||
-		!validVisualFoundationInputBinding(storyGraphBinding, "storygraph", "storygraph_version", "storygraph") ||
-		!validVisualFoundationInputBinding(selectionBinding, "selection", "project_preset_selection", "selection") {
+		!validVersionedInputBinding(storyGraphBinding, "storygraph", "storygraph_version", "storygraph") ||
+		!validVersionedInputBinding(selectionBinding, "selection", "project_preset_selection", "selection") {
 		return domain.NodeExecutorResult{}, errors.New("Visual Foundation inputs have drifted")
 	}
 	world, err := dependencies.Worlds.VisualFoundationWorld(ctx, storygraphapp.Actor{
@@ -1110,7 +1142,7 @@ func (executor *NodeExecutor) executeVisualFoundation(
 	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
-func validVisualFoundationInputBinding(
+func validVersionedInputBinding(
 	binding domain.NodeInputBinding,
 	port string,
 	valueType string,
@@ -1126,6 +1158,111 @@ func validVisualFoundationInputBinding(
 	}
 	revision, err := strconv.ParseInt(binding.ReferenceVersion, 10, 64)
 	return err == nil && revision > 0
+}
+
+func (executor *NodeExecutor) executeReferencePlan(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	dependencies := executor.referencePlan
+	if dependencies == nil || dependencies.Selections == nil || dependencies.FindRelease == nil ||
+		dependencies.Worlds == nil || dependencies.Sources == nil || dependencies.Candidates == nil {
+		return domain.NodeExecutorResult{}, errors.New("Reference Plan workflow sources are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 3 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "candidate" ||
+		command.OutputPorts[0].ValueType != "reference_plan_candidate" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Reference Plan node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Reference Plan node config")
+	}
+	bindings := make(map[string]domain.NodeInputBinding, len(input.Bindings))
+	for _, binding := range input.Bindings {
+		bindings[binding.Port] = binding
+	}
+	storyGraphBinding, storyGraphExists := bindings["storygraph"]
+	selectionBinding, selectionExists := bindings["selection"]
+	visualBinding, visualExists := bindings["visual_foundation"]
+	if !storyGraphExists || !selectionExists || !visualExists ||
+		!validVersionedInputBinding(storyGraphBinding, "storygraph", "storygraph_version", "storygraph") ||
+		!validVersionedInputBinding(selectionBinding, "selection", "project_preset_selection", "selection") ||
+		!validVersionedInputBinding(visualBinding, "visual_foundation", "visual_foundation_candidate", "candidate") {
+		return domain.NodeExecutorResult{}, errors.New("Reference Plan inputs have drifted")
+	}
+	world, err := dependencies.Worlds.ReferencePlanWorld(ctx, storygraphapp.Actor{
+		UserID: command.InitiatorUserID, TokenVersion: command.InitiatorTokenVersion,
+	}, command.ProjectID)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if world.WorkspaceID != command.WorkspaceID || world.ProjectID != command.ProjectID ||
+		world.StoryGraphVersionID != storyGraphBinding.ReferenceID ||
+		world.StoryGraphContentHash != storyGraphBinding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Reference Plan StoryGraph input has drifted")
+	}
+	selection, err := dependencies.Selections.Exact(
+		ctx, command.WorkspaceID, command.ProjectID, selectionBinding.ReferenceID,
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if strconv.FormatInt(selection.Revision, 10) != selectionBinding.ReferenceVersion ||
+		selection.ContentHash != selectionBinding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Reference Plan Project Preset selection has drifted")
+	}
+	release, found, err := dependencies.FindRelease(selection.PresetRelease.Key, selection.PresetRelease.Release)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if !found || release.ContentHash != selection.PresetRelease.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Reference Plan Preset release is unavailable")
+	}
+	visualCandidate, err := dependencies.Sources.ExactVisualFoundationCandidate(
+		ctx,
+		command.WorkspaceID,
+		command.ProjectID,
+		visualBinding.ReferenceID,
+		visualBinding.ContentHash,
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if visualBinding.ReferenceVersion != strconv.FormatInt(visualCandidate.Revision, 10) ||
+		visualCandidate.ID != visualBinding.ReferenceID || visualCandidate.RevisionHash != visualBinding.ContentHash {
+		return domain.NodeExecutorResult{}, errors.New("Reference Plan Visual Foundation Candidate has drifted")
+	}
+	referenceInput, _, err := workflowapp.CompileReferencePlanInput(workflowapp.ReferencePlanInputCommand{
+		Inventory: world.Inventory, VisualFoundationRevision: visualCandidate, PresetRelease: release,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	candidate, err := dependencies.Candidates.Execute(ctx, agentapp.ExecuteReferencePlanCommand{
+		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID, Input: referenceInput,
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if candidate.WorkspaceID != command.WorkspaceID || candidate.ProjectID != command.ProjectID ||
+		candidate.StageKey != agentcontract.ReferencePlanStageKey ||
+		candidate.CandidateType != "reference_plan_candidate" || candidate.Revision < 1 ||
+		!workflowContentHashPattern.MatchString(candidate.CandidateRevisionHash) {
+		return domain.NodeExecutorResult{}, errors.New("Reference Plan Candidate does not match Workflow input")
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "candidate", ValueType: "reference_plan_candidate", ReferenceID: candidate.ID,
+			ReferenceVersion: strconv.FormatInt(candidate.Revision, 10), ContentHash: candidate.CandidateRevisionHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
 }
 
 func (executor *NodeExecutor) executeStoryboardDraft(

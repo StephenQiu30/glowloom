@@ -181,6 +181,25 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	referenceStore, err := agentgorm.NewReferencePlanStore(database, workflowgorm.ValidateCurrentReferencePlanInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenceService, err := agentapp.NewReferencePlanExecutionService(
+		referenceStore,
+		visualRuntime,
+		dispatchSigner,
+		agentapp.ReferencePlanExecutionConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest:  "sha256:" + fmt.Sprintf("%064d", 8),
+			ValidateCandidate: workflowapp.ValidateReferencePlanCandidateProjection,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storyGraphQueries := storygraphapp.NewQueryService(storygraphgorm.New(database))
+	referenceSources := workflowgorm.NewReferencePlanSourceStore(database)
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, productionGraphService, nil, nil, nil, nil,
@@ -189,8 +208,12 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 			ProductionWorld: productionWorldService,
 			VisualFoundation: &workflowproduction.VisualFoundationDependencies{
 				Selections: presetStore, FindRelease: presetcatalog.FindCuratedRelease,
-				Worlds:  storygraphapp.NewQueryService(storygraphgorm.New(database)),
+				Worlds:  storyGraphQueries,
 				Sources: visualSourceService, Candidates: visualService,
+			},
+			ReferencePlan: &workflowproduction.ReferencePlanDependencies{
+				Selections: presetStore, FindRelease: presetcatalog.FindCuratedRelease,
+				Worlds: storyGraphQueries, Sources: referenceSources, Candidates: referenceService,
 			},
 		},
 	)
@@ -745,6 +768,22 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	if err = database.First(&visualCandidate, "id = ?", visualOutput.Bindings[0].ReferenceID).Error; err != nil ||
 		visualCandidate.CandidateType != "visual_foundation_candidate" || visualRuntime.calls == 0 {
 		t.Fatalf("Temporal Visual Foundation Candidate=%#v calls=%d err=%v", visualCandidate, visualRuntime.calls, err)
+	}
+	var referenceNode model.NodeRunProjection
+	if err = database.Where(
+		"workflow_run_id = ? AND node_id = ?", productionWorldRepairRun.ID, "reference-plan",
+	).First(&referenceNode).Error; err != nil {
+		t.Fatalf("query Temporal Reference Plan node: %v", err)
+	}
+	referenceOutput, _, _, referenceOutputErr := workflow.ParseNodeOutput(json.RawMessage(referenceNode.Output))
+	if referenceNode.Status != "SUCCEEDED" || referenceNode.OutputHash == nil || referenceOutputErr != nil ||
+		len(referenceOutput.Bindings) != 1 || referenceOutput.Bindings[0].ValueType != "reference_plan_candidate" {
+		t.Fatalf("Temporal Reference Plan output=%#v node=%#v err=%v", referenceOutput, referenceNode, referenceOutputErr)
+	}
+	var referenceCandidate model.SceneAnalysisCandidateRevision
+	if err = database.First(&referenceCandidate, "id = ?", referenceOutput.Bindings[0].ReferenceID).Error; err != nil ||
+		referenceCandidate.CandidateType != "reference_plan_candidate" || visualRuntime.referenceCalls == 0 {
+		t.Fatalf("Temporal Reference Plan Candidate=%#v calls=%d err=%v", referenceCandidate, visualRuntime.referenceCalls, err)
 	}
 	var productionEntityInvocation model.SceneAnalysisInvocationRecord
 	if err = database.Where(

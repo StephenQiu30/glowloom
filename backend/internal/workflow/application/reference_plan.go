@@ -19,9 +19,11 @@ import (
 // Candidate projection required to compile one Reference Plan invocation.
 type ReferencePlanVisualFoundationCandidateRevision struct {
 	ID                   string
+	Revision             int64
 	RevisionHash         string
 	CandidateContentHash string
 	Candidate            json.RawMessage
+	SourceInput          agentcontract.VisualFoundationInput
 }
 
 type ReferencePlanInputCommand struct {
@@ -75,7 +77,7 @@ func decodeReferencePlanVisualFoundationRevision(
 	value ReferencePlanVisualFoundationCandidateRevision,
 ) (agentcontract.VisualFoundationCandidate, error) {
 	identifier, err := uuid.Parse(value.ID)
-	if err != nil || identifier == uuid.Nil || !visualFoundationHashPattern.MatchString(value.RevisionHash) ||
+	if err != nil || identifier == uuid.Nil || value.Revision < 1 || !visualFoundationHashPattern.MatchString(value.RevisionHash) ||
 		!visualFoundationHashPattern.MatchString(value.CandidateContentHash) {
 		return agentcontract.VisualFoundationCandidate{}, errors.New("invalid Visual Foundation Candidate revision")
 	}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -154,7 +155,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 14 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 15 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
@@ -167,7 +168,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		plan.Nodes[10].Executor != "gate.production_world_review" ||
 		plan.Nodes[11].Executor != "activity.production_storygraph_projection" ||
 		plan.Nodes[12].Executor != "activity.project_preset_selection" ||
-		plan.Nodes[13].Executor != "activity.resolve_visual_foundation" {
+		plan.Nodes[13].Executor != "activity.resolve_visual_foundation" ||
+		plan.Nodes[14].Executor != "activity.plan_reference_assets" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -228,6 +230,25 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	referenceStore, err := agentgorm.NewReferencePlanStore(database, workflowgorm.ValidateCurrentReferencePlanInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenceService, err := agentapp.NewReferencePlanExecutionService(
+		referenceStore,
+		visualRuntime,
+		dispatchSigner,
+		agentapp.ReferencePlanExecutionConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest:  "sha256:" + fmt.Sprintf("%064d", 7),
+			ValidateCandidate: workflowapp.ValidateReferencePlanCandidateProjection,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storyGraphQueries := storygraphapp.NewQueryService(storygraphgorm.New(database))
+	referenceSources := workflowgorm.NewReferencePlanSourceStore(database)
 	nodeExecutor := workflowproduction.NewNodeExecutor(
 		scriptapp.NewService(scriptStore, nil, scriptapp.Config{Now: func() time.Time { return now }, NewID: uuid.NewString}),
 		nil, nil, nil, nil, nil, nil, nil, productionGraphService, nil, nil, nil, nil,
@@ -236,8 +257,12 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			ProductionWorld: productionWorldService,
 			VisualFoundation: &workflowproduction.VisualFoundationDependencies{
 				Selections: presetStore, FindRelease: presetcatalog.FindCuratedRelease,
-				Worlds:  storygraphapp.NewQueryService(storygraphgorm.New(database)),
+				Worlds:  storyGraphQueries,
 				Sources: visualSourceService, Candidates: visualService,
+			},
+			ReferencePlan: &workflowproduction.ReferencePlanDependencies{
+				Selections: presetStore, FindRelease: presetcatalog.FindCuratedRelease,
+				Worlds: storyGraphQueries, Sources: referenceSources, Candidates: referenceService,
 			},
 		},
 	)
@@ -1133,6 +1158,35 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	})
 	if err != nil || replayedVisualResult.OutputHash != visualResult.OutputHash || visualRuntime.calls != 1 {
 		t.Fatalf("replay Visual Foundation Workflow node: got=%#v want=%#v calls=%d err=%v", replayedVisualResult, visualResult, visualRuntime.calls, err)
+	}
+	referenceNode := plan.Nodes[14]
+	referenceResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: referenceNode.NodeRunID, NodeID: referenceNode.NodeID,
+		Executor: referenceNode.Executor, Attempt: 1,
+	})
+	if err != nil || referenceResult.Status != "SUCCEEDED" || len(referenceResult.Output.Bindings) != 1 {
+		t.Fatalf("execute Reference Plan Workflow node: result=%#v err=%v", referenceResult, err)
+	}
+	referenceCandidate, err := sceneService.GetCandidate(
+		ctx, fixture.projectID.String(), referenceResult.Output.Bindings[0].ReferenceID,
+	)
+	if err != nil || referenceCandidate.StageKey != contract.ReferencePlanStageKey ||
+		referenceCandidate.CandidateType != "reference_plan_candidate" ||
+		referenceCandidate.ProjectID != fixture.projectID.String() || visualRuntime.referenceCalls != 1 {
+		t.Fatalf("persist Reference Plan Candidate: candidate=%#v calls=%d err=%v", referenceCandidate, visualRuntime.referenceCalls, err)
+	}
+	var referenceInvocation model.SceneAnalysisInvocationRecord
+	if err = database.First(&referenceInvocation, "id = ?", referenceCandidate.SourceInvocationID).Error; err != nil ||
+		referenceInvocation.StageKey != contract.ReferencePlanStageKey || referenceInvocation.SourceVersionID != nil ||
+		referenceInvocation.SourceHash == "" || referenceInvocation.Status != "accepted" {
+		t.Fatalf("persisted Reference Plan Invocation: invocation=%#v err=%v", referenceInvocation, err)
+	}
+	replayedReferenceResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: referenceNode.NodeRunID, NodeID: referenceNode.NodeID,
+		Executor: referenceNode.Executor, Attempt: 2,
+	})
+	if err != nil || replayedReferenceResult.OutputHash != referenceResult.OutputHash || visualRuntime.referenceCalls != 1 {
+		t.Fatalf("replay Reference Plan Workflow node: got=%#v want=%#v calls=%d err=%v", replayedReferenceResult, referenceResult, visualRuntime.referenceCalls, err)
 	}
 	var visualRelease model.SceneAnalysisRelease
 	if err = database.First(&visualRelease, "stage_key = ?", contract.VisualFoundationStageKey).Error; err != nil ||
@@ -2104,6 +2158,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "production-storygraph", DefinitionKey: "production.storygraph_projection", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "preset-selection", DefinitionKey: "production.project_preset_selection", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "visual-foundation", DefinitionKey: "agent.visual_foundation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "reference-plan", DefinitionKey: "agent.reference_plan", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -2143,6 +2198,9 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "storygraph-preset-selection", FromNodeID: "production-storygraph", FromPort: "storygraph", ToNodeID: "preset-selection", ToPort: "storygraph"},
 			{ID: "storygraph-visual-foundation", FromNodeID: "production-storygraph", FromPort: "storygraph", ToNodeID: "visual-foundation", ToPort: "storygraph"},
 			{ID: "preset-selection-visual-foundation", FromNodeID: "preset-selection", FromPort: "selection", ToNodeID: "visual-foundation", ToPort: "selection"},
+			{ID: "storygraph-reference-plan", FromNodeID: "production-storygraph", FromPort: "storygraph", ToNodeID: "reference-plan", ToPort: "storygraph"},
+			{ID: "preset-selection-reference-plan", FromNodeID: "preset-selection", FromPort: "selection", ToNodeID: "reference-plan", ToPort: "selection"},
+			{ID: "visual-foundation-reference-plan", FromNodeID: "visual-foundation", FromPort: "candidate", ToNodeID: "reference-plan", ToPort: "visual_foundation"},
 		},
 	}
 }
@@ -2171,8 +2229,9 @@ type deterministicSceneAnalysisRuntime struct {
 }
 
 type deterministicVisualFoundationRuntime struct {
-	now   time.Time
-	calls int
+	now            time.Time
+	calls          int
+	referenceCalls int
 }
 
 type failOnceSceneAnalysisRuntime struct {
@@ -2293,6 +2352,113 @@ func (runtime *deterministicVisualFoundationRuntime) Invoke(
 	result.ResultHash, err = result.ComputeResultHash()
 	if err != nil {
 		return contract.VisualFoundationAttemptResult{}, err
+	}
+	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
+}
+
+func (runtime *deterministicVisualFoundationRuntime) InvokeReferencePlan(
+	_ context.Context,
+	invocation contract.ReferencePlanInvocation,
+	authorization contract.SceneAnalysisDispatchAuthorization,
+) (contract.ReferencePlanAttemptResult, error) {
+	runtime.referenceCalls++
+	input := invocation.Payload.StageInput
+	profiles := make(map[string]contract.ReferencePlanPurposeProfile, len(input.PurposeProfiles))
+	for _, profile := range input.PurposeProfiles {
+		profiles[profile.TargetKind] = profile
+	}
+	selections := make([]contract.ReferencePlanAnchorSelection, 0, len(input.CharacterSeeds))
+	selected := make(map[string]contract.ReferencePlanOwnerRef, len(input.CharacterSeeds))
+	specifications := make([]contract.ReferencePlanTargetSpecification, 0)
+	for _, seed := range input.CharacterSeeds {
+		state := seed.StateOptions[0].StateRef
+		selected[seed.AnchorBusinessKey] = state
+		selections = append(selections, contract.ReferencePlanAnchorSelection{
+			AnchorBusinessKey: seed.AnchorBusinessKey, SelectedStateRef: state,
+		})
+		profile := profiles["character_identity_anchor"]
+		specifications = append(specifications, contract.ReferencePlanTargetSpecification{
+			TargetBusinessKey: seed.AnchorBusinessKey, TargetKind: "character_identity_anchor",
+			Fulfillment: "required", DesignFocus: profile.DesignFocus[:1],
+			ForbiddenChanges:            append([]string(nil), profile.ForbiddenChanges...),
+			DependsOnTargetBusinessKeys: []string{},
+		})
+		for _, option := range seed.StateOptions[1:] {
+			profile = profiles["character_appearance"]
+			specifications = append(specifications, contract.ReferencePlanTargetSpecification{
+				TargetBusinessKey: option.AppearanceBusinessKey, TargetKind: "character_appearance",
+				Fulfillment: "required", DesignFocus: profile.DesignFocus[:1],
+				ForbiddenChanges:            append([]string(nil), profile.ForbiddenChanges...),
+				DependsOnTargetBusinessKeys: []string{seed.AnchorBusinessKey},
+			})
+		}
+	}
+	for _, seed := range input.FixedTargetSeeds {
+		dependencies := []string{}
+		if seed.TargetKind == "scene_composition" || seed.TargetKind == "interaction_composition" {
+			dependencies = append(dependencies, seed.FixedDependencyBusinessKeys...)
+			for _, dependency := range seed.CharacterDependencies {
+				key := dependency.AppearanceBusinessKey
+				if reflect.DeepEqual(selected[dependency.AnchorBusinessKey], dependency.StateRef) {
+					key = dependency.AnchorBusinessKey
+				}
+				dependencies = append(dependencies, key)
+			}
+			sort.Strings(dependencies)
+			dependencies = slices.Compact(dependencies)
+		}
+		profile := profiles[seed.TargetKind]
+		specifications = append(specifications, contract.ReferencePlanTargetSpecification{
+			TargetBusinessKey: seed.TargetBusinessKey, TargetKind: seed.TargetKind,
+			Fulfillment: "required", DesignFocus: profile.DesignFocus[:1],
+			ForbiddenChanges:            append([]string(nil), profile.ForbiddenChanges...),
+			DependsOnTargetBusinessKeys: dependencies,
+		})
+	}
+	sort.Slice(specifications, func(left, right int) bool {
+		return specifications[left].TargetBusinessKey < specifications[right].TargetBusinessKey
+	})
+	candidate, err := json.Marshal(contract.ReferencePlanCandidate{
+		WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID,
+		ProductionWorldOwnerSetHash:           input.ProductionWorldOwnerSetHash,
+		P1ScopeKeys:                           append([]string(nil), input.P1ScopeKeys...),
+		VisualFoundationCandidateRevisionID:   input.VisualFoundationCandidateRevisionID,
+		VisualFoundationCandidateRevisionHash: input.VisualFoundationCandidateRevisionHash,
+		ReferenceTargetSeedRoot:               input.ReferenceTargetSeedRoot,
+		AnchorSelections:                      selections, TargetSpecifications: specifications,
+	})
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	outputHash, err := contract.ProductionCanonicalHash(candidate)
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	diagnostics := []contract.SceneAnalysisDiagnostic{}
+	diagnosticBytes, err := json.Marshal(diagnostics)
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	diagnosticHash, err := contract.ProductionCanonicalHash(diagnosticBytes)
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	result := contract.ReferencePlanAttemptResult{
+		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
+		Kind: "storygraph_stage", WireSchemaVersion: invocation.WireSchemaVersion,
+		Variant: invocation.Payload.Variant, StageRelease: invocation.StageRelease, Control: invocation.Control,
+		ClaimVersion: authorization.ClaimVersion, DispatchAuthorizationHash: authorization.Hash,
+		Status: "accepted", CandidateType: "reference_plan_candidate", Candidate: candidate,
+		InputHash: invocation.InputHash, OutputHash: &outputHash,
+		Diagnostics: diagnostics, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now.Add(2 * time.Minute),
+		Executor: contract.ReferencePlanExecutor{
+			RuntimeClass: "text", RuntimeImageDigest: invocation.StageRelease.AgentImageDigest,
+			HarnessVersion: "reference-plan-harness", Model: "deterministic-reference-plan",
+		},
+	}
+	result.ResultHash, err = result.ComputeResultHash()
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
 	}
 	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
 }

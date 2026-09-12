@@ -42,6 +42,7 @@ func (executor *NodeExecutor) Execute(
 		"activity.production_storygraph_projection",
 		"activity.project_preset_selection",
 		"activity.resolve_visual_foundation",
+		"activity.plan_reference_assets",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

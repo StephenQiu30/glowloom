@@ -25,6 +25,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"agent.interaction_continuity_reconciliation@1.0.0",
 		"agent.production_bible@1.0.0",
 		"agent.production_entity_derivation@1.0.0",
+		"agent.reference_plan@1.0.0",
 		"agent.scene_fact_extraction@1.0.0",
 		"agent.scene_occurrence_binding@1.0.0",
 		"agent.script_span_proposal@1.0.0",
@@ -67,7 +68,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	}
 }
 
-func TestVisualFoundationConsumesExactStoryGraphAndProjectPresetSelection(t *testing.T) {
+func TestVisualStagesConsumeExactStoryGraphAndProjectPresetSelection(t *testing.T) {
 	catalog, err := authoring.SystemCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +87,14 @@ func TestVisualFoundationConsumesExactStoryGraphAndProjectPresetSelection(t *tes
 			executor: "activity.resolve_visual_foundation", cachePolicy: "by_inputs", riskLevel: "external_ai",
 			inputs:    map[string]string{"storygraph": "storygraph_version", "selection": "project_preset_selection"},
 			outputKey: "candidate", outputType: "visual_foundation_candidate",
+		},
+		"agent.reference_plan": {
+			executor: "activity.plan_reference_assets", cachePolicy: "by_inputs", riskLevel: "external_ai",
+			inputs: map[string]string{
+				"storygraph": "storygraph_version", "selection": "project_preset_selection",
+				"visual_foundation": "visual_foundation_candidate",
+			},
+			outputKey: "candidate", outputType: "reference_plan_candidate",
 		},
 	}
 	for _, definition := range catalog.Definitions {

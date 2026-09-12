@@ -72,6 +72,76 @@ func TestCompileReferencePlanInputRejectsCandidateOrPresetDrift(t *testing.T) {
 	}
 }
 
+func TestBuildReferencePlanCandidateProjectionRestoresBackendOwnedFacts(t *testing.T) {
+	release := curatedFaithfulRelease(t)
+	inventory := referencePlanInventoryFixture()
+	revision := referencePlanVisualFoundationRevision(t, inventory, release.ContentHash)
+	input, _, err := workflowapp.CompileReferencePlanInput(workflowapp.ReferencePlanInputCommand{
+		Inventory: inventory, VisualFoundationRevision: revision, PresetRelease: release,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor := input.CharacterSeeds[0]
+	selected := anchor.StateOptions[0]
+	profiles := make(map[string]agentcontract.ReferencePlanPurposeProfile, len(input.PurposeProfiles))
+	for _, profile := range input.PurposeProfiles {
+		profiles[profile.TargetKind] = profile
+	}
+	anchorSpec := agentcontract.ReferencePlanTargetSpecification{
+		TargetBusinessKey: anchor.AnchorBusinessKey, TargetKind: "character_identity_anchor",
+		Fulfillment: "required", DesignFocus: profiles["character_identity_anchor"].DesignFocus[:1],
+		ForbiddenChanges:            profiles["character_identity_anchor"].ForbiddenChanges,
+		DependsOnTargetBusinessKeys: []string{},
+	}
+	fixed := input.FixedTargetSeeds[0]
+	fixedSpec := agentcontract.ReferencePlanTargetSpecification{
+		TargetBusinessKey: fixed.TargetBusinessKey, TargetKind: fixed.TargetKind,
+		Fulfillment: "required", DesignFocus: profiles[fixed.TargetKind].DesignFocus[:1],
+		ForbiddenChanges:            profiles[fixed.TargetKind].ForbiddenChanges,
+		DependsOnTargetBusinessKeys: []string{anchor.AnchorBusinessKey},
+	}
+	targets := []agentcontract.ReferencePlanTargetSpecification{anchorSpec, fixedSpec}
+	if targets[0].TargetBusinessKey > targets[1].TargetBusinessKey {
+		targets[0], targets[1] = targets[1], targets[0]
+	}
+	candidate := agentcontract.ReferencePlanCandidate{
+		WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID,
+		ProductionWorldOwnerSetHash:           input.ProductionWorldOwnerSetHash,
+		P1ScopeKeys:                           append([]string(nil), input.P1ScopeKeys...),
+		VisualFoundationCandidateRevisionID:   input.VisualFoundationCandidateRevisionID,
+		VisualFoundationCandidateRevisionHash: input.VisualFoundationCandidateRevisionHash,
+		ReferenceTargetSeedRoot:               input.ReferenceTargetSeedRoot,
+		AnchorSelections: []agentcontract.ReferencePlanAnchorSelection{{
+			AnchorBusinessKey: anchor.AnchorBusinessKey, SelectedStateRef: selected.StateRef,
+		}},
+		TargetSpecifications: targets,
+	}
+	candidateBytes, err := json.Marshal(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	projection, err := workflowapp.BuildReferencePlanCandidateProjection(input, candidateBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projection.Targets) != 2 || len(projection.ExpectedTargetSet.ExpectedTargetBusinessKeys) != 2 ||
+		projection.ExpectedTargetSet.ExpectedTargetKeyRoot == "" {
+		t.Fatalf("Reference Plan projection is incomplete: %#v", projection)
+	}
+	for _, target := range projection.Targets {
+		if target.Constraints.VisualFoundationCandidateRevisionID != input.VisualFoundationCandidateRevisionID ||
+			target.Constraints.VisualFoundationCandidateRevisionHash != input.VisualFoundationCandidateRevisionHash ||
+			target.Constraints.ProductionWorldOwnerSetHash != input.ProductionWorldOwnerSetHash ||
+			target.Constraints.ReferenceTargetSeedRoot != input.ReferenceTargetSeedRoot ||
+			target.Constraints.PresetReleaseContentHash != input.VisualFoundationCandidate.PresetReleaseContentHash ||
+			len(target.OwnerRefs.Scene) != 1 || len(target.CoverageScopeKeys) != 1 {
+			t.Fatalf("Reference Plan target lost Backend-owned facts: %#v", target)
+		}
+	}
+}
+
 func referencePlanVisualFoundationRevision(
 	t *testing.T,
 	inventory storygraphdomain.ReferencePlanSeedInventory,
@@ -104,7 +174,7 @@ func referencePlanVisualFoundationRevision(
 		t.Fatal(err)
 	}
 	return workflowapp.ReferencePlanVisualFoundationCandidateRevision{
-		ID: uuid.NewString(), RevisionHash: referencePlanCompilerHash("visual-foundation-revision"),
+		ID: uuid.NewString(), Revision: 1, RevisionHash: referencePlanCompilerHash("visual-foundation-revision"),
 		CandidateContentHash: contentHash, Candidate: raw,
 	}
 }

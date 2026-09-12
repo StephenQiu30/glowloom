@@ -24,6 +24,58 @@ type GrantIssuer interface {
 	Issue(contract.StageInvocation, int, int64) (string, error)
 }
 
+func (client *HTTP) InvokeReferencePlan(
+	ctx context.Context,
+	invocation contract.ReferencePlanInvocation,
+	authorization contract.SceneAnalysisDispatchAuthorization,
+) (contract.ReferencePlanAttemptResult, error) {
+	if err := invocation.Validate(); err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	if err := authorization.Validate(); err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	runtime, err := client.runtimes.Resolve(invocation.StageRelease.BundleContentHash)
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	if runtime.ImageDigest != invocation.StageRelease.AgentImageDigest {
+		return contract.ReferencePlanAttemptResult{}, contract.ErrSkillBundleUnavailable
+	}
+	body, err := json.Marshal(invocation)
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	endpoint := strings.TrimRight(runtime.BaseURL, "/") + "/internal/storygraph/reference-plan/invocations"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Lanverse-Dispatch-Authorization", authorization.Value)
+	response, err := client.client.Do(request)
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, fmt.Errorf("Reference Plan outcome unknown: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return contract.ReferencePlanAttemptResult{}, fmt.Errorf("Reference Plan returned HTTP %d", response.StatusCode)
+	}
+	encoded, err := io.ReadAll(io.LimitReader(response.Body, maxResultBytes+1))
+	if err != nil || len(encoded) > maxResultBytes {
+		return contract.ReferencePlanAttemptResult{}, errorsOrLimit(err)
+	}
+	result, err := contract.DecodeReferencePlanAttemptResult(encoded)
+	if err != nil {
+		return contract.ReferencePlanAttemptResult{}, fmt.Errorf("decode Reference Plan result: %w", err)
+	}
+	if err = result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash); err != nil {
+		return contract.ReferencePlanAttemptResult{}, err
+	}
+	return result, nil
+}
+
 func (client *HTTP) InvokeVisualFoundation(
 	ctx context.Context,
 	invocation contract.VisualFoundationInvocation,

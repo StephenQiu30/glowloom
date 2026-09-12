@@ -22,6 +22,7 @@ type SceneAnalysisStore struct{ database *gorm.DB }
 type sceneAnalysisRepository struct {
 	database                  *gorm.DB
 	visualFoundationValidator VisualFoundationInputValidator
+	referencePlanValidator    ReferencePlanInputValidator
 }
 
 func NewSceneAnalysisStore(database *gorm.DB) *SceneAnalysisStore {

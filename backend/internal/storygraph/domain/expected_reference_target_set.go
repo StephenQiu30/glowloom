@@ -87,11 +87,31 @@ func BuildExpectedReferenceTargetSet(input ExpectedReferenceTargetSetInput) (Exp
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	proof := ExpectedReferenceTargetSet{
-		OwnerSetHash: input.OwnerSetHash, P1ScopeKeys: append([]string(nil), input.P1ScopeKeys...),
-		ExpectedTargetBusinessKeys: keys,
+	return BuildExpectedReferenceTargetSetProof(input.OwnerSetHash, input.P1ScopeKeys, keys)
+}
+
+// BuildExpectedReferenceTargetSetProof freezes an independently derived Target
+// key set into the same proof consumed by Gate 3. Callers must derive keys from
+// Backend-owned production inputs before using this function.
+func BuildExpectedReferenceTargetSetProof(
+	ownerSetHash string,
+	p1ScopeKeys []string,
+	expectedTargetBusinessKeys []string,
+) (ExpectedReferenceTargetSet, error) {
+	if !hashPattern.MatchString(ownerSetHash) || validateSortedProductionStrings(p1ScopeKeys, 1) != nil ||
+		len(expectedTargetBusinessKeys) == 0 {
+		return ExpectedReferenceTargetSet{}, errors.New("invalid_expected_reference_target_proof")
 	}
-	proof.ExpectedTargetKeyRoot, err = canonicalValueHash(struct {
+	for index, key := range expectedTargetBusinessKeys {
+		if key == "" || index > 0 && expectedTargetBusinessKeys[index-1] >= key {
+			return ExpectedReferenceTargetSet{}, errors.New("invalid_expected_reference_target_proof")
+		}
+	}
+	proof := ExpectedReferenceTargetSet{
+		OwnerSetHash: ownerSetHash, P1ScopeKeys: append([]string(nil), p1ScopeKeys...),
+		ExpectedTargetBusinessKeys: append([]string(nil), expectedTargetBusinessKeys...),
+	}
+	root, err := canonicalValueHash(struct {
 		OwnerSetHash               string   `json:"owner_set_hash"`
 		P1ScopeKeys                []string `json:"p1_scope_keys"`
 		ExpectedTargetBusinessKeys []string `json:"expected_target_business_keys"`
@@ -99,6 +119,7 @@ func BuildExpectedReferenceTargetSet(input ExpectedReferenceTargetSetInput) (Exp
 	if err != nil {
 		return ExpectedReferenceTargetSet{}, err
 	}
+	proof.ExpectedTargetKeyRoot = root
 	return proof, nil
 }
 

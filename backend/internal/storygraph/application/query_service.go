@@ -166,6 +166,37 @@ func (service *QueryService) VisualFoundationWorld(
 	return result, nil
 }
 
+func (service *QueryService) ReferencePlanWorld(
+	ctx context.Context,
+	actor Actor,
+	projectID string,
+) (storygraph.ReferencePlanWorldReadSet, error) {
+	projectID = strings.TrimSpace(projectID)
+	if _, err := uuid.Parse(projectID); err != nil {
+		return storygraph.ReferencePlanWorldReadSet{}, invalid("Invalid Reference Plan world query")
+	}
+	version, err := service.reader.GetCurrentVersion(ctx, actor, projectID)
+	if err != nil {
+		return storygraph.ReferencePlanWorldReadSet{}, normalizeError(err)
+	}
+	currentOwnerSetHash, err := service.reader.GetCurrentOwnerSetHash(ctx, actor, projectID)
+	if err != nil {
+		return storygraph.ReferencePlanWorldReadSet{}, normalizeError(err)
+	}
+	if currentOwnerSetHash == "" || currentOwnerSetHash != version.OwnerSetHash {
+		return storygraph.ReferencePlanWorldReadSet{}, &Error{
+			Code: "stale_production_world", Message: "Production World changed before Reference Plan input was frozen", Status: 409,
+		}
+	}
+	result, err := storygraph.BuildReferencePlanWorldReadSet(version)
+	if err != nil {
+		return storygraph.ReferencePlanWorldReadSet{}, &Error{
+			Code: "production_world_unavailable", Message: "Confirmed Production World is not available for Reference Plan", Status: 409,
+		}
+	}
+	return result, nil
+}
+
 func (service *QueryService) Lens(ctx context.Context, actor Actor, query LensQuery) (SubgraphResult, error) {
 	if err := validateLensQuery(query); err != nil {
 		return SubgraphResult{}, err

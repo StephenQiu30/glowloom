@@ -116,6 +116,15 @@ func SystemCatalog() (Catalog, error) {
 			[]PortDefinition{requiredPort("candidate", "visual_foundation_candidate")}, emptyNodeConfig(),
 		),
 		systemNodeDefinition(
+			"agent.reference_plan", "Reference Plan Candidate", "agent", "activity.plan_reference_assets", "by_inputs", "external_ai",
+			[]PortDefinition{
+				requiredPort("storygraph", "storygraph_version"),
+				requiredPort("selection", "project_preset_selection"),
+				requiredPort("visual_foundation", "visual_foundation_candidate"),
+			},
+			[]PortDefinition{requiredPort("candidate", "reference_plan_candidate")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
 			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",
 			[]PortDefinition{requiredPort("script", "script_revision")}, []PortDefinition{requiredPort("evidence", "source_evidence_candidate")}, emptyNodeConfig(),
 		),

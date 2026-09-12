@@ -118,6 +118,42 @@ func (store *Store) GetCurrentVisualFoundationWorld(
 	return storygraph.BuildVisualFoundationWorldReadSet(version)
 }
 
+// GetCurrentReferencePlanVersion is the authorization-free worker query used
+// only inside a Backend-owned serializable invocation transaction.
+func (store *Store) GetCurrentReferencePlanVersion(
+	ctx context.Context,
+	workspaceID string,
+	projectID string,
+) (storygraph.Version, error) {
+	workspace, workspaceErr := uuid.Parse(workspaceID)
+	project, projectErr := uuid.Parse(projectID)
+	if workspaceErr != nil || projectErr != nil || workspace == uuid.Nil || project == uuid.Nil {
+		return storygraph.Version{}, errors.New("invalid Reference Plan worker scope")
+	}
+	var head model.StoryGraphHead
+	if err := store.database.WithContext(ctx).Where(
+		"workspace_id = ? AND project_id = ?", workspace, project,
+	).First(&head).Error; err != nil {
+		return storygraph.Version{}, normalizeNotFound(err)
+	}
+	version, err := store.versionForProject(ctx, workspace, project, head.CurrentVersionID)
+	if err != nil {
+		return storygraph.Version{}, err
+	}
+	if version.VersionNo != head.Revision || version.ContentHash != head.CurrentContentHash {
+		return storygraph.Version{}, errors.New("StoryGraph head does not match its current immutable version")
+	}
+	repo := &repository{database: store.database}
+	ownerSetHash, err := store.currentProductionOwnerSetHash(ctx, repo, workspace, project)
+	if err != nil {
+		return storygraph.Version{}, err
+	}
+	if ownerSetHash == "" || ownerSetHash != version.OwnerSetHash {
+		return storygraph.Version{}, errors.New("Production World changed before Reference Plan Candidate acceptance")
+	}
+	return version, nil
+}
+
 func (store *Store) currentProductionOwnerSetHash(
 	ctx context.Context,
 	repo *repository,

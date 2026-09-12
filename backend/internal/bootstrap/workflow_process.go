@@ -139,6 +139,23 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("workflow Visual Foundation service initialization failed: %w", err)
 	}
+	referencePlanStore, err := agentgorm.NewReferencePlanStore(
+		database,
+		workflowgorm.ValidateCurrentReferencePlanInput,
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Reference Plan store initialization failed: %w", err)
+	}
+	referencePlanService, err := agentapp.NewReferencePlanExecutionService(
+		referencePlanStore, agentHTTPClient, agentSigner,
+		agentapp.ReferencePlanExecutionConfig{
+			Now: now, NewID: uuid.NewString, AgentImageDigest: configuration.AgentRuntimeImageDigest,
+			ValidateCandidate: workflowapp.ValidateReferencePlanCandidateProjection,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Reference Plan service initialization failed: %w", err)
+	}
 	bibleStore := biblegorm.New(database)
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: now, NewID: uuid.NewString})
 	evidenceService := bibleapp.NewSourceEvidenceService(bibleStore, bibleapp.SourceEvidenceConfig{
@@ -232,6 +249,8 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("workflow Visual Foundation source composition failed: %w", err)
 	}
+	referencePlanSources := workflowgorm.NewReferencePlanSourceStore(database)
+	storyGraphQueries := storygraphapp.NewQueryService(storygraphgorm.New(database))
 	activities, err := NewWorkflowRuntime(
 		workflowStore, scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
 		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations, providerService,
@@ -242,8 +261,12 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 			ProductionWorld:     productionWorldService,
 			VisualFoundation: &workflowproduction.VisualFoundationDependencies{
 				Selections: presetgorm.NewProjectSelectionStore(database), FindRelease: presetcatalog.FindCuratedRelease,
-				Worlds:  storygraphapp.NewQueryService(storygraphgorm.New(database)),
+				Worlds:  storyGraphQueries,
 				Sources: visualSourceService, Candidates: visualFoundationService,
+			},
+			ReferencePlan: &workflowproduction.ReferencePlanDependencies{
+				Selections: presetgorm.NewProjectSelectionStore(database), FindRelease: presetcatalog.FindCuratedRelease,
+				Worlds: storyGraphQueries, Sources: referencePlanSources, Candidates: referencePlanService,
 			},
 		},
 	)
