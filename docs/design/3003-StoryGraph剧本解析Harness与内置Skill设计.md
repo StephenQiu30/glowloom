@@ -578,6 +578,8 @@ Agent 执行边界登记独立 Stage Registry/DefinitionCore/StageRelease，只�
 
 Backend GORM facts loader 只能读取当前 Project Reference Plan Activation Head 指向的 Approved Plan、该 Plan 内精确 Target，以及当前 Preset Effective Head 指向的 Binding/Style/Policy；每份 JSON 内容、内容 Hash、关系列与 Head 都必须重验，再调用同一个领域编译器。首个可执行波次只含无依赖的 `character_identity_anchor`、`location_board`、`prop_sheet`。`character_appearance`、`interaction_composition`、`scene_composition` 在正式 AssetVersion Owner/Selection 发布前返回明确的 dependency-not-ready，不得把 `GenerationCandidateSelection` 或 Artifact 伪装成 AssetVersion，也不得用空依赖降级。该 loader 不建表、不写 SQL、不写 Candidate，只为后续 dispatch/accept 两次重编译提供唯一事实读取路径。
 
+基础 Target 的 Backend 持久执行复用现有 Release、Manifest、Invocation、Attempt、DispatchAuthorization、Result、CandidateRevision 与 CandidateHead；`compile_reference_brief` 及 `reference_brief_candidate` 只扩展这些既有 GORM Catalog 的语义闭集，不增加表、字段或 migration 文件。dispatch 事务和 accepted 事务都调用上述同一 facts loader，并要求重编译结果与冻结 Input 逐字段相同；accepted 重放返回同一 Candidate Revision，传输不可信只落 `outcome_unknown` 且不得产生 Candidate。此阶段仍不注册 Workflow/Temporal 节点，不调用 Provider，也不放行有依赖 Target。
+
 `vision_review_candidate_production` 对每项给 `pass|warn|fail|not_assessable`、证据区域/视图、issue code、置信度和建议，覆盖：
 
 1. 结构/视图完整性；

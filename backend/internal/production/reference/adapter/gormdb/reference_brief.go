@@ -71,6 +71,30 @@ func (store *Store) CompileReferenceBriefInput(
 	return compiled, err
 }
 
+func ValidateCurrentReferenceBriefInput(
+	ctx context.Context,
+	database *gorm.DB,
+	input agentcontract.ReferenceBriefInput,
+) error {
+	if input.Validate() != nil {
+		return errors.New("invalid Reference Brief input")
+	}
+	rebuilt, err := NewStore(database).CompileReferenceBriefInput(
+		ctx,
+		input.WorkspaceID,
+		input.ProjectID,
+		input.TargetBusinessKey,
+		input.StageRelease,
+	)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(rebuilt, input) {
+		return errors.New("Reference Brief input has drifted from current facts")
+	}
+	return nil
+}
+
 func loadCurrentReferenceBriefPlan(
 	ctx context.Context,
 	database *gorm.DB,

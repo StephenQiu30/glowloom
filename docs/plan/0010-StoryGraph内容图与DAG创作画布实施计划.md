@@ -209,6 +209,7 @@
   - [x] 固定 `compile_reference_brief` 专用 Go/Python Target 级 Invocation/AttemptResult Wire：scope/shard、Input 与内外 StageRelease、一次文本模型预算、dispatch attempt/expiry、accepted Candidate 与冻结 Input 全部失败关闭；统一 Wire Schema Root 已纳入该合同。本子项不注册 Stage、不调用 Harness/模型，也不冒充 GORM facts loader 或执行前重算。
   - [x] 接通 `compile_reference_brief` Agent capability：登记 Stage Registry/DefinitionCore/StageRelease，Bundle 增加专用 `references/reference-brief.md`，Harness 只加载入口和该 Reference，在 Release 预算内执行一次 strict Codex CLI，并由私有授权入口返回 accepted/rejected/outcome_unknown。该子项不读取 PostgreSQL、不写 Candidate Revision、不接 Temporal、不调用 Provider；GORM exact facts loader 与执行前/接受前重编译仍单独待实现。
   - [x] 实现基础 Reference Brief GORM exact facts loader：只从当前 Activation/Effective Heads 读取并重验 Approved Plan、无依赖 Target、Binding/Style/Policy，复用领域编译器生成 Input；有依赖 Target 在正式 AssetVersion Owner Selection 完成前明确阻塞。本子项不建表、不写 Candidate、不接 Temporal、不调用 Provider。
+  - [x] 实现基础 Reference Brief Backend 持久执行：复用既有 Release/Manifest/Invocation/Attempt/Authorization/Result/Candidate/Head，以同一 GORM facts loader 在 dispatch 与 accepted 前重编译并校验 Input；accepted 重放返回同一 Candidate Revision，未知终态只记录 `outcome_unknown`。本子项只扩展既有 GORM Catalog 语义闭集，不建表、不加字段、不接 Temporal、不调用 Provider。
 - [ ] 提供 ReferenceCoverageMatrix 与 Target detail Query。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 

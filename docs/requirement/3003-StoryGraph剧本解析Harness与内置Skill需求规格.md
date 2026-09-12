@@ -111,6 +111,8 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 
 Backend facts loader 必须通过 GORM 从当前 Reference Plan/Preset Effective Heads 读取并重验 Approved Plan、Target、Binding、Style 与 Policy，再由既有领域编译器生成相同 `ReferenceBriefInput`。MVP 只放行无依赖的基础 Target；存在依赖但尚无正式 AssetVersion Owner Selection 时必须报告 dependency-not-ready，禁止读取 GenerationCandidateSelection/Artifact 代替正式 Owner，禁止新建 migration、Raw SQL 或第二事实源。
 
+基础 Target 的持久执行必须复用既有 Agent 生产表，在 dispatch 与 accepted 写入前分别从 PostgreSQL 重编译同一 `ReferenceBriefInput`；accepted 结果只能原子创建唯一 `reference_brief_candidate` Revision/Head，重放不得再次调用 Agent，发送后无法确认的结果必须保留 `outcome_unknown` 且不创建 Candidate。本要求不等于 Temporal 已接通，也不得提前生成媒体或 AssetVersion。
+
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
 | VPA-STG-001 | CandidateStageSet 对上表十三个 stage_key 完整且无重复；缺一项、额外项或变体碰撞均不能批准。 | Set golden |

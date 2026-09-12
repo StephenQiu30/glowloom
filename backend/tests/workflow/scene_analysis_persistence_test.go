@@ -1426,6 +1426,69 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || !reflect.DeepEqual(replayedBriefInput, briefInput) {
 		t.Fatalf("replay base Reference Brief input: got=%#v want=%#v err=%v", replayedBriefInput, briefInput, err)
 	}
+	referenceBriefNodeRunID := uuid.New()
+	if err = database.Create(&model.NodeRunProjection{
+		ID: referenceBriefNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: uuid.MustParse(started.ID),
+		NodeID: "compile-reference-brief-base", DefinitionKey: "agent.reference_brief",
+		DefinitionVersion: "1.0.0", Executor: "activity.reference_brief",
+		RiskLevel: "external_ai", Status: "QUEUED", Attempt: 0, Revision: 1,
+		CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create Reference Brief NodeRun: %v", err)
+	}
+	referenceBriefStore, err := agentgorm.NewReferenceBriefStore(
+		database,
+		referencegorm.ValidateCurrentReferenceBriefInput,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenceBriefService, err := agentapp.NewReferenceBriefExecutionService(
+		referenceBriefStore,
+		visualRuntime,
+		dispatchSigner,
+		agentapp.ReferenceBriefExecutionConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 7),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenceBriefCommand := agentapp.ExecuteReferenceBriefCommand{
+		WorkflowRunID: started.ID, NodeRunID: referenceBriefNodeRunID.String(), Input: briefInput,
+	}
+	referenceBriefCandidate, err := referenceBriefService.Execute(ctx, referenceBriefCommand)
+	if err != nil || referenceBriefCandidate.CandidateType != "reference_brief_candidate" ||
+		referenceBriefCandidate.StageKey != contract.ReferenceBriefStageKey || visualRuntime.briefCalls != 1 {
+		t.Fatalf("persist base Reference Brief Candidate: candidate=%#v calls=%d runtime_err=%v err=%v", referenceBriefCandidate, visualRuntime.briefCalls, visualRuntime.briefError, err)
+	}
+	replayedReferenceBriefCandidate, err := referenceBriefService.Execute(ctx, referenceBriefCommand)
+	if err != nil || replayedReferenceBriefCandidate.ID != referenceBriefCandidate.ID ||
+		replayedReferenceBriefCandidate.CandidateRevisionHash != referenceBriefCandidate.CandidateRevisionHash ||
+		visualRuntime.briefCalls != 1 {
+		t.Fatalf("replay persisted Reference Brief Candidate: got=%#v want=%#v calls=%d err=%v", replayedReferenceBriefCandidate, referenceBriefCandidate, visualRuntime.briefCalls, err)
+	}
+	var referenceBriefInvocationCount, referenceBriefResultCount, referenceBriefCandidateCount int64
+	if err = database.Model(&model.SceneAnalysisInvocationRecord{}).
+		Where("node_run_id = ? AND stage_key = ?", referenceBriefNodeRunID, contract.ReferenceBriefStageKey).
+		Count(&referenceBriefInvocationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.SceneAnalysisResult{}).
+		Where("attempt_id IN (?)", database.Model(&model.SceneAnalysisAttempt{}).
+			Select("id").Where("invocation_id = ?", referenceBriefCandidate.SourceInvocationID)).
+		Count(&referenceBriefResultCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.SceneAnalysisCandidateRevision{}).
+		Where("id = ? AND candidate_type = ?", referenceBriefCandidate.ID, "reference_brief_candidate").
+		Count(&referenceBriefCandidateCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if referenceBriefInvocationCount != 1 || referenceBriefResultCount != 1 || referenceBriefCandidateCount != 1 {
+		t.Fatalf("Reference Brief persistence counts: invocation=%d result=%d candidate=%d", referenceBriefInvocationCount, referenceBriefResultCount, referenceBriefCandidateCount)
+	}
 	const briefHeadDriftSavepoint = "reference_brief_head_drift"
 	if err = database.SavePoint(briefHeadDriftSavepoint).Error; err != nil {
 		t.Fatal(err)
@@ -2553,6 +2616,8 @@ type deterministicVisualFoundationRuntime struct {
 	now            time.Time
 	calls          int
 	referenceCalls int
+	briefCalls     int
+	briefError     error
 }
 
 type failOnceSceneAnalysisRuntime struct {
@@ -2782,6 +2847,134 @@ func (runtime *deterministicVisualFoundationRuntime) InvokeReferencePlan(
 		return contract.ReferencePlanAttemptResult{}, err
 	}
 	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
+}
+
+func (runtime *deterministicVisualFoundationRuntime) InvokeReferenceBrief(
+	_ context.Context,
+	invocation contract.ReferenceBriefInvocation,
+	authorization contract.SceneAnalysisDispatchAuthorization,
+) (contract.ReferenceBriefAttemptResult, error) {
+	runtime.briefCalls++
+	input := invocation.Payload.StageInput
+	brief, err := deterministicReferenceBriefPurpose(input.TargetKind)
+	if err != nil {
+		return contract.ReferenceBriefAttemptResult{}, err
+	}
+	candidate, err := json.Marshal(contract.ReferenceBriefCandidate{
+		WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID,
+		ApprovedReferencePlanVersionRef: input.ApprovedReferencePlanVersionRef,
+		ReferencePlanTargetRef:          input.ReferencePlanTargetRef,
+		TargetBusinessKey:               input.TargetBusinessKey,
+		TargetKind:                      input.TargetKind,
+		VisualFoundationVersionRef:      input.VisualFoundationVersionRef,
+		EffectiveStyleSnapshotRef:       input.EffectiveStyleSnapshotRef,
+		EffectivePolicySnapshotRef:      input.EffectivePolicySnapshotRef,
+		DependencySelections:            append([]contract.ReferenceBriefDependencySelection{}, input.DependencySelections...),
+		StageRelease:                    input.StageRelease,
+		TypedReadSetRoot:                input.TypedReadSetRoot,
+		SourceDesignSlots: []contract.ReferenceBriefSourceDesignSlot{{
+			SlotKey: "primary_form", SourceRequirement: "preserve confirmed production facts",
+			DesignRequirement: "apply only the approved visual policy",
+		}},
+		PositiveInstructions:   append([]string(nil), input.DesignFocus...),
+		NegativeInstructions:   append([]string(nil), input.ForbiddenChanges...),
+		RequiredViewRoles:      append([]string(nil), input.RequiredViewRoles...),
+		LayoutRequirements:     []string{"keep every required view independently assessable"},
+		ScaleRequirements:      []string{"preserve approved relative scale"},
+		RightsRequirements:     []string{"use only authorized source and dependency material"},
+		ProvenanceRequirements: []string{"preserve exact source and dependency lineage"},
+		QCRubricRefs: []contract.ReferenceBriefQCRubricRef{{
+			ContractID: "reference-visual-qc-production", ContentHash: fmt.Sprintf("%064d", 9),
+		}},
+		SourceRefs: input.SourceRefs,
+		Brief:      brief,
+	})
+	if err != nil {
+		return contract.ReferenceBriefAttemptResult{}, err
+	}
+	decoded, candidate, err := contract.DecodeReferenceBriefCandidate(candidate)
+	if err != nil {
+		runtime.briefError = err
+		return contract.ReferenceBriefAttemptResult{}, fmt.Errorf("build deterministic Reference Brief Candidate: %w", err)
+	}
+	if validateErr := decoded.ValidateFor(input); validateErr != nil {
+		runtime.briefError = validateErr
+		return contract.ReferenceBriefAttemptResult{}, fmt.Errorf("validate deterministic Reference Brief Candidate: %w", validateErr)
+	}
+	outputHash, err := contract.ProductionCanonicalHash(candidate)
+	if err != nil {
+		return contract.ReferenceBriefAttemptResult{}, err
+	}
+	diagnostics := []contract.SceneAnalysisDiagnostic{}
+	diagnosticBytes, err := json.Marshal(diagnostics)
+	if err != nil {
+		return contract.ReferenceBriefAttemptResult{}, err
+	}
+	diagnosticHash, err := contract.ProductionCanonicalHash(diagnosticBytes)
+	if err != nil {
+		return contract.ReferenceBriefAttemptResult{}, err
+	}
+	result := contract.ReferenceBriefAttemptResult{
+		InvocationID: invocation.InvocationID, AttemptID: invocation.AttemptID,
+		Kind: "storygraph_stage", WireSchemaVersion: invocation.WireSchemaVersion,
+		Variant: invocation.Payload.Variant, StageRelease: invocation.StageRelease, Control: invocation.Control,
+		ClaimVersion: authorization.ClaimVersion, DispatchAuthorizationHash: authorization.Hash,
+		Status: "accepted", CandidateType: "reference_brief_candidate", Candidate: candidate,
+		InputHash: invocation.InputHash, OutputHash: &outputHash,
+		Diagnostics: diagnostics, DiagnosticHash: diagnosticHash, CompletedAt: runtime.now.Add(3 * time.Minute),
+		Executor: contract.ReferenceBriefExecutor{
+			RuntimeClass: "text", RuntimeImageDigest: invocation.StageRelease.AgentImageDigest,
+			HarnessVersion: "reference-brief-harness", Model: "deterministic-reference-brief",
+		},
+	}
+	result.ResultHash, err = result.ComputeResultHash()
+	if err != nil {
+		return contract.ReferenceBriefAttemptResult{}, err
+	}
+	return result, result.ValidateFor(invocation, authorization.ClaimVersion, authorization.Hash)
+}
+
+func deterministicReferenceBriefPurpose(targetKind string) (json.RawMessage, error) {
+	var value any
+	switch targetKind {
+	case "character_identity_anchor":
+		value = contract.CharacterIdentityAnchorBrief{
+			TargetKind:             targetKind,
+			IdentityInvariantSlots: []string{"body_shape", "facial_structure", "hair", "permanent_marks", "proportions"},
+		}
+	case "character_appearance":
+		value = contract.CharacterAppearanceBrief{
+			TargetKind:             targetKind,
+			IdentityInvariantSlots: []string{"body_shape", "facial_structure", "hair", "permanent_marks", "proportions"},
+			ApprovedVariableSlots:  []string{"wardrobe"},
+		}
+	case "location_board":
+		value = contract.LocationBoardBrief{
+			TargetKind: targetKind, TopologyConstraints: []string{"preserve entrance and exit topology"},
+			ScaleAnchors: []string{"preserve confirmed human scale"}, MaterialSlots: []string{"approved wall material"},
+			OccupancyPolicy: "empty",
+		}
+	case "prop_sheet":
+		value = contract.PropSheetBrief{
+			TargetKind: targetKind, PhysicalDimensions: "preserve confirmed dimensions",
+			StructuralSlots: []string{"outer structure"}, StateSlots: []string{"approved state"},
+			ContentOrMechanismSlots: []string{"approved mechanism"}, OccupancyPolicy: "no_hands_no_people",
+		}
+	case "scene_composition":
+		value = contract.SceneCompositionBrief{
+			TargetKind: targetKind, CompositionPurpose: "show the approved scene relationship",
+			SpatialConstraints: []string{"preserve approved occurrence positions"},
+		}
+	case "interaction_composition":
+		value = contract.InteractionCompositionBrief{
+			TargetKind: targetKind, HandSide: "right", GripOrContactPoint: "approved handle",
+			Orientation:              "toward the approved counterparty",
+			BodyPropScaleConstraints: []string{"preserve approved body-to-prop scale"}, TransferOrUseState: "held",
+		}
+	default:
+		return nil, errors.New("unsupported deterministic Reference Brief purpose")
+	}
+	return json.Marshal(value)
 }
 
 func (runtime *deterministicSceneAnalysisRuntime) InvokeSceneAnalysis(
