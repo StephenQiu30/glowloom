@@ -584,6 +584,10 @@ Temporal 接入使用单个 `activity.compile_reference_briefs` 基础波次屏�
 
 该节点只加入新发布的不可变 ExecutionPlan；Temporal Workflow 代码仍按持久化 Plan 的通用节点循环执行，Activity 内承担全部 GORM/HTTP I/O。旧运行继续重放其原 ExecutionPlan，不会看到新增节点，因此不需要业务兼容分支或人为 Workflow 版本命名；只有未来改变同一已发布 Plan 的 Workflow Command 序列时才使用 Temporal 官方版本机制。
 
+基础波次之后先交付两个 Backend-owned 只读 Lens：项目级 `ReferenceCoverageMatrix` 与按 Target Version ID 读取的 `ReferenceTargetDetail`。两者必须在一个 GORM 只读事务中重验当前 Project Activation Head、Approved Plan、Plan 内 Target Version，以及属于同一 Plan/Target read-set 的 Reference Brief Invocation/Candidate Head；不得从前端缓存、ELK、Kafka 或“最新”字符串拼装状态。Matrix 按 dependency DAG 的 canonical Target 顺序返回 fulfillment、wave、coverage scope、依赖 business key、Brief 执行状态、精确 Candidate ref、blocker 与当前已实现 action；Detail 复用同一行计算并附完整不可变 Target Version。
+
+当前尚无正式 AssetVersion/Selection，因此 Query 只能输出 `not_generated|planned|generating|blocked`，不能提前输出 `awaiting_selection|selected|owner_applied` 或 `reference_ready`。无依赖 Target 在 Brief accepted 后仍为 `planned`，只证明 Provider-neutral Brief 已就绪；有依赖 Target 明确以缺失的 dependency Target business key 阻塞；`not_generated` 不计入 required coverage。Matrix 内容 Hash 覆盖当前 Plan ref、逐行状态和精确 Candidate ref，相同 PostgreSQL 事实必须重放为同一结果。HTTP 只提供 `GET /api/projects/{project_id}/reference-coverage` 与 `GET /api/projects/{project_id}/reference-targets/{target_version_id}`，无请求体、无 selector query、`Cache-Control: no-store`，并先通过 Project 读取权限。
+
 `vision_review_candidate_production` 对每项给 `pass|warn|fail|not_assessable`、证据区域/视图、issue code、置信度和建议，覆盖：
 
 1. 结构/视图完整性；

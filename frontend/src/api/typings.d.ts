@@ -154,6 +154,17 @@ declare global {
     type ProjectPresetSelectionRequest = components["schemas"]["ProjectPresetSelectionRequest"];
     type ProjectResponse = components["schemas"]["ProjectResponse"];
     type PublishImportCommitRequest = components["schemas"]["PublishImportCommitRequest"];
+    type ReferenceBriefCandidateRefResponse = components["schemas"]["ReferenceBriefCandidateRefResponse"];
+    type ReferenceCoverageBlockerResponse = components["schemas"]["ReferenceCoverageBlockerResponse"];
+    type ReferenceCoverageMatrixResponse = components["schemas"]["ReferenceCoverageMatrixResponse"];
+    type ReferenceCoverageRowResponse = components["schemas"]["ReferenceCoverageRowResponse"];
+    type ReferenceCoverageSummaryResponse = components["schemas"]["ReferenceCoverageSummaryResponse"];
+    type ReferencePlanOwnerRefResponse = components["schemas"]["ReferencePlanOwnerRefResponse"];
+    type ReferencePlanTargetOwnerRefsResponse = components["schemas"]["ReferencePlanTargetOwnerRefsResponse"];
+    type ReferencePlanTargetVersionResponse = components["schemas"]["ReferencePlanTargetVersionResponse"];
+    type ReferenceTargetConstraintsResponse = components["schemas"]["ReferenceTargetConstraintsResponse"];
+    type ReferenceTargetDetailResponse = components["schemas"]["ReferenceTargetDetailResponse"];
+    type ReferenceVersionRefResponse = components["schemas"]["ReferenceVersionRefResponse"];
     type RegisterRequest = components["schemas"]["RegisterRequest"];
     type RegistrationVerificationAccepted = components["schemas"]["RegistrationVerificationAccepted"];
     type RegistrationVerificationConfirmRequest = components["schemas"]["RegistrationVerificationConfirmRequest"];

@@ -1989,6 +1989,77 @@
         }
       }
     },
+    "/api/projects/{project_id}/reference-coverage": {
+      "get": {
+        "operationId": "getReferenceCoverageMatrix",
+        "description": "从当前 Approved Reference Plan 与精确 Reference Brief 执行事实读取只读覆盖矩阵；不触发生成、重跑或状态写入。",
+        "parameters": [
+          { "$ref": "#/components/parameters/project_id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前权限核验后的 Reference Coverage Matrix。",
+            "headers": {
+              "Cache-Control": { "schema": { "type": "string", "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ReferenceCoverageMatrixResponse" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reference-targets/{target_version_id}": {
+      "get": {
+        "operationId": "getReferenceTargetDetail",
+        "description": "按当前 Approved Plan 内的精确 Target Version ID 读取不可变 Target 与同一覆盖行；不接受 current/latest。",
+        "parameters": [
+          { "$ref": "#/components/parameters/project_id" },
+          { "$ref": "#/components/parameters/target_version_id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前权限核验后的 Reference Target detail。",
+            "headers": {
+              "Cache-Control": { "schema": { "type": "string", "const": "no-store" } }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["data"],
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/ReferenceTargetDetailResponse" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/production-bibles/{bible_id}/review-decisions": {
       "post": {
         "operationId": "decideProductionBibleReviewIssue",
@@ -7385,6 +7456,222 @@
           },
           "collection_root_hash": { "type": "string" },
           "receipt_content_hash": { "type": "string" }
+        }
+      },
+      "ReferenceBriefCandidateRefResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision_id", "revision", "revision_hash", "content_hash"],
+        "properties": {
+          "revision_id": { "type": "string", "format": "uuid" },
+          "revision": { "type": "integer", "minimum": 1 },
+          "revision_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferenceCoverageBlockerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "dependency_asset_version_unavailable",
+              "reference_brief_rejected",
+              "reference_brief_outcome_unknown"
+            ]
+          },
+          "target_business_key": { "type": "string" }
+        }
+      },
+      "ReferenceCoverageRowResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_version_id", "target_content_hash", "target_business_key", "target_kind",
+          "fulfillment", "wave_key", "coverage_scope_keys", "depends_on_target_business_keys",
+          "status", "brief_status", "blockers", "allowed_actions"
+        ],
+        "properties": {
+          "target_version_id": { "type": "string", "format": "uuid" },
+          "target_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "target_business_key": { "type": "string" },
+          "target_kind": {
+            "type": "string",
+            "enum": [
+              "character_appearance", "character_identity_anchor", "interaction_composition",
+              "location_board", "prop_sheet", "scene_composition"
+            ]
+          },
+          "fulfillment": { "type": "string", "enum": ["required", "optional", "not_generated"] },
+          "wave_key": { "type": "string", "enum": ["base", "appearance", "composition", "none"] },
+          "coverage_scope_keys": { "type": "array", "items": { "type": "string" } },
+          "depends_on_target_business_keys": { "type": "array", "items": { "type": "string" } },
+          "status": { "type": "string", "enum": ["not_generated", "planned", "generating", "blocked"] },
+          "brief_status": {
+            "type": "string",
+            "enum": ["not_required", "dependency_blocked", "not_started", "queued", "running", "accepted", "rejected", "outcome_unknown"]
+          },
+          "brief_invocation_id": { "type": "string", "format": "uuid" },
+          "brief_input_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "brief_candidate": { "$ref": "#/components/schemas/ReferenceBriefCandidateRefResponse" },
+          "blockers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReferenceCoverageBlockerResponse" }
+          },
+          "allowed_actions": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["view_target"] }
+          }
+        }
+      },
+      "ReferenceCoverageSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "required_total", "optional_total", "not_generated", "planned", "generating",
+          "blocked", "selected_total", "reference_ready"
+        ],
+        "properties": {
+          "required_total": { "type": "integer", "minimum": 0 },
+          "optional_total": { "type": "integer", "minimum": 0 },
+          "not_generated": { "type": "integer", "minimum": 0 },
+          "planned": { "type": "integer", "minimum": 0 },
+          "generating": { "type": "integer", "minimum": 0 },
+          "blocked": { "type": "integer", "minimum": 0 },
+          "selected_total": { "type": "integer", "const": 0 },
+          "reference_ready": { "type": "boolean", "const": false }
+        }
+      },
+      "ReferenceCoverageMatrixResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "plan_version_id", "plan_revision", "plan_content_hash", "rows", "summary", "content_hash"],
+        "properties": {
+          "schema_version": { "type": "string", "const": "reference-coverage-matrix-production" },
+          "plan_version_id": { "type": "string", "format": "uuid" },
+          "plan_revision": { "type": "integer", "minimum": 1 },
+          "plan_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "rows": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/ReferenceCoverageRowResponse" } },
+          "summary": { "$ref": "#/components/schemas/ReferenceCoverageSummaryResponse" },
+          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferencePlanOwnerRefResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id", "project_id", "owner_kind", "version_family", "owner_logical_id",
+          "owner_version_id", "owner_revision", "owner_content_hash", "fragment_key", "fragment_content_hash"
+        ],
+        "properties": {
+          "workspace_id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "owner_kind": { "type": "string" },
+          "version_family": { "type": "string" },
+          "owner_logical_id": { "type": "string" },
+          "owner_version_id": { "type": "string", "format": "uuid" },
+          "owner_revision": { "type": "integer", "minimum": 1 },
+          "owner_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "fragment_key": { "type": ["string", "null"] },
+          "fragment_content_hash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferencePlanTargetOwnerRefsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["identity", "specification", "state", "scene", "occurrence", "interaction"],
+        "properties": {
+          "identity": { "type": "array", "items": { "$ref": "#/components/schemas/ReferencePlanOwnerRefResponse" } },
+          "specification": { "type": "array", "items": { "$ref": "#/components/schemas/ReferencePlanOwnerRefResponse" } },
+          "state": { "type": "array", "items": { "$ref": "#/components/schemas/ReferencePlanOwnerRefResponse" } },
+          "scene": { "type": "array", "items": { "$ref": "#/components/schemas/ReferencePlanOwnerRefResponse" } },
+          "occurrence": { "type": "array", "items": { "$ref": "#/components/schemas/ReferencePlanOwnerRefResponse" } },
+          "interaction": { "type": "array", "items": { "$ref": "#/components/schemas/ReferencePlanOwnerRefResponse" } }
+        }
+      },
+      "ReferenceTargetConstraintsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "production_world_owner_set_hash", "reference_target_seed_root",
+          "visual_foundation_candidate_revision_id", "visual_foundation_candidate_revision_hash",
+          "preset_release_content_hash", "design_focus", "forbidden_changes"
+        ],
+        "properties": {
+          "production_world_owner_set_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "reference_target_seed_root": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "visual_foundation_candidate_revision_id": { "type": "string", "format": "uuid" },
+          "visual_foundation_candidate_revision_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "preset_release_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "design_focus": { "type": "array", "items": { "type": "string" } },
+          "forbidden_changes": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ReferenceVersionRefResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id", "project_id", "owner_kind", "version_family", "owner_logical_id",
+          "owner_version_id", "owner_revision", "owner_content_hash"
+        ],
+        "properties": {
+          "workspace_id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "owner_kind": { "type": "string" },
+          "version_family": { "type": "string" },
+          "owner_logical_id": { "type": "string" },
+          "owner_version_id": { "type": "string", "format": "uuid" },
+          "owner_revision": { "type": "integer", "minimum": 1 },
+          "owner_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferencePlanTargetVersionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id", "contract_id", "workspace_id", "project_id", "plan_logical_id", "plan_version_id",
+          "revision", "target_business_key", "target_kind", "fulfillment", "owner_refs",
+          "coverage_scope_keys", "depends_on_target_business_keys", "constraints",
+          "effective_style_snapshot", "effective_policy_snapshot", "review_decision_id",
+          "created_by", "created_at", "content_hash"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "contract_id": { "type": "string", "const": "reference-plan-target-production" },
+          "workspace_id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "plan_logical_id": { "type": "string", "format": "uuid" },
+          "plan_version_id": { "type": "string", "format": "uuid" },
+          "revision": { "type": "integer", "minimum": 1 },
+          "target_business_key": { "type": "string" },
+          "target_kind": { "$ref": "#/components/schemas/ReferenceCoverageRowResponse/properties/target_kind" },
+          "fulfillment": { "$ref": "#/components/schemas/ReferenceCoverageRowResponse/properties/fulfillment" },
+          "owner_refs": { "$ref": "#/components/schemas/ReferencePlanTargetOwnerRefsResponse" },
+          "coverage_scope_keys": { "type": "array", "items": { "type": "string" } },
+          "depends_on_target_business_keys": { "type": "array", "items": { "type": "string" } },
+          "constraints": { "$ref": "#/components/schemas/ReferenceTargetConstraintsResponse" },
+          "effective_style_snapshot": { "$ref": "#/components/schemas/ReferenceVersionRefResponse" },
+          "effective_policy_snapshot": { "$ref": "#/components/schemas/ReferenceVersionRefResponse" },
+          "review_decision_id": { "type": "string", "format": "uuid" },
+          "created_by": { "type": "string", "format": "uuid" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferenceTargetDetailResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "plan_version_id", "plan_revision", "plan_content_hash", "target", "row", "content_hash"],
+        "properties": {
+          "schema_version": { "type": "string", "const": "reference-target-detail-production" },
+          "plan_version_id": { "type": "string", "format": "uuid" },
+          "plan_revision": { "type": "integer", "minimum": 1 },
+          "plan_content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "target": { "$ref": "#/components/schemas/ReferencePlanTargetVersionResponse" },
+          "row": { "$ref": "#/components/schemas/ReferenceCoverageRowResponse" },
+          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
         }
       },
       "StructureIdentitySnapshotResponse": {
@@ -14733,6 +15020,15 @@
       },
       "project_id": {
         "name": "project_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "target_version_id": {
+        "name": "target_version_id",
         "in": "path",
         "required": true,
         "schema": {

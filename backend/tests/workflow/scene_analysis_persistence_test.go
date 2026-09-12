@@ -1540,6 +1540,68 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		len(referenceBriefShards) != len(baseTargetKeys) {
 		t.Fatalf("Reference Brief shared Manifest shards=%#v targets=%d err=%v", referenceBriefShards, len(baseTargetKeys), err)
 	}
+	referenceCoverageQuery := referenceapp.NewReferenceCoverageQuery(referenceBriefFacts, projectService)
+	referenceCoverage, err := referenceCoverageQuery.GetMatrix(
+		ctx,
+		referenceapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1},
+		fixture.projectID.String(),
+	)
+	if err != nil || len(referenceCoverage.Rows) != len(referenceProjection.Targets) ||
+		referenceCoverage.Summary.ReferenceReady || referenceCoverage.Summary.SelectedTotal != 0 ||
+		len(referenceCoverage.ContentHash) != 64 {
+		t.Fatalf("read Reference Coverage Matrix: matrix=%#v err=%v", referenceCoverage, err)
+	}
+	for _, row := range referenceCoverage.Rows {
+		switch {
+		case len(row.DependsOnTargetBusinessKeys) == 0 && row.Fulfillment != "not_generated":
+			if row.Status != "planned" || row.BriefStatus != "accepted" || row.BriefCandidate == nil {
+				t.Fatalf("base Reference Coverage row=%#v", row)
+			}
+		case row.Fulfillment == "not_generated":
+			if row.Status != "not_generated" || row.BriefCandidate != nil {
+				t.Fatalf("not-generated Reference Coverage row=%#v", row)
+			}
+		default:
+			if row.Status != "blocked" || row.BriefStatus != "dependency_blocked" || len(row.Blockers) == 0 {
+				t.Fatalf("dependent Reference Coverage row=%#v", row)
+			}
+		}
+	}
+	baseTarget := slices.IndexFunc(referenceCoverage.Rows, func(row referenceapp.ReferenceCoverageRow) bool {
+		return row.TargetBusinessKey == baseTargetKey
+	})
+	if baseTarget < 0 {
+		t.Fatal("base Reference Target is missing from Coverage Matrix")
+	}
+	referenceTargetDetail, err := referenceCoverageQuery.GetTarget(
+		ctx,
+		referenceapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1},
+		fixture.projectID.String(),
+		referenceCoverage.Rows[baseTarget].TargetVersionID,
+	)
+	if err != nil || referenceTargetDetail.Target.TargetBusinessKey != baseTargetKey ||
+		referenceTargetDetail.Row.BriefCandidate == nil || len(referenceTargetDetail.ContentHash) != 64 {
+		t.Fatalf("read Reference Target detail: detail=%#v err=%v", referenceTargetDetail, err)
+	}
+	const referenceCoverageDriftSavepoint = "reference_coverage_candidate_head_drift"
+	if err = database.SavePoint(referenceCoverageDriftSavepoint).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.SceneAnalysisCandidateHead{}).
+		Where("current_revision_id = ?", referenceTargetDetail.Row.BriefCandidate.RevisionID).
+		Update("current_candidate_revision_hash", sceneTextHash("drifted-reference-brief-head")).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, coverageDriftErr := referenceCoverageQuery.GetMatrix(
+		ctx,
+		referenceapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1},
+		fixture.projectID.String(),
+	); coverageDriftErr == nil {
+		t.Fatal("Reference Coverage query accepted a drifted Candidate Head")
+	}
+	if err = database.RollbackTo(referenceCoverageDriftSavepoint).Error; err != nil {
+		t.Fatal(err)
+	}
 	const briefHeadDriftSavepoint = "reference_brief_head_drift"
 	if err = database.SavePoint(briefHeadDriftSavepoint).Error; err != nil {
 		t.Fatal(err)

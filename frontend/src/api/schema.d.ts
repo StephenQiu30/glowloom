@@ -909,6 +909,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/reference-coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 从当前 Approved Reference Plan 与精确 Reference Brief 执行事实读取只读覆盖矩阵；不触发生成、重跑或状态写入。 */
+        get: operations["getReferenceCoverageMatrix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/reference-targets/{target_version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 按当前 Approved Plan 内的精确 Target Version ID 读取不可变 Target 与同一覆盖行；不接受 current/latest。 */
+        get: operations["getReferenceTargetDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/production-bibles/{bible_id}/review-decisions": {
         parameters: {
             query?: never;
@@ -2742,6 +2776,153 @@ export interface components {
             covered_scope_keys: string[];
             collection_root_hash: string;
             receipt_content_hash: string;
+        };
+        ReferenceBriefCandidateRefResponse: {
+            /** Format: uuid */
+            revision_id: string;
+            revision: number;
+            revision_hash: string;
+            content_hash: string;
+        };
+        ReferenceCoverageBlockerResponse: {
+            /** @enum {string} */
+            code: "dependency_asset_version_unavailable" | "reference_brief_rejected" | "reference_brief_outcome_unknown";
+            target_business_key?: string;
+        };
+        ReferenceCoverageRowResponse: {
+            /** Format: uuid */
+            target_version_id: string;
+            target_content_hash: string;
+            target_business_key: string;
+            /** @enum {string} */
+            target_kind: "character_appearance" | "character_identity_anchor" | "interaction_composition" | "location_board" | "prop_sheet" | "scene_composition";
+            /** @enum {string} */
+            fulfillment: "required" | "optional" | "not_generated";
+            /** @enum {string} */
+            wave_key: "base" | "appearance" | "composition" | "none";
+            coverage_scope_keys: string[];
+            depends_on_target_business_keys: string[];
+            /** @enum {string} */
+            status: "not_generated" | "planned" | "generating" | "blocked";
+            /** @enum {string} */
+            brief_status: "not_required" | "dependency_blocked" | "not_started" | "queued" | "running" | "accepted" | "rejected" | "outcome_unknown";
+            /** Format: uuid */
+            brief_invocation_id?: string;
+            brief_input_hash?: string;
+            brief_candidate?: components["schemas"]["ReferenceBriefCandidateRefResponse"];
+            blockers: components["schemas"]["ReferenceCoverageBlockerResponse"][];
+            allowed_actions: "view_target"[];
+        };
+        ReferenceCoverageSummaryResponse: {
+            required_total: number;
+            optional_total: number;
+            not_generated: number;
+            planned: number;
+            generating: number;
+            blocked: number;
+            /** @constant */
+            selected_total: 0;
+            /** @constant */
+            reference_ready: false;
+        };
+        ReferenceCoverageMatrixResponse: {
+            /** @constant */
+            schema_version: "reference-coverage-matrix-production";
+            /** Format: uuid */
+            plan_version_id: string;
+            plan_revision: number;
+            plan_content_hash: string;
+            rows: components["schemas"]["ReferenceCoverageRowResponse"][];
+            summary: components["schemas"]["ReferenceCoverageSummaryResponse"];
+            content_hash: string;
+        };
+        ReferencePlanOwnerRefResponse: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            owner_kind: string;
+            version_family: string;
+            owner_logical_id: string;
+            /** Format: uuid */
+            owner_version_id: string;
+            owner_revision: number;
+            owner_content_hash: string;
+            fragment_key: string | null;
+            fragment_content_hash: string | null;
+        };
+        ReferencePlanTargetOwnerRefsResponse: {
+            identity: components["schemas"]["ReferencePlanOwnerRefResponse"][];
+            specification: components["schemas"]["ReferencePlanOwnerRefResponse"][];
+            state: components["schemas"]["ReferencePlanOwnerRefResponse"][];
+            scene: components["schemas"]["ReferencePlanOwnerRefResponse"][];
+            occurrence: components["schemas"]["ReferencePlanOwnerRefResponse"][];
+            interaction: components["schemas"]["ReferencePlanOwnerRefResponse"][];
+        };
+        ReferenceTargetConstraintsResponse: {
+            production_world_owner_set_hash: string;
+            reference_target_seed_root: string;
+            /** Format: uuid */
+            visual_foundation_candidate_revision_id: string;
+            visual_foundation_candidate_revision_hash: string;
+            preset_release_content_hash: string;
+            design_focus: string[];
+            forbidden_changes: string[];
+        };
+        ReferenceVersionRefResponse: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            owner_kind: string;
+            version_family: string;
+            owner_logical_id: string;
+            /** Format: uuid */
+            owner_version_id: string;
+            owner_revision: number;
+            owner_content_hash: string;
+        };
+        ReferencePlanTargetVersionResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            contract_id: "reference-plan-target-production";
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            plan_logical_id: string;
+            /** Format: uuid */
+            plan_version_id: string;
+            revision: number;
+            target_business_key: string;
+            target_kind: components["schemas"]["ReferenceCoverageRowResponse"]["target_kind"];
+            fulfillment: components["schemas"]["ReferenceCoverageRowResponse"]["fulfillment"];
+            owner_refs: components["schemas"]["ReferencePlanTargetOwnerRefsResponse"];
+            coverage_scope_keys: string[];
+            depends_on_target_business_keys: string[];
+            constraints: components["schemas"]["ReferenceTargetConstraintsResponse"];
+            effective_style_snapshot: components["schemas"]["ReferenceVersionRefResponse"];
+            effective_policy_snapshot: components["schemas"]["ReferenceVersionRefResponse"];
+            /** Format: uuid */
+            review_decision_id: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            content_hash: string;
+        };
+        ReferenceTargetDetailResponse: {
+            /** @constant */
+            schema_version: "reference-target-detail-production";
+            /** Format: uuid */
+            plan_version_id: string;
+            plan_revision: number;
+            plan_content_hash: string;
+            target: components["schemas"]["ReferencePlanTargetVersionResponse"];
+            row: components["schemas"]["ReferenceCoverageRowResponse"];
+            content_hash: string;
         };
         StructureIdentitySnapshotResponse: {
             version: components["schemas"]["StructureIdentitySetVersionResponse"];
@@ -5186,6 +5367,7 @@ export interface components {
     parameters: {
         workspace_id: string;
         project_id: string;
+        target_version_id: string;
         profile_version_id: string;
         upload_session_id: string;
         version_id: string;
@@ -6774,6 +6956,69 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["StructureIdentitySnapshotResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getReferenceCoverageMatrix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前权限核验后的 Reference Coverage Matrix。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceCoverageMatrixResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getReferenceTargetDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                target_version_id: components["parameters"]["target_version_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前权限核验后的 Reference Target detail。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceTargetDetailResponse"];
                     };
                 };
             };

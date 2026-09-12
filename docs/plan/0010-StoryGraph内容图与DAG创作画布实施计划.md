@@ -211,7 +211,8 @@
   - [x] 实现基础 Reference Brief GORM exact facts loader：只从当前 Activation/Effective Heads 读取并重验 Approved Plan、无依赖 Target、Binding/Style/Policy，复用领域编译器生成 Input；有依赖 Target 在正式 AssetVersion Owner Selection 完成前明确阻塞。本子项不建表、不写 Candidate、不接 Temporal、不调用 Provider。
   - [x] 实现基础 Reference Brief Backend 持久执行：复用既有 Release/Manifest/Invocation/Attempt/Authorization/Result/Candidate/Head，以同一 GORM facts loader 在 dispatch 与 accepted 前重编译并校验 Input；accepted 重放返回同一 Candidate Revision，未知终态只记录 `outcome_unknown`。本子项只扩展既有 GORM Catalog 语义闭集，不建表、不加字段、不接 Temporal、不调用 Provider。
   - [x] 接通基础 Reference Brief Temporal 屏障节点：重验 Gate 3 Owner Receipt，canonical 顺序执行全部无依赖 Target；同一 Node/Stage 使用一个覆盖完整波次的共享 Manifest，逐 Target Invocation/Candidate 幂等持久化，全部 accepted 后只透传原 Owner Set。合法 semantic shard key 由 GORM Catalog 完整保存为 `text`，不截断、不另存 Hash；不建 Candidate Set、不加字段、不写 migration/Raw SQL、不调用 Provider。
-- [ ] 提供 ReferenceCoverageMatrix 与 Target detail Query。
+- [x] 提供 ReferenceCoverageMatrix 与 Target detail Query。
+  - [x] 先实现 Backend/GORM 只读 Lens：重验 current Plan/Target 与 exact Brief Candidate Head，canonical 输出未生成、计划中、生成中或阻塞状态；提供无请求体、无 selector query、no-store 的项目 Matrix 与 Target Version detail API。在正式 AssetVersion/Selection 前不得冒充 selected/reference_ready，不触发 Agent/Temporal，不新增表、migration、Raw SQL 或第二事实源。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I07 — 图片执行、Bundle、确定性 QC 与 Vision Review

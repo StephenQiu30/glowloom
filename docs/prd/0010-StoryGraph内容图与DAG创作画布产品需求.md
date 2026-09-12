@@ -213,6 +213,8 @@ Gate 5 不提供 `needs_asset` 或“从分镜发起资产生成”。本 Gate �
 - 一条真实图片执行路径，零配置合法、缺配置时只阻塞需要生成的 Target；
 - 参考覆盖矩阵、每场就绪状态、局部重生和上游变更影响。
 
+Reference Brief 基础波次完成后，首个查询 MVP 提供项目级 Reference Coverage Matrix 和 Target detail 深链。它只展示 Backend 从当前 Approved Plan 与精确 Brief 执行事实计算的状态；在 AssetVersion/Selection 尚未发布前，界面不得把 Brief accepted 显示成资产已选择或场景已就绪。依赖 Target 必须显示缺失的 exact dependency key，`not_generated` 必须明确展示且不混入 required coverage；两个读取入口都不触发生成、重跑或状态写入。
+
 ### 7.3 P4：分镜与正式生产包
 
 - 按 Scene 建立不可混入项目其他资产的精确分镜输入包；

@@ -115,6 +115,8 @@ Backend facts loader 必须通过 GORM 从当前 Reference Plan/Preset Effective
 
 基础 Reference Brief Temporal 节点必须消费并重验 Gate 3 `visual_reference_owner_set`，按 canonical target key 顺序覆盖当前 Approved Plan 中全部无依赖、非 `not_generated` Target，并逐项复用持久执行幂等语义。同一 Node/Stage 只能有一个覆盖全部基础 Target shard 的 Manifest，完整 semantic shard key 必须持久化且不得截断或用旁路 Hash 替代。只有全部基础 Target accepted 才可成功并透传原 Owner Set；任一失败不得发布伪 Candidate Set 或跳过 Target。数据库、Agent HTTP 等 I/O 只能发生在 Activity/Backend，旧 Workflow 依靠其已持久化 ExecutionPlan 保持可重放，不得为本节点引入数字代际命名或业务兼容层。
 
+`ReferenceCoverageMatrix` 与 `ReferenceTargetDetail` 必须由 Backend 在 GORM 只读事务中从当前 Activation Head、Approved Plan/Target Version 和精确 Reference Brief Invocation/Candidate Head 计算。Matrix 行按 canonical business key 排序并返回 fulfillment、dependency wave、scope、依赖、Brief 状态、Candidate ref、blocker、allowed actions 与内容 Hash；Detail 以 Plan 内 Target Version ID 定位并复用同一行状态，不接受 current/latest 或任意 selector query。正式 AssetVersion/Selection 未实现前，状态闭集只能是 `not_generated|planned|generating|blocked`，Brief accepted 不得冒充 selected/reference_ready；查询不得写表、触发 Agent/Temporal、读取 ELK/Kafka 或增加第二事实源。
+
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
 | VPA-STG-001 | CandidateStageSet 对上表十三个 stage_key 完整且无重复；缺一项、额外项或变体碰撞均不能批准。 | Set golden |

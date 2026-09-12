@@ -63,6 +63,7 @@ import (
 	projecthttp "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/httpapi"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	referencegorm "github.com/StephenQiu30/lanverse/backend/internal/production/reference/adapter/gormdb"
+	referencehttp "github.com/StephenQiu30/lanverse/backend/internal/production/reference/adapter/httpapi"
 	referenceapp "github.com/StephenQiu30/lanverse/backend/internal/production/reference/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scripthttp "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/httpapi"
@@ -404,6 +405,10 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	visualReferenceConfirmation := referenceapp.NewConfirmationService(
 		referencegorm.NewStore(database), func() time.Time { return time.Now().UTC() },
 	)
+	referenceCoverageHandler := referencehttp.NewReferenceCoverageHandler(
+		referenceapp.NewReferenceCoverageQuery(referencegorm.NewStore(database), projectService),
+		tokenVerifier,
+	)
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
 		workflowproduction.New(
 			bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService,
@@ -467,6 +472,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				searchHandler.Register(mux)
 				workflowHandler.Register(mux)
 				reviewHandler.Register(mux)
+				referenceCoverageHandler.Register(mux)
 			},
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
