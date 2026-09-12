@@ -458,6 +458,12 @@ Adapter 不能：
 
 ### 7.3 调用身份与状态机
 
+基础图片传输直接消费已编译的 Reference Call、canonical 请求和精确输出 slot，不转换成旧 Intent/GenerationRequest/PriceQuote。发送前重验 Call key、请求 Hash、Bundle/slot、模型参数与本地媒体限额，凭据仅借用当前 invocation 的明文字节。HTTP 只执行一次 POST，不跟随重定向、不设置可重试请求体或把 submission token 当作供应商幂等支持；deadline 覆盖请求、响应读取和私有对象写入。同步接口不提供伪 Query。
+
+传输观察明确区分 `staged`、`output_rejected` 与 `outcome_unknown`，只携带 Call/token、受控原因码和通过校验的媒体元数据；发送后的网络错误、非成功状态或 staging 失败不冒充明确远程失败，也不触发重发。响应严格限制总字节，拒绝重复 JSON key、非唯一输出、URL 替代 Base64、非法 PNG、尾随内容、尺寸或字节超限；不把被拒绝输出提升为 Candidate。通过完整解码的 PNG 才复用既有私有对象存储，key 绑定 Workspace/Project/Execution/Call/token，digest 绑定原始字节。此 Adapter 观察不是持久化 Receipt 或正式 AssetVersion。
+
+后续应用服务必须在同一 Backend invocation 内完成 preflight、领取并提交唯一发送权、调用 Submit、持久化观察；不能将 `should_dispatch` 写进 Temporal 历史，再交给可重投的独立 Submit Activity。Adapter 不自行查数据库或授予发送权，未完成该应用编排和终态 Receipt 前不开放业务执行入口。传输合同测试使用本地 TLS 接口和对象写入断言，不等于真实付费模型或最终浏览器验收。
+
 一个 CandidateBundle 的每个 required slot 对应一个确定性 `ProviderCallKey`：
 
 ```text

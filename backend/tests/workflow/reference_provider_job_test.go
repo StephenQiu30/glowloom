@@ -33,6 +33,7 @@ func assertReferenceProviderJobPersistence(t *testing.T, ctx context.Context, da
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertPersistedReferenceTransportPreflight(t, ctx, target, compiled, expectedCalls, profile)
 	store := generationgorm.New(database)
 	err = store.WithinReferenceExecution(ctx, func(repo generationapp.ReferenceExecutionRepository) error {
 		job, calls, err := repo.FindReferenceProviderJob(ctx, execution.WorkspaceID, execution.ProjectID, execution.ID)

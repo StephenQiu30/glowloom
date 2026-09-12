@@ -26,6 +26,16 @@ const referenceImageMaxRatio = 3
 const referenceImageMinPixels = 655360
 const referenceImageMaxPixels = 8294400
 
+type referenceImageBody struct {
+	Model        string `json:"model"`
+	Prompt       string `json:"prompt"`
+	Size         string `json:"size"`
+	N            int    `json:"n"`
+	Quality      string `json:"quality"`
+	OutputFormat string `json:"output_format"`
+	Stream       bool   `json:"stream"`
+}
+
 func (factory *Factory) ReferenceImageDescriptor() (app.ReferenceImageCompilerDescriptor, error) {
 	if factory == nil {
 		return app.ReferenceImageCompilerDescriptor{}, errors.New("Reference image factory is unavailable")
@@ -79,15 +89,7 @@ func (factory *Factory) CompileReferenceImages(target app.ReferenceGenerationTar
 			if err != nil {
 				return app.ReferenceImageCompilation{}, err
 			}
-			body, err := json.Marshal(struct {
-				Model        string `json:"model"`
-				Prompt       string `json:"prompt"`
-				Size         string `json:"size"`
-				N            int    `json:"n"`
-				Quality      string `json:"quality"`
-				OutputFormat string `json:"output_format"`
-				Stream       bool   `json:"stream"`
-			}{profile.ExternalModelID, prompt, fmt.Sprintf("%dx%d", slot.MinWidth, slot.MinHeight), 1, "high", "png", false})
+			body, err := json.Marshal(referenceImageBody{profile.ExternalModelID, prompt, fmt.Sprintf("%dx%d", slot.MinWidth, slot.MinHeight), 1, "high", "png", false})
 			if err != nil {
 				return app.ReferenceImageCompilation{}, err
 			}
