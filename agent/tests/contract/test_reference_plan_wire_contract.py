@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import pytest
@@ -200,7 +200,14 @@ def test_reference_plan_attempt_result_validates_candidate_and_terminal_states()
     with pytest.raises((ValidationError, ValueError)):
         ReferencePlanAttemptResult.model_validate(unsafe)
 
-    for status, retry_class in (("rejected", "never"), ("outcome_unknown", "same_release")):
+    terminal_states: tuple[
+        tuple[
+            Literal["rejected", "outcome_unknown"],
+            Literal["never", "same_release"],
+        ],
+        ...,
+    ] = (("rejected", "never"), ("outcome_unknown", "same_release"))
+    for status, retry_class in terminal_states:
         result = ReferencePlanAttemptResult.build(
             invocation_id=accepted.invocation_id,
             attempt_id=accepted.attempt_id,
