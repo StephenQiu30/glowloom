@@ -576,6 +576,8 @@ Backend 在构造 input hash 前执行 style-isolation gate；P0 payload 或 att
 
 Agent 执行边界登记独立 Stage Registry/DefinitionCore/StageRelease，只加载 Bundle 入口和 `references/reference-brief.md`，在 Release 上限内调用一次本机 Codex CLI strict schema，并通过私有授权入口返回候选或保留 `outcome_unknown`。这只证明 Agent capability 可执行；在 Backend 的 GORM exact facts loader、dispatch 前 `ReferenceBriefInput` 重编译、accepted 前二次重编译、Candidate Revision 持久化及 Temporal 节点完成前，不把它宣称为端到端生产 Stage。Agent 不读取 PostgreSQL、不写事实源，也不调用 Provider。
 
+Backend GORM facts loader 只能读取当前 Project Reference Plan Activation Head 指向的 Approved Plan、该 Plan 内精确 Target，以及当前 Preset Effective Head 指向的 Binding/Style/Policy；每份 JSON 内容、内容 Hash、关系列与 Head 都必须重验，再调用同一个领域编译器。首个可执行波次只含无依赖的 `character_identity_anchor`、`location_board`、`prop_sheet`。`character_appearance`、`interaction_composition`、`scene_composition` 在正式 AssetVersion Owner/Selection 发布前返回明确的 dependency-not-ready，不得把 `GenerationCandidateSelection` 或 Artifact 伪装成 AssetVersion，也不得用空依赖降级。该 loader 不建表、不写 SQL、不写 Candidate，只为后续 dispatch/accept 两次重编译提供唯一事实读取路径。
+
 `vision_review_candidate_production` 对每项给 `pass|warn|fail|not_assessable`、证据区域/视图、issue code、置信度和建议，覆盖：
 
 1. 结构/视图完整性；

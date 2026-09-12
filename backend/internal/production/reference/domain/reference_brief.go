@@ -15,6 +15,8 @@ import (
 
 const referenceBriefReadSetContractID = "reference-brief-read-set-production"
 
+var ErrReferenceBriefDependenciesNotReady = errors.New("Reference Brief dependencies do not have formal AssetVersion selections")
+
 type ReferenceBriefDependencyFact struct {
 	Target                  ReferencePlanTargetVersion
 	SelectedAssetVersionRef platformowner.VersionRef

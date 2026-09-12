@@ -1385,6 +1385,78 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			t.Fatalf("Visual Foundation confirmation %T count=%d want=%d err=%v", check.model, count, check.want, countErr)
 		}
 	}
+	briefReleaseIndex := slices.IndexFunc(stageReleases, func(value contract.SceneAnalysisStageRelease) bool {
+		return value.VariantKey.StageKey == contract.ReferenceBriefStageKey
+	})
+	if briefReleaseIndex < 0 {
+		t.Fatal("Reference Brief Stage Release is missing")
+	}
+	var baseTargetKey, dependentTargetKey string
+	for _, target := range referenceProjection.Targets {
+		if len(target.DependsOnTargetBusinessKeys) == 0 && baseTargetKey == "" {
+			baseTargetKey = target.TargetBusinessKey
+		}
+		if len(target.DependsOnTargetBusinessKeys) > 0 && dependentTargetKey == "" {
+			dependentTargetKey = target.TargetBusinessKey
+		}
+	}
+	briefStageRelease := contract.ReferenceBriefStageRelease{
+		StageKey:         contract.ReferenceBriefStageKey,
+		StageReleaseHash: stageReleases[briefReleaseIndex].StageReleaseHash,
+	}
+	briefInput, err := referencegorm.NewStore(database).CompileReferenceBriefInput(
+		ctx,
+		fixture.workspaceID.String(),
+		fixture.projectID.String(),
+		baseTargetKey,
+		briefStageRelease,
+	)
+	if err != nil || briefInput.ApprovedReferencePlanVersionRef.OwnerVersionID != confirmedVisualScope.PlanVersionID ||
+		briefInput.TargetBusinessKey != baseTargetKey || briefInput.StageRelease != briefStageRelease ||
+		briefInput.DependencySelections == nil || len(briefInput.DependencySelections) != 0 {
+		t.Fatalf("compile base Reference Brief input from exact GORM facts: input=%#v err=%v", briefInput, err)
+	}
+	replayedBriefInput, err := referencegorm.NewStore(database).CompileReferenceBriefInput(
+		ctx,
+		fixture.workspaceID.String(),
+		fixture.projectID.String(),
+		baseTargetKey,
+		briefStageRelease,
+	)
+	if err != nil || !reflect.DeepEqual(replayedBriefInput, briefInput) {
+		t.Fatalf("replay base Reference Brief input: got=%#v want=%#v err=%v", replayedBriefInput, briefInput, err)
+	}
+	const briefHeadDriftSavepoint = "reference_brief_head_drift"
+	if err = database.SavePoint(briefHeadDriftSavepoint).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Model(&model.PresetEffectiveScopeHead{}).
+		Where("project_id = ?", fixture.projectID).
+		Update("head_revision", 2).Error; err != nil {
+		t.Fatal(err)
+	}
+	_, briefHeadDriftErr := referencegorm.NewStore(database).CompileReferenceBriefInput(
+		ctx,
+		fixture.workspaceID.String(),
+		fixture.projectID.String(),
+		baseTargetKey,
+		briefStageRelease,
+	)
+	if err = database.RollbackTo(briefHeadDriftSavepoint).Error; err != nil {
+		t.Fatal(err)
+	}
+	if briefHeadDriftErr == nil {
+		t.Fatal("Reference Brief facts loader accepted a drifted Preset Head")
+	}
+	if _, err = referencegorm.NewStore(database).CompileReferenceBriefInput(
+		ctx,
+		fixture.workspaceID.String(),
+		fixture.projectID.String(),
+		dependentTargetKey,
+		briefStageRelease,
+	); !errors.Is(err, referencedomain.ErrReferenceBriefDependenciesNotReady) {
+		t.Fatalf("dependent Reference Brief compiled without formal AssetVersion selections: %v", err)
+	}
 	var presetHead model.PresetEffectiveScopeHead
 	var referenceHead model.ReferencePlanScopeHead
 	var activation model.ProjectReferencePlanActivationHead
