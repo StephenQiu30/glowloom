@@ -28,6 +28,10 @@ var referenceBriefViewRoles = map[string][]string{
 	"scene_composition":         {"composition_master"},
 }
 
+func ReferenceBriefRequiredViewRoles(targetKind string) []string {
+	return append([]string(nil), referenceBriefViewRoles[targetKind]...)
+}
+
 type ReferenceBriefStageRelease struct {
 	StageKey         string `json:"stage_key"`
 	StageReleaseHash string `json:"stage_release_hash"`
