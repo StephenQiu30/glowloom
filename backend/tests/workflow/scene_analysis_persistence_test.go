@@ -29,6 +29,8 @@ import (
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	eventingdomain "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
+	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
+	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
@@ -1556,6 +1558,39 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		case len(row.DependsOnTargetBusinessKeys) == 0 && row.Fulfillment != "not_generated":
 			if row.Status != "planned" || row.BriefStatus != "accepted" || row.BriefCandidate == nil {
 				t.Fatalf("base Reference Coverage row=%#v", row)
+			}
+			var storedBrief model.SceneAnalysisCandidateRevision
+			if err = database.First(&storedBrief, "id = ?", row.BriefCandidate.RevisionID).Error; err != nil {
+				t.Fatal(err)
+			}
+			brief, _, decodeErr := contract.DecodeReferenceBriefCandidate(json.RawMessage(storedBrief.Candidate))
+			if decodeErr != nil {
+				t.Fatal(decodeErr)
+			}
+			inputIndex := slices.IndexFunc(baseBriefInputs, func(input contract.ReferenceBriefInput) bool {
+				return input.TargetBusinessKey == row.TargetBusinessKey
+			})
+			if inputIndex < 0 {
+				t.Fatal("persisted Brief has no frozen base input")
+			}
+			policies := make([]generationapp.ReferenceOutputSlotPolicy, len(brief.RequiredViewRoles))
+			for i, role := range brief.RequiredViewRoles {
+				policies[i] = generationapp.ReferenceOutputSlotPolicy{
+					ViewRole: role, AllowedMediaTypes: []string{"image/png"}, AspectRatio: "1:1",
+					MinWidth: 1024, MinHeight: 1024, MaxBytes: 8 << 20,
+				}
+			}
+			output, compileErr := generationapp.CompileReferenceOutputContract(baseBriefInputs[inputIndex], brief, 2, policies)
+			if compileErr != nil || len(output.Slots) != len(brief.RequiredViewRoles) {
+				t.Fatalf("compile persisted Brief output: output=%#v err=%v", output, compileErr)
+			}
+			rawOutput, marshalErr := json.Marshal(output)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			decodedOutput, outputErr := generationdomain.DecodeReferenceOutputContract(rawOutput, row.TargetKind)
+			if outputErr != nil || !reflect.DeepEqual(decodedOutput, output) {
+				t.Fatalf("output roundtrip: %v", outputErr)
 			}
 		case row.Fulfillment == "not_generated":
 			if row.Status != "not_generated" || row.BriefCandidate != nil {

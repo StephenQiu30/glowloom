@@ -221,6 +221,7 @@
 
 - [ ] Red：唯一发送权、发送后断联、outcome_unknown、恶意媒体、错误尺寸、缺 view role、Bundle/Vision Hash 环和 Vision 越权选择。
 - [ ] 实现 Target/Execution 分层、ProviderCall、staging、AssetVersion 提升与完整 Bundle 状态机。
+  - [x] 从通过冻结 Input fence 的六类 Reference Brief 编译严格 `ReferenceOutputContractProduction`：独立必需视图槽位、候选 Bundle 数量、精确媒体 Policy、语义/QC 要求、预算与 canonical Hash；补齐缺视图、重复/跨类型视图、额外字段、预算越界和 Hash 漂移负例，供正式 Target Builder 消费。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。

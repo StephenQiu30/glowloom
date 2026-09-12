@@ -137,6 +137,8 @@
 | VPR-GEN-012 | interaction 与 scene_composition 选择应用到对应场景范围，不得覆盖无关场景或全项目 Head。 | Scope integration |
 | VPR-GEN-013 | Gate 4 是逐 Target HumanTask 与 checkpoint 聚合，不存在一个全局“全部视觉通过”任务；每个 Target 均保留独立决定和恢复边界。 | Workflow journey |
 
+执行前输出合同必须从通过冻结 Input fence 的 Brief 编译：每个 required view role 恰一个独立 slot，媒体 Policy 恰好覆盖该集合，语义/QC 要求和 Bundle 数量均进入 canonical Hash。缺视图、跨类型视图、重复槽位、未知字段、Hash 漂移或超出单图/整组运行预算均拒绝。该合同是 `VPR-GEN-004/006/009` 的前置证据，不单独证明媒体、Bundle 审核或 Selection 已完成。
+
 ## 8. 五个 Human Gate 的公共合同
 
 | ID | 必须满足的合同 | 最低验证 |

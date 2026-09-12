@@ -325,6 +325,10 @@ ReferenceOutputContractProduction
 
 `candidate_bundle_count` 是用户请求并经 Policy 限制的候选方向数，不是 Provider 自由返回的图片数。每个 Bundle 必须拥有全部 required slot；例如三视图生成 4 个候选方向时，逻辑上是 4 个 Bundle × 3 个槽位。MVP 可以按执行策略串行或受限并行生成槽位，但 CandidateSet 不能把不同人物方向的 front/profile/back 混拼为一个 Bundle。
 
+输出合同先由 `generation` 领域构造器闭合，再由应用层从通过 `ValidateFor(input)` 的 Reference Brief 编译。每个 role 使用相同名称作为 `slot_key`，按 role 字典序固定顺序；输入输出均要求完整且唯一的角色集合，不能用 composite sheet 代替槽位。调用方提供逐槽位媒体/比例/尺寸/字节 Policy，必须恰好覆盖 Brief 的角色集合；构造器复制并规范化数组，拒绝缺失、重复、未知角色与未知 JSON 字段。正向、layout、scale 要求按集合排序去重进入每个 slot，QC 引用按 contract ID 排序且不可丢失；完整 Brief/source/negative 仍由后续 Target 和请求编译器冻结。
+
+首个输出合同的运行上限固定为每 Target 1–4 个 Bundle、每 Bundle 最多 4 个必需槽位、单槽位最多 10 MiB、同 Bundle 最大字节预算合计 32 MiB，以符合已接受的 Vision 媒体预算。只接受 PNG/JPEG、正整数最小尺寸（不超过 8192）与约分后的正整数比例（两边不超过 100）；具体尺寸来自显式 Policy，不推测 Provider 能力。Content Hash 使用现有 Production Canonical JSON，覆盖完整合同且把自身 `content_hash` 置空；解码重验全部字段和 Hash。此编译不证明 Provider 配置、Target Head、Candidate 发布资格或 READY 媒体，后续 Target Builder/Execution 仍承担正式事实与能力验证。
+
 ## 6. 依赖 DAG 与执行波次
 
 Backend 从 Plan Target dependency refs 和已发布结果机械生成执行 DAG：

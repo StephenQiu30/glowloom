@@ -480,13 +480,13 @@
 
 ### `VP-I07` — 图片执行、Bundle、确定性 QC 与 Vision Review
 
-- 状态：未开始
-- Git 基线/提交：待记录
-- Red 命令与失败：待记录
-- Green/定向验证：待记录
-- 全量 CI：待记录
-- 真实输入/产物/事实对账：待记录
-- 未覆盖条件与残余风险：待记录
+- 状态：进行中；已完成六类冻结 Reference Brief 的独立视图输出合同编译，尚未完成正式 Target Builder、Provider 图片执行与 Bundle 选择。
+- Git 基线/提交：基线 `5112b44ede1c3d34e8a15eec705332bc33b666db`；输出合同随本记录所在提交交付。基线的 Reference Query 全量 GitHub Actions run `34692818404` 已全部成功。
+- Red 命令与失败：`go test ./tests/generation ./tests/agent -run '^TestReferenceOutput' -count=1` 首先因输出合同类型、构造器和编译器未定义而失败，固定六类完整视图、严格媒体 Policy、冻结 Brief fence、负例和 canonical identity。
+- Green/定向验证：同一定向命令通过（generation 0.725 秒、agent 1.160 秒），Race Detector 通过（1.829 秒、2.304 秒）；`go test ./tests/architecture -count=1`、`go vet ./...`、无外部环境变量的 `go test -count=1 ./...` 全部通过。Hash golden 由独立 Node SHA-256 对排序 JSON 重算，人物锚点 4 Bundle 的合同根为 `000e2355eedeadc80ce703b67f427723b693e36f9d6e9db53c4c0076c69467cc`；补充组合/分解 Unicode 去重后的身份与往返解码回归。
+- 全量 CI：本提交推送后核验远端全量结论；本地无外部环境变量的测试不作为真实系统边界证据。本机未安装 `goimports`、`golangci-lint`、`govulncheck`，未执行这些工具；本次执行了 gofmt、vet、定向 Race Detector 与既有架构门。
+- 真实输入/产物/事实对账：复用已运行 PostgreSQL 的固定 `lanverse_test`，`TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays` 8.640 秒通过；从 GORM 已接受的基础 Brief Revision 读取 Candidate，与其冻结 Input 校验，再编译完整输出槽位并严格往返重验。测试复用既有事务回滚，不启动/重启环境，不新增表、字段、migration、Raw SQL 或第二事实源。领域合同复制调用方数组并规范排序、语义去重；不接受 composite sheet、缺失/重复/跨类型角色、未知 JSON 字段、Hash 漂移及超出单图/整组预算。
+- 未覆盖条件与残余风险：此处仅证明输出合同与持久 Brief 的真实消费，不证明生成 Target 已发布、Owner Head 仍有效、Provider 已调用、媒体 READY、Bundle QC/Vision 或 Human Selection 已完成；`VPR-GEN-001–009` 与视觉验收继续保持未勾选。最终 `agent-browser` 仍只在全部开发完成后执行。
 
 ### `VP-I08` — Gate 4 基础 Bundle 选择与 checkpoint
 
