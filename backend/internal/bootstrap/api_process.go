@@ -420,6 +420,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	referenceExecutionStartHandler := workflowhttp.NewReferenceExecutionStartHandler(referenceExecutionStart, tokenVerifier)
 	referenceBundleHandler := generationhttp.NewReferenceBundleHandler(generationapp.NewReferenceBundleQuery(generationgorm.New(database)), tokenVerifier)
 	referenceStore := generationgorm.New(database)
+	referenceGenerationHandler := generationhttp.NewReferenceGenerationHandler(generationapp.NewReferenceGenerationQuery(referenceStore), tokenVerifier)
 	referenceGenerationAuthorization, err := generationapp.NewReferenceGenerationAuthorizationService(referenceStore, time.Now, uuid.NewString)
 	if err != nil {
 		return fmt.Errorf("Reference generation authorization composition failed: %w", err)
@@ -505,6 +506,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				reviewHandler.Register(mux)
 				referenceCoverageHandler.Register(mux)
 				referenceExecutionHandler.Register(mux)
+				referenceGenerationHandler.Register(mux)
 				referenceExecutionStartHandler.Register(mux)
 				referenceBundleHandler.Register(mux)
 				referencePreparationHandler.Register(mux)

@@ -960,6 +960,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取已发布生成 Target 的冻结来源身份及当前 Execution Head 对应的完整传输进度。execution 为 null 表示尚未准备，不代表任何审核或执行许可。 */
+        get: operations["getReferenceGenerationProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}/execution-authorizations": {
         parameters: {
             query?: never;
@@ -3063,6 +3080,24 @@ export interface components {
         };
         ReferenceGenerationAuthorizationResponse: {
             generation_authorization_ref: components["schemas"]["ReferenceCommandActionRef"];
+        };
+        ReferenceGenerationProgressResponse: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            generation_target_ref: components["schemas"]["ReferenceExecutionProgressResponse"]["execution_ref"];
+            plan_ref: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            reference_target_ref: components["schemas"]["ReferenceGenerationProgressResponse"]["plan_ref"];
+            /** @constant */
+            generation_round: 1;
+            execution: components["schemas"]["ReferenceExecutionProgressResponse"] | null;
+            content_hash: string;
         };
         ReferenceGenerationTargetBuildResponse: {
             generation_target_ref: components["schemas"]["ReferenceExecutionProgressResponse"]["execution_ref"];
@@ -7388,6 +7423,38 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ReferenceGenerationTargetBuildResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getReferenceGenerationProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                generation_target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前读取权限核验后的同一快照内生成身份和执行进度。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceGenerationProgressResponse"];
                     };
                 };
             };

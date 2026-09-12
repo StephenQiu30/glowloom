@@ -49,6 +49,7 @@ func assertReferenceExecutionCollection(t *testing.T, parent context.Context, da
 	if err != nil || before.Total < 2 {
 		t.Fatalf("collection fixture: %+v %v", before, err)
 	}
+	generationtestgorm.AssertReferenceGenerationProgressStorage(t, ctx, database, actor, fixture.execution)
 	requests := 0
 	factory, objects := referenceExecutionHTTPFactory(t, before.Total, 2, func() {
 		requests++
@@ -156,6 +157,10 @@ func assertReferenceExecutionCollection(t *testing.T, parent context.Context, da
 	after, err := query.Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID)
 	if err != nil || !after.Terminal || after.Status != gen.ProviderJobPartialSucceeded || after.Failed != 1 || after.Succeeded != before.Total-1 || after.Pending != 0 || after.OutcomeUnknown != 0 {
 		t.Fatalf("complete explicit outcomes: %+v %v", after, err)
+	}
+	generationProgress, err := genapp.NewReferenceGenerationQuery(store).Get(ctx, actor, command.ProjectID, fixture.execution.ReadSet.TargetRef.ID)
+	if err != nil || generationProgress.Execution == nil || !reflect.DeepEqual(*generationProgress.Execution, after) {
+		t.Fatalf("Target lost complete collection progress: %v", err)
 	}
 	if !replyLoss.lost.Load() || !activities.lost.Load() || activities.activityCalls.Load() != int64(before.Total+3) {
 		t.Fatalf("missing commit/reply recovery: %d", activities.activityCalls.Load())

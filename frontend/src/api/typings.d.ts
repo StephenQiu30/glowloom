@@ -174,6 +174,7 @@ declare global {
     type ReferenceExecutionWorkflowStartResponse = components["schemas"]["ReferenceExecutionWorkflowStartResponse"];
     type ReferenceGenerationAuthorizationRequest = components["schemas"]["ReferenceGenerationAuthorizationRequest"];
     type ReferenceGenerationAuthorizationResponse = components["schemas"]["ReferenceGenerationAuthorizationResponse"];
+    type ReferenceGenerationProgressResponse = components["schemas"]["ReferenceGenerationProgressResponse"];
     type ReferenceGenerationTargetBuildRequest = components["schemas"]["ReferenceGenerationTargetBuildRequest"];
     type ReferenceGenerationTargetBuildResponse = components["schemas"]["ReferenceGenerationTargetBuildResponse"];
     type ReferenceOutputSlotPolicyRequest = components["schemas"]["ReferenceOutputSlotPolicyRequest"];

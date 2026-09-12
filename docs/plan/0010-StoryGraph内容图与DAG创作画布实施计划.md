@@ -239,6 +239,7 @@
     - [x] 接通首次生成授权、Target 构建、执行授权和执行准备四个严格认证 HTTP 命令，复用已有 Owner/回执；由真实 accepted Brief 经 HTTP 准备后继续既有全量 Call 旅程，验证幂等和拒绝路径，不隐式合并授权或增加 CI 步骤。真实 JWT/SQL 校验失效 Token、输入冲突、非法 Policy、首轮冲突及拒绝/重放零新增事实；完整三条系统旅程通过。不代表前端、依赖型 Target、真实模型或最终浏览器验收完成。
     - [x] 接通已准备 Execution 的全量 Call 观察 DAG 与汇总：明确失败继续收集、未知停止对账、独立 Activity 重试不重发，复用 Authoring/Compiler/Start 与真实冻结输入；真实 PostgreSQL/Temporal 验证完整调用收集、幂等启动、提交后丢失响应和 Replay。仅完成 prepared Target，不替代完整基础波次、六类目标或 Bundle/QC。
     - [x] 补齐完整 Job 的只读执行进度：严格全量聚合、当前读取权限、同一 SQL 快照与 no-store 查询；覆盖部分失败、未知优先、损坏集合拒绝与历史读取零发送，不以传输状态抵扣 Bundle/QC。真实 PostgreSQL 验证并发提交不混入当前快照，既有剧本/Temporal 系统旅程验证未知 Call 不被单个成功掩盖。
+    - [x] 补齐已发布生成 Target→当前 Execution 的只读恢复查询：重用现有 Head、完整进度和权限校验，区分未准备与事实损坏；Red/HTTP 合同、GORM/启动装配和 OpenAPI 已接通，既有真实系统旅程验证 viewer、并发快照、丢失 Head 拒绝及查询零新增事实。不代表 Coverage 聚合、前端工作台或正式媒体验收完成。
     - [x] 接通成功 Receipt→唯一 Generation Staged Media→事务外私有字节校验→CAS ready/rejected，并由现有 Call Activity 消费；应用故障测试覆盖暂时读取失败、取消、权限撤销及完成提交失败，真实 PostgreSQL/Temporal 验证跨连接 quarantine 可见、完成持久化、提交后响应丢失重试与不重发 Provider，不提前发布 AssetVersion。完整波次、Bundle/QC、retention/pin 和正式 Owner Apply 仍按后续顺序完成。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
   - [x] 固定整组 Vision Review 候选的五类结果、逐槽位证据区域与完整冻结 Subject，Go/Python 一致验证六种用途、输入漂移和越权输出；共享 canonical golden、整数基点和缺失字段拒绝已验证。不登记虚假的可执行 Stage，不绕过未通过 QC 的素材；完整 Input/附件 transport、真实审核执行与持久化仍待接通。

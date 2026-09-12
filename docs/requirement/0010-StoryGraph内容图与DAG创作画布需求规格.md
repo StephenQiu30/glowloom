@@ -149,6 +149,8 @@
 
 执行进度必须从同一快照内的完整冻结 Job/Call 集合计算；单个成功、未发送、结果未知或缺少必需 Call 均不得冒充整组成功。未知结果优先阻断终态；只读查询核验当前读取权限并保留历史执行身份，不依赖最新 Head、不重新发送。接口只返回有序调用身份和状态，不返回私有媒体、发送 token 或凭据；传输完成与 Bundle/QC/Selection 完成严格区分。
 
+已发布生成 Target 必须能找回当前 Execution 的精确身份和完整传输进度。Target 查询通过明确的 Head 读取，不按时间猜测执行；没有准备记录时返回空 execution，有记录却丢失 Head 时拒绝。读取不要求写权限，不把历史来源仍可展示当作允许继续执行；全部事实来自同一只读快照，且不得产生新的授权、Call、发送或正式资产。
+
 已准备 Execution 的启动必须绑定精确冻结身份，通过既有 Authoring/Compiler/Start 执行完整 required Call DAG。每个 Call 独立记录明确结果，明确失败不阻断剩余收集；结果未知必须停止后续发送并进入对账。汇总重验全部调用身份和终态，不能把观察收集成功表示为媒体全部成功。重复启动与提交后响应丢失的重投不得重复发送或生成第二个 Run；启动接口只接收 execution_hash 与 idempotency_key，不接受自由 Provider 配置，不自动创建新授权或缺失 Call。
 
 Bundle Input 必须完整覆盖同一 Execution、同一候选组的所有 required slot，分别携带不可变 Call/媒体身份与确定性 QC 引用。per-slot QC 在 slot_set_root 之前，bundle QC 仅引用 slot_set_root，Bundle Input 不引用 Vision，禁止内容 Hash 环。明确失败保留诊断，pending/unknown、媒体缺项或身份漂移不得伪装成完整输入；同组重复图片必须失败。尚无权利评估事实时保持 blocked，不得因字节校验成功而通过 QC。首个一致快照查询只展示派生输入，不发布 CandidateBundle、赋予审核许可或自动选择。

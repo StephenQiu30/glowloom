@@ -2195,6 +2195,32 @@
         }
       }
     },
+    "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}": {
+      "get": {
+        "operationId": "getReferenceGenerationProgress",
+        "description": "读取已发布生成 Target 的冻结来源身份及当前 Execution Head 对应的完整传输进度。execution 为 null 表示尚未准备，不代表任何审核或执行许可。",
+        "parameters": [
+          { "$ref": "#/components/parameters/project_id" },
+          { "name": "generation_target_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前读取权限核验后的同一快照内生成身份和执行进度。",
+            "headers": { "Cache-Control": { "schema": { "type": "string", "const": "no-store" } } },
+            "content": { "application/json": { "schema": {
+              "type": "object", "additionalProperties": false, "required": ["data"],
+              "properties": { "data": { "$ref": "#/components/schemas/ReferenceGenerationProgressResponse" } }
+            } } }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}/execution-authorizations": {
       "post": {
         "operationId": "authorizeInitialReferenceExecution",
@@ -8644,6 +8670,28 @@
           "generation_authorization_ref": {
             "$ref": "#/components/schemas/ReferenceCommandActionRef"
           }
+        }
+      },
+      "ReferenceGenerationProgressResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspace_id", "project_id", "generation_target_ref", "plan_ref", "reference_target_ref", "generation_round", "execution", "content_hash"],
+        "properties": {
+          "workspace_id": { "type": "string", "format": "uuid" },
+          "project_id": { "type": "string", "format": "uuid" },
+          "generation_target_ref": { "$ref": "#/components/schemas/ReferenceExecutionProgressResponse/properties/execution_ref" },
+          "plan_ref": {
+            "type": "object", "additionalProperties": false, "required": ["id", "revision", "content_hash"],
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "revision": { "type": "integer", "minimum": 1 },
+              "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          },
+          "reference_target_ref": { "$ref": "#/components/schemas/ReferenceGenerationProgressResponse/properties/plan_ref" },
+          "generation_round": { "type": "integer", "const": 1 },
+          "execution": { "oneOf": [ { "$ref": "#/components/schemas/ReferenceExecutionProgressResponse" }, { "type": "null" } ] },
+          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
         }
       },
       "ReferenceGenerationTargetBuildResponse": {

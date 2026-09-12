@@ -698,6 +698,8 @@ Checkpoint 使用 D09 的 Collection Receipt，不写一张“gate passed=true�
 
 Owner Apply 命令属于 `asset`/`production/reference` 协调器，不属于 Generation API。Agent 只能通过 Stage Invocation 获得 Brief/Vision Review输入；不得暴露 `publish_asset` 或任意 SQL Tool。浏览器只调用 Backend，不能直连 Provider 或对象存储私有地址。
 
+生成状态查询先落地已发布 Target 的最小恢复边界：`GET /api/projects/{project_id}/reference-generation-targets/{generation_target_id}` 返回不可变 Target、其冻结 Plan/Reference Target 身份和当前 Execution Head 对应的完整传输进度；未准备 Execution 时 `execution` 为 null。当前读取权限、Target/Execution Head、不可变内容及完整 Job/Call 集合须在同一 Repeatable Read 只读事务校验。Head 指向错误、缺少已发布执行的 Head 或调用集合损坏均拒绝，不按时间寻找“最新执行”、不补写缺失事实。该查询允许 viewer 读取历史 Plan 下的已发布生成事实，不代表 Plan 仍激活或输入仍具备执行资格；后续写命令继续独立重验当前权限与全部来源。它不恢复尚未发布 Target 的授权、不返回授权许可、Prompt、Secret 或私有媒体地址，也不提供 Selection/正式资产完成状态。现有 Coverage Matrix 不因此获得尚未实现的生成聚合状态。
+
 所有 Command 绑定 Workspace、Project、Membership/Token Version、command idempotency key、expected revision/hash。所有 Query 先授权再返回防枚举错误；preview handle 短时、只读、绑定用户/对象/用途，不作为 Artifact identity。
 
 ## 11. Hash、Read Set、Fence 与 stale
