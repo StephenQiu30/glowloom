@@ -44,6 +44,9 @@ import (
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
+	referencegorm "github.com/StephenQiu30/lanverse/backend/internal/production/reference/adapter/gormdb"
+	referenceapp "github.com/StephenQiu30/lanverse/backend/internal/production/reference/application"
+	referencedomain "github.com/StephenQiu30/lanverse/backend/internal/production/reference/domain"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	worldgorm "github.com/StephenQiu30/lanverse/backend/internal/production/world/adapter/gormdb"
@@ -84,6 +87,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	t.Cleanup(func() { _ = database.Rollback().Error })
 	now := time.Date(2026, time.August, 31, 8, 0, 0, 0, time.UTC)
 	fixture := seedSceneAnalysisProject(t, func(value any) error { return database.Create(value).Error }, now)
+	seedVisualFoundationImageCapability(t, func(value any) error { return database.Create(value).Error }, fixture, now)
 	catalog, err := authoring.SystemCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -1208,8 +1212,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		decodedVisualScopeGate.Subject.ProjectPresetSelection.SelectionID != visualSelection.ID ||
 		decodedVisualScopeGate.Subject.VisualFoundationCandidate.RevisionID != visualCandidate.ID ||
 		decodedVisualScopeGate.Subject.ReferencePlanCandidate.RevisionID != referenceCandidate.ID ||
-		decodedVisualScopeGate.ImageGenerationCapability.Available ||
-		!slices.Equal(decodedVisualScopeGate.AllowedDecisions, []string{"changes_requested", "rejected"}) {
+		!decodedVisualScopeGate.ImageGenerationCapability.Available || len(decodedVisualScopeGate.SemanticBlockers) != 0 ||
+		!slices.Equal(decodedVisualScopeGate.AllowedDecisions, []string{"approved", "changes_requested", "rejected"}) {
 		t.Fatalf("persisted Visual Foundation Scope Gate input = %#v err=%v", decodedVisualScopeGate, visualScopeDecodeErr)
 	}
 	var visualScopeTask model.HumanTask
@@ -1226,6 +1230,127 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		visualScopeTask.SubjectHash != visualScopeGateInput.InputHash {
 		t.Fatalf("Visual Foundation Scope HumanTask = %#v candidates=%v err=%v", visualScopeTask, visualScopeCandidateIDs, err)
 	}
+	visualScopeDecisionID := uuid.New()
+	if err = database.Model(&model.HumanTask{}).Where("id = ?", visualScopeTask.ID).Updates(map[string]any{
+		"status": "COMPLETED", "revision": visualScopeTask.Revision + 1, "updated_at": now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.Create(&model.ReviewDecision{
+		ID: visualScopeDecisionID, WorkspaceID: fixture.workspaceID, HumanTaskID: visualScopeTask.ID,
+		Decision: "approved", SubjectRevision: visualScopeTask.SubjectRevision, SubjectHash: visualScopeTask.SubjectHash,
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+		CreatedBy:           fixture.userID, CreatedAt: now,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	var referencePayload contract.ReferencePlanPayload
+	if err = json.Unmarshal(referenceInvocation.Payload, &referencePayload); err != nil {
+		t.Fatalf("decode Reference Plan invocation payload: %v", err)
+	}
+	referenceProjection, err := workflowapp.BuildReferencePlanCandidateProjection(
+		referencePayload.StageInput, referenceCandidate.Candidate,
+	)
+	if err != nil {
+		t.Fatalf("project approved Reference Plan targets: %v", err)
+	}
+	visualScopeCommand := referenceapp.ConfirmVisualFoundationCommand{
+		CommandID:        uuid.NewString(),
+		WorkspaceID:      fixture.workspaceID.String(),
+		ProjectID:        fixture.projectID.String(),
+		ActorID:          fixture.userID.String(),
+		GateInputID:      visualScopeGateInput.ID.String(),
+		GateInputHash:    visualScopeGateInput.InputHash,
+		ReviewDecisionID: visualScopeDecisionID.String(),
+		IdempotencyKey:   "confirm-visual-foundation:" + visualScopeDecisionID.String(),
+		Selection:        visualSelection,
+		Release:          visualPreset,
+		VisualCandidate: referenceapp.CandidateRevision{
+			ID: visualCandidate.ID, Revision: visualCandidate.Revision,
+			RevisionHash: visualCandidate.CandidateRevisionHash,
+			ContentHash:  visualCandidate.CandidateContentHash, Candidate: visualCandidate.Candidate,
+		},
+		ReferenceCandidate: referenceapp.CandidateRevision{
+			ID: referenceCandidate.ID, Revision: referenceCandidate.Revision,
+			RevisionHash: referenceCandidate.CandidateRevisionHash,
+			ContentHash:  referenceCandidate.CandidateContentHash, Candidate: referenceCandidate.Candidate,
+		},
+		ProductionWorldOwnerSetHash: decodedVisualScopeGate.Subject.ConfirmedProductionWorld.OwnerSetHash,
+		ReferenceTargetSeedRoot:     decodedVisualScopeGate.Subject.ReferenceTargetSeedRoot,
+		ExpectedTargetSet:           decodedVisualScopeGate.Subject.ExpectedReferenceTargetSet,
+		Targets:                     visualReferenceTargetDrafts(referenceProjection),
+		ExpectedPresetHead:          visualReferenceExpectedHead(t, decodedVisualScopeGate, "preset"),
+		ExpectedReferenceHead:       visualReferenceExpectedHead(t, decodedVisualScopeGate, "production/reference"),
+	}
+	visualScopeConfirmation := referenceapp.NewConfirmationService(
+		referencegorm.NewStore(database), func() time.Time { return now },
+	)
+	confirmedVisualScope, err := visualScopeConfirmation.ConfirmVisualFoundation(ctx, visualScopeCommand)
+	if err != nil || confirmedVisualScope.PlanRevision != 1 || confirmedVisualScope.PlanContentHash == "" ||
+		confirmedVisualScope.PresetCollectionReceipt.Collection.OwnerKind != "preset" ||
+		confirmedVisualScope.ReferenceCollectionReceipt.Collection.OwnerKind != "production/reference" {
+		t.Fatalf("confirm Visual Foundation and Reference Plan: result=%#v err=%v", confirmedVisualScope, err)
+	}
+	confirmationFacts := []struct {
+		model any
+		query string
+		args  []any
+		want  int64
+	}{
+		{&model.ProjectPresetBindingVersion{}, "project_id = ?", []any{visualScopeCommand.ProjectID}, 1},
+		{&model.EffectiveStyleSnapshot{}, "project_id = ?", []any{visualScopeCommand.ProjectID}, 1},
+		{&model.EffectivePolicySnapshot{}, "project_id = ?", []any{visualScopeCommand.ProjectID}, 1},
+		{&model.PresetEffectiveScopeHead{}, "project_id = ?", []any{visualScopeCommand.ProjectID}, 1},
+		{&model.ApprovedReferencePlanVersion{}, "id = ?", []any{confirmedVisualScope.PlanVersionID}, 1},
+		{&model.ReferencePlanTargetVersion{}, "plan_version_id = ?", []any{confirmedVisualScope.PlanVersionID}, int64(len(referenceProjection.Targets))},
+		{&model.ReferencePlanScopeHead{}, "current_plan_version_id = ?", []any{confirmedVisualScope.PlanVersionID}, 1},
+		{&model.ProjectReferencePlanActivationHead{}, "project_id = ?", []any{visualScopeCommand.ProjectID}, 1},
+		{&model.VisualFoundationScopeCollectionReceipt{}, "review_decision_id = ?", []any{visualScopeCommand.ReviewDecisionID}, 2},
+		{&model.CommandReceipt{}, "id = ?", []any{confirmedVisualScope.CommandReceiptID}, 1},
+		{&model.OutboxEvent{}, "source_receipt_id = ?", []any{confirmedVisualScope.CommandReceiptID}, 1},
+	}
+	for _, check := range confirmationFacts {
+		var count int64
+		if countErr := database.Model(check.model).Where(check.query, check.args...).Count(&count).Error; countErr != nil || count != check.want {
+			t.Fatalf("Visual Foundation confirmation %T count=%d want=%d err=%v", check.model, count, check.want, countErr)
+		}
+	}
+	var presetHead model.PresetEffectiveScopeHead
+	var referenceHead model.ReferencePlanScopeHead
+	var activation model.ProjectReferencePlanActivationHead
+	var visualScopeOutbox model.OutboxEvent
+	if err = database.First(&presetHead, "project_id = ?", visualScopeCommand.ProjectID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.First(&referenceHead, "current_plan_version_id = ?", confirmedVisualScope.PlanVersionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.First(&activation, "project_id = ?", visualScopeCommand.ProjectID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = database.First(&visualScopeOutbox, "source_receipt_id = ?", confirmedVisualScope.CommandReceiptID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if presetHead.HeadRevision != 1 || referenceHead.HeadRevision != 1 || activation.HeadRevision != 1 ||
+		referenceHead.CurrentPlanContentHash != confirmedVisualScope.PlanContentHash ||
+		activation.CurrentPlanVersionID != referenceHead.CurrentPlanVersionID ||
+		activation.CurrentPlanContentHash != referenceHead.CurrentPlanContentHash ||
+		visualScopeOutbox.EventType != referencedomain.VisualFoundationConfirmedEvent || visualScopeOutbox.Status != "pending" ||
+		visualScopeOutbox.AggregateID != confirmedVisualScope.PlanVersionID ||
+		visualScopeOutbox.AggregateRevision != confirmedVisualScope.PlanRevision {
+		t.Fatalf("Visual Foundation confirmation heads or outbox drifted: preset=%#v reference=%#v activation=%#v outbox=%#v", presetHead, referenceHead, activation, visualScopeOutbox)
+	}
+	replayedVisualScope, err := visualScopeConfirmation.ConfirmVisualFoundation(ctx, visualScopeCommand)
+	if err != nil || !reflect.DeepEqual(replayedVisualScope, confirmedVisualScope) {
+		t.Fatalf("replay Visual Foundation confirmation: got=%#v want=%#v err=%v", replayedVisualScope, confirmedVisualScope, err)
+	}
+	driftedVisualScopeConfirmation := visualScopeCommand
+	driftedVisualScopeConfirmation.ReferenceTargetSeedRoot = sceneTextHash("drifted-reference-target-seed")
+	if _, err = visualScopeConfirmation.ConfirmVisualFoundation(ctx, driftedVisualScopeConfirmation); !errors.Is(err, referenceapp.ErrVisualFoundationConfirmationConflict) {
+		t.Fatalf("Visual Foundation confirmation accepted idempotency drift: %v", err)
+	}
+	queryFactsBefore[2]++
+	queryFactsBefore[3]++
 	var visualRelease model.SceneAnalysisRelease
 	if err = database.First(&visualRelease, "stage_key = ?", contract.VisualFoundationStageKey).Error; err != nil ||
 		visualRelease.ModelCapability != "vision" {
