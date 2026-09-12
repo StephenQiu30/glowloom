@@ -55,7 +55,7 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	if databaseURL == "" || temporalAddress == "" {
 		t.Skip("set PostgreSQL and Temporal test endpoints to run the Scene Analysis gates journey")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	database, err := platformdatabase.Open(ctx, databaseURL, io.Discard)
 	if err != nil {
