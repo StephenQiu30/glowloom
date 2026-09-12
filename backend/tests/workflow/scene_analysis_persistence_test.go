@@ -1565,6 +1565,11 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				t.Fatal(readErr)
 			}
 			brief := acceptedBrief.Candidate
+			generationWorld, sourceErr := storygraphgorm.New(database).GetCurrentReferencePlanVersion(ctx, fixture.workspaceID.String(), fixture.projectID.String())
+			if sourceErr != nil {
+				t.Fatal(sourceErr)
+			}
+			bindingRef := assertBaseReferenceGenerationSource(t, acceptedBrief.Input, brief, generationWorld)
 			inputIndex := slices.IndexFunc(baseBriefInputs, func(input contract.ReferenceBriefInput) bool {
 				return input.TargetBusinessKey == row.TargetBusinessKey
 			})
@@ -1612,6 +1617,27 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			replayed, authorizationErr := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
 			if authorizationErr != nil || !reflect.DeepEqual(authorized, replayed) {
 				t.Fatalf("authorization replay drifted: %v", authorizationErr)
+			}
+			if err = database.SavePoint("reference_authorization_source").Error; err != nil {
+				t.Fatal(err)
+			}
+			bindingID := strings.TrimPrefix(*bindingRef.FragmentKey, "binding:")
+			if update := database.Model(&model.ProductionWorldBinding{}).Where("id = ? AND workspace_id = ? AND project_id = ?", bindingID, fixture.workspaceID, fixture.projectID).UpdateColumns(map[string]any{"content_hash": strings.Repeat("f", 64)}); update.Error != nil || update.RowsAffected != 1 {
+				t.Fatalf("inject exact Binding drift: rows=%d err=%v", update.RowsAffected, update.Error)
+			}
+			_, driftedReplay := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+			newAuthorization := authorizationCommand
+			newAuthorization.IdempotencyKey += ":source-drift"
+			_, driftedWrite := authorizer.AuthorizeInitial(ctx, authorizationActor, newAuthorization)
+			var driftedReceiptCount int64
+			if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND idempotency_key = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceGenerationOperation, newAuthorization.IdempotencyKey).Count(&driftedReceiptCount).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err = database.RollbackTo("reference_authorization_source").Error; err != nil {
+				t.Fatal(err)
+			}
+			if driftedReplay == nil || driftedWrite == nil || driftedReceiptCount != 0 {
+				t.Fatalf("Binding drift authorized generation: replay=%v write=%v receipts=%d", driftedReplay, driftedWrite, driftedReceiptCount)
 			}
 			var authorizationCount int64
 			if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceGenerationOperation, row.TargetVersionID).Count(&authorizationCount).Error; err != nil || authorizationCount != 1 {

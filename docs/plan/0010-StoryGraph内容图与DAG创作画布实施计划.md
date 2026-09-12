@@ -224,6 +224,7 @@
   - [x] 从通过冻结 Input fence 的六类 Reference Brief 编译严格 `ReferenceOutputContractProduction`：独立必需视图槽位、候选 Bundle 数量、精确媒体 Policy、语义/QC 要求、预算与 canonical Hash；补齐缺视图、重复/跨类型视图、额外字段、预算越界和 Hash 漂移负例，供正式 Target Builder 消费。
   - [x] 实现 Backend Agent Owner 的 accepted Brief exact read：按 Revision ID/Hash 重算来源 Result 与 Revision 内容身份，沿精确 Result→Attempt→Dispatch Authorization 校验 accepted/completed 状态及当前 approved Release Control/Head，并重编译当前 Input facts。Coverage Query 和持久 Brief→输出合同回归已消费同一入口；不按最新 Attempt 替代来源，不创建生成授权或 Target。
   - [x] 实现首次生成授权合同与 Backend/GORM 事务服务：锁定权限/Token，读取当前 accepted Brief，冻结 exact Plan/Target 与候选 Bundle 数量，复用 Command Receipt 持久化用户动作并严格幂等重放。错 scope/hash、数量漂移、Token 或写权限失效均拒绝；不新增表、不启动 Provider、不把授权当 Target 发布。重新生成仍等待正式 base Target/CandidateSet，独立前端入口不提前开放。
+  - [x] 编译人物身份锚点、地点板、道具表三类基础来源：复用经过当前 Owner 重验的 Production World 投影，验证 exact Identity/Specification/State、唯一 Binding 和 Scene 范围内完整 Occurrence 集合，保留类型专属 Brief 约束与视图。首次授权事务及幂等重放消费编译结果，回执输入 Hash 绑定来源和 World Owner Set；真实 Binding 漂移拒绝且零新增回执。此项不等于 Target 发布或依赖型来源完成。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。

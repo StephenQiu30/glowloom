@@ -13,6 +13,7 @@ import (
 	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	"github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	owner "github.com/StephenQiu30/lanverse/backend/internal/platform/ownercollection"
 )
@@ -35,6 +36,7 @@ type AuthorizeInitialReferenceGenerationCommand struct {
 type ReferenceGenerationAuthorizationRepository interface {
 	AuthorizeReferenceGenerationProject(context.Context, Actor, string, string) error
 	ReadReferenceGenerationBrief(context.Context, string, string, string, string) (agentapp.AcceptedReferenceBrief, error)
+	ReadReferenceGenerationSource(context.Context, agentapp.AcceptedReferenceBrief) (ReferenceGenerationSourceCompilation, error)
 	FindReceipt(context.Context, string, string, string) (platformcommand.Receipt, error)
 	EnsureReceipt(context.Context, platformcommand.Receipt) (platformcommand.Receipt, error)
 }
@@ -67,15 +69,8 @@ func (service *ReferenceGenerationAuthorizationService) AuthorizeInitial(ctx con
 		!intentHashPattern.MatchString(command.PlanContentHash) || !intentHashPattern.MatchString(command.TargetContentHash) || !intentHashPattern.MatchString(command.BriefRevisionHash) {
 		return domain.ReferenceGenerationAuthorization{}, invalid("Invalid Reference generation authorization request")
 	}
-	inputHash, err := platformcommand.InputHash(struct {
-		Actor   Actor
-		Command AuthorizeInitialReferenceGenerationCommand
-	}{actor, command})
-	if err != nil {
-		return domain.ReferenceGenerationAuthorization{}, err
-	}
 	var result domain.ReferenceGenerationAuthorization
-	err = service.transactions.WithinReferenceGenerationAuthorization(ctx, func(repo ReferenceGenerationAuthorizationRepository) error {
+	err := service.transactions.WithinReferenceGenerationAuthorization(ctx, func(repo ReferenceGenerationAuthorizationRepository) error {
 		if err := repo.AuthorizeReferenceGenerationProject(ctx, actor, command.WorkspaceID, command.ProjectID); err != nil {
 			return err
 		}
@@ -89,6 +84,23 @@ func (service *ReferenceGenerationAuthorizationService) AuthorizeInitial(ctx con
 			input.ReferencePlanTargetRef.OwnerVersionID != command.TargetVersionID || input.ReferencePlanTargetRef.OwnerContentHash != command.TargetContentHash ||
 			brief.Candidate.ValidateFor(input) != nil {
 			return conflict("Reference generation authorization input has drifted")
+		}
+		source, err := repo.ReadReferenceGenerationSource(ctx, brief)
+		if err != nil {
+			return err
+		}
+		sourceHash, err := canonical.Hash(source.Payload)
+		if err != nil || sourceHash != source.ContentHash || !intentHashPattern.MatchString(source.ProductionWorldOwnerSetHash) {
+			return conflict("Reference generation source compilation is invalid")
+		}
+		inputHash, err := platformcommand.InputHash(struct {
+			Actor                       Actor
+			Command                     AuthorizeInitialReferenceGenerationCommand
+			SourceContentHash           string
+			ProductionWorldOwnerSetHash string
+		}{actor, command, source.ContentHash, source.ProductionWorldOwnerSetHash})
+		if err != nil {
+			return err
 		}
 		expected := domain.InitialReferenceGenerationAuthorizationInput{ApprovedReferencePlanVersionRef: referenceAuthorizationOwnerRef(input.ApprovedReferencePlanVersionRef), ReferencePlanTargetRef: referenceAuthorizationOwnerRef(input.ReferencePlanTargetRef), RequestedCandidateBundleCount: command.CandidateBundleCount, MembershipTokenVersion: actor.TokenVersion, AuthorizedBy: actor.UserID}
 		receipt, err := repo.FindReceipt(ctx, command.WorkspaceID, AuthorizeInitialReferenceGenerationOperation, command.IdempotencyKey)

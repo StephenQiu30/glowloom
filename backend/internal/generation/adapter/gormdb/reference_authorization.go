@@ -13,6 +13,7 @@ import (
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	referencegorm "github.com/StephenQiu30/lanverse/backend/internal/production/reference/adapter/gormdb"
+	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 )
 
 type referenceAuthorizationRepository struct{ repository }
@@ -54,3 +55,19 @@ func (repo *referenceAuthorizationRepository) ReadReferenceGenerationBrief(ctx c
 }
 
 var _ application.ReferenceGenerationAuthorizationTransactions = (*Store)(nil)
+
+func (repo *referenceAuthorizationRepository) ReadReferenceGenerationSource(ctx context.Context, brief agentapp.AcceptedReferenceBrief) (application.ReferenceGenerationSourceCompilation, error) {
+	input := brief.Input
+	world, err := storygraphgorm.New(repo.database).GetCurrentReferencePlanVersion(ctx, input.WorkspaceID, input.ProjectID)
+	if err != nil {
+		return application.ReferenceGenerationSourceCompilation{}, err
+	}
+	var plan model.ApprovedReferencePlanVersion
+	if err = repo.database.WithContext(ctx).Where("id = ? AND workspace_id = ? AND project_id = ? AND content_hash = ?", input.ApprovedReferencePlanVersionRef.OwnerVersionID, input.WorkspaceID, input.ProjectID, input.ApprovedReferencePlanVersionRef.OwnerContentHash).First(&plan).Error; err != nil {
+		return application.ReferenceGenerationSourceCompilation{}, err
+	}
+	if plan.ProductionWorldOwnerSetHash != world.OwnerSetHash {
+		return application.ReferenceGenerationSourceCompilation{}, errors.New("Reference generation source no longer matches the approved Production World")
+	}
+	return application.CompileBaseReferenceGenerationSource(input, brief.Candidate, world)
+}

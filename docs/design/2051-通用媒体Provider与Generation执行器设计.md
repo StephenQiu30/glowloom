@@ -196,6 +196,8 @@ ReferenceExecutionAuthorizationContract
 
 `ReferenceGenerationSourceProduction` 只允许以下六个分支；所有 OwnerRef 都包含 `owner_kind/version_family/owner_logical_id/revision/content_hash/fragment_key?`，数组按 canonical key 排序去重，`additionalProperties=false`。
 
+基础来源编译先覆盖无 AssetVersion 依赖的人物身份锚点、地点板和道具表。Backend 在首次生成授权事务中复用当前 Production World 的 Owner 重验查询，要求其 Owner Set Hash 与已批准 Plan 一致，再从机械 StoryGraph 投影解析 exact Identity/Specification/State、唯一 Production Binding，以及指定 Scene 范围内该身份状态的完整 Occurrence 集合。投影只用于关系解析，不成为第二事实源；缺失、重复、跨 scope、Hash 或关系漂移均在写授权回执前失败。来源输出保留 Brief 的类型专属约束和独立视图角色，使用 canonical JSON 内容 Hash；回执输入身份同时绑定来源 Hash 与 World Owner Set Hash，幂等重放也重新验证。依赖型来源不得以空 AssetVersion 或旧 Storyboard 输入替代；正式 Target 发布仍须在自身写事务内重新读取和编译。
+
 ### 5.1 Character Identity Anchor
 
 ```text
