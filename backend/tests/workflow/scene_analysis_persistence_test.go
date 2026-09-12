@@ -460,10 +460,13 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	productionWorldConfirmation := worldapp.NewConfirmationService(
 		worldgorm.NewStore(database), func() time.Time { return now }, uuid.NewString,
 	)
+	visualScopeConfirmation := referenceapp.NewConfirmationService(
+		referencegorm.NewStore(database), func() time.Time { return now },
+	)
 	signalService := workflowapp.NewSignalService(
 		workflowStore, &acceptingStructureIdentitySignaler{}, workflowapp.SignalConfig{
 			Now: func() time.Time { return now }, NewID: uuid.NewString,
-			Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, productionWorldConfirmation),
+			Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, productionWorldConfirmation, visualScopeConfirmation),
 		},
 	)
 	signalIntent, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
@@ -1244,6 +1247,24 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
+	visualScopeOwnerApplication, err := workflowStore.ResolveHumanGateOwnerApplication(ctx, workflow.HumanGateDecisionRequest{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: visualScopeGate.NodeRunID,
+		HumanTaskID: visualScopeTask.ID.String(), ReviewDecisionID: visualScopeDecisionID.String(),
+		SubjectRevision: visualScopeTask.SubjectRevision, Decision: "approved",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+	})
+	if err != nil || visualScopeOwnerApplication.Candidate.ReferenceID != referenceCandidate.ID ||
+		visualScopeOwnerApplication.OutputPort != "owners" ||
+		visualScopeOwnerApplication.OutputValueType != "visual_reference_owner_set" {
+		t.Fatalf("resolve Visual Foundation owner application: application=%#v err=%v", visualScopeOwnerApplication, err)
+	}
+	visualScopeOwnerMaterial, err := workflow.DecodeVisualFoundationOwnerMaterial(visualScopeOwnerApplication.OwnerMaterial)
+	if err != nil || visualScopeOwnerMaterial.GateInputID != visualScopeGateInput.ID.String() ||
+		visualScopeOwnerMaterial.GateInput.InputHash != visualScopeGateInput.InputHash ||
+		visualScopeOwnerMaterial.VisualCandidate.RevisionID != visualCandidate.ID ||
+		visualScopeOwnerMaterial.ReferenceCandidate.RevisionID != referenceCandidate.ID {
+		t.Fatalf("Visual Foundation owner material = %#v err=%v", visualScopeOwnerMaterial, err)
+	}
 	var referencePayload contract.ReferencePlanPayload
 	if err = json.Unmarshal(referenceInvocation.Payload, &referencePayload); err != nil {
 		t.Fatalf("decode Reference Plan invocation payload: %v", err)
@@ -1255,25 +1276,28 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		t.Fatalf("project approved Reference Plan targets: %v", err)
 	}
 	visualScopeCommand := referenceapp.ConfirmVisualFoundationCommand{
-		CommandID:        uuid.NewString(),
+		CommandID: uuid.NewSHA1(
+			uuid.NameSpaceURL,
+			[]byte("lanverse:confirm-visual-foundation:"+visualScopeDecisionID.String()),
+		).String(),
 		WorkspaceID:      fixture.workspaceID.String(),
 		ProjectID:        fixture.projectID.String(),
 		ActorID:          fixture.userID.String(),
 		GateInputID:      visualScopeGateInput.ID.String(),
 		GateInputHash:    visualScopeGateInput.InputHash,
 		ReviewDecisionID: visualScopeDecisionID.String(),
-		IdempotencyKey:   "confirm-visual-foundation:" + visualScopeDecisionID.String(),
-		Selection:        visualSelection,
-		Release:          visualPreset,
+		IdempotencyKey:   "workflow-visual-foundation:" + visualScopeDecisionID.String(),
+		Selection:        visualScopeOwnerMaterial.Selection,
+		Release:          visualScopeOwnerMaterial.Release,
 		VisualCandidate: referenceapp.CandidateRevision{
-			ID: visualCandidate.ID, Revision: visualCandidate.Revision,
-			RevisionHash: visualCandidate.CandidateRevisionHash,
-			ContentHash:  visualCandidate.CandidateContentHash, Candidate: visualCandidate.Candidate,
+			ID: visualScopeOwnerMaterial.VisualCandidate.RevisionID, Revision: visualScopeOwnerMaterial.VisualCandidate.Revision,
+			RevisionHash: visualScopeOwnerMaterial.VisualCandidate.RevisionHash,
+			ContentHash:  visualScopeOwnerMaterial.VisualCandidate.ContentHash, Candidate: visualScopeOwnerMaterial.VisualCandidate.Candidate,
 		},
 		ReferenceCandidate: referenceapp.CandidateRevision{
-			ID: referenceCandidate.ID, Revision: referenceCandidate.Revision,
-			RevisionHash: referenceCandidate.CandidateRevisionHash,
-			ContentHash:  referenceCandidate.CandidateContentHash, Candidate: referenceCandidate.Candidate,
+			ID: visualScopeOwnerMaterial.ReferenceCandidate.RevisionID, Revision: visualScopeOwnerMaterial.ReferenceCandidate.Revision,
+			RevisionHash: visualScopeOwnerMaterial.ReferenceCandidate.RevisionHash,
+			ContentHash:  visualScopeOwnerMaterial.ReferenceCandidate.ContentHash, Candidate: visualScopeOwnerMaterial.ReferenceCandidate.Candidate,
 		},
 		ProductionWorldOwnerSetHash: decodedVisualScopeGate.Subject.ConfirmedProductionWorld.OwnerSetHash,
 		ReferenceTargetSeedRoot:     decodedVisualScopeGate.Subject.ReferenceTargetSeedRoot,
@@ -1282,14 +1306,60 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		ExpectedPresetHead:          visualReferenceExpectedHead(t, decodedVisualScopeGate, "preset"),
 		ExpectedReferenceHead:       visualReferenceExpectedHead(t, decodedVisualScopeGate, "production/reference"),
 	}
-	visualScopeConfirmation := referenceapp.NewConfirmationService(
-		referencegorm.NewStore(database), func() time.Time { return now },
+	visualScopeSignalCommand := workflowapp.SignalHumanGateCommand{
+		WorkspaceID: fixture.workspaceID.String(), WorkflowRunID: started.ID, NodeRunID: visualScopeGate.NodeRunID,
+		HumanTaskID: visualScopeTask.ID.String(), ReviewDecisionID: visualScopeDecisionID.String(),
+		SubjectRevision: visualScopeTask.SubjectRevision, Decision: "approved",
+		DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+		IdempotencyKey:      "visual-foundation-signal:" + visualScopeDecisionID.String(),
+	}
+	visualScopeSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, visualScopeSignalCommand)
+	if err != nil || visualScopeSignal.Status != "completed" {
+		t.Fatalf("signal Visual Foundation owner chain: intent=%#v err=%v", visualScopeSignal, err)
+	}
+	var visualScopeApplyReceipt model.WorkflowHumanGateApplyReceipt
+	if err = database.First(&visualScopeApplyReceipt, "review_decision_id = ?", visualScopeDecisionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	visualScopeOutput, _, visualScopeOutputHash, outputErr := workflow.ParseNodeOutput(
+		json.RawMessage(visualScopeApplyReceipt.Output),
 	)
+	if outputErr != nil || visualScopeApplyReceipt.Status != "completed" ||
+		visualScopeApplyReceipt.OwnerReceiptID == nil || visualScopeApplyReceipt.OwnerOperation == nil ||
+		*visualScopeApplyReceipt.OwnerOperation != referencedomain.ConfirmVisualFoundationOperation ||
+		visualScopeApplyReceipt.OutputHash == nil || *visualScopeApplyReceipt.OutputHash != visualScopeOutputHash ||
+		len(visualScopeOutput.Bindings) != 1 || visualScopeOutput.Bindings[0].ValueType != "visual_reference_owner_set" ||
+		visualScopeOutput.Bindings[0].ReferenceID != visualScopeApplyReceipt.OwnerReceiptID.String() {
+		t.Fatalf("Visual Foundation owner signal: apply=%#v output=%#v err=%v", visualScopeApplyReceipt, visualScopeOutput, outputErr)
+	}
 	confirmedVisualScope, err := visualScopeConfirmation.ConfirmVisualFoundation(ctx, visualScopeCommand)
 	if err != nil || confirmedVisualScope.PlanRevision != 1 || confirmedVisualScope.PlanContentHash == "" ||
 		confirmedVisualScope.PresetCollectionReceipt.Collection.OwnerKind != "preset" ||
 		confirmedVisualScope.ReferenceCollectionReceipt.Collection.OwnerKind != "production/reference" {
 		t.Fatalf("confirm Visual Foundation and Reference Plan: result=%#v err=%v", confirmedVisualScope, err)
+	}
+	applyVisualScopeCommand := workflow.ApplyHumanGateCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualScopeGate.NodeRunID, NodeID: visualScopeGate.NodeID,
+		SignalIntentID: visualScopeSignal.ID, Decision: "APPROVED",
+		DecisionPayloadHash: visualScopeSignal.DecisionPayloadHash,
+		OwnerReceiptID:      visualScopeApplyReceipt.OwnerReceiptID.String(),
+		Output:              visualScopeOutput, OutputHash: visualScopeOutputHash,
+	}
+	if err = runtimeService.ApplyHumanGate(ctx, applyVisualScopeCommand); err != nil {
+		t.Fatalf("apply Visual Foundation owner output to Workflow node: %v", err)
+	}
+	if err = runtimeService.ApplyHumanGate(ctx, applyVisualScopeCommand); err != nil {
+		t.Fatalf("replay Visual Foundation Workflow node application: %v", err)
+	}
+	var appliedVisualScopeGate model.NodeRunProjection
+	if err = database.First(&appliedVisualScopeGate, "id = ?", visualScopeGate.NodeRunID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if appliedVisualScopeGate.Status != "SUCCEEDED" || appliedVisualScopeGate.OutputHash == nil ||
+		*appliedVisualScopeGate.OutputHash != visualScopeOutputHash {
+		t.Fatalf("applied Visual Foundation Workflow node = %#v", appliedVisualScopeGate)
 	}
 	confirmationFacts := []struct {
 		model any
@@ -1343,6 +1413,16 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	replayedVisualScope, err := visualScopeConfirmation.ConfirmVisualFoundation(ctx, visualScopeCommand)
 	if err != nil || !reflect.DeepEqual(replayedVisualScope, confirmedVisualScope) {
 		t.Fatalf("replay Visual Foundation confirmation: got=%#v want=%#v err=%v", replayedVisualScope, confirmedVisualScope, err)
+	}
+	replayedVisualScopeSignal, err := signalService.SignalHumanGate(ctx, workflowapp.Actor{
+		UserID: fixture.userID.String(), TokenVersion: 1,
+	}, visualScopeSignalCommand)
+	if err != nil || replayedVisualScopeSignal.ID != visualScopeSignal.ID ||
+		replayedVisualScopeSignal.InputHash != visualScopeSignal.InputHash ||
+		replayedVisualScopeSignal.Status != visualScopeSignal.Status ||
+		replayedVisualScopeSignal.AttemptNo != visualScopeSignal.AttemptNo ||
+		replayedVisualScopeSignal.Revision != visualScopeSignal.Revision {
+		t.Fatalf("replay Visual Foundation owner signal: got=%#v want=%#v err=%v", replayedVisualScopeSignal, visualScopeSignal, err)
 	}
 	driftedVisualScopeConfirmation := visualScopeCommand
 	driftedVisualScopeConfirmation.ReferenceTargetSeedRoot = sceneTextHash("drifted-reference-target-seed")
@@ -1400,12 +1480,6 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		t.Fatalf("switch Project Preset selection before stale validation: %v", err)
 	}
 	queryFactsBefore[2]++ // the explicit Preset selection command owns one CommandReceipt
-	if staleGateErr := runtimeService.OpenHumanGate(ctx, workflow.NodeActivityCommand{
-		WorkflowRunID: started.ID, NodeRunID: visualScopeGate.NodeRunID, NodeID: visualScopeGate.NodeID,
-		Executor: visualScopeGate.Executor, Attempt: 2,
-	}); staleGateErr == nil || !strings.Contains(staleGateErr.Error(), "Preset selection has drifted") {
-		t.Fatalf("Visual Foundation Scope Gate accepted a switched Preset selection: %v", staleGateErr)
-	}
 	if _, selectionDriftErr := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
 		WorkflowRunID: started.ID, NodeRunID: visualNode.NodeRunID, Input: visualInput,
 		MediaAttachments: []contract.VisualFoundationMediaAttachment{},

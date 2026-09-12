@@ -3,6 +3,7 @@ package gormdb
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strconv"
 	"time"
@@ -273,6 +274,110 @@ func loadVisualFoundationScopeReferenceCandidate(
 		return model.SceneAnalysisCandidateRevision{}, agentcontract.ReferencePlanInput{}, workflowapp.ReferencePlanCandidateProjection{}, errors.New("Visual Foundation Scope Gate Reference source output has drifted")
 	}
 	return record, payload.StageInput, projection, nil
+}
+
+func resolveVisualFoundationOwnerMaterial(
+	database *gorm.DB,
+	run model.WorkflowRun,
+	node model.NodeRunProjection,
+	task model.HumanTask,
+	input domain.NodeInputSnapshot,
+) (json.RawMessage, error) {
+	var record model.WorkflowHumanGateInput
+	if err := database.First(&record, "node_run_id = ?", node.ID).Error; err != nil {
+		return nil, normalizeNotFound(err)
+	}
+	gate, _, err := domain.DecodeVisualFoundationScopeGateInput(json.RawMessage(record.Input))
+	if err != nil {
+		return nil, errors.New("Visual Foundation owner Gate input is invalid")
+	}
+	if record.WorkspaceID != run.WorkspaceID || record.ProjectID != run.ProjectID ||
+		record.WorkflowRunID != run.ID || record.NodeRunID != node.ID || gate.InputHash != record.InputHash {
+		return nil, errors.New("Visual Foundation owner Gate identity has drifted")
+	}
+	if task.SubjectType != "visual_foundation_scope_gate_input" {
+		return nil, errors.New("Visual Foundation owner Gate subject type has drifted")
+	}
+	if task.SubjectID != record.ID {
+		return nil, errors.New("Visual Foundation owner Gate subject identity has drifted")
+	}
+	if task.SubjectRevision != 1 {
+		return nil, errors.New("Visual Foundation owner Gate subject revision has drifted")
+	}
+	if task.SubjectHash != record.InputHash {
+		return nil, errors.New("Visual Foundation owner Gate subject hash has drifted")
+	}
+	bindings, err := visualFoundationScopeGateBindings(input)
+	if err != nil {
+		return nil, err
+	}
+	ctx := database.Statement.Context
+	world, err := currentReferencePlanWorld(ctx, database, run.WorkspaceID.String(), run.ProjectID.String())
+	if err != nil || bindings["storygraph"].ReferenceID != world.StoryGraphVersionID ||
+		bindings["storygraph"].ContentHash != world.StoryGraphContentHash {
+		return nil, errors.New("Visual Foundation owner Production World has drifted")
+	}
+	selection, err := presetgorm.NewProjectSelectionStore(database).Current(
+		ctx, run.WorkspaceID.String(), run.ProjectID.String(),
+	)
+	if err != nil || bindings["selection"].ReferenceID != selection.ID ||
+		bindings["selection"].ReferenceVersion != strconv.FormatInt(selection.Revision, 10) ||
+		bindings["selection"].ContentHash != selection.ContentHash {
+		return nil, errors.New("Visual Foundation owner Preset selection has drifted")
+	}
+	release, found, err := presetcatalog.FindCuratedRelease(selection.PresetRelease.Key, selection.PresetRelease.Release)
+	if err != nil || !found || release.ContentHash != selection.PresetRelease.ContentHash {
+		return nil, errors.New("Visual Foundation owner Preset release is unavailable")
+	}
+	visual, err := exactReferencePlanVisualFoundationCandidate(
+		ctx, database, run.WorkspaceID.String(), run.ProjectID.String(),
+		bindings["visual_foundation"].ReferenceID, bindings["visual_foundation"].ContentHash,
+	)
+	if err != nil || bindings["visual_foundation"].ReferenceVersion != strconv.FormatInt(visual.Revision, 10) {
+		return nil, errors.New("Visual Foundation owner Visual Candidate has drifted")
+	}
+	if err = validateVisualFoundationScopeCandidateSource(
+		database, run, bindings["visual_foundation"], agentcontract.VisualFoundationStageKey,
+	); err != nil {
+		return nil, err
+	}
+	reference, referenceInput, projection, err := loadVisualFoundationScopeReferenceCandidate(
+		database, run, bindings["reference_plan"],
+	)
+	if err != nil || !reflect.DeepEqual(projection.ExpectedTargetSet, gate.Subject.ExpectedReferenceTargetSet) {
+		return nil, errors.New("Visual Foundation owner Reference Candidate has drifted")
+	}
+	actualCandidateIDs, err := humanTaskCandidateIDs(task.CandidateIDs)
+	if err != nil {
+		return nil, errors.New("Visual Foundation owner Candidate set is invalid")
+	}
+	wantCandidateIDs := visualFoundationScopeCandidateIDs(gate.Subject)
+	slices.Sort(actualCandidateIDs)
+	if !slices.Equal(actualCandidateIDs, wantCandidateIDs) {
+		return nil, errors.New("Visual Foundation owner Candidate set has drifted")
+	}
+	material := domain.VisualFoundationOwnerMaterial{
+		SchemaVersion: domain.VisualFoundationOwnerMaterialSchema, GateInputID: record.ID.String(), GateInput: gate,
+		ConfirmedProductionWorld: world, Selection: selection, Release: release,
+		VisualCandidate: domain.VisualFoundationScopeCandidateRevisionMaterial{
+			RevisionID: visual.ID, Revision: visual.Revision, RevisionHash: visual.RevisionHash,
+			ContentHash: visual.CandidateContentHash, Candidate: json.RawMessage(visual.Candidate),
+		},
+		ReferencePlanInput: referenceInput,
+		ReferenceCandidate: domain.VisualFoundationScopeCandidateRevisionMaterial{
+			RevisionID: reference.ID.String(), Revision: reference.RevisionNo,
+			RevisionHash: reference.CandidateRevisionHash, ContentHash: reference.CandidateContentHash,
+			Candidate: json.RawMessage(reference.Candidate),
+		},
+	}
+	encoded, err := json.Marshal(material)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = domain.DecodeVisualFoundationOwnerMaterial(encoded); err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }
 
 func visualFoundationScopeImageCapability(

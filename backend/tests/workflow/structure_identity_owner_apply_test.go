@@ -95,7 +95,7 @@ func TestStructureIdentityOwnerAppliesProjectBeforeBible(t *testing.T) {
 	order := []string{}
 	projectOwner := &structureIdentityProjectOwner{order: &order}
 	bibleOwner := &structureIdentityBibleOwner{order: &order}
-	applier := workflowproduction.New(nil, bibleOwner, projectOwner, nil, nil, nil, nil)
+	applier := workflowproduction.New(nil, bibleOwner, projectOwner, nil, nil, nil, nil, nil)
 	result, err := applier.ApplyHumanGateDecision(context.Background(), workflowapp.Actor{
 		UserID: uuid.NewString(), TokenVersion: 1,
 	}, workflow.HumanGateOwnerApplication{

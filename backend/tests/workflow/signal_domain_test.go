@@ -112,3 +112,21 @@ func TestEpisodePlanningHumanGateOutputUsesDistinctOwnerSetIdentityAndHash(t *te
 		t.Fatal("Episode Planning gate accepted its Agent Candidate as formal facts")
 	}
 }
+
+func TestVisualFoundationHumanGateOutputUsesCombinedOwnerReceipt(t *testing.T) {
+	candidate := workflow.NodeInputBinding{
+		ValueType: "reference_plan_candidate", ReferenceID: "47fb8568-bbb9-4071-898a-01bcf812356c",
+		ReferenceVersion: "1", ContentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	output := workflow.NodeOutputBinding{
+		ValueType: "visual_reference_owner_set", ReferenceID: "77bb2559-b058-4309-957b-6f656e096945",
+		ReferenceVersion: "1", ContentHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	}
+	if !workflow.HumanGateOutputMatchesCandidate("gate.visual_foundation_scope", candidate, output) {
+		t.Fatal("Visual Foundation gate must publish the combined Owner transaction Receipt")
+	}
+	output.ReferenceID = candidate.ReferenceID
+	if workflow.HumanGateOutputMatchesCandidate("gate.visual_foundation_scope", candidate, output) {
+		t.Fatal("Visual Foundation gate accepted its Reference Plan Candidate as formal Owner output")
+	}
+}

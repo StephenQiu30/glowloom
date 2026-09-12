@@ -8,6 +8,7 @@ import (
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/production/bible/application"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
+	referenceapp "github.com/StephenQiu30/lanverse/backend/internal/production/reference/application"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -41,7 +42,7 @@ func (router *HumanGateOwnerRouter) ApplyHumanGateDecision(
 		err    error
 	)
 	switch application.Executor {
-	case "gate.structure_identity_review", "gate.production_bible_review", "gate.episode_plan_review", "gate.episode_structure_review", "gate.storyboard_review":
+	case "gate.structure_identity_review", "gate.production_bible_review", "gate.episode_plan_review", "gate.episode_structure_review", "gate.storyboard_review", "gate.production_world_review", "gate.visual_foundation_scope":
 		result, err = router.production.ApplyHumanGateDecision(ctx, actor, application)
 	case "gate.generation_image_review":
 		result, err = router.generation.ApplyHumanGateDecision(ctx, actor, application)
@@ -60,6 +61,11 @@ func normalizeHumanGateOwnerError(err error) error {
 	if errors.Is(err, bibleapp.ErrNotFound) || errors.Is(err, planningapp.ErrNotFound) ||
 		errors.Is(err, projectapp.ErrNotFound) || errors.Is(err, storyboardapp.ErrNotFound) || errors.Is(err, generationapp.ErrNotFound) {
 		return workflowapp.ErrNotFound
+	}
+	if errors.Is(err, referenceapp.ErrVisualFoundationConfirmationConflict) {
+		return &workflowapp.Error{
+			Code: "resource_conflict", Message: "Visual Foundation confirmation input has changed", Status: 409,
+		}
 	}
 	var bibleError *bibleapp.Error
 	if errors.As(err, &bibleError) {

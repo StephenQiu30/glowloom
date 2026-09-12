@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ func (transaction *confirmationTransaction) ValidateReadSet(
 ) error {
 	workspaceID, projectID, actorID, gateInputID, decisionID, err := confirmationIDs(command)
 	if err != nil {
-		return referenceapp.ErrVisualFoundationConfirmationConflict
+		return fmt.Errorf("Visual Foundation confirmation identity: %w", referenceapp.ErrVisualFoundationConfirmationConflict)
 	}
 	var project model.Project
 	if err = transaction.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
@@ -79,7 +80,7 @@ func (transaction *confirmationTransaction) ValidateReadSet(
 	}
 	if project.WorkspaceID != workspaceID || project.Status != "active" ||
 		(membership.Role != "owner" && membership.Role != "editor") {
-		return referenceapp.ErrVisualFoundationConfirmationConflict
+		return fmt.Errorf("Visual Foundation confirmation project access: %w", referenceapp.ErrVisualFoundationConfirmationConflict)
 	}
 	var gateRecord model.WorkflowHumanGateInput
 	if err = transaction.database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).
@@ -103,24 +104,27 @@ func (transaction *confirmationTransaction) ValidateReadSet(
 		gate.Subject.ConfirmedProductionWorld.OwnerSetHash != command.ProductionWorldOwnerSetHash ||
 		!reflect.DeepEqual(gate.Subject.ExpectedReferenceTargetSet, command.ExpectedTargetSet) ||
 		!sameExpectedHeads(gate.EffectPlan.AtomicStep.ExpectedHeads, command) {
-		return referenceapp.ErrVisualFoundationConfirmationConflict
+		return fmt.Errorf("Visual Foundation confirmation Gate read set: %w", referenceapp.ErrVisualFoundationConfirmationConflict)
 	}
 	if err = transaction.validateDecision(ctx, workspaceID, projectID, actorID, gateRecord, decisionID); err != nil {
-		return err
+		return fmt.Errorf("Visual Foundation confirmation decision: %w", err)
 	}
 	if err = transaction.validateSelection(ctx, workspaceID, projectID, command); err != nil {
-		return err
+		return fmt.Errorf("Visual Foundation confirmation selection: %w", err)
 	}
 	if err = transaction.validateCandidate(ctx, workspaceID, projectID, command.VisualCandidate, "visual_foundation_candidate"); err != nil {
-		return err
+		return fmt.Errorf("Visual Foundation confirmation visual candidate: %w", err)
 	}
 	if err = transaction.validateCandidate(ctx, workspaceID, projectID, command.ReferenceCandidate, "reference_plan_candidate"); err != nil {
-		return err
+		return fmt.Errorf("Visual Foundation confirmation reference candidate: %w", err)
 	}
 	if err = transaction.validateReferenceProjection(ctx, command); err != nil {
-		return err
+		return fmt.Errorf("Visual Foundation confirmation projection: %w", err)
 	}
-	return transaction.validateExpectedHeads(ctx, projectID, command)
+	if err = transaction.validateExpectedHeads(ctx, projectID, command); err != nil {
+		return fmt.Errorf("Visual Foundation confirmation expected Heads: %w", err)
+	}
+	return nil
 }
 
 func containsDecision(decisions []string, expected string) bool {
@@ -210,11 +214,12 @@ func (transaction *confirmationTransaction) validateCandidate(
 		return err
 	}
 	contentHash, hashErr := platformcanonical.Hash(json.RawMessage(record.Candidate))
-	if hashErr != nil || record.WorkspaceID != workspaceID || record.ProjectID != projectID ||
+	candidateHash, candidateHashErr := platformcanonical.Hash(candidate.Candidate)
+	if hashErr != nil || candidateHashErr != nil || record.WorkspaceID != workspaceID || record.ProjectID != projectID ||
 		record.CandidateType != candidateType || record.RevisionNo != candidate.Revision ||
 		record.CandidateRevisionHash != candidate.RevisionHash ||
 		record.CandidateContentHash != candidate.ContentHash || contentHash != candidate.ContentHash ||
-		string(record.Candidate) != string(candidate.Candidate) ||
+		candidateHash != candidate.ContentHash ||
 		head.WorkspaceID != workspaceID || head.ProjectID != projectID ||
 		head.CurrentRevisionID != record.ID ||
 		head.CurrentCandidateRevisionHash != record.CandidateRevisionHash ||

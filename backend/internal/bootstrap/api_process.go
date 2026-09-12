@@ -62,6 +62,8 @@ import (
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projecthttp "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/httpapi"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
+	referencegorm "github.com/StephenQiu30/lanverse/backend/internal/production/reference/adapter/gormdb"
+	referenceapp "github.com/StephenQiu30/lanverse/backend/internal/production/reference/application"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scripthttp "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/httpapi"
 	"github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/mediareader"
@@ -399,10 +401,13 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	productionWorldConfirmation := worldapp.NewConfirmationService(
 		worldgorm.NewStore(database), func() time.Time { return time.Now().UTC() }, uuid.NewString,
 	)
+	visualReferenceConfirmation := referenceapp.NewConfirmationService(
+		referencegorm.NewStore(database), func() time.Time { return time.Now().UTC() },
+	)
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
 		workflowproduction.New(
 			bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService,
-			productionWorldConfirmation,
+			productionWorldConfirmation, visualReferenceConfirmation,
 		),
 		workflowgeneration.NewHumanGateApplier(selectionService),
 	)

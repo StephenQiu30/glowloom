@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ import (
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
 	projectdomain "github.com/StephenQiu30/lanverse/backend/internal/production/project/domain"
+	referenceapp "github.com/StephenQiu30/lanverse/backend/internal/production/reference/application"
+	referencedomain "github.com/StephenQiu30/lanverse/backend/internal/production/reference/domain"
 	storyboardapp "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/application"
 	worldapp "github.com/StephenQiu30/lanverse/backend/internal/production/world/application"
 	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
@@ -64,6 +67,10 @@ type ProductionWorldOwner interface {
 	ConfirmProductionWorld(context.Context, worldapp.ConfirmProductionWorldCommand) (worlddomain.ConfirmProductionWorldResult, error)
 }
 
+type VisualReferenceOwner interface {
+	ConfirmVisualFoundation(context.Context, referenceapp.ConfirmVisualFoundationCommand) (referencedomain.ConfirmVisualFoundationResult, error)
+}
+
 type Applier struct {
 	bibles              BibleOwner
 	structureIdentities StructureIdentityOwner
@@ -72,6 +79,7 @@ type Applier struct {
 	planningCandidates  EpisodePlanningOwner
 	storyboards         StoryboardSetOwner
 	productionWorlds    ProductionWorldOwner
+	visualReferences    VisualReferenceOwner
 }
 
 func New(
@@ -82,11 +90,12 @@ func New(
 	planningCandidates EpisodePlanningOwner,
 	storyboards StoryboardSetOwner,
 	productionWorlds ProductionWorldOwner,
+	visualReferences VisualReferenceOwner,
 ) *Applier {
 	return &Applier{
 		bibles: bibles, structureIdentities: structureIdentities, projects: projects,
 		plans: plans, planningCandidates: planningCandidates, storyboards: storyboards,
-		productionWorlds: productionWorlds,
+		productionWorlds: productionWorlds, visualReferences: visualReferences,
 	}
 }
 
@@ -114,6 +123,9 @@ func (applier *Applier) ApplyHumanGateDecision(
 	}
 	if application.Executor == "gate.production_world_review" {
 		return applier.applyProductionWorld(ctx, actor, application)
+	}
+	if application.Executor == "gate.visual_foundation_scope" {
+		return applier.applyVisualFoundation(ctx, actor, application)
 	}
 	if applier.bibles == nil || application.Executor != "gate.production_bible_review" ||
 		application.Candidate.ValueType != "story_reconciliation_candidate" ||
@@ -174,6 +186,146 @@ func (applier *Applier) ApplyHumanGateDecision(
 	return domain.HumanGateOwnerResult{
 		ReceiptID: result.Receipt.ID, Operation: result.Receipt.Operation, Output: output, OutputHash: outputHash,
 	}, nil
+}
+
+func (applier *Applier) applyVisualFoundation(
+	ctx context.Context,
+	actor workflowapp.Actor,
+	application domain.HumanGateOwnerApplication,
+) (domain.HumanGateOwnerResult, error) {
+	if applier.visualReferences == nil || application.Decision != "approved" ||
+		application.Candidate.Port != "reference_plan" ||
+		application.Candidate.ValueType != "reference_plan_candidate" ||
+		application.OutputPort != "owners" || application.OutputValueType != "visual_reference_owner_set" {
+		return domain.HumanGateOwnerResult{}, errors.New("unsupported Visual Foundation Human Gate owner application")
+	}
+	material, err := domain.DecodeVisualFoundationOwnerMaterial(application.OwnerMaterial)
+	if err != nil || material.GateInputID == "" || material.GateInput.WorkspaceID != application.WorkspaceID ||
+		material.GateInput.ProjectID != application.ProjectID || material.GateInput.WorkflowRunID != application.WorkflowRunID ||
+		material.GateInput.NodeRunID != application.NodeRunID || material.GateInput.InputHash == "" ||
+		len(material.GateInput.SemanticBlockers) != 0 || !slices.Contains(material.GateInput.AllowedDecisions, "approved") ||
+		material.GateInput.Subject.ReferencePlanCandidate.RevisionID != application.Candidate.ReferenceID ||
+		material.GateInput.Subject.ReferencePlanCandidate.RevisionHash != application.Candidate.ContentHash {
+		return domain.HumanGateOwnerResult{}, errors.New("Visual Foundation Human Gate material has drifted")
+	}
+	projection, err := workflowapp.BuildReferencePlanCandidateProjection(
+		material.ReferencePlanInput, material.ReferenceCandidate.Candidate,
+	)
+	if err != nil || !reflect.DeepEqual(projection.ExpectedTargetSet, material.GateInput.Subject.ExpectedReferenceTargetSet) {
+		return domain.HumanGateOwnerResult{}, errors.New("Visual Foundation Reference Plan projection has drifted")
+	}
+	presetHead, referenceHead, err := visualFoundationExpectedHeads(material.GateInput)
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	commandID := uuid.NewSHA1(
+		uuid.NameSpaceURL,
+		[]byte("lanverse:confirm-visual-foundation:"+application.ReviewDecisionID),
+	).String()
+	result, err := applier.visualReferences.ConfirmVisualFoundation(ctx, referenceapp.ConfirmVisualFoundationCommand{
+		CommandID: commandID, WorkspaceID: application.WorkspaceID, ProjectID: application.ProjectID,
+		ActorID: actor.UserID, GateInputID: material.GateInputID, GateInputHash: material.GateInput.InputHash,
+		ReviewDecisionID: application.ReviewDecisionID,
+		IdempotencyKey:   "workflow-visual-foundation:" + application.ReviewDecisionID,
+		Selection:        material.Selection, Release: material.Release,
+		VisualCandidate: referenceapp.CandidateRevision{
+			ID: material.VisualCandidate.RevisionID, Revision: material.VisualCandidate.Revision,
+			RevisionHash: material.VisualCandidate.RevisionHash, ContentHash: material.VisualCandidate.ContentHash,
+			Candidate: material.VisualCandidate.Candidate,
+		},
+		ReferenceCandidate: referenceapp.CandidateRevision{
+			ID: material.ReferenceCandidate.RevisionID, Revision: material.ReferenceCandidate.Revision,
+			RevisionHash: material.ReferenceCandidate.RevisionHash, ContentHash: material.ReferenceCandidate.ContentHash,
+			Candidate: material.ReferenceCandidate.Candidate,
+		},
+		ProductionWorldOwnerSetHash: material.GateInput.Subject.ConfirmedProductionWorld.OwnerSetHash,
+		ReferenceTargetSeedRoot:     material.GateInput.Subject.ReferenceTargetSeedRoot,
+		ExpectedTargetSet:           material.GateInput.Subject.ExpectedReferenceTargetSet,
+		Targets:                     visualReferenceTargetDrafts(projection),
+		ExpectedPresetHead:          presetHead,
+		ExpectedReferenceHead:       referenceHead,
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, normalizeOwnerApplyError(err)
+	}
+	verified, verifyErr := referencedomain.CompleteConfirmVisualFoundationResult(result)
+	if verifyErr != nil || verified.ResultContentHash != result.ResultContentHash ||
+		verified.ReceiptContentHash != result.ReceiptContentHash || result.CommandID != commandID ||
+		result.CommandReceiptID == "" || result.PlanVersionID == "" || result.PlanRevision < 1 ||
+		result.PresetCollectionReceipt.GateInputID != material.GateInputID ||
+		result.ReferenceCollectionReceipt.GateInputID != material.GateInputID ||
+		result.PresetCollectionReceipt.ReviewDecisionID != application.ReviewDecisionID ||
+		result.ReferenceCollectionReceipt.ReviewDecisionID != application.ReviewDecisionID ||
+		result.CommittedBy != actor.UserID {
+		return domain.HumanGateOwnerResult{}, errors.New("Visual Foundation owner result does not match Workflow Gate")
+	}
+	output, _, outputHash, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: application.OutputPort, ValueType: application.OutputValueType,
+			ReferenceID: result.CommandReceiptID, ReferenceVersion: "1", ContentHash: result.ReceiptContentHash,
+		}},
+	})
+	if err != nil {
+		return domain.HumanGateOwnerResult{}, err
+	}
+	return domain.HumanGateOwnerResult{
+		ReceiptID: result.CommandReceiptID, Operation: referencedomain.ConfirmVisualFoundationOperation,
+		Output: output, OutputHash: outputHash,
+	}, nil
+}
+
+func visualFoundationExpectedHeads(
+	gate domain.VisualFoundationScopeGateInput,
+) (referenceapp.ExpectedHead, referenceapp.ExpectedHead, error) {
+	var presetHead, referenceHead referenceapp.ExpectedHead
+	for _, head := range gate.EffectPlan.AtomicStep.ExpectedHeads {
+		value := referenceapp.ExpectedHead{
+			OwnerKind: head.OwnerKind, LogicalID: head.LogicalID,
+			Revision: head.Revision, ContentHash: head.ContentHash,
+		}
+		switch head.OwnerKind {
+		case "preset":
+			presetHead = value
+		case "production/reference":
+			referenceHead = value
+		}
+	}
+	if presetHead.LogicalID == "" || referenceHead.LogicalID == "" {
+		return referenceapp.ExpectedHead{}, referenceapp.ExpectedHead{}, errors.New("Visual Foundation expected Heads have drifted")
+	}
+	return presetHead, referenceHead, nil
+}
+
+func visualReferenceTargetDrafts(
+	projection workflowapp.ReferencePlanCandidateProjection,
+) []referencedomain.TargetDraft {
+	result := make([]referencedomain.TargetDraft, len(projection.Targets))
+	for index, target := range projection.Targets {
+		result[index] = referencedomain.TargetDraft{
+			TargetBusinessKey: target.TargetBusinessKey, TargetKind: target.TargetKind, Fulfillment: target.Fulfillment,
+			OwnerRefs: agentcontract.ReferencePlanTargetOwnerRefs{
+				Identity:      append([]agentcontract.ReferencePlanOwnerRef{}, target.OwnerRefs.Identity...),
+				Specification: append([]agentcontract.ReferencePlanOwnerRef{}, target.OwnerRefs.Specification...),
+				State:         append([]agentcontract.ReferencePlanOwnerRef{}, target.OwnerRefs.State...),
+				Scene:         append([]agentcontract.ReferencePlanOwnerRef{}, target.OwnerRefs.Scene...),
+				Occurrence:    append([]agentcontract.ReferencePlanOwnerRef{}, target.OwnerRefs.Occurrence...),
+				Interaction:   append([]agentcontract.ReferencePlanOwnerRef{}, target.OwnerRefs.Interaction...),
+			},
+			CoverageScopeKeys:           append([]string(nil), target.CoverageScopeKeys...),
+			DependsOnTargetBusinessKeys: append([]string(nil), target.DependsOnTargetBusinessKeys...),
+			Constraints: referencedomain.TargetConstraints{
+				ProductionWorldOwnerSetHash:           target.Constraints.ProductionWorldOwnerSetHash,
+				ReferenceTargetSeedRoot:               target.Constraints.ReferenceTargetSeedRoot,
+				VisualFoundationCandidateRevisionID:   target.Constraints.VisualFoundationCandidateRevisionID,
+				VisualFoundationCandidateRevisionHash: target.Constraints.VisualFoundationCandidateRevisionHash,
+				PresetReleaseContentHash:              target.Constraints.PresetReleaseContentHash,
+				DesignFocus:                           append([]string(nil), target.Constraints.DesignFocus...),
+				ForbiddenChanges:                      append([]string(nil), target.Constraints.ForbiddenChanges...),
+			},
+		}
+	}
+	return result
 }
 
 func (applier *Applier) applyProductionWorld(
@@ -778,6 +930,11 @@ func normalizeOwnerApplyError(err error) error {
 	if errors.Is(err, worldapp.ErrProductionWorldConfirmationConflict) {
 		return &workflowapp.Error{
 			Code: "resource_conflict", Message: "Production World confirmation input has changed", Status: 409,
+		}
+	}
+	if errors.Is(err, referenceapp.ErrVisualFoundationConfirmationConflict) {
+		return &workflowapp.Error{
+			Code: "resource_conflict", Message: err.Error(), Status: 409,
 		}
 	}
 	return err

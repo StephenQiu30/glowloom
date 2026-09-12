@@ -359,7 +359,7 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	)
 	signalService := workflowapp.NewSignalService(workflowStore, temporalRuntime, workflowapp.SignalConfig{
 		Now: func() time.Time { return now }, NewID: uuid.NewString,
-		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, productionWorldConfirmation),
+		Owner: workflowproduction.New(nil, bibleService, projectService, nil, nil, nil, productionWorldConfirmation, nil),
 	})
 	workflowActor := workflowapp.Actor{
 		UserID: fixture.userID.String(), TokenVersion: 1,

@@ -20,6 +20,7 @@ import (
 	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/production/bible/domain"
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	planningdomain "github.com/StephenQiu30/lanverse/backend/internal/production/planning/domain"
+	referencedomain "github.com/StephenQiu30/lanverse/backend/internal/production/reference/domain"
 	storyboarddomain "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/domain"
 	worlddomain "github.com/StephenQiu30/lanverse/backend/internal/production/world/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
@@ -135,6 +136,19 @@ func (store *Store) ResolveHumanGateOwnerApplication(
 			}
 			for _, binding := range resolved.Input.Bindings {
 				if binding.Port == "candidate" && binding.ValueType == "production_world_candidate" &&
+					binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+					humanTaskContainsCandidateString(task.CandidateIDs, binding.ReferenceID) {
+					candidate, candidateFound = binding, true
+					break
+				}
+			}
+		} else if node.Executor == "gate.visual_foundation_scope" {
+			ownerMaterial, resolveErr = resolveVisualFoundationOwnerMaterial(transaction, run, node, task, resolved.Input)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			for _, binding := range resolved.Input.Bindings {
+				if binding.Port == "reference_plan" && binding.ValueType == "reference_plan_candidate" &&
 					binding.SourceKind == domain.NodeInputSourceNodeOutput &&
 					humanTaskContainsCandidateString(task.CandidateIDs, binding.ReferenceID) {
 					candidate, candidateFound = binding, true
@@ -602,6 +616,15 @@ func validateHumanGateOwnerEvidence(
 				break
 			}
 		}
+	} else if node.Executor == "gate.visual_foundation_scope" {
+		for _, binding := range resolved.Input.Bindings {
+			if binding.Port == "reference_plan" && binding.ValueType == "reference_plan_candidate" &&
+				binding.SourceKind == domain.NodeInputSourceNodeOutput &&
+				humanTaskContainsCandidateString(task.CandidateIDs, binding.ReferenceID) {
+				candidate, candidateFound = binding, true
+				break
+			}
+		}
 	} else {
 		candidateID, candidateErr := selectedHumanGateCandidate(task, decision)
 		if candidateErr != nil {
@@ -633,10 +656,11 @@ func validateHumanGateOwnerEvidence(
 	episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
 	storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 	productionWorldOwnerApply := node.Executor == "gate.production_world_review" && node.DefinitionVersion == "1.0.0"
+	visualFoundationOwnerApply := node.Executor == "gate.visual_foundation_scope" && node.DefinitionVersion == "1.0.0"
 	receiptMatchesOutput := receipt.ResourceID.String() == binding.ReferenceID
 	if episodePlanOwnerApply || episodePlanningOwnerApply {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID && receipt.ResourceID.String() == candidate.ReferenceID
-	} else if storyboardIntentOwnerApply || productionWorldOwnerApply {
+	} else if storyboardIntentOwnerApply || productionWorldOwnerApply || visualFoundationOwnerApply {
 		receiptMatchesOutput = receipt.ID.String() == binding.ReferenceID
 	}
 	if !supported || *apply.OwnerOperation != expectedOperation || receipt.WorkspaceID != run.WorkspaceID || receipt.Operation != *apply.OwnerOperation ||
@@ -868,6 +892,21 @@ func validateHumanGateOwnerEvidence(
 			return errors.New("Production World Receipt does not match the frozen Candidate")
 		}
 	}
+	if visualFoundationOwnerApply {
+		var confirmed referencedomain.ConfirmVisualFoundationResult
+		if err := json.Unmarshal(receipt.Result, &confirmed); err != nil {
+			return errors.New("Visual Foundation Receipt result is invalid")
+		}
+		verified, verifyErr := referencedomain.CompleteConfirmVisualFoundationResult(confirmed)
+		if verifyErr != nil || verified.ResultContentHash != confirmed.ResultContentHash ||
+			verified.ReceiptContentHash != confirmed.ReceiptContentHash ||
+			confirmed.CommandReceiptID != receipt.ID.String() || confirmed.PlanVersionID != receipt.ResourceID.String() ||
+			confirmed.ReceiptContentHash != binding.ContentHash || confirmed.CommittedBy != apply.CreatedBy.String() ||
+			confirmed.ReferenceCollectionReceipt.ReviewDecisionID != decision.ID.String() ||
+			confirmed.PresetCollectionReceipt.ReviewDecisionID != decision.ID.String() {
+			return errors.New("Visual Foundation Receipt does not match the frozen Candidate set")
+		}
+	}
 	return nil
 }
 
@@ -949,6 +988,8 @@ func humanGateOwnerOperation(node model.NodeRunProjection) (string, bool) {
 		return "generation.candidate.select", true
 	case "gate.production_world_review":
 		return worlddomain.ConfirmProductionWorldOperation, true
+	case "gate.visual_foundation_scope":
+		return referencedomain.ConfirmVisualFoundationOperation, true
 	default:
 		return "", false
 	}
