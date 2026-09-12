@@ -203,6 +203,7 @@
 - [ ] 实现 character_anchor、character_appearance、location、prop、interaction、scene_composition 六类 Target。
 - [x] 从 Gate 3 已批准的六类 `ReferencePlanTargetVersion` 机械生成 Provider-neutral 依赖 DAG：固定 `base → appearance → composition` 三个执行波次，输入重排得到同一内容 Hash；基础 Target 不得有依赖，Appearance 恰依赖同 Plan Anchor，Composition 只依赖更早的可执行基础 Target，`not_generated` 不进入执行图且不能被依赖。Plan 外依赖、同/后波次依赖、fulfillment rank 倒挂和环全部失败关闭；本子项不创建 Brief、GenerationExecution、Provider 调用或 SQL 表。
 - [ ] 实现 compile_reference_brief strict union、三视图/多面/状态/组合角色和冻结 read set。
+  - [x] Go/Python `reference_brief_candidate_production` 六类判别联合已固定：精确 Plan/Target/Visual Foundation/Style/Policy/Stage Release/read-set 身份、排序去重的依赖选择和 source/design/QC/rights/provenance 结构化字段必填；各 purpose 的视图角色、占用策略和几何/状态槽位严格校验，自由 Prompt、Provider 字段、Secret、latest 和错分支拒绝。本子项只定义 Agent↔Backend Candidate 边界，尚未注册 Stage、编译输入或发布 Brief Candidate Revision。
 - [ ] 提供 ReferenceCoverageMatrix 与 Target detail Query。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
