@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.modules.storygraph.reference_brief_contract import ReferenceBriefCandidate
 from app.modules.storygraph.reference_plan_contract import ReferencePlanCandidate
 from app.modules.storygraph.scene_analysis_candidates import (
     IdentityResolutionCandidate,
@@ -26,6 +27,7 @@ SceneAnalysisCandidateType = Literal[
     "production_entity_fragment_candidate",
     "scene_binding_fragment_candidate",
     "continuity_fragment_candidate",
+    "reference_brief_candidate",
     "reference_plan_candidate",
     "visual_foundation_candidate",
 ]
@@ -51,6 +53,12 @@ SCENE_ANALYSIS_REGISTRY: dict[tuple[str, str], SceneAnalysisStageSpec] = {
         candidate_model=SceneFactCandidate,
         output_schema_version="scene-fact-candidate-production",
         references=("scene-facts.md",),
+    ),
+    ("compile_reference_brief", "default"): SceneAnalysisStageSpec(
+        candidate_type="reference_brief_candidate",
+        candidate_model=ReferenceBriefCandidate,
+        output_schema_version="reference-brief-candidate-production",
+        references=("reference-brief.md",),
     ),
     ("plan_reference_assets", "default"): SceneAnalysisStageSpec(
         candidate_type="reference_plan_candidate",

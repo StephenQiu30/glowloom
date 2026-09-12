@@ -26,6 +26,7 @@ from app.harness.visual_foundation_schemas import (
     VisualFoundationAttemptResult,
     VisualFoundationInvocation,
 )
+from app.modules.storygraph.reference_brief_contract import ReferenceBriefInput
 from app.modules.storygraph.reference_plan_contract import ReferencePlanInput
 from app.modules.storygraph.visual_foundation_contract import VisualFoundationInput
 from app.protocol.canonical import production_canonical_hash
@@ -73,6 +74,12 @@ _INPUT_SCHEMAS: tuple[tuple[str, str, str, type[BaseModel]], ...] = (
         "default",
         "scene-occurrence-binding-input-production",
         SceneOccurrenceBindingInput,
+    ),
+    (
+        "compile_reference_brief",
+        "default",
+        "reference-brief-input-production",
+        ReferenceBriefInput,
     ),
     (
         "derive_production_entities",

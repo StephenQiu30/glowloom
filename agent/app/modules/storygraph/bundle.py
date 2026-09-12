@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.modules.storygraph.skill_registry import RegistryError, stage_spec
 
-SKILL_BUNDLE_HASH = "2642a3e6293a80d0f66e86236ce330fc33ac2cb9c3e95b182e55de8836a53bfb"
+SKILL_BUNDLE_HASH = "c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42"
 
 
 class BundleInvalid(ValueError):
@@ -38,6 +38,7 @@ class StoryGraphBundle:
         "references/episode-segmentation.md",
         "references/interaction-continuity.md",
         "references/production-entities.md",
+        "references/reference-brief.md",
         "references/reference-planning.md",
         "references/scene-facts.md",
         "references/scene-occurrences.md",

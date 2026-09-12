@@ -9,7 +9,12 @@ import (
 	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 )
 
-const ReferenceBriefCandidateContractID = "reference-brief-candidate-production"
+const (
+	ReferenceBriefCandidateContractID = "reference-brief-candidate-production"
+	ReferenceBriefCandidateSchemaHash = "d100072d39f4a5958d0126c8aa6342d67ef368457be5efb85caeb18e777e172f"
+	ReferenceBriefInputContractID     = "reference-brief-input-production"
+	ReferenceBriefInputSchemaHash     = "b4ce81ae76e11a273190e231ce82f44762e9c76e620869dc21618b44c03816db"
+)
 
 var referenceBriefIdentityInvariantSlots = []string{
 	"body_shape",

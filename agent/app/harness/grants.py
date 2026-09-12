@@ -8,6 +8,10 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from app.harness.reference_brief_schemas import (
+    ReferenceBriefInvocation,
+    validate_reference_brief_dispatch_authorization,
+)
 from app.harness.reference_plan_schemas import (
     ReferencePlanInvocation,
     validate_reference_plan_dispatch_authorization,
@@ -131,6 +135,26 @@ def verify_reference_plan_dispatch_authorization(
     claims, evidence, now = _verify_dispatch_authorization(value, secret)
     try:
         validate_reference_plan_dispatch_authorization(
+            claims,
+            invocation,
+            claim_version=claims.claim_version,
+            now_unix=now,
+        )
+    except ValueError as error:
+        raise InvalidSceneAnalysisDispatchAuthorization(
+            "dispatch authorization does not authorize invocation"
+        ) from error
+    return evidence
+
+
+def verify_reference_brief_dispatch_authorization(
+    value: str,
+    secret: str,
+    invocation: ReferenceBriefInvocation,
+) -> SceneAnalysisDispatchAuthorizationEvidence:
+    claims, evidence, now = _verify_dispatch_authorization(value, secret)
+    try:
+        validate_reference_brief_dispatch_authorization(
             claims,
             invocation,
             claim_version=claims.claim_version,

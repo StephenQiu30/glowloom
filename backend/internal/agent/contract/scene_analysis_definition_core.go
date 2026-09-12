@@ -173,9 +173,13 @@ func buildSceneAnalysisDefinitionVariant(
 		runtimeClass = "vision"
 		modelCapability = "vision"
 		invariantEnforcement = "backend-visual-foundation-attempt-result-validate-for"
-	} else if output.StageKey == "plan_reference_assets" {
+	} else if output.StageKey == "plan_reference_assets" || output.StageKey == ReferenceBriefStageKey {
 		lane = "preset_visual"
-		invariantEnforcement = "backend-reference-plan-attempt-result-validate-for"
+		if output.StageKey == "plan_reference_assets" {
+			invariantEnforcement = "backend-reference-plan-attempt-result-validate-for"
+		} else {
+			invariantEnforcement = "backend-reference-brief-attempt-result-validate-for"
+		}
 	}
 	resourcePolicy := sceneAnalysisResourcePolicy{
 		ContractID: "scene-analysis-loaded-resource-policy-production", BundleEntrypoint: "SKILL.md",
@@ -254,6 +258,8 @@ func sceneAnalysisCapabilityKey(stageKey string) string {
 		return "resolve-visual-foundation"
 	case "plan_reference_assets":
 		return "plan-reference-assets"
+	case ReferenceBriefStageKey:
+		return "compile-reference-brief"
 	case "review_candidate":
 		return "review-production"
 	default:
@@ -267,6 +273,7 @@ func sceneAnalysisReferencePath(stageKey string) string {
 		"resolve_identities": "references/entity-reconciliation.md", "review_candidate": "references/structure-identity-review.md",
 		"derive_production_entities": "references/production-entities.md", "bind_scene_occurrences": "references/scene-occurrences.md",
 		"reconcile_interaction_continuity": "references/interaction-continuity.md",
+		ReferenceBriefStageKey:             "references/reference-brief.md",
 		"plan_reference_assets":            "references/reference-planning.md",
 		VisualFoundationStageKey:           "references/visual-identity.md",
 	}[stageKey]

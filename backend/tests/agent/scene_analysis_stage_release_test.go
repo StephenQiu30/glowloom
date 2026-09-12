@@ -25,7 +25,7 @@ func TestSceneAnalysisStageReleasesBindCoreBundleAndLoadedResources(t *testing.T
 
 	imageDigest := "sha256:" + strings.Repeat("7", 64)
 	releases, err := contract.BuildSceneAnalysisStageReleases(imageDigest)
-	if err != nil || len(releases) != 9 {
+	if err != nil || len(releases) != 10 {
 		t.Fatalf("build Scene Analysis Stage Releases: count=%d err=%v", len(releases), err)
 	}
 	core, _, err := contract.BuildSceneAnalysisDefinitionCore()
@@ -85,6 +85,21 @@ func TestSceneAnalysisStageReleasesBindCoreBundleAndLoadedResources(t *testing.T
 		referencePlan.OutputContractID != "reference_plan_candidate" ||
 		referencePlan.PromptCompilerHash == releases[0].PromptCompilerHash {
 		t.Fatalf("unexpected Reference Plan Stage Release: %#v paths=%v err=%v", referencePlan, paths, err)
+	}
+	referenceBriefIndex := slices.IndexFunc(releases, func(candidate contract.SceneAnalysisStageRelease) bool {
+		return candidate.VariantKey.StageKey == "compile_reference_brief"
+	})
+	if referenceBriefIndex < 0 {
+		t.Fatal("Reference Brief Stage Release is missing")
+	}
+	referenceBrief := releases[referenceBriefIndex]
+	paths, err = contract.SceneAnalysisLoadedResourcePaths(referenceBrief)
+	if err != nil || !slices.Equal(paths, []string{"SKILL.md", "references/reference-brief.md"}) ||
+		referenceBrief.CapabilityKey != "compile-reference-brief" || referenceBrief.Lane != "preset_visual" ||
+		referenceBrief.RuntimeClass != "text" || referenceBrief.InputContractID != contract.ReferenceBriefInputContractID ||
+		referenceBrief.OutputContractID != "reference_brief_candidate" ||
+		referenceBrief.PromptCompilerHash == releases[0].PromptCompilerHash {
+		t.Fatalf("unexpected Reference Brief Stage Release: %#v paths=%v err=%v", referenceBrief, paths, err)
 	}
 
 	changed, err := contract.BuildSceneAnalysisStageReleases("sha256:" + strings.Repeat("8", 64))

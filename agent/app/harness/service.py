@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.harness.reference_brief_schemas import ReferenceBriefInvocation
 from app.harness.reference_plan_schemas import ReferencePlanInvocation
 from app.harness.scene_analysis_schemas import (
     SceneAnalysisInvocation,
@@ -11,6 +12,7 @@ from app.harness.scene_analysis_schemas import (
 from app.harness.schemas import StoryGraphStageInvocation
 from app.harness.visual_foundation_schemas import VisualFoundationInvocation
 from app.modules.storygraph.harness import StoryGraphHarness
+from app.modules.storygraph.reference_brief_harness import ReferenceBriefHarness
 from app.modules.storygraph.reference_plan_harness import ReferencePlanHarness
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
 from app.modules.storygraph.visual_foundation_harness import (
@@ -60,6 +62,18 @@ class HarnessService:
         invocation: ReferencePlanInvocation,
     ) -> tuple[BaseModel, str]:
         harness = ReferencePlanHarness(
+            invocation.payload.stage_input,
+            max_execution_seconds=invocation.budget.max_execution_seconds,
+            max_output_bytes=invocation.budget.max_output_bytes,
+            skill_catalog=self.skill_runtime.catalog,
+        )
+        return await harness.execute(), harness.model_name
+
+    async def reference_brief(
+        self,
+        invocation: ReferenceBriefInvocation,
+    ) -> tuple[BaseModel, str]:
+        harness = ReferenceBriefHarness(
             invocation.payload.stage_input,
             max_execution_seconds=invocation.budget.max_execution_seconds,
             max_output_bytes=invocation.budget.max_output_bytes,

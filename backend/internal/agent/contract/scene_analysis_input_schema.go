@@ -27,6 +27,7 @@ type SceneAnalysisInputSchemaManifest struct {
 
 var sceneAnalysisInputSchemas = []SceneAnalysisInputSchema{
 	{StageKey: "bind_scene_occurrences", ProfileKey: "default", InputContractID: "scene-occurrence-binding-input-production", SchemaHash: "fb12a00b10aca86d6f87b8d10625bdacb0f8bc97f7ae010c96fe27c638e83c73"},
+	{StageKey: ReferenceBriefStageKey, ProfileKey: "default", InputContractID: ReferenceBriefInputContractID, SchemaHash: ReferenceBriefInputSchemaHash},
 	{StageKey: "derive_production_entities", ProfileKey: "default", InputContractID: "production-entity-derivation-input-production", SchemaHash: "731624221a473e22fb22cddc695bcb849a8bf0bd8944c92f00dcd97f4819a2ce"},
 	{StageKey: "extract_scene_facts", ProfileKey: "default", InputContractID: "scene-fact-extraction-input-production", SchemaHash: "d5274894af86322cbdfd2336d519c09cfff0c17faaa940063087707c60acb17f"},
 	{StageKey: "plan_reference_assets", ProfileKey: "default", InputContractID: ReferencePlanInputContractID, SchemaHash: ReferencePlanInputSchemaHash},

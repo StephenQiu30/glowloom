@@ -28,6 +28,7 @@ class SceneAnalysisBundle:
         "references/entity-reconciliation.md",
         "references/interaction-continuity.md",
         "references/production-entities.md",
+        "references/reference-brief.md",
         "references/reference-planning.md",
         "references/scene-occurrences.md",
         "references/scene-facts.md",

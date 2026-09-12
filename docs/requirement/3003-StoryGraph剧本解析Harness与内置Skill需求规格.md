@@ -107,6 +107,8 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 | review_reference_artifact | Bundle ref + restricted media reads | VisionReviewCandidate | 选择 Bundle、写 Asset、Provider 调用 |
 | direct_storyboard | ProductionPacketVersion | StoryboardCandidate | needs_asset、联网搜索、正式 Shot 写入 |
 
+`compile_reference_brief` 的 Agent 执行验收必须证明：Registry/DefinitionCore/StageRelease 精确一致；Harness 仅加载入口和专用 Reference；单次 Codex CLI 调用服从 Release 时间与输出预算；accepted 候选再次对冻结 Input 校验；运行时不可用或传输结果不可信时保留 `outcome_unknown`。该验收不替代 Backend GORM facts loader、执行前重编译、候选持久化或 Temporal 编排。
+
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
 | VPA-STG-001 | CandidateStageSet 对上表十三个 stage_key 完整且无重复；缺一项、额外项或变体碰撞均不能批准。 | Set golden |

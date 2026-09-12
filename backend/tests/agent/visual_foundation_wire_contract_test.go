@@ -23,9 +23,9 @@ func TestVisualFoundationInvocationFreezesProjectMediaAndInputHash(t *testing.T)
 		t.Fatal(err)
 	}
 	if invocation.InputHash != computed ||
-		invocation.InputHash != "530d26c50a61f84cd233a16b7c5892d4aa0e1cc463f90fc5f6916ee5277af72c" ||
-		invocation.StageInstanceKey() != "abbd3e39b228a397c978c05e71ebf2e72bb4837c598b7fd9234d16f77c9253c8" {
-		t.Fatal("Visual Foundation invocation identity is not deterministic")
+		invocation.InputHash != "2f29e94e5f29d194dc0dea83587b26fd6a93c7b445198640428ef8368cbc33c4" ||
+		invocation.StageInstanceKey() != "7b98988445792eb8d7ff01d71e6fa85a38a713945dc78de579a8a5cf6ee578bc" {
+		t.Fatalf("Visual Foundation invocation identity is not deterministic: input=%s stage=%s", invocation.InputHash, invocation.StageInstanceKey())
 	}
 	_, current, _, _ := runtime.Caller(0)
 	encoded, err := os.ReadFile(filepath.Join(
@@ -212,7 +212,7 @@ func TestVisualFoundationAttemptResultValidatesCandidateAndTerminalStates(t *tes
 		t.Fatal(err)
 	}
 	if outputHash != "3c89f9503800ac661d25bc41ee15127ee392ad32601329442c04177ac192c7eb" ||
-		accepted.ResultHash != "bfcb6c5f2c4164e87683e2102d2da8469bf3f2f29f58e2994013014a646ddaae" {
+		accepted.ResultHash != "76abedd1750ffb9b9326941e3fa58445f6463028a7162a3f677261f7e6850cfd" {
 		t.Fatal("Visual Foundation output or result hash drifted across runtimes")
 	}
 	if err = accepted.ValidateFor(invocation, 1, authorizationHash); err != nil {

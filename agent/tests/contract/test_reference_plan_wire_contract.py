@@ -132,10 +132,10 @@ def test_reference_plan_invocation_freezes_project_input_and_identity() -> None:
 
     assert invocation.input_hash == invocation.compute_input_hash()
     assert invocation.input_hash == (
-        "b932272110b4d1aebeeb1e44d48e5ae66d4b277a5f05f7989ec0086421d946da"
+        "ca672d54212ac560a73b24a024f49ab3d67eef078331138e6474ecec1ab72ab6"
     )
     assert invocation.stage_instance_key() == (
-        "1c72e59a4733a2d4684895abc7de590bbb1ae906d8769c6db19a2edbd9f9b416"
+        "d2ce8ec1a911e8c2998de2b017ece2ccc39d413cc26eef553a042c3bee2b15d4"
     )
     assert invocation.payload.scope.workspace_id == invocation.payload.stage_input.workspace_id
     assert invocation.payload.scope.project_id == invocation.payload.stage_input.project_id
@@ -187,7 +187,7 @@ def test_reference_plan_attempt_result_validates_candidate_and_terminal_states()
         "9176e76d8c146a3e92899322b88e4a92e87002c3f17f94527f8cc174371d3ba1"
     )
     assert accepted.result_hash == (
-        "6276d8b99d5aaeb0b195852c47f6d1c194cc7db6de763b726df1a2549b0e381d"
+        "dae54d10671e07b144db4a978c7ae725e9ca754c2fbeffdec6193006ac793bff"
     )
     assert accepted.result_hash == accepted.compute_result_hash()
 

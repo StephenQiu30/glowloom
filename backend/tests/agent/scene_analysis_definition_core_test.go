@@ -16,7 +16,7 @@ func TestSceneAnalysisDefinitionCoreFreezesOnlyPreReleaseContracts(t *testing.T)
 		t.Fatalf("build Scene Analysis Definition Core: %v", err)
 	}
 	if core.ContractID != contract.SceneAnalysisDefinitionCoreContractID ||
-		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 9 {
+		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 10 {
 		t.Fatalf("unexpected Scene Analysis Definition Core: %#v", core)
 	}
 	visualIndex := slices.IndexFunc(core.VariantContracts, func(candidate contract.SceneAnalysisDefinitionVariant) bool {
@@ -48,6 +48,21 @@ func TestSceneAnalysisDefinitionCoreFreezesOnlyPreReleaseContracts(t *testing.T)
 		referencePlan.OutputContractID != "reference_plan_candidate" ||
 		referencePlan.OutputSchemaHash != contract.ReferencePlanCandidateSchemaHash {
 		t.Fatalf("unexpected Reference Plan Definition variant: %#v", referencePlan)
+	}
+	referenceBriefIndex := slices.IndexFunc(core.VariantContracts, func(candidate contract.SceneAnalysisDefinitionVariant) bool {
+		return candidate.VariantKey.StageKey == "compile_reference_brief"
+	})
+	if referenceBriefIndex < 0 {
+		t.Fatal("Reference Brief Definition variant is missing")
+	}
+	referenceBrief := core.VariantContracts[referenceBriefIndex]
+	if referenceBrief.VariantKey.ProfileKey != "default" || referenceBrief.CapabilityKey != "compile-reference-brief" ||
+		referenceBrief.Lane != "preset_visual" || referenceBrief.RuntimeClass != "text" ||
+		referenceBrief.InputContractID != contract.ReferenceBriefInputContractID ||
+		referenceBrief.InputSchemaHash != contract.ReferenceBriefInputSchemaHash ||
+		referenceBrief.OutputContractID != "reference_brief_candidate" ||
+		referenceBrief.OutputSchemaHash != contract.ReferenceBriefCandidateSchemaHash {
+		t.Fatalf("unexpected Reference Brief Definition variant: %#v", referenceBrief)
 	}
 	for _, forbidden := range []string{"stage_release", "skill_release", "signature", "control", "current", "latest"} {
 		if bytes.Contains(encoded, []byte(forbidden)) {

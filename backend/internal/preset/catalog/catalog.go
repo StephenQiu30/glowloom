@@ -18,10 +18,10 @@ const (
 )
 
 var curatedReleaseHashes = map[string]string{
-	"chinese-fantasy-animation": "63694486dc920c64d5c0d109e728c1ce1670e1384fcb38f68f20e21df3330e5a",
-	"cyberpunk-animation":       "a40c30ea7c284a7347ae6ed66c7f62014834ef375d32e8b1d609e59e55149a6c",
-	"period-cinematic-realism":  "233bcc7ea1d1a612154ca711d9fe062f9397d728e163a64f2229af42ceefcd73",
-	"urban-cinematic-realism":   "0a3953970ffa5ba4f414ef986d10638f01ba1defdd9d02765fe3a20ae0be9a0d",
+	"chinese-fantasy-animation": "8f18bcf2001151a4793a859fb8f43978cfe58ef8c9ce48eb7c530cab3ff33956",
+	"cyberpunk-animation":       "1b0d565f6f5311111564b0f7dbed9267ad0b9411bf8e98c5555ea43661f41205",
+	"period-cinematic-realism":  "c18e1f89585553dc18ac1716e1ee13412cc0972ef05101cb60424606e09ced96",
+	"urban-cinematic-realism":   "fbbe69ef45d178bd414872bf4160befa6bd5db9df8c2055e92b43c25be5492c4",
 }
 
 type ImageQCPolicy struct {

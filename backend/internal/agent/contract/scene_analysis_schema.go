@@ -28,6 +28,7 @@ type SceneAnalysisCandidateSchemaManifest struct {
 
 var sceneAnalysisCandidateSchemas = []SceneAnalysisCandidateSchema{
 	{StageKey: "bind_scene_occurrences", ProfileKey: "default", CandidateType: "scene_binding_fragment_candidate", OutputSchemaVersion: SceneBindingFragmentCandidateSchemaVersion, SchemaHash: "bfcb5ecaf50dcf957254a7a2f8590538c3932102781ffee0c38edd00f4ce3c48"},
+	{StageKey: ReferenceBriefStageKey, ProfileKey: "default", CandidateType: "reference_brief_candidate", OutputSchemaVersion: ReferenceBriefCandidateContractID, SchemaHash: ReferenceBriefCandidateSchemaHash},
 	{StageKey: "derive_production_entities", ProfileKey: "default", CandidateType: "production_entity_fragment_candidate", OutputSchemaVersion: ProductionEntityFragmentCandidateSchemaVersion, SchemaHash: "6e64c80934e967535562702878da6a848a563147add8b7449a5008087ea52895"},
 	{StageKey: "extract_scene_facts", ProfileKey: "default", CandidateType: "scene_fact_candidate", OutputSchemaVersion: SceneFactCandidateSchemaVersion, SchemaHash: "6ed929feea15117f4759875f7e690757fd99abe345603d905560e8c8b6334658"},
 	{StageKey: "plan_reference_assets", ProfileKey: "default", CandidateType: "reference_plan_candidate", OutputSchemaVersion: ReferencePlanCandidateContractID, SchemaHash: ReferencePlanCandidateSchemaHash},
