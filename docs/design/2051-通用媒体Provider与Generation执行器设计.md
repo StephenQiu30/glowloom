@@ -492,6 +492,10 @@ ProviderCall
 
 `GenerationProviderJobProduction` 是一个 Execution Snapshot 的本地聚合，只保存 expected `ProviderCallKeyProduction` 完整集及其 root。全部 Call 成功才是 `SUCCEEDED`；至少一个成功且其余全部明确失败是 `PARTIAL_SUCCEEDED`；全部明确失败是 `FAILED`；任一 Call 尚未解决或 `OUTCOME_UNKNOWN` 时 Job 不得假终态。Job 聚合不拥有远程发送权，也不能用“整体重试”创建第二套 Call。
 
+首次准备在同一事务发布 Execution/Head、不可变 Job 调用清单、全部 PENDING Call 和准备回执。Call key 是上述 canonical tuple 的 SHA-256；数据库额外唯一约束 `(execution_id, bundle_index, slot_key)`，请求 Hash 变化不能为同一槽位另造一次调用。Job 的 expected keys 按 bundle index、slot key 排序，root 对完整有序 keys 数组计算；Job 引用 Execution，Execution 不反向引用 Job，避免 Hash 环。`gen_reference_provider_jobs` 与 `gen_reference_provider_calls` 由既有 GORM Catalog 管理，不复用绑定旧 Intent/PriceQuote 的调用模型。
+
+准备重放必须重编译完整 manifest，逐项重建 Job/Call 身份并核对数据库清单、scope 和元数据；缺项、多项、请求/槽位/Job root 损坏均拒绝，不补建、不重置已有调用。任何 Call 或回执写入失败回滚整个准备事务。此步骤只建立待发送事实，不授予发送权、不扣减并发/每日额度，也不代替发送后恢复和媒体验收。
+
 当前 MVP 不建立新的动态 PriceQuote/付费 Reservation 完成门。运行保护只冻结 `OperationalGenerationLimitPolicy`：单 Target 最大 Bundle、单 Bundle 最大 slot、最大输入/输出字节、并发、超时和每日运维调用上限。它不表达货币、用户余额或套餐，且策略缺失时使用代码内安全默认值，不阻断已授权 MVP 旅程。
 
 ## 8. Staged Media、CandidateBundle 与 QC

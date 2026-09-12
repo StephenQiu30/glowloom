@@ -30,6 +30,8 @@ type ReferenceExecutionRepository interface {
 	FindReferenceExecution(context.Context, string, string, string) (domain.ReferenceExecution, error)
 	FindReferenceExecutionReceipt(context.Context, string, string) (platformcommand.Receipt, error)
 	ValidateReferenceExecutionHead(context.Context, domain.ReferenceExecution) error
+	PublishReferenceProviderJob(context.Context, string, string, domain.ReferenceProviderJob, []domain.ReferenceProviderCall) error
+	FindReferenceProviderJob(context.Context, string, string, string) (domain.ReferenceProviderJob, []domain.ReferenceProviderCall, error)
 }
 
 type ReferenceExecutionTransactions interface {
@@ -61,10 +63,11 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 		if err := repo.LockProviderWorkspace(ctx, command.WorkspaceID); err != nil {
 			return err
 		}
-		readSet, err := service.readInitialExecutionInputs(ctx, repo, actor, command)
+		inputs, err := service.readInitialExecutionInputs(ctx, repo, actor, command)
 		if err != nil {
 			return err
 		}
+		readSet := inputs.readSet
 		inputHash, err := platformcommand.InputHash(struct {
 			Actor   Actor
 			Command PrepareInitialReferenceExecutionCommand
@@ -82,7 +85,7 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 			if readErr != nil {
 				return readErr
 			}
-			result, err = validateReferenceExecutionPublication(ctx, repo, actor, command, readSet, receipt, persisted)
+			result, err = validateReferenceExecutionPublication(ctx, repo, actor, command, inputs, receipt, persisted)
 			return err
 		}
 		if !errors.Is(err, platformcommand.ErrReceiptNotFound) {
@@ -93,6 +96,13 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 			return err
 		}
 		if err = repo.PublishInitialReferenceExecution(ctx, result); err != nil {
+			return err
+		}
+		job, calls, err := domain.BuildReferenceProviderJob(domain.GenerationRevisionRef{ID: result.ID, Revision: result.Revision, ContentHash: result.ContentHash}, inputs.calls)
+		if err != nil {
+			return err
+		}
+		if err = repo.PublishReferenceProviderJob(ctx, command.WorkspaceID, command.ProjectID, job, calls); err != nil {
 			return err
 		}
 		raw, err := json.Marshal(domain.GenerationRevisionRef{ID: result.ID, Revision: result.Revision, ContentHash: result.ContentHash})
@@ -106,7 +116,7 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 		if receipt.InputHash != inputHash {
 			return platformcommand.ErrInputMismatch
 		}
-		result, err = validateReferenceExecutionPublication(ctx, repo, actor, command, readSet, receipt, result)
+		result, err = validateReferenceExecutionPublication(ctx, repo, actor, command, inputs, receipt, result)
 		return err
 	})
 	if err != nil {
@@ -115,8 +125,13 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 	return result, nil
 }
 
-func (service *ReferenceExecutionPreparationService) readInitialExecutionInputs(ctx context.Context, repo ReferenceExecutionRepository, actor Actor, command PrepareInitialReferenceExecutionCommand) (domain.ReferenceExecutionReadSet, error) {
-	var result domain.ReferenceExecutionReadSet
+type referenceExecutionInputs struct {
+	readSet domain.ReferenceExecutionReadSet
+	calls   []domain.ReferenceProviderCallInput
+}
+
+func (service *ReferenceExecutionPreparationService) readInitialExecutionInputs(ctx context.Context, repo ReferenceExecutionRepository, actor Actor, command PrepareInitialReferenceExecutionCommand) (referenceExecutionInputs, error) {
+	var result referenceExecutionInputs
 	target, err := ReadCurrentReferenceGenerationTarget(ctx, repo, actor, ReadReferenceGenerationTargetQuery{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, TargetRef: command.TargetRef})
 	if err != nil {
 		return result, err
@@ -171,7 +186,11 @@ func (service *ReferenceExecutionPreparationService) readInitialExecutionInputs(
 	if err != nil {
 		return result, err
 	}
-	result = domain.ReferenceExecutionReadSet{TargetRef: command.TargetRef, TargetReadSetRoot: target.TargetReadSetRoot, ExpectedHeadRevision: 0, BindingRef: authorization.SelectedProjectProviderBindingVersionRef, ConnectionRef: domain.GenerationRevisionRef{ID: provider.connection.ID, Revision: provider.connection.Revision, ContentHash: provider.connection.ContentHash}, CredentialRef: domain.ReferenceCredentialRef{ID: provider.credential.ID, Revision: provider.credential.Revision, Fingerprint: provider.credential.SecretFingerprint}, ProfileRef: domain.GenerationRevisionRef{ID: provider.profile.ID, Revision: provider.profile.Revision, ContentHash: provider.profile.ContentHash}, RegistryReleaseHash: releaseHash, AdapterRef: descriptor.AdapterRef, CompilerRef: descriptor.CompilerRef, CapabilityHash: descriptor.CapabilityHash, ManifestHash: compiled.ManifestHash, OperationalPolicyRef: policyRef, AuthorizationRef: command.AuthorizationRef}
+	result.readSet = domain.ReferenceExecutionReadSet{TargetRef: command.TargetRef, TargetReadSetRoot: target.TargetReadSetRoot, ExpectedHeadRevision: 0, BindingRef: authorization.SelectedProjectProviderBindingVersionRef, ConnectionRef: domain.GenerationRevisionRef{ID: provider.connection.ID, Revision: provider.connection.Revision, ContentHash: provider.connection.ContentHash}, CredentialRef: domain.ReferenceCredentialRef{ID: provider.credential.ID, Revision: provider.credential.Revision, Fingerprint: provider.credential.SecretFingerprint}, ProfileRef: domain.GenerationRevisionRef{ID: provider.profile.ID, Revision: provider.profile.Revision, ContentHash: provider.profile.ContentHash}, RegistryReleaseHash: releaseHash, AdapterRef: descriptor.AdapterRef, CompilerRef: descriptor.CompilerRef, CapabilityHash: descriptor.CapabilityHash, ManifestHash: compiled.ManifestHash, OperationalPolicyRef: policyRef, AuthorizationRef: command.AuthorizationRef}
+	result.calls = make([]domain.ReferenceProviderCallInput, len(compiled.Requests))
+	for i, request := range compiled.Requests {
+		result.calls[i] = domain.ReferenceProviderCallInput{BundleIndex: request.BundleIndex, SlotKey: request.SlotKey, CompiledRequestHash: request.ContentHash}
+	}
 	return result, nil
 }
 
@@ -204,8 +223,8 @@ func validateReferenceCompilationManifest(target ReferenceGenerationTarget, prof
 	return nil
 }
 
-func validateReferenceExecutionPublication(ctx context.Context, repo ReferenceExecutionRepository, actor Actor, command PrepareInitialReferenceExecutionCommand, readSet domain.ReferenceExecutionReadSet, receipt platformcommand.Receipt, value domain.ReferenceExecution) (domain.ReferenceExecution, error) {
-	expected, err := domain.BuildInitialReferenceExecution(domain.InitialReferenceExecutionInput{ID: value.ID, WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ReadSet: readSet, CreatedBy: actor.UserID, CreatedAt: receipt.CreatedAt})
+func validateReferenceExecutionPublication(ctx context.Context, repo ReferenceExecutionRepository, actor Actor, command PrepareInitialReferenceExecutionCommand, inputs referenceExecutionInputs, receipt platformcommand.Receipt, value domain.ReferenceExecution) (domain.ReferenceExecution, error) {
+	expected, err := domain.BuildInitialReferenceExecution(domain.InitialReferenceExecutionInput{ID: value.ID, WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ReadSet: inputs.readSet, CreatedBy: actor.UserID, CreatedAt: receipt.CreatedAt})
 	if err != nil {
 		return domain.ReferenceExecution{}, err
 	}
@@ -222,6 +241,17 @@ func validateReferenceExecutionPublication(ctx context.Context, repo ReferenceEx
 	}
 	if err = repo.ValidateReferenceExecutionHead(ctx, value); err != nil {
 		return domain.ReferenceExecution{}, err
+	}
+	expectedJob, expectedCalls, err := domain.BuildReferenceProviderJob(ref, inputs.calls)
+	if err != nil {
+		return domain.ReferenceExecution{}, err
+	}
+	job, calls, err := repo.FindReferenceProviderJob(ctx, command.WorkspaceID, command.ProjectID, value.ID)
+	if err != nil {
+		return domain.ReferenceExecution{}, err
+	}
+	if !reflect.DeepEqual(job, expectedJob) || !reflect.DeepEqual(calls, expectedCalls) {
+		return domain.ReferenceExecution{}, conflict("Reference Provider call set differs from frozen compilation")
 	}
 	return value, nil
 }

@@ -1,0 +1,24 @@
+package gormdb_test
+
+import (
+	"sync"
+	"testing"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
+	"gorm.io/gorm/schema"
+)
+
+func TestReferenceProviderCallBelongsToFrozenJob(t *testing.T) {
+	parsed, err := schema.Parse(&model.GenerationReferenceProviderCall{}, &sync.Map{}, schema.NamingStrategy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := parsed.Relationships.Relations["Job"]
+	if job == nil || job.Type != schema.BelongsTo {
+		t.Fatalf("call must reference Job, not own it: %+v", job)
+	}
+	constraint := job.ParseConstraint()
+	if constraint == nil || constraint.Schema.Table != "gen_reference_provider_calls" || constraint.ReferenceSchema.Table != "gen_reference_provider_jobs" {
+		t.Fatal("Provider call foreign key has the wrong owner")
+	}
+}

@@ -1675,9 +1675,10 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				assertPersistedReferenceImageCompilation(t, currentTarget, acceptedBrief, execution.profile.Profile)
 				prepared := assertInitialReferenceExecutionPreparation(t, ctx, generationgorm.New(database), authorizationActor, currentTarget, execution.authorization, now.Add(7*time.Minute))
 				preparation = &prepared
+				assertReferenceProviderJobPersistence(t, ctx, database, authorizationActor, prepared, currentTarget, acceptedBrief, execution.profile.Profile)
 				assertPreparationCounts := func() {
 					t.Helper()
-					var snapshots, heads, receipts int64
+					var snapshots, heads, receipts, jobs, calls int64
 					if err := database.Model(&model.GenerationReferenceExecution{}).Where("target_id = ?", published.ID).Count(&snapshots).Error; err != nil {
 						t.Fatal(err)
 					}
@@ -1687,8 +1688,14 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 					if err := database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", published.WorkspaceID, generationapp.PrepareInitialReferenceExecutionOperation, preparation.execution.ID).Count(&receipts).Error; err != nil {
 						t.Fatal(err)
 					}
-					if snapshots != 1 || heads != 1 || receipts != 1 {
-						t.Fatalf("preparation left duplicate or orphan facts: snapshots=%d heads=%d receipts=%d", snapshots, heads, receipts)
+					if err := database.Model(&model.GenerationReferenceProviderJob{}).Where("workspace_id = ?", published.WorkspaceID).Count(&jobs).Error; err != nil {
+						t.Fatal(err)
+					}
+					if err := database.Model(&model.GenerationReferenceProviderCall{}).Where("workspace_id = ?", published.WorkspaceID).Count(&calls).Error; err != nil {
+						t.Fatal(err)
+					}
+					if snapshots != 1 || heads != 1 || receipts != 1 || jobs != 1 || calls != int64(len(currentTarget.OutputContract.Slots)*currentTarget.OutputContract.CandidateBundleCount) {
+						t.Fatalf("preparation left duplicate or orphan facts: snapshots=%d heads=%d receipts=%d jobs=%d calls=%d", snapshots, heads, receipts, jobs, calls)
 					}
 				}
 				assertPreparationCounts()

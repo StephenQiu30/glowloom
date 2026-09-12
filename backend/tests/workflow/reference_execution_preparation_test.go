@@ -3,6 +3,7 @@ package workflow_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -65,6 +66,15 @@ func assertInitialReferenceExecutionPreparation(t *testing.T, ctx context.Contex
 			t.Fatalf("receipt failure did not roll back preparation: calls=%d err=%v", calls, err)
 		}
 	}
+	// Simulate a storage failure after the real Job and full call set are written.
+	// The outer transaction must also remove the already published Snapshot/Head.
+	failing, err := generationapp.NewReferenceExecutionPreparationService(referenceCallWriteFailureTransactions{transactions}, registry, clock, uuid.NewString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := failing.PrepareInitial(ctx, actor, command); err == nil || !reflect.DeepEqual(got, domain.ReferenceExecution{}) {
+		t.Fatal("call persistence failure did not roll back execution preparation")
+	}
 	service, err := generationapp.NewReferenceExecutionPreparationService(transactions, registry, clock, uuid.NewString)
 	if err != nil {
 		t.Fatal(err)
@@ -108,6 +118,27 @@ func assertInitialReferenceExecutionPreparation(t *testing.T, ctx context.Contex
 		}
 	}
 	return referencePreparationFixture{service, command, value}
+}
+
+type referenceCallWriteFailureTransactions struct {
+	generationapp.ReferenceExecutionTransactions
+}
+
+func (tx referenceCallWriteFailureTransactions) WithinReferenceExecution(ctx context.Context, operation func(generationapp.ReferenceExecutionRepository) error) error {
+	return tx.ReferenceExecutionTransactions.WithinReferenceExecution(ctx, func(repo generationapp.ReferenceExecutionRepository) error {
+		return operation(referenceCallWriteFailureRepository{repo})
+	})
+}
+
+type referenceCallWriteFailureRepository struct {
+	generationapp.ReferenceExecutionRepository
+}
+
+func (repo referenceCallWriteFailureRepository) PublishReferenceProviderJob(ctx context.Context, workspace, project string, job domain.ReferenceProviderJob, calls []domain.ReferenceProviderCall) error {
+	if err := repo.ReferenceExecutionRepository.PublishReferenceProviderJob(ctx, workspace, project, job, calls); err != nil {
+		return err
+	}
+	return errors.New("injected Reference Provider call persistence failure")
 }
 
 type referenceCompilationFaultFactory struct {
