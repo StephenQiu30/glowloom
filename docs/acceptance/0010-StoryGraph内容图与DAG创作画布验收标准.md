@@ -460,15 +460,16 @@
 
 ### `VP-I06` — 六类 Target 与 Provider-neutral Brief
 
-- 状态：进行中；已完成 Approved Reference Target 的确定性依赖 DAG、三个执行波次与 Go/Python Provider-neutral Brief strict union。Brief Input Compiler/fence、Stage 注册与持久执行、Coverage Matrix 和 Target Query 尚未实现。
+- 状态：进行中；已完成 Approved Reference Target 的确定性依赖 DAG、三个执行波次、Go/Python Provider-neutral Brief strict union 与 Candidate-level Input fence。从 GORM exact facts 编译 Input/执行前重算 fence、Stage 注册与持久执行、Coverage Matrix 和 Target Query 尚未实现。
 - Git 基线/提交：基线 `b744cc29e210fba09286776990f594c6234567b4`；本依赖 DAG 子项随本记录所在提交交付。
 - Red 命令与失败：`go test ./tests/production/reference -run '^TestReferenceTargetDependencyDAG' -count=1` 首先因 `BuildReferenceTargetDependencyDAG` 及 DAG Schema/节点/波次合同不存在而编译失败；负例同时固定 Plan 外依赖、反向/同波次依赖、环和依赖 `not_generated` Target 必须失败关闭。
 - Green/定向验证：定向普通测试 0.387 秒、Race Detector 1.572 秒通过；架构门 1.573 秒、`go vet ./...` 与无外部集成环境变量的 `go test -count=1 ./...` 全部通过。同一组 Target 输入反转后产生完全相同的节点、波次与 Content Hash。
-- 全量 CI：依赖 DAG 子项实现提交 `dd3d770609e6b6ec7c54cea7c79dcb7fe41d05a5`；GitHub Actions run `34681189712` 全部成功：Agent 27 秒、Frontend 49 秒、Backend 1 分 05 秒、真实 PostgreSQL+Temporal Workflow/System Boundary 2 分 59 秒、`Required / CI` 6 秒。Brief strict union 子项的远端 CI 待本次独立提交后核验。
+- 全量 CI：依赖 DAG 子项实现提交 `dd3d770609e6b6ec7c54cea7c79dcb7fe41d05a5`，GitHub Actions run `34681189712` 全部成功：Agent 27 秒、Frontend 49 秒、Backend 1 分 05 秒、真实 PostgreSQL+Temporal Workflow/System Boundary 2 分 59 秒、`Required / CI` 6 秒。Brief strict union 子项实现提交 `e4dc9c668bc280a7b457e852042ef330f15d599e`，run `34681872982` 全部成功：Agent 31 秒、Backend 1 分 03 秒、Frontend 1 分 19 秒、Workflow/System Boundary 2 分 56 秒、`Required / CI` 7 秒。Candidate-level fence 子项的远端 CI 待本次独立提交后核验。
 - 真实输入/产物/事实对账：Builder 只消费 Gate 3 已发布 `ReferencePlanTargetVersion`，保留其精确 Version ID、business key、fulfillment 与 Content Hash；产物只是 Provider-neutral 确定性执行图，不写 PostgreSQL、不创建 migration/Raw SQL/第二事实源，不调用 Provider，不启动或重启本机环境。
-- 未覆盖条件与残余风险：DAG 子项只关闭 `VPR-REF-009`；当前 Brief 子项只关闭六类 Provider-neutral strict schema 与 Location/Prop 固定视图合同。冻结 Input/read-set fence、身份与交互闭包精确对账、Coverage Matrix 与 Target detail Query 仍未实现，不将合同测试冒充媒体或浏览器验收。
+- 未覆盖条件与残余风险：DAG 子项只关闭 `VPR-REF-009`；当前 Brief 子项只关闭六类 Provider-neutral strict schema、Location/Prop 固定视图合同和 Candidate-level Input fence。GORM exact facts 编译、执行前 read-set 重算、身份与交互闭包精确对账、Coverage Matrix 与 Target detail Query 仍未实现，不将合同测试冒充媒体或浏览器验收。
 - Reference Brief strict union Red/Green：Go Red 命令 `go test ./tests/agent -run '^TestReferenceBriefCandidate' -count=1` 首先因 `DecodeReferenceBriefCandidate` 不存在而编译失败。Green 后 Go 普通测试 0.779 秒、Race Detector 1.790 秒通过；Python 12 项定向合同测试、Ruff lint/format 和 Pyright 全部通过。Backend 同 CI 边界的 `gofmt`/`go vet ./...`/全量测试通过；Agent 首次与 Go 全量在同一本机并行时，3 个既有 synthetic subprocess 测试撞到 2/5 秒 deadline，未修改超时或产品逻辑；按 CI 独立 runner 条件串行复跑后为 `275 passed, 60 skipped`（5.47 秒）。负例固定 Provider/自由 Prompt/未知字段、latest、错 purpose/view role、缺 Anchor 选择和不完整 source closure 必须拒绝。
-- Reference Brief 当前事实边界：已完成 Candidate schema 形状与结构约束，尚未完成从 exact Approved Target/Owner/Asset 事实编译 Input 及 `ValidateFor(input)` 的逐字节 fence，因此 `VPA-VIS-005`、`VPA-VIS-007` 与 `VPR-REF-002`–`008` 继续未勾选；没有 Stage Release 注册、Agent 模型调用、Candidate Revision 持久化、Provider 或媒体生成。
+- Reference Brief Candidate-level fence Red/Green：Go Red 首先因 `DecodeReferenceBriefInput` 和 Candidate `ValidateFor` 不存在而编译失败；Python Red 在收集期因 `ReferenceBriefInput` 不存在而失败。Green 后 Go 普通测试 0.785 秒、Race Detector 1.845 秒、定向 `go vet` 通过；Python 13 项定向测试、Ruff lint/format 与 Pyright 通过。Backend 同 CI 边界的 `gofmt`/`go vet ./...`/无外部集成环境变量全量测试通过；Agent 独立全量为 `276 passed, 60 skipped`（6.93 秒）。替换 typed read-set 或 exact dependency Asset Version 均在 Candidate 接受前失败关闭。
+- Reference Brief 当前事实边界：已完成 Candidate schema 形状、Backend-owned Input 合同与逐字段 `ValidateFor(input)` fence，尚未完成从 exact Approved Target/Owner/Asset GORM 事实编译该 Input 及执行前重算，因此 `VPA-VIS-005`、`VPA-VIS-007` 与 `VPR-REF-002`–`008` 继续未勾选；没有 Stage Release 注册、Agent 模型调用、Candidate Revision 持久化、Provider 或媒体生成。
 
 ### `VP-I07` — 图片执行、Bundle、确定性 QC 与 Vision Review
 

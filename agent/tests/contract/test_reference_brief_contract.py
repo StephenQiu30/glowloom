@@ -8,7 +8,10 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app.modules.storygraph.reference_brief_contract import ReferenceBriefCandidate
+from app.modules.storygraph.reference_brief_contract import (
+    ReferenceBriefCandidate,
+    ReferenceBriefInput,
+)
 
 
 @pytest.mark.parametrize(
@@ -53,6 +56,25 @@ def test_reference_brief_candidate_rejects_unknown_nested_purpose_field() -> Non
     payload["brief"]["prompt"] = "free-form provider prompt"
     with pytest.raises(ValidationError):
         ReferenceBriefCandidate.model_validate(payload)
+
+
+def test_reference_brief_candidate_validates_against_frozen_input_fence() -> None:
+    payload = reference_brief_candidate("character_appearance")
+    stage_input = ReferenceBriefInput.model_validate(reference_brief_input(payload))
+    candidate = ReferenceBriefCandidate.model_validate(payload)
+    candidate.validate_for(stage_input)
+
+    stale = copy.deepcopy(payload)
+    stale["typed_read_set_root"] = digest("other-read-set")
+    with pytest.raises(ValueError):
+        ReferenceBriefCandidate.model_validate(stale).validate_for(stage_input)
+
+    stale = copy.deepcopy(payload)
+    stale["dependency_selections"][0]["selected_asset_version_ref"]["owner_version_id"] = (
+        "00000000-0000-4000-8000-000000000999"
+    )
+    with pytest.raises(ValueError):
+        ReferenceBriefCandidate.model_validate(stale).validate_for(stage_input)
 
 
 def reference_brief_candidate(target_kind: str) -> dict[str, Any]:
@@ -213,6 +235,28 @@ def reference_brief_candidate(target_kind: str) -> dict[str, Any]:
         ],
         "source_refs": source_refs,
         "brief": purpose_brief(target_kind),
+    }
+
+
+def reference_brief_input(candidate: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "workspace_id": candidate["workspace_id"],
+        "project_id": candidate["project_id"],
+        "approved_reference_plan_version_ref": candidate["approved_reference_plan_version_ref"],
+        "reference_plan_target_ref": candidate["reference_plan_target_ref"],
+        "target_business_key": candidate["target_business_key"],
+        "target_kind": candidate["target_kind"],
+        "target_fulfillment": "required",
+        "visual_foundation_version_ref": candidate["visual_foundation_version_ref"],
+        "effective_style_snapshot_ref": candidate["effective_style_snapshot_ref"],
+        "effective_policy_snapshot_ref": candidate["effective_policy_snapshot_ref"],
+        "dependency_selections": candidate["dependency_selections"],
+        "stage_release": candidate["stage_release"],
+        "typed_read_set_root": candidate["typed_read_set_root"],
+        "source_refs": candidate["source_refs"],
+        "design_focus": candidate["positive_instructions"],
+        "forbidden_changes": candidate["negative_instructions"],
+        "required_view_roles": candidate["required_view_roles"],
     }
 
 

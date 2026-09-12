@@ -49,6 +49,26 @@ type ReferenceBriefDependencySelection struct {
 	SelectedAssetVersionRef ReferencePlanOwnerRef `json:"selected_asset_version_ref"`
 }
 
+type ReferenceBriefInput struct {
+	WorkspaceID                     string                              `json:"workspace_id"`
+	ProjectID                       string                              `json:"project_id"`
+	ApprovedReferencePlanVersionRef ReferencePlanOwnerRef               `json:"approved_reference_plan_version_ref"`
+	ReferencePlanTargetRef          ReferencePlanOwnerRef               `json:"reference_plan_target_ref"`
+	TargetBusinessKey               string                              `json:"target_business_key"`
+	TargetKind                      string                              `json:"target_kind"`
+	TargetFulfillment               string                              `json:"target_fulfillment"`
+	VisualFoundationVersionRef      ReferencePlanOwnerRef               `json:"visual_foundation_version_ref"`
+	EffectiveStyleSnapshotRef       ReferencePlanOwnerRef               `json:"effective_style_snapshot_ref"`
+	EffectivePolicySnapshotRef      ReferencePlanOwnerRef               `json:"effective_policy_snapshot_ref"`
+	DependencySelections            []ReferenceBriefDependencySelection `json:"dependency_selections"`
+	StageRelease                    ReferenceBriefStageRelease          `json:"stage_release"`
+	TypedReadSetRoot                string                              `json:"typed_read_set_root"`
+	SourceRefs                      ReferencePlanTargetOwnerRefs        `json:"source_refs"`
+	DesignFocus                     []string                            `json:"design_focus"`
+	ForbiddenChanges                []string                            `json:"forbidden_changes"`
+	RequiredViewRoles               []string                            `json:"required_view_roles"`
+}
+
 type ReferenceBriefCandidate struct {
 	WorkspaceID                     string                              `json:"workspace_id"`
 	ProjectID                       string                              `json:"project_id"`
@@ -134,6 +154,66 @@ func DecodeReferenceBriefCandidate(raw json.RawMessage) (ReferenceBriefCandidate
 	return value, json.RawMessage(canonical), nil
 }
 
+func DecodeReferenceBriefInput(raw json.RawMessage) (ReferenceBriefInput, json.RawMessage, error) {
+	var value ReferenceBriefInput
+	if decodeStrict(raw, &value) != nil || value.Validate() != nil {
+		return ReferenceBriefInput{}, nil, errors.New("invalid Reference Brief input")
+	}
+	canonical, err := platformcanonical.JSON(raw)
+	if err != nil {
+		return ReferenceBriefInput{}, nil, err
+	}
+	return value, json.RawMessage(canonical), nil
+}
+
+func (value ReferenceBriefInput) Validate() error {
+	dependencyProbe := ReferenceBriefCandidate{
+		WorkspaceID: value.WorkspaceID, ProjectID: value.ProjectID, TargetKind: value.TargetKind,
+		DependencySelections: value.DependencySelections,
+	}
+	if !referencePlanUUID(value.WorkspaceID) || !referencePlanUUID(value.ProjectID) ||
+		validateReferencePlanOwnerRef(value.ApprovedReferencePlanVersionRef, value.WorkspaceID, value.ProjectID) != nil ||
+		validateReferencePlanOwnerRef(value.ReferencePlanTargetRef, value.WorkspaceID, value.ProjectID) != nil ||
+		validateReferencePlanOwnerRef(value.VisualFoundationVersionRef, value.WorkspaceID, value.ProjectID) != nil ||
+		validateReferencePlanOwnerRef(value.EffectiveStyleSnapshotRef, value.WorkspaceID, value.ProjectID) != nil ||
+		validateReferencePlanOwnerRef(value.EffectivePolicySnapshotRef, value.WorkspaceID, value.ProjectID) != nil ||
+		!validReferenceBriefOwnerFamilies(
+			value.ApprovedReferencePlanVersionRef, value.ReferencePlanTargetRef, value.VisualFoundationVersionRef,
+			value.EffectiveStyleSnapshotRef, value.EffectivePolicySnapshotRef,
+		) || referencePlanBusinessKeyKind(value.TargetBusinessKey) != value.TargetKind ||
+		value.ReferencePlanTargetRef.OwnerLogicalID != value.TargetBusinessKey ||
+		!slices.Contains([]string{"optional", "required"}, value.TargetFulfillment) ||
+		value.StageRelease.StageKey != "compile_reference_brief" || !hashPattern.MatchString(value.StageRelease.StageReleaseHash) ||
+		!hashPattern.MatchString(value.TypedReadSetRoot) || validateReferenceBriefDependencies(dependencyProbe) != nil ||
+		validateReferencePlanTargetOwnerRefs(value.SourceRefs, value.WorkspaceID, value.ProjectID) != nil ||
+		validateReferenceBriefSourceRefs(value.TargetKind, value.SourceRefs) != nil ||
+		!referencePlanSortedStrings(value.DesignFocus, true) || !referencePlanSortedStrings(value.ForbiddenChanges, true) ||
+		!reflect.DeepEqual(value.RequiredViewRoles, referenceBriefViewRoles[value.TargetKind]) {
+		return errors.New("invalid Reference Brief input")
+	}
+	return nil
+}
+
+func (value ReferenceBriefCandidate) ValidateFor(input ReferenceBriefInput) error {
+	if input.Validate() != nil || value.validate() != nil || value.WorkspaceID != input.WorkspaceID ||
+		value.ProjectID != input.ProjectID ||
+		!reflect.DeepEqual(value.ApprovedReferencePlanVersionRef, input.ApprovedReferencePlanVersionRef) ||
+		!reflect.DeepEqual(value.ReferencePlanTargetRef, input.ReferencePlanTargetRef) ||
+		value.TargetBusinessKey != input.TargetBusinessKey || value.TargetKind != input.TargetKind ||
+		!reflect.DeepEqual(value.VisualFoundationVersionRef, input.VisualFoundationVersionRef) ||
+		!reflect.DeepEqual(value.EffectiveStyleSnapshotRef, input.EffectiveStyleSnapshotRef) ||
+		!reflect.DeepEqual(value.EffectivePolicySnapshotRef, input.EffectivePolicySnapshotRef) ||
+		!reflect.DeepEqual(value.DependencySelections, input.DependencySelections) ||
+		!reflect.DeepEqual(value.StageRelease, input.StageRelease) || value.TypedReadSetRoot != input.TypedReadSetRoot ||
+		!reflect.DeepEqual(value.SourceRefs, input.SourceRefs) ||
+		!reflect.DeepEqual(value.PositiveInstructions, input.DesignFocus) ||
+		!reflect.DeepEqual(value.NegativeInstructions, input.ForbiddenChanges) ||
+		!reflect.DeepEqual(value.RequiredViewRoles, input.RequiredViewRoles) {
+		return errors.New("Reference Brief Candidate input fence has drifted")
+	}
+	return nil
+}
+
 func (value ReferenceBriefCandidate) validate() error {
 	if !referencePlanUUID(value.WorkspaceID) || !referencePlanUUID(value.ProjectID) ||
 		validateReferencePlanOwnerRef(value.ApprovedReferencePlanVersionRef, value.WorkspaceID, value.ProjectID) != nil ||
@@ -141,7 +221,10 @@ func (value ReferenceBriefCandidate) validate() error {
 		validateReferencePlanOwnerRef(value.VisualFoundationVersionRef, value.WorkspaceID, value.ProjectID) != nil ||
 		validateReferencePlanOwnerRef(value.EffectiveStyleSnapshotRef, value.WorkspaceID, value.ProjectID) != nil ||
 		validateReferencePlanOwnerRef(value.EffectivePolicySnapshotRef, value.WorkspaceID, value.ProjectID) != nil ||
-		!validReferenceBriefOwnerFamilies(value) || referencePlanBusinessKeyKind(value.TargetBusinessKey) != value.TargetKind ||
+		!validReferenceBriefOwnerFamilies(
+			value.ApprovedReferencePlanVersionRef, value.ReferencePlanTargetRef, value.VisualFoundationVersionRef,
+			value.EffectiveStyleSnapshotRef, value.EffectivePolicySnapshotRef,
+		) || referencePlanBusinessKeyKind(value.TargetBusinessKey) != value.TargetKind ||
 		value.ReferencePlanTargetRef.OwnerLogicalID != value.TargetBusinessKey ||
 		value.StageRelease.StageKey != "compile_reference_brief" || !hashPattern.MatchString(value.StageRelease.StageReleaseHash) ||
 		!hashPattern.MatchString(value.TypedReadSetRoot) || validateReferenceBriefDependencies(value) != nil ||
@@ -162,13 +245,19 @@ func (value ReferenceBriefCandidate) validate() error {
 	return nil
 }
 
-func validReferenceBriefOwnerFamilies(value ReferenceBriefCandidate) bool {
-	for _, ref := range []ReferencePlanOwnerRef{value.ApprovedReferencePlanVersionRef, value.ReferencePlanTargetRef} {
+func validReferenceBriefOwnerFamilies(
+	planRef ReferencePlanOwnerRef,
+	targetRef ReferencePlanOwnerRef,
+	visualFoundationRef ReferencePlanOwnerRef,
+	styleRef ReferencePlanOwnerRef,
+	policyRef ReferencePlanOwnerRef,
+) bool {
+	for _, ref := range []ReferencePlanOwnerRef{planRef, targetRef} {
 		if ref.OwnerKind != "production/reference" || ref.VersionFamily != "reference_plan_set" || ref.FragmentKey != nil {
 			return false
 		}
 	}
-	for _, ref := range []ReferencePlanOwnerRef{value.VisualFoundationVersionRef, value.EffectiveStyleSnapshotRef, value.EffectivePolicySnapshotRef} {
+	for _, ref := range []ReferencePlanOwnerRef{visualFoundationRef, styleRef, policyRef} {
 		if ref.OwnerKind != "preset" || ref.VersionFamily != "preset_effective_set" || ref.FragmentKey != nil {
 			return false
 		}

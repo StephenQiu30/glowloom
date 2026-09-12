@@ -76,6 +76,40 @@ func TestReferenceBriefCandidateRejectsProviderFieldsWrongViewsAndBranchDrift(t 
 	}
 }
 
+func TestReferenceBriefCandidateValidatesAgainstFrozenInputFence(t *testing.T) {
+	document := referenceBriefCandidateDocument(t, "character_appearance")
+	inputRaw := mustReferenceBriefJSON(t, referenceBriefInputDocument(document))
+	input, _, err := agentcontract.DecodeReferenceBriefInput(inputRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, _, err := agentcontract.DecodeReferenceBriefCandidate(mustReferenceBriefJSON(t, document))
+	if err != nil || candidate.ValidateFor(input) != nil {
+		t.Fatalf("Reference Brief Candidate did not validate against its frozen input: %v", err)
+	}
+
+	drifted := cloneReferenceBriefDocument(t, document)
+	drifted["typed_read_set_root"] = strings.Repeat("f", 64)
+	candidate, _, err = agentcontract.DecodeReferenceBriefCandidate(mustReferenceBriefJSON(t, drifted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidate.ValidateFor(input) == nil {
+		t.Fatal("Reference Brief Candidate accepted a stale typed read set")
+	}
+
+	drifted = cloneReferenceBriefDocument(t, document)
+	selection := drifted["dependency_selections"].([]any)[0].(map[string]any)
+	selection["selected_asset_version_ref"].(map[string]any)["owner_version_id"] = uuid.NewString()
+	candidate, _, err = agentcontract.DecodeReferenceBriefCandidate(mustReferenceBriefJSON(t, drifted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidate.ValidateFor(input) == nil {
+		t.Fatal("Reference Brief Candidate accepted a different dependency Asset Version")
+	}
+}
+
 func referenceBriefCandidateJSON(t *testing.T, targetKind string) json.RawMessage {
 	t.Helper()
 	return mustReferenceBriefJSON(t, referenceBriefCandidateDocument(t, targetKind))
@@ -133,6 +167,26 @@ func referenceBriefCandidateDocument(t *testing.T, targetKind string) map[string
 		}},
 		"source_refs": sourceRefs,
 		"brief":       referenceBriefPurpose(targetKind),
+	}
+}
+
+func referenceBriefInputDocument(candidate map[string]any) map[string]any {
+	return map[string]any{
+		"workspace_id": candidate["workspace_id"], "project_id": candidate["project_id"],
+		"approved_reference_plan_version_ref": candidate["approved_reference_plan_version_ref"],
+		"reference_plan_target_ref":           candidate["reference_plan_target_ref"],
+		"target_business_key":                 candidate["target_business_key"],
+		"target_kind":                         candidate["target_kind"], "target_fulfillment": "required",
+		"visual_foundation_version_ref": candidate["visual_foundation_version_ref"],
+		"effective_style_snapshot_ref":  candidate["effective_style_snapshot_ref"],
+		"effective_policy_snapshot_ref": candidate["effective_policy_snapshot_ref"],
+		"dependency_selections":         candidate["dependency_selections"],
+		"stage_release":                 candidate["stage_release"],
+		"typed_read_set_root":           candidate["typed_read_set_root"],
+		"source_refs":                   candidate["source_refs"],
+		"design_focus":                  candidate["positive_instructions"],
+		"forbidden_changes":             candidate["negative_instructions"],
+		"required_view_roles":           candidate["required_view_roles"],
 	}
 }
 
@@ -210,4 +264,13 @@ func mustReferenceBriefJSON(t *testing.T, value any) json.RawMessage {
 		t.Fatal(err)
 	}
 	return raw
+}
+
+func cloneReferenceBriefDocument(t *testing.T, value map[string]any) map[string]any {
+	t.Helper()
+	var result map[string]any
+	if err := json.Unmarshal(mustReferenceBriefJSON(t, value), &result); err != nil {
+		t.Fatal(err)
+	}
+	return result
 }

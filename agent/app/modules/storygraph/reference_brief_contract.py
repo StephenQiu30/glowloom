@@ -154,6 +154,66 @@ ReferenceBriefPurpose = Annotated[
 ]
 
 
+class ReferenceBriefInput(StrictSceneAnalysisModel):
+    workspace_id: UUID
+    project_id: UUID
+    approved_reference_plan_version_ref: ReferencePlanOwnerRef
+    reference_plan_target_ref: ReferencePlanOwnerRef
+    target_business_key: str = Field(min_length=1)
+    target_kind: ReferenceTargetKind
+    target_fulfillment: Literal["optional", "required"]
+    visual_foundation_version_ref: ReferencePlanOwnerRef
+    effective_style_snapshot_ref: ReferencePlanOwnerRef
+    effective_policy_snapshot_ref: ReferencePlanOwnerRef
+    dependency_selections: list[ReferenceBriefDependencySelection]
+    stage_release: ReferenceBriefStageRelease
+    typed_read_set_root: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_refs: ReferencePlanTargetOwnerRefs
+    design_focus: list[str] = Field(min_length=1)
+    forbidden_changes: list[str] = Field(min_length=1)
+    required_view_roles: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_input(self) -> ReferenceBriefInput:
+        workspace_id, project_id = str(self.workspace_id), str(self.project_id)
+        refs = (
+            self.approved_reference_plan_version_ref,
+            self.reference_plan_target_ref,
+            self.visual_foundation_version_ref,
+            self.effective_style_snapshot_ref,
+            self.effective_policy_snapshot_ref,
+        )
+        for ref in refs:
+            _validate_ref(ref, workspace_id, project_id)
+        for ref in refs[:2]:
+            if (
+                ref.owner_kind != "production/reference"
+                or ref.version_family != "reference_plan_set"
+                or ref.fragment_key is not None
+            ):
+                raise ValueError("Reference Brief Input Plan/Target ref is invalid")
+        for ref in refs[2:]:
+            if (
+                ref.owner_kind != "preset"
+                or ref.version_family != "preset_effective_set"
+                or ref.fragment_key is not None
+            ):
+                raise ValueError("Reference Brief Input Visual Foundation ref is invalid")
+        if (
+            _business_key_kind(self.target_business_key) != self.target_kind
+            or self.reference_plan_target_ref.owner_logical_id != self.target_business_key
+            or self.required_view_roles != REFERENCE_BRIEF_VIEW_ROLES[self.target_kind]
+        ):
+            raise ValueError("Reference Brief Input target purpose has drifted")
+        _validate_dependency_selections(
+            self.target_kind, self.dependency_selections, workspace_id, project_id
+        )
+        _validate_source_refs(self.target_kind, self.source_refs, workspace_id, project_id)
+        _validate_sorted_text(self.design_focus, nonempty=True)
+        _validate_sorted_text(self.forbidden_changes, nonempty=True)
+        return self
+
+
 class ReferenceBriefCandidate(StrictSceneAnalysisModel):
     workspace_id: UUID
     project_id: UUID
@@ -216,48 +276,32 @@ class ReferenceBriefCandidate(StrictSceneAnalysisModel):
         self._validate_common_requirements(workspace_id, project_id)
         return self
 
+    def validate_for(self, stage_input: ReferenceBriefInput) -> None:
+        if (
+            self.workspace_id != stage_input.workspace_id
+            or self.project_id != stage_input.project_id
+            or self.approved_reference_plan_version_ref
+            != stage_input.approved_reference_plan_version_ref
+            or self.reference_plan_target_ref != stage_input.reference_plan_target_ref
+            or self.target_business_key != stage_input.target_business_key
+            or self.target_kind != stage_input.target_kind
+            or self.visual_foundation_version_ref != stage_input.visual_foundation_version_ref
+            or self.effective_style_snapshot_ref != stage_input.effective_style_snapshot_ref
+            or self.effective_policy_snapshot_ref != stage_input.effective_policy_snapshot_ref
+            or self.dependency_selections != stage_input.dependency_selections
+            or self.stage_release != stage_input.stage_release
+            or self.typed_read_set_root != stage_input.typed_read_set_root
+            or self.source_refs != stage_input.source_refs
+            or self.positive_instructions != stage_input.design_focus
+            or self.negative_instructions != stage_input.forbidden_changes
+            or self.required_view_roles != stage_input.required_view_roles
+        ):
+            raise ValueError("Reference Brief Candidate input fence has drifted")
+
     def _validate_dependencies(self, workspace_id: str, project_id: str) -> None:
-        if self.target_kind in {"character_identity_anchor", "location_board", "prop_sheet"}:
-            if self.dependency_selections:
-                raise ValueError("Reference Brief base Target has dependencies")
-        elif self.target_kind == "character_appearance":
-            if (
-                len(self.dependency_selections) != 1
-                or _business_key_kind(
-                    self.dependency_selections[0].target_version_ref.owner_logical_id
-                )
-                != "character_identity_anchor"
-            ):
-                raise ValueError("Reference Brief Appearance lacks its exact Identity Anchor")
-        elif not self.dependency_selections:
-            raise ValueError("Reference Brief Composition lacks selected base assets")
-        keys: list[bytes] = []
-        for selection in self.dependency_selections:
-            target_ref, asset_ref = (
-                selection.target_version_ref,
-                selection.selected_asset_version_ref,
-            )
-            _validate_ref(target_ref, workspace_id, project_id)
-            _validate_ref(asset_ref, workspace_id, project_id)
-            if (
-                target_ref.owner_kind != "production/reference"
-                or target_ref.version_family != "reference_plan_set"
-                or target_ref.fragment_key is not None
-                or _business_key_kind(target_ref.owner_logical_id)
-                not in {
-                    "character_appearance",
-                    "character_identity_anchor",
-                    "location_board",
-                    "prop_sheet",
-                }
-                or asset_ref.owner_kind != "asset"
-                or asset_ref.version_family != "asset_base_reference_set"
-                or asset_ref.fragment_key is not None
-            ):
-                raise ValueError("Reference Brief dependency selection is invalid")
-            keys.append(target_ref.owner_logical_id.encode())
-        if keys != sorted(set(keys)):
-            raise ValueError("Reference Brief dependency selections are not sorted and unique")
+        _validate_dependency_selections(
+            self.target_kind, self.dependency_selections, workspace_id, project_id
+        )
 
     def _validate_common_requirements(self, workspace_id: str, project_id: str) -> None:
         slot_keys: list[bytes] = []
@@ -284,40 +328,92 @@ class ReferenceBriefCandidate(StrictSceneAnalysisModel):
             not _stable_text(value.contract_id) for value in self.qc_rubric_refs
         ):
             raise ValueError("Reference Brief QC rubric refs are invalid")
-        for refs in (
-            self.source_refs.identity,
-            self.source_refs.specification,
-            self.source_refs.state,
-            self.source_refs.scene,
-            self.source_refs.occurrence,
-            self.source_refs.interaction,
+        _validate_source_refs(self.target_kind, self.source_refs, workspace_id, project_id)
+
+
+def _validate_source_refs(
+    target_kind: str,
+    refs: ReferencePlanTargetOwnerRefs,
+    workspace_id: str,
+    project_id: str,
+) -> None:
+    for group in (
+        refs.identity,
+        refs.specification,
+        refs.state,
+        refs.scene,
+        refs.occurrence,
+        refs.interaction,
+    ):
+        for ref in group:
+            _validate_ref(ref, workspace_id, project_id)
+        keys = [ref.sort_key() for ref in group]
+        if keys != sorted(set(keys)):
+            raise ValueError("Reference Brief source refs are not sorted and unique")
+    if not all((refs.identity, refs.specification, refs.state, refs.scene, refs.occurrence)):
+        raise ValueError("Reference Brief source closure is incomplete")
+    if target_kind in {
+        "character_appearance",
+        "character_identity_anchor",
+        "location_board",
+        "prop_sheet",
+    }:
+        if (
+            len(refs.identity) != 1
+            or len(refs.specification) != 1
+            or len(refs.state) != 1
+            or refs.interaction
         ):
-            for ref in refs:
-                _validate_ref(ref, workspace_id, project_id)
-            keys = [ref.sort_key() for ref in refs]
-            if keys != sorted(set(keys)):
-                raise ValueError("Reference Brief source refs are not sorted and unique")
-        refs = self.source_refs
-        if not all((refs.identity, refs.specification, refs.state, refs.scene, refs.occurrence)):
-            raise ValueError("Reference Brief source closure is incomplete")
-        if self.target_kind in {
-            "character_appearance",
-            "character_identity_anchor",
-            "location_board",
-            "prop_sheet",
-        }:
-            if (
-                len(refs.identity) != 1
-                or len(refs.specification) != 1
-                or len(refs.state) != 1
-                or refs.interaction
-            ):
-                raise ValueError("Reference Brief base source closure is invalid")
-        elif self.target_kind == "interaction_composition":
-            if len(refs.scene) != 1 or len(refs.interaction) != 1:
-                raise ValueError("Reference Brief Interaction source closure is invalid")
-        elif len(refs.scene) != 1:
-            raise ValueError("Reference Brief Scene source closure is invalid")
+            raise ValueError("Reference Brief base source closure is invalid")
+    elif target_kind == "interaction_composition":
+        if len(refs.scene) != 1 or len(refs.interaction) != 1:
+            raise ValueError("Reference Brief Interaction source closure is invalid")
+    elif len(refs.scene) != 1:
+        raise ValueError("Reference Brief Scene source closure is invalid")
+
+
+def _validate_dependency_selections(
+    target_kind: str,
+    selections: list[ReferenceBriefDependencySelection],
+    workspace_id: str,
+    project_id: str,
+) -> None:
+    if target_kind in {"character_identity_anchor", "location_board", "prop_sheet"}:
+        if selections:
+            raise ValueError("Reference Brief base Target has dependencies")
+    elif target_kind == "character_appearance":
+        if (
+            len(selections) != 1
+            or _business_key_kind(selections[0].target_version_ref.owner_logical_id)
+            != "character_identity_anchor"
+        ):
+            raise ValueError("Reference Brief Appearance lacks its exact Identity Anchor")
+    elif not selections:
+        raise ValueError("Reference Brief Composition lacks selected base assets")
+    keys: list[bytes] = []
+    for selection in selections:
+        target_ref, asset_ref = selection.target_version_ref, selection.selected_asset_version_ref
+        _validate_ref(target_ref, workspace_id, project_id)
+        _validate_ref(asset_ref, workspace_id, project_id)
+        if (
+            target_ref.owner_kind != "production/reference"
+            or target_ref.version_family != "reference_plan_set"
+            or target_ref.fragment_key is not None
+            or _business_key_kind(target_ref.owner_logical_id)
+            not in {
+                "character_appearance",
+                "character_identity_anchor",
+                "location_board",
+                "prop_sheet",
+            }
+            or asset_ref.owner_kind != "asset"
+            or asset_ref.version_family != "asset_base_reference_set"
+            or asset_ref.fragment_key is not None
+        ):
+            raise ValueError("Reference Brief dependency selection is invalid")
+        keys.append(target_ref.owner_logical_id.encode())
+    if keys != sorted(set(keys)):
+        raise ValueError("Reference Brief dependency selections are not sorted and unique")
 
 
 def _business_key_kind(value: str) -> str:
