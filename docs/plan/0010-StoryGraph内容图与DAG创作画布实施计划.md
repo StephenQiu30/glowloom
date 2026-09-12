@@ -233,7 +233,8 @@
   - [x] 在首次准备事务发布完整 Reference Provider Job/PENDING Call 集合，冻结逐 Bundle/slot 请求身份；重放重验全量集合，缺项或损坏不修补，写入失败整体回滚。真实 PostgreSQL 完整旅程与定向 Race 已通过；发送权与恢复仍为后续步骤，不以待发送记录抵扣真实模型验收。
   - [x] 实现唯一发送权和超时丢失结果保护：冻结运行状态与 token，重验精确输入，Workspace 锁内执行并发/每日上限与 CAS；重复领取不再次授权，超时仅转 outcome_unknown，不重置或 Submit。真实业务持久化旅程、独立 PostgreSQL 并发事务与定向 Race 通过。真实 Provider 传输/观察、staging 与 Temporal 调度仍待后续接通。
   - [x] 实现基础 Reference 图片单次 HTTP 传输与有界 PNG 私有 staging Adapter：直接消费冻结请求，复用 HTTP/私有对象写入；本地 TLS、恶意输出、断联、取消、禁止自动重发及既有 PostgreSQL 全槽位预检通过。不代表真实模型或已开放工作流执行入口。
-  - [ ] 在同一 Backend invocation 接通 preflight、发送权、Submit 与终态 Receipt，再接 Temporal 调度；不得将已领取 token 当作独立可重试 Activity 的发送许可。
+  - [x] 同一 Backend invocation 接通 preflight、真实 COMMIT 发送权、单次 Submit 和不可变观察回执；回执/状态同 CAS，历史重放不解密/重发，未知结果不释放未解决名额。生产执行拒绝外层事务，真实 PostgreSQL/TLS 跨连接证明发送前提交可见，故障矩阵与独立并发 CAS 已验证。回执内嵌现有 Call 状态，不新增表；不把传输成功当作正式 AssetVersion 或语义验收。
+  - [ ] 接通 Temporal 调度和应用启动装配：调用完整 Execute，而非重放已领取的 token；按冻结 deadline 恢复未解决调用，再完成 Staged Media Owner/Bundle/QC。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。

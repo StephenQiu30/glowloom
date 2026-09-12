@@ -39,11 +39,11 @@ type GenerationReferenceProviderCall struct {
 	SlotKey             string                         `gorm:"type:varchar(120);not null;uniqueIndex:ux_gen_ref_call_slot,priority:3"`
 	CompiledRequestHash string                         `gorm:"type:char(64);not null;check:ck_gen_ref_call_request_hash,char_length(compiled_request_hash) = 64"`
 	Content             datatypes.JSON                 `gorm:"type:jsonb;not null"`
-	Status              string                         `gorm:"type:varchar(32);not null;check:ck_gen_ref_call_status,status IN ('PENDING','DISPATCHING','OUTCOME_UNKNOWN')"`
-	Revision            int64                          `gorm:"not null;check:ck_gen_ref_call_revision,revision >= 1 AND revision <= 3"`
+	Status              string                         `gorm:"type:varchar(32);not null;check:ck_gen_ref_call_status,status IN ('PENDING','DISPATCHING','OUTCOME_UNKNOWN','SUCCEEDED','FAILED')"`
+	Revision            int64                          `gorm:"not null;check:ck_gen_ref_call_revision,revision >= 1 AND revision <= 4"`
 	StateContent        datatypes.JSON                 `gorm:"type:jsonb;not null"`
 	StateHash           string                         `gorm:"type:char(64);not null;check:ck_gen_ref_call_state_hash,char_length(state_hash) = 64"`
-	SubmissionToken     *uuid.UUID                     `gorm:"type:uuid;uniqueIndex;check:ck_gen_ref_call_dispatch_metadata,(status = 'PENDING' AND submission_token IS NULL AND dispatched_at IS NULL) OR (status IN ('DISPATCHING','OUTCOME_UNKNOWN') AND submission_token IS NOT NULL AND dispatched_at IS NOT NULL)"`
+	SubmissionToken     *uuid.UUID                     `gorm:"type:uuid;uniqueIndex;check:ck_gen_ref_call_dispatch_metadata,(status = 'PENDING' AND submission_token IS NULL AND dispatched_at IS NULL) OR (status IN ('DISPATCHING','OUTCOME_UNKNOWN','SUCCEEDED','FAILED') AND submission_token IS NOT NULL AND dispatched_at IS NOT NULL)"`
 	DispatchedAt        *time.Time                     `gorm:"type:timestamptz"`
 	Job                 GenerationReferenceProviderJob `gorm:"belongsTo:Job;foreignKey:ExecutionID;references:ExecutionID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }

@@ -25,6 +25,16 @@ func (store *Store) WithinReferenceCallDispatch(ctx context.Context, operation f
 	})
 }
 
+func (store *Store) WithinReferenceCallExecution(ctx context.Context, operation func(application.ReferenceCallDispatchRepository) error) error {
+	if store == nil || store.database == nil || store.database.Statement == nil {
+		return errors.New("Reference execution requires a standalone database transaction")
+	}
+	if _, nested := store.database.Statement.ConnPool.(gorm.TxCommitter); nested {
+		return errors.New("Reference execution cannot use an outer transaction or savepoint")
+	}
+	return store.WithinReferenceCallDispatch(ctx, operation)
+}
+
 func referenceCallStateFromRecord(record model.GenerationReferenceProviderCall) (domain.ReferenceCallState, error) {
 	state, err := domain.DecodeReferenceCallState(json.RawMessage(record.StateContent))
 	if err != nil {
@@ -32,6 +42,9 @@ func referenceCallStateFromRecord(record model.GenerationReferenceProviderCall) 
 	}
 	if state.CallKey != record.CallKey || state.Status != record.Status || state.Revision != record.Revision || state.ContentHash != record.StateHash {
 		return domain.ReferenceCallState{}, errors.New("Reference call runtime columns have drifted")
+	}
+	if state.Receipt != nil && (state.Receipt.WorkspaceID != record.WorkspaceID.String() || state.Receipt.ProjectID != record.ProjectID.String() || state.Receipt.Call.ExecutionRef.ID != record.ExecutionID.String()) {
+		return domain.ReferenceCallState{}, errors.New("Reference receipt scope differs from persisted call")
 	}
 	if state.Dispatch == nil {
 		if record.SubmissionToken != nil || record.DispatchedAt != nil {
@@ -61,6 +74,9 @@ func (repo *referenceExecutionRepository) FindReferenceCallState(ctx context.Con
 func (repo *referenceExecutionRepository) UpdateReferenceCallState(ctx context.Context, workspace, project, executionID string, before, after domain.ReferenceCallState) error {
 	if err := domain.ValidateReferenceCallTransition(before, after); err != nil {
 		return err
+	}
+	if after.Receipt != nil && (after.Receipt.WorkspaceID != workspace || after.Receipt.ProjectID != project || after.Receipt.Call.ExecutionRef.ID != executionID) {
+		return errors.New("Reference receipt scope differs from call update")
 	}
 	raw, err := json.Marshal(after)
 	if err != nil {
@@ -97,3 +113,4 @@ func (repo *referenceExecutionRepository) ReferenceCallDispatchUsage(ctx context
 }
 
 var _ application.ReferenceCallDispatchTransactions = (*Store)(nil)
+var _ application.ReferenceCallExecutionTransactions = (*Store)(nil)

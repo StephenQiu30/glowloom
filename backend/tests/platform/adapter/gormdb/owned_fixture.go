@@ -201,6 +201,14 @@ func deleteOwnedScope(transaction *gorm.DB, userIDs []string, workspaceID string
 			Delete(&model.AssetIdentityStateMembership{}).Error; err != nil {
 			return err
 		}
+		// Visual Foundation facts precede Agent models in the startup catalog,
+		// but reference their Candidate/Review rows. Delete this exact project's
+		// dependent heads/snapshots before traversing the catalog in reverse.
+		for _, entry := range []any{&model.PresetEffectiveScopeHead{}, &model.EffectivePolicySnapshot{}, &model.EffectiveStyleSnapshot{}, &model.ProjectPresetBindingVersion{}} {
+			if err := transaction.Session(&gorm.Session{SkipHooks: true}).Unscoped().Where("project_id IN ?", projectIDs).Delete(entry).Error; err != nil {
+				return err
+			}
+		}
 	}
 
 	for index := len(schema.Catalog()) - 1; index >= 0; index-- {

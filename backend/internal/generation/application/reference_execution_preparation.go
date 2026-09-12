@@ -122,8 +122,11 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 }
 
 type referenceExecutionInputs struct {
-	readSet domain.ReferenceExecutionReadSet
-	calls   []domain.ReferenceProviderCallInput
+	readSet  domain.ReferenceExecutionReadSet
+	calls    []domain.ReferenceProviderCallInput
+	target   ReferenceGenerationTarget
+	provider referenceExecutionProviderFacts
+	compiled ReferenceImageCompilation
 }
 
 func readReferenceExecutionInputs(ctx context.Context, repo ReferenceExecutionRepository, registry *MediaFactoryRegistry, actor Actor, command PrepareInitialReferenceExecutionCommand, readProvider func(context.Context, referenceExecutionProviderRepository, string, string, domain.GenerationRevisionRef) (referenceExecutionProviderFacts, error)) (referenceExecutionInputs, error) {
@@ -187,6 +190,7 @@ func readReferenceExecutionInputs(ctx context.Context, repo ReferenceExecutionRe
 	for i, request := range compiled.Requests {
 		result.calls[i] = domain.ReferenceProviderCallInput{BundleIndex: request.BundleIndex, SlotKey: request.SlotKey, CompiledRequestHash: request.ContentHash}
 	}
+	result.target, result.provider, result.compiled = target, provider, compiled
 	return result, nil
 }
 

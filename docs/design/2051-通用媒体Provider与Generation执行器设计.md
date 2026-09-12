@@ -464,6 +464,12 @@ Adapter 不能：
 
 后续应用服务必须在同一 Backend invocation 内完成 preflight、领取并提交唯一发送权、调用 Submit、持久化观察；不能将 `should_dispatch` 写进 Temporal 历史，再交给可重投的独立 Submit Activity。Adapter 不自行查数据库或授予发送权，未完成该应用编排和终态 Receipt 前不开放业务执行入口。传输合同测试使用本地 TLS 接口和对象写入断言，不等于真实付费模型或最终浏览器验收。
 
+首次同步执行由 `ReferenceCallExecutionService` 消费上述链路。预检读取 exact Snapshot/Target/完整清单和冻结 Provider，事务结束后解密 invocation 凭据；预检通过后再次完整重验并提交发送权，只有本调用领取成功才执行 Submit。不是 PENDING 的重放只返回已存状态，不解密、不读最新 Provider、不再提交。发送前失败保持 PENDING；领取后 Adapter 明确未尝试 HTTP 的错误记为 `not_sent`，发送后的不确定性记为 `outcome_unknown`，不得自动重新领取。
+
+执行服务使用要求真实 COMMIT 的事务端口，GORM 实现拒绝外层 SQL Transaction/PreparedStmt Transaction，不能将 savepoint 的 release 当作已持久发送权。状态机故障矩阵可以使用受控测试事务替身，但真实发送边界证据必须来自独立已提交的业务事实：本地 TLS 接收端通过另一数据库连接读到 DISPATCHING，执行返回后另一连接读到同一回执，重复执行没有第二次 HTTP。该测试只使用保留测试域的独立 owner，并按精确 scope 清理。
+
+同步 Submit Receipt 内嵌于既有 Call 状态 JSON，与状态和 Hash 同一次 CAS 发布，不新增专用表或第二事实源。回执有独立内容 Hash，绑定 scope、完整 Call、token、冻结输出 slot、观察时间、受控 disposition/reason 和已验证输出；外部引用使用 Call key + Receipt hash。回执只能从空追加一次，同值重放不变、不同值失败关闭。此处 `outcome_unknown` 的 Submit 回执不是远程终态，仍占未解决上限；未来人工对账不得覆写这份原始发送观察。成功或明确输出拒绝/未发送更新为 SUCCEEDED/FAILED，并保留原因分类；每日调用数仍计已领取的发送边界。到期标记与及时观察落库竞争时，同 token 的有效回执可接在 OUTCOME_UNKNOWN 之后，不产生新 Submit。写入失败则保留原 DISPATCHING/OUTCOME_UNKNOWN，重复执行只观察状态，由恢复流程处理，不能因回执缺失重发。
+
 一个 CandidateBundle 的每个 required slot 对应一个确定性 `ProviderCallKey`：
 
 ```text

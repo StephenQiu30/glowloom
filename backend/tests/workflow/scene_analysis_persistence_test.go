@@ -70,6 +70,13 @@ import (
 )
 
 func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testing.T) {
+	t.Run("transactional_contracts", func(t *testing.T) { runSceneAnalysisPersistenceJourney(t, false) })
+	if !t.Failed() {
+		t.Run("committed_reference_execution", func(t *testing.T) { runSceneAnalysisPersistenceJourney(t, true) })
+	}
+}
+
+func runSceneAnalysisPersistenceJourney(t *testing.T, standaloneExecution bool) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set LANVERSE_TEST_DATABASE_URL to run the Scene Analysis workflow journey")
@@ -88,7 +95,12 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if database.Error != nil {
 		t.Fatalf("begin isolated Scene Analysis journey: %v", database.Error)
 	}
-	t.Cleanup(func() { _ = database.Rollback().Error })
+	committed := false
+	t.Cleanup(func() {
+		if !committed {
+			_ = database.Rollback().Error
+		}
+	})
 	now := time.Date(2026, time.August, 31, 8, 0, 0, 0, time.UTC)
 	fixture := seedSceneAnalysisProject(t, func(value any) error { return database.Create(value).Error }, now)
 	seedVisualFoundationImageCapability(t, func(value any) error { return database.Create(value).Error }, fixture, now)
@@ -1677,6 +1689,15 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				preparation = &prepared
 				assertReferenceProviderJobPersistence(t, ctx, database, authorizationActor, prepared, currentTarget, acceptedBrief, execution.profile.Profile)
 				assertReferenceCallDispatchPersistence(t, ctx, database, authorizationActor, prepared, *execution)
+				if standaloneExecution {
+					if err := database.Commit().Error; err != nil {
+						t.Fatal(err)
+					}
+					committed = true
+					assertReferenceStandaloneExecution(t, ctx, rootDatabase, authorizationActor, prepared, *execution, fixture.userID.String())
+					return
+				}
+				assertReferenceCallExecutionPersistence(t, ctx, database, authorizationActor, prepared, *execution)
 				assertPreparationCounts := func() {
 					t.Helper()
 					var snapshots, heads, receipts, jobs, calls int64

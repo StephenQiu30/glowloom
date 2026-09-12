@@ -2,6 +2,7 @@ package gormdb_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -203,6 +204,105 @@ func TestReferenceCallDispatchCASAndWorkspaceLimits(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// Real, independently committed transactions append exactly one receipt and
+	// release the unresolved slot without refunding the daily dispatch count.
+	var receipt domain.ReferenceCallReceipt
+	if err := store.WithinReferenceCallDispatch(ctx, func(repo application.ReferenceCallDispatchRepository) error {
+		state, err := repo.FindReferenceCallState(ctx, workspace.String(), project.String(), execution.ID, calls[0].CallKey)
+		if err != nil {
+			return err
+		}
+		slot := domain.ReferenceOutputSlot{SlotKey: "back", ViewRole: "back", Required: true, AllowedMediaTypes: []string{"image/png"}, AspectRatio: "1:1", MinWidth: 1024, MinHeight: 1024, MaxBytes: 10 << 20, SemanticRequirements: []string{"preserve identity"}, QCRubricRefs: []domain.ReferenceOutputQCRubricRef{{ContractID: "reference-qc", ContentHash: hash}}}
+		input := domain.ReferenceCallReceiptInput{WorkspaceID: workspace.String(), ProjectID: project.String(), Call: calls[0], SubmissionToken: state.Dispatch.SubmissionToken, Slot: slot, ObservedAt: now.Add(time.Second), Disposition: "staged", Usage: domain.ProviderUsageObservation{ImageCount: 1}}
+		input.Output = &domain.ProviderOutput{OutputKey: "image", StagingObjectKey: "staging/reference/" + input.WorkspaceID + "/" + input.ProjectID + "/" + execution.ID + "/" + calls[0].CallKey + "/" + input.SubmissionToken + "/image.png", SHA256: hash, MediaType: "image/png", Bytes: 100, Width: 1024, Height: 1024}
+		receipt, err = domain.BuildReferenceCallReceipt(input)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rollback := errors.New("injected receipt rollback")
+	if err := store.WithinReferenceCallDispatch(ctx, func(repo application.ReferenceCallDispatchRepository) error {
+		before, err := repo.FindReferenceCallState(ctx, workspace.String(), project.String(), execution.ID, calls[0].CallKey)
+		if err != nil {
+			return err
+		}
+		after, _, err := domain.RecordReferenceCallReceipt(before, receipt)
+		if err != nil {
+			return err
+		}
+		if err := repo.UpdateReferenceCallState(ctx, workspace.String(), project.String(), execution.ID, before, after); err != nil {
+			return err
+		}
+		return rollback
+	}); !errors.Is(err, rollback) {
+		t.Fatalf("receipt rollback: %v", err)
+	}
+	var workers sync.WaitGroup
+	var committed atomic.Int64
+	start := make(chan struct{})
+	for range 6 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			changed := false
+			err := store.WithinReferenceCallDispatch(ctx, func(repo application.ReferenceCallDispatchRepository) error {
+				if err := repo.LockProviderWorkspace(ctx, workspace.String()); err != nil {
+					return err
+				}
+				before, err := repo.FindReferenceCallState(ctx, workspace.String(), project.String(), execution.ID, calls[0].CallKey)
+				if err != nil {
+					return err
+				}
+				after, update, err := domain.RecordReferenceCallReceipt(before, receipt)
+				if err != nil {
+					return err
+				}
+				if !update {
+					return nil
+				}
+				changed = true
+				return repo.UpdateReferenceCallState(ctx, workspace.String(), project.String(), execution.ID, before, after)
+			})
+			if err == nil {
+				if changed {
+					committed.Add(1)
+				}
+				return
+			}
+			var stateErr interface{ SQLState() string }
+			if !errors.Is(err, application.ErrReferenceCallStateConflict) && !(errors.As(err, &stateErr) && stateErr.SQLState() == "40001") {
+				t.Error(err)
+			}
+		}()
+	}
+	close(start)
+	workers.Wait()
+	if committed.Load() != 1 {
+		t.Fatalf("receipt had %d committed writers", committed.Load())
+	}
+	if winners := claimBatch(keys, 2); winners != 1 {
+		t.Fatalf("completed receipt released %d new slots", winners)
+	}
+	if err := store.WithinReferenceCallDispatch(ctx, func(repo application.ReferenceCallDispatchRepository) error {
+		state, err := repo.FindReferenceCallState(ctx, workspace.String(), project.String(), execution.ID, calls[0].CallKey)
+		if err != nil {
+			return err
+		}
+		if state.Status != domain.ProviderCallSucceeded || state.Receipt == nil || state.Receipt.ContentHash != receipt.ContentHash {
+			return errors.New("receipt was not committed with state")
+		}
+		usage, err := repo.ReferenceCallDispatchUsage(ctx, workspace.String(), now, now.Add(time.Hour))
+		if err != nil {
+			return err
+		}
+		if usage.Unresolved != 2 || usage.Daily != 3 {
+			return errors.New("receipt released daily count or incorrect concurrency")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestReferenceCallDispatchStoreRejectsInvalidTransactions(t *testing.T) {
@@ -214,6 +314,18 @@ func TestReferenceCallDispatchStoreRejectsInvalidTransactions(t *testing.T) {
 		})
 		if err == nil {
 			t.Fatal("invalid dispatch transaction configuration accepted")
+		}
+	}
+}
+
+func TestReferenceCallExecutionRequiresPhysicalCommit(t *testing.T) {
+	for _, database := range []*gorm.DB{nil, {}, {Config: &gorm.Config{}, Statement: &gorm.Statement{ConnPool: &sql.Tx{}}}} {
+		store := generationgorm.New(database)
+		if err := store.WithinReferenceCallExecution(context.Background(), func(application.ReferenceCallDispatchRepository) error {
+			t.Fatal("execution accepted a savepoint as a commit")
+			return nil
+		}); err == nil {
+			t.Fatal("non-standalone execution transaction accepted")
 		}
 	}
 }

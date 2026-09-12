@@ -192,6 +192,7 @@ func refreshEvolvingConstraints(ctx context.Context, database *gorm.DB) error {
 		{model: &model.GenerationTarget{}, name: "ck_gen_target_kind"},
 		{model: &model.GenerationReferenceProviderCall{}, name: "ck_gen_ref_call_status"},
 		{model: &model.GenerationReferenceProviderCall{}, name: "ck_gen_ref_call_revision"},
+		{model: &model.GenerationReferenceProviderCall{}, name: "ck_gen_ref_call_dispatch_metadata"},
 	}
 	return database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		for _, constraint := range constraints {

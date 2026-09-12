@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
-	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 )
 
 var ErrReferenceCallStateConflict = errors.New("Reference Provider call state conflicts with expected revision")
@@ -83,24 +82,7 @@ func (service *ReferenceCallDispatchService) Claim(ctx context.Context, actor Ac
 		if state.Revision != command.ExpectedRevision {
 			return ErrReferenceCallStateConflict
 		}
-		receipt, err := repo.FindReferenceExecutionReceipt(ctx, execution.WorkspaceID, execution.ID)
-		if err != nil {
-			return err
-		}
-		prepared := PrepareInitialReferenceExecutionCommand{WorkspaceID: execution.WorkspaceID, ProjectID: execution.ProjectID, TargetRef: execution.ReadSet.TargetRef, AuthorizationRef: execution.ReadSet.AuthorizationRef, IdempotencyKey: receipt.IdempotencyKey}
-		inputs, err := readReferenceExecutionInputs(ctx, repo, service.registry, actor, prepared, readFrozenReferenceExecutionProvider)
-		if err != nil {
-			return err
-		}
-		preparer := Actor{UserID: execution.CreatedBy, TokenVersion: execution.MembershipTokenVersion}
-		hash, err := referenceExecutionPreparationInputHash(preparer, prepared, inputs.readSet)
-		if err != nil {
-			return err
-		}
-		if hash != receipt.InputHash {
-			return platformcommand.ErrInputMismatch
-		}
-		if _, err = validateReferenceExecutionPublication(ctx, repo, preparer, prepared, inputs, receipt, execution); err != nil {
+		if _, err = readReferenceDispatchInputs(ctx, repo, service.registry, actor, execution); err != nil {
 			return err
 		}
 		limits := domain.DefaultReferenceGenerationLimits()

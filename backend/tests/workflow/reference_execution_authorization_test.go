@@ -26,6 +26,7 @@ type referenceExecutionFixture struct {
 	connection    generationapp.ProviderConnectionResult
 	profile       generationapp.ProviderModelProfileResult
 	binding       generationapp.ProjectProviderBindingResult
+	secrets       generationapp.ProviderRuntimeSecrets
 }
 
 // Only the descriptor is registered: this test cannot create a Provider runtime.
@@ -58,7 +59,8 @@ func assertInitialReferenceExecutionAuthorization(t *testing.T, ctx context.Cont
 	if err != nil {
 		t.Fatal(err)
 	}
-	configuration := generationapp.NewProviderConfigurationService(configurationTransactions, catalog, providersecret.Open(key), generationapp.ProviderConfigurationConfig{Now: clock, NewID: uuid.NewString})
+	secrets := providersecret.Open(key)
+	configuration := generationapp.NewProviderConfigurationService(configurationTransactions, catalog, secrets, generationapp.ProviderConfigurationConfig{Now: clock, NewID: uuid.NewString})
 	connection, err := configuration.CreateConnection(ctx, actor, generationapp.CreateProviderConnectionCommand{WorkspaceID: target.WorkspaceID, ConnectionKey: "reference-primary", PresetKey: "openai.official-api", PresetVersion: 1, DisplayName: "Reference authorization fixture", Credentials: map[string]string{"api_key": "sk-reference-execution-fixture"}, IdempotencyKey: "reference-connection"})
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +128,7 @@ func assertInitialReferenceExecutionAuthorization(t *testing.T, ctx context.Cont
 	if value, err := service.AuthorizeInitial(ctx, generationapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion + 1}, command); err == nil || value.ContentHash != "" {
 		t.Fatal("execution authorization ignored Token version")
 	}
-	return referenceExecutionFixture{service, command, authorized, configuration, connection, profile, binding}
+	return referenceExecutionFixture{service, command, authorized, configuration, connection, profile, binding, secrets}
 }
 
 func assertReferenceExecutionAuthorizationRejected(t *testing.T, ctx context.Context, fixture *referenceExecutionFixture, actor generationapp.Actor, checkNewKey bool) {
