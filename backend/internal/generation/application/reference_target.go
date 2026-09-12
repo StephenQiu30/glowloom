@@ -158,14 +158,8 @@ func (service *ReferenceGenerationTargetService) BuildInitial(ctx context.Contex
 	return result, nil
 }
 
-type ReferenceGenerationTargetRef struct {
-	ID          string `json:"id"`
-	Revision    int64  `json:"revision"`
-	ContentHash string `json:"content_hash"`
-}
-
-func referenceGenerationTargetRef(value ReferenceGenerationTarget) ReferenceGenerationTargetRef {
-	return ReferenceGenerationTargetRef{value.ID, value.Revision, value.ContentHash}
+func referenceGenerationTargetRef(value ReferenceGenerationTarget) domain.GenerationRevisionRef {
+	return domain.GenerationRevisionRef{ID: value.ID, Revision: value.Revision, ContentHash: value.ContentHash}
 }
 
 func readReferenceTargetAuthorization(ctx context.Context, repo ReferenceGenerationTargetReadRepository, actor Actor, command BuildReferenceGenerationTargetCommand, brief agentapp.AcceptedReferenceBrief, source ReferenceGenerationSourceCompilation) (domain.ReferenceGenerationAuthorization, error) {

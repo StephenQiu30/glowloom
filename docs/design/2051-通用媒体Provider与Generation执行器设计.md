@@ -411,6 +411,10 @@ Secret 明文、Prompt、Provider URL 和响应内容不进入 Snapshot。Creden
 
 执行方读取已发布基础 Target 时，使用 Backend Generation 的 exact ID/revision/hash 入口，不以 Payload 解码成功作为执行资格。入口在调用方事务内重验当前操作者写权限、原生成授权人的 Token/权限、唯一发布回执、accepted Brief、当前 World/来源、Preset capability 和 Target Head，按冻结输出策略重编译并比较完整 Target 与回执输入 Hash。原授权人与后续执行操作者可以不同，但不能用后者身份改写前者的授权。读取不创建 Target、回执或执行授权；历史 Target 仍保留，失效时仅拒绝作为当前执行输入。
 
+首次执行授权复用 Command Receipt，operation 为 `generation.reference.authorize_execution_initial`，不新增授权表。合同明确 Workspace/Project、exact Generation Target 与用户选定的 Project Provider Binding ID/revision/hash；`kind/reason_code=initial_execution`、previous Execution 为空、unresolved acknowledgements 为空数组，绑定操作者、Token Version、动作回执 ID 与 UTC 微秒时间，并对完整合同重算 Hash。事务先沿既有 Provider 配置写入锁序锁 Workspace，再消费 Target exact read；精确 Binding 必须属于当前项目且用途为 Reference 图片，关联 Connection/Profile 已启用、内容身份与关系一致，Binding/Connection/Profile/Credential 均仍指向指定版本。不以查询到的新版本替换用户选择。
+
+重复授权 key 仍重验上述事实，回执输入 Hash 绑定 Target read-set 和关联 Provider 版本内容身份；漂移拒绝、同输入返回原回执，失败不留下新授权。缺少选择或配置返回 `provider_configuration_required`，不影响解析与非视觉节点。授权只记录执行意图，不解密 Secret、不调用 Adapter、不预留成本、不创建 Execution/Call；槽位与模型能力、Request Compiler、运行限额及 expected Execution Head 的完整校验仍必须由执行准备在同一事务内消费授权并完成。首次授权不能在执行准备时冒充 retry 或 switch_provider。
+
 执行准备必须证明：
 
 - Binding 属于同 Workspace/Project，已启用且 modality/capability 覆盖 Target 全部 slot；

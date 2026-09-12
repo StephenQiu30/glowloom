@@ -32,6 +32,7 @@ import (
 	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/schema"
@@ -1658,13 +1659,66 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				t.Fatalf("Reference Generation Target replay drifted: %v", buildErr)
 			}
 			assertReferenceGenerationTargetContract(t, published)
-			targetQuery := generationapp.ReadReferenceGenerationTargetQuery{WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), TargetRef: generationapp.ReferenceGenerationTargetRef{ID: published.ID, Revision: published.Revision, ContentHash: published.ContentHash}}
+			targetQuery := generationapp.ReadReferenceGenerationTargetQuery{WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), TargetRef: generationdomain.GenerationRevisionRef{ID: published.ID, Revision: published.Revision, ContentHash: published.ContentHash}}
 			currentTarget, readErr := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
 			if readErr != nil || !reflect.DeepEqual(currentTarget, published) {
 				t.Fatalf("read current persisted Reference Target: %v", readErr)
 			}
 			if deniedTarget, deniedErr := builder.ReadCurrent(ctx, generationapp.Actor{UserID: fixture.userID.String(), TokenVersion: 2}, targetQuery); deniedErr == nil || deniedTarget.ID != "" {
 				t.Fatal("Target read ignored caller Token version")
+			}
+			var execution *referenceExecutionFixture
+			if published.TargetKind == "character_identity_anchor" {
+				created := assertInitialReferenceExecutionAuthorization(t, ctx, generationgorm.New(database), generationgorm.NewProviderConfigurationStore(database), authorizationActor, published, now.Add(6*time.Minute))
+				execution = &created
+				var executionAuthorizationCount int64
+				if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceExecutionOperation, published.ID).Count(&executionAuthorizationCount).Error; err != nil || executionAuthorizationCount != 1 {
+					t.Fatalf("execution authorization receipt count=%d err=%v", executionAuthorizationCount, err)
+				}
+				if execution.authorization.HumanActionRef == authorized.HumanActionRef {
+					t.Fatal("execution authorization reused the generation human action")
+				}
+				for _, fault := range []string{"connection_disabled", "profile_disabled", "credential_rotated", "binding_replaced", "connection_hash", "receipt_input"} {
+					if err = database.SavePoint("reference_execution_fault").Error; err != nil {
+						t.Fatal(err)
+					}
+					switch fault {
+					case "connection_disabled":
+						_, err = execution.configuration.SetConnectionState(ctx, authorizationActor, generationapp.SetProviderConnectionStateCommand{WorkspaceID: published.WorkspaceID, ConnectionKey: "reference-primary", State: "disabled", ExpectedRevision: execution.connection.Connection.Revision, ExpectedContentHash: execution.connection.Connection.ContentHash, IdempotencyKey: "reference-disable-connection"})
+					case "profile_disabled":
+						_, err = execution.configuration.SetModelProfileState(ctx, authorizationActor, generationapp.SetProviderModelProfileStateCommand{WorkspaceID: published.WorkspaceID, ProfileKey: "reference-image", State: "disabled", ExpectedRevision: execution.profile.Profile.Revision, ExpectedContentHash: execution.profile.Profile.ContentHash, IdempotencyKey: "reference-disable-profile"})
+					case "credential_rotated":
+						_, err = execution.configuration.RotateCredential(ctx, authorizationActor, generationapp.RotateProviderCredentialCommand{WorkspaceID: published.WorkspaceID, ConnectionKey: "reference-primary", ExpectedRevision: execution.connection.Connection.Revision, ExpectedContentHash: execution.connection.Connection.ContentHash, Credentials: map[string]string{"api_key": "sk-reference-rotated-fixture"}, IdempotencyKey: "reference-rotate-credential"})
+					case "binding_replaced":
+						var replacement generationapp.ProjectProviderBindingResult
+						replacement, err = execution.configuration.PublishProjectBinding(ctx, authorizationActor, generationapp.PublishProjectProviderBindingCommand{WorkspaceID: published.WorkspaceID, ProjectID: published.ProjectID, Purpose: "reference_asset", ConnectionVersionID: execution.connection.Connection.ID, ModelProfileVersionID: execution.profile.Profile.ID, ExpectedRevision: execution.binding.Binding.Revision, ExpectedContentHash: execution.binding.Binding.ContentHash, IdempotencyKey: "reference-replace-binding"})
+						if err == nil {
+							changed := execution.command
+							changed.SelectedProviderBindingRef = generationdomain.GenerationRevisionRef{ID: replacement.Binding.ID, Revision: replacement.Binding.Revision, ContentHash: replacement.Binding.ContentHash}
+							if value, changedErr := execution.service.AuthorizeInitial(ctx, authorizationActor, changed); !errors.Is(changedErr, platformcommand.ErrInputMismatch) || value.ContentHash != "" {
+								t.Fatalf("new valid binding reused execution authorization key: %v", changedErr)
+							}
+						}
+					case "connection_hash":
+						err = database.Model(&model.ProviderConnectionVersion{}).Where("id = ?", execution.connection.Connection.ID).UpdateColumns(map[string]any{"content_hash": strings.Repeat("f", 64)}).Error
+					case "receipt_input":
+						err = database.Model(&model.CommandReceipt{}).Where("id = ?", execution.authorization.HumanActionRef).UpdateColumns(map[string]any{"input_hash": strings.Repeat("f", 64)}).Error
+					}
+					if err != nil {
+						t.Fatalf("inject execution authorization fault %s: %v", fault, err)
+					}
+					assertReferenceExecutionAuthorizationRejected(t, ctx, execution, authorizationActor, fault != "receipt_input")
+					if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceExecutionOperation, published.ID).Count(&executionAuthorizationCount).Error; err != nil || executionAuthorizationCount != 1 {
+						t.Fatalf("rejected execution wrote authorization: count=%d err=%v", executionAuthorizationCount, err)
+					}
+					if err = database.RollbackTo("reference_execution_fault").Error; err != nil {
+						t.Fatal(err)
+					}
+				}
+				var executionRequestCount int64
+				if err = database.Model(&model.GenerationRequest{}).Where("target_id = ?", published.ID).Count(&executionRequestCount).Error; err != nil || executionRequestCount != 0 {
+					t.Fatalf("authorization created a Provider request: count=%d err=%v", executionRequestCount, err)
+				}
 			}
 			reorderedBuild := buildCommand
 			reorderedBuild.SlotPolicies = slices.Clone(policies)
@@ -1738,6 +1792,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			_, driftedReplay := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
 			_, driftedTargetReplay := builder.BuildInitial(ctx, authorizationActor, buildCommand)
 			invalidCurrentTarget, driftedTargetRead := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
+			if execution != nil {
+				assertReferenceExecutionAuthorizationRejected(t, ctx, execution, authorizationActor, true)
+			}
 			newAuthorization := authorizationCommand
 			newAuthorization.IdempotencyKey += ":source-drift"
 			_, driftedWrite := authorizer.AuthorizeInitial(ctx, authorizationActor, newAuthorization)
@@ -1776,6 +1833,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			}
 			_, deniedAuthorization := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
 			deniedTarget, deniedRead := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
+			if execution != nil {
+				assertReferenceExecutionAuthorizationRejected(t, ctx, execution, authorizationActor, true)
+			}
 			if err = database.RollbackTo("reference_authorization_membership").Error; err != nil {
 				t.Fatal(err)
 			}

@@ -30,7 +30,7 @@ type ReferenceGenerationTargetReadRepository interface {
 
 type ReadReferenceGenerationTargetQuery struct {
 	WorkspaceID, ProjectID string
-	TargetRef              ReferenceGenerationTargetRef
+	TargetRef              domain.GenerationRevisionRef
 }
 
 func (service *ReferenceGenerationTargetService) ReadCurrent(ctx context.Context, actor Actor, query ReadReferenceGenerationTargetQuery) (ReferenceGenerationTarget, error) {
@@ -181,7 +181,7 @@ func revalidateReferenceTargetPublication(actor Actor, persisted ReferenceGenera
 		!reflect.DeepEqual(result, persisted) || receipt.CreatedBy != actor.UserID || !receipt.CreatedAt.Equal(persisted.CreatedAt) {
 		return ReferenceGenerationTarget{}, conflict("Reference generation Target receipt has drifted")
 	}
-	var ref ReferenceGenerationTargetRef
+	var ref domain.GenerationRevisionRef
 	if canonical.Decode(receipt.Result, &ref) != nil || ref != referenceGenerationTargetRef(result) {
 		return ReferenceGenerationTarget{}, conflict("Reference generation Target receipt identity has drifted")
 	}

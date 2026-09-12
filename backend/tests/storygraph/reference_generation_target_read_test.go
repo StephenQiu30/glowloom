@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
+	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 )
 
@@ -23,7 +24,7 @@ func TestReferenceGenerationTargetReadRevalidatesCurrentFactsWithoutWriting(t *t
 			if err != nil {
 				t.Fatal(err)
 			}
-			query := generationapp.ReadReferenceGenerationTargetQuery{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, TargetRef: generationapp.ReferenceGenerationTargetRef{ID: published.ID, Revision: published.Revision, ContentHash: published.ContentHash}}
+			query := generationapp.ReadReferenceGenerationTargetQuery{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, TargetRef: generationdomain.GenerationRevisionRef{ID: published.ID, Revision: published.Revision, ContentHash: published.ContentHash}}
 			caller := actor
 			receiptKey := generationapp.BuildReferenceGenerationTargetOperation + ":" + command.IdempotencyKey
 			receipt := repo.receipts[receiptKey]
