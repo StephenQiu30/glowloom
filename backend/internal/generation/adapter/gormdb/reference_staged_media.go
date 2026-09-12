@@ -36,6 +36,10 @@ func (repo *referenceExecutionRepository) FindReferenceStagedMedia(ctx context.C
 		}
 		return domain.ReferenceStagedMedia{}, err
 	}
+	return referenceStagedMediaFromRecord(record)
+}
+
+func referenceStagedMediaFromRecord(record model.GenerationReferenceStagedMedia) (domain.ReferenceStagedMedia, error) {
 	v, err := domain.DecodeReferenceStagedMedia(json.RawMessage(record.Content))
 	if err != nil {
 		return domain.ReferenceStagedMedia{}, err

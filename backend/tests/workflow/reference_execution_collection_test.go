@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -39,6 +41,10 @@ func assertReferenceExecutionCollection(t *testing.T, parent context.Context, da
 	defer cancel()
 	store := generationgorm.New(database)
 	query := genapp.NewReferenceExecutionQuery(store)
+	bundleQuery := genapp.NewReferenceBundleQuery(store)
+	if _, err := bundleQuery.Get(ctx, actor, fixture.execution.ProjectID, fixture.execution.ID); err == nil {
+		t.Fatal("pending Calls produced Bundle inputs")
+	}
 	before, err := query.Get(ctx, actor, fixture.execution.ProjectID, fixture.execution.ID)
 	if err != nil || before.Total < 2 {
 		t.Fatalf("collection fixture: %+v %v", before, err)
@@ -153,6 +159,84 @@ func assertReferenceExecutionCollection(t *testing.T, parent context.Context, da
 	}
 	if !replyLoss.lost.Load() || !activities.lost.Load() || activities.activityCalls.Load() != int64(before.Total+3) {
 		t.Fatalf("missing commit/reply recovery: %d", activities.activityCalls.Load())
+	}
+	bundles, err := bundleQuery.Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID)
+	if err != nil || len(bundles.Bundles) == 0 {
+		t.Fatalf("persisted bundle inputs: %v", err)
+	}
+	var slots, failures int
+	for _, bundle := range bundles.Bundles {
+		if bundle.BundleQC.Status == "passed" || bundle.BundleQC.InputRoot != bundle.Input.SlotSetRoot {
+			t.Fatal("unassessed rights or non-acyclic QC passed")
+		}
+		for _, slot := range bundle.Input.Slots {
+			slots++
+			if slot.CallStatus == gen.ProviderCallFailed {
+				failures++
+			}
+		}
+	}
+	if slots != before.Total || failures != 1 {
+		t.Fatal("bundle query omitted required outcomes")
+	}
+	if replay, err := bundleQuery.Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID); err != nil || !reflect.DeepEqual(replay, bundles) {
+		t.Fatal("bundle replay changed frozen identity")
+	}
+	for _, mode := range []string{"actor", "token", "project", "execution", "outer_transaction"} {
+		reader, who, project, id := bundleQuery, actor, command.ProjectID, command.ExecutionRef.ID
+		switch mode {
+		case "actor":
+			who.UserID = uuid.NewString()
+		case "token":
+			who.TokenVersion++
+		case "project":
+			project = uuid.NewString()
+		case "execution":
+			id = uuid.NewString()
+		case "outer_transaction":
+			tx := database.Begin()
+			if tx.Error != nil {
+				t.Fatal(tx.Error)
+			}
+			defer tx.Rollback()
+			reader = genapp.NewReferenceBundleQuery(generationgorm.New(tx))
+		}
+		if value, err := reader.Get(ctx, who, project, id); err == nil || !reflect.DeepEqual(value, gen.ReferenceBundleInputCollection{}) {
+			t.Fatalf("bundle query accepted %s", mode)
+		}
+	}
+	// A concurrent write after the exact Execution read must not mix into this
+	// snapshot. Only this journey's owned row is changed and restored.
+	var row model.GenerationReferenceStagedMedia
+	if err := database.Where("project_id = ? AND call_key IN ?", command.ProjectID, referenceCollectionKeys(before)).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := database.Model(&model.GenerationReferenceStagedMedia{}).Where("id = ? AND project_id = ?", row.ID, command.ProjectID).UpdateColumn("content_hash", row.ContentHash).Error; err != nil {
+			t.Error(err)
+		}
+	}()
+	callback := "test_reference_bundle_snapshot_" + uuid.NewString()
+	var fired atomic.Bool
+	var concurrentErr error
+	if err := database.Callback().Query().After("gorm:query").Register(callback, func(tx *generationtestgorm.Database) {
+		if tx.Statement.Schema == nil || tx.Statement.Schema.Name != "GenerationReferenceExecution" || !fired.CompareAndSwap(false, true) {
+			return
+		}
+		concurrentErr = database.Model(&model.GenerationReferenceStagedMedia{}).Where("id = ? AND project_id = ?", row.ID, command.ProjectID).UpdateColumn("content_hash", strings.Repeat("f", 64)).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = database.Callback().Query().Remove(callback) }()
+	during, err := bundleQuery.Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID)
+	if err != nil || concurrentErr != nil || !fired.Load() || !reflect.DeepEqual(during, bundles) {
+		t.Fatalf("mixed bundle snapshot: %v %v", err, concurrentErr)
+	}
+	if _, err := bundleQuery.Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID); err == nil {
+		t.Fatal("next snapshot ignored media identity drift")
+	}
+	if err := database.Model(&model.GenerationReferenceStagedMedia{}).Where("id = ? AND project_id = ?", row.ID, command.ProjectID).UpdateColumn("content_hash", row.ContentHash).Error; err != nil {
+		t.Fatal(err)
 	}
 	repeated, err := collection.Start(ctx, runActor, command)
 	if err != nil || repeated.ID != run.ID {

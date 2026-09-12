@@ -909,6 +909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/reference-executions/{execution_id}/bundle-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取完整明确结果的同组 Bundle Input 和确定性 QC 派生快照；未决结果拒绝，权利未评估保持 blocked，不代表 Vision 或资产发布。 */
+        get: operations["getReferenceBundleInputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/reference-executions/{execution_id}/workflow-runs": {
         parameters: {
             query?: never;
@@ -2816,6 +2833,114 @@ export interface components {
             revision_id: string;
             revision: number;
             revision_hash: string;
+            content_hash: string;
+        };
+        ReferenceBundleSlotResponse: {
+            slot_key: string;
+            view_role: string;
+            provider_call_ref: {
+                /** @constant */
+                contract_id: "reference-provider-call";
+                execution_ref: {
+                    /** Format: uuid */
+                    id: string;
+                    revision: number;
+                    content_hash: string;
+                };
+                bundle_index: number;
+                slot_key: string;
+                compiled_request_hash: string;
+                call_key: string;
+            };
+            call_state_hash: string;
+            /** @enum {string} */
+            call_status: "SUCCEEDED" | "FAILED";
+            staged_media_ref?: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            media_sha256: string;
+            deterministic_qc_result_ref: {
+                /** Format: uuid */
+                id: string;
+                content_hash: string;
+            };
+        };
+        ReferenceDeterministicQCResponse: {
+            /** Format: uuid */
+            qc_result_id: string;
+            /** @enum {string} */
+            scope: "slot" | "bundle";
+            input_root: string;
+            policy_ref: {
+                contract_id: string;
+                content_hash: string;
+            };
+            /** @enum {string} */
+            status: "passed" | "blocked" | "failed";
+            issues: ("rights_not_assessed" | "provider_explicit_failure" | "media_rejected" | "media_policy_failed" | "duplicate_image")[];
+            content_hash: string;
+        };
+        ReferenceCandidateBundleInputResponse: {
+            /** Format: uuid */
+            bundle_input_id: string;
+            generation_target_ref: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            execution_ref: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            /** @constant */
+            generation_round: 1;
+            candidate_bundle_index: number;
+            output_contract_ref: {
+                contract_id: string;
+                content_hash: string;
+            };
+            slots: components["schemas"]["ReferenceBundleSlotResponse"][];
+            slot_set_root: string;
+            /** @enum {string} */
+            bundle_completeness: "complete" | "partial_explicit_failure";
+            bundle_deterministic_qc_result_ref: {
+                /** Format: uuid */
+                id: string;
+                content_hash: string;
+            };
+            dependency_root_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            content_hash: string;
+        };
+        ReferenceBundleEvaluationResponse: {
+            input: components["schemas"]["ReferenceCandidateBundleInputResponse"];
+            slot_qc_results: components["schemas"]["ReferenceDeterministicQCResponse"][];
+            bundle_qc_result: components["schemas"]["ReferenceDeterministicQCResponse"];
+        };
+        ReferenceBundleInputsResponse: {
+            /** @constant */
+            contract_id: "reference-bundle-input-collection";
+            generation_target_ref: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            execution_ref: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            job_hash: string;
+            bundles: components["schemas"]["ReferenceBundleEvaluationResponse"][];
             content_hash: string;
         };
         ReferenceExecutionWorkflowStartRequest: {
@@ -7030,6 +7155,38 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["StructureIdentitySnapshotResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getReferenceBundleInputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                execution_id: components["parameters"]["execution_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 精确身份和读取权限校验后的派生快照。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceBundleInputsResponse"];
                     };
                 };
             };

@@ -42,6 +42,7 @@ func TestReferenceCoverageQueriesAreTypedReadOnlySnapshots(t *testing.T) {
 	}{
 		{"/api/projects/{project_id}/reference-coverage", []string{"#/components/parameters/project_id"}, "#/components/schemas/ReferenceCoverageMatrixResponse"},
 		{"/api/projects/{project_id}/reference-executions/{execution_id}", []string{"#/components/parameters/project_id", "#/components/parameters/execution_id"}, "#/components/schemas/ReferenceExecutionProgressResponse"},
+		{"/api/projects/{project_id}/reference-executions/{execution_id}/bundle-inputs", []string{"#/components/parameters/project_id", "#/components/parameters/execution_id"}, "#/components/schemas/ReferenceBundleInputsResponse"},
 		{"/api/projects/{project_id}/reference-targets/{target_version_id}", []string{"#/components/parameters/project_id", "#/components/parameters/target_version_id"}, "#/components/schemas/ReferenceTargetDetailResponse"},
 	}
 	for _, check := range checks {

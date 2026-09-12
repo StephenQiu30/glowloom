@@ -155,10 +155,15 @@ declare global {
     type ProjectResponse = components["schemas"]["ProjectResponse"];
     type PublishImportCommitRequest = components["schemas"]["PublishImportCommitRequest"];
     type ReferenceBriefCandidateRefResponse = components["schemas"]["ReferenceBriefCandidateRefResponse"];
+    type ReferenceBundleEvaluationResponse = components["schemas"]["ReferenceBundleEvaluationResponse"];
+    type ReferenceBundleInputsResponse = components["schemas"]["ReferenceBundleInputsResponse"];
+    type ReferenceBundleSlotResponse = components["schemas"]["ReferenceBundleSlotResponse"];
+    type ReferenceCandidateBundleInputResponse = components["schemas"]["ReferenceCandidateBundleInputResponse"];
     type ReferenceCoverageBlockerResponse = components["schemas"]["ReferenceCoverageBlockerResponse"];
     type ReferenceCoverageMatrixResponse = components["schemas"]["ReferenceCoverageMatrixResponse"];
     type ReferenceCoverageRowResponse = components["schemas"]["ReferenceCoverageRowResponse"];
     type ReferenceCoverageSummaryResponse = components["schemas"]["ReferenceCoverageSummaryResponse"];
+    type ReferenceDeterministicQCResponse = components["schemas"]["ReferenceDeterministicQCResponse"];
     type ReferenceExecutionProgressResponse = components["schemas"]["ReferenceExecutionProgressResponse"];
     type ReferenceExecutionWorkflowStartRequest = components["schemas"]["ReferenceExecutionWorkflowStartRequest"];
     type ReferenceExecutionWorkflowStartResponse = components["schemas"]["ReferenceExecutionWorkflowStartResponse"];

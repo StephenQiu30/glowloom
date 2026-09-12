@@ -240,6 +240,7 @@
     - [x] 补齐完整 Job 的只读执行进度：严格全量聚合、当前读取权限、同一 SQL 快照与 no-store 查询；覆盖部分失败、未知优先、损坏集合拒绝与历史读取零发送，不以传输状态抵扣 Bundle/QC。真实 PostgreSQL 验证并发提交不混入当前快照，既有剧本/Temporal 系统旅程验证未知 Call 不被单个成功掩盖。
     - [x] 接通成功 Receipt→唯一 Generation Staged Media→事务外私有字节校验→CAS ready/rejected，并由现有 Call Activity 消费；应用故障测试覆盖暂时读取失败、取消、权限撤销及完成提交失败，真实 PostgreSQL/Temporal 验证跨连接 quarantine 可见、完成持久化、提交后响应丢失重试与不重发 Provider，不提前发布 AssetVersion。完整波次、Bundle/QC、retention/pin 和正式 Owner Apply 仍按后续顺序完成。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
+  - [x] 从完整已终结 Job/Call/媒体事实编译同组 Bundle Input、per-slot 与 bundle 确定性 QC，提供一致快照只读查询；拒绝混组、缺项和漂移，权利未评估保持 blocked，不冒充 CandidateBundle/Vision/Selection 发布。真实 PostgreSQL/Temporal 旅程验证全槽位、明确失败、重放与跨连接一致快照；完整权利策略、Vision 和正式发布仍按后续步骤完成。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 

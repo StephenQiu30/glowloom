@@ -1989,6 +1989,67 @@
         }
       }
     },
+    "/api/projects/{project_id}/reference-executions/{execution_id}/bundle-inputs": {
+      "get": {
+        "operationId": "getReferenceBundleInputs",
+        "description": "读取完整明确结果的同组 Bundle Input 和确定性 QC 派生快照；未决结果拒绝，权利未评估保持 blocked，不代表 Vision 或资产发布。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/execution_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "精确身份和读取权限校验后的派生快照。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceBundleInputsResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/projects/{project_id}/reference-executions/{execution_id}/workflow-runs": {
       "post": {
         "operationId": "startReferenceExecutionWorkflow",
@@ -7599,6 +7660,462 @@
           "revision": { "type": "integer", "minimum": 1 },
           "revision_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "ReferenceBundleSlotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slot_key",
+          "view_role",
+          "provider_call_ref",
+          "call_state_hash",
+          "call_status",
+          "media_sha256",
+          "deterministic_qc_result_ref"
+        ],
+        "properties": {
+          "slot_key": {
+            "type": "string"
+          },
+          "view_role": {
+            "type": "string"
+          },
+          "provider_call_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "contract_id",
+              "execution_ref",
+              "bundle_index",
+              "slot_key",
+              "compiled_request_hash",
+              "call_key"
+            ],
+            "properties": {
+              "contract_id": {
+                "type": "string",
+                "const": "reference-provider-call"
+              },
+              "execution_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "revision",
+                  "content_hash"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              },
+              "bundle_index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3
+              },
+              "slot_key": {
+                "type": "string"
+              },
+              "compiled_request_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "call_key": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "call_state_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "call_status": {
+            "type": "string",
+            "enum": [
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          },
+          "staged_media_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "media_sha256": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{64})?$"
+          },
+          "deterministic_qc_result_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      },
+      "ReferenceDeterministicQCResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "qc_result_id",
+          "scope",
+          "input_root",
+          "policy_ref",
+          "status",
+          "issues",
+          "content_hash"
+        ],
+        "properties": {
+          "qc_result_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "slot",
+              "bundle"
+            ]
+          },
+          "input_root": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "policy_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "contract_id",
+              "content_hash"
+            ],
+            "properties": {
+              "contract_id": {
+                "type": "string"
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "blocked",
+              "failed"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "rights_not_assessed",
+                "provider_explicit_failure",
+                "media_rejected",
+                "media_policy_failed",
+                "duplicate_image"
+              ]
+            }
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ReferenceCandidateBundleInputResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bundle_input_id",
+          "generation_target_ref",
+          "execution_ref",
+          "generation_round",
+          "candidate_bundle_index",
+          "output_contract_ref",
+          "slots",
+          "slot_set_root",
+          "bundle_completeness",
+          "bundle_deterministic_qc_result_ref",
+          "dependency_root_hash",
+          "created_at",
+          "content_hash"
+        ],
+        "properties": {
+          "bundle_input_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generation_target_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "execution_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "generation_round": {
+            "type": "integer",
+            "const": 1
+          },
+          "candidate_bundle_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "output_contract_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "contract_id",
+              "content_hash"
+            ],
+            "properties": {
+              "contract_id": {
+                "type": "string"
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "slots": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ReferenceBundleSlotResponse"
+            }
+          },
+          "slot_set_root": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "bundle_completeness": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial_explicit_failure"
+            ]
+          },
+          "bundle_deterministic_qc_result_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "dependency_root_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ReferenceBundleEvaluationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "slot_qc_results",
+          "bundle_qc_result"
+        ],
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/ReferenceCandidateBundleInputResponse"
+          },
+          "slot_qc_results": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ReferenceDeterministicQCResponse"
+            }
+          },
+          "bundle_qc_result": {
+            "$ref": "#/components/schemas/ReferenceDeterministicQCResponse"
+          }
+        }
+      },
+      "ReferenceBundleInputsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contract_id",
+          "generation_target_ref",
+          "execution_ref",
+          "job_hash",
+          "bundles",
+          "content_hash"
+        ],
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "const": "reference-bundle-input-collection"
+          },
+          "generation_target_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "execution_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "job_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "bundles": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/ReferenceBundleEvaluationResponse"
+            }
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
         }
       },
       "ReferenceExecutionWorkflowStartRequest": {
