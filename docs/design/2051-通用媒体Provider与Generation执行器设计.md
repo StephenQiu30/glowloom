@@ -174,6 +174,10 @@ ReferenceExecutionAuthorizationContract
 
 `generation_round=1` 必须绑定 `initial_generation` 用户动作、Gate 3 已批准 Target 与有效 Brief；round 大于 1 必须绑定 `regenerate_candidates`，并覆盖 reason、base Target/CandidateSet refs 和授权 scope。Temporal Activity 重投、Provider retry、Provider 切换或媒体下载重试都不能递增 generation round；它们只可能在同一 Target 下创建新的、显式授权的 Execution Snapshot。
 
+首次生成授权先由 Backend `generation` 应用服务写入既有 Command Receipt（operation=`generation.reference.authorize_initial`），不增加授权专用表；`human_action_ref` 为该不可变回执 UUID，Result 保存完整授权合同。合同绑定同 scope 的 exact Plan/Target OwnerRef、1–4 个候选 Bundle、操作者与会员 Token Version，`kind/reason_code` 均为 `initial_generation`，两个 base refs 均为空。内容 Hash 使用 Production Canonical JSON，并将自身 Hash 置空；时间统一为 UTC 微秒，便于持久化后逐字段重验。
+
+应用服务在同一事务中锁定并重验 Workspace/Membership/用户 Token/Project，消费 Agent Owner 的 accepted Brief exact read，比较命令中的 Plan/Target/Brief revision/hash 后写回执。重复 key 必须重验当前权限和事实；相同输入返回同一回执，输入漂移拒绝。授权只记录用户生成意图，不证明已履约、不递增 generation round、不启动 Workflow/Provider、不消耗成本额度；后续 Target Builder 必须在发布事务内再次验证该回执与 expected Head。当前写入口只支持首次生成，重新生成必须等正式 base Target/CandidateSet 事实具备后按上面的独立授权分支实施，不以首次授权兼容重试或重新生成，也不提前增加独立前端入口。
+
 ### 4.3 Reference Brief fence
 
 每个可执行 Target 必须绑定恰 1 个 `reference_brief_candidate_production` 成功 Candidate Revision：

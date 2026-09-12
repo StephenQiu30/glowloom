@@ -29,6 +29,7 @@ import (
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoring "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
 	eventingdomain "github.com/StephenQiu30/lanverse/backend/internal/eventing/domain"
+	generationgorm "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/gormdb"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	generationdomain "github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
@@ -1588,6 +1589,65 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			decodedOutput, outputErr := generationdomain.DecodeReferenceOutputContract(rawOutput, row.TargetKind)
 			if outputErr != nil || !reflect.DeepEqual(decodedOutput, output) {
 				t.Fatalf("output roundtrip: %v", outputErr)
+			}
+			if err = database.SavePoint("reference_generation_authorization_case").Error; err != nil {
+				t.Fatal(err)
+			}
+			authorizer, authorizationErr := generationapp.NewReferenceGenerationAuthorizationService(generationgorm.New(database), func() time.Time { return now.Add(4 * time.Minute) }, uuid.NewString)
+			if authorizationErr != nil {
+				t.Fatal(authorizationErr)
+			}
+			authorizationCommand := generationapp.AuthorizeInitialReferenceGenerationCommand{
+				WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+				PlanVersionID: acceptedBrief.Input.ApprovedReferencePlanVersionRef.OwnerVersionID, PlanContentHash: acceptedBrief.Input.ApprovedReferencePlanVersionRef.OwnerContentHash,
+				TargetVersionID: row.TargetVersionID, TargetContentHash: acceptedBrief.Input.ReferencePlanTargetRef.OwnerContentHash,
+				BriefRevisionID: acceptedBrief.RevisionID, BriefRevisionHash: acceptedBrief.RevisionHash,
+				CandidateBundleCount: output.CandidateBundleCount, IdempotencyKey: "reference-initial:" + row.TargetVersionID,
+			}
+			authorizationActor := generationapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1}
+			authorized, authorizationErr := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+			if authorizationErr != nil || authorized.RequestedCandidateBundleCount != output.CandidateBundleCount || authorized.ReferencePlanTargetRef.OwnerLogicalID != row.TargetBusinessKey {
+				t.Fatalf("authorize initial Reference generation: %#v err=%v", authorized, authorizationErr)
+			}
+			replayed, authorizationErr := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+			if authorizationErr != nil || !reflect.DeepEqual(authorized, replayed) {
+				t.Fatalf("authorization replay drifted: %v", authorizationErr)
+			}
+			var authorizationCount int64
+			if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceGenerationOperation, row.TargetVersionID).Count(&authorizationCount).Error; err != nil || authorizationCount != 1 {
+				t.Fatalf("authorization receipt count=%d err=%v", authorizationCount, err)
+			}
+			changed := authorizationCommand
+			changed.CandidateBundleCount++
+			if _, err = authorizer.AuthorizeInitial(ctx, authorizationActor, changed); err == nil {
+				t.Fatal("authorization accepted changed Bundle request under same key")
+			}
+			changed = authorizationCommand
+			changed.TargetContentHash = strings.Repeat("f", 64)
+			if _, err = authorizer.AuthorizeInitial(ctx, authorizationActor, changed); err == nil {
+				t.Fatal("authorization accepted drifted Target")
+			}
+			if _, err = authorizer.AuthorizeInitial(ctx, generationapp.Actor{UserID: fixture.userID.String(), TokenVersion: 2}, authorizationCommand); err == nil {
+				t.Fatal("authorization replay ignored Token version")
+			}
+			if err = database.SavePoint("reference_authorization_membership").Error; err != nil {
+				t.Fatal(err)
+			}
+			if err = database.Model(&model.Membership{}).Where("workspace_id = ? AND user_id = ?", fixture.workspaceID, fixture.userID).Update("role", "viewer").Error; err != nil {
+				t.Fatal(err)
+			}
+			_, deniedAuthorization := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+			if err = database.RollbackTo("reference_authorization_membership").Error; err != nil {
+				t.Fatal(err)
+			}
+			if deniedAuthorization == nil {
+				t.Fatal("authorization replay ignored revoked write role")
+			}
+			if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceGenerationOperation, row.TargetVersionID).Count(&authorizationCount).Error; err != nil || authorizationCount != 1 {
+				t.Fatalf("rejected authorization changed receipts: count=%d err=%v", authorizationCount, err)
+			}
+			if err = database.RollbackTo("reference_generation_authorization_case").Error; err != nil {
+				t.Fatal(err)
 			}
 		case row.Fulfillment == "not_generated":
 			if row.Status != "not_generated" || row.BriefCandidate != nil {
