@@ -104,7 +104,7 @@ func (repo *referenceTargetRepository) PublishInitialReferenceGenerationTarget(c
 		return created.Error
 	}
 	if created.RowsAffected != 1 {
-		return errors.New("Reference generation Target Head conflicts with expected initial revision")
+		return &application.Error{Code: "state_conflict", Message: "Reference generation Target already has an initial revision", Status: 409}
 	}
 	return nil
 }

@@ -2050,6 +2050,305 @@
         }
       }
     },
+    "/api/projects/{project_id}/reference-targets/{target_version_id}/generation-authorizations": {
+      "post": {
+        "operationId": "authorizeInitialReferenceGeneration",
+        "description": "记录独立首次生成授权，不构建 Target 或发送请求。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "name": "target_version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceGenerationAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建或幂等返回同一事实身份。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceGenerationAuthorizationResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reference-generation-targets": {
+      "post": {
+        "operationId": "buildInitialReferenceGenerationTarget",
+        "description": "从已授权 accepted Brief 发布首轮 Target；不授权执行。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceGenerationTargetBuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建或幂等返回同一事实身份。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceGenerationTargetBuildResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}/execution-authorizations": {
+      "post": {
+        "operationId": "authorizeInitialReferenceExecution",
+        "description": "用户明确选择 Provider Binding，记录独立执行授权，不发送请求。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "name": "generation_target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceExecutionAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建或幂等返回同一事实身份。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceExecutionAuthorizationResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}/executions": {
+      "post": {
+        "operationId": "prepareInitialReferenceExecution",
+        "description": "准备首轮 Execution 和全量 PENDING Call；须另行显式启动工作流。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "name": "generation_target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceExecutionPreparationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建或幂等返回同一事实身份。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceExecutionPreparationResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/projects/{project_id}/reference-executions/{execution_id}/workflow-runs": {
       "post": {
         "operationId": "startReferenceExecutionWorkflow",
@@ -8115,6 +8414,271 @@
           "content_hash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ReferenceCommandActionRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "content_hash"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ReferenceOutputSlotPolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "view_role",
+          "allowed_media_types",
+          "aspect_ratio",
+          "min_width",
+          "min_height",
+          "max_bytes"
+        ],
+        "properties": {
+          "view_role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "allowed_media_types": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "string",
+              "enum": [
+                "image/png",
+                "image/jpeg"
+              ]
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "min_width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8192
+          },
+          "min_height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8192
+          },
+          "max_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760
+          }
+        }
+      },
+      "ReferenceGenerationAuthorizationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id",
+          "plan_version_id",
+          "plan_content_hash",
+          "target_content_hash",
+          "brief_revision_id",
+          "brief_revision_hash",
+          "candidate_bundle_count",
+          "idempotency_key"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plan_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "plan_content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "target_content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "brief_revision_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brief_revision_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "candidate_bundle_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "ReferenceGenerationTargetBuildRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id",
+          "generation_authorization_ref",
+          "brief_revision_id",
+          "brief_revision_hash",
+          "slot_policies",
+          "idempotency_key"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generation_authorization_ref": {
+            "$ref": "#/components/schemas/ReferenceCommandActionRef"
+          },
+          "brief_revision_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brief_revision_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "slot_policies": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/ReferenceOutputSlotPolicyRequest"
+            }
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "ReferenceExecutionAuthorizationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id",
+          "target_hash",
+          "selected_provider_binding_ref",
+          "idempotency_key"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "selected_provider_binding_ref": {
+            "$ref": "#/components/schemas/ReferenceExecutionProgressResponse/properties/execution_ref"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "ReferenceExecutionPreparationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id",
+          "target_hash",
+          "execution_authorization_ref",
+          "idempotency_key"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "execution_authorization_ref": {
+            "$ref": "#/components/schemas/ReferenceCommandActionRef"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "ReferenceGenerationAuthorizationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "generation_authorization_ref"
+        ],
+        "properties": {
+          "generation_authorization_ref": {
+            "$ref": "#/components/schemas/ReferenceCommandActionRef"
+          }
+        }
+      },
+      "ReferenceGenerationTargetBuildResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "generation_target_ref"
+        ],
+        "properties": {
+          "generation_target_ref": {
+            "$ref": "#/components/schemas/ReferenceExecutionProgressResponse/properties/execution_ref"
+          }
+        }
+      },
+      "ReferenceExecutionAuthorizationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "execution_authorization_ref"
+        ],
+        "properties": {
+          "execution_authorization_ref": {
+            "$ref": "#/components/schemas/ReferenceCommandActionRef"
+          }
+        }
+      },
+      "ReferenceExecutionPreparationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "execution_ref"
+        ],
+        "properties": {
+          "execution_ref": {
+            "$ref": "#/components/schemas/ReferenceExecutionProgressResponse/properties/execution_ref"
           }
         }
       },

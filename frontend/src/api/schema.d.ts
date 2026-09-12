@@ -926,6 +926,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/reference-targets/{target_version_id}/generation-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 记录独立首次生成授权，不构建 Target 或发送请求。 */
+        post: operations["authorizeInitialReferenceGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/reference-generation-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 从已授权 accepted Brief 发布首轮 Target；不授权执行。 */
+        post: operations["buildInitialReferenceGenerationTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}/execution-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 用户明确选择 Provider Binding，记录独立执行授权，不发送请求。 */
+        post: operations["authorizeInitialReferenceExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/reference-generation-targets/{generation_target_id}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 准备首轮 Execution 和全量 PENDING Call；须另行显式启动工作流。 */
+        post: operations["prepareInitialReferenceExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/reference-executions/{execution_id}/workflow-runs": {
         parameters: {
             query?: never;
@@ -2942,6 +3010,68 @@ export interface components {
             job_hash: string;
             bundles: components["schemas"]["ReferenceBundleEvaluationResponse"][];
             content_hash: string;
+        };
+        ReferenceCommandActionRef: {
+            /** Format: uuid */
+            id: string;
+            content_hash: string;
+        };
+        ReferenceOutputSlotPolicyRequest: {
+            view_role: string;
+            allowed_media_types: ("image/png" | "image/jpeg")[];
+            aspect_ratio: string;
+            min_width: number;
+            min_height: number;
+            max_bytes: number;
+        };
+        ReferenceGenerationAuthorizationRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            plan_version_id: string;
+            plan_content_hash: string;
+            target_content_hash: string;
+            /** Format: uuid */
+            brief_revision_id: string;
+            brief_revision_hash: string;
+            candidate_bundle_count: number;
+            idempotency_key: string;
+        };
+        ReferenceGenerationTargetBuildRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+            generation_authorization_ref: components["schemas"]["ReferenceCommandActionRef"];
+            /** Format: uuid */
+            brief_revision_id: string;
+            brief_revision_hash: string;
+            slot_policies: components["schemas"]["ReferenceOutputSlotPolicyRequest"][];
+            idempotency_key: string;
+        };
+        ReferenceExecutionAuthorizationRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+            target_hash: string;
+            selected_provider_binding_ref: components["schemas"]["ReferenceExecutionProgressResponse"]["execution_ref"];
+            idempotency_key: string;
+        };
+        ReferenceExecutionPreparationRequest: {
+            /** Format: uuid */
+            workspace_id: string;
+            target_hash: string;
+            execution_authorization_ref: components["schemas"]["ReferenceCommandActionRef"];
+            idempotency_key: string;
+        };
+        ReferenceGenerationAuthorizationResponse: {
+            generation_authorization_ref: components["schemas"]["ReferenceCommandActionRef"];
+        };
+        ReferenceGenerationTargetBuildResponse: {
+            generation_target_ref: components["schemas"]["ReferenceExecutionProgressResponse"]["execution_ref"];
+        };
+        ReferenceExecutionAuthorizationResponse: {
+            execution_authorization_ref: components["schemas"]["ReferenceCommandActionRef"];
+        };
+        ReferenceExecutionPreparationResponse: {
+            execution_ref: components["schemas"]["ReferenceExecutionProgressResponse"]["execution_ref"];
         };
         ReferenceExecutionWorkflowStartRequest: {
             execution_hash: string;
@@ -7187,6 +7317,149 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ReferenceBundleInputsResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    authorizeInitialReferenceGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                target_version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferenceGenerationAuthorizationRequest"];
+            };
+        };
+        responses: {
+            /** @description 创建或幂等返回同一事实身份。 */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceGenerationAuthorizationResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    buildInitialReferenceGenerationTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferenceGenerationTargetBuildRequest"];
+            };
+        };
+        responses: {
+            /** @description 创建或幂等返回同一事实身份。 */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceGenerationTargetBuildResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    authorizeInitialReferenceExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                generation_target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferenceExecutionAuthorizationRequest"];
+            };
+        };
+        responses: {
+            /** @description 创建或幂等返回同一事实身份。 */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceExecutionAuthorizationResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    prepareInitialReferenceExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                generation_target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferenceExecutionPreparationRequest"];
+            };
+        };
+        responses: {
+            /** @description 创建或幂等返回同一事实身份。 */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceExecutionPreparationResponse"];
                     };
                 };
             };

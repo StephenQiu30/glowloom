@@ -1685,27 +1685,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			if executeCommittedReference != nil && prepareAdditionalReference == nil {
 				prepareAdditionalReference = func(t *testing.T, first referencePreparationFixture, configuration referenceExecutionFixture) referencePreparationFixture {
 					t.Helper()
-					authorization, err := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
-					if err != nil {
-						t.Fatal(err)
-					}
-					command := buildCommand
-					command.AuthorizationID = authorization.HumanActionRef
-					command.AuthorizationHash = authorization.ContentHash
-					target, err := builder.BuildInitial(ctx, authorizationActor, command)
-					if err != nil {
-						t.Fatal(err)
-					}
-					executionAuthorization, err := configuration.service.AuthorizeInitial(ctx, authorizationActor, generationapp.AuthorizeInitialReferenceExecutionCommand{WorkspaceID: target.WorkspaceID, ProjectID: target.ProjectID, TargetRef: generationdomain.GenerationRevisionRef{ID: target.ID, Revision: target.Revision, ContentHash: target.ContentHash}, SelectedProviderBindingRef: configuration.command.SelectedProviderBindingRef, IdempotencyKey: "reference-group-authorize:" + target.ID})
-					if err != nil {
-						t.Fatal(err)
-					}
-					prepare := generationapp.PrepareInitialReferenceExecutionCommand{WorkspaceID: target.WorkspaceID, ProjectID: target.ProjectID, TargetRef: executionAuthorization.GenerationTargetRef, AuthorizationRef: generationdomain.GenerationActionRef{ID: executionAuthorization.HumanActionRef, ContentHash: executionAuthorization.ContentHash}, IdempotencyKey: "reference-group-prepare:" + target.ID}
-					prepared, err := first.service.PrepareInitial(ctx, authorizationActor, prepare)
-					if err != nil {
-						t.Fatal(err)
-					}
-					return referencePreparationFixture{service: first.service, command: prepare, execution: prepared}
+					return prepareReferenceOverHTTP(t, ctx, database, authorizationActor, authorizationCommand, buildCommand, authorizer, builder, configuration, first)
 				}
 			}
 			if published.TargetKind == "character_identity_anchor" {

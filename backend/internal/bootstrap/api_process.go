@@ -419,6 +419,27 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	}
 	referenceExecutionStartHandler := workflowhttp.NewReferenceExecutionStartHandler(referenceExecutionStart, tokenVerifier)
 	referenceBundleHandler := generationhttp.NewReferenceBundleHandler(generationapp.NewReferenceBundleQuery(generationgorm.New(database)), tokenVerifier)
+	referenceStore := generationgorm.New(database)
+	referenceGenerationAuthorization, err := generationapp.NewReferenceGenerationAuthorizationService(referenceStore, time.Now, uuid.NewString)
+	if err != nil {
+		return fmt.Errorf("Reference generation authorization composition failed: %w", err)
+	}
+	referenceTargetBuilder, err := generationapp.NewReferenceGenerationTargetService(referenceStore, time.Now, uuid.NewString)
+	if err != nil {
+		return fmt.Errorf("Reference target builder composition failed: %w", err)
+	}
+	referenceExecutionAuthorization, err := generationapp.NewReferenceExecutionAuthorizationService(referenceStore, time.Now, uuid.NewString)
+	if err != nil {
+		return fmt.Errorf("Reference execution authorization composition failed: %w", err)
+	}
+	referenceExecutionPreparation, err := generationapp.NewReferenceExecutionPreparationService(referenceStore, providerRegistry, time.Now, uuid.NewString)
+	if err != nil {
+		return fmt.Errorf("Reference execution preparation composition failed: %w", err)
+	}
+	referencePreparationHandler, err := generationhttp.NewReferencePreparationHandler(referenceGenerationAuthorization, referenceTargetBuilder, referenceExecutionAuthorization, referenceExecutionPreparation, tokenVerifier)
+	if err != nil {
+		return fmt.Errorf("Reference preparation HTTP composition failed: %w", err)
+	}
 	humanGateOwners, err := workflowexecution.NewHumanGateOwnerRouter(
 		workflowproduction.New(
 			bibleService, bibleService, projectService, planningService, episodePlanningService, storyboardService,
@@ -486,6 +507,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				referenceExecutionHandler.Register(mux)
 				referenceExecutionStartHandler.Register(mux)
 				referenceBundleHandler.Register(mux)
+				referencePreparationHandler.Register(mux)
 			},
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

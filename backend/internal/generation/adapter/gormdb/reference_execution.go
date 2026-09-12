@@ -57,7 +57,7 @@ func (repo *referenceExecutionRepository) PublishInitialReferenceExecution(ctx c
 		return created.Error
 	}
 	if created.RowsAffected != 1 {
-		return errors.New("Reference execution Head conflicts with expected initial revision")
+		return &application.Error{Code: "state_conflict", Message: "Reference execution already has an initial revision", Status: 409}
 	}
 	return nil
 }

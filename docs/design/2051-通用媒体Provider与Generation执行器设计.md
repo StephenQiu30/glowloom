@@ -670,7 +670,18 @@ Checkpoint 使用 D09 的 Collection Receipt，不写一张“gate passed=true�
 
 ## 10. 命令、Query 与接口边界
 
-本文固定语义命令，不固定 HTTP 路径：
+本文固定语义命令；已实现的首次基础生成服务通过以下 HTTP 适配接入，不合并或隐式代行两个用户授权动作：
+
+| POST 路径（均以 `/api/projects/{project_id}` 为前缀） | 既有应用命令 | 返回身份 |
+|---|---|---|
+| `/reference-targets/{target_version_id}/generation-authorizations` | 首次生成授权；exact Plan/Target/Brief、候选组数量 | generation_authorization_ref |
+| `/reference-generation-targets` | 使用上述授权与逐槽位媒体 Policy 构建首轮 Target | generation_target_ref |
+| `/reference-generation-targets/{generation_target_id}/execution-authorizations` | 用户明确选择 exact Provider Binding 并授权执行 | execution_authorization_ref |
+| `/reference-generation-targets/{generation_target_id}/executions` | 使用上述授权准备首轮 Execution 与全量 PENDING Call | execution_ref |
+
+请求显式携带 workspace_id、精确 Hash 与各自 idempotency_key；Project/目标 ID 只取路径，首次 revision/expected Head 由服务端固定，不接受自由 Provider 参数、Prompt、重试或发送许可。请求为有界闭合 JSON，拒绝重复字段、未知字段和 query selector；先认证，再由既有 Owner 校验当前权限、Token、事实与回执。相同输入返回同一身份，幂等输入冲突为 409，非法请求为 422，内部错误不泄露诊断内容。响应仅返回身份并设置 no-store，不返回源码、凭据、私有地址或执行许可。准备不启动 Provider；后续仍显式调用既有 Execution workflow-runs 入口。该接入不增加业务表、协调器或运行入口，不代表依赖型目标、重新生成、前端交互或正式媒体验收完成。
+
+其余命令边界如下：
 
 | Command / Query | 输入 | 输出/副作用 |
 |---|---|---|

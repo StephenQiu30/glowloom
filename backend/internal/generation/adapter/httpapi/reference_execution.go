@@ -9,6 +9,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/access/authentication"
 	"github.com/StephenQiu30/lanverse/backend/internal/generation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
+	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 	platformhttp "github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
 )
 
@@ -55,7 +56,9 @@ func (handler *ReferenceExecutionHandler) get(writer http.ResponseWriter, reques
 
 func writeError(writer http.ResponseWriter, request *http.Request, err error) {
 	var problem *application.Error
-	if !errors.As(err, &problem) {
+	if errors.Is(err, platformcommand.ErrInputMismatch) {
+		problem = &application.Error{Code: "resource_conflict", Message: "Idempotency key input differs", Status: 409}
+	} else if !errors.As(err, &problem) {
 		problem = &application.Error{Code: "internal_error", Message: "Internal server error", Status: 500}
 	}
 	platformhttp.WriteProblem(writer, request, platformhttp.Problem{Code: problem.Code, Message: problem.Message, Status: problem.Status})

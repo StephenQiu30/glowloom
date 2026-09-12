@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 
@@ -150,7 +151,9 @@ func readReferenceTargetInputs(ctx context.Context, repo ReferenceGenerationTarg
 	}
 	output, err := CompileReferenceOutputContract(brief.Input, brief.Candidate, authorization.RequestedCandidateBundleCount, command.SlotPolicies)
 	if err != nil {
-		return facts, err
+		// The accepted Brief was validated above; a caller's slot policy must
+		// be reported as invalid input, retaining the compiler error for diagnosis.
+		return facts, errors.Join(invalid("Invalid Reference output slot policies"), err)
 	}
 	root, err := referenceTargetReadSetHash(brief, source, authorization, output)
 	if err != nil {
