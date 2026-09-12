@@ -70,13 +70,6 @@ import (
 )
 
 func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testing.T) {
-	t.Run("transactional_contracts", func(t *testing.T) { runSceneAnalysisPersistenceJourney(t, false) })
-	if !t.Failed() {
-		t.Run("committed_reference_execution", func(t *testing.T) { runSceneAnalysisPersistenceJourney(t, true) })
-	}
-}
-
-func runSceneAnalysisPersistenceJourney(t *testing.T, standaloneExecution bool) {
 	databaseURL := os.Getenv("LANVERSE_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set LANVERSE_TEST_DATABASE_URL to run the Scene Analysis workflow journey")
@@ -1567,6 +1560,13 @@ func runSceneAnalysisPersistenceJourney(t *testing.T, standaloneExecution bool) 
 		len(referenceCoverage.ContentHash) != 64 {
 		t.Fatalf("read Reference Coverage Matrix: matrix=%#v err=%v", referenceCoverage, err)
 	}
+	// Keep the accepted script/World/Brief facts once. Fault cases below still
+	// run in full; their writes must not become the committed Provider fixture.
+	const referenceFactsSavepoint = "accepted_reference_facts"
+	if err = database.SavePoint(referenceFactsSavepoint).Error; err != nil {
+		t.Fatal(err)
+	}
+	var executeCommittedReference func(t *testing.T)
 	for _, row := range referenceCoverage.Rows {
 		switch {
 		case len(row.DependsOnTargetBusinessKeys) == 0 && row.Fulfillment != "not_generated":
@@ -1689,13 +1689,30 @@ func runSceneAnalysisPersistenceJourney(t *testing.T, standaloneExecution bool) 
 				preparation = &prepared
 				assertReferenceProviderJobPersistence(t, ctx, database, authorizationActor, prepared, currentTarget, acceptedBrief, execution.profile.Profile)
 				assertReferenceCallDispatchPersistence(t, ctx, database, authorizationActor, prepared, *execution)
-				if standaloneExecution {
-					if err := database.Commit().Error; err != nil {
-						t.Fatal(err)
+				if executeCommittedReference == nil {
+					executeCommittedReference = func(t *testing.T) {
+						t.Helper()
+						// Recreate only the authorized Call on the accepted facts,
+						// not another complete script analysis journey.
+						authorization, err := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+						if err != nil {
+							t.Fatal(err)
+						}
+						command := buildCommand
+						command.AuthorizationID = authorization.HumanActionRef
+						command.AuthorizationHash = authorization.ContentHash
+						target, err := builder.BuildInitial(ctx, authorizationActor, command)
+						if err != nil {
+							t.Fatal(err)
+						}
+						configuration := assertInitialReferenceExecutionAuthorization(t, ctx, generationgorm.New(database), generationgorm.NewProviderConfigurationStore(database), authorizationActor, target, now.Add(6*time.Minute))
+						prepared := assertInitialReferenceExecutionPreparation(t, ctx, generationgorm.New(database), authorizationActor, target, configuration.authorization, now.Add(7*time.Minute))
+						if err := database.Commit().Error; err != nil {
+							t.Fatal(err)
+						}
+						committed = true
+						assertReferenceStandaloneExecution(t, ctx, rootDatabase, authorizationActor, prepared, configuration, fixture.userID.String())
 					}
-					committed = true
-					assertReferenceStandaloneExecution(t, ctx, rootDatabase, authorizationActor, prepared, *execution, fixture.userID.String())
-					return
 				}
 				assertReferenceCallExecutionPersistence(t, ctx, database, authorizationActor, prepared, *execution)
 				assertPreparationCounts := func() {
@@ -3030,6 +3047,16 @@ func runSceneAnalysisPersistenceJourney(t *testing.T, standaloneExecution bool) 
 			storyGraphVersionCountAfterDrift,
 		)
 	}
+	if t.Failed() {
+		return
+	}
+	if executeCommittedReference == nil {
+		t.Fatal("journey did not prepare a character Reference Call for committed execution")
+	}
+	if err = database.RollbackTo(referenceFactsSavepoint).Error; err != nil {
+		t.Fatalf("restore accepted Reference facts after fault assertions: %v", err)
+	}
+	t.Run("committed_reference_execution", executeCommittedReference)
 }
 
 func countStoryGraphNodeType(nodes []storygraphdomain.Node, nodeType storygraphdomain.NodeType) int {
