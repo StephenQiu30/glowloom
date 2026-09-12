@@ -190,6 +190,8 @@ func refreshEvolvingConstraints(ctx context.Context, database *gorm.DB) error {
 		{model: &model.WorkflowHumanGateInput{}, name: "ck_wrk_human_gate_input_subject"},
 		{model: &model.ProductionWorldClaim{}, name: "ck_scr_world_claim_type"},
 		{model: &model.GenerationTarget{}, name: "ck_gen_target_kind"},
+		{model: &model.GenerationReferenceProviderCall{}, name: "ck_gen_ref_call_status"},
+		{model: &model.GenerationReferenceProviderCall{}, name: "ck_gen_ref_call_revision"},
 	}
 	return database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		for _, constraint := range constraints {

@@ -498,6 +498,12 @@ ProviderCall
 
 当前 MVP 不建立新的动态 PriceQuote/付费 Reservation 完成门。运行保护只冻结 `OperationalGenerationLimitPolicy`：单 Target 最大 Bundle、单 Bundle 最大 slot、最大输入/输出字节、并发、超时和每日运维调用上限。它不表达货币、用户余额或套餐，且策略缺失时使用代码内安全默认值，不阻断已授权 MVP 旅程。
 
+首次发送权由独立 Backend Command 获取，不复用准备回执返回许可。事务先锁 Workspace，重验当前操作者、当前 Target/Brief/来源、原执行授权和精确 Execution/Head/Job；Provider 只读取快照中冻结的版本，不用新的 Binding/Profile 替换进行中的执行。Snapshot 同时冻结准备操作者的 Token Version，以重算原准备回执输入 Hash，不把当前领取者冒充原准备人。使用同一 Registry/Compiler 重编译并核对完整 read-set 和 Call 请求身份后，按 expected Call revision CAS 完成 `PENDING → DISPATCHING`。只有该事务提交成功的调用路径返回 `should_dispatch=true`；重复命令和事务失败均不能再次返回许可。
+
+调用运行状态与不可变身份分开保存：状态内容 Hash 覆盖 Call key、revision、submission token、领取者及其 Token Version、UTC 微秒发送边界时间、冻结 deadline 和 outcome-unknown 时间。submission token 全局唯一，初始 PENDING 没有 token。Workspace 锁内直接统计既有 Call：DISPATCHING 与 OUTCOME_UNKNOWN 均占用未解决调用上限；当日 UTC 时间范围内已越发送边界的记录占每日调用数。超限不改变 Call，不新增额度/计费表，未知结果不会自动释放未解决额度。
+
+deadline 到期后，恢复命令只读取冻结执行、完整 Job/Call 身份和运行状态，验证当前操作者的项目权限及原 submission token；不重读最新 Provider、重编译已过期业务来源或调用 Submit。未到 deadline 保持 DISPATCHING；到期 CAS 标记 OUTCOME_UNKNOWN；重复恢复幂等，永不退回 PENDING。该步骤只落地发送权与丢失结果保护，实际 Provider 传输、成功/失败观察、媒体 staging 与 Temporal 调度按后续实施，不把取得许可当远程调用成功。
+
 ## 8. Staged Media、CandidateBundle 与 QC
 
 ### 8.1 Generation-owned staged media

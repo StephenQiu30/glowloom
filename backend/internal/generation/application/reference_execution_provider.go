@@ -32,7 +32,7 @@ func readReferenceExecutionProvider(ctx context.Context, repo referenceExecution
 	return facts, err
 }
 
-func readSelectedReferenceExecutionProvider(ctx context.Context, repo referenceExecutionProviderRepository, workspace, project string, selected domain.GenerationRevisionRef) (referenceExecutionProviderFacts, error) {
+func readFrozenReferenceExecutionProvider(ctx context.Context, repo referenceExecutionProviderRepository, workspace, project string, selected domain.GenerationRevisionRef) (referenceExecutionProviderFacts, error) {
 	var facts referenceExecutionProviderFacts
 	binding, err := repo.FindProjectProviderBinding(ctx, selected.ID)
 	if err != nil {
@@ -56,11 +56,20 @@ func readSelectedReferenceExecutionProvider(ctx context.Context, repo referenceE
 	if err = validateResolvedProviderFacts(binding, connection, credential, profile); err != nil {
 		return facts, err
 	}
+	return referenceExecutionProviderFacts{connection, credential, profile}, nil
+}
+
+func readSelectedReferenceExecutionProvider(ctx context.Context, repo referenceExecutionProviderRepository, workspace, project string, selected domain.GenerationRevisionRef) (referenceExecutionProviderFacts, error) {
+	facts, err := readFrozenReferenceExecutionProvider(ctx, repo, workspace, project, selected)
+	if err != nil {
+		return facts, err
+	}
+	connection, credential, profile := facts.connection, facts.credential, facts.profile
 	currentBinding, err := repo.LatestProjectProviderBindingForUpdate(ctx, workspace, project, domain.ProviderPurposeReferenceAsset)
 	if err != nil {
 		return facts, err
 	}
-	if currentBinding.ID != binding.ID || currentBinding.Revision != binding.Revision || currentBinding.ContentHash != binding.ContentHash {
+	if currentBinding.ID != selected.ID || currentBinding.Revision != selected.Revision || currentBinding.ContentHash != selected.ContentHash {
 		return facts, conflict("Selected Reference Provider binding is no longer current")
 	}
 	currentConnection, err := repo.LatestProviderConnectionForUpdate(ctx, workspace, connection.ConnectionKey)

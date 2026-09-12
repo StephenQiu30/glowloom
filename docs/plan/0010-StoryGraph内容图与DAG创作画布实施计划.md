@@ -231,6 +231,7 @@
   - [x] 实现基础图片请求编译器：核验官方 `gpt-image-2` 参数，按冻结 Target/Brief/Profile 为每个 Bundle/slot 编译独立 canonical 请求与无 Prompt 的 manifest 身份；固定 PNG/high/非流式，严格检查尺寸、比例、媒体与本地字节预算。覆盖三种基础类型、篡改与不支持参数拒绝，以及现有 PostgreSQL 的持久化人物锚点输入回归。尚未创建 Execution、发送模型请求或生成媒体；依赖型图片编译和 Execution Snapshot/Head 继续按后续顺序实施。
   - [x] 持久化基础 Reference 首次执行准备：同一 Serializable 事务重验 Target、原执行授权、当前 Provider 与已注册编译器，冻结完整 read-set、能力/Registry/清单身份及运行限额，原子发布不可变 Execution、首个 Head 和 Command Receipt。新 key、回执失败、配置/来源/权限漂移或记录损坏均不能留下多余执行。复用 GORM Catalog、现有授权回执和 Registry，编译端口由 application 定义。该快照子项当时尚未产生 ProviderCall；调用集合由下一项补齐，不证明发送、恢复、运维额度扣减或真实图片验收完成。
   - [x] 在首次准备事务发布完整 Reference Provider Job/PENDING Call 集合，冻结逐 Bundle/slot 请求身份；重放重验全量集合，缺项或损坏不修补，写入失败整体回滚。真实 PostgreSQL 完整旅程与定向 Race 已通过；发送权与恢复仍为后续步骤，不以待发送记录抵扣真实模型验收。
+  - [x] 实现唯一发送权和超时丢失结果保护：冻结运行状态与 token，重验精确输入，Workspace 锁内执行并发/每日上限与 CAS；重复领取不再次授权，超时仅转 outcome_unknown，不重置或 Submit。真实业务持久化旅程、独立 PostgreSQL 并发事务与定向 Race 通过。真实 Provider 传输/观察、staging 与 Temporal 调度仍待后续接通。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。

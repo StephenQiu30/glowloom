@@ -52,12 +52,13 @@ type ReferenceExecutionReadSet struct {
 }
 
 type InitialReferenceExecutionInput struct {
-	ID          string                    `json:"execution_id"`
-	WorkspaceID string                    `json:"workspace_id"`
-	ProjectID   string                    `json:"project_id"`
-	ReadSet     ReferenceExecutionReadSet `json:"read_set"`
-	CreatedBy   string                    `json:"created_by"`
-	CreatedAt   time.Time                 `json:"created_at"`
+	ID                     string                    `json:"execution_id"`
+	WorkspaceID            string                    `json:"workspace_id"`
+	ProjectID              string                    `json:"project_id"`
+	ReadSet                ReferenceExecutionReadSet `json:"read_set"`
+	CreatedBy              string                    `json:"created_by"`
+	MembershipTokenVersion int                       `json:"membership_token_version"`
+	CreatedAt              time.Time                 `json:"created_at"`
 }
 
 type ReferenceExecution struct {
@@ -91,7 +92,7 @@ func BuildInitialReferenceExecution(input InitialReferenceExecutionInput) (Refer
 			return ReferenceExecution{}, errors.New("invalid Reference execution content identity")
 		}
 	}
-	if !r.AuthorizationRef.Valid() || r.ExpectedHeadRevision != 0 || r.TargetRef.Revision != 1 || input.CreatedAt.IsZero() {
+	if !r.AuthorizationRef.Valid() || r.ExpectedHeadRevision != 0 || r.TargetRef.Revision != 1 || input.CreatedAt.IsZero() || input.MembershipTokenVersion < 1 {
 		return ReferenceExecution{}, errors.New("invalid initial Reference execution")
 	}
 	input.CreatedAt = input.CreatedAt.UTC().Truncate(time.Microsecond)

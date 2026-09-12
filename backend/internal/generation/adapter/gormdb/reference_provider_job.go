@@ -51,7 +51,15 @@ func (repo *referenceExecutionRepository) PublishReferenceProviderJob(ctx contex
 		if err != nil {
 			return err
 		}
-		records[i] = model.GenerationReferenceProviderCall{CallKey: call.CallKey, ExecutionID: executionID, WorkspaceID: workspaceID, ProjectID: projectID, BundleIndex: call.BundleIndex, SlotKey: call.SlotKey, CompiledRequestHash: call.CompiledRequestHash, Content: raw, Status: domain.ProviderCallPending, Revision: 1}
+		state, err := domain.NewReferenceCallState(call.CallKey)
+		if err != nil {
+			return err
+		}
+		stateRaw, err := json.Marshal(state)
+		if err != nil {
+			return err
+		}
+		records[i] = model.GenerationReferenceProviderCall{CallKey: call.CallKey, ExecutionID: executionID, WorkspaceID: workspaceID, ProjectID: projectID, BundleIndex: call.BundleIndex, SlotKey: call.SlotKey, CompiledRequestHash: call.CompiledRequestHash, Content: raw, Status: state.Status, Revision: state.Revision, StateContent: stateRaw, StateHash: state.ContentHash}
 	}
 	return repo.database.WithContext(ctx).Omit(clause.Associations).Create(&records).Error
 }
@@ -81,8 +89,11 @@ func (repo *referenceExecutionRepository) FindReferenceProviderJob(ctx context.C
 		if err != nil {
 			return domain.ReferenceProviderJob{}, nil, err
 		}
-		if item.WorkspaceID != record.WorkspaceID || item.ProjectID != record.ProjectID || call.ExecutionRef != job.ExecutionRef || call.CallKey != item.CallKey || call.BundleIndex != item.BundleIndex || call.SlotKey != item.SlotKey || call.CompiledRequestHash != item.CompiledRequestHash || item.Status != domain.ProviderCallPending || item.Revision != 1 {
+		if item.WorkspaceID != record.WorkspaceID || item.ProjectID != record.ProjectID || call.ExecutionRef != job.ExecutionRef || call.CallKey != item.CallKey || call.BundleIndex != item.BundleIndex || call.SlotKey != item.SlotKey || call.CompiledRequestHash != item.CompiledRequestHash {
 			return domain.ReferenceProviderJob{}, nil, errors.New("persisted Reference Provider call identity has drifted")
+		}
+		if _, err := referenceCallStateFromRecord(item); err != nil {
+			return domain.ReferenceProviderJob{}, nil, err
 		}
 		calls[i] = call
 	}

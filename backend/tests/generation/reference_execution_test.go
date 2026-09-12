@@ -21,6 +21,7 @@ func TestInitialReferenceExecutionSnapshotStrictIdentity(t *testing.T) {
 		t.Fatal(policyErr)
 	}
 	input := domain.InitialReferenceExecutionInput{ID: uuid.NewString(), WorkspaceID: uuid.NewString(), ProjectID: uuid.NewString(), CreatedBy: uuid.NewString(), CreatedAt: time.Now(), ReadSet: domain.ReferenceExecutionReadSet{TargetRef: ref(), TargetReadSetRoot: strings.Repeat("c", 64), BindingRef: ref(), ConnectionRef: ref(), ProfileRef: ref(), CredentialRef: domain.ReferenceCredentialRef{ID: uuid.NewString(), Revision: 1, Fingerprint: strings.Repeat("d", 64)}, RegistryReleaseHash: strings.Repeat("e", 64), AdapterRef: contract, CompilerRef: contract, CapabilityHash: strings.Repeat("f", 64), ManifestHash: strings.Repeat("a", 64), OperationalPolicyRef: policy, AuthorizationRef: domain.GenerationActionRef{ID: uuid.NewString(), ContentHash: strings.Repeat("b", 64)}}}
+	input.MembershipTokenVersion = 1
 	value, err := domain.BuildInitialReferenceExecution(input)
 	if err != nil {
 		t.Fatal(err)
@@ -41,5 +42,10 @@ func TestInitialReferenceExecutionSnapshotStrictIdentity(t *testing.T) {
 	input.ReadSet.ExpectedHeadRevision = 1
 	if _, err := domain.BuildInitialReferenceExecution(input); err == nil {
 		t.Fatal("initial execution bypassed Head contract")
+	}
+	input.ReadSet.ExpectedHeadRevision = 0
+	input.MembershipTokenVersion = 0
+	if _, err := domain.BuildInitialReferenceExecution(input); err == nil {
+		t.Fatal("execution omitted its original preparation actor epoch")
 	}
 }

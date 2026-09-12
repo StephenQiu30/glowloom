@@ -63,16 +63,12 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 		if err := repo.LockProviderWorkspace(ctx, command.WorkspaceID); err != nil {
 			return err
 		}
-		inputs, err := service.readInitialExecutionInputs(ctx, repo, actor, command)
+		inputs, err := readReferenceExecutionInputs(ctx, repo, service.registry, actor, command, readReferenceExecutionProvider)
 		if err != nil {
 			return err
 		}
 		readSet := inputs.readSet
-		inputHash, err := platformcommand.InputHash(struct {
-			Actor   Actor
-			Command PrepareInitialReferenceExecutionCommand
-			ReadSet domain.ReferenceExecutionReadSet
-		}{actor, command, readSet})
+		inputHash, err := referenceExecutionPreparationInputHash(actor, command, readSet)
 		if err != nil {
 			return err
 		}
@@ -91,7 +87,7 @@ func (service *ReferenceExecutionPreparationService) PrepareInitial(ctx context.
 		if !errors.Is(err, platformcommand.ErrReceiptNotFound) {
 			return err
 		}
-		result, err = domain.BuildInitialReferenceExecution(domain.InitialReferenceExecutionInput{ID: service.newID(), WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ReadSet: readSet, CreatedBy: actor.UserID, CreatedAt: service.now()})
+		result, err = domain.BuildInitialReferenceExecution(domain.InitialReferenceExecutionInput{ID: service.newID(), WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ReadSet: readSet, CreatedBy: actor.UserID, MembershipTokenVersion: actor.TokenVersion, CreatedAt: service.now()})
 		if err != nil {
 			return err
 		}
@@ -130,7 +126,7 @@ type referenceExecutionInputs struct {
 	calls   []domain.ReferenceProviderCallInput
 }
 
-func (service *ReferenceExecutionPreparationService) readInitialExecutionInputs(ctx context.Context, repo ReferenceExecutionRepository, actor Actor, command PrepareInitialReferenceExecutionCommand) (referenceExecutionInputs, error) {
+func readReferenceExecutionInputs(ctx context.Context, repo ReferenceExecutionRepository, registry *MediaFactoryRegistry, actor Actor, command PrepareInitialReferenceExecutionCommand, readProvider func(context.Context, referenceExecutionProviderRepository, string, string, domain.GenerationRevisionRef) (referenceExecutionProviderFacts, error)) (referenceExecutionInputs, error) {
 	var result referenceExecutionInputs
 	target, err := ReadCurrentReferenceGenerationTarget(ctx, repo, actor, ReadReferenceGenerationTargetQuery{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, TargetRef: command.TargetRef})
 	if err != nil {
@@ -151,7 +147,7 @@ func (service *ReferenceExecutionPreparationService) readInitialExecutionInputs(
 	if err = repo.AuthorizeReferenceGenerationProject(ctx, author, command.WorkspaceID, command.ProjectID); err != nil {
 		return result, err
 	}
-	provider, err := readReferenceExecutionProvider(ctx, repo, command.WorkspaceID, command.ProjectID, authorization.SelectedProjectProviderBindingVersionRef)
+	provider, err := readProvider(ctx, repo, command.WorkspaceID, command.ProjectID, authorization.SelectedProjectProviderBindingVersionRef)
 	if err != nil {
 		return result, err
 	}
@@ -163,7 +159,7 @@ func (service *ReferenceExecutionPreparationService) readInitialExecutionInputs(
 	if _, err = replayReferenceExecutionAuthorization(receipt, hash, original, authorization.InitialReferenceExecutionAuthorizationInput); err != nil {
 		return result, err
 	}
-	compiler, descriptor, releaseHash, err := service.registry.referenceCompiler(provider.connection.ProviderKey, provider.profile.Modality, provider.connection.AdapterContractVersion)
+	compiler, descriptor, releaseHash, err := registry.referenceCompiler(provider.connection.ProviderKey, provider.profile.Modality, provider.connection.AdapterContractVersion)
 	if err != nil {
 		return result, err
 	}
@@ -224,7 +220,7 @@ func validateReferenceCompilationManifest(target ReferenceGenerationTarget, prof
 }
 
 func validateReferenceExecutionPublication(ctx context.Context, repo ReferenceExecutionRepository, actor Actor, command PrepareInitialReferenceExecutionCommand, inputs referenceExecutionInputs, receipt platformcommand.Receipt, value domain.ReferenceExecution) (domain.ReferenceExecution, error) {
-	expected, err := domain.BuildInitialReferenceExecution(domain.InitialReferenceExecutionInput{ID: value.ID, WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ReadSet: inputs.readSet, CreatedBy: actor.UserID, CreatedAt: receipt.CreatedAt})
+	expected, err := domain.BuildInitialReferenceExecution(domain.InitialReferenceExecutionInput{ID: value.ID, WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ReadSet: inputs.readSet, CreatedBy: actor.UserID, MembershipTokenVersion: actor.TokenVersion, CreatedAt: receipt.CreatedAt})
 	if err != nil {
 		return domain.ReferenceExecution{}, err
 	}
@@ -254,4 +250,12 @@ func validateReferenceExecutionPublication(ctx context.Context, repo ReferenceEx
 		return domain.ReferenceExecution{}, conflict("Reference Provider call set differs from frozen compilation")
 	}
 	return value, nil
+}
+
+func referenceExecutionPreparationInputHash(actor Actor, command PrepareInitialReferenceExecutionCommand, readSet domain.ReferenceExecutionReadSet) (string, error) {
+	return platformcommand.InputHash(struct {
+		Actor   Actor
+		Command PrepareInitialReferenceExecutionCommand
+		ReadSet domain.ReferenceExecutionReadSet
+	}{actor, command, readSet})
 }

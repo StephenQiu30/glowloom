@@ -102,6 +102,14 @@ func assertReferenceProviderJobPersistence(t *testing.T, ctx context.Context, da
 			call.BundleIndex = 0
 			call.Content, err = json.Marshal(extra[0])
 			if err == nil {
+				state, stateErr := domain.NewReferenceCallState(call.CallKey)
+				if stateErr != nil {
+					t.Fatal(stateErr)
+				}
+				call.StateContent, err = json.Marshal(state)
+				call.StateHash = state.ContentHash
+			}
+			if err == nil {
 				err = database.Omit("Job").Create(&call).Error
 			}
 		}

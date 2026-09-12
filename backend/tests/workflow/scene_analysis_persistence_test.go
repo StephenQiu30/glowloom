@@ -1676,6 +1676,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				prepared := assertInitialReferenceExecutionPreparation(t, ctx, generationgorm.New(database), authorizationActor, currentTarget, execution.authorization, now.Add(7*time.Minute))
 				preparation = &prepared
 				assertReferenceProviderJobPersistence(t, ctx, database, authorizationActor, prepared, currentTarget, acceptedBrief, execution.profile.Profile)
+				assertReferenceCallDispatchPersistence(t, ctx, database, authorizationActor, prepared, *execution)
 				assertPreparationCounts := func() {
 					t.Helper()
 					var snapshots, heads, receipts, jobs, calls int64
