@@ -470,6 +470,10 @@ Adapter 不能：
 
 同步 Submit Receipt 内嵌于既有 Call 状态 JSON，与状态和 Hash 同一次 CAS 发布，不新增专用表或第二事实源。回执有独立内容 Hash，绑定 scope、完整 Call、token、冻结输出 slot、观察时间、受控 disposition/reason 和已验证输出；外部引用使用 Call key + Receipt hash。回执只能从空追加一次，同值重放不变、不同值失败关闭。此处 `outcome_unknown` 的 Submit 回执不是远程终态，仍占未解决上限；未来人工对账不得覆写这份原始发送观察。成功或明确输出拒绝/未发送更新为 SUCCEEDED/FAILED，并保留原因分类；每日调用数仍计已领取的发送边界。到期标记与及时观察落库竞争时，同 token 的有效回执可接在 OUTCOME_UNKNOWN 之后，不产生新 Submit。写入失败则保留原 DISPATCHING/OUTCOME_UNKNOWN，重复执行只观察状态，由恢复流程处理，不能因回执缺失重发。
 
+Temporal 通过系统节点 `generation.reference_image_call`（executor 为 `activity.reference_image_call`，cache 为 `never`）消费已存在的执行。节点配置仅含 exact `execution_ref` 与 `call_key`，进入既有不可变 Node Input；不接受 token、Provider 参数或新的生成授权。Worker 装配完整 `Execute` 和只读/到期恢复服务，继续使用既有 ExecuteNode Activity、心跳与 durable polling，不新增 Workflow 类型、服务入口或消息队列。DISPATCHING 重投调用 Expire：未到冻结 deadline 返回 RETRYING，到期返回 NEEDS_ATTENTION；OUTCOME_UNKNOWN 要求人工对账，FAILED 失败关闭，只有带有效 staged 回执的 SUCCEEDED 输出 `reference_call_receipt`。Workflow 通用引用要求 UUID，因此该输出以数据库唯一 submission token 定位、固定回执 revision `1` 和 Receipt hash 标识，回执内容仍绑定完整 Call key，不把 token 当发送许可。执行错误不能携带 Provider 原文进入历史。
+
+该节点是已经授权并准备的 Call 的内部执行能力，不自动授权或重建 Target/Execution。基础波次的完整准备、全部 required slot、媒体 Owner/Bundle/QC 继续按后续链路装配；单节点 SUCCEEDED 仅表示该 Call 的受控传输和回执成功，不表示业务素材已经发布。
+
 一个 CandidateBundle 的每个 required slot 对应一个确定性 `ProviderCallKey`：
 
 ```text

@@ -47,6 +47,7 @@ import (
 	reviewapp "github.com/StephenQiu30/lanverse/backend/internal/review/application"
 	storygraphgorm "github.com/StephenQiu30/lanverse/backend/internal/storygraph/adapter/gormdb"
 	storygraphapp "github.com/StephenQiu30/lanverse/backend/internal/storygraph/application"
+	workflowgeneration "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/generation"
 	workflowgorm "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/gormdb"
 	workflowproduction "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/production"
 	workflowtemporal "github.com/StephenQiu30/lanverse/backend/internal/workflow/adapter/temporal"
@@ -233,6 +234,19 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("workflow Media Provider preset catalog is invalid: %w", err)
 	}
 	providerSecrets := providersecret.OpenFixed()
+	referenceStore := generationgorm.New(database)
+	referenceExecution, err := generationapp.NewReferenceCallExecutionService(referenceStore, providerRegistry, providerSecrets, now, uuid.NewString)
+	if err != nil {
+		return fmt.Errorf("workflow Reference execution composition failed: %w", err)
+	}
+	referenceRecovery, err := generationapp.NewReferenceCallDispatchService(referenceStore, providerRegistry, now, uuid.NewString)
+	if err != nil {
+		return fmt.Errorf("workflow Reference recovery composition failed: %w", err)
+	}
+	referenceCalls, err := workflowgeneration.NewReferenceCallNodeExecutor(referenceExecution, referenceRecovery)
+	if err != nil {
+		return fmt.Errorf("workflow Reference call composition failed: %w", err)
+	}
 	providerConfigurationService := generationapp.NewProviderConfigurationService(
 		generationgorm.NewProviderConfigurationStore(database), providerCatalog, providerSecrets,
 		generationapp.ProviderConfigurationConfig{Now: now, NewID: uuid.NewString},
@@ -283,7 +297,7 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	activities, err := NewWorkflowRuntime(
 		workflowStore, scriptService, evidenceService, storyAnalysisService, storyReviewService, bibleService, projectService, planningService, planningOwnerService, storyGraphService, storyboardService, reviewService,
 		imageBindings, candidateSets, referenceTargetBuilder, imagePreparations, providerService,
-		episodeSegmentationService, episodeAnalysisService,
+		episodeSegmentationService, episodeAnalysisService, referenceCalls,
 		workflowproduction.SceneAnalysisDependencies{
 			Sources: scriptSourceService, Candidates: sceneAnalysisService,
 			StructureIdentities: bibleapp.NewStructureIdentityQuery(bibleStore, projectService),

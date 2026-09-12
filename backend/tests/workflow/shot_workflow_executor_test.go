@@ -100,7 +100,7 @@ func TestShotWorkflowSourceExecutorsRouteOnlyToOwningApplications(t *testing.T) 
 	}}
 	production := workflowproduction.NewNodeExecutor(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, owner, nil, nil)
 	generation := workflowgeneration.NewNodeExecutor(sets, nil, nil, nil, nil, nil)
-	executor, err := workflowexecution.NewNodeExecutor(production, generation)
+	executor, err := workflowexecution.NewNodeExecutor(production, generation, nil)
 	if err != nil {
 		t.Fatalf("compose explicit Workflow executor router: %v", err)
 	}

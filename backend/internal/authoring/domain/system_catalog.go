@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "28.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "29.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -138,6 +138,11 @@ func SystemCatalog() (Catalog, error) {
 			"agent.reference_briefs", "Reference Brief Base Wave", "agent", "activity.compile_reference_briefs", "by_inputs", "external_ai",
 			[]PortDefinition{requiredPort("owners", "visual_reference_owner_set")},
 			[]PortDefinition{requiredPort("owners", "visual_reference_owner_set")}, emptyNodeConfig(),
+		),
+		systemNodeDefinition(
+			"generation.reference_image_call", "Reference Image Call", "generation", "activity.reference_image_call", "never", "external_ai",
+			nil, []PortDefinition{requiredPort("receipt", "reference_call_receipt")},
+			json.RawMessage(`{"type":"object","properties":{"execution_ref":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1},"content_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"required":["id","revision","content_hash"],"additionalProperties":false},"call_key":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"required":["execution_ref","call_key"],"additionalProperties":false}`),
 		),
 		systemNodeDefinition(
 			"agent.source_evidence", "Source Evidence Candidate", "agent", "activity.source_evidence", "by_inputs", "external_ai",

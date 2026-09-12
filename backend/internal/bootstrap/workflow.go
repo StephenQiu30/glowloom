@@ -48,6 +48,7 @@ func NewWorkflowRuntime(
 	providers workflowgeneration.ImageProvider,
 	segments workflowproduction.EpisodeSegmentationOwner,
 	episodes workflowproduction.EpisodeAnalysisOwner,
+	referenceCalls workflowapp.NodeExecutor,
 	sceneAnalysis ...workflowproduction.SceneAnalysisDependencies,
 ) (*workflowapp.RuntimeService, error) {
 	if repository == nil || scripts == nil || evidence == nil || stories == nil || storyReviews == nil || bibles == nil || projects == nil || plans == nil || planningOwners == nil || storygraphs == nil || storyboards == nil || reviews == nil {
@@ -87,7 +88,7 @@ func NewWorkflowRuntime(
 			sceneAnalysis...,
 		),
 	)
-	if candidateSets != nil || referenceTargets != nil {
+	if candidateSets != nil || referenceTargets != nil || referenceCalls != nil {
 		materializer, _ := candidateSets.(workflowgeneration.ProviderOutputMaterializer)
 		if referenceTargets != nil && materializer == nil {
 			return nil, errors.New("reference asset output materializer is required")
@@ -95,6 +96,7 @@ func NewWorkflowRuntime(
 		var err error
 		executor, err = workflowexecution.NewNodeExecutor(
 			executor, workflowgeneration.NewNodeExecutor(candidateSets, referenceTargets, preparations, preparations, providers, materializer),
+			referenceCalls,
 		)
 		if err != nil {
 			return nil, err

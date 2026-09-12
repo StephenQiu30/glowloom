@@ -266,7 +266,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		planningService, episodePlanningService, storyGraphService,
 		storyboardService,
 		reviewService,
-		nil, nil, nil, nil, nil, episodeSegmentationService, episodeAnalysisService,
+		nil, nil, nil, nil, nil, episodeSegmentationService, episodeAnalysisService, nil,
 	)
 	if err != nil {
 		t.Fatalf("compose Source Evidence Workflow Runtime: %v", err)

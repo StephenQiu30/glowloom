@@ -9,15 +9,16 @@ import (
 )
 
 type NodeExecutor struct {
-	production workflowapp.NodeExecutor
-	generation workflowapp.NodeExecutor
+	production     workflowapp.NodeExecutor
+	generation     workflowapp.NodeExecutor
+	referenceCalls workflowapp.NodeExecutor
 }
 
-func NewNodeExecutor(production, generation workflowapp.NodeExecutor) (*NodeExecutor, error) {
+func NewNodeExecutor(production, generation, referenceCalls workflowapp.NodeExecutor) (*NodeExecutor, error) {
 	if production == nil || generation == nil {
 		return nil, errors.New("workflow executor owners are required")
 	}
-	return &NodeExecutor{production: production, generation: generation}, nil
+	return &NodeExecutor{production: production, generation: generation, referenceCalls: referenceCalls}, nil
 }
 
 func (executor *NodeExecutor) Execute(
@@ -28,6 +29,11 @@ func (executor *NodeExecutor) Execute(
 		return domain.NodeExecutorResult{}, errors.New("workflow executor owners are unavailable")
 	}
 	switch command.Executor {
+	case "activity.reference_image_call":
+		if executor.referenceCalls == nil {
+			return domain.NodeExecutorResult{}, errors.New("Reference call workflow owner is unavailable")
+		}
+		return executor.referenceCalls.Execute(ctx, command)
 	case "workflow.input.generation_candidate_set", "activity.reference_asset_generation":
 		return executor.generation.Execute(ctx, command)
 	case "workflow.input.script_revision",

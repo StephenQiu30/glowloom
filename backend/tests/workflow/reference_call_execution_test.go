@@ -11,6 +11,7 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -370,6 +371,38 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 	service, err := app.NewReferenceCallExecutionService(store, registry, configuration.secrets, time.Now, uuid.NewString)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if address := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS"); address != "" {
+		recovery, err := app.NewReferenceCallDispatchService(store, registry, time.Now, uuid.NewString)
+		if err != nil {
+			t.Fatal(err)
+		}
+		executeReferenceCallThroughTemporal(t, ctx, database, address, actor, command, service, recovery, false, nil)
+		// A different, already-fenced call simulates a Worker lost after Claim.
+		// Backdate only the injected dispatch clock; production still freezes its
+		// full 180-second timeout and recovery uses the real wall clock.
+		if len(rows) < 2 {
+			t.Fatal("missing second call for expiry recovery")
+		}
+		lost := command
+		lost.CallKey = rows[1].CallKey
+		executeReferenceCallThroughTemporal(t, ctx, database, address, actor, lost, service, recovery, true, func() {
+			claimClock := time.Now().UTC().Add(-165 * time.Second)
+			dispatch, err := app.NewReferenceCallDispatchService(store, registry, func() time.Time { return claimClock }, uuid.NewString)
+			if err != nil {
+				t.Fatal(err)
+			}
+			claimed, err := dispatch.Claim(ctx, actor, lost)
+			if err != nil || !claimed.ShouldDispatch {
+				t.Fatalf("seed lost dispatch: %v", err)
+			}
+		})
+		unknown, err := service.Execute(ctx, actor, lost)
+		if err != nil || unknown.Status != domain.ProviderCallOutcomeUnknown || unknown.Receipt != nil {
+			t.Fatalf("lost dispatch was resent or published: %+v %v", unknown, err)
+		}
+	} else {
+		t.Log("Temporal not configured: verifying direct committed execution only")
 	}
 	result, err := service.Execute(ctx, actor, command)
 	if err != nil || result.Status != domain.ProviderCallSucceeded || result.Receipt == nil || result.Receipt.Output == nil {

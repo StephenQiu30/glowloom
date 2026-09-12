@@ -23,7 +23,8 @@ func (executor *recordingWorkflowExecutor) Execute(
 func TestWorkflowRouterKeepsProductionWorldStoryGraphAndVisualStagesInBackendOwner(t *testing.T) {
 	production := &recordingWorkflowExecutor{}
 	generation := &recordingWorkflowExecutor{}
-	executor, err := workflowexecution.NewNodeExecutor(production, generation)
+	referenceCalls := &recordingWorkflowExecutor{}
+	executor, err := workflowexecution.NewNodeExecutor(production, generation, referenceCalls)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,5 +50,8 @@ func TestWorkflowRouterKeepsProductionWorldStoryGraphAndVisualStagesInBackendOwn
 		production.executors[4] != "activity.plan_reference_assets" ||
 		production.executors[5] != "activity.compile_reference_briefs" {
 		t.Fatalf("production=%v generation=%v", production.executors, generation.executors)
+	}
+	if _, err := executor.Execute(context.Background(), workflow.NodeExecutorCommand{NodeActivityCommand: workflow.NodeActivityCommand{Executor: "activity.reference_image_call"}}); err != nil || len(referenceCalls.executors) != 1 || len(generation.executors) != 0 || len(production.executors) != 6 {
+		t.Fatal("Reference call did not reach its execution owner")
 	}
 }
