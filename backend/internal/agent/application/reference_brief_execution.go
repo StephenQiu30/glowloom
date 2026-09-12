@@ -132,11 +132,76 @@ func (service *ReferenceBriefExecutionService) Execute(
 	if err != nil {
 		return Candidate{}, err
 	}
+	return service.executePrepared(ctx, command, now, release, manifest, impactClosureHash)
+}
+
+func (service *ReferenceBriefExecutionService) ExecuteBatch(
+	ctx context.Context,
+	workflowRunID string,
+	nodeRunID string,
+	inputs []contract.ReferenceBriefInput,
+) ([]Candidate, error) {
+	if len(inputs) == 0 {
+		return nil, &Error{Code: "invalid_reference_brief_command", Message: "Reference Brief batch is empty"}
+	}
+	commands := make([]ExecuteReferenceBriefCommand, len(inputs))
+	previousTarget := ""
+	for index, input := range inputs {
+		commands[index] = ExecuteReferenceBriefCommand{WorkflowRunID: workflowRunID, NodeRunID: nodeRunID, Input: input}
+		if err := validateExecuteReferenceBriefCommand(commands[index]); err != nil {
+			return nil, err
+		}
+		if previousTarget != "" && input.TargetBusinessKey <= previousTarget {
+			return nil, &Error{Code: "invalid_reference_brief_command", Message: "Reference Brief batch is not canonical"}
+		}
+		if index > 0 && (input.WorkspaceID != inputs[0].WorkspaceID || input.ProjectID != inputs[0].ProjectID ||
+			!reflect.DeepEqual(input.ApprovedReferencePlanVersionRef, inputs[0].ApprovedReferencePlanVersionRef) ||
+			input.StageRelease != inputs[0].StageRelease) {
+			return nil, &Error{Code: "invalid_reference_brief_command", Message: "Reference Brief batch scope has drifted"}
+		}
+		previousTarget = input.TargetBusinessKey
+	}
+	now := service.config.Now().UTC()
+	release, err := BuildStageReleaseRecord(contract.ReferenceBriefStageKey, service.config.AgentImageDigest, now)
+	if err != nil {
+		return nil, err
+	}
+	for _, command := range commands {
+		if command.Input.StageRelease.StageReleaseHash != release.Identity.StageReleaseHash {
+			return nil, &Error{Code: "invalid_reference_brief_input", Message: "Reference Brief input release is not executable"}
+		}
+	}
+	manifest, impactClosureHashes, err := buildReferenceBriefBatchManifest(commands, now)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]Candidate, len(commands))
+	for index, command := range commands {
+		candidate, executeErr := service.executePrepared(
+			ctx, command, now, release, manifest, impactClosureHashes[command.Input.TargetBusinessKey],
+		)
+		if executeErr != nil {
+			return nil, executeErr
+		}
+		candidates[index] = candidate
+	}
+	return candidates, nil
+}
+
+func (service *ReferenceBriefExecutionService) executePrepared(
+	ctx context.Context,
+	command ExecuteReferenceBriefCommand,
+	now time.Time,
+	release ReleaseRecord,
+	manifest ManifestRecord,
+	impactClosureHash string,
+) (Candidate, error) {
 
 	var invocationRecord ReferenceBriefInvocationRecord
 	var authorization contract.SceneAnalysisDispatchAuthorization
 	var claimVersion int64
 	var completed Candidate
+	var err error
 	err = service.transactions.WithinReferenceBriefTransaction(ctx, func(repo ReferenceBriefRepository) error {
 		if validateErr := repo.ValidateReferenceBriefInput(ctx, command.Input); validateErr != nil {
 			return validateErr
@@ -297,67 +362,108 @@ func buildReferenceBriefManifest(
 	command ExecuteReferenceBriefCommand,
 	now time.Time,
 ) (ManifestRecord, string, error) {
-	inputJSON, err := json.Marshal(command.Input)
-	if err != nil {
-		return ManifestRecord{}, "", err
+	manifest, impactClosureHashes, err := buildReferenceBriefBatchManifest(
+		[]ExecuteReferenceBriefCommand{command}, now,
+	)
+	return manifest, impactClosureHashes[command.Input.TargetBusinessKey], err
+}
+
+func buildReferenceBriefBatchManifest(
+	commands []ExecuteReferenceBriefCommand,
+	now time.Time,
+) (ManifestRecord, map[string]string, error) {
+	type inputRoot struct {
+		TargetBusinessKey string `json:"target_business_key"`
+		InputHash         string `json:"input_hash"`
 	}
-	rootInputHash, err := platformcanonical.Hash(inputJSON)
-	if err != nil {
-		return ManifestRecord{}, "", err
+	if len(commands) == 0 {
+		return ManifestRecord{}, nil, errors.New("Reference Brief manifest batch is empty")
 	}
-	impactMaterial, err := json.Marshal(struct {
-		ContractID              string `json:"contract_id"`
-		ApprovedPlanContentHash string `json:"approved_plan_content_hash"`
-		TargetBusinessKey       string `json:"target_business_key"`
-		TargetContentHash       string `json:"target_content_hash"`
-		TypedReadSetRoot        string `json:"typed_read_set_root"`
-	}{
-		ContractID:              "reference-brief-impact-closure-production",
-		ApprovedPlanContentHash: command.Input.ApprovedReferencePlanVersionRef.OwnerContentHash,
-		TargetBusinessKey:       command.Input.TargetBusinessKey,
-		TargetContentHash:       command.Input.ReferencePlanTargetRef.OwnerContentHash,
-		TypedReadSetRoot:        command.Input.TypedReadSetRoot,
-	})
-	if err != nil {
-		return ManifestRecord{}, "", err
+	inputRoots := make([]inputRoot, len(commands))
+	shards := make([]map[string]any, len(commands))
+	impactClosureHashes := make(map[string]string, len(commands))
+	previousTarget := ""
+	for index, command := range commands {
+		if previousTarget != "" && command.Input.TargetBusinessKey <= previousTarget {
+			return ManifestRecord{}, nil, errors.New("Reference Brief manifest batch is not canonical")
+		}
+		inputJSON, err := json.Marshal(command.Input)
+		if err != nil {
+			return ManifestRecord{}, nil, err
+		}
+		inputHash, err := platformcanonical.Hash(inputJSON)
+		if err != nil {
+			return ManifestRecord{}, nil, err
+		}
+		impactMaterial, err := json.Marshal(struct {
+			ContractID              string `json:"contract_id"`
+			ApprovedPlanContentHash string `json:"approved_plan_content_hash"`
+			TargetBusinessKey       string `json:"target_business_key"`
+			TargetContentHash       string `json:"target_content_hash"`
+			TypedReadSetRoot        string `json:"typed_read_set_root"`
+		}{
+			ContractID:              "reference-brief-impact-closure-production",
+			ApprovedPlanContentHash: command.Input.ApprovedReferencePlanVersionRef.OwnerContentHash,
+			TargetBusinessKey:       command.Input.TargetBusinessKey,
+			TargetContentHash:       command.Input.ReferencePlanTargetRef.OwnerContentHash,
+			TypedReadSetRoot:        command.Input.TypedReadSetRoot,
+		})
+		if err != nil {
+			return ManifestRecord{}, nil, err
+		}
+		impactClosureHash, err := platformcanonical.Hash(impactMaterial)
+		if err != nil {
+			return ManifestRecord{}, nil, err
+		}
+		inputRoots[index] = inputRoot{TargetBusinessKey: command.Input.TargetBusinessKey, InputHash: inputHash}
+		shards[index] = map[string]any{
+			"shard_key":           "reference_target:" + command.Input.TargetBusinessKey,
+			"impact_closure_hash": impactClosureHash,
+		}
+		impactClosureHashes[command.Input.TargetBusinessKey] = impactClosureHash
+		previousTarget = command.Input.TargetBusinessKey
 	}
-	impactClosureHash, err := platformcanonical.Hash(impactMaterial)
-	if err != nil {
-		return ManifestRecord{}, "", err
+	rootInputHash := inputRoots[0].InputHash
+	if len(inputRoots) > 1 {
+		rootMaterial, err := json.Marshal(inputRoots)
+		if err != nil {
+			return ManifestRecord{}, nil, err
+		}
+		rootInputHash, err = platformcanonical.Hash(rootMaterial)
+		if err != nil {
+			return ManifestRecord{}, nil, err
+		}
 	}
 	manifestID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf(
-		"lanverse:reference-brief:manifest:%s:%s", command.NodeRunID, rootInputHash,
+		"lanverse:reference-brief:manifest:%s:%s", commands[0].NodeRunID, rootInputHash,
 	))).String()
-	shardKey := "reference_target:" + command.Input.TargetBusinessKey
-	shards, err := json.Marshal([]map[string]any{{
-		"shard_key": shardKey, "impact_closure_hash": impactClosureHash,
-	}})
+	shardsJSON, err := json.Marshal(shards)
 	if err != nil {
-		return ManifestRecord{}, "", err
+		return ManifestRecord{}, nil, err
 	}
-	coverageHash, err := platformcanonical.Hash(shards)
+	coverageHash, err := platformcanonical.Hash(shardsJSON)
 	if err != nil {
-		return ManifestRecord{}, "", err
+		return ManifestRecord{}, nil, err
 	}
 	material, err := json.Marshal(map[string]any{
 		"contract_id": "reference-brief-shard-manifest-production", "manifest_id": manifestID,
-		"workflow_run_id": command.WorkflowRunID, "node_run_id": command.NodeRunID,
+		"workflow_run_id": commands[0].WorkflowRunID, "node_run_id": commands[0].NodeRunID,
 		"stage_key": contract.ReferenceBriefStageKey, "root_input_hash": rootInputHash,
-		"shards": json.RawMessage(shards), "coverage_hash": coverageHash,
+		"shards": json.RawMessage(shardsJSON), "coverage_hash": coverageHash,
 	})
 	if err != nil {
-		return ManifestRecord{}, "", err
+		return ManifestRecord{}, nil, err
 	}
 	manifestHash, err := platformcanonical.Hash(material)
 	if err != nil {
-		return ManifestRecord{}, "", err
+		return ManifestRecord{}, nil, err
 	}
 	return ManifestRecord{
-		ID: manifestID, WorkspaceID: command.Input.WorkspaceID,
-		WorkflowRunID: command.WorkflowRunID, NodeRunID: command.NodeRunID,
+		ID: manifestID, WorkspaceID: commands[0].Input.WorkspaceID,
+		WorkflowRunID: commands[0].WorkflowRunID, NodeRunID: commands[0].NodeRunID,
 		StageKey: contract.ReferenceBriefStageKey, RootInputHash: rootInputHash,
-		Shards: shards, CoverageHash: coverageHash, ManifestHash: manifestHash, CreatedAt: now,
-	}, impactClosureHash, nil
+		Shards: shardsJSON, CoverageHash: coverageHash, ManifestHash: manifestHash, CreatedAt: now,
+	}, impactClosureHashes, nil
 }
 
 func buildReferenceBriefInvocation(

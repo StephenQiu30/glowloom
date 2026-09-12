@@ -46,6 +46,7 @@ const (
 	projectPresetSelectionExecutor     = "activity.project_preset_selection"
 	visualFoundationExecutor           = "activity.resolve_visual_foundation"
 	referencePlanExecutor              = "activity.plan_reference_assets"
+	referenceBriefExecutor             = "activity.compile_reference_briefs"
 	sourceEvidenceExecutor             = "activity.source_evidence"
 	storyAnalysisExecutor              = "activity.story_analysis"
 	storyReviewExecutor                = "activity.story_review"
@@ -86,6 +87,7 @@ type SceneAnalysisDependencies struct {
 	ProductionWorld     workflowapp.ProductionWorldAssembler
 	VisualFoundation    *VisualFoundationDependencies
 	ReferencePlan       *ReferencePlanDependencies
+	ReferenceBrief      *ReferenceBriefDependencies
 }
 
 type ProjectPresetSelectionSource interface {
@@ -137,6 +139,27 @@ type ReferencePlanDependencies struct {
 	Worlds      ReferencePlanWorldSource
 	Sources     ReferencePlanVisualFoundationSource
 	Candidates  ReferencePlanOwner
+}
+
+type ReferenceBriefInputSource interface {
+	CompileBaseReferenceBriefInputs(
+		context.Context,
+		string,
+		string,
+		string,
+		string,
+		agentcontract.ReferenceBriefStageRelease,
+	) ([]agentcontract.ReferenceBriefInput, error)
+}
+
+type ReferenceBriefOwner interface {
+	ExecuteBatch(context.Context, string, string, []agentcontract.ReferenceBriefInput) ([]agentapp.Candidate, error)
+}
+
+type ReferenceBriefDependencies struct {
+	Inputs       ReferenceBriefInputSource
+	Candidates   ReferenceBriefOwner
+	StageRelease agentcontract.ReferenceBriefStageRelease
 }
 
 type FormalStructureIdentitySource interface {
@@ -213,6 +236,7 @@ type NodeExecutor struct {
 	productionWorld     workflowapp.ProductionWorldAssembler
 	visualFoundation    *VisualFoundationDependencies
 	referencePlan       *ReferencePlanDependencies
+	referenceBrief      *ReferenceBriefDependencies
 	evidence            SourceEvidenceOwner
 	stories             StoryAnalysisOwner
 	storyReviews        StoryReviewOwner
@@ -255,6 +279,7 @@ func NewNodeExecutor(
 		executor.productionWorld = sceneAnalysis[0].ProductionWorld
 		executor.visualFoundation = sceneAnalysis[0].VisualFoundation
 		executor.referencePlan = sceneAnalysis[0].ReferencePlan
+		executor.referenceBrief = sceneAnalysis[0].ReferenceBrief
 	}
 	return executor
 }
@@ -297,6 +322,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeVisualFoundation(ctx, command)
 	case referencePlanExecutor:
 		return executor.executeReferencePlan(ctx, command)
+	case referenceBriefExecutor:
+		return executor.executeReferenceBriefs(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:
@@ -1257,6 +1284,85 @@ func (executor *NodeExecutor) executeReferencePlan(
 		Bindings: []domain.NodeOutputBinding{{
 			Port: "candidate", ValueType: "reference_plan_candidate", ReferenceID: candidate.ID,
 			ReferenceVersion: strconv.FormatInt(candidate.Revision, 10), ContentHash: candidate.CandidateRevisionHash,
+		}},
+	})
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	return domain.NodeExecutorResult{Status: "SUCCEEDED", Output: output}, nil
+}
+
+func (executor *NodeExecutor) executeReferenceBriefs(
+	ctx context.Context,
+	command domain.NodeExecutorCommand,
+) (domain.NodeExecutorResult, error) {
+	dependencies := executor.referenceBrief
+	if dependencies == nil || dependencies.Inputs == nil || dependencies.Candidates == nil ||
+		dependencies.StageRelease.StageKey != agentcontract.ReferenceBriefStageKey ||
+		!workflowContentHashPattern.MatchString(dependencies.StageRelease.StageReleaseHash) {
+		return domain.NodeExecutorResult{}, errors.New("Reference Brief workflow sources are unavailable")
+	}
+	input, _, inputHash, err := domain.BuildNodeInput(command.Input)
+	if err != nil || inputHash != command.InputHash || len(input.Bindings) != 1 ||
+		len(command.OutputPorts) != 1 || command.OutputPorts[0].Key != "owners" ||
+		command.OutputPorts[0].ValueType != "visual_reference_owner_set" || !command.OutputPorts[0].Required {
+		return domain.NodeExecutorResult{}, errors.New("invalid Reference Brief node contract")
+	}
+	var config map[string]json.RawMessage
+	if json.Unmarshal(input.Config, &config) != nil || len(config) != 0 {
+		return domain.NodeExecutorResult{}, errors.New("invalid Reference Brief node config")
+	}
+	owners := input.Bindings[0]
+	if !validVersionedInputBinding(owners, "owners", "visual_reference_owner_set", "owners") ||
+		owners.ReferenceVersion != "1" {
+		return domain.NodeExecutorResult{}, errors.New("Reference Brief Gate 3 owner input has drifted")
+	}
+	briefInputs, err := dependencies.Inputs.CompileBaseReferenceBriefInputs(
+		ctx,
+		command.WorkspaceID,
+		command.ProjectID,
+		owners.ReferenceID,
+		owners.ContentHash,
+		dependencies.StageRelease,
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if len(briefInputs) == 0 {
+		return domain.NodeExecutorResult{}, errors.New("Reference Brief base wave is empty")
+	}
+	previousTarget := ""
+	for _, briefInput := range briefInputs {
+		if briefInput.WorkspaceID != command.WorkspaceID || briefInput.ProjectID != command.ProjectID ||
+			briefInput.StageRelease != dependencies.StageRelease || strings.TrimSpace(briefInput.TargetBusinessKey) == "" ||
+			(previousTarget != "" && briefInput.TargetBusinessKey <= previousTarget) {
+			return domain.NodeExecutorResult{}, errors.New("Reference Brief base wave has drifted")
+		}
+		previousTarget = briefInput.TargetBusinessKey
+	}
+	candidates, err := dependencies.Candidates.ExecuteBatch(
+		ctx, command.WorkflowRunID, command.NodeRunID, briefInputs,
+	)
+	if err != nil {
+		return domain.NodeExecutorResult{}, err
+	}
+	if len(candidates) != len(briefInputs) {
+		return domain.NodeExecutorResult{}, errors.New("Reference Brief Candidate wave is incomplete")
+	}
+	for _, candidate := range candidates {
+		if candidate.WorkspaceID != command.WorkspaceID || candidate.ProjectID != command.ProjectID ||
+			candidate.StageKey != agentcontract.ReferenceBriefStageKey ||
+			candidate.CandidateType != "reference_brief_candidate" || candidate.Revision < 1 ||
+			!workflowContentHashPattern.MatchString(candidate.CandidateRevisionHash) {
+			return domain.NodeExecutorResult{}, errors.New("Reference Brief Candidate does not match Workflow input")
+		}
+	}
+	output, _, _, err := domain.BuildNodeOutput(domain.NodeOutputSnapshot{
+		SchemaVersion: domain.NodeOutputSchemaVersion,
+		Bindings: []domain.NodeOutputBinding{{
+			Port: "owners", ValueType: "visual_reference_owner_set",
+			ReferenceID: owners.ReferenceID, ReferenceVersion: owners.ReferenceVersion,
+			ContentHash: owners.ContentHash,
 		}},
 	})
 	if err != nil {

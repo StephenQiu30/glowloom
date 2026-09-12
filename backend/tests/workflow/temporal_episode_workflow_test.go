@@ -104,6 +104,78 @@ func TestEpisodeWorkflowExecutesCompiledOrderAndWaitsForHumanSignal(t *testing.T
 	}
 }
 
+func TestEpisodeWorkflowExecutesReferenceBriefBaseWaveOnlyAfterGateThree(t *testing.T) {
+	request := episodeWorkflowStartRequest()
+	plan := temporaladapter.ExecutionPlan{
+		WorkflowRunID: request.WorkflowRunID, DefinitionVersionID: request.DefinitionVersionID,
+		RunInputSnapshotID: request.RunInputSnapshotID, DefinitionContentHash: request.DefinitionContentHash,
+		InputSnapshotHash: request.InputSnapshotHash,
+		Nodes: []temporaladapter.ExecutionNode{
+			{NodeRunID: "node-run-visual-scope", NodeID: "visual-foundation-scope-gate", Executor: "gate.visual_foundation_scope", RiskLevel: "human_gate"},
+			{NodeRunID: "node-run-reference-briefs", NodeID: "reference-brief-base-wave", Executor: "activity.compile_reference_briefs", RiskLevel: "external_ai"},
+		},
+	}
+
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	steps := make([]string, 0, 4)
+	environment.RegisterActivityWithOptions(
+		func(context.Context, workflow.StartRequest) (temporaladapter.ExecutionPlan, error) { return plan, nil },
+		activity.RegisterOptions{Name: temporaladapter.LoadExecutionPlanActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, command temporaladapter.NodeActivityCommand) (temporaladapter.NodeActivityResult, error) {
+			steps = append(steps, "execute:"+command.Executor)
+			return successfulNodeActivityResult(), nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.ExecuteNodeActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, command temporaladapter.NodeActivityCommand) error {
+			steps = append(steps, "open:"+command.Executor)
+			return nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.OpenHumanGateActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, command temporaladapter.ApplyHumanGateCommand) error {
+			steps = append(steps, "apply:"+command.NodeID)
+			return nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.ApplyHumanGateActivityName},
+	)
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, command temporaladapter.CompleteRunCommand) error {
+			steps = append(steps, "complete:"+command.WorkflowRunID)
+			return nil
+		},
+		activity.RegisterOptions{Name: temporaladapter.CompleteRunActivityName},
+	)
+	ownerReceiptID, ownerOutput, ownerOutputHash := visualReferenceOwnerOutput()
+	environment.RegisterDelayedCallback(func() {
+		environment.SignalWorkflow(temporaladapter.HumanGateSignalName, temporaladapter.HumanGateSignal{
+			WorkflowRunID: request.WorkflowRunID, NodeRunID: "node-run-visual-scope",
+			SignalID: "signal-visual-scope", SignalIntentID: "signal-intent-visual-scope", Decision: "APPROVED",
+			DecisionPayloadHash: emptyReviewDecisionPayloadHash,
+			OwnerReceiptID:      ownerReceiptID, Output: ownerOutput, OutputHash: ownerOutputHash,
+		})
+	}, time.Minute)
+
+	environment.ExecuteWorkflow(temporaladapter.EpisodeProductionWorkflow, request)
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatalf("execute Reference Brief Temporal order: %v", err)
+	}
+	want := []string{
+		"open:gate.visual_foundation_scope",
+		"apply:visual-foundation-scope-gate",
+		"execute:activity.compile_reference_briefs",
+		"complete:" + request.WorkflowRunID,
+	}
+	if !slices.Equal(steps, want) {
+		t.Fatalf("Reference Brief Temporal activity order = %v, want %v", steps, want)
+	}
+}
+
 func successfulNodeActivityResult() workflow.NodeActivityResult {
 	output, _, outputHash, err := workflow.BuildNodeOutput(successfulExecutorOutput())
 	if err != nil {
@@ -124,6 +196,21 @@ func successfulHumanGateOwnerOutput() (string, workflow.NodeOutputSnapshot, stri
 		panic(err)
 	}
 	return "00000000-0000-0000-0000-000000000334", output, outputHash
+}
+
+func visualReferenceOwnerOutput() (string, workflow.NodeOutputSnapshot, string) {
+	output, _, outputHash, err := workflow.BuildNodeOutput(workflow.NodeOutputSnapshot{
+		SchemaVersion: workflow.NodeOutputSchemaVersion,
+		Bindings: []workflow.NodeOutputBinding{{
+			Port: "owners", ValueType: "visual_reference_owner_set",
+			ReferenceID:      "00000000-0000-0000-0000-000000000444",
+			ReferenceVersion: "1", ContentHash: strings.Repeat("d", 64),
+		}},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return output.Bindings[0].ReferenceID, output, outputHash
 }
 
 func approvedHumanGateSignalPreparation(intent workflow.SignalIntent) workflow.SignalPreparation {

@@ -72,7 +72,7 @@ type SceneAnalysisInvocationRecord struct {
 	SourceHash        string               `gorm:"type:char(64);not null;check:ck_agt_scene_invocation_source_hash,char_length(source_hash) = 64"`
 	ShardManifestID   uuid.UUID            `gorm:"type:uuid;not null"`
 	ShardManifestHash string               `gorm:"type:char(64);not null;check:ck_agt_scene_invocation_manifest_hash,char_length(shard_manifest_hash) = 64"`
-	ShardKey          string               `gorm:"type:varchar(200);not null"`
+	ShardKey          string               `gorm:"type:text;not null"`
 	Payload           datatypes.JSON       `gorm:"type:jsonb;not null;check:ck_agt_scene_invocation_payload,jsonb_typeof(payload) = 'object'"`
 	Budget            datatypes.JSON       `gorm:"type:jsonb;not null;check:ck_agt_scene_invocation_budget,jsonb_typeof(budget) = 'object'"`
 	Status            string               `gorm:"type:varchar(20);not null;index:ix_agt_scene_invocation_status_created,priority:1;check:ck_agt_scene_invocation_status,status IN ('queued','running','accepted','rejected','outcome_unknown')"`
@@ -92,7 +92,7 @@ type SceneAnalysisInvocationRead struct {
 	InvocationID          uuid.UUID                      `gorm:"type:uuid;primaryKey;uniqueIndex:uq_agt_scene_read_stage,priority:1;uniqueIndex:uq_agt_scene_read_candidate,priority:1"`
 	Position              int                            `gorm:"primaryKey;check:ck_agt_scene_upstream_position,position >= 1"`
 	StageKey              string                         `gorm:"type:varchar(64);not null;uniqueIndex:uq_agt_scene_read_stage,priority:2"`
-	ShardKey              string                         `gorm:"type:varchar(200);not null"`
+	ShardKey              string                         `gorm:"type:text;not null"`
 	CandidateRevisionID   uuid.UUID                      `gorm:"type:uuid;not null;uniqueIndex:uq_agt_scene_read_candidate,priority:2"`
 	CandidateRevisionHash string                         `gorm:"type:char(64);not null;check:ck_agt_scene_upstream_candidate_hash,char_length(candidate_revision_hash) = 64"`
 	SourceInvocationID    uuid.UUID                      `gorm:"type:uuid;not null"`

@@ -43,6 +43,7 @@ func (executor *NodeExecutor) Execute(
 		"activity.project_preset_selection",
 		"activity.resolve_visual_foundation",
 		"activity.plan_reference_assets",
+		"activity.compile_reference_briefs",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

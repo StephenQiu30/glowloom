@@ -33,6 +33,7 @@ func TestWorkflowRouterKeepsProductionWorldStoryGraphAndVisualStagesInBackendOwn
 		"activity.project_preset_selection",
 		"activity.resolve_visual_foundation",
 		"activity.plan_reference_assets",
+		"activity.compile_reference_briefs",
 	} {
 		if _, err = executor.Execute(context.Background(), workflow.NodeExecutorCommand{
 			NodeActivityCommand: workflow.NodeActivityCommand{Executor: executorName},
@@ -40,12 +41,13 @@ func TestWorkflowRouterKeepsProductionWorldStoryGraphAndVisualStagesInBackendOwn
 			t.Fatalf("route %s: %v", executorName, err)
 		}
 	}
-	if len(production.executors) != 5 || len(generation.executors) != 0 ||
+	if len(production.executors) != 6 || len(generation.executors) != 0 ||
 		production.executors[0] != "activity.production_world_assembly" ||
 		production.executors[1] != "activity.production_storygraph_projection" ||
 		production.executors[2] != "activity.project_preset_selection" ||
 		production.executors[3] != "activity.resolve_visual_foundation" ||
-		production.executors[4] != "activity.plan_reference_assets" {
+		production.executors[4] != "activity.plan_reference_assets" ||
+		production.executors[5] != "activity.compile_reference_briefs" {
 		t.Fatalf("production=%v generation=%v", production.executors, generation.executors)
 	}
 }

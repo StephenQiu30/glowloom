@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"sort"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -62,13 +63,146 @@ func (store *Store) CompileReferenceBriefInput(
 			!reflect.DeepEqual(plan.EffectivePolicySnapshot, policyRef) {
 			return errors.New("Reference Brief effective snapshot facts have drifted")
 		}
-		compiled, loadErr = referencedomain.CompileReferenceBriefInput(referencedomain.ReferenceBriefCompilationFacts{
-			ApprovedPlan: plan, Target: target, VisualFoundationVersionRef: visualFoundationRef,
-			DependencyFacts: []referencedomain.ReferenceBriefDependencyFact{}, StageRelease: stageRelease,
-		})
+		compiled, loadErr = compileBaseReferenceBriefInput(
+			plan, target, visualFoundationRef, styleRef, policyRef, stageRelease,
+		)
 		return loadErr
 	})
 	return compiled, err
+}
+
+func (store *Store) CompileBaseReferenceBriefInputs(
+	ctx context.Context,
+	workspaceID string,
+	projectID string,
+	ownerReceiptID string,
+	ownerReceiptHash string,
+	stageRelease agentcontract.ReferenceBriefStageRelease,
+) ([]agentcontract.ReferenceBriefInput, error) {
+	if store == nil || store.database == nil {
+		return nil, errors.New("Reference Brief facts store is unavailable")
+	}
+	workspace, workspaceErr := uuid.Parse(workspaceID)
+	project, projectErr := uuid.Parse(projectID)
+	receiptID, receiptErr := uuid.Parse(ownerReceiptID)
+	if workspaceErr != nil || projectErr != nil || receiptErr != nil || workspace == uuid.Nil ||
+		project == uuid.Nil || receiptID == uuid.Nil || len(ownerReceiptHash) != 64 {
+		return nil, errors.New("invalid Reference Brief base wave scope")
+	}
+
+	var compiled []agentcontract.ReferenceBriefInput
+	err := platformdatabase.WithinTransaction(ctx, store.database, func(transaction *gorm.DB) error {
+		plan, loadErr := loadCurrentReferenceBriefPlan(ctx, transaction, workspace, project)
+		if loadErr != nil {
+			return loadErr
+		}
+		if loadErr = validateReferenceBriefOwnerReceipt(
+			ctx, transaction, workspace, project, receiptID, ownerReceiptHash, plan,
+		); loadErr != nil {
+			return loadErr
+		}
+		visualFoundationRef, styleRef, policyRef, loadErr := loadCurrentReferenceBriefPresetFacts(
+			ctx, transaction, workspace, project, plan,
+		)
+		if loadErr != nil {
+			return loadErr
+		}
+		if !reflect.DeepEqual(plan.EffectiveStyleSnapshot, styleRef) ||
+			!reflect.DeepEqual(plan.EffectivePolicySnapshot, policyRef) {
+			return errors.New("Reference Brief effective snapshot facts have drifted")
+		}
+		for _, targetRef := range plan.TargetVersionRefs {
+			target, targetErr := loadReferenceBriefTarget(
+				ctx, transaction, workspace, project, plan, targetRef.OwnerLogicalID,
+			)
+			if targetErr != nil {
+				return targetErr
+			}
+			if target.ID != targetRef.OwnerVersionID || target.Revision != targetRef.OwnerRevision ||
+				target.ContentHash != targetRef.OwnerContentHash {
+				return errors.New("Reference Plan Target ref has drifted")
+			}
+			if len(target.DependsOnTargetBusinessKeys) != 0 || target.Fulfillment == "not_generated" {
+				continue
+			}
+			input, compileErr := compileBaseReferenceBriefInput(
+				plan, target, visualFoundationRef, styleRef, policyRef, stageRelease,
+			)
+			if compileErr != nil {
+				return compileErr
+			}
+			compiled = append(compiled, input)
+		}
+		if len(compiled) == 0 {
+			return errors.New("Reference Brief base wave is empty")
+		}
+		sort.Slice(compiled, func(left, right int) bool {
+			return compiled[left].TargetBusinessKey < compiled[right].TargetBusinessKey
+		})
+		return nil
+	})
+	return compiled, err
+}
+
+func compileBaseReferenceBriefInput(
+	plan referencedomain.ApprovedReferencePlanVersion,
+	target referencedomain.ReferencePlanTargetVersion,
+	visualFoundationRef platformowner.VersionRef,
+	styleRef platformowner.VersionRef,
+	policyRef platformowner.VersionRef,
+	stageRelease agentcontract.ReferenceBriefStageRelease,
+) (agentcontract.ReferenceBriefInput, error) {
+	if !reflect.DeepEqual(plan.EffectiveStyleSnapshot, styleRef) ||
+		!reflect.DeepEqual(plan.EffectivePolicySnapshot, policyRef) ||
+		len(target.DependsOnTargetBusinessKeys) != 0 {
+		return agentcontract.ReferenceBriefInput{}, errors.New("invalid Reference Brief base facts")
+	}
+	return referencedomain.CompileReferenceBriefInput(referencedomain.ReferenceBriefCompilationFacts{
+		ApprovedPlan: plan, Target: target, VisualFoundationVersionRef: visualFoundationRef,
+		DependencyFacts: []referencedomain.ReferenceBriefDependencyFact{}, StageRelease: stageRelease,
+	})
+}
+
+func validateReferenceBriefOwnerReceipt(
+	ctx context.Context,
+	database *gorm.DB,
+	workspaceID uuid.UUID,
+	projectID uuid.UUID,
+	receiptID uuid.UUID,
+	receiptHash string,
+	plan referencedomain.ApprovedReferencePlanVersion,
+) error {
+	var receipt model.CommandReceipt
+	if err := database.WithContext(ctx).Clauses(clause.Locking{Strength: "SHARE"}).Where(
+		"id = ? AND workspace_id = ? AND operation = ?",
+		receiptID, workspaceID, referencedomain.ConfirmVisualFoundationOperation,
+	).First(&receipt).Error; err != nil {
+		return err
+	}
+	result, err := decodeStoredReferenceBriefFact[referencedomain.ConfirmVisualFoundationResult](receipt.Result)
+	if err != nil {
+		return err
+	}
+	rebuilt, err := referencedomain.CompleteConfirmVisualFoundationResult(result)
+	if err != nil || !reflect.DeepEqual(rebuilt, result) {
+		return errors.New("Reference Brief Gate 3 owner receipt content has drifted")
+	}
+	if result.CommandReceiptID != receipt.ID.String() || result.CommittedBy != receipt.CreatedBy.String() ||
+		!result.CommittedAt.Equal(receipt.CreatedAt) {
+		return errors.New("Reference Brief Gate 3 owner receipt identity has drifted")
+	}
+	if result.PlanVersionID != plan.ID || result.PlanRevision != plan.Revision ||
+		result.PlanContentHash != plan.ContentHash || receipt.ResourceID.String() != plan.ID {
+		return errors.New("Reference Brief Gate 3 owner receipt Plan has drifted")
+	}
+	if result.ReceiptContentHash != receiptHash {
+		return errors.New("Reference Brief Gate 3 owner receipt hash has drifted")
+	}
+	if result.ReferenceCollectionReceipt.WorkspaceID != workspaceID.String() ||
+		result.ReferenceCollectionReceipt.ProjectID != projectID.String() {
+		return errors.New("Reference Brief Gate 3 owner receipt scope has drifted")
+	}
+	return nil
 }
 
 func ValidateCurrentReferenceBriefInput(

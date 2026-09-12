@@ -159,7 +159,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 16 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 17 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
@@ -174,7 +174,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		plan.Nodes[12].Executor != "activity.project_preset_selection" ||
 		plan.Nodes[13].Executor != "activity.resolve_visual_foundation" ||
 		plan.Nodes[14].Executor != "activity.plan_reference_assets" ||
-		plan.Nodes[15].Executor != "gate.visual_foundation_scope" {
+		plan.Nodes[15].Executor != "gate.visual_foundation_scope" ||
+		plan.Nodes[16].Executor != "activity.compile_reference_briefs" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -252,6 +253,38 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	referenceBriefRelease, err := agentapp.BuildStageReleaseRecord(
+		contract.ReferenceBriefStageKey,
+		"sha256:"+fmt.Sprintf("%064d", 7),
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	briefStageRelease := contract.ReferenceBriefStageRelease{
+		StageKey:         contract.ReferenceBriefStageKey,
+		StageReleaseHash: referenceBriefRelease.Identity.StageReleaseHash,
+	}
+	referenceBriefFacts := referencegorm.NewStore(database)
+	referenceBriefStore, err := agentgorm.NewReferenceBriefStore(
+		database,
+		referencegorm.ValidateCurrentReferenceBriefInput,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	referenceBriefService, err := agentapp.NewReferenceBriefExecutionService(
+		referenceBriefStore,
+		visualRuntime,
+		dispatchSigner,
+		agentapp.ReferenceBriefExecutionConfig{
+			Now: func() time.Time { return now }, NewID: uuid.NewString,
+			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 7),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	storyGraphQueries := storygraphapp.NewQueryService(storygraphgorm.New(database))
 	referenceSources := workflowgorm.NewReferencePlanSourceStore(database)
 	nodeExecutor := workflowproduction.NewNodeExecutor(
@@ -268,6 +301,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			ReferencePlan: &workflowproduction.ReferencePlanDependencies{
 				Selections: presetStore, FindRelease: presetcatalog.FindCuratedRelease,
 				Worlds: storyGraphQueries, Sources: referenceSources, Candidates: referenceService,
+			},
+			ReferenceBrief: &workflowproduction.ReferenceBriefDependencies{
+				Inputs: referenceBriefFacts, Candidates: referenceBriefService, StageRelease: briefStageRelease,
 			},
 		},
 	)
@@ -1385,26 +1421,20 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			t.Fatalf("Visual Foundation confirmation %T count=%d want=%d err=%v", check.model, count, check.want, countErr)
 		}
 	}
-	briefReleaseIndex := slices.IndexFunc(stageReleases, func(value contract.SceneAnalysisStageRelease) bool {
-		return value.VariantKey.StageKey == contract.ReferenceBriefStageKey
-	})
-	if briefReleaseIndex < 0 {
-		t.Fatal("Reference Brief Stage Release is missing")
-	}
 	var baseTargetKey, dependentTargetKey string
+	var baseTargetKeys []string
 	for _, target := range referenceProjection.Targets {
-		if len(target.DependsOnTargetBusinessKeys) == 0 && baseTargetKey == "" {
-			baseTargetKey = target.TargetBusinessKey
+		if len(target.DependsOnTargetBusinessKeys) == 0 {
+			baseTargetKeys = append(baseTargetKeys, target.TargetBusinessKey)
+			if baseTargetKey == "" {
+				baseTargetKey = target.TargetBusinessKey
+			}
 		}
 		if len(target.DependsOnTargetBusinessKeys) > 0 && dependentTargetKey == "" {
 			dependentTargetKey = target.TargetBusinessKey
 		}
 	}
-	briefStageRelease := contract.ReferenceBriefStageRelease{
-		StageKey:         contract.ReferenceBriefStageKey,
-		StageReleaseHash: stageReleases[briefReleaseIndex].StageReleaseHash,
-	}
-	briefInput, err := referencegorm.NewStore(database).CompileReferenceBriefInput(
+	briefInput, err := referenceBriefFacts.CompileReferenceBriefInput(
 		ctx,
 		fixture.workspaceID.String(),
 		fixture.projectID.String(),
@@ -1416,7 +1446,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		briefInput.DependencySelections == nil || len(briefInput.DependencySelections) != 0 {
 		t.Fatalf("compile base Reference Brief input from exact GORM facts: input=%#v err=%v", briefInput, err)
 	}
-	replayedBriefInput, err := referencegorm.NewStore(database).CompileReferenceBriefInput(
+	replayedBriefInput, err := referenceBriefFacts.CompileReferenceBriefInput(
 		ctx,
 		fixture.workspaceID.String(),
 		fixture.projectID.String(),
@@ -1426,68 +1456,89 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || !reflect.DeepEqual(replayedBriefInput, briefInput) {
 		t.Fatalf("replay base Reference Brief input: got=%#v want=%#v err=%v", replayedBriefInput, briefInput, err)
 	}
-	referenceBriefNodeRunID := uuid.New()
-	if err = database.Create(&model.NodeRunProjection{
-		ID: referenceBriefNodeRunID, WorkspaceID: fixture.workspaceID, WorkflowRunID: uuid.MustParse(started.ID),
-		NodeID: "compile-reference-brief-base", DefinitionKey: "agent.reference_brief",
-		DefinitionVersion: "1.0.0", Executor: "activity.reference_brief",
-		RiskLevel: "external_ai", Status: "QUEUED", Attempt: 0, Revision: 1,
-		CreatedAt: now, UpdatedAt: now,
-	}).Error; err != nil {
-		t.Fatalf("create Reference Brief NodeRun: %v", err)
+	referenceBriefNode := plan.Nodes[16]
+	if _, staleOwnerErr := referenceBriefFacts.CompileBaseReferenceBriefInputs(
+		ctx,
+		fixture.workspaceID.String(),
+		fixture.projectID.String(),
+		visualScopeOutput.Bindings[0].ReferenceID,
+		sceneTextHash("stale-gate-three-owner-receipt"),
+		briefStageRelease,
+	); staleOwnerErr == nil {
+		t.Fatal("Reference Brief base wave accepted a drifted Gate 3 Owner Receipt hash")
 	}
-	referenceBriefStore, err := agentgorm.NewReferenceBriefStore(
-		database,
-		referencegorm.ValidateCurrentReferenceBriefInput,
+	baseBriefInputs, err := referenceBriefFacts.CompileBaseReferenceBriefInputs(
+		ctx,
+		fixture.workspaceID.String(),
+		fixture.projectID.String(),
+		visualScopeOutput.Bindings[0].ReferenceID,
+		visualScopeOutput.Bindings[0].ContentHash,
+		briefStageRelease,
 	)
-	if err != nil {
+	if err != nil || len(baseBriefInputs) != len(baseTargetKeys) {
+		t.Fatalf("compile Reference Brief base wave: inputs=%d targets=%d err=%v", len(baseBriefInputs), len(baseTargetKeys), err)
+	}
+	for index := 1; index < len(baseBriefInputs); index++ {
+		if baseBriefInputs[index-1].TargetBusinessKey >= baseBriefInputs[index].TargetBusinessKey {
+			t.Fatalf("Reference Brief base wave is not canonical: %#v", baseBriefInputs)
+		}
+	}
+	referenceBriefResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: referenceBriefNode.NodeRunID, NodeID: referenceBriefNode.NodeID,
+		Executor: referenceBriefNode.Executor, Attempt: 1,
+	})
+	if err != nil || referenceBriefResult.Status != "SUCCEEDED" ||
+		referenceBriefResult.OutputHash == "" || len(referenceBriefResult.Output.Bindings) != 1 ||
+		!reflect.DeepEqual(referenceBriefResult.Output.Bindings, visualScopeOutput.Bindings) ||
+		visualRuntime.briefCalls != len(baseTargetKeys) {
+		t.Fatalf("execute Reference Brief base wave: result=%#v calls=%d targets=%d runtime_err=%v err=%v", referenceBriefResult, visualRuntime.briefCalls, len(baseTargetKeys), visualRuntime.briefError, err)
+	}
+	replayedReferenceBriefResult, err := runtimeService.ExecuteNode(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: referenceBriefNode.NodeRunID, NodeID: referenceBriefNode.NodeID,
+		Executor: referenceBriefNode.Executor, Attempt: 2,
+	})
+	if err != nil || replayedReferenceBriefResult.OutputHash != referenceBriefResult.OutputHash ||
+		visualRuntime.briefCalls != len(baseTargetKeys) {
+		t.Fatalf("replay Reference Brief base wave: got=%#v want=%#v calls=%d err=%v", replayedReferenceBriefResult, referenceBriefResult, visualRuntime.briefCalls, err)
+	}
+	var referenceBriefManifestCount, referenceBriefInvocationCount, referenceBriefResultCount, referenceBriefCandidateCount int64
+	if err = database.Model(&model.ShardManifest{}).
+		Where("node_run_id = ? AND stage = ?", referenceBriefNode.NodeRunID, contract.ReferenceBriefStageKey).
+		Count(&referenceBriefManifestCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	referenceBriefService, err := agentapp.NewReferenceBriefExecutionService(
-		referenceBriefStore,
-		visualRuntime,
-		dispatchSigner,
-		agentapp.ReferenceBriefExecutionConfig{
-			Now: func() time.Time { return now }, NewID: uuid.NewString,
-			AgentImageDigest: "sha256:" + fmt.Sprintf("%064d", 7),
-		},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	referenceBriefCommand := agentapp.ExecuteReferenceBriefCommand{
-		WorkflowRunID: started.ID, NodeRunID: referenceBriefNodeRunID.String(), Input: briefInput,
-	}
-	referenceBriefCandidate, err := referenceBriefService.Execute(ctx, referenceBriefCommand)
-	if err != nil || referenceBriefCandidate.CandidateType != "reference_brief_candidate" ||
-		referenceBriefCandidate.StageKey != contract.ReferenceBriefStageKey || visualRuntime.briefCalls != 1 {
-		t.Fatalf("persist base Reference Brief Candidate: candidate=%#v calls=%d runtime_err=%v err=%v", referenceBriefCandidate, visualRuntime.briefCalls, visualRuntime.briefError, err)
-	}
-	replayedReferenceBriefCandidate, err := referenceBriefService.Execute(ctx, referenceBriefCommand)
-	if err != nil || replayedReferenceBriefCandidate.ID != referenceBriefCandidate.ID ||
-		replayedReferenceBriefCandidate.CandidateRevisionHash != referenceBriefCandidate.CandidateRevisionHash ||
-		visualRuntime.briefCalls != 1 {
-		t.Fatalf("replay persisted Reference Brief Candidate: got=%#v want=%#v calls=%d err=%v", replayedReferenceBriefCandidate, referenceBriefCandidate, visualRuntime.briefCalls, err)
-	}
-	var referenceBriefInvocationCount, referenceBriefResultCount, referenceBriefCandidateCount int64
 	if err = database.Model(&model.SceneAnalysisInvocationRecord{}).
-		Where("node_run_id = ? AND stage_key = ?", referenceBriefNodeRunID, contract.ReferenceBriefStageKey).
+		Where("node_run_id = ? AND stage_key = ?", referenceBriefNode.NodeRunID, contract.ReferenceBriefStageKey).
 		Count(&referenceBriefInvocationCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err = database.Model(&model.SceneAnalysisResult{}).
 		Where("attempt_id IN (?)", database.Model(&model.SceneAnalysisAttempt{}).
-			Select("id").Where("invocation_id = ?", referenceBriefCandidate.SourceInvocationID)).
+			Select("id").Where("invocation_id IN (?)", database.Model(&model.SceneAnalysisInvocationRecord{}).
+			Select("id").Where("node_run_id = ? AND stage_key = ?", referenceBriefNode.NodeRunID, contract.ReferenceBriefStageKey))).
 		Count(&referenceBriefResultCount).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err = database.Model(&model.SceneAnalysisCandidateRevision{}).
-		Where("id = ? AND candidate_type = ?", referenceBriefCandidate.ID, "reference_brief_candidate").
+		Where("source_invocation_id IN (?) AND candidate_type = ?", database.Model(&model.SceneAnalysisInvocationRecord{}).
+			Select("id").Where("node_run_id = ? AND stage_key = ?", referenceBriefNode.NodeRunID, contract.ReferenceBriefStageKey), "reference_brief_candidate").
 		Count(&referenceBriefCandidateCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if referenceBriefInvocationCount != 1 || referenceBriefResultCount != 1 || referenceBriefCandidateCount != 1 {
-		t.Fatalf("Reference Brief persistence counts: invocation=%d result=%d candidate=%d", referenceBriefInvocationCount, referenceBriefResultCount, referenceBriefCandidateCount)
+	if referenceBriefManifestCount != 1 || referenceBriefInvocationCount != int64(len(baseTargetKeys)) ||
+		referenceBriefResultCount != int64(len(baseTargetKeys)) || referenceBriefCandidateCount != int64(len(baseTargetKeys)) {
+		t.Fatalf("Reference Brief persistence counts: manifest=%d invocation=%d result=%d candidate=%d", referenceBriefManifestCount, referenceBriefInvocationCount, referenceBriefResultCount, referenceBriefCandidateCount)
+	}
+	var referenceBriefManifest model.ShardManifest
+	if err = database.Where(
+		"node_run_id = ? AND stage = ?", referenceBriefNode.NodeRunID, contract.ReferenceBriefStageKey,
+	).First(&referenceBriefManifest).Error; err != nil {
+		t.Fatal(err)
+	}
+	var referenceBriefShards []map[string]string
+	if err = json.Unmarshal(referenceBriefManifest.Shards, &referenceBriefShards); err != nil ||
+		len(referenceBriefShards) != len(baseTargetKeys) {
+		t.Fatalf("Reference Brief shared Manifest shards=%#v targets=%d err=%v", referenceBriefShards, len(baseTargetKeys), err)
 	}
 	const briefHeadDriftSavepoint = "reference_brief_head_drift"
 	if err = database.SavePoint(briefHeadDriftSavepoint).Error; err != nil {
@@ -2539,6 +2590,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "visual-foundation", DefinitionKey: "agent.visual_foundation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "reference-plan", DefinitionKey: "agent.reference_plan", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "visual-foundation-scope-gate", DefinitionKey: "human.visual_foundation_scope", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "reference-brief-base-wave", DefinitionKey: "agent.reference_briefs", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -2585,6 +2637,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "preset-selection-visual-foundation-scope-gate", FromNodeID: "preset-selection", FromPort: "selection", ToNodeID: "visual-foundation-scope-gate", ToPort: "selection"},
 			{ID: "visual-foundation-visual-foundation-scope-gate", FromNodeID: "visual-foundation", FromPort: "candidate", ToNodeID: "visual-foundation-scope-gate", ToPort: "visual_foundation"},
 			{ID: "reference-plan-visual-foundation-scope-gate", FromNodeID: "reference-plan", FromPort: "candidate", ToNodeID: "visual-foundation-scope-gate", ToPort: "reference_plan"},
+			{ID: "visual-foundation-scope-reference-briefs", FromNodeID: "visual-foundation-scope-gate", FromPort: "owners", ToNodeID: "reference-brief-base-wave", ToPort: "owners"},
 		},
 	}
 }

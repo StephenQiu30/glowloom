@@ -34,6 +34,7 @@ import (
 	planningapp "github.com/StephenQiu30/lanverse/backend/internal/production/planning/application"
 	projectgorm "github.com/StephenQiu30/lanverse/backend/internal/production/project/adapter/gormdb"
 	projectapp "github.com/StephenQiu30/lanverse/backend/internal/production/project/application"
+	referencegorm "github.com/StephenQiu30/lanverse/backend/internal/production/reference/adapter/gormdb"
 	scriptgorm "github.com/StephenQiu30/lanverse/backend/internal/production/script/adapter/gormdb"
 	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/production/script/application"
 	storyboardgeneration "github.com/StephenQiu30/lanverse/backend/internal/production/storyboard/adapter/generation"
@@ -156,6 +157,34 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("workflow Reference Plan service initialization failed: %w", err)
 	}
+	referenceBriefRelease, err := agentapp.BuildStageReleaseRecord(
+		agentcontract.ReferenceBriefStageKey,
+		configuration.AgentRuntimeImageDigest,
+		now(),
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Reference Brief release initialization failed: %w", err)
+	}
+	referenceBriefStageRelease := agentcontract.ReferenceBriefStageRelease{
+		StageKey:         agentcontract.ReferenceBriefStageKey,
+		StageReleaseHash: referenceBriefRelease.Identity.StageReleaseHash,
+	}
+	referenceBriefStore, err := agentgorm.NewReferenceBriefStore(
+		database,
+		referencegorm.ValidateCurrentReferenceBriefInput,
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Reference Brief store initialization failed: %w", err)
+	}
+	referenceBriefService, err := agentapp.NewReferenceBriefExecutionService(
+		referenceBriefStore, agentHTTPClient, agentSigner,
+		agentapp.ReferenceBriefExecutionConfig{
+			Now: now, NewID: uuid.NewString, AgentImageDigest: configuration.AgentRuntimeImageDigest,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("workflow Reference Brief service initialization failed: %w", err)
+	}
 	bibleStore := biblegorm.New(database)
 	bibleService := bibleapp.NewService(bibleStore, bibleapp.Config{Now: now, NewID: uuid.NewString})
 	evidenceService := bibleapp.NewSourceEvidenceService(bibleStore, bibleapp.SourceEvidenceConfig{
@@ -267,6 +296,10 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 			ReferencePlan: &workflowproduction.ReferencePlanDependencies{
 				Selections: presetgorm.NewProjectSelectionStore(database), FindRelease: presetcatalog.FindCuratedRelease,
 				Worlds: storyGraphQueries, Sources: referencePlanSources, Candidates: referencePlanService,
+			},
+			ReferenceBrief: &workflowproduction.ReferenceBriefDependencies{
+				Inputs: referencegorm.NewStore(database), Candidates: referenceBriefService,
+				StageRelease: referenceBriefStageRelease,
 			},
 		},
 	)

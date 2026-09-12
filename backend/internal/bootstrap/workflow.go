@@ -65,6 +65,13 @@ func NewWorkflowRuntime(
 			return nil, errors.New("Visual Foundation workflow dependencies must be configured together")
 		}
 	}
+	if len(sceneAnalysis) == 1 && sceneAnalysis[0].ReferenceBrief != nil {
+		referenceBrief := sceneAnalysis[0].ReferenceBrief
+		if referenceBrief.Inputs == nil || referenceBrief.Candidates == nil ||
+			referenceBrief.StageRelease.StageKey == "" || referenceBrief.StageRelease.StageReleaseHash == "" {
+			return nil, errors.New("Reference Brief workflow dependencies must be configured together")
+		}
+	}
 	now := func() time.Time { return time.Now().UTC() }
 	humanTasks := workflowapp.HumanTaskOpener(workflowreview.New(reviews))
 	if candidateSets != nil {

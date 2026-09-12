@@ -111,7 +111,9 @@ Backend 拥有 Definition、Release、Control、Invocation、Lease、Result、Ca
 
 Backend facts loader 必须通过 GORM 从当前 Reference Plan/Preset Effective Heads 读取并重验 Approved Plan、Target、Binding、Style 与 Policy，再由既有领域编译器生成相同 `ReferenceBriefInput`。MVP 只放行无依赖的基础 Target；存在依赖但尚无正式 AssetVersion Owner Selection 时必须报告 dependency-not-ready，禁止读取 GenerationCandidateSelection/Artifact 代替正式 Owner，禁止新建 migration、Raw SQL 或第二事实源。
 
-基础 Target 的持久执行必须复用既有 Agent 生产表，在 dispatch 与 accepted 写入前分别从 PostgreSQL 重编译同一 `ReferenceBriefInput`；accepted 结果只能原子创建唯一 `reference_brief_candidate` Revision/Head，重放不得再次调用 Agent，发送后无法确认的结果必须保留 `outcome_unknown` 且不创建 Candidate。本要求不等于 Temporal 已接通，也不得提前生成媒体或 AssetVersion。
+基础 Target 的持久执行必须复用既有 Agent 生产表，在 dispatch 与 accepted 写入前分别从 PostgreSQL 重编译同一 `ReferenceBriefInput`；accepted 结果只能原子创建唯一 `reference_brief_candidate` Revision/Head，重放不得再次调用 Agent，发送后无法确认的结果必须保留 `outcome_unknown` 且不创建 Candidate。该持久执行子项的验收不能单独冒充 Temporal 已接通，也不得提前生成媒体或 AssetVersion。
+
+基础 Reference Brief Temporal 节点必须消费并重验 Gate 3 `visual_reference_owner_set`，按 canonical target key 顺序覆盖当前 Approved Plan 中全部无依赖、非 `not_generated` Target，并逐项复用持久执行幂等语义。同一 Node/Stage 只能有一个覆盖全部基础 Target shard 的 Manifest，完整 semantic shard key 必须持久化且不得截断或用旁路 Hash 替代。只有全部基础 Target accepted 才可成功并透传原 Owner Set；任一失败不得发布伪 Candidate Set 或跳过 Target。数据库、Agent HTTP 等 I/O 只能发生在 Activity/Backend，旧 Workflow 依靠其已持久化 ExecutionPlan 保持可重放，不得为本节点引入数字代际命名或业务兼容层。
 
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
