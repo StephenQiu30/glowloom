@@ -9,9 +9,43 @@ import (
 
 	"github.com/google/uuid"
 
+	agentapp "github.com/StephenQiu30/lanverse/backend/internal/agent/application"
+	openaiadapter "github.com/StephenQiu30/lanverse/backend/internal/generation/adapter/openai"
 	generationapp "github.com/StephenQiu30/lanverse/backend/internal/generation/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 )
+
+func assertPersistedReferenceImageCompilation(t *testing.T, target generationapp.ReferenceGenerationTarget, brief agentapp.AcceptedReferenceBrief, profile domain.ProviderModelProfileVersion) {
+	t.Helper()
+	compiled, err := openaiadapter.CompileReferenceImages(target, brief, profile)
+	if err != nil || len(compiled.Requests) != target.OutputContract.CandidateBundleCount*len(target.OutputContract.Slots) {
+		t.Fatalf("compile persisted Target/Brief/Profile: %v", err)
+	}
+	replay, err := openaiadapter.CompileReferenceImages(target, brief, profile)
+	if err != nil || !reflect.DeepEqual(replay, compiled) {
+		t.Fatalf("persisted compilation replay: %v", err)
+	}
+	raw, err := json.Marshal(compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"prompt", "source_design_slots", "ciphertext", "api_key", "https://"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Fatal("request content leaked into manifest")
+		}
+	}
+	preimage := compiled
+	preimage.ManifestHash = ""
+	raw, err = json.Marshal(preimage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := canonical.Hash(raw)
+	if err != nil || hash != compiled.ManifestHash {
+		t.Fatal("manifest identity drifted")
+	}
+}
 
 func assertReferenceGenerationTargetContract(t *testing.T, target generationapp.ReferenceGenerationTarget) {
 	t.Helper()

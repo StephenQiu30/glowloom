@@ -985,7 +985,7 @@ func replayProfile(
 	if err != nil {
 		return err
 	}
-	if profile.WorkspaceID != receipt.WorkspaceID || validateProviderModelProfileVersion(profile) != nil {
+	if profile.WorkspaceID != receipt.WorkspaceID || ValidateProviderModelProfileVersion(profile) != nil {
 		return conflict("Media Provider command receipt resource has drifted")
 	}
 	*result = ProviderModelProfileResult{Profile: profile, Receipt: receipt}
@@ -1162,7 +1162,7 @@ func validateResolvedProviderFacts(
 	profile domain.ProviderModelProfileVersion,
 ) error {
 	if validateProjectProviderBinding(binding) != nil || validateProviderConnectionVersion(connection) != nil ||
-		validateProviderCredentialVersion(credential) != nil || validateProviderModelProfileVersion(profile) != nil ||
+		validateProviderCredentialVersion(credential) != nil || ValidateProviderModelProfileVersion(profile) != nil ||
 		binding.WorkspaceID != connection.WorkspaceID || binding.WorkspaceID != credential.WorkspaceID ||
 		binding.WorkspaceID != profile.WorkspaceID || binding.ConnectionVersionID != connection.ID ||
 		binding.CredentialVersionID != credential.ID || binding.ModelProfileVersionID != profile.ID ||
@@ -1204,7 +1204,8 @@ func validateProviderCredentialVersion(value domain.ProviderCredentialVersion) e
 	return nil
 }
 
-func validateProviderModelProfileVersion(value domain.ProviderModelProfileVersion) error {
+// ValidateProviderModelProfileVersion verifies immutable content, not current Binding eligibility.
+func ValidateProviderModelProfileVersion(value domain.ProviderModelProfileVersion) error {
 	if !validUUID(value.ID) || !validUUID(value.WorkspaceID) ||
 		!providerConfigurationKeyPattern.MatchString(value.ProfileKey) || value.Revision < 1 || len(value.CreationSource) == 0 ||
 		!providerConfigurationKeyPattern.MatchString(value.ConnectionKey) ||

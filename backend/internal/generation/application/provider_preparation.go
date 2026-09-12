@@ -233,7 +233,7 @@ func (service *ProviderService) createProviderExecution(
 		return domain.GenerationRequest{}, domain.ProviderJob{}, nil, conflict("Generation Provider credential snapshot has drifted")
 	}
 	profile, err := repo.FindProviderModelProfile(ctx, intent.ModelProfileVersionID)
-	if err != nil || validateProviderModelProfileVersion(profile) != nil || profile.WorkspaceID != intent.WorkspaceID ||
+	if err != nil || ValidateProviderModelProfileVersion(profile) != nil || profile.WorkspaceID != intent.WorkspaceID ||
 		profile.ProviderKey != binding.ProviderKey || profile.Modality != domain.MediaModalityImage ||
 		profile.BillingMetric != costdomain.MetricGenerationImageCall || profile.BillingMetric != intent.BillingMetric ||
 		profile.Revision != intent.ModelProfileRevision || profile.ContentHash != intent.ModelProfileContentHash {
@@ -381,7 +381,7 @@ func (service *ProviderService) validateProviderFacts(
 		return conflict("Generation Provider binding snapshot has drifted")
 	}
 	profile, err := repo.FindProviderModelProfile(ctx, request.ModelProfileVersionID)
-	if err != nil || validateProviderModelProfileVersion(profile) != nil || profile.WorkspaceID != request.WorkspaceID ||
+	if err != nil || ValidateProviderModelProfileVersion(profile) != nil || profile.WorkspaceID != request.WorkspaceID ||
 		profile.ProviderKey != request.ProviderKey || profile.ExternalModelID != request.ExternalModelID ||
 		profile.Modality != binding.Modality || profile.Revision != request.ModelProfileRevision ||
 		profile.ContentHash != request.ModelProfileContentHash || profile.BillingMetric != request.BillingMetric {

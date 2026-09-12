@@ -446,6 +446,10 @@ Adapter 不能：
 
 模型 ID、参数和能力会变化；具体 Adapter 开发开始时必须重新核验官方一手文档并冻结进 ModelProfile/contract test。本文不把 2026-08-29 的展示名和外部 Model ID 重述成永久事实。
 
+首个基础图片请求编译器固定为 `openai-reference-image-compiler`，消费通过 exact read 的 Target、accepted Brief 与已验证 Profile，不读取 Owner、Secret 或网络。仅支持无图片依赖的人物身份锚点、地点板和道具表；依赖型 Target 不得丢弃参考图后降级为文生图。每个 Bundle/slot 编译一个 `n=1` 的独立请求，显式 PNG、high quality、非流式；尺寸直接使用冻结 slot 的宽高，严格匹配比例，不取整、不裁切、不使用 auto。当前 Profile 必须为启用的 `gpt-image-2` / `openai-image-api-nonstreaming` 且无未支持的 Defaults，不能忽略覆盖参数。
+
+2026-09-12 核验 [OpenAI 官方 GPT Image 2 参数](https://developers.openai.com/api/docs/guides/image-generation#earlier-gpt-image-models)：边长不超过 3840、均为 16 的倍数、长短边比例不超过 3、总像素在 655360–8294400。编译器逐槽位检查这些限制与 PNG Policy；32,000 UTF-8 bytes 为本地 Prompt 安全预算，不声明为供应商上限。Prompt 机械保留 source/design slots、正负约束、layout/scale、rights/provenance 与类型专属 Brief，并明确只生成当前 view role，不把角色列表当作拼版指令。编译结果包含瞬时 canonical 请求字节和逐 Bundle/slot 的请求 Hash；无 Prompt 的 manifest 身份绑定 exact Target/Brief/Profile 和 compiler contract。准备事务仍须重验授权、当前配置/Head、运行限额并持久化 Execution；本编译器不产生发送许可，也不证明生成图片满足语义 QC。
+
 ### 7.3 调用身份与状态机
 
 一个 CandidateBundle 的每个 required slot 对应一个确定性 `ProviderCallKey`：

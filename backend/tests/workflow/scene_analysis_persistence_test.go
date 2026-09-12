@@ -1671,6 +1671,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			if published.TargetKind == "character_identity_anchor" {
 				created := assertInitialReferenceExecutionAuthorization(t, ctx, generationgorm.New(database), generationgorm.NewProviderConfigurationStore(database), authorizationActor, published, now.Add(6*time.Minute))
 				execution = &created
+				assertPersistedReferenceImageCompilation(t, currentTarget, acceptedBrief, execution.profile.Profile)
 				var executionAuthorizationCount int64
 				if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceExecutionOperation, published.ID).Count(&executionAuthorizationCount).Error; err != nil || executionAuthorizationCount != 1 {
 					t.Fatalf("execution authorization receipt count=%d err=%v", executionAuthorizationCount, err)

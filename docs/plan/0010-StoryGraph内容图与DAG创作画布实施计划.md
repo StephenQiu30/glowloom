@@ -228,6 +228,7 @@
   - [x] 发布三类基础 `GenerationTargetProduction`：同一 Backend/GORM 事务重验权限、授权、Brief、World 与 Preset capability，冻结来源、输出合同和读取快照；复用 `gen_targets` 的 `reference_plan` 分支，原子写首轮 Head 与 Command Receipt。重放重新检查事实及 Head；回执失败、首轮冲突或输入漂移不留下孤立 Target。依赖型 Target、重新生成与 Provider Execution 仍按后续顺序实施。
   - [x] 接通执行前基础 Target exact read：重验当前操作者与原授权、唯一发布回执、当前 Brief/来源/Preset 和 Head；重编译冻结输入，拒绝失效 Target，不产生写入或 Provider 调用。发布重放共用事实与回执校验；此项不等于执行授权、Execution Snapshot 或 Provider 已接通。
   - [x] 实现首次执行授权：复用 Command Receipt，绑定 exact Target 和用户选定 Provider Binding，事务重验目标与当前配置版本，严格重放；不新增授权表，不创建 Execution、不解密或调用模型。独立用户动作不等于发送许可，完整模型能力、请求编译与 Execution Head 仍由后续准备阶段验证。
+  - [x] 实现基础图片请求编译器：核验官方 `gpt-image-2` 参数，按冻结 Target/Brief/Profile 为每个 Bundle/slot 编译独立 canonical 请求与无 Prompt 的 manifest 身份；固定 PNG/high/非流式，严格检查尺寸、比例、媒体与本地字节预算。覆盖三种基础类型、篡改与不支持参数拒绝，以及现有 PostgreSQL 的持久化人物锚点输入回归。尚未创建 Execution、发送模型请求或生成媒体；依赖型图片编译和 Execution Snapshot/Head 继续按后续顺序实施。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
