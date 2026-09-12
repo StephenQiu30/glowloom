@@ -123,6 +123,7 @@ func Catalog() []any {
 		&model.ProductionWorldCollectionReceipt{},
 		&model.ApprovedReferencePlanVersion{},
 		&model.ReferencePlanTargetVersion{},
+		&model.GenerationReferenceTargetHead{},
 		&model.ReferencePlanScopeHead{},
 		&model.ProjectReferencePlanActivationHead{},
 		&model.VisualFoundationScopeCollectionReceipt{},
@@ -184,6 +185,7 @@ func refreshEvolvingConstraints(ctx context.Context, database *gorm.DB) error {
 		{model: &model.WorkflowHumanGateInput{}, name: "ck_wrk_human_gate_input_key"},
 		{model: &model.WorkflowHumanGateInput{}, name: "ck_wrk_human_gate_input_subject"},
 		{model: &model.ProductionWorldClaim{}, name: "ck_scr_world_claim_type"},
+		{model: &model.GenerationTarget{}, name: "ck_gen_target_kind"},
 	}
 	return database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		for _, constraint := range constraints {

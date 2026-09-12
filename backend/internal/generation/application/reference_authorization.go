@@ -93,12 +93,7 @@ func (service *ReferenceGenerationAuthorizationService) AuthorizeInitial(ctx con
 		if err != nil || sourceHash != source.ContentHash || !intentHashPattern.MatchString(source.ProductionWorldOwnerSetHash) {
 			return conflict("Reference generation source compilation is invalid")
 		}
-		inputHash, err := platformcommand.InputHash(struct {
-			Actor                       Actor
-			Command                     AuthorizeInitialReferenceGenerationCommand
-			SourceContentHash           string
-			ProductionWorldOwnerSetHash string
-		}{actor, command, source.ContentHash, source.ProductionWorldOwnerSetHash})
+		inputHash, err := referenceAuthorizationInputHash(actor, command, source)
 		if err != nil {
 			return err
 		}
@@ -151,4 +146,13 @@ func replayReferenceGenerationAuthorization(receipt platformcommand.Receipt, inp
 
 func referenceAuthorizationOwnerRef(ref agentcontract.ReferencePlanOwnerRef) owner.VersionRef {
 	return owner.VersionRef{WorkspaceID: ref.WorkspaceID, ProjectID: ref.ProjectID, OwnerKind: ref.OwnerKind, VersionFamily: ref.VersionFamily, OwnerLogicalID: ref.OwnerLogicalID, OwnerVersionID: ref.OwnerVersionID, OwnerRevision: ref.OwnerRevision, OwnerContentHash: ref.OwnerContentHash}
+}
+
+func referenceAuthorizationInputHash(actor Actor, command AuthorizeInitialReferenceGenerationCommand, source ReferenceGenerationSourceCompilation) (string, error) {
+	return platformcommand.InputHash(struct {
+		Actor                       Actor
+		Command                     AuthorizeInitialReferenceGenerationCommand
+		SourceContentHash           string
+		ProductionWorldOwnerSetHash string
+	}{actor, command, source.ContentHash, source.ProductionWorldOwnerSetHash})
 }

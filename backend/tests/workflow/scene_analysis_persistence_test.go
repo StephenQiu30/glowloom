@@ -1618,6 +1618,90 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			if authorizationErr != nil || !reflect.DeepEqual(authorized, replayed) {
 				t.Fatalf("authorization replay drifted: %v", authorizationErr)
 			}
+			builder, buildErr := generationapp.NewReferenceGenerationTargetService(generationgorm.New(database), func() time.Time { return now.Add(5 * time.Minute) }, uuid.NewString)
+			if buildErr != nil {
+				t.Fatal(buildErr)
+			}
+			buildCommand := generationapp.BuildReferenceGenerationTargetCommand{
+				WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
+				AuthorizationID: authorized.HumanActionRef, AuthorizationHash: authorized.ContentHash,
+				BriefRevisionID: acceptedBrief.RevisionID, BriefRevisionHash: acceptedBrief.RevisionHash,
+				ExpectedHeadRevision: 0, SlotPolicies: policies, IdempotencyKey: "reference-target:" + row.TargetVersionID,
+			}
+			publicationIDCalls := 0
+			failingBuilder, buildErr := generationapp.NewReferenceGenerationTargetService(generationgorm.New(database), func() time.Time { return now.Add(5 * time.Minute) }, func() string {
+				publicationIDCalls++
+				if publicationIDCalls == 1 {
+					return uuid.NewString()
+				}
+				return "invalid-receipt-id"
+			})
+			if buildErr != nil {
+				t.Fatal(buildErr)
+			}
+			if _, buildErr = failingBuilder.BuildInitial(ctx, authorizationActor, buildCommand); buildErr == nil || publicationIDCalls != 2 {
+				t.Fatalf("receipt failure did not abort publication: id_calls=%d err=%v", publicationIDCalls, buildErr)
+			}
+			var targetCount, targetHeadCount int64
+			if err = database.Model(&model.GenerationTarget{}).Where("workspace_id = ? AND project_id = ? AND kind = ? AND source_content_hash = ?", fixture.workspaceID, fixture.projectID, "reference_plan", acceptedBrief.Input.ReferencePlanTargetRef.OwnerContentHash).Count(&targetCount).Error; err != nil || targetCount != 0 {
+				t.Fatalf("failed publication left Target: count=%d err=%v", targetCount, err)
+			}
+			if err = database.Model(&model.GenerationReferenceTargetHead{}).Where("reference_target_version_id = ?", row.TargetVersionID).Count(&targetHeadCount).Error; err != nil || targetHeadCount != 0 {
+				t.Fatalf("failed publication left Head: count=%d err=%v", targetHeadCount, err)
+			}
+			published, buildErr := builder.BuildInitial(ctx, authorizationActor, buildCommand)
+			if buildErr != nil || published.GenerationRound != 1 || published.OutputContract.ContentHash != output.ContentHash || published.ReferencePlanTargetRef.OwnerVersionID != row.TargetVersionID {
+				t.Fatalf("publish Reference Generation Target: %#v err=%v", published, buildErr)
+			}
+			publishedReplay, buildErr := builder.BuildInitial(ctx, authorizationActor, buildCommand)
+			if buildErr != nil || !reflect.DeepEqual(publishedReplay, published) {
+				t.Fatalf("Reference Generation Target replay drifted: %v", buildErr)
+			}
+			assertReferenceGenerationTargetContract(t, published)
+			reorderedBuild := buildCommand
+			reorderedBuild.SlotPolicies = slices.Clone(policies)
+			slices.Reverse(reorderedBuild.SlotPolicies)
+			if reorderedTarget, reorderErr := builder.BuildInitial(ctx, authorizationActor, reorderedBuild); reorderErr != nil || !reflect.DeepEqual(reorderedTarget, published) {
+				t.Fatalf("canonical output policy order broke Target replay: %v", reorderErr)
+			}
+			var publishedRecord model.GenerationTarget
+			if err = database.First(&publishedRecord, "id = ?", published.ID).Error; err != nil || publishedRecord.Kind != "reference_plan" || publishedRecord.TargetHash != published.ContentHash {
+				t.Fatalf("Reference target did not use formal Generation storage: %v", err)
+			}
+			newRoundCommand := buildCommand
+			newRoundCommand.IdempotencyKey += ":another"
+			if _, buildErr = builder.BuildInitial(ctx, authorizationActor, newRoundCommand); buildErr == nil {
+				t.Fatal("new command key bypassed initial generation Head CAS")
+			}
+			changedOutputCommand := buildCommand
+			changedOutputCommand.SlotPolicies = slices.Clone(policies)
+			changedOutputCommand.SlotPolicies[0].MinWidth++
+			if _, buildErr = builder.BuildInitial(ctx, authorizationActor, changedOutputCommand); buildErr == nil {
+				t.Fatal("changed output policy reused Target idempotency key")
+			}
+			if err = database.Model(&model.GenerationTarget{}).Where("workspace_id = ? AND project_id = ? AND kind = ? AND source_content_hash = ?", fixture.workspaceID, fixture.projectID, "reference_plan", acceptedBrief.Input.ReferencePlanTargetRef.OwnerContentHash).Count(&targetCount).Error; err != nil || targetCount != 1 {
+				t.Fatalf("Head conflict left orphan Target: count=%d err=%v", targetCount, err)
+			}
+			for _, corrupted := range []string{"head", "target"} {
+				if err = database.SavePoint("reference_target_corruption").Error; err != nil {
+					t.Fatal(err)
+				}
+				if corrupted == "head" {
+					err = database.Model(&model.GenerationReferenceTargetHead{}).Where("current_target_id = ?", published.ID).Update("current_target_hash", strings.Repeat("f", 64)).Error
+				} else {
+					err = database.Model(&model.GenerationTarget{}).Where("id = ?", published.ID).UpdateColumns(map[string]any{"target_hash": strings.Repeat("f", 64)}).Error
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, corruptionErr := builder.BuildInitial(ctx, authorizationActor, buildCommand)
+				if err = database.RollbackTo("reference_target_corruption").Error; err != nil {
+					t.Fatal(err)
+				}
+				if corruptionErr == nil {
+					t.Fatalf("Target replay accepted corrupted %s", corrupted)
+				}
+			}
 			if err = database.SavePoint("reference_authorization_source").Error; err != nil {
 				t.Fatal(err)
 			}
@@ -1626,6 +1710,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				t.Fatalf("inject exact Binding drift: rows=%d err=%v", update.RowsAffected, update.Error)
 			}
 			_, driftedReplay := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+			_, driftedTargetReplay := builder.BuildInitial(ctx, authorizationActor, buildCommand)
 			newAuthorization := authorizationCommand
 			newAuthorization.IdempotencyKey += ":source-drift"
 			_, driftedWrite := authorizer.AuthorizeInitial(ctx, authorizationActor, newAuthorization)
@@ -1636,7 +1721,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			if err = database.RollbackTo("reference_authorization_source").Error; err != nil {
 				t.Fatal(err)
 			}
-			if driftedReplay == nil || driftedWrite == nil || driftedReceiptCount != 0 {
+			if driftedReplay == nil || driftedTargetReplay == nil || driftedWrite == nil || driftedReceiptCount != 0 {
 				t.Fatalf("Binding drift authorized generation: replay=%v write=%v receipts=%d", driftedReplay, driftedWrite, driftedReceiptCount)
 			}
 			var authorizationCount int64

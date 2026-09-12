@@ -18,7 +18,7 @@ type GenerationTarget struct {
 	ID                uuid.UUID      `gorm:"type:uuid;primaryKey"`
 	WorkspaceID       uuid.UUID      `gorm:"type:uuid;not null;index:ix_gen_targets_workspace_hash,priority:1"`
 	ProjectID         uuid.UUID      `gorm:"type:uuid;not null;index:ix_gen_targets_workspace_hash,priority:2"`
-	Kind              string         `gorm:"type:varchar(32);not null;index;check:ck_gen_target_kind,kind IN ('reference_asset','shot_frame')"`
+	Kind              string         `gorm:"type:varchar(32);not null;index;check:ck_gen_target_kind,kind IN ('reference_asset','shot_frame','reference_plan')"`
 	SourceOwnerRef    datatypes.JSON `gorm:"type:jsonb;not null"`
 	SourceContentHash string         `gorm:"type:char(64);not null;check:ck_gen_target_source_hash,char_length(source_content_hash) = 64"`
 	PolicySnapshotRef datatypes.JSON `gorm:"type:jsonb;not null"`
@@ -37,3 +37,19 @@ func (GenerationTarget) TableName() string { return "gen_targets" }
 
 func (*GenerationTarget) BeforeUpdate(*gorm.DB) error { return ErrImmutableGenerationTarget }
 func (*GenerationTarget) BeforeDelete(*gorm.DB) error { return ErrImmutableGenerationTarget }
+
+// GenerationReferenceTargetHead is only a concurrency index over exact Plan/Target versions.
+type GenerationReferenceTargetHead struct {
+	WorkspaceID              uuid.UUID                    `gorm:"type:uuid;primaryKey"`
+	ProjectID                uuid.UUID                    `gorm:"type:uuid;primaryKey"`
+	PlanVersionID            uuid.UUID                    `gorm:"type:uuid;primaryKey"`
+	ReferenceTargetVersionID uuid.UUID                    `gorm:"type:uuid;primaryKey"`
+	CurrentTargetID          uuid.UUID                    `gorm:"type:uuid;not null;uniqueIndex"`
+	CurrentTargetHash        string                       `gorm:"type:char(64);not null;check:ck_gen_ref_head_hash,char_length(current_target_hash) = 64"`
+	Revision                 int64                        `gorm:"not null;check:ck_gen_ref_head_revision,revision >= 1"`
+	CurrentTarget            GenerationTarget             `gorm:"foreignKey:CurrentTargetID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	Plan                     ApprovedReferencePlanVersion `gorm:"foreignKey:PlanVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ReferenceTarget          ReferencePlanTargetVersion   `gorm:"foreignKey:ReferenceTargetVersionID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (GenerationReferenceTargetHead) TableName() string { return "gen_reference_target_heads" }

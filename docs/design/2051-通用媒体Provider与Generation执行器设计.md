@@ -150,6 +150,8 @@ Target content hash 排除 `created_by/created_at` 审计字段，但覆盖其�
 
 `GenerationTargetHeadProduction` 以 `(workspace, project, approved plan ref, reference plan target ref)` 为键，只用 expected revision CAS 指向最高已授权 generation round；`GenerationExecutionHeadContract` 以 Target ref 为键；`GenerationCandidateSelectionHeadContract` 以 Target ref 为键。三个 Head 都只是并发索引，不复制 Target、Execution 或 Selection 内容，也不提供“查最新资产”能力。
 
+首次基础 Target 发布复用 `gen_targets`，存储类别为语义化 `reference_plan`，Payload 为完整 `GenerationTargetProduction`；Source/Policy 列分别保留 exact Reference Plan Target 与 Effective Policy refs，不转换成旧 `approved_storyboard_intents`。新增 Generation Reference Target Head 只保存 scope、精确 Plan/Target ID、当前 Generation Target ID/Hash 和轮次，首次 expected revision 必须为 0。授权、accepted Brief、当前来源和 Preset capability 在同一 Backend 事务内重验，再编译输出合同、dependency/read-set roots，原子写 Target、Head 与 Command Receipt。重复命令先重验事实，再核对原 Target 和 Head；新 key 不得绕过首次 Head CAS 创建第二轮。此入口不准备 Provider Execution，不创建媒体或假 AssetVersion；重新生成按独立授权后续实施。
+
 生成授权与执行授权分离：
 
 ```text
