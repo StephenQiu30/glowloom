@@ -139,6 +139,8 @@
 
 执行前输出合同必须从通过冻结 Input fence 的 Brief 编译：每个 required view role 恰一个独立 slot，媒体 Policy 恰好覆盖该集合，语义/QC 要求和 Bundle 数量均进入 canonical Hash。缺视图、跨类型视图、重复槽位、未知字段、Hash 漂移或超出单图/整组运行预算均拒绝。该合同是 `VPR-GEN-004/006/009` 的前置证据，不单独证明媒体、Bundle 审核或 Selection 已完成。
 
+正式生成输入只消费 Backend Agent Owner 验证后的精确 accepted Brief Revision：当前 source facts、Candidate Head、Release Control、来源 Result、已完成 Attempt 与 Dispatch Authorization 必须闭合，且重算内容和 Revision Hash。错 scope、旧 Head、Control 撤销/隔离、来源漂移或未完成 Attempt 均不可消费；Coverage 的 accepted 展示遵守同一边界。后续出现的新 Attempt 不能替代 Candidate 已绑定的来源 Attempt。
+
 ## 8. 五个 Human Gate 的公共合同
 
 | ID | 必须满足的合同 | 最低验证 |

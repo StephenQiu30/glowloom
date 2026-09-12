@@ -1559,18 +1559,15 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			if row.Status != "planned" || row.BriefStatus != "accepted" || row.BriefCandidate == nil {
 				t.Fatalf("base Reference Coverage row=%#v", row)
 			}
-			var storedBrief model.SceneAnalysisCandidateRevision
-			if err = database.First(&storedBrief, "id = ?", row.BriefCandidate.RevisionID).Error; err != nil {
-				t.Fatal(err)
+			acceptedBrief, readErr := referenceBriefStore.ReadAcceptedReferenceBrief(ctx, fixture.workspaceID.String(), fixture.projectID.String(), row.BriefCandidate.RevisionID, row.BriefCandidate.RevisionHash)
+			if readErr != nil {
+				t.Fatal(readErr)
 			}
-			brief, _, decodeErr := contract.DecodeReferenceBriefCandidate(json.RawMessage(storedBrief.Candidate))
-			if decodeErr != nil {
-				t.Fatal(decodeErr)
-			}
+			brief := acceptedBrief.Candidate
 			inputIndex := slices.IndexFunc(baseBriefInputs, func(input contract.ReferenceBriefInput) bool {
 				return input.TargetBusinessKey == row.TargetBusinessKey
 			})
-			if inputIndex < 0 {
+			if inputIndex < 0 || !reflect.DeepEqual(acceptedBrief.Input, baseBriefInputs[inputIndex]) {
 				t.Fatal("persisted Brief has no frozen base input")
 			}
 			policies := make([]generationapp.ReferenceOutputSlotPolicy, len(brief.RequiredViewRoles))
@@ -1580,7 +1577,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 					MinWidth: 1024, MinHeight: 1024, MaxBytes: 8 << 20,
 				}
 			}
-			output, compileErr := generationapp.CompileReferenceOutputContract(baseBriefInputs[inputIndex], brief, 2, policies)
+			output, compileErr := generationapp.CompileReferenceOutputContract(acceptedBrief.Input, brief, 2, policies)
 			if compileErr != nil || len(output.Slots) != len(brief.RequiredViewRoles) {
 				t.Fatalf("compile persisted Brief output: output=%#v err=%v", output, compileErr)
 			}
@@ -1608,6 +1605,133 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if baseTarget < 0 {
 		t.Fatal("base Reference Target is missing from Coverage Matrix")
 	}
+	var acceptedBriefForRead model.SceneAnalysisCandidateRevision
+	if err = database.First(&acceptedBriefForRead, "id = ?", referenceCoverage.Rows[baseTarget].BriefCandidate.RevisionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Run("accepted Reference Brief source fence", func(t *testing.T) {
+		candidate := acceptedBriefForRead
+		read := func(projectID, revisionHash string) error {
+			store, err := agentgorm.NewReferenceBriefStore(database, referencegorm.ValidateCurrentReferenceBriefInput)
+			if err != nil {
+				return err
+			}
+			accepted, err := store.ReadAcceptedReferenceBrief(ctx, candidate.WorkspaceID.String(), projectID, candidate.ID.String(), revisionHash)
+			if err == nil && (accepted.RevisionID != candidate.ID.String() || accepted.RevisionHash != candidate.CandidateRevisionHash || accepted.ContentHash != candidate.CandidateContentHash || accepted.Candidate.ValidateFor(accepted.Input) != nil) {
+				t.Error("accepted Brief read lost exact identity or Input fence")
+			}
+			return err
+		}
+		if err := read(candidate.ProjectID.String(), candidate.CandidateRevisionHash); err != nil {
+			t.Fatal(err)
+		}
+		for name, values := range map[string][2]string{
+			"wrong project":       {uuid.NewString(), candidate.CandidateRevisionHash},
+			"wrong revision hash": {candidate.ProjectID.String(), strings.Repeat("f", 64)},
+		} {
+			t.Run(name, func(t *testing.T) {
+				if err := read(values[0], values[1]); !errors.Is(err, agentapp.ErrAcceptedReferenceBriefUnavailable) {
+					t.Fatalf("invalid exact Brief read: %v", err)
+				}
+			})
+		}
+		var invocation model.SceneAnalysisInvocationRecord
+		var result model.SceneAnalysisResult
+		if err := database.First(&invocation, "id = ?", candidate.SourceInvocationID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.First(&result, "id = ?", candidate.SourceResultID).Error; err != nil {
+			t.Fatal(err)
+		}
+		t.Run("source attempt is not latest attempt", func(t *testing.T) {
+			if err := database.SavePoint("reference_brief_newer_attempt").Error; err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := database.RollbackTo("reference_brief_newer_attempt").Error; err != nil {
+					t.Fatal(err)
+				}
+			}()
+			var newer model.SceneAnalysisAttempt
+			if err := database.First(&newer, "id = ?", result.AttemptID).Error; err != nil {
+				t.Fatal(err)
+			}
+			newer.ID, newer.ClaimVersion, newer.Status, newer.CompletedAt = uuid.New(), newer.ClaimVersion+1, "dispatched", nil
+			if err := database.Create(&newer).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := read(candidate.ProjectID.String(), candidate.CandidateRevisionHash); err != nil {
+				t.Fatalf("reader substituted latest attempt: %v", err)
+			}
+		})
+		t.Run("matching forged revision and head hashes", func(t *testing.T) {
+			if err := database.SavePoint("reference_brief_forged_hash").Error; err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := database.RollbackTo("reference_brief_forged_hash").Error; err != nil {
+					t.Fatal(err)
+				}
+			}()
+			forged := strings.Repeat("f", 64)
+			if err := database.Model(&model.SceneAnalysisCandidateRevision{}).Where("id = ?", candidate.ID).UpdateColumns(map[string]any{"candidate_revision_hash": forged}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := database.Model(&model.SceneAnalysisCandidateHead{}).Where("stage_instance_key = ?", candidate.StageInstanceKey).UpdateColumns(map[string]any{"current_candidate_revision_hash": forged}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := read(candidate.ProjectID.String(), forged); !errors.Is(err, agentapp.ErrAcceptedReferenceBriefUnavailable) {
+				t.Fatalf("reader trusted forged hash: %v", err)
+			}
+		})
+		for _, tc := range []struct {
+			name    string
+			table   any
+			key     string
+			id      any
+			updates map[string]any
+		}{
+			{"revoked release", &model.SceneAnalysisControlHead{}, "release_id", invocation.ReleaseID, map[string]any{"status": "revoked"}},
+			{"quarantined release", &model.SceneAnalysisControlHead{}, "release_id", invocation.ReleaseID, map[string]any{"status": "quarantined"}},
+			{"control fence drift", &model.SceneAnalysisControlHead{}, "release_id", invocation.ReleaseID, map[string]any{"release_fence": invocation.ReleaseFence + 1}},
+			{"head revision drift", &model.SceneAnalysisCandidateHead{}, "stage_instance_key", invocation.StageInstanceKey, map[string]any{"revision": 2}},
+			{"invocation unknown", &model.SceneAnalysisInvocationRecord{}, "id", invocation.ID, map[string]any{"status": "outcome_unknown"}},
+			{"attempt incomplete", &model.SceneAnalysisAttempt{}, "id", result.AttemptID, map[string]any{"status": "dispatched"}},
+			{"authorization drift", &model.SceneAnalysisDispatchAuthorization{}, "attempt_id", result.AttemptID, map[string]any{"authorization_hash": strings.Repeat("f", 64)}},
+			{"result hash drift", &model.SceneAnalysisCandidateRevision{}, "id", candidate.ID, map[string]any{"source_result_hash": strings.Repeat("f", 64)}},
+			{"revision hash drift", &model.SceneAnalysisCandidateRevision{}, "id", candidate.ID, map[string]any{"candidate_revision_hash": strings.Repeat("f", 64)}},
+			{"result column drift", &model.SceneAnalysisResult{}, "id", result.ID, map[string]any{"diagnostic_hash": strings.Repeat("f", 64)}},
+			{"payload extra field", &model.SceneAnalysisInvocationRecord{}, "id", invocation.ID, map[string]any{"payload": string(append([]byte(`{"provider":"injected",`), invocation.Payload[1:]...))}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				if err := database.SavePoint("reference_brief_read_fault").Error; err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := database.RollbackTo("reference_brief_read_fault").Error; err != nil {
+						t.Fatal(err)
+					}
+				}()
+				if err := database.Model(tc.table).Where(tc.key+" = ?", tc.id).UpdateColumns(tc.updates).Error; err != nil {
+					t.Fatal(err)
+				}
+				if err := read(candidate.ProjectID.String(), candidate.CandidateRevisionHash); !errors.Is(err, agentapp.ErrAcceptedReferenceBriefUnavailable) {
+					t.Errorf("invalid Brief remained consumable: %v", err)
+				}
+				coverage, err := referencegorm.NewStore(database).ReadCurrentReferenceCoverage(ctx, candidate.WorkspaceID.String(), candidate.ProjectID.String())
+				if err == nil {
+					for _, execution := range coverage.BriefExecutions {
+						if execution.InvocationID == candidate.SourceInvocationID.String() && execution.Status == "accepted" {
+							t.Error("Coverage advertised invalid Brief")
+						}
+					}
+				}
+			})
+		}
+		if err := read(candidate.ProjectID.String(), candidate.CandidateRevisionHash); err != nil {
+			t.Fatalf("fault rollback lost accepted Brief: %v", err)
+		}
+	})
 	referenceTargetDetail, err := referenceCoverageQuery.GetTarget(
 		ctx,
 		referenceapp.Actor{UserID: fixture.userID.String(), TokenVersion: 1},
@@ -1653,6 +1777,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		baseTargetKey,
 		briefStageRelease,
 	)
+	if _, readErr := referenceBriefStore.ReadAcceptedReferenceBrief(ctx, fixture.workspaceID.String(), fixture.projectID.String(), acceptedBriefForRead.ID.String(), acceptedBriefForRead.CandidateRevisionHash); !errors.Is(readErr, agentapp.ErrAcceptedReferenceBriefUnavailable) {
+		t.Fatalf("accepted Brief reader ignored current Preset Head drift: %v", readErr)
+	}
 	if err = database.RollbackTo(briefHeadDriftSavepoint).Error; err != nil {
 		t.Fatal(err)
 	}

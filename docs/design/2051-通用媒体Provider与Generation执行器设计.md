@@ -186,6 +186,8 @@ ReferenceExecutionAuthorizationContract
 
 无 Brief、旧 Brief、Target 不匹配或自由文本 Prompt 均在 Provider Binding、远程调用和媒体创建前失败关闭。
 
+消费 Brief 时，Backend `agent` Owner 提供 exact Candidate Revision ID + Revision Hash 的只读入口，在调用方事务内重验当前 Input facts，再读取精确来源 Invocation、Result、Attempt、Dispatch Authorization、Release Control 与 Candidate Head。禁止按最新 Attempt 替代 Candidate 的来源 Attempt；Result/Candidate 内容 Hash 与 Revision Hash 均重新计算，Result 必须为 accepted、Attempt 必须 completed，当前 Control 必须仍 approved 且完整 fence 一致。Coverage Query 与后续 Target Builder 复用此入口；普通 Query 的 accepted 展示也不能绕过这些验证。此入口不创造审批或 repair 事实，当前 Reference Brief 只有原始 accepted Revision，未实现的 repair 不能通过伪造 Revision 序号获得资格。
+
 ## 5. 六类 Target strict union
 
 `ReferenceGenerationSourceProduction` 只允许以下六个分支；所有 OwnerRef 都包含 `owner_kind/version_family/owner_logical_id/revision/content_hash/fragment_key?`，数组按 canonical key 排序去重，`additionalProperties=false`。

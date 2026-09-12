@@ -2,15 +2,14 @@ package gormdb
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	agentgorm "github.com/StephenQiu30/lanverse/backend/internal/agent/adapter/gormdb"
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
-	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 	platformdatabase "github.com/StephenQiu30/lanverse/backend/internal/platform/database"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/database/model"
 	referenceapp "github.com/StephenQiu30/lanverse/backend/internal/production/reference/application"
@@ -149,29 +148,17 @@ func loadCurrentReferenceBriefCandidate(
 		}
 		return referenceapp.ReferenceBriefCandidateRef{}, err
 	}
-	var candidate model.SceneAnalysisCandidateRevision
-	if err := database.WithContext(ctx).First(&candidate, "id = ?", head.CurrentRevisionID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return referenceapp.ReferenceBriefCandidateRef{}, referenceCoverageDrift("accepted Reference Brief Candidate is missing")
-		}
+	reader, err := agentgorm.NewReferenceBriefStore(database, ValidateCurrentReferenceBriefInput)
+	if err != nil {
 		return referenceapp.ReferenceBriefCandidateRef{}, err
 	}
-	decoded, canonical, err := agentcontract.DecodeReferenceBriefCandidate(json.RawMessage(candidate.Candidate))
-	if err != nil || decoded.ValidateFor(input) != nil {
-		return referenceapp.ReferenceBriefCandidateRef{}, referenceCoverageDrift("stored Reference Brief Candidate has drifted")
-	}
-	contentHash, err := platformcanonical.Hash(canonical)
-	if err != nil || contentHash != candidate.CandidateContentHash ||
-		candidate.WorkspaceID != invocation.WorkspaceID || candidate.ProjectID != invocation.ProjectID ||
-		candidate.StageInstanceKey != invocation.StageInstanceKey || candidate.CandidateType != "reference_brief_candidate" ||
-		candidate.SourceInvocationID != invocation.ID || candidate.RevisionNo != head.Revision ||
-		head.WorkspaceID != invocation.WorkspaceID || head.ProjectID != invocation.ProjectID ||
-		head.CurrentCandidateRevisionHash != candidate.CandidateRevisionHash {
-		return referenceapp.ReferenceBriefCandidateRef{}, referenceCoverageDrift("current Reference Brief Candidate Head has drifted")
+	candidate, err := reader.ReadAcceptedReferenceBrief(ctx, invocation.WorkspaceID.String(), invocation.ProjectID.String(), head.CurrentRevisionID.String(), head.CurrentCandidateRevisionHash)
+	if err != nil || candidate.Candidate.ValidateFor(input) != nil {
+		return referenceapp.ReferenceBriefCandidateRef{}, errors.Join(referenceCoverageDrift("accepted Reference Brief provenance has drifted"), err)
 	}
 	return referenceapp.ReferenceBriefCandidateRef{
-		RevisionID: candidate.ID.String(), Revision: candidate.RevisionNo,
-		RevisionHash: candidate.CandidateRevisionHash, ContentHash: candidate.CandidateContentHash,
+		RevisionID: candidate.RevisionID, Revision: candidate.Revision,
+		RevisionHash: candidate.RevisionHash, ContentHash: candidate.ContentHash,
 	}, nil
 }
 
