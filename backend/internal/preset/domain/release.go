@@ -274,6 +274,12 @@ func validateCapabilities(values []Capability) error {
 	return nil
 }
 
+// ValidateCapabilityManifest applies the production Preset capability contract
+// to a frozen capability projection consumed by another bounded context.
+func ValidateCapabilityManifest(values []Capability) error {
+	return validateCapabilities(values)
+}
+
 func validatePurposeProfiles(values []PurposeProfile) error {
 	if len(values) != len(releaseTargetKinds) {
 		return errors.New("Preset release must declare every purpose profile")

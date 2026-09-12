@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
 	agentcontract "github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
+	presetdomain "github.com/StephenQiu30/lanverse/backend/internal/preset/domain"
 	storygraphdomain "github.com/StephenQiu30/lanverse/backend/internal/storygraph/domain"
 	workflowapp "github.com/StephenQiu30/lanverse/backend/internal/workflow/application"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/workflow/domain"
@@ -90,6 +92,153 @@ func TestVisualFoundationScopeSubjectRejectsUnknownOrPrePublishedSnapshotFields(
 	}
 }
 
+func TestVisualFoundationScopeGateInputDerivesReadyDecisionsAndAtomicEffectPlan(t *testing.T) {
+	draft := visualFoundationScopeSubjectDraft(t)
+	subject, _, err := workflow.NewVisualFoundationScopeSubject(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, canonical, err := workflow.NewVisualFoundationScopeGateInput(
+		workflow.VisualFoundationScopeGateInputDraft{
+			WorkspaceID:   draft.ConfirmedProductionWorld.WorkspaceID,
+			ProjectID:     draft.ConfirmedProductionWorld.ProjectID,
+			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
+			Subject: subject, PresetRelease: draft.PresetRelease,
+			ImageGenerationCapability: workflow.VisualFoundationScopeImageGenerationCapability{
+				Available: true, ReadSetHash: strings.Repeat("c", 64),
+			},
+			ExpectedPresetHead: workflow.HumanGateExpectedHead{
+				OwnerKind: "preset", LogicalID: draft.ConfirmedProductionWorld.ProjectID,
+				Revision: 0,
+			},
+			ExpectedReferenceHead: workflow.HumanGateExpectedHead{
+				OwnerKind: "production/reference", LogicalID: uuid.NewString(), Revision: 0,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.GateKey != workflow.VisualFoundationScopeGateKey || len(value.InputHash) != 64 ||
+		len(value.SubjectHash) != 64 || len(value.PresetCapabilityManifestRoot) != 64 ||
+		!value.ImageGenerationCapability.Available || len(value.SemanticBlockers) != 0 ||
+		!slices.Equal(value.AllowedDecisions, []string{"approved", "changes_requested", "rejected"}) {
+		t.Fatalf("ready Gate 3 input is incomplete: %#v", value)
+	}
+	step := value.EffectPlan.AtomicStep
+	if value.EffectPlan.PlanKey != "visual_foundation_scope" ||
+		step.StepKey != "confirm_visual_foundation_and_reference_plan" ||
+		step.OwnerCommand != "confirm_visual_foundation_and_reference_plan" ||
+		!slices.Equal(step.OwnerKinds, []string{"preset", "production/reference"}) ||
+		len(step.ExpectedHeads) != 2 || len(value.ReadSetRoot) != 64 || step.ReadSetRoot != value.ReadSetRoot ||
+		step.ExpectedReferenceTargetKeyRoot != subject.ExpectedReferenceTargetSet.ExpectedTargetKeyRoot {
+		t.Fatalf("Gate 3 atomic effect plan drifted: %#v", value.EffectPlan)
+	}
+	decoded, decodedCanonical, err := workflow.DecodeVisualFoundationScopeGateInput(canonical)
+	if err != nil || !reflect.DeepEqual(decoded, value) || !bytes.Equal(decodedCanonical, canonical) {
+		t.Fatalf("decode Gate 3 input: decoded=%#v err=%v", decoded, err)
+	}
+}
+
+func TestVisualFoundationScopeGateInputKeepsDraftButRemovesApprovalWithoutImageCapability(t *testing.T) {
+	draft := visualFoundationScopeSubjectDraft(t)
+	subject, _, err := workflow.NewVisualFoundationScopeSubject(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, canonical, err := workflow.NewVisualFoundationScopeGateInput(
+		workflow.VisualFoundationScopeGateInputDraft{
+			WorkspaceID:   draft.ConfirmedProductionWorld.WorkspaceID,
+			ProjectID:     draft.ConfirmedProductionWorld.ProjectID,
+			WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
+			Subject: subject, PresetRelease: draft.PresetRelease,
+			ImageGenerationCapability: workflow.VisualFoundationScopeImageGenerationCapability{
+				Available: false, ReadSetHash: strings.Repeat("d", 64),
+			},
+			ExpectedPresetHead: workflow.HumanGateExpectedHead{
+				OwnerKind: "preset", LogicalID: draft.ConfirmedProductionWorld.ProjectID,
+				Revision: 0,
+			},
+			ExpectedReferenceHead: workflow.HumanGateExpectedHead{
+				OwnerKind: "production/reference", LogicalID: uuid.NewString(), Revision: 0,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(value.AllowedDecisions, []string{"changes_requested", "rejected"}) ||
+		len(value.SemanticBlockers) != 1 ||
+		value.SemanticBlockers[0].Code != "image_generation_capability_unavailable" {
+		t.Fatalf("unavailable capability did not close approval: %#v", value)
+	}
+	for _, forbidden := range []string{"provider_call", "provider_job", "artifact", "media_bytes"} {
+		if bytes.Contains(canonical, []byte(forbidden)) {
+			t.Fatalf("Gate 3 input contains forbidden execution field %q", forbidden)
+		}
+	}
+	var raw map[string]any
+	if err = json.Unmarshal(canonical, &raw); err != nil {
+		t.Fatal(err)
+	}
+	raw["provider_call_ref"] = uuid.NewString()
+	drifted, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = workflow.DecodeVisualFoundationScopeGateInput(drifted); err == nil {
+		t.Fatal("Gate 3 input accepted a Provider call reference")
+	}
+}
+
+func TestVisualFoundationScopeGateInputRejectsCapabilityAndHashDrift(t *testing.T) {
+	draft := visualFoundationScopeSubjectDraft(t)
+	subject, _, err := workflow.NewVisualFoundationScopeSubject(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := workflow.VisualFoundationScopeGateInputDraft{
+		WorkspaceID:   draft.ConfirmedProductionWorld.WorkspaceID,
+		ProjectID:     draft.ConfirmedProductionWorld.ProjectID,
+		WorkflowRunID: uuid.NewString(), NodeRunID: uuid.NewString(),
+		Subject: subject, PresetRelease: draft.PresetRelease,
+		ImageGenerationCapability: workflow.VisualFoundationScopeImageGenerationCapability{
+			Available: true, ReadSetHash: strings.Repeat("e", 64),
+		},
+		ExpectedPresetHead: workflow.HumanGateExpectedHead{
+			OwnerKind: "preset", LogicalID: draft.ConfirmedProductionWorld.ProjectID, Revision: 0,
+		},
+		ExpectedReferenceHead: workflow.HumanGateExpectedHead{
+			OwnerKind: "production/reference", LogicalID: uuid.NewString(), Revision: 0,
+		},
+	}
+	_, canonical, err := workflow.NewVisualFoundationScopeGateInput(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err = json.Unmarshal(canonical, &raw); err != nil {
+		t.Fatal(err)
+	}
+	raw["allowed_decisions"] = []string{"approved", "changes_requested", "rejected"}
+	capability := raw["image_generation_capability"].(map[string]any)
+	capability["available"] = false
+	drifted, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = workflow.DecodeVisualFoundationScopeGateInput(drifted); err == nil {
+		t.Fatal("Gate 3 input accepted capability readiness and allowed decision drift")
+	}
+
+	invalidRelease := draft.PresetRelease
+	invalidRelease.CapabilityManifest = append([]presetdomain.Capability(nil), invalidRelease.CapabilityManifest[:5]...)
+	base.PresetRelease = invalidRelease
+	if _, _, err = workflow.NewVisualFoundationScopeGateInput(base); err == nil {
+		t.Fatal("Gate 3 input accepted a Preset capability projection outside the frozen Release")
+	}
+}
+
 func visualFoundationScopeSubjectDraft(t *testing.T) workflow.VisualFoundationScopeSubjectDraft {
 	t.Helper()
 	release := curatedFaithfulRelease(t)
@@ -123,6 +272,7 @@ func visualFoundationScopeSubjectDraft(t *testing.T) workflow.VisualFoundationSc
 			Inventory: inventory,
 		},
 		ProjectPresetSelection: frozenProjectSelection(t, workspaceID, projectID, release),
+		PresetRelease:          release,
 		VisualFoundationCandidate: workflow.VisualFoundationScopeCandidateRevisionMaterial{
 			RevisionID: visualRevision.ID, Revision: visualRevision.Revision,
 			RevisionHash: visualRevision.RevisionHash, ContentHash: visualRevision.CandidateContentHash,

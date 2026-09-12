@@ -52,20 +52,22 @@ type VisualFoundationScopeProjectPresetSelectionRef struct {
 }
 
 type VisualFoundationScopeSubject struct {
-	SchemaVersion              string                                         `json:"schema_version"`
-	ConfirmedProductionWorld   VisualFoundationScopeProductionWorldRef        `json:"confirmed_production_world"`
-	PresetRelease              presetdomain.ProjectSelectionRelease           `json:"preset_release"`
-	ProjectPresetSelection     VisualFoundationScopeProjectPresetSelectionRef `json:"project_preset_selection"`
-	VisualFoundationCandidate  VisualFoundationScopeCandidateRevisionRef      `json:"visual_foundation_candidate"`
-	ReferencePlanCandidate     VisualFoundationScopeCandidateRevisionRef      `json:"reference_plan_candidate"`
-	ReferenceTargetSeedRoot    string                                         `json:"reference_target_seed_root"`
-	ExpectedReferenceTargetSet storygraphdomain.ExpectedReferenceTargetSet    `json:"expected_reference_target_set"`
-	ReadSetRoot                string                                         `json:"read_set_root"`
+	SchemaVersion                string                                         `json:"schema_version"`
+	ConfirmedProductionWorld     VisualFoundationScopeProductionWorldRef        `json:"confirmed_production_world"`
+	PresetRelease                presetdomain.ProjectSelectionRelease           `json:"preset_release"`
+	ProjectPresetSelection       VisualFoundationScopeProjectPresetSelectionRef `json:"project_preset_selection"`
+	PresetCapabilityManifestRoot string                                         `json:"preset_capability_manifest_root"`
+	VisualFoundationCandidate    VisualFoundationScopeCandidateRevisionRef      `json:"visual_foundation_candidate"`
+	ReferencePlanCandidate       VisualFoundationScopeCandidateRevisionRef      `json:"reference_plan_candidate"`
+	ReferenceTargetSeedRoot      string                                         `json:"reference_target_seed_root"`
+	ExpectedReferenceTargetSet   storygraphdomain.ExpectedReferenceTargetSet    `json:"expected_reference_target_set"`
+	ReadSetRoot                  string                                         `json:"read_set_root"`
 }
 
 type VisualFoundationScopeSubjectDraft struct {
 	ConfirmedProductionWorld   storygraphdomain.ReferencePlanWorldReadSet
 	ProjectPresetSelection     presetdomain.ProjectSelection
+	PresetRelease              presetdomain.Release
 	VisualFoundationCandidate  VisualFoundationScopeCandidateRevisionMaterial
 	ReferencePlanInput         agentcontract.ReferencePlanInput
 	ReferencePlanCandidate     VisualFoundationScopeCandidateRevisionMaterial
@@ -76,6 +78,10 @@ func NewVisualFoundationScopeSubject(
 	draft VisualFoundationScopeSubjectDraft,
 ) (VisualFoundationScopeSubject, json.RawMessage, error) {
 	selection, err := validateVisualFoundationScopeSelection(draft.ProjectPresetSelection)
+	if err != nil {
+		return VisualFoundationScopeSubject{}, nil, err
+	}
+	presetCapabilityManifestRoot, err := validateVisualFoundationScopeRelease(selection, draft.PresetRelease)
 	if err != nil {
 		return VisualFoundationScopeSubject{}, nil, err
 	}
@@ -110,10 +116,11 @@ func NewVisualFoundationScopeSubject(
 			SelectionID: selection.ID, Revision: selection.Revision, ContentHash: selection.ContentHash,
 			ApplicationMode: selection.ApplicationMode,
 		},
-		VisualFoundationCandidate:  visualRef,
-		ReferencePlanCandidate:     referenceRef,
-		ReferenceTargetSeedRoot:    draft.ReferencePlanInput.ReferenceTargetSeedRoot,
-		ExpectedReferenceTargetSet: cloneExpectedReferenceTargetSet(draft.ExpectedReferenceTargetSet),
+		PresetCapabilityManifestRoot: presetCapabilityManifestRoot,
+		VisualFoundationCandidate:    visualRef,
+		ReferencePlanCandidate:       referenceRef,
+		ReferenceTargetSeedRoot:      draft.ReferencePlanInput.ReferenceTargetSeedRoot,
+		ExpectedReferenceTargetSet:   cloneExpectedReferenceTargetSet(draft.ExpectedReferenceTargetSet),
 	}
 	value.ReadSetRoot, err = visualFoundationScopeHash(visualFoundationScopeReadSetMaterial(value))
 	if err != nil {
@@ -215,6 +222,30 @@ func validateVisualFoundationScopeSelection(
 	return decoded, nil
 }
 
+func validateVisualFoundationScopeRelease(
+	selection presetdomain.ProjectSelection,
+	release presetdomain.Release,
+) (string, error) {
+	return validateVisualFoundationScopeReleaseRef(selection.PresetRelease, release)
+}
+
+func validateVisualFoundationScopeReleaseRef(
+	releaseRef presetdomain.ProjectSelectionRelease,
+	release presetdomain.Release,
+) (string, error) {
+	raw, err := json.Marshal(release)
+	if err != nil {
+		return "", err
+	}
+	decoded, _, err := presetdomain.DecodeRelease(raw)
+	if err != nil || !reflect.DeepEqual(decoded, release) ||
+		releaseRef.Key != release.Key || releaseRef.Release != release.Release ||
+		releaseRef.ContentHash != release.ContentHash {
+		return "", errors.New("invalid Gate 3 Preset release")
+	}
+	return visualFoundationScopeHash(release.CapabilityManifest)
+}
+
 func visualFoundationScopeVisualCandidate(
 	material VisualFoundationScopeCandidateRevisionMaterial,
 ) (agentcontract.VisualFoundationCandidate, VisualFoundationScopeCandidateRevisionRef, error) {
@@ -311,6 +342,7 @@ func validateVisualFoundationScopeSubject(value VisualFoundationScopeSubject) er
 		!nodeOutputContentHashPattern.MatchString(value.ConfirmedProductionWorld.OwnerSetHash) ||
 		!nodeOutputContentHashPattern.MatchString(value.PresetRelease.ContentHash) ||
 		!nodeOutputContentHashPattern.MatchString(value.ProjectPresetSelection.ContentHash) ||
+		!nodeOutputContentHashPattern.MatchString(value.PresetCapabilityManifestRoot) ||
 		!nodeOutputContentHashPattern.MatchString(value.ReferenceTargetSeedRoot) ||
 		value.VisualFoundationCandidate.StageKey != agentcontract.VisualFoundationStageKey ||
 		value.VisualFoundationCandidate.CandidateType != "visual_foundation_candidate" ||
@@ -358,17 +390,19 @@ func validateVisualFoundationScopeCandidateRef(value VisualFoundationScopeCandid
 
 func visualFoundationScopeReadSetMaterial(value VisualFoundationScopeSubject) any {
 	return struct {
-		ConfirmedProductionWorld   VisualFoundationScopeProductionWorldRef        `json:"confirmed_production_world"`
-		PresetRelease              presetdomain.ProjectSelectionRelease           `json:"preset_release"`
-		ProjectPresetSelection     VisualFoundationScopeProjectPresetSelectionRef `json:"project_preset_selection"`
-		VisualFoundationCandidate  VisualFoundationScopeCandidateRevisionRef      `json:"visual_foundation_candidate"`
-		ReferencePlanCandidate     VisualFoundationScopeCandidateRevisionRef      `json:"reference_plan_candidate"`
-		ReferenceTargetSeedRoot    string                                         `json:"reference_target_seed_root"`
-		ExpectedReferenceTargetSet storygraphdomain.ExpectedReferenceTargetSet    `json:"expected_reference_target_set"`
+		ConfirmedProductionWorld     VisualFoundationScopeProductionWorldRef        `json:"confirmed_production_world"`
+		PresetRelease                presetdomain.ProjectSelectionRelease           `json:"preset_release"`
+		ProjectPresetSelection       VisualFoundationScopeProjectPresetSelectionRef `json:"project_preset_selection"`
+		PresetCapabilityManifestRoot string                                         `json:"preset_capability_manifest_root"`
+		VisualFoundationCandidate    VisualFoundationScopeCandidateRevisionRef      `json:"visual_foundation_candidate"`
+		ReferencePlanCandidate       VisualFoundationScopeCandidateRevisionRef      `json:"reference_plan_candidate"`
+		ReferenceTargetSeedRoot      string                                         `json:"reference_target_seed_root"`
+		ExpectedReferenceTargetSet   storygraphdomain.ExpectedReferenceTargetSet    `json:"expected_reference_target_set"`
 	}{
 		value.ConfirmedProductionWorld,
 		value.PresetRelease,
 		value.ProjectPresetSelection,
+		value.PresetCapabilityManifestRoot,
 		value.VisualFoundationCandidate,
 		value.ReferencePlanCandidate,
 		value.ReferenceTargetSeedRoot,
