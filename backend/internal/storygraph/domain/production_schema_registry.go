@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"sync"
 
 	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 )
@@ -19,6 +20,24 @@ type ProductionSchemaRegistry struct {
 	CanonicalPayloadContracts map[string][]byte
 	PayloadContractHashes     map[string]string
 }
+
+// Only immutable declaration identities are retained, never Owner facts or
+// mutable registry maps/slices. A new binary validates its own declarations.
+type productionSchemaIdentity struct {
+	SchemaID, SchemaHash, NodeKeyDerivationID, EdgeKeyDerivationID string
+}
+
+var currentProductionSchemaIdentity = sync.OnceValues(func() (productionSchemaIdentity, error) {
+	registry, err := BuildProductionSchemaRegistry()
+	if err != nil {
+		return productionSchemaIdentity{}, err
+	}
+	return productionSchemaIdentity{
+		SchemaID: registry.Manifest.SchemaID, SchemaHash: registry.SchemaHash,
+		NodeKeyDerivationID: registry.Manifest.NodeKeyDerivationID,
+		EdgeKeyDerivationID: registry.Manifest.EdgeKeyDerivationID,
+	}, nil
+})
 
 // BuildProductionSchemaRegistry builds and validates the complete frozen
 // production registry. Meta-contract decoding alone is not publication

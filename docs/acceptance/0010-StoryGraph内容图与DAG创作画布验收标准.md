@@ -480,6 +480,10 @@
 
 ### `VP-I07` — 图片执行、Bundle、确定性 QC 与 Vision Review
 
+- CI 耗时修复依据：用途准入提交 `b56b7033a7f1cd85b1c08445d742c5ac75890e3b` 的完整远端 CI `34725581486` 失败，Backend/Agent/Frontend 通过，Workflow 包累计 300.046 秒超时，Source Evidence 当时已执行 76 秒；不是准入业务断言失败，也不能记为远端通过。没有重跑该提交或延长 CI。随后用既有固定 PostgreSQL/Temporal 对完整持久化旅程运行 `go test ./tests/workflow -run '^TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays$' -count=1 -timeout=5m -cpuprofile=<临时目录>/cpu.pprof -o <临时目录>/workflow.test -v`：旅程 89.12 秒通过，CPU 样本 79.56 秒，其中静态 `BuildProductionSchemaRegistry` 累计 31.62 秒（39.74%）。Profile 与测试二进制仅在临时目录，不进入仓库。
+- Schema 身份复用边界：内部首次完整构建并校验当前二进制的 Schema Registry，仅保留四个不可变字符串供编译器和持久 Version 校验读取；公开完整构建接口保持独立结果，不共享其 map/slice。Owner、Graph、Coverage、权限与 Head 仍逐次重验，初始化错误仍返回，无业务查询缓存、配置或 CI 改动。属于保持合同的性能重构：修复前先增加并通过并发编译、外部 Registry 变更隔离与业务事实漂移拒绝测试（定向 Race 4.237 秒），性能基线由上条真实采样提供，不新增不稳定的耗时阈值门禁。修复后整个 StoryGraph 测试包 Race 21.258 秒、`go vet ./...` 通过；共享 Schema golden 未改变。
+- Schema 身份复用最终本地验证：同一已有 PostgreSQL/Temporal、同一三条系统用例和 `-timeout=5m` 全部通过，107.897 秒；持久化/Gate/Source Evidence 分别为 47.14/7.17/52.76 秒，之前用途准入完整重跑为 174.856 秒。这是两次实际运行的观察值，不是稳定性能承诺；CPU 采样支持移除静态 Registry 重复构建这一具体优化。Backend 无外部变量全量测试（含架构门）全部通过，StoryGraph 包为 6.356 秒；集成跳过仍不计作真实系统证据。修复独立提交，最新完整远端 CI 推送后再核验。
+
 - 内部视觉审核用途边界（用户确认后实施）：仅完整且技术 QC 合格的 Bundle 可满足内部送审条件。权利仍为 `not_assessed`，原 per-slot/bundle QC 仍为 `blocked`；正式选择与发布均为 false，原因包含权利未评估及尚无 Vision Review。本条替代下方历史记录中“未评估权利同时阻断内部送审”的旧边界，不将内部审核作为权利证据。
 - 用途条件实现：在既有 Bundle 编译/只读 Query 返回 `admission`，含内容定址 Policy、三类 ready 与内部/正式使用阻塞原因。Collection Hash 覆盖该结果，Decoder 重算并校验完整 wire shape；原 Input/QC 身份不变，不新建表或持久状态。查询是素材条件，不是操作者授权，不启动模型、不发布 CandidateBundle/Selection/Asset；OpenAPI 和前端生成类型同步。
 - 用途条件 Red/Green：`go test ./tests/generation -run '^TestReferenceBundleAdmission' -count=1` 首先因 Admission 缺失构建失败。补充 `TestReferenceBundleAdmissionRequiresExplicitReadinessFields` 后，六种缺失/null 布尔字段用例复现失败；实现后定向 `go test -race ./tests/generation ./tests/openapi -run '^TestReferenceBundle' -count=1` 通过（6.307/1.534 秒）。覆盖完整组、重复图片、明确传输/媒体失败、缺项/unknown、保留原权利与 QC、篡改准入后重算合法 Hash 仍拒绝，以及 HTTP 的真实派生字段。新增 OpenAPI 测试的宽泛文档解析曾因其他 schema 的 string const/数组 type 失败，改用 RawMessage 后最终通过，没有放宽本次合同。

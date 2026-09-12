@@ -585,6 +585,8 @@ production 明确排除历史 `shot_continuity_claim`、`generation_target`、`s
 
 ## production Payload Contract Registry
 
+运行时只对当前二进制内不变的 Schema 声明复用已完整校验的身份：首次从全部声明构建 Registry、重算内容 Hash，之后内部编译器与持久 Version 校验只复用 Schema ID/Hash 和 Node/Edge key derivation ID 四个不可变字符串。完整 Registry 构建接口仍返回独立结果供合同检查；不共享可变 map/slice，不缓存 Owner 数据、权限、Head、Coverage 或 Graph 校验结果。初始化失败必须返回错误；新二进制重新构建，不持久化缓存或新增配置。此优化不改变 Schema/Wire/Hash 合同，业务事实仍逐次重验。
+
 所有 Payload Object 都必须 `additionalProperties=false`，必需字段不可省略，只有本节显式写为 nullable/optional 的字段才可为 `null` 或省略。OwnerNodeRef 数组统一按 `(owner_kind, version_family, owner_logical_id, fragment_key ?? "", owner_version_id)` 的 UTF-8 字节元组升序并去重；省略 `fragment_key` 时唯一使用空字符串作排序哨兵，已存在的 fragment 因合同要求非空而不会碰撞。Scope Key 和字符串 ID 数组按 UTF-8 字节字典序排序并去重。
 
 全部 Payload 共用以下基底：

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sync"
 	"testing"
 
 	platformcanonical "github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
@@ -12,6 +14,42 @@ import (
 )
 
 const productionSchemaRegistryFixture = "../fixtures/storygraph/production-schema-registry.json"
+
+func TestProductionSchemaIdentityIsIsolatedAcrossConcurrentCompilations(t *testing.T) {
+	snapshot := productionOwnerSnapshotFixture(t)
+	want, err := storygraph.CompileProductionOwnerSnapshot(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := storygraph.BuildProductionSchemaRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want.SchemaManifestHash != registry.SchemaHash {
+		t.Fatal("compiler did not use the complete registry identity")
+	}
+	registry.SchemaHash = "corrupted"
+	registry.Manifest.SchemaID = "corrupted"
+	registry.CanonicalManifest[0] = '!'
+	registry.PayloadContractHashes[registry.PayloadContracts[0].PayloadContractID] = "corrupted"
+	registry.Manifest.NodeDefinitions[0].AllowedVersionFamilies[0] = "corrupted"
+	var workers sync.WaitGroup
+	for range 8 {
+		workers.Go(func() {
+			got, compileErr := storygraph.CompileProductionOwnerSnapshot(snapshot)
+			if compileErr != nil || !reflect.DeepEqual(got, want) {
+				t.Errorf("concurrent compilation changed identity: %v", compileErr)
+			}
+		})
+	}
+	workers.Wait()
+	// Dynamic Owner facts still require validation after the static identity
+	// has been initialized; they must never enter the memoized state.
+	snapshot.OwnerCollections[0].CollectionRootHash = "corrupted"
+	if _, err := storygraph.CompileProductionOwnerSnapshot(snapshot); err == nil {
+		t.Fatal("static identity reuse bypassed Owner validation")
+	}
+}
 
 type productionSchemaFixture struct {
 	SchemaHash       string                              `json:"schema_hash"`

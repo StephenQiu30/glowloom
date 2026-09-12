@@ -151,7 +151,7 @@ func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledP
 	if _, err := uuid.Parse(snapshot.ProductionWorldConfirmationID); err != nil {
 		return CompiledProductionOwnerSnapshot{}, errors.New("invalid Production World confirmation identity")
 	}
-	registry, err := BuildProductionSchemaRegistry()
+	registry, err := currentProductionSchemaIdentity()
 	if err != nil {
 		return CompiledProductionOwnerSnapshot{}, err
 	}
@@ -240,9 +240,9 @@ func CompileProductionOwnerSnapshot(snapshot ProductionOwnerSnapshot) (CompiledP
 	return CompiledProductionOwnerSnapshot{
 		WorkspaceID: snapshot.WorkspaceID, ProjectID: snapshot.ProjectID,
 		SourceRevisionID: snapshot.SourceRevisionID, SourceRevisionHash: snapshot.SourceRevisionHash,
-		SchemaID: registry.Manifest.SchemaID, SchemaRank: ProductionSchemaRank,
-		SchemaManifestHash: registry.SchemaHash, NodeKeyDerivationID: registry.Manifest.NodeKeyDerivationID,
-		EdgeKeyDerivationID: registry.Manifest.EdgeKeyDerivationID,
+		SchemaID: registry.SchemaID, SchemaRank: ProductionSchemaRank,
+		SchemaManifestHash: registry.SchemaHash, NodeKeyDerivationID: registry.NodeKeyDerivationID,
+		EdgeKeyDerivationID: registry.EdgeKeyDerivationID,
 		Coverage:            snapshot.Coverage, OwnerCollections: collections, OwnerHeads: heads,
 		OwnerSetHash: ownerSetHash, Graph: graph,
 	}, nil

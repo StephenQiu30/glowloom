@@ -33,15 +33,15 @@ func ValidateProductionVersion(version Version) error {
 		return errors.New("invalid persisted Production StoryGraph Version")
 	}
 	input := *version.ProductionInput
-	registry, err := BuildProductionSchemaRegistry()
+	registry, err := currentProductionSchemaIdentity()
 	if err != nil {
 		return err
 	}
-	if input.SchemaID != registry.Manifest.SchemaID || input.SchemaRank != ProductionSchemaRank ||
+	if input.SchemaID != registry.SchemaID || input.SchemaRank != ProductionSchemaRank ||
 		input.SchemaManifestHash != registry.SchemaHash || input.CoveragePhase != input.Coverage.CoveragePhase ||
 		input.CoverageScopeManifestHash != input.Coverage.CoverageScopeManifestHash ||
-		input.NodeKeyDerivationID != registry.Manifest.NodeKeyDerivationID ||
-		input.EdgeKeyDerivationID != registry.Manifest.EdgeKeyDerivationID {
+		input.NodeKeyDerivationID != registry.NodeKeyDerivationID ||
+		input.EdgeKeyDerivationID != registry.EdgeKeyDerivationID {
 		return errors.New("persisted Production Schema or coverage identity has drifted")
 	}
 	collections := append([]OwnerCollectionRef(nil), input.OwnerCollections...)
@@ -416,7 +416,7 @@ func productionScopeUnionEquals(actual map[string]struct{}, expected []string) b
 
 func productionGraphHashes(
 	graph CanonicalSnapshot,
-	registry ProductionSchemaRegistry,
+	registry productionSchemaIdentity,
 	coverage ProductionCoverageProof,
 	ownerSetHash string,
 ) (string, string, error) {
@@ -449,9 +449,9 @@ func productionGraphHashes(
 		Nodes                     any    `json:"nodes"`
 		Edges                     any    `json:"edges"`
 	}{
-		registry.Manifest.SchemaID, registry.SchemaHash, coverage.CoveragePhase,
-		coverage.CoverageScopeManifestHash, registry.Manifest.NodeKeyDerivationID,
-		registry.Manifest.EdgeKeyDerivationID, topologyNodes, topologyEdges,
+		registry.SchemaID, registry.SchemaHash, coverage.CoveragePhase,
+		coverage.CoverageScopeManifestHash, registry.NodeKeyDerivationID,
+		registry.EdgeKeyDerivationID, topologyNodes, topologyEdges,
 	})
 	if err != nil {
 		return "", "", err
@@ -467,9 +467,9 @@ func productionGraphHashes(
 		Nodes                     []Node `json:"nodes"`
 		Edges                     []Edge `json:"edges"`
 	}{
-		registry.Manifest.SchemaID, registry.SchemaHash, coverage.CoveragePhase,
-		coverage.CoverageScopeManifestHash, registry.Manifest.NodeKeyDerivationID,
-		registry.Manifest.EdgeKeyDerivationID, ownerSetHash, graph.Nodes, graph.Edges,
+		registry.SchemaID, registry.SchemaHash, coverage.CoveragePhase,
+		coverage.CoverageScopeManifestHash, registry.NodeKeyDerivationID,
+		registry.EdgeKeyDerivationID, ownerSetHash, graph.Nodes, graph.Edges,
 	})
 	return topologyHash, contentHash, err
 }
