@@ -19,11 +19,6 @@ import (
 
 const BuildReferenceGenerationTargetOperation = "generation.reference.build_target"
 
-type ReferenceGenerationAuthorizationRef struct {
-	ID          string `json:"id"`
-	ContentHash string `json:"content_hash"`
-}
-
 type ReferenceBriefRevisionRef struct {
 	ID           string `json:"id"`
 	Revision     int64  `json:"revision"`
@@ -34,29 +29,29 @@ type ReferenceBriefRevisionRef struct {
 // ReferenceGenerationTarget is the Provider-neutral, immutable publication.
 // Integrity decoding does not replace current Owner and authorization checks.
 type ReferenceGenerationTarget struct {
-	ID                              string                              `json:"target_id"`
-	ContractID                      string                              `json:"contract_id"`
-	Revision                        int64                               `json:"revision"`
-	ContentHash                     string                              `json:"content_hash"`
-	WorkspaceID                     string                              `json:"workspace_id"`
-	ProjectID                       string                              `json:"project_id"`
-	ApprovedReferencePlanVersionRef contract.ReferencePlanOwnerRef      `json:"approved_reference_plan_version_ref"`
-	ReferencePlanTargetRef          contract.ReferencePlanOwnerRef      `json:"reference_plan_target_ref"`
-	TargetBusinessKey               string                              `json:"target_business_key"`
-	TargetKind                      string                              `json:"target_kind"`
-	Fulfillment                     string                              `json:"fulfillment"`
-	GenerationRound                 int64                               `json:"generation_round"`
-	GenerationAuthorizationRef      ReferenceGenerationAuthorizationRef `json:"generation_authorization_ref"`
-	ReferenceBriefRevisionRef       ReferenceBriefRevisionRef           `json:"reference_brief_candidate_revision_ref"`
-	EffectiveStyleSnapshotRef       contract.ReferencePlanOwnerRef      `json:"effective_style_snapshot_ref"`
-	EffectivePolicySnapshotRef      contract.ReferencePlanOwnerRef      `json:"effective_policy_snapshot_ref"`
-	SourcePayload                   json.RawMessage                     `json:"source_payload"`
-	DependencyAssetVersionRefs      []contract.ReferencePlanOwnerRef    `json:"dependency_asset_version_refs"`
-	DependencyRootHash              string                              `json:"dependency_root_hash"`
-	OutputContract                  domain.ReferenceOutputContract      `json:"output_contract"`
-	TargetReadSetRoot               string                              `json:"target_read_set_root"`
-	CreatedBy                       string                              `json:"created_by"`
-	CreatedAt                       time.Time                           `json:"created_at"`
+	ID                              string                           `json:"target_id"`
+	ContractID                      string                           `json:"contract_id"`
+	Revision                        int64                            `json:"revision"`
+	ContentHash                     string                           `json:"content_hash"`
+	WorkspaceID                     string                           `json:"workspace_id"`
+	ProjectID                       string                           `json:"project_id"`
+	ApprovedReferencePlanVersionRef contract.ReferencePlanOwnerRef   `json:"approved_reference_plan_version_ref"`
+	ReferencePlanTargetRef          contract.ReferencePlanOwnerRef   `json:"reference_plan_target_ref"`
+	TargetBusinessKey               string                           `json:"target_business_key"`
+	TargetKind                      string                           `json:"target_kind"`
+	Fulfillment                     string                           `json:"fulfillment"`
+	GenerationRound                 int64                            `json:"generation_round"`
+	GenerationAuthorizationRef      domain.GenerationActionRef       `json:"generation_authorization_ref"`
+	ReferenceBriefRevisionRef       ReferenceBriefRevisionRef        `json:"reference_brief_candidate_revision_ref"`
+	EffectiveStyleSnapshotRef       contract.ReferencePlanOwnerRef   `json:"effective_style_snapshot_ref"`
+	EffectivePolicySnapshotRef      contract.ReferencePlanOwnerRef   `json:"effective_policy_snapshot_ref"`
+	SourcePayload                   json.RawMessage                  `json:"source_payload"`
+	DependencyAssetVersionRefs      []contract.ReferencePlanOwnerRef `json:"dependency_asset_version_refs"`
+	DependencyRootHash              string                           `json:"dependency_root_hash"`
+	OutputContract                  domain.ReferenceOutputContract   `json:"output_contract"`
+	TargetReadSetRoot               string                           `json:"target_read_set_root"`
+	CreatedBy                       string                           `json:"created_by"`
+	CreatedAt                       time.Time                        `json:"created_at"`
 }
 
 type BuildReferenceGenerationTargetCommand struct {
@@ -208,7 +203,7 @@ func compileInitialReferenceTarget(id, actorID string, now time.Time, brief agen
 	if err != nil {
 		return ReferenceGenerationTarget{}, err
 	}
-	value := ReferenceGenerationTarget{ID: id, ContractID: "generation-target-production", Revision: 1, WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID, ApprovedReferencePlanVersionRef: input.ApprovedReferencePlanVersionRef, ReferencePlanTargetRef: input.ReferencePlanTargetRef, TargetBusinessKey: input.TargetBusinessKey, TargetKind: input.TargetKind, Fulfillment: input.TargetFulfillment, GenerationRound: 1, GenerationAuthorizationRef: ReferenceGenerationAuthorizationRef{authorization.HumanActionRef, authorization.ContentHash}, ReferenceBriefRevisionRef: ReferenceBriefRevisionRef{brief.RevisionID, brief.Revision, brief.RevisionHash, brief.ContentHash}, EffectiveStyleSnapshotRef: input.EffectiveStyleSnapshotRef, EffectivePolicySnapshotRef: input.EffectivePolicySnapshotRef, SourcePayload: source.Payload, DependencyAssetVersionRefs: dependencies, DependencyRootHash: dependencyRoot, OutputContract: output, TargetReadSetRoot: readSetRoot, CreatedBy: actorID, CreatedAt: now}
+	value := ReferenceGenerationTarget{ID: id, ContractID: "generation-target-production", Revision: 1, WorkspaceID: input.WorkspaceID, ProjectID: input.ProjectID, ApprovedReferencePlanVersionRef: input.ApprovedReferencePlanVersionRef, ReferencePlanTargetRef: input.ReferencePlanTargetRef, TargetBusinessKey: input.TargetBusinessKey, TargetKind: input.TargetKind, Fulfillment: input.TargetFulfillment, GenerationRound: 1, GenerationAuthorizationRef: domain.GenerationActionRef{ID: authorization.HumanActionRef, ContentHash: authorization.ContentHash}, ReferenceBriefRevisionRef: ReferenceBriefRevisionRef{brief.RevisionID, brief.Revision, brief.RevisionHash, brief.ContentHash}, EffectiveStyleSnapshotRef: input.EffectiveStyleSnapshotRef, EffectivePolicySnapshotRef: input.EffectivePolicySnapshotRef, SourcePayload: source.Payload, DependencyAssetVersionRefs: dependencies, DependencyRootHash: dependencyRoot, OutputContract: output, TargetReadSetRoot: readSetRoot, CreatedBy: actorID, CreatedAt: now}
 	value.ContentHash, err = referenceGenerationTargetHash(value)
 	if err != nil {
 		return ReferenceGenerationTarget{}, err

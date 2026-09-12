@@ -1668,10 +1668,52 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				t.Fatal("Target read ignored caller Token version")
 			}
 			var execution *referenceExecutionFixture
+			var preparation *referencePreparationFixture
 			if published.TargetKind == "character_identity_anchor" {
 				created := assertInitialReferenceExecutionAuthorization(t, ctx, generationgorm.New(database), generationgorm.NewProviderConfigurationStore(database), authorizationActor, published, now.Add(6*time.Minute))
 				execution = &created
 				assertPersistedReferenceImageCompilation(t, currentTarget, acceptedBrief, execution.profile.Profile)
+				prepared := assertInitialReferenceExecutionPreparation(t, ctx, generationgorm.New(database), authorizationActor, currentTarget, execution.authorization, now.Add(7*time.Minute))
+				preparation = &prepared
+				assertPreparationCounts := func() {
+					t.Helper()
+					var snapshots, heads, receipts int64
+					if err := database.Model(&model.GenerationReferenceExecution{}).Where("target_id = ?", published.ID).Count(&snapshots).Error; err != nil {
+						t.Fatal(err)
+					}
+					if err := database.Model(&model.GenerationReferenceExecutionHead{}).Where("target_id = ?", published.ID).Count(&heads).Error; err != nil {
+						t.Fatal(err)
+					}
+					if err := database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", published.WorkspaceID, generationapp.PrepareInitialReferenceExecutionOperation, preparation.execution.ID).Count(&receipts).Error; err != nil {
+						t.Fatal(err)
+					}
+					if snapshots != 1 || heads != 1 || receipts != 1 {
+						t.Fatalf("preparation left duplicate or orphan facts: snapshots=%d heads=%d receipts=%d", snapshots, heads, receipts)
+					}
+				}
+				assertPreparationCounts()
+				for _, fault := range []string{"snapshot_hash", "head_hash", "prepare_receipt_input"} {
+					if err = database.SavePoint("reference_prepare_fault").Error; err != nil {
+						t.Fatal(err)
+					}
+					switch fault {
+					case "snapshot_hash":
+						err = database.Model(&model.GenerationReferenceExecution{}).Where("id = ?", preparation.execution.ID).UpdateColumns(map[string]any{"content_hash": strings.Repeat("f", 64)}).Error
+					case "head_hash":
+						err = database.Model(&model.GenerationReferenceExecutionHead{}).Where("target_id = ?", published.ID).UpdateColumns(map[string]any{"current_execution_hash": strings.Repeat("f", 64)}).Error
+					case "prepare_receipt_input":
+						err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", published.WorkspaceID, generationapp.PrepareInitialReferenceExecutionOperation, preparation.execution.ID).UpdateColumns(map[string]any{"input_hash": strings.Repeat("f", 64)}).Error
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, false)
+					assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, true)
+					assertPreparationCounts()
+					if err = database.RollbackTo("reference_prepare_fault").Error; err != nil {
+						t.Fatal(err)
+					}
+				}
 				var executionAuthorizationCount int64
 				if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceExecutionOperation, published.ID).Count(&executionAuthorizationCount).Error; err != nil || executionAuthorizationCount != 1 {
 					t.Fatalf("execution authorization receipt count=%d err=%v", executionAuthorizationCount, err)
@@ -1709,6 +1751,9 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 						t.Fatalf("inject execution authorization fault %s: %v", fault, err)
 					}
 					assertReferenceExecutionAuthorizationRejected(t, ctx, execution, authorizationActor, fault != "receipt_input")
+					assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, false)
+					assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, true)
+					assertPreparationCounts()
 					if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceExecutionOperation, published.ID).Count(&executionAuthorizationCount).Error; err != nil || executionAuthorizationCount != 1 {
 						t.Fatalf("rejected execution wrote authorization: count=%d err=%v", executionAuthorizationCount, err)
 					}
@@ -1795,6 +1840,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			invalidCurrentTarget, driftedTargetRead := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
 			if execution != nil {
 				assertReferenceExecutionAuthorizationRejected(t, ctx, execution, authorizationActor, true)
+				assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, false)
+				assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, true)
 			}
 			newAuthorization := authorizationCommand
 			newAuthorization.IdempotencyKey += ":source-drift"
@@ -1836,6 +1883,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			deniedTarget, deniedRead := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
 			if execution != nil {
 				assertReferenceExecutionAuthorizationRejected(t, ctx, execution, authorizationActor, true)
+				assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, false)
+				assertReferencePreparationRejected(t, ctx, authorizationActor, *preparation, true)
 			}
 			if err = database.RollbackTo("reference_authorization_membership").Error; err != nil {
 				t.Fatal(err)

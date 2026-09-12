@@ -26,14 +26,14 @@ func TestReferenceImageCompilerFreezesIndependentViews(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile := referenceImageProfile(t, target.WorkspaceID)
-	compiled, err := openaiadapter.CompileReferenceImages(target, repo.brief, profile)
+	compiled, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, profile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(compiled.Requests) != 6 || compiled.ManifestHash == "" {
 		t.Fatal("missing Bundle views or manifest identity")
 	}
-	replayed, err := openaiadapter.CompileReferenceImages(target, repo.brief, profile)
+	replayed, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, profile)
 	if err != nil || !reflect.DeepEqual(compiled, replayed) {
 		t.Fatalf("unstable compilation: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestReferenceImageCompilerFreezesIndependentViews(t *testing.T) {
 		t.Fatal("view requests or Bundle identities confused")
 	}
 	profile.ID = uuid.NewString()
-	changed, err := openaiadapter.CompileReferenceImages(target, repo.brief, profile)
+	changed, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, profile)
 	if err != nil || changed.ManifestHash == compiled.ManifestHash {
 		t.Fatal("profile version not frozen")
 	}
@@ -114,8 +114,8 @@ func TestReferenceImageCompilerRejectsDriftAndUnsupportedInputs(t *testing.T) {
 			}
 			profile := referenceImageProfile(t, target.WorkspaceID)
 			mutate(&target, &repo.brief, &profile)
-			got, err := openaiadapter.CompileReferenceImages(target, repo.brief, profile)
-			if err == nil || !reflect.DeepEqual(got, openaiadapter.ReferenceImageCompilation{}) {
+			got, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, profile)
+			if err == nil || !reflect.DeepEqual(got, generationapp.ReferenceImageCompilation{}) {
 				t.Fatal("unsafe input returned requests")
 			}
 		})
@@ -157,12 +157,12 @@ func TestReferenceImageCompilerChecksExactOutputPolicy(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := openaiadapter.CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID))
+			got, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID))
 			if tc.allowed {
 				if err != nil || len(got.Requests) != 6 {
 					t.Fatalf("valid explicit dimensions rejected: %v", err)
 				}
-			} else if err == nil || !reflect.DeepEqual(got, openaiadapter.ReferenceImageCompilation{}) {
+			} else if err == nil || !reflect.DeepEqual(got, generationapp.ReferenceImageCompilation{}) {
 				t.Fatal("invalid policy produced requests")
 			}
 		})
@@ -184,7 +184,7 @@ func TestReferenceImageCompilerRejectsOversizePromptWithoutTruncation(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := openaiadapter.CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID)); err == nil || !reflect.DeepEqual(got, openaiadapter.ReferenceImageCompilation{}) {
+	if got, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID)); err == nil || !reflect.DeepEqual(got, generationapp.ReferenceImageCompilation{}) {
 		t.Fatal("oversized prompt produced requests")
 	}
 }
@@ -255,7 +255,7 @@ func TestReferenceImageCompilerPreservesLocationAndPropPurpose(t *testing.T) {
 			}
 			target.ReferenceBriefRevisionRef.ContentHash = repo.brief.ContentHash
 			hashReferenceImageTarget(t, &target)
-			compiled, err := openaiadapter.CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID))
+			compiled, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID))
 			if err != nil || len(compiled.Requests) != 2*len(b.RequiredViewRoles) {
 				t.Fatalf("compile %s: %v", kind, err)
 			}
@@ -267,7 +267,7 @@ func TestReferenceImageCompilerPreservesLocationAndPropPurpose(t *testing.T) {
 			// Re-hashing a Target cannot silently substitute a different source.
 			target.SourcePayload = json.RawMessage(strings.Replace(string(target.SourcePayload), refs.State[0].OwnerContentHash, strings.Repeat("f", 64), 1))
 			hashReferenceImageTarget(t, &target)
-			if _, err := openaiadapter.CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID)); err == nil {
+			if _, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, repo.brief, referenceImageProfile(t, target.WorkspaceID)); err == nil {
 				t.Fatal("rehashed source drift accepted")
 			}
 		})

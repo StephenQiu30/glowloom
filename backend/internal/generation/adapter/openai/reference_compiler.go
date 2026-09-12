@@ -18,45 +18,66 @@ import (
 
 const ReferenceImageCompilerContractID = "openai-reference-image-compiler"
 
-// Body is invocation-scoped material. It must not enter a Snapshot, receipt or log.
-type ReferenceImageRequest struct {
-	BundleIndex int             `json:"bundle_index"`
-	SlotKey     string          `json:"slot_key"`
-	ContentHash string          `json:"content_hash"`
-	Body        json.RawMessage `json:"-"`
-}
+const referenceImagePromptPrefix = "Generate exactly one independent image of the specified view_role. Do not create a collage, contact sheet, or multiple views. Follow the approved source and design requirements below without inventing identities, objects, or states. Negative instructions are exclusions.\n"
+const referenceImageMaxPromptBytes = 32000
+const referenceImageMaxEdge = 3840
+const referenceImageEdgeMultiple = 16
+const referenceImageMaxRatio = 3
+const referenceImageMinPixels = 655360
+const referenceImageMaxPixels = 8294400
 
-type ReferenceImageCompilation struct {
-	ContractID   string                        `json:"contract_id"`
-	TargetRef    domain.GenerationRevisionRef  `json:"target_ref"`
-	BriefRef     app.ReferenceBriefRevisionRef `json:"brief_ref"`
-	ProfileRef   domain.GenerationRevisionRef  `json:"profile_ref"`
-	Requests     []ReferenceImageRequest       `json:"requests"`
-	ManifestHash string                        `json:"manifest_hash"`
+func (factory *Factory) ReferenceImageDescriptor() (app.ReferenceImageCompilerDescriptor, error) {
+	if factory == nil {
+		return app.ReferenceImageCompilerDescriptor{}, errors.New("Reference image factory is unavailable")
+	}
+	hash := func(value any) (string, error) {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return "", err
+		}
+		return canonical.Hash(raw)
+	}
+	capability, err := hash(map[string]any{"model": "gpt-image-2", "modality": "image", "max_edge": referenceImageMaxEdge, "edge_multiple": referenceImageEdgeMultiple, "max_ratio": referenceImageMaxRatio, "min_pixels": referenceImageMinPixels, "max_pixels": referenceImageMaxPixels, "max_prompt_bytes": referenceImageMaxPromptBytes, "quality": "high", "output_format": "png", "stream": false, "n": 1, "input_images": 0, "target_kinds": []string{"character_identity_anchor", "location_board", "prop_sheet"}})
+	if err != nil {
+		return app.ReferenceImageCompilerDescriptor{}, err
+	}
+	adapter, err := hash(map[string]any{"contract_id": "openai-image-api", "transport": "openai-image-api-nonstreaming", "endpoint": "images/generations", "capability_hash": capability})
+	if err != nil {
+		return app.ReferenceImageCompilerDescriptor{}, err
+	}
+	compiler, err := hash(map[string]any{"contract_id": ReferenceImageCompilerContractID, "prompt_prefix": referenceImagePromptPrefix, "brief_schema": contract.ReferenceBriefCandidateSchemaHash, "input_schema": contract.ReferenceBriefInputSchemaHash, "output_contract": domain.ReferenceOutputContractID, "capability_hash": capability})
+	if err != nil {
+		return app.ReferenceImageCompilerDescriptor{}, err
+	}
+	return app.ReferenceImageCompilerDescriptor{AdapterRef: domain.GenerationContractRef{ContractID: "openai-image-api", ContentHash: adapter}, CompilerRef: domain.GenerationContractRef{ContractID: ReferenceImageCompilerContractID, ContentHash: compiler}, CapabilityHash: capability}, nil
 }
 
 // CompileReferenceImages performs no IO and grants no sending permission. The
 // preparation transaction must separately revalidate Owner/Binding/Head facts,
 // consume execution authorization and freeze this exact manifest identity.
-func CompileReferenceImages(target app.ReferenceGenerationTarget, brief agentapp.AcceptedReferenceBrief, profile domain.ProviderModelProfileVersion) (ReferenceImageCompilation, error) {
+func (factory *Factory) CompileReferenceImages(target app.ReferenceGenerationTarget, brief agentapp.AcceptedReferenceBrief, profile domain.ProviderModelProfileVersion) (app.ReferenceImageCompilation, error) {
 	if err := validateReferenceCompilationInputs(target, brief); err != nil {
-		return ReferenceImageCompilation{}, err
+		return app.ReferenceImageCompilation{}, err
 	}
 	if err := app.ValidateProviderModelProfileVersion(profile); err != nil {
-		return ReferenceImageCompilation{}, err
+		return app.ReferenceImageCompilation{}, err
 	}
 	if profile.WorkspaceID != target.WorkspaceID || profile.State != domain.ProviderStateEnabled || profile.ProviderKey != domain.MediaProviderOpenAI || profile.ExternalModelID != "gpt-image-2" || profile.Modality != "image" || profile.Family != "gpt_image" || profile.CapabilitySchemaVersion != "gpt_image-capability" || profile.AdapterTransportContract != "openai-image-api-nonstreaming" || len(profile.Defaults) != 0 {
-		return ReferenceImageCompilation{}, errors.New("unsupported Reference image profile")
+		return app.ReferenceImageCompilation{}, errors.New("unsupported Reference image profile")
 	}
-	result := ReferenceImageCompilation{ContractID: ReferenceImageCompilerContractID, TargetRef: domain.GenerationRevisionRef{ID: target.ID, Revision: target.Revision, ContentHash: target.ContentHash}, BriefRef: target.ReferenceBriefRevisionRef, ProfileRef: domain.GenerationRevisionRef{ID: profile.ID, Revision: profile.Revision, ContentHash: profile.ContentHash}, Requests: []ReferenceImageRequest{}}
+	descriptor, err := factory.ReferenceImageDescriptor()
+	if err != nil {
+		return app.ReferenceImageCompilation{}, err
+	}
+	result := app.ReferenceImageCompilation{Descriptor: descriptor, ContractID: ReferenceImageCompilerContractID, TargetRef: domain.GenerationRevisionRef{ID: target.ID, Revision: target.Revision, ContentHash: target.ContentHash}, BriefRef: target.ReferenceBriefRevisionRef, ProfileRef: domain.GenerationRevisionRef{ID: profile.ID, Revision: profile.Revision, ContentHash: profile.ContentHash}, Requests: []app.ReferenceImageRequest{}}
 	for bundle := 0; bundle < target.OutputContract.CandidateBundleCount; bundle++ {
 		for _, slot := range target.OutputContract.Slots {
 			if err := validateReferenceImageSize(slot); err != nil {
-				return ReferenceImageCompilation{}, err
+				return app.ReferenceImageCompilation{}, err
 			}
 			prompt, err := compileReferenceImagePrompt(brief.Candidate, slot.ViewRole)
 			if err != nil {
-				return ReferenceImageCompilation{}, err
+				return app.ReferenceImageCompilation{}, err
 			}
 			body, err := json.Marshal(struct {
 				Model        string `json:"model"`
@@ -68,26 +89,26 @@ func CompileReferenceImages(target app.ReferenceGenerationTarget, brief agentapp
 				Stream       bool   `json:"stream"`
 			}{profile.ExternalModelID, prompt, fmt.Sprintf("%dx%d", slot.MinWidth, slot.MinHeight), 1, "high", "png", false})
 			if err != nil {
-				return ReferenceImageCompilation{}, err
+				return app.ReferenceImageCompilation{}, err
 			}
 			body, err = canonical.JSON(body)
 			if err != nil {
-				return ReferenceImageCompilation{}, err
+				return app.ReferenceImageCompilation{}, err
 			}
 			hash, err := canonical.Hash(body)
 			if err != nil {
-				return ReferenceImageCompilation{}, err
+				return app.ReferenceImageCompilation{}, err
 			}
-			result.Requests = append(result.Requests, ReferenceImageRequest{BundleIndex: bundle, SlotKey: slot.SlotKey, ContentHash: hash, Body: body})
+			result.Requests = append(result.Requests, app.ReferenceImageRequest{BundleIndex: bundle, SlotKey: slot.SlotKey, ContentHash: hash, Body: body})
 		}
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {
-		return ReferenceImageCompilation{}, err
+		return app.ReferenceImageCompilation{}, err
 	}
 	result.ManifestHash, err = canonical.Hash(raw)
 	if err != nil {
-		return ReferenceImageCompilation{}, err
+		return app.ReferenceImageCompilation{}, err
 	}
 	return result, nil
 }
@@ -97,7 +118,7 @@ func validateReferenceImageSize(slot domain.ReferenceOutputSlot) error {
 	a, b, ok := strings.Cut(slot.AspectRatio, ":")
 	x, xerr := strconv.Atoi(a)
 	y, yerr := strconv.Atoi(b)
-	if !ok || xerr != nil || yerr != nil || x < 1 || y < 1 || w < 1 || h < 1 || w > 3840 || h > 3840 || w%16 != 0 || h%16 != 0 || w > 3*h || h > 3*w || w*h < 655360 || w*h > 8294400 || w*y != h*x || !slices.Contains(slot.AllowedMediaTypes, "image/png") {
+	if !ok || xerr != nil || yerr != nil || x < 1 || y < 1 || w < 1 || h < 1 || w > referenceImageMaxEdge || h > referenceImageMaxEdge || w%referenceImageEdgeMultiple != 0 || h%referenceImageEdgeMultiple != 0 || w > referenceImageMaxRatio*h || h > referenceImageMaxRatio*w || w*h < referenceImageMinPixels || w*h > referenceImageMaxPixels || w*y != h*x || !slices.Contains(slot.AllowedMediaTypes, "image/png") {
 		return errors.New("Reference image slot is outside exact GPT Image 2 capability")
 	}
 	return nil
@@ -124,8 +145,8 @@ func compileReferenceImagePrompt(brief contract.ReferenceBriefCandidate, role st
 	if err != nil {
 		return "", err
 	}
-	prompt := "Generate exactly one independent image of the specified view_role. Do not create a collage, contact sheet, or multiple views. Follow the approved source and design requirements below without inventing identities, objects, or states. Negative instructions are exclusions.\n" + string(raw)
-	if len(prompt) > 32000 {
+	prompt := referenceImagePromptPrefix + string(raw)
+	if len(prompt) > referenceImageMaxPromptBytes {
 		return "", errors.New("Reference image prompt exceeds local byte budget")
 	}
 	return prompt, nil

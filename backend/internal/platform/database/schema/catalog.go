@@ -124,6 +124,8 @@ func Catalog() []any {
 		&model.ApprovedReferencePlanVersion{},
 		&model.ReferencePlanTargetVersion{},
 		&model.GenerationReferenceTargetHead{},
+		&model.GenerationReferenceExecution{},
+		&model.GenerationReferenceExecutionHead{},
 		&model.ReferencePlanScopeHead{},
 		&model.ProjectReferencePlanActivationHead{},
 		&model.VisualFoundationScopeCollectionReceipt{},

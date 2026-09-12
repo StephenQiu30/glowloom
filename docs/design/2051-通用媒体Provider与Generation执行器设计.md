@@ -425,6 +425,12 @@ Secret 明文、Prompt、Provider URL 和响应内容不进入 Snapshot。Creden
 
 无 Provider 配置时返回 `provider_configuration_required`，但 Backend、剧本解析、Gate 1–3、查询和非视觉 Workflow 正常。当前 MVP 只要求至少一条真实、可恢复、可审核的图片执行路径覆盖六类 Target；此前接受的 Seedream、GPT Image、Nano Banana 与 Seedance 广度仍是 Platform Complete，不能用本步声明为已完成。
 
+首次执行准备只接受 `expected_execution_head_revision=0`。Backend 复用现有 exact Target、accepted Brief、Provider 配置与 Command Receipt 入口，在 Serializable 事务中先锁 Workspace，再重验当前操作者、原执行授权人的权限和原授权回执输入身份。只解析已注册且声明正式 Reference 编译合同的 Factory，不复用旧 GenerationRequest/PriceQuote。编译所有 Bundle/slot 并校验完整清单，冻结 Target read-set、精确 Binding/Connection/Profile、Credential ID/revision/fingerprint、Registry release、Adapter/Compiler/Capability 身份、清单 Hash 与运行限额。默认运行限额为最多 4 Bundle、每 Bundle 4 slot、输入 32 MiB、每输出 10 MiB、并发 2、提交超时 180 秒、每日运维调用 256 次；准备仅冻结限额，实际发送阶段另行原子执行并发/每日额度检查，不把准备当作额度预占。
+
+`gen_reference_executions` 存储严格不可变快照，`gen_reference_execution_heads` 仅以 scoped exact Target 为键保存当前 Execution ID/Hash 和 revision；二者由现有 GORM Catalog 同步，不增加迁移入口。快照、首个 Head 与准备回执必须一次提交，新 key 不能绕过首次 Head；回执失败不能留下孤立快照。相同 key 先重新验证事实，再比较输入 Hash、重编译快照和 Head，不返回失效的准备结果。此入口不用于恢复已越发送边界的历史执行：恢复需要后续专用流程消费冻结 Provider 与 Call 状态，不得借准备重放切换 Provider 或二次 Submit。
+
+首次快照的具体 JSON 将上述冻结输入统一放入 `read_set`，`execution_read_set_root` 对该对象计算 canonical Hash；外层保存 contract ID、execution ID/revision、scope、操作者和 UTC 微秒时间，`content_hash` 覆盖整个快照并将自身置空。`Credential` 使用明确的 fingerprint 字段，不将密文冒充内容 Hash。编译端口及返回类型由 application 定义，OpenAI Factory 直接实现；Registry release Hash 覆盖排序后的注册项与 Reference 编译 descriptor，不建立第二套注册中心。
+
 ### 7.2 Adapter 合同
 
 Provider Registry 是进程内只读 Factory 表；数据库只保存不可变连接/Profile/Binding 版本。Adapter 统一的最小端口为：

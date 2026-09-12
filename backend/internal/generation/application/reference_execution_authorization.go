@@ -80,14 +80,7 @@ func (service *ReferenceExecutionAuthorizationService) AuthorizeInitial(ctx cont
 		if err != nil {
 			return err
 		}
-		inputHash, err := platformcommand.InputHash(struct {
-			Actor                 Actor
-			Command               AuthorizeInitialReferenceExecutionCommand
-			TargetReadSetRoot     string
-			ConnectionContentHash string
-			ProfileContentHash    string
-			CredentialFingerprint string
-		}{actor, command, target.TargetReadSetRoot, provider.connection.ContentHash, provider.profile.ContentHash, provider.credential.SecretFingerprint})
+		inputHash, err := referenceExecutionAuthorizationInputHash(actor, command, target.TargetReadSetRoot, provider)
 		if err != nil {
 			return err
 		}
@@ -135,4 +128,15 @@ func replayReferenceExecutionAuthorization(receipt platformcommand.Receipt, inpu
 		return domain.ReferenceExecutionAuthorization{}, conflict("Reference execution authorization receipt has drifted")
 	}
 	return value, nil
+}
+
+func referenceExecutionAuthorizationInputHash(actor Actor, command AuthorizeInitialReferenceExecutionCommand, targetReadSetRoot string, provider referenceExecutionProviderFacts) (string, error) {
+	return platformcommand.InputHash(struct {
+		Actor                 Actor
+		Command               AuthorizeInitialReferenceExecutionCommand
+		TargetReadSetRoot     string
+		ConnectionContentHash string
+		ProfileContentHash    string
+		CredentialFingerprint string
+	}{actor, command, targetReadSetRoot, provider.connection.ContentHash, provider.profile.ContentHash, provider.credential.SecretFingerprint})
 }

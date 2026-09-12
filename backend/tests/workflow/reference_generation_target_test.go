@@ -18,11 +18,11 @@ import (
 
 func assertPersistedReferenceImageCompilation(t *testing.T, target generationapp.ReferenceGenerationTarget, brief agentapp.AcceptedReferenceBrief, profile domain.ProviderModelProfileVersion) {
 	t.Helper()
-	compiled, err := openaiadapter.CompileReferenceImages(target, brief, profile)
+	compiled, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, brief, profile)
 	if err != nil || len(compiled.Requests) != target.OutputContract.CandidateBundleCount*len(target.OutputContract.Slots) {
 		t.Fatalf("compile persisted Target/Brief/Profile: %v", err)
 	}
-	replay, err := openaiadapter.CompileReferenceImages(target, brief, profile)
+	replay, err := openaiadapter.NewFactory(nil, nil, nil).CompileReferenceImages(target, brief, profile)
 	if err != nil || !reflect.DeepEqual(replay, compiled) {
 		t.Fatalf("persisted compilation replay: %v", err)
 	}

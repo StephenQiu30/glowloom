@@ -480,6 +480,14 @@
 
 ### `VP-I07` — 图片执行、Bundle、确定性 QC 与 Vision Review
 
+- 首次执行准备已实现：`ReferenceExecutionPreparationService.PrepareInitial` 在同一 Serializable 事务消费当前 Target 与独立执行授权；原授权输入 Hash 与授权创建共用同一计算函数，不把操作者替换成授权人。只解析现有只读 Registry 中实现 Reference 编译端口的 Factory，重编译 accepted Brief 的完整 Bundle/slot 清单；逐项校验 exact Target/Brief/Profile、descriptor、请求字节 Hash、slot 身份、输出和输入预算以及 manifest Hash。
+- 快照冻结 exact Target/Binding/Connection/Profile、Credential ID/revision/fingerprint、Target read-set、首次 expected Head revision、Registry release Hash、Adapter/Compiler 合同 Hash、能力 Hash、请求清单 Hash、运行限额 ref 与授权动作 ref；严格解码拒绝未知字段、重复 key、Hash/引用/轮次漂移，时间规范为 UTC 微秒。编译器返回类型移至消费方 application，OpenAI Factory 实现同一个编译端口；通用动作 ref 移至 generation domain，既有 Target JSON 不变，没有兼容别名或第二份 DTO。
+- GORM 增加 `gen_reference_executions` 与 `gen_reference_execution_heads`，由现有 Catalog 自动同步并声明 FK、唯一键、Hash/revision 检查及快照不可变 Hook。发布 Snapshot/首个 Head/准备回执一次提交；相同 key 重验输入、唯一回执和 Head，新 key 不能绕过首次 Head。快照不含 Prompt、Secret 或 Provider URL；不写旧 GenerationRequest、不接成本预留，也不创建 Call 或发送权。
+- Red/Green：领域测试先因 Snapshot/read-set 类型与构造器缺失失败；真实旅程随后因 Store 未实现 `WithinReferenceExecution` 构建失败。Green 覆盖 strict Snapshot 往返、缺少 compiler、缺/错 slot、请求/manifest/compiler Hash 损坏在首次写入前拒绝；回执非法 ID 与真实主键冲突造成快照/Head 回滚，之后同命令可成功且幂等；新 key/错误授权/非首次 Head 拒绝。已有固定 PostgreSQL 旅程还注入 Snapshot/Head/准备回执损坏，以及 Connection/Profile 禁用、Credential 轮换、Binding 换版、原授权回执损坏、来源 Binding 漂移和会员降级；重放与新 key 均失败关闭，快照/Head/准备回执计数维持一份。
+- 当前验证：现有 `lanverse_test` 的完整持久化旅程普通模式 45.306 秒通过；`go test -race ./tests/generation ./tests/storygraph -run '^TestInitialReferenceExecutionSnapshot|^TestInitialReferenceExecutionAuthorization|^TestReferenceImageCompiler|^TestReferenceGenerationTarget' -count=1` 通过（generation 1.798 秒、storygraph 78.508 秒）。`go vet ./...`、无外部变量的 Backend 全量测试（含架构门）与 diff 检查通过。前置提交 `b476066379a3cb7067563d3d8e612d9c0f64a5ae` 的完整远程 CI `34701443567` 已重新核验成功，本次提交另行核验。没有改 CI、启动基础环境、调用真实 Provider 或进行最终浏览器验收；本机未安装 goimports/golangci-lint/govulncheck，未执行。
+- 验证边界：当前仅为基础 Target 首次准备，尚未接入 Workflow/HTTP 调用入口、ProviderCall 发送与恢复、并发/每日调用限额实际扣减、依赖型输入图、媒体 staging 或最终浏览器验收。运维限额只冻结安全默认值，不宣称已经预占或执行。历史远程 Call 的恢复不允许复用此“重验当前配置”的准备入口。
+- 最终本地验证：复用同一既有固定 PostgreSQL 的 `go test -race ./tests/workflow -run '^TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays$' -count=1` 406.940 秒通过，包含本次新增全部准备与故障注入断言；未重启或新建环境。前述普通模式和定向 Race 均为独立执行，不以跳过外部变量的全量测试替代持久化证据。
+
 - 状态：进行中；已完成六类冻结 Reference Brief 的独立视图输出合同编译与三类基础 Target 的正式首轮发布，依赖型 Target、Provider 图片执行与 Bundle 选择尚未完成。
 - Git 基线/提交：基线 `5112b44ede1c3d34e8a15eec705332bc33b666db`；输出合同随本记录所在提交交付。基线的 Reference Query 全量 GitHub Actions run `34692818404` 已全部成功。
 - Red 命令与失败：`go test ./tests/generation ./tests/agent -run '^TestReferenceOutput' -count=1` 首先因输出合同类型、构造器和编译器未定义而失败，固定六类完整视图、严格媒体 Policy、冻结 Brief fence、负例和 canonical identity。
