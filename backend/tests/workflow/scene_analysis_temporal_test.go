@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -698,7 +699,15 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 		if loadErr := database.First(&current, "id = ?", productionWorldRepairRun.ID).Error; loadErr != nil {
 			return false, loadErr
 		}
-		return current.Status == "SUCCEEDED", nil
+		if current.Status != "WAITING_HUMAN" {
+			return false, nil
+		}
+		var count int64
+		err := database.Model(&model.HumanTask{}).Where(
+			"workflow_run_id = ? AND subject_type = ? AND status = ?",
+			productionWorldRepairRun.ID, "visual_foundation_scope_gate_input", "OPEN",
+		).Count(&count).Error
+		return count == 1, err
 	})
 	var productionWorldApply model.WorkflowHumanGateApplyReceipt
 	if err = database.First(
@@ -784,6 +793,31 @@ func TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow(t *testin
 	if err = database.First(&referenceCandidate, "id = ?", referenceOutput.Bindings[0].ReferenceID).Error; err != nil ||
 		referenceCandidate.CandidateType != "reference_plan_candidate" || visualRuntime.referenceCalls == 0 {
 		t.Fatalf("Temporal Reference Plan Candidate=%#v calls=%d err=%v", referenceCandidate, visualRuntime.referenceCalls, err)
+	}
+	var visualScopeTask model.HumanTask
+	if err = database.Where(
+		"workflow_run_id = ? AND subject_type = ?", productionWorldRepairRun.ID, "visual_foundation_scope_gate_input",
+	).First(&visualScopeTask).Error; err != nil {
+		t.Fatalf("query Temporal Visual Foundation Scope HumanTask: %v", err)
+	}
+	var visualScopeInput model.WorkflowHumanGateInput
+	if err = database.First(&visualScopeInput, "id = ?", visualScopeTask.SubjectID).Error; err != nil {
+		t.Fatalf("query Temporal Visual Foundation Scope Gate input: %v", err)
+	}
+	visualScopeGate, _, visualScopeErr := workflow.DecodeVisualFoundationScopeGateInput(json.RawMessage(visualScopeInput.Input))
+	var visualScopeCandidateIDs []string
+	if err = json.Unmarshal(visualScopeTask.CandidateIDs, &visualScopeCandidateIDs); err != nil {
+		t.Fatalf("decode Temporal Visual Foundation Scope Candidate IDs: %v", err)
+	}
+	wantVisualScopeCandidates := []string{visualCandidate.ID.String(), referenceCandidate.ID.String()}
+	slices.Sort(wantVisualScopeCandidates)
+	if visualScopeErr != nil || visualScopeTask.Status != "OPEN" || visualScopeTask.SubjectHash != visualScopeInput.InputHash ||
+		visualScopeGate.Subject.ConfirmedProductionWorld.StoryGraphVersionID != productionGraphVersion.ID.String() ||
+		visualScopeGate.Subject.ProjectPresetSelection.SelectionID != visualSelection.ID ||
+		visualScopeGate.ImageGenerationCapability.Available ||
+		!slices.Equal(visualScopeGate.AllowedDecisions, []string{"changes_requested", "rejected"}) ||
+		!slices.Equal(visualScopeCandidateIDs, wantVisualScopeCandidates) {
+		t.Fatalf("Temporal Visual Foundation Scope Gate=%#v task=%#v candidates=%v err=%v", visualScopeGate, visualScopeTask, visualScopeCandidateIDs, visualScopeErr)
 	}
 	var productionEntityInvocation model.SceneAnalysisInvocationRecord
 	if err = database.Where(

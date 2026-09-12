@@ -456,7 +456,8 @@ func expectedHumanGateSubject(
 	storyboardIntentOwnerApply := node.Executor == "gate.storyboard_review" && node.DefinitionVersion == "2.0.0"
 	structureIdentityOwnerApply := node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0"
 	productionWorldReview := node.Executor == "gate.production_world_review" && node.DefinitionVersion == "1.0.0"
-	if structureIdentityOwnerApply || productionWorldReview {
+	visualFoundationScopeReview := node.Executor == "gate.visual_foundation_scope" && node.DefinitionVersion == "1.0.0"
+	if structureIdentityOwnerApply || productionWorldReview || visualFoundationScopeReview {
 		var gateInput model.WorkflowHumanGateInput
 		if err = transaction.First(&gateInput, "node_run_id = ?", node.ID).Error; err != nil {
 			return "", uuid.Nil, 0, "", normalizeNotFound(err)
@@ -468,6 +469,8 @@ func expectedHumanGateSubject(
 		subjectType := "structure_identity_gate_input"
 		if productionWorldReview {
 			subjectType = "production_world_gate_input"
+		} else if visualFoundationScopeReview {
+			subjectType = "visual_foundation_scope_gate_input"
 		}
 		return subjectType, gateInput.ID, 1, gateInput.InputHash, nil
 	}

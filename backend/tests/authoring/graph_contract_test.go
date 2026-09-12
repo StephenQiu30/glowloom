@@ -14,7 +14,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build system catalog: %v", err)
 	}
-	if catalog.Key != "lanverse.production" || catalog.Version != "26.0.0" || len(catalog.ContentHash) != 64 {
+	if catalog.Key != "lanverse.production" || catalog.Version != "27.0.0" || len(catalog.ContentHash) != 64 {
 		t.Fatalf("unexpected catalog identity: %#v", catalog)
 	}
 
@@ -45,6 +45,7 @@ func TestSystemCatalogCoversScriptToStoryboardJourney(t *testing.T) {
 		"human.production_world_review@1.0.0",
 		"human.storyboard_review@2.0.0",
 		"human.structure_identity_review@1.0.0",
+		"human.visual_foundation_scope@1.0.0",
 		"input.script_revision@1.0.0",
 		"input.script_source@1.0.0",
 		"production.bible_materialization@1.0.0",
@@ -95,6 +96,14 @@ func TestVisualStagesConsumeExactStoryGraphAndProjectPresetSelection(t *testing.
 				"visual_foundation": "visual_foundation_candidate",
 			},
 			outputKey: "candidate", outputType: "reference_plan_candidate",
+		},
+		"human.visual_foundation_scope": {
+			executor: "gate.visual_foundation_scope", cachePolicy: "never", riskLevel: "human_gate",
+			inputs: map[string]string{
+				"storygraph": "storygraph_version", "selection": "project_preset_selection",
+				"visual_foundation": "visual_foundation_candidate", "reference_plan": "reference_plan_candidate",
+			},
+			outputKey: "owners", outputType: "visual_reference_owner_set",
 		},
 	}
 	for _, definition := range catalog.Definitions {

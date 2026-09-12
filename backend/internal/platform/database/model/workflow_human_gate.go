@@ -18,9 +18,9 @@ type WorkflowHumanGateInput struct {
 	ProjectID         uuid.UUID         `gorm:"type:uuid;not null;index:ix_wrk_human_gate_inputs_project_created,priority:1"`
 	WorkflowRunID     uuid.UUID         `gorm:"type:uuid;not null;index:ix_wrk_human_gate_inputs_run"`
 	NodeRunID         uuid.UUID         `gorm:"type:uuid;not null;uniqueIndex:uq_wrk_human_gate_input_node"`
-	GateKey           string            `gorm:"type:varchar(80);not null;check:ck_wrk_human_gate_input_key,gate_key IN ('structure_identity','bible_continuity')"`
+	GateKey           string            `gorm:"type:varchar(80);not null;check:ck_wrk_human_gate_input_key,gate_key IN ('structure_identity','bible_continuity','visual_foundation_scope')"`
 	GateInstanceKey   string            `gorm:"type:varchar(220);not null;uniqueIndex:uq_wrk_human_gate_input_instance"`
-	SubjectType       string            `gorm:"type:varchar(80);not null;check:ck_wrk_human_gate_input_subject,subject_type IN ('structure_identity','production_world')"`
+	SubjectType       string            `gorm:"type:varchar(80);not null;check:ck_wrk_human_gate_input_subject,subject_type IN ('structure_identity','production_world','visual_foundation_scope')"`
 	SubjectHash       string            `gorm:"type:char(64);not null;check:ck_wrk_human_gate_input_subject_hash,char_length(subject_hash) = 64"`
 	EffectPlanHash    string            `gorm:"type:char(64);not null;check:ck_wrk_human_gate_input_effect_hash,char_length(effect_plan_hash) = 64"`
 	InputHash         string            `gorm:"type:char(64);not null;uniqueIndex:uq_wrk_human_gate_input_hash;check:ck_wrk_human_gate_input_hash,char_length(input_hash) = 64"`

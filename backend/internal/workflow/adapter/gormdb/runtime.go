@@ -815,6 +815,7 @@ func (store *Store) PrepareHumanGate(
 		candidateRevision := 0
 		structureIdentityOwnerApply := node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0"
 		productionWorldReview := node.Executor == "gate.production_world_review" && node.DefinitionVersion == "1.0.0"
+		visualFoundationScopeReview := node.Executor == "gate.visual_foundation_scope" && node.DefinitionVersion == "1.0.0"
 		productionBibleOwnerApply := node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0"
 		episodePlanOwnerApply := node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0"
 		episodePlanningOwnerApply := node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0"
@@ -823,6 +824,8 @@ func (store *Store) PrepareHumanGate(
 		var structureIdentityGate domain.StructureIdentityGateInput
 		var productionWorldGateRecord model.WorkflowHumanGateInput
 		var productionWorldGate domain.ProductionWorldGateInput
+		var visualFoundationScopeGateRecord model.WorkflowHumanGateInput
+		var visualFoundationScopeGate domain.VisualFoundationScopeGateInput
 		if structureIdentityOwnerApply {
 			structureIdentityGateRecord, structureIdentityGate, resolveErr = prepareStructureIdentityGateInput(
 				transaction, run, node, resolved.Input, now,
@@ -833,6 +836,13 @@ func (store *Store) PrepareHumanGate(
 			candidateIDs = structureIdentityCandidateIDs(structureIdentityGate)
 		} else if productionWorldReview {
 			productionWorldGateRecord, productionWorldGate, candidateIDs, resolveErr = prepareProductionWorldGateInput(
+				transaction, run, node, resolved.Input, now,
+			)
+			if resolveErr != nil {
+				return resolveErr
+			}
+		} else if visualFoundationScopeReview {
+			visualFoundationScopeGateRecord, visualFoundationScopeGate, candidateIDs, resolveErr = prepareVisualFoundationScopeGateInput(
 				transaction, run, node, resolved.Input, now,
 			)
 			if resolveErr != nil {
@@ -895,6 +905,8 @@ func (store *Store) PrepareHumanGate(
 		allowedDecisions := structureIdentityGate.AllowedDecisions
 		if productionWorldReview {
 			allowedDecisions = productionWorldGate.AllowedDecisions
+		} else if visualFoundationScopeReview {
+			allowedDecisions = visualFoundationScopeGate.AllowedDecisions
 		} else if !structureIdentityOwnerApply {
 			var allowedErr error
 			allowedDecisions, allowedErr = humanGateAllowedDecisions(node.Executor)
@@ -942,6 +954,9 @@ func (store *Store) PrepareHumanGate(
 		} else if productionWorldReview {
 			subjectType, subjectID, subjectHash = "production_world_gate_input", productionWorldGateRecord.ID.String(), productionWorldGateRecord.InputHash
 			subjectRevision = 1
+		} else if visualFoundationScopeReview {
+			subjectType, subjectID, subjectHash = "visual_foundation_scope_gate_input", visualFoundationScopeGateRecord.ID.String(), visualFoundationScopeGateRecord.InputHash
+			subjectRevision = 1
 		} else if productionBibleOwnerApply {
 			candidate := resolved.Input.Bindings[0]
 			subjectType, subjectID, subjectHash = "story_reconciliation_candidate", candidate.ReferenceID, candidate.ContentHash
@@ -979,6 +994,8 @@ func humanGateAllowedDecisions(executor string) ([]string, error) {
 	case "gate.generation_image_review":
 		return []string{"changes_requested", "rejected", "selected"}, nil
 	case "gate.production_world_review":
+		return []string{"approved", "changes_requested", "rejected"}, nil
+	case "gate.visual_foundation_scope":
 		return []string{"approved", "changes_requested", "rejected"}, nil
 	case "gate.structure_identity_review":
 		return []string{"approved", "changes_requested", "rejected"}, nil
@@ -1067,6 +1084,7 @@ func (store *Store) ApplyHumanGate(
 		subjectRevisionIndependentOfNode :=
 			node.Executor == "gate.structure_identity_review" && node.DefinitionVersion == "1.0.0" ||
 				node.Executor == "gate.production_world_review" && node.DefinitionVersion == "1.0.0" ||
+				node.Executor == "gate.visual_foundation_scope" && node.DefinitionVersion == "1.0.0" ||
 				node.Executor == "gate.production_bible_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.episode_plan_review" && node.DefinitionVersion == "2.0.0" ||
 				node.Executor == "gate.episode_structure_review" && node.DefinitionVersion == "2.0.0" ||

@@ -155,7 +155,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil {
 		t.Fatalf("load Scene Analysis plan: %v", err)
 	}
-	if len(plan.Nodes) != 15 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
+	if len(plan.Nodes) != 16 || plan.Nodes[0].Executor != "workflow.input.script_source" ||
 		plan.Nodes[1].Executor != "activity.script_span_proposal" ||
 		plan.Nodes[2].Executor != "activity.scene_fact_extraction" ||
 		plan.Nodes[3].Executor != "activity.identity_resolution" ||
@@ -169,7 +169,8 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 		plan.Nodes[11].Executor != "activity.production_storygraph_projection" ||
 		plan.Nodes[12].Executor != "activity.project_preset_selection" ||
 		plan.Nodes[13].Executor != "activity.resolve_visual_foundation" ||
-		plan.Nodes[14].Executor != "activity.plan_reference_assets" {
+		plan.Nodes[14].Executor != "activity.plan_reference_assets" ||
+		plan.Nodes[15].Executor != "gate.visual_foundation_scope" {
 		t.Fatalf("Scene Analysis plan = %#v", plan.Nodes)
 	}
 
@@ -1188,6 +1189,43 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if err != nil || replayedReferenceResult.OutputHash != referenceResult.OutputHash || visualRuntime.referenceCalls != 1 {
 		t.Fatalf("replay Reference Plan Workflow node: got=%#v want=%#v calls=%d err=%v", replayedReferenceResult, referenceResult, visualRuntime.referenceCalls, err)
 	}
+	visualScopeGate := plan.Nodes[15]
+	if err = runtimeService.OpenHumanGate(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualScopeGate.NodeRunID, NodeID: visualScopeGate.NodeID,
+		Executor: visualScopeGate.Executor, Attempt: 1,
+	}); err != nil {
+		t.Fatalf("open Visual Foundation Scope HumanTask: %v", err)
+	}
+	var visualScopeGateInput model.WorkflowHumanGateInput
+	if err = database.First(&visualScopeGateInput, "node_run_id = ?", visualScopeGate.NodeRunID).Error; err != nil {
+		t.Fatalf("query Visual Foundation Scope Gate input: %v", err)
+	}
+	decodedVisualScopeGate, _, visualScopeDecodeErr := workflow.DecodeVisualFoundationScopeGateInput(
+		json.RawMessage(visualScopeGateInput.Input),
+	)
+	if visualScopeDecodeErr != nil || decodedVisualScopeGate.InputHash != visualScopeGateInput.InputHash ||
+		decodedVisualScopeGate.Subject.ConfirmedProductionWorld.StoryGraphVersionID != productionGraph.Version.ID ||
+		decodedVisualScopeGate.Subject.ProjectPresetSelection.SelectionID != visualSelection.ID ||
+		decodedVisualScopeGate.Subject.VisualFoundationCandidate.RevisionID != visualCandidate.ID ||
+		decodedVisualScopeGate.Subject.ReferencePlanCandidate.RevisionID != referenceCandidate.ID ||
+		decodedVisualScopeGate.ImageGenerationCapability.Available ||
+		!slices.Equal(decodedVisualScopeGate.AllowedDecisions, []string{"changes_requested", "rejected"}) {
+		t.Fatalf("persisted Visual Foundation Scope Gate input = %#v err=%v", decodedVisualScopeGate, visualScopeDecodeErr)
+	}
+	var visualScopeTask model.HumanTask
+	if err = database.First(&visualScopeTask, "node_run_id = ?", visualScopeGate.NodeRunID).Error; err != nil {
+		t.Fatalf("query Visual Foundation Scope HumanTask: %v", err)
+	}
+	var visualScopeCandidateIDs []string
+	wantVisualScopeCandidateIDs := []string{visualCandidate.ID, referenceCandidate.ID}
+	slices.Sort(wantVisualScopeCandidateIDs)
+	if err = json.Unmarshal(visualScopeTask.CandidateIDs, &visualScopeCandidateIDs); err != nil ||
+		!slices.Equal(visualScopeCandidateIDs, wantVisualScopeCandidateIDs) ||
+		visualScopeTask.SubjectType != "visual_foundation_scope_gate_input" ||
+		visualScopeTask.SubjectID != visualScopeGateInput.ID || visualScopeTask.SubjectRevision != 1 ||
+		visualScopeTask.SubjectHash != visualScopeGateInput.InputHash {
+		t.Fatalf("Visual Foundation Scope HumanTask = %#v candidates=%v err=%v", visualScopeTask, visualScopeCandidateIDs, err)
+	}
 	var visualRelease model.SceneAnalysisRelease
 	if err = database.First(&visualRelease, "stage_key = ?", contract.VisualFoundationStageKey).Error; err != nil ||
 		visualRelease.ModelCapability != "vision" {
@@ -1230,11 +1268,18 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	}
 	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
-		SelectedBy: fixture.userID.String(), PresetKey: "xianxia-animation",
+		SelectedBy: fixture.userID.String(), PresetKey: "chinese-fantasy-animation",
 		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 1,
 		IdempotencyKey: "scene-analysis-visual-preset-switch",
 	}); err != nil {
 		t.Fatalf("switch Project Preset selection before stale validation: %v", err)
+	}
+	queryFactsBefore[2]++ // the explicit Preset selection command owns one CommandReceipt
+	if staleGateErr := runtimeService.OpenHumanGate(ctx, workflow.NodeActivityCommand{
+		WorkflowRunID: started.ID, NodeRunID: visualScopeGate.NodeRunID, NodeID: visualScopeGate.NodeID,
+		Executor: visualScopeGate.Executor, Attempt: 2,
+	}); staleGateErr == nil || !strings.Contains(staleGateErr.Error(), "Preset selection has drifted") {
+		t.Fatalf("Visual Foundation Scope Gate accepted a switched Preset selection: %v", staleGateErr)
 	}
 	if _, selectionDriftErr := visualService.Execute(ctx, agentapp.ExecuteVisualFoundationCommand{
 		WorkflowRunID: started.ID, NodeRunID: visualNode.NodeRunID, Input: visualInput,
@@ -2159,6 +2204,7 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "preset-selection", DefinitionKey: "production.project_preset_selection", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "visual-foundation", DefinitionKey: "agent.visual_foundation", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 			{ID: "reference-plan", DefinitionKey: "agent.reference_plan", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
+			{ID: "visual-foundation-scope-gate", DefinitionKey: "human.visual_foundation_scope", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)},
 		},
 		Edges: []authoring.Edge{
 			{ID: "source-spans", FromNodeID: "source", FromPort: "source", ToNodeID: "spans", ToPort: "source"},
@@ -2201,6 +2247,10 @@ func sceneAnalysisGraph(revisionID string) authoring.Graph {
 			{ID: "storygraph-reference-plan", FromNodeID: "production-storygraph", FromPort: "storygraph", ToNodeID: "reference-plan", ToPort: "storygraph"},
 			{ID: "preset-selection-reference-plan", FromNodeID: "preset-selection", FromPort: "selection", ToNodeID: "reference-plan", ToPort: "selection"},
 			{ID: "visual-foundation-reference-plan", FromNodeID: "visual-foundation", FromPort: "candidate", ToNodeID: "reference-plan", ToPort: "visual_foundation"},
+			{ID: "storygraph-visual-foundation-scope-gate", FromNodeID: "production-storygraph", FromPort: "storygraph", ToNodeID: "visual-foundation-scope-gate", ToPort: "storygraph"},
+			{ID: "preset-selection-visual-foundation-scope-gate", FromNodeID: "preset-selection", FromPort: "selection", ToNodeID: "visual-foundation-scope-gate", ToPort: "selection"},
+			{ID: "visual-foundation-visual-foundation-scope-gate", FromNodeID: "visual-foundation", FromPort: "candidate", ToNodeID: "visual-foundation-scope-gate", ToPort: "visual_foundation"},
+			{ID: "reference-plan-visual-foundation-scope-gate", FromNodeID: "reference-plan", FromPort: "candidate", ToNodeID: "visual-foundation-scope-gate", ToPort: "reference_plan"},
 		},
 	}
 }
