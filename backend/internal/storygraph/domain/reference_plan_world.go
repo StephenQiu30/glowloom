@@ -37,7 +37,11 @@ func BuildReferencePlanWorldReadSet(version Version) (ReferencePlanWorldReadSet,
 	inventory, err := BuildReferencePlanSeedInventory(ReferencePlanSeedInventoryInput{
 		OwnerSetHash: version.OwnerSetHash,
 		P1ScopeKeys:  scopes,
-		Graph:        Snapshot{Nodes: version.Nodes, Edges: version.Edges},
+		Graph: Snapshot{
+			SchemaVersion: version.SchemaVersion,
+			Nodes:         version.Nodes,
+			Edges:         version.Edges,
+		},
 	})
 	if err != nil {
 		return ReferencePlanWorldReadSet{}, err
