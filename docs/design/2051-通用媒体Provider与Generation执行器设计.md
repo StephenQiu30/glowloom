@@ -593,13 +593,13 @@ GenerationCandidateSetProduction
 
 构造顺序严格单向：`Call/Staged/per-slot QC → canonical slot_set_root → bundle deterministic QC → ReferenceCandidateBundleInputContract → Vision Invocation/Candidate → GenerationCandidateBundleProduction → CandidateSet`。Bundle deterministic QC Result 的 input root 必须等于 `slot_set_root`，不得引用 Bundle Input；Vision Candidate 的 input hash 覆盖 bundle input ref/hash，但 Bundle Input 不引用 Vision，因此两处都不存在内容哈希环。
 
-`generation_completion_state` 固定为 `complete|partial_explicit_failure|outcome_unknown`。Bundle Input 必须来自同一 Target、round、Execution Snapshot、bundle index 和 dependency root。任何必需 slot 缺失、unknown 或跨 Bundle 混合都不得标为 complete。部分明确失败可以展示诊断，但只有 complete 且 deterministic QC passed 的 Bundle Input 能进入 Vision Review；最终 CandidateBundle 还必须绑定成功且 fence 有效的 bundle-level Vision Candidate。任一 Call outcome unknown 时 CandidateSet 只能用于对账，不开放选择。
+`generation_completion_state` 固定为 `complete|partial_explicit_failure|outcome_unknown`。Bundle Input 必须来自同一 Target、round、Execution Snapshot、bundle index 和 dependency root。任何必需 slot 缺失、unknown 或跨 Bundle 混合都不得标为 complete。部分明确失败可以展示诊断。按用户确认的用途边界，完整且技术 QC 合格的 Bundle Input 可进入内部 Vision Review；`rights_not_assessed` 仅阻断正式选择和资产发布，不阻断内部质量审核，且权利状态与综合 QC 的 blocked 均保持不变。最终 CandidateBundle 仍须绑定成功且 fence 有效的 bundle-level Vision Candidate；内部审核通过不构成权利批准。任一 Call outcome unknown 时 CandidateSet 只能用于对账，不开放选择。
 
 ### 8.3 两层审查
 
 首个 Bundle Input 编译器只消费已完成明确结果的冻结 Job/Call 和不可变已验证 Staged Media，按完整输出合同逐组生成内容定址的槽位清单、per-slot QC 和 bundle QC；部分明确失败保留诊断，pending/unknown 或成功 Call 缺少媒体事实直接拒绝。QC 的 input root 位于 Bundle Input 之前，禁止反向引用 Bundle/Vision。首个只读 Query 在同一 SQL 快照内读取并重验这些既有事实，返回确定性派生结果，不另建可变状态表、不发布 CandidateBundle、不赋予 Vision/选择权限。后续 Invocation 必须冻结并重验精确 Bundle Input，不能仅凭一次查询获得审核授权。
 
-PNG 字节完整性沿用已提交的媒体验证事实；编译器再检查 Receipt/媒体/槽位身份及完整覆盖、尺寸/比例/字节合同和同组重复 digest，不将语义 rubric 或 rights 文本当作已执行证明。权利事实仍为 not_assessed 时 QC 保留 blocked，不能自动通过或人工覆盖；明确媒体/传输/重复图片失败为 failed。派生结果不包含私有路径、token、Prompt 或临时 URL，提供 no-store 的精确 Execution 查询；它不替代未来完整 rights policy、恶意内容策略、Vision 与正式 Owner Apply。
+PNG 字节完整性沿用已提交的媒体验证事实；编译器再检查 Receipt/媒体/槽位身份及完整覆盖、尺寸/比例/字节合同和同组重复 digest，不将语义 rubric 或 rights 文本当作已执行证明。权利事实仍为 not_assessed 时 QC 保留 blocked，不能自动通过或人工覆盖；明确媒体/传输/重复图片失败为 failed。每组查询增加 Backend 派生的 admission：内容定址用途 Policy、internal_review_ready、selection_ready、publication_ready、internal_review_blockers、formal_use_blockers。内部送审只容许 rights_not_assessed 这一非技术阻塞项，其余问题仍拒绝；正式使用还必须经过独立权利评估与 Vision，目前保持阻断。admission 纳入 Collection Hash，Decoder 重算，不能接收客户端覆盖；原 Bundle Input/QC 身份不因展示用途划分改变。它只表达素材条件，不授予操作者执行权限，不启动模型、不写 Selection 或资产。派生结果不包含私有路径、token、Prompt 或临时 URL，提供 no-store 的精确 Execution 查询；它不替代未来完整 rights policy、恶意内容策略、Vision 与正式 Owner Apply。
 
 确定性 QC 与 Agent Vision Review 不得合并：
 

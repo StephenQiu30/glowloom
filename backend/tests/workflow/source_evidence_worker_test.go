@@ -382,7 +382,17 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 			}
 		}
 		if deadlineFailure.ID != uuid.Nil {
-			break
+			// The two workers commit independently. Recovery must start only
+			// after both the injected failure and a successful sibling exist.
+			var successfulSiblings int64
+			if err = database.Model(&model.AgentInvocation{}).Where(
+				"node_run_id = ? AND id <> ? AND status = ?", deadlineFailure.NodeRunID, deadlineFailure.ID, "succeeded",
+			).Count(&successfulSiblings).Error; err != nil {
+				t.Fatalf("load successful sibling while waiting for recovery: %v", err)
+			}
+			if successfulSiblings > 0 {
+				break
+			}
 		}
 		var observedRun model.WorkflowRun
 		if err = database.First(&observedRun, "id = ?", run.ID).Error; err != nil {
@@ -390,7 +400,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 		}
 		if observedRun.Status == "FAILED" || observedRun.Status == "CANCELLED" || time.Now().After(recoveryDeadline) {
 			t.Fatalf(
-				"Story deadline did not remain recoverable: run_status=%s failed_invocations=%d",
+				"Story deadline and successful sibling did not become recoverable: run_status=%s failed_invocations=%d",
 				observedRun.Status, len(failedInvocations),
 			)
 		}

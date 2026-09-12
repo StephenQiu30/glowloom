@@ -3004,10 +3004,26 @@ export interface components {
             created_at: string;
             content_hash: string;
         };
+        /** @description Backend 从完整 Bundle 与 QC 重算的用途条件，不授予操作者权限。内部质量审核不代表权利通过、正式选择或资产发布。 */
+        ReferenceBundleAdmissionResponse: {
+            policy_ref: {
+                /** @constant */
+                contract_id: "reference-bundle-purpose-admission";
+                content_hash: string;
+            };
+            internal_review_ready: boolean;
+            /** @constant */
+            selection_ready: false;
+            /** @constant */
+            publication_ready: false;
+            internal_review_blockers: string[];
+            formal_use_blockers: string[];
+        };
         ReferenceBundleEvaluationResponse: {
             input: components["schemas"]["ReferenceCandidateBundleInputResponse"];
             slot_qc_results: components["schemas"]["ReferenceDeterministicQCResponse"][];
             bundle_qc_result: components["schemas"]["ReferenceDeterministicQCResponse"];
+            admission: components["schemas"]["ReferenceBundleAdmissionResponse"];
         };
         ReferenceBundleInputsResponse: {
             /** @constant */

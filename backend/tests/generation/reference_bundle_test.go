@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/generation/domain"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/canonical"
 	"github.com/google/uuid"
 )
 
@@ -114,6 +115,102 @@ func TestReferenceBundleInputsFreezeWholeGroupsWithoutRightsApproval(t *testing.
 	}
 }
 
+func TestReferenceBundleAdmissionSeparatesInternalReviewFromFormalUse(t *testing.T) {
+	for _, duplicate := range []bool{false, true} {
+		facts := referenceBundleFacts(t, duplicate)
+		result, err := domain.BuildReferenceBundleInputs(facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, bundle := range result.Bundles {
+			a := bundle.Admission
+			if !a.PolicyRef.Valid() || a.InternalReviewReady == duplicate || a.SelectionReady || a.PublicationReady || !slices.Contains(a.FormalUseBlockers, "rights_not_assessed") || !slices.Contains(a.FormalUseBlockers, "vision_review_required") {
+				t.Fatalf("unsafe purpose admission: %+v", a)
+			}
+			if !duplicate && (len(a.InternalReviewBlockers) != 0 || bundle.BundleQC.Status != "blocked") {
+				t.Fatal("internal review rewrote rights QC")
+			}
+			if duplicate && !slices.Contains(a.InternalReviewBlockers, "duplicate_image") {
+				t.Fatal("technical failure admitted")
+			}
+		}
+		for _, media := range facts.Media {
+			if media.RightsObservation != "not_assessed" {
+				t.Fatal("rights observation changed")
+			}
+		}
+		raw, _ := json.Marshal(result)
+		if _, err := domain.DecodeReferenceBundleInputs(raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestReferenceBundleAdmissionRejectsForgedReadinessWithRecomputedHash(t *testing.T) {
+	for _, fault := range []string{"selection", "publication", "review_failed_media", "formal_blockers", "review_blockers", "policy"} {
+		t.Run(fault, func(t *testing.T) {
+			value, err := domain.BuildReferenceBundleInputs(referenceBundleFacts(t, true))
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &value.Bundles[0].Admission
+			switch fault {
+			case "selection":
+				a.SelectionReady = true
+			case "publication":
+				a.PublicationReady = true
+			case "review_failed_media":
+				a.InternalReviewReady = true
+			case "formal_blockers":
+				a.FormalUseBlockers = []string{}
+			case "review_blockers":
+				a.InternalReviewBlockers = []string{}
+			case "policy":
+				a.PolicyRef.ContentHash = strings.Repeat("f", 64)
+			}
+			value.ContentHash = ""
+			raw, _ := json.Marshal(value)
+			value.ContentHash, err = canonical.Hash(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, _ = json.Marshal(value)
+			if _, err := domain.DecodeReferenceBundleInputs(raw); err == nil {
+				t.Fatal("accepted forged readiness with valid collection hash")
+			}
+		})
+	}
+}
+
+func TestReferenceBundleAdmissionRequiresExplicitReadinessFields(t *testing.T) {
+	value, err := domain.BuildReferenceBundleInputs(referenceBundleFacts(t, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"internal_review_ready", "selection_ready", "publication_ready"} {
+		for _, mode := range []string{"missing", "null"} {
+			t.Run(field+"/"+mode, func(t *testing.T) {
+				old, replacement := `"`+field+`":false`, `"`+field+`":null`
+				if mode == "missing" {
+					old += ","
+					replacement = ""
+				}
+				changed := bytes.Replace(raw, []byte(old), []byte(replacement), 1)
+				if bytes.Equal(changed, raw) {
+					t.Fatal("fault was not injected")
+				}
+				if _, err := domain.DecodeReferenceBundleInputs(changed); err == nil {
+					t.Fatal("accepted omitted or null readiness with original hash")
+				}
+			})
+		}
+	}
+}
+
 func TestReferenceBundleInputsRejectMissingMixedOrUnresolvedFacts(t *testing.T) {
 	for _, mode := range []string{"call_missing", "call_duplicate", "media_missing", "media_duplicate", "unknown", "pending", "scope", "target", "media_hash", "job_hash", "output"} {
 		t.Run(mode, func(t *testing.T) {
@@ -198,6 +295,9 @@ func TestReferenceBundleInputsRetainExplicitFailureAndRejectContentDrift(t *test
 			}
 			if result.Bundles[0].BundleQC.Status != "failed" || result.Bundles[1].BundleQC.Status != "blocked" {
 				t.Fatal("one failed group corrupted independent group outcome")
+			}
+			if result.Bundles[0].Admission.InternalReviewReady || !result.Bundles[1].Admission.InternalReviewReady || result.Bundles[1].Admission.SelectionReady || result.Bundles[1].Admission.PublicationReady {
+				t.Fatal("purpose admission ignored technical failure or approved formal use")
 			}
 			if mode == "explicit_failure" && result.Bundles[0].Input.BundleCompleteness != "partial_explicit_failure" {
 				t.Fatal("explicit failure became complete")

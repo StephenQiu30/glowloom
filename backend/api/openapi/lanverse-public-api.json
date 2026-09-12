@@ -8339,13 +8339,34 @@
           }
         }
       },
+      "ReferenceBundleAdmissionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Backend 从完整 Bundle 与 QC 重算的用途条件，不授予操作者权限。内部质量审核不代表权利通过、正式选择或资产发布。",
+        "required": ["policy_ref", "internal_review_ready", "selection_ready", "publication_ready", "internal_review_blockers", "formal_use_blockers"],
+        "properties": {
+          "policy_ref": {
+            "type": "object", "additionalProperties": false, "required": ["contract_id", "content_hash"],
+            "properties": {
+              "contract_id": { "type": "string", "const": "reference-bundle-purpose-admission" },
+              "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          },
+          "internal_review_ready": { "type": "boolean" },
+          "selection_ready": { "type": "boolean", "const": false },
+          "publication_ready": { "type": "boolean", "const": false },
+          "internal_review_blockers": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+          "formal_use_blockers": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
+        }
+      },
       "ReferenceBundleEvaluationResponse": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "input",
           "slot_qc_results",
-          "bundle_qc_result"
+          "bundle_qc_result",
+          "admission"
         ],
         "properties": {
           "input": {
@@ -8360,6 +8381,9 @@
           },
           "bundle_qc_result": {
             "$ref": "#/components/schemas/ReferenceDeterministicQCResponse"
+          },
+          "admission": {
+            "$ref": "#/components/schemas/ReferenceBundleAdmissionResponse"
           }
         }
       },

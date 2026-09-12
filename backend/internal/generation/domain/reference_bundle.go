@@ -65,9 +65,47 @@ type ReferenceCandidateBundleInput struct {
 }
 
 type ReferenceBundleEvaluation struct {
-	Input    ReferenceCandidateBundleInput `json:"input"`
-	SlotQC   []ReferenceDeterministicQC    `json:"slot_qc_results"`
-	BundleQC ReferenceDeterministicQC      `json:"bundle_qc_result"`
+	Input     ReferenceCandidateBundleInput `json:"input"`
+	SlotQC    []ReferenceDeterministicQC    `json:"slot_qc_results"`
+	BundleQC  ReferenceDeterministicQC      `json:"bundle_qc_result"`
+	Admission ReferenceBundleAdmission      `json:"admission"`
+}
+
+// ReferenceBundleAdmission describes material readiness, not actor authorization. Internal
+// inspection does not change QC, rights observations, or formal-use eligibility.
+type ReferenceBundleAdmission struct {
+	PolicyRef              GenerationContractRef `json:"policy_ref"`
+	InternalReviewReady    bool                  `json:"internal_review_ready"`
+	SelectionReady         bool                  `json:"selection_ready"`
+	PublicationReady       bool                  `json:"publication_ready"`
+	InternalReviewBlockers []string              `json:"internal_review_blockers"`
+	FormalUseBlockers      []string              `json:"formal_use_blockers"`
+}
+
+func referenceBundleAdmission(input ReferenceCandidateBundleInput, qc ReferenceDeterministicQC) ReferenceBundleAdmission {
+	const policy = `{"formal_use_requires":["rights_assessment","vision_review"],"internal_review_requires":["complete_bundle","technical_qc"],"rights_not_assessed":"internal_review_only"}`
+	hash, _ := canonical.Hash([]byte(policy))
+	result := ReferenceBundleAdmission{
+		PolicyRef:              GenerationContractRef{ContractID: "reference-bundle-purpose-admission", ContentHash: hash},
+		InternalReviewBlockers: []string{},
+		FormalUseBlockers:      append([]string{}, qc.Issues...),
+	}
+	for _, issue := range qc.Issues {
+		if issue != "rights_not_assessed" {
+			result.InternalReviewBlockers = append(result.InternalReviewBlockers, issue)
+		}
+	}
+	if input.BundleCompleteness != "complete" {
+		result.InternalReviewBlockers = append(result.InternalReviewBlockers, "bundle_incomplete")
+		result.FormalUseBlockers = append(result.FormalUseBlockers, "bundle_incomplete")
+	}
+	// Bundle Inputs precede Vision Candidates. A successful internal review and
+	// separate rights evidence must be consumed by the later Selection Owner.
+	result.FormalUseBlockers = append(result.FormalUseBlockers, "vision_review_required")
+	slices.Sort(result.InternalReviewBlockers)
+	slices.Sort(result.FormalUseBlockers)
+	result.InternalReviewReady = len(result.InternalReviewBlockers) == 0
+	return result
 }
 
 type ReferenceBundleInputCollection struct {
@@ -216,7 +254,7 @@ func BuildReferenceBundleInputs(facts ReferenceBundleFacts) (ReferenceBundleInpu
 		if err != nil {
 			return fail()
 		}
-		result.Bundles = append(result.Bundles, ReferenceBundleEvaluation{Input: input, SlotQC: slotQC, BundleQC: qc})
+		result.Bundles = append(result.Bundles, ReferenceBundleEvaluation{Input: input, SlotQC: slotQC, BundleQC: qc, Admission: referenceBundleAdmission(input, qc)})
 	}
 	if usedMedia != len(media) {
 		return fail()
@@ -342,6 +380,9 @@ func DecodeReferenceBundleInputs(raw json.RawMessage) (ReferenceBundleInputColle
 		if err != nil || !reflect.DeepEqual(qc, bundle.BundleQC) || input.BundleQCRef != (GenerationActionRef{ID: qc.ID, ContentHash: qc.ContentHash}) {
 			return fail()
 		}
+		if !reflect.DeepEqual(bundle.Admission, referenceBundleAdmission(input, qc)) {
+			return fail()
+		}
 		if input.ID != uuid.NewSHA1(uuid.NameSpaceOID, []byte("reference-bundle-input:"+qc.ID+":"+input.TargetRef.ContentHash+":"+input.DependencyRootHash)).String() {
 			return fail()
 		}
@@ -359,5 +400,15 @@ func DecodeReferenceBundleInputs(raw json.RawMessage) (ReferenceBundleInputColle
 		return fail()
 	}
 	value.ContentHash = hash
+	// Reject omitted or null zero-valued fields instead of silently treating
+	// an absent purpose decision as an explicit false decision.
+	wireHash, err := canonical.Hash(raw)
+	if err != nil {
+		return fail()
+	}
+	encodedHash, err := referenceBundleHash(value)
+	if err != nil || wireHash != encodedHash {
+		return fail()
+	}
 	return value, nil
 }

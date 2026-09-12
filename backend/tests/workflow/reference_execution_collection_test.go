@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -173,6 +174,10 @@ func assertReferenceExecutionCollection(t *testing.T, parent context.Context, da
 	for _, bundle := range bundles.Bundles {
 		if bundle.BundleQC.Status == "passed" || bundle.BundleQC.InputRoot != bundle.Input.SlotSetRoot {
 			t.Fatal("unassessed rights or non-acyclic QC passed")
+		}
+		technicalReady := bundle.Input.BundleCompleteness == "complete" && bundle.BundleQC.Status == "blocked"
+		if bundle.Admission.InternalReviewReady != technicalReady || bundle.Admission.SelectionReady || bundle.Admission.PublicationReady || !slices.Contains(bundle.Admission.FormalUseBlockers, "rights_not_assessed") {
+			t.Fatal("persisted Bundle query conflated internal review with formal use")
 		}
 		for _, slot := range bundle.Input.Slots {
 			slots++

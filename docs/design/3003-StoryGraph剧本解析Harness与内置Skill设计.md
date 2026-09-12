@@ -602,7 +602,7 @@ Vision Reviewer 不能发布、选择、修改 Artifact 或降低 Backend determ
 
 `vision-review-candidate-production` 按固定顺序恰好返回 `identity / interaction_geometry / state / style_fidelity / view_role` 五项；身份/状态项同时承担与冻结依赖资产的比较。每项含 status、issue_code、confidence_bps（0–10000 的整数基点）、summary、recommendation 和证据区域。证据只能定位 Subject 中的 slot，区域采用整数基点 x/y/width/height（10000 表示完整边长），必须在图内且面积为正；按 slot/区域排序、去重。pass 必须覆盖该组每个槽位，issue_code 为 none 且无修复建议；warn/fail 必须有问题码、建议和至少一个证据区域；not_assessable 保留原因和建议、confidence_bps=0，可无证据，绝不隐式视为通过。每项最多 16 个区域，拒绝浮点数/越界、重复或缺少类别、混组图片、unknown 字段，以及 selected/eligible/publish 等越权输出。
 
-Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同阶段不登记可执行 Stage、不创建 Invocation/候选持久事实、不赋予 Vision/Selection 权限；只有完整且 deterministic QC passed 的 Bundle 才能由后续服务授权送审。当前 rights not_assessed 仍阻断，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
+Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同阶段不登记可执行 Stage、不创建 Invocation/候选持久事实、不赋予 Vision/Selection 权限。按用户确认的用途边界，完整且技术 QC 合格的 Bundle 可由后续服务授权进行内部视觉质量审核；rights not_assessed 保持原事实，仅阻断正式选择和资产发布。发送服务必须重验 Backend 编译的用途准入与当前授权，不能由 Agent 或客户端移除阻塞；媒体失败、缺项、重复图片或未知结果均不可送审。内部审核候选不构成权利批准，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
 
 ## 12. Shard、Coverage 与固定点
 

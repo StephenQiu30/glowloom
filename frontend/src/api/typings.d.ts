@@ -155,6 +155,7 @@ declare global {
     type ProjectResponse = components["schemas"]["ProjectResponse"];
     type PublishImportCommitRequest = components["schemas"]["PublishImportCommitRequest"];
     type ReferenceBriefCandidateRefResponse = components["schemas"]["ReferenceBriefCandidateRefResponse"];
+    type ReferenceBundleAdmissionResponse = components["schemas"]["ReferenceBundleAdmissionResponse"];
     type ReferenceBundleEvaluationResponse = components["schemas"]["ReferenceBundleEvaluationResponse"];
     type ReferenceBundleInputsResponse = components["schemas"]["ReferenceBundleInputsResponse"];
     type ReferenceBundleSlotResponse = components["schemas"]["ReferenceBundleSlotResponse"];

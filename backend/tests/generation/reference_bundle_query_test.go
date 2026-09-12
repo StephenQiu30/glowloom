@@ -2,6 +2,7 @@ package generation_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -59,6 +60,19 @@ func TestReferenceBundleQueryAndHTTPBoundary(t *testing.T) {
 			mux.ServeHTTP(response, request)
 			if response.Code != test.code || reads != test.reads || response.Header().Get("Cache-Control") != "no-store" || strings.Contains(response.Body.String(), "private") {
 				t.Fatalf("query boundary: %d reads=%d", response.Code, reads)
+			}
+			if test.code == 200 {
+				var envelope struct {
+					Data domain.ReferenceBundleInputCollection `json:"data"`
+				}
+				if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil || len(envelope.Data.Bundles) != 2 {
+					t.Fatal("missing bundle response")
+				}
+				for _, bundle := range envelope.Data.Bundles {
+					if !bundle.Admission.InternalReviewReady || bundle.Admission.SelectionReady || bundle.Admission.PublicationReady || bundle.BundleQC.Status != "blocked" {
+						t.Fatal("HTTP conflated internal review and rights approval")
+					}
+				}
 			}
 		})
 	}
