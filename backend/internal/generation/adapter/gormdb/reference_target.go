@@ -38,6 +38,17 @@ func (repo *referenceTargetRepository) FindReferenceAuthorization(ctx context.Co
 	return commandgorm.FindByID(ctx, repo.database, id)
 }
 
+func (repo *referenceTargetRepository) FindReferenceGenerationTargetReceipt(ctx context.Context, workspaceID, targetID string) (platformcommand.Receipt, error) {
+	var records []model.CommandReceipt
+	if err := repo.database.WithContext(ctx).Select("id").Where("workspace_id = ? AND operation = ? AND resource_id = ?", workspaceID, application.BuildReferenceGenerationTargetOperation, targetID).Limit(2).Find(&records).Error; err != nil {
+		return platformcommand.Receipt{}, err
+	}
+	if len(records) != 1 {
+		return platformcommand.Receipt{}, errors.New("Reference generation Target publication receipt is missing or ambiguous")
+	}
+	return commandgorm.FindByID(ctx, repo.database, records[0].ID.String())
+}
+
 func (repo *referenceTargetRepository) ValidateReferenceGenerationCapabilities(ctx context.Context, input contract.ReferenceBriefInput) error {
 	var record model.EffectivePolicySnapshot
 	ref := input.EffectivePolicySnapshotRef

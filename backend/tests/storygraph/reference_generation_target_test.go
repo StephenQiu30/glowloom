@@ -20,6 +20,36 @@ import (
 )
 
 func TestReferenceGenerationTargetPublishesAndRevalidatesReplay(t *testing.T) {
+	repo, service, actor, command := referenceTargetFixture(t)
+	published, err := service.BuildInitial(context.Background(), actor, command)
+	if err != nil || len(repo.targets) != 1 || len(repo.receipts) != 2 {
+		t.Fatalf("Target publication: %v", err)
+	}
+	replayed, err := service.BuildInitial(context.Background(), actor, command)
+	if err != nil || !reflect.DeepEqual(replayed, published) || len(repo.targets) != 1 || len(repo.receipts) != 2 {
+		t.Fatalf("Target replay: %v", err)
+	}
+	newRound := command
+	newRound.IdempotencyKey = "another"
+	if _, err = service.BuildInitial(context.Background(), actor, newRound); err == nil {
+		t.Fatal("new key bypassed Head")
+	}
+	wrongAuthorization := command
+	wrongAuthorization.AuthorizationHash = strings.Repeat("f", 64)
+	if _, err = service.BuildInitial(context.Background(), actor, wrongAuthorization); err == nil {
+		t.Fatal("wrong authorization was accepted")
+	}
+	repo.capabilityError = errors.New("preset_capability_missing")
+	if _, err = service.BuildInitial(context.Background(), actor, command); err == nil {
+		t.Fatal("replay skipped capability validation")
+	}
+	if len(repo.targets) != 1 || len(repo.receipts) != 2 {
+		t.Fatal("rejected publication changed facts")
+	}
+}
+
+func referenceTargetFixture(t *testing.T) (*referenceTargetMemory, *generationapp.ReferenceGenerationTargetService, generationapp.Actor, generationapp.BuildReferenceGenerationTargetCommand) {
+	t.Helper()
 	world := visualFoundationProductionVersion(t)
 	input, candidate := referenceGenerationAnchorBrief(t, world)
 	source, err := generationapp.CompileBaseReferenceGenerationSource(input, candidate, world)
@@ -53,31 +83,7 @@ func TestReferenceGenerationTargetPublishesAndRevalidatesReplay(t *testing.T) {
 	for _, role := range input.RequiredViewRoles {
 		command.SlotPolicies = append(command.SlotPolicies, generationapp.ReferenceOutputSlotPolicy{ViewRole: role, AllowedMediaTypes: []string{"image/png"}, AspectRatio: "1:1", MinWidth: 1024, MinHeight: 1024, MaxBytes: 8 << 20})
 	}
-	published, err := service.BuildInitial(context.Background(), actor, command)
-	if err != nil || len(repo.targets) != 1 || len(repo.receipts) != 2 {
-		t.Fatalf("Target publication: %v", err)
-	}
-	replayed, err := service.BuildInitial(context.Background(), actor, command)
-	if err != nil || !reflect.DeepEqual(replayed, published) || len(repo.targets) != 1 || len(repo.receipts) != 2 {
-		t.Fatalf("Target replay: %v", err)
-	}
-	newRound := command
-	newRound.IdempotencyKey = "another"
-	if _, err = service.BuildInitial(context.Background(), actor, newRound); err == nil {
-		t.Fatal("new key bypassed Head")
-	}
-	wrongAuthorization := command
-	wrongAuthorization.AuthorizationHash = strings.Repeat("f", 64)
-	if _, err = service.BuildInitial(context.Background(), actor, wrongAuthorization); err == nil {
-		t.Fatal("wrong authorization was accepted")
-	}
-	repo.capabilityError = errors.New("preset_capability_missing")
-	if _, err = service.BuildInitial(context.Background(), actor, command); err == nil {
-		t.Fatal("replay skipped capability validation")
-	}
-	if len(repo.targets) != 1 || len(repo.receipts) != 2 {
-		t.Fatal("rejected publication changed facts")
-	}
+	return repo, service, actor, command
 }
 
 type referenceTargetMemory struct {
@@ -87,6 +93,7 @@ type referenceTargetMemory struct {
 	targets         map[string]generationapp.ReferenceGenerationTarget
 	head            string
 	capabilityError error
+	deniedUser      string
 }
 
 func (repo *referenceTargetMemory) WithinReferenceGenerationAuthorization(_ context.Context, operation func(generationapp.ReferenceGenerationAuthorizationRepository) error) error {
@@ -101,7 +108,7 @@ func (repo *referenceTargetMemory) WithinReferenceGenerationTarget(_ context.Con
 	return nil
 }
 func (repo *referenceTargetMemory) AuthorizeReferenceGenerationProject(_ context.Context, actor generationapp.Actor, workspace, project string) error {
-	if actor.TokenVersion != 1 || workspace != repo.brief.Input.WorkspaceID || project != repo.brief.Input.ProjectID {
+	if actor.TokenVersion != 1 || actor.UserID == repo.deniedUser || workspace != repo.brief.Input.WorkspaceID || project != repo.brief.Input.ProjectID {
 		return errors.New("forbidden")
 	}
 	return nil

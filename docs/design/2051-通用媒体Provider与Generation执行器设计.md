@@ -409,6 +409,8 @@ GenerationExecutionSnapshotContract
 
 Secret 明文、Prompt、Provider URL 和响应内容不进入 Snapshot。Credential ref 只用于 Backend 在一次调用前解析短生命周期 Secret；Query 只返回版本/fingerprint，不回显密文或明文。
 
+执行方读取已发布基础 Target 时，使用 Backend Generation 的 exact ID/revision/hash 入口，不以 Payload 解码成功作为执行资格。入口在调用方事务内重验当前操作者写权限、原生成授权人的 Token/权限、唯一发布回执、accepted Brief、当前 World/来源、Preset capability 和 Target Head，按冻结输出策略重编译并比较完整 Target 与回执输入 Hash。原授权人与后续执行操作者可以不同，但不能用后者身份改写前者的授权。读取不创建 Target、回执或执行授权；历史 Target 仍保留，失效时仅拒绝作为当前执行输入。
+
 执行准备必须证明：
 
 - Binding 属于同 Workspace/Project，已启用且 modality/capability 覆盖 Target 全部 slot；

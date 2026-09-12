@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -71,11 +70,8 @@ type BuildReferenceGenerationTargetCommand struct {
 
 type ReferenceGenerationTargetRepository interface {
 	ReferenceGenerationAuthorizationRepository
-	FindReferenceAuthorization(context.Context, string) (platformcommand.Receipt, error)
-	ValidateReferenceGenerationCapabilities(context.Context, contract.ReferenceBriefInput) error
-	FindReferenceGenerationTarget(context.Context, string, string, string) (ReferenceGenerationTarget, error)
+	ReferenceGenerationTargetReadRepository
 	PublishInitialReferenceGenerationTarget(context.Context, ReferenceGenerationTarget) error
-	ValidateReferenceGenerationTargetHead(context.Context, ReferenceGenerationTarget) error
 }
 
 type ReferenceGenerationTargetTransactions interface {
@@ -110,66 +106,39 @@ func (service *ReferenceGenerationTargetService) BuildInitial(ctx context.Contex
 		if err := repo.AuthorizeReferenceGenerationProject(ctx, actor, command.WorkspaceID, command.ProjectID); err != nil {
 			return err
 		}
-		brief, err := repo.ReadReferenceGenerationBrief(ctx, command.WorkspaceID, command.ProjectID, command.BriefRevisionID, command.BriefRevisionHash)
-		if err != nil {
-			return err
-		}
-		if brief.RevisionID != command.BriefRevisionID || brief.RevisionHash != command.BriefRevisionHash || brief.Input.WorkspaceID != command.WorkspaceID || brief.Input.ProjectID != command.ProjectID || brief.Candidate.ValidateFor(brief.Input) != nil {
-			return conflict("Reference Target Brief scope has drifted")
-		}
-		source, err := repo.ReadReferenceGenerationSource(ctx, brief)
-		if err != nil {
-			return err
-		}
-		authorization, err := readReferenceTargetAuthorization(ctx, repo, actor, command, brief, source)
-		if err != nil {
-			return err
-		}
-		if err = repo.ValidateReferenceGenerationCapabilities(ctx, brief.Input); err != nil {
-			return err
-		}
-		output, err := CompileReferenceOutputContract(brief.Input, brief.Candidate, authorization.RequestedCandidateBundleCount, command.SlotPolicies)
-		if err != nil {
-			return err
-		}
-		readSetRoot, err := referenceTargetReadSetHash(brief, source, authorization, output)
-		if err != nil {
-			return err
-		}
-		inputHash, err := platformcommand.InputHash(struct {
-			Actor                               Actor
-			WorkspaceID, ProjectID, ReadSetRoot string
-			ExpectedHeadRevision                int64
-		}{actor, command.WorkspaceID, command.ProjectID, readSetRoot, command.ExpectedHeadRevision})
+		facts, err := readReferenceTargetInputs(ctx, repo, actor, command)
 		if err != nil {
 			return err
 		}
 		receipt, err := repo.FindReceipt(ctx, command.WorkspaceID, BuildReferenceGenerationTargetOperation, command.IdempotencyKey)
 		if err == nil {
-			if receipt.InputHash != inputHash {
+			if receipt.InputHash != facts.inputHash {
 				return platformcommand.ErrInputMismatch
 			}
 			persisted, readErr := repo.FindReferenceGenerationTarget(ctx, command.WorkspaceID, command.ProjectID, receipt.ResourceID)
 			if readErr != nil {
 				return readErr
 			}
-			result, err = compileInitialReferenceTarget(persisted.ID, actor.UserID, persisted.CreatedAt, brief, source, authorization, output, readSetRoot)
+			if receipt.IdempotencyKey != command.IdempotencyKey {
+				return conflict("Reference generation Target receipt key has drifted")
+			}
+			publication, publicationErr := repo.FindReferenceGenerationTargetReceipt(ctx, command.WorkspaceID, persisted.ID)
+			if publicationErr != nil {
+				return publicationErr
+			}
+			if publication.ID != receipt.ID {
+				return conflict("Reference generation Target publication identity has drifted")
+			}
+			result, err = revalidateReferenceTargetPublication(actor, persisted, receipt, facts)
 			if err != nil {
 				return err
-			}
-			if !reflect.DeepEqual(result, persisted) || receipt.CreatedBy != actor.UserID || !receipt.CreatedAt.Equal(persisted.CreatedAt) {
-				return conflict("Reference generation Target receipt has drifted")
-			}
-			var ref ReferenceGenerationTargetRef
-			if canonical.Decode(receipt.Result, &ref) != nil || ref != referenceGenerationTargetRef(result) {
-				return conflict("Reference generation Target receipt identity has drifted")
 			}
 			return repo.ValidateReferenceGenerationTargetHead(ctx, result)
 		}
 		if !errors.Is(err, platformcommand.ErrReceiptNotFound) {
 			return err
 		}
-		result, err = compileInitialReferenceTarget(service.newID(), actor.UserID, service.now().UTC().Truncate(time.Microsecond), brief, source, authorization, output, readSetRoot)
+		result, err = compileInitialReferenceTarget(service.newID(), actor.UserID, service.now().UTC().Truncate(time.Microsecond), facts.brief, facts.source, facts.authorization, facts.output, facts.readSetRoot)
 		if err != nil {
 			return err
 		}
@@ -180,7 +149,7 @@ func (service *ReferenceGenerationTargetService) BuildInitial(ctx context.Contex
 		if err != nil {
 			return err
 		}
-		_, err = repo.EnsureReceipt(ctx, platformcommand.Receipt{ID: service.newID(), WorkspaceID: command.WorkspaceID, Operation: BuildReferenceGenerationTargetOperation, IdempotencyKey: command.IdempotencyKey, InputHash: inputHash, ResourceID: result.ID, Result: raw, CreatedBy: actor.UserID, CreatedAt: result.CreatedAt})
+		_, err = repo.EnsureReceipt(ctx, platformcommand.Receipt{ID: service.newID(), WorkspaceID: command.WorkspaceID, Operation: BuildReferenceGenerationTargetOperation, IdempotencyKey: command.IdempotencyKey, InputHash: facts.inputHash, ResourceID: result.ID, Result: raw, CreatedBy: actor.UserID, CreatedAt: result.CreatedAt})
 		return err
 	})
 	if err != nil {
@@ -199,7 +168,7 @@ func referenceGenerationTargetRef(value ReferenceGenerationTarget) ReferenceGene
 	return ReferenceGenerationTargetRef{value.ID, value.Revision, value.ContentHash}
 }
 
-func readReferenceTargetAuthorization(ctx context.Context, repo ReferenceGenerationTargetRepository, actor Actor, command BuildReferenceGenerationTargetCommand, brief agentapp.AcceptedReferenceBrief, source ReferenceGenerationSourceCompilation) (domain.ReferenceGenerationAuthorization, error) {
+func readReferenceTargetAuthorization(ctx context.Context, repo ReferenceGenerationTargetReadRepository, actor Actor, command BuildReferenceGenerationTargetCommand, brief agentapp.AcceptedReferenceBrief, source ReferenceGenerationSourceCompilation) (domain.ReferenceGenerationAuthorization, error) {
 	receipt, err := repo.FindReferenceAuthorization(ctx, command.AuthorizationID)
 	if err != nil {
 		return domain.ReferenceGenerationAuthorization{}, err

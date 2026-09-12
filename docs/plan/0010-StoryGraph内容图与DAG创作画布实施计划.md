@@ -226,6 +226,7 @@
   - [x] 实现首次生成授权合同与 Backend/GORM 事务服务：锁定权限/Token，读取当前 accepted Brief，冻结 exact Plan/Target 与候选 Bundle 数量，复用 Command Receipt 持久化用户动作并严格幂等重放。错 scope/hash、数量漂移、Token 或写权限失效均拒绝；不新增表、不启动 Provider、不把授权当 Target 发布。重新生成仍等待正式 base Target/CandidateSet，独立前端入口不提前开放。
   - [x] 编译人物身份锚点、地点板、道具表三类基础来源：复用经过当前 Owner 重验的 Production World 投影，验证 exact Identity/Specification/State、唯一 Binding 和 Scene 范围内完整 Occurrence 集合，保留类型专属 Brief 约束与视图。首次授权事务及幂等重放消费编译结果，回执输入 Hash 绑定来源和 World Owner Set；真实 Binding 漂移拒绝且零新增回执。此项不等于 Target 发布或依赖型来源完成。
   - [x] 发布三类基础 `GenerationTargetProduction`：同一 Backend/GORM 事务重验权限、授权、Brief、World 与 Preset capability，冻结来源、输出合同和读取快照；复用 `gen_targets` 的 `reference_plan` 分支，原子写首轮 Head 与 Command Receipt。重放重新检查事实及 Head；回执失败、首轮冲突或输入漂移不留下孤立 Target。依赖型 Target、重新生成与 Provider Execution 仍按后续顺序实施。
+  - [x] 接通执行前基础 Target exact read：重验当前操作者与原授权、唯一发布回执、当前 Brief/来源/Preset 和 Head；重编译冻结输入，拒绝失效 Target，不产生写入或 Provider 调用。发布重放共用事实与回执校验；此项不等于执行授权、Execution Snapshot 或 Provider 已接通。
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。

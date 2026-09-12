@@ -1658,6 +1658,14 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				t.Fatalf("Reference Generation Target replay drifted: %v", buildErr)
 			}
 			assertReferenceGenerationTargetContract(t, published)
+			targetQuery := generationapp.ReadReferenceGenerationTargetQuery{WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(), TargetRef: generationapp.ReferenceGenerationTargetRef{ID: published.ID, Revision: published.Revision, ContentHash: published.ContentHash}}
+			currentTarget, readErr := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
+			if readErr != nil || !reflect.DeepEqual(currentTarget, published) {
+				t.Fatalf("read current persisted Reference Target: %v", readErr)
+			}
+			if deniedTarget, deniedErr := builder.ReadCurrent(ctx, generationapp.Actor{UserID: fixture.userID.String(), TokenVersion: 2}, targetQuery); deniedErr == nil || deniedTarget.ID != "" {
+				t.Fatal("Target read ignored caller Token version")
+			}
 			reorderedBuild := buildCommand
 			reorderedBuild.SlotPolicies = slices.Clone(policies)
 			slices.Reverse(reorderedBuild.SlotPolicies)
@@ -1682,24 +1690,42 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			if err = database.Model(&model.GenerationTarget{}).Where("workspace_id = ? AND project_id = ? AND kind = ? AND source_content_hash = ?", fixture.workspaceID, fixture.projectID, "reference_plan", acceptedBrief.Input.ReferencePlanTargetRef.OwnerContentHash).Count(&targetCount).Error; err != nil || targetCount != 1 {
 				t.Fatalf("Head conflict left orphan Target: count=%d err=%v", targetCount, err)
 			}
-			for _, corrupted := range []string{"head", "target"} {
+			for _, corrupted := range []string{"head", "target", "receipt_missing", "receipt_duplicate", "receipt_input", "authorization"} {
 				if err = database.SavePoint("reference_target_corruption").Error; err != nil {
 					t.Fatal(err)
 				}
-				if corrupted == "head" {
+				switch corrupted {
+				case "head":
 					err = database.Model(&model.GenerationReferenceTargetHead{}).Where("current_target_id = ?", published.ID).Update("current_target_hash", strings.Repeat("f", 64)).Error
-				} else {
+				case "target":
 					err = database.Model(&model.GenerationTarget{}).Where("id = ?", published.ID).UpdateColumns(map[string]any{"target_hash": strings.Repeat("f", 64)}).Error
+				case "receipt_missing":
+					err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", generationapp.BuildReferenceGenerationTargetOperation, published.ID).UpdateColumns(map[string]any{"operation": "generation.reference.unrelated"}).Error
+				case "receipt_duplicate":
+					var duplicate model.CommandReceipt
+					if err = database.Where("operation = ? AND resource_id = ?", generationapp.BuildReferenceGenerationTargetOperation, published.ID).First(&duplicate).Error; err != nil {
+						t.Fatal(err)
+					}
+					duplicate.ID, duplicate.IdempotencyKey = uuid.New(), duplicate.IdempotencyKey+":duplicate"
+					err = database.Create(&duplicate).Error
+				case "receipt_input":
+					err = database.Model(&model.CommandReceipt{}).Where("operation = ? AND resource_id = ?", generationapp.BuildReferenceGenerationTargetOperation, published.ID).UpdateColumns(map[string]any{"input_hash": strings.Repeat("f", 64)}).Error
+				case "authorization":
+					err = database.Model(&model.CommandReceipt{}).Where("id = ?", authorized.HumanActionRef).UpdateColumns(map[string]any{"input_hash": strings.Repeat("f", 64)}).Error
 				}
 				if err != nil {
 					t.Fatal(err)
 				}
 				_, corruptionErr := builder.BuildInitial(ctx, authorizationActor, buildCommand)
+				invalidTarget, currentReadErr := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
 				if err = database.RollbackTo("reference_target_corruption").Error; err != nil {
 					t.Fatal(err)
 				}
 				if corruptionErr == nil {
 					t.Fatalf("Target replay accepted corrupted %s", corrupted)
+				}
+				if currentReadErr == nil || invalidTarget.ID != "" {
+					t.Fatalf("Target read accepted corrupted %s: %v", corrupted, currentReadErr)
 				}
 			}
 			if err = database.SavePoint("reference_authorization_source").Error; err != nil {
@@ -1711,6 +1737,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			}
 			_, driftedReplay := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
 			_, driftedTargetReplay := builder.BuildInitial(ctx, authorizationActor, buildCommand)
+			invalidCurrentTarget, driftedTargetRead := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
 			newAuthorization := authorizationCommand
 			newAuthorization.IdempotencyKey += ":source-drift"
 			_, driftedWrite := authorizer.AuthorizeInitial(ctx, authorizationActor, newAuthorization)
@@ -1721,7 +1748,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 			if err = database.RollbackTo("reference_authorization_source").Error; err != nil {
 				t.Fatal(err)
 			}
-			if driftedReplay == nil || driftedTargetReplay == nil || driftedWrite == nil || driftedReceiptCount != 0 {
+			if driftedReplay == nil || driftedTargetReplay == nil || driftedTargetRead == nil || invalidCurrentTarget.ID != "" || driftedWrite == nil || driftedReceiptCount != 0 {
 				t.Fatalf("Binding drift authorized generation: replay=%v write=%v receipts=%d", driftedReplay, driftedWrite, driftedReceiptCount)
 			}
 			var authorizationCount int64
@@ -1748,10 +1775,11 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 				t.Fatal(err)
 			}
 			_, deniedAuthorization := authorizer.AuthorizeInitial(ctx, authorizationActor, authorizationCommand)
+			deniedTarget, deniedRead := builder.ReadCurrent(ctx, authorizationActor, targetQuery)
 			if err = database.RollbackTo("reference_authorization_membership").Error; err != nil {
 				t.Fatal(err)
 			}
-			if deniedAuthorization == nil {
+			if deniedAuthorization == nil || deniedRead == nil || deniedTarget.ID != "" {
 				t.Fatal("authorization replay ignored revoked write role")
 			}
 			if err = database.Model(&model.CommandReceipt{}).Where("workspace_id = ? AND operation = ? AND resource_id = ?", fixture.workspaceID, generationapp.AuthorizeInitialReferenceGenerationOperation, row.TargetVersionID).Count(&authorizationCount).Error; err != nil || authorizationCount != 1 {
