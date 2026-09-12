@@ -14,7 +14,7 @@ const (
 	SceneAnalysisDefinitionCoreContractID = "storygraph-agent-definition-core-production"
 	sceneAnalysisDefinitionCoreID         = "storygraph-scene-analysis-definition-core-production"
 	sceneAnalysisDefinitionCoreVersion    = "2026.09.12"
-	sceneAnalysisWireSchemaContentHash    = "98fc408040f1356c3d069326fe5a9178db54ed185b785a142915141f94abeff4"
+	sceneAnalysisWireSchemaContentHash    = "69f812c1775ce96df775ec986bdc0829f7cbbb3bba1ba1d0b5ab23cbc14755f2"
 )
 
 type SceneAnalysisPatchApplication struct {

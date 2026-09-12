@@ -206,6 +206,7 @@
   - [x] Go/Python `reference_brief_candidate_production` 六类判别联合已固定：精确 Plan/Target/Visual Foundation/Style/Policy/Stage Release/read-set 身份、排序去重的依赖选择和 source/design/QC/rights/provenance 结构化字段必填；各 purpose 的视图角色、占用策略和几何/状态槽位严格校验，自由 Prompt、Provider 字段、Secret、latest 和错分支拒绝。本子项只定义 Agent↔Backend Candidate 边界，尚未注册 Stage、编译输入或发布 Brief Candidate Revision。
   - [x] Go/Python `ReferenceBriefInput` 与 Candidate `ValidateFor` 已固定 Candidate-level fence：Plan/Target、Visual Foundation、Style/Policy、dependency Asset Version、Stage Release、typed read-set、source closure、PurposeProfile 与 view roles 任一漂移都拒绝。本子项不冒充 GORM 事实编译、Candidate Revision 持久化或执行前二次重算。
   - [x] `production/reference` 领域编译器已从显式 Approved Plan/Target、Visual Foundation、Style/Policy、dependency Target→selected AssetVersion 与 Stage Release 机械生成 `ReferenceBriefInput` 和 typed read-set root；缺依赖、跨 Plan、Plan 内版本 Hash 漂移及 `not_generated` 均失败关闭。GORM facts loader 与执行前重算仍独立待实现。
+  - [x] 固定 `compile_reference_brief` 专用 Go/Python Target 级 Invocation/AttemptResult Wire：scope/shard、Input 与内外 StageRelease、一次文本模型预算、dispatch attempt/expiry、accepted Candidate 与冻结 Input 全部失败关闭；统一 Wire Schema Root 已纳入该合同。本子项不注册 Stage、不调用 Harness/模型，也不冒充 GORM facts loader 或执行前重算。
 - [ ] 提供 ReferenceCoverageMatrix 与 Target detail Query。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 

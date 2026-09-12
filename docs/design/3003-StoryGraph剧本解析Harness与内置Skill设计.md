@@ -572,6 +572,8 @@ Backend 在构造 input hash 前执行 style-isolation gate；P0 payload 或 att
 
 `ReferenceBriefInput` 由 `production/reference` 领域编译器从显式事实机械生成：Approved Plan Version、目标 Target Version、同次 Gate 3 发布的 Visual Foundation/Style/Policy Version、Target 声明的每个 dependency Target 及其已选 AssetVersion、Stage Release。编译器要求 dependency facts 与 Target 中排序后的 dependency business keys 逐项相等，并要求每个 Target Version 精确存在于 Approved Plan 的 `target_version_refs`；`not_generated`、跨 Plan、跨 workspace/project、缺失选择或可变 current/latest 一律失败关闭。typed read-set root 覆盖上述全部 OwnerVersion Ref、source closure 与 dependency selection；GORM Adapter 只负责读取和重验 PostgreSQL 事实，不能在领域层之外重造另一套映射。
 
+`compile_reference_brief` 使用独立的 Target 级 Wire，而不复用只接受 ScriptSource/Scene scope 的通用 Scene Analysis Wire。Invocation 固定 `workspace/project/target_business_key`、`reference_target:<canonical target business key>` shard、完整 `ReferenceBriefInput`、Release/Control/Budget 与 canonical input hash；Input 内 `stage_release_hash` 必须逐字节等于外层 StageRelease。Dispatch Authorization 绑定 invocation/attempt/input/release/control/image/expiry；Attempt Result 仅允许 `accepted|rejected|outcome_unknown`，accepted 时 Backend 与 Agent 都必须再次以冻结 Input 校验六用途 `ReferenceBriefCandidate`。Wire 合同进入统一 schema root，但在 GORM facts loader、执行前重编译、专用 Harness 与 Stage Release 注册完成前，不把该 Stage 宣称为可执行。
+
 `vision_review_candidate_production` 对每项给 `pass|warn|fail|not_assessable`、证据区域/视图、issue code、置信度和建议，覆盖：
 
 1. 结构/视图完整性；

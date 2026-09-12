@@ -110,7 +110,7 @@
 | ID | 必须满足的合同 | 最低验证 |
 |---|---|---|
 | VPR-REF-001 | ReferenceTarget 是创作意图和依赖身份；GenerationExecution 是一次执行事实。两者不得共享状态枚举或让重试创建新 Target。 | Domain unit |
-| VPR-REF-002 | 每个 Brief 必须绑定 ReferencePlanVersion、VisualFoundationVersion、目标 OwnerVersion、dependency selection、StageRelease 和 typed read set；任一漂移后不能执行。 | Fence |
+| VPR-REF-002 | 每个 Brief 必须绑定 ReferencePlanVersion、VisualFoundationVersion、目标 OwnerVersion、dependency selection、StageRelease 和 typed read set；Target 级 Invocation 的 scope/shard、内外 StageRelease、授权 attempt 或 accepted Candidate 任一漂移后不能执行。 | Fence |
 | VPR-REF-003 | character_anchor 必须请求 front、profile、back 三视图，并冻结体型、面部、发型、比例和不可变身份特征。 | Contract + Media |
 | VPR-REF-004 | character_appearance 必须请求 front、profile、back 三视图，且继承 character_anchor 身份，只改变已批准的服装/年龄/伤妆等状态。 | Contract + Vision |
 | VPR-REF-005 | location 必须请求 empty_establishing、spatial_orientation、material_scale_detail，不能用带主角的气氛图替代空间基底。 | Contract + Media |

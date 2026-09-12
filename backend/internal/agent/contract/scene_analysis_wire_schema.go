@@ -26,6 +26,8 @@ type SceneAnalysisWireSchemaManifest struct {
 
 var sceneAnalysisWireSchemas = []SceneAnalysisWireSchema{
 	{ContractID: "storygraph-dispatch-authorization-claims-production", SchemaHash: "3ffd2bc7c001579261d9e91c0daf3c8332ed6fe1e90b573239d916e18e06f8ef"},
+	{ContractID: "storygraph-reference-brief-stage-attempt-result-production", SchemaHash: "fbbc865ff55cfcbcd65651f36a83b3e75459e324686f02309eda14c1979af9e9"},
+	{ContractID: "storygraph-reference-brief-stage-invocation-production", SchemaHash: "1e6bab7aa0da4766b8a418a9b0fe954ca4ee623bc0dc26a04cd447bb568d81ad"},
 	{ContractID: "storygraph-reference-plan-stage-attempt-result-production", SchemaHash: "892d4649e0fe3939319a0df1d84fb86346be1222794039d222a4cb0e170f4d4d"},
 	{ContractID: "storygraph-reference-plan-stage-invocation-production", SchemaHash: "6324794b82348d02f99002ed08c3bdc590be44a9d1e94838dff2e47e35d40e33"},
 	{ContractID: "storygraph-stage-attempt-result-production", SchemaHash: "3b8294b376964bf52c48d7a2767ac89f5bee40d9d2732e33fc45318fd5f4fb2d"},

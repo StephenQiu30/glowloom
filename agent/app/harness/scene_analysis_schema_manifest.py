@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.harness.reference_brief_schemas import (
+    ReferenceBriefAttemptResult,
+    ReferenceBriefInvocation,
+)
 from app.harness.reference_plan_schemas import (
     ReferencePlanAttemptResult,
     ReferencePlanInvocation,
@@ -34,6 +38,14 @@ _WIRE_SCHEMAS: tuple[tuple[str, type[BaseModel]], ...] = (
     (
         "storygraph-dispatch-authorization-claims-production",
         SceneAnalysisDispatchAuthorizationClaims,
+    ),
+    (
+        "storygraph-reference-brief-stage-attempt-result-production",
+        ReferenceBriefAttemptResult,
+    ),
+    (
+        "storygraph-reference-brief-stage-invocation-production",
+        ReferenceBriefInvocation,
     ),
     (
         "storygraph-reference-plan-stage-attempt-result-production",

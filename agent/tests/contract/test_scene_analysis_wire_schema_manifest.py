@@ -24,6 +24,8 @@ def test_scene_analysis_wire_schema_manifest_matches_the_backend_fixture() -> No
     schemas = cast(list[dict[str, str]], manifest["schemas"])
     assert [schema["contract_id"] for schema in schemas] == [
         "storygraph-dispatch-authorization-claims-production",
+        "storygraph-reference-brief-stage-attempt-result-production",
+        "storygraph-reference-brief-stage-invocation-production",
         "storygraph-reference-plan-stage-attempt-result-production",
         "storygraph-reference-plan-stage-invocation-production",
         "storygraph-stage-attempt-result-production",
