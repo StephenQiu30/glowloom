@@ -121,6 +121,8 @@
 
 ### 7.2 执行、候选、审核与选择
 
+整组 Vision Review 候选必须恰好覆盖 identity、interaction_geometry、state、style_fidelity、view_role 五类，绑定 exact Target/Execution/Bundle/Brief/Stage/Input 与全部素材槽位。证据区域只能引用本组槽位；pass 覆盖全部视图，warn/fail 有证据和修复建议，not_assessable 显式保留且不可冒充通过。置信度和坐标使用整数基点，Go/Python canonical 内容身份一致；未知/缺失字段、跨组、范围越界或选择/发布输出均拒绝。候选格式有效不等于素材权利、deterministic QC、真实像素语义或选择条件已通过。
+
 首次基础生成必须可通过 Backend 的四个独立 HTTP 命令完成生成授权、Target 构建、执行授权和执行准备，再显式启动既有全量 Call 工作流。每个命令只调用对应 Owner，严格验证有界闭合请求和当前权限/Token；不接受路径身份覆盖、自由 Prompt/Provider 参数、发送指令或首次 Head revision 覆盖。响应只暴露精确身份并设置 no-store。幂等重放复用同一事实，输入冲突为 409；无效槽位 Policy 为 422，失败不能遗留 Target/Head/准备回执。公开入口不意味着自动执行、重新生成或六类目标和媒体验收已完成。
 
 | ID | 必须满足的合同 | 最低验证 |

@@ -598,6 +598,12 @@ Temporal 接入使用单个 `activity.compile_reference_briefs` 基础波次屏�
 
 Vision Reviewer 不能发布、选择、修改 Artifact 或降低 Backend deterministic QC。只有 Human CandidateSelection 能发布 AssetVersion/Reference Binding；审查 `not_assessable` 不等于通过。
 
+视觉审核候选首先固定闭合的 `VisionReviewSubject`：Workspace/Project、目标用途/轮次、exact Generation Target/Execution/Bundle Input、候选组 index、accepted Brief Revision ID/Hash、Stage Release Hash、完整 Invocation Input Hash，以及按 view role 排序的全部待审槽位（Staged Media revision/hash 与原始图片 SHA-256）。Subject 是冻结输入的身份摘要，不是审核授权或完整 Prompt；其余 Style/Policy/依赖附件由完整 Input Hash 绑定，后续 Backend facts loader 仍须重读、重编译。不得由 Agent 补写 Subject、选择新图片或替换模型来源。
+
+`vision-review-candidate-production` 按固定顺序恰好返回 `identity / interaction_geometry / state / style_fidelity / view_role` 五项；身份/状态项同时承担与冻结依赖资产的比较。每项含 status、issue_code、confidence_bps（0–10000 的整数基点）、summary、recommendation 和证据区域。证据只能定位 Subject 中的 slot，区域采用整数基点 x/y/width/height（10000 表示完整边长），必须在图内且面积为正；按 slot/区域排序、去重。pass 必须覆盖该组每个槽位，issue_code 为 none 且无修复建议；warn/fail 必须有问题码、建议和至少一个证据区域；not_assessable 保留原因和建议、confidence_bps=0，可无证据，绝不隐式视为通过。每项最多 16 个区域，拒绝浮点数/越界、重复或缺少类别、混组图片、unknown 字段，以及 selected/eligible/publish 等越权输出。
+
+Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同阶段不登记可执行 Stage、不创建 Invocation/候选持久事实、不赋予 Vision/Selection 权限；只有完整且 deterministic QC passed 的 Bundle 才能由后续服务授权送审。当前 rights not_assessed 仍阻断，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
+
 ## 12. Shard、Coverage 与固定点
 
 Backend 为每个可 fan-out NodeRun 发布不可变 `ShardManifestProduction`。Manifest Hash Root 至少覆盖 workflow/node、stage release、root input hash、candidate contract、partition rule、active/superseded shards、ordered reduce tree、coverage proof 和 parent manifest hash。

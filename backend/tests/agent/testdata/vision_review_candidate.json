@@ -1,0 +1,247 @@
+{
+  "contract_id": "vision-review-candidate-production",
+  "subject": {
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "project_id": "00000000-0000-4000-8000-000000000002",
+    "target_kind": "character_identity_anchor",
+    "generation_round": 1,
+    "generation_target_ref": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "revision": 1,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "execution_ref": {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "revision": 1,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "bundle_input_ref": {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "candidate_bundle_index": 0,
+    "brief_revision_id": "00000000-0000-4000-8000-000000000006",
+    "brief_revision_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "stage_release_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "input_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "slots": [
+      {
+        "slot_key": "back",
+        "view_role": "back",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "slot_key": "front",
+        "view_role": "front",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "slot_key": "profile",
+        "view_role": "profile",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "category": "identity",
+      "status": "pass",
+      "issue_code": "none",
+      "summary": "已检查冻结素材组中的全部视图。",
+      "recommendation": "",
+      "evidence": [
+        {
+          "slot_key": "back",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "front",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "profile",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        }
+      ],
+      "confidence_bps": 9800
+    },
+    {
+      "category": "interaction_geometry",
+      "status": "pass",
+      "issue_code": "none",
+      "summary": "已检查冻结素材组中的全部视图。",
+      "recommendation": "",
+      "evidence": [
+        {
+          "slot_key": "back",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "front",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "profile",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        }
+      ],
+      "confidence_bps": 9800
+    },
+    {
+      "category": "state",
+      "status": "pass",
+      "issue_code": "none",
+      "summary": "已检查冻结素材组中的全部视图。",
+      "recommendation": "",
+      "evidence": [
+        {
+          "slot_key": "back",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "front",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "profile",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        }
+      ],
+      "confidence_bps": 9800
+    },
+    {
+      "category": "style_fidelity",
+      "status": "pass",
+      "issue_code": "none",
+      "summary": "已检查冻结素材组中的全部视图。",
+      "recommendation": "",
+      "evidence": [
+        {
+          "slot_key": "back",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "front",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "profile",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        }
+      ],
+      "confidence_bps": 9800
+    },
+    {
+      "category": "view_role",
+      "status": "pass",
+      "issue_code": "none",
+      "summary": "已检查冻结素材组中的全部视图。",
+      "recommendation": "",
+      "evidence": [
+        {
+          "slot_key": "back",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "front",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        },
+        {
+          "slot_key": "profile",
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 10000,
+            "height": 10000
+          }
+        }
+      ],
+      "confidence_bps": 9800
+    }
+  ]
+}
