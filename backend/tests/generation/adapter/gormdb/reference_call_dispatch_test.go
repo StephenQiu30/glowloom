@@ -303,6 +303,7 @@ func TestReferenceCallDispatchCASAndWorkspaceLimits(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	assertReferenceStagedMediaStorage(t, ctx, store, receipt)
 }
 
 func TestReferenceCallDispatchStoreRejectsInvalidTransactions(t *testing.T) {

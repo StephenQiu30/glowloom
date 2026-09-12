@@ -23,20 +23,25 @@ type ReferenceCallRecovery interface {
 	Expire(context.Context, app.Actor, app.ExpireReferenceCallCommand) (gen.ReferenceCallState, error)
 }
 
+type ReferenceStagedMediaMaterializer interface {
+	Materialize(context.Context, app.Actor, app.MaterializeReferenceStagedMediaCommand) (gen.ReferenceStagedMedia, error)
+}
+
 type ReferenceCallNodeExecutor struct {
 	execution ReferenceCallExecutor
 	recovery  ReferenceCallRecovery
+	media     ReferenceStagedMediaMaterializer
 }
 
-func NewReferenceCallNodeExecutor(execution ReferenceCallExecutor, recovery ReferenceCallRecovery) (*ReferenceCallNodeExecutor, error) {
-	if execution == nil || recovery == nil {
-		return nil, errors.New("Reference call execution and recovery owners are required")
+func NewReferenceCallNodeExecutor(execution ReferenceCallExecutor, recovery ReferenceCallRecovery, media ReferenceStagedMediaMaterializer) (*ReferenceCallNodeExecutor, error) {
+	if execution == nil || recovery == nil || media == nil {
+		return nil, errors.New("Reference call execution, recovery and staged media owners are required")
 	}
-	return &ReferenceCallNodeExecutor{execution: execution, recovery: recovery}, nil
+	return &ReferenceCallNodeExecutor{execution: execution, recovery: recovery, media: media}, nil
 }
 
 func (executor *ReferenceCallNodeExecutor) Execute(ctx context.Context, command flow.NodeExecutorCommand) (flow.NodeExecutorResult, error) {
-	if executor == nil || executor.execution == nil || executor.recovery == nil || command.Executor != "activity.reference_image_call" || command.Attempt < 1 || command.InitiatorTokenVersion < 1 || strings.TrimSpace(command.IdempotencyKey) == "" {
+	if executor == nil || executor.execution == nil || executor.recovery == nil || executor.media == nil || command.Executor != "activity.reference_image_call" || command.Attempt < 1 || command.InitiatorTokenVersion < 1 || strings.TrimSpace(command.IdempotencyKey) == "" {
 		return flow.NodeExecutorResult{}, errors.New("invalid Reference call workflow boundary")
 	}
 	for _, id := range []string{command.WorkspaceID, command.ProjectID, command.InitiatorUserID, command.WorkflowRunID, command.NodeRunID} {
@@ -101,6 +106,22 @@ func (executor *ReferenceCallNodeExecutor) Execute(ctx context.Context, command 
 	case gen.ProviderCallOutcomeUnknown:
 		return flow.NodeExecutorResult{Status: flow.NodeActivityNeedsAttention, ErrorCode: flow.ProviderOutcomeUnknownErrorCode, NextAction: flow.ManualProviderReconciliationNextAction}, nil
 	case gen.ProviderCallSucceeded:
+		media, err := executor.media.Materialize(ctx, actor, app.MaterializeReferenceStagedMediaCommand{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ExecutionRef: config.ExecutionRef, CallKey: config.CallKey, ReceiptRef: gen.GenerationActionRef{ID: state.Receipt.SubmissionToken, ContentHash: state.Receipt.ContentHash}})
+		if err != nil {
+			return flow.NodeExecutorResult{}, errors.New("Reference staged media materialization failed")
+		}
+		raw, err := json.Marshal(media)
+		if err != nil {
+			return flow.NodeExecutorResult{}, errors.New("Reference staged media encoding failed")
+		}
+		if _, err := gen.DecodeReferenceStagedMedia(raw); err != nil || media.State != "ready_for_review" {
+			return flow.NodeExecutorResult{}, errors.New("Reference staged media is not ready for review")
+		}
+		expected, err := gen.NewReferenceStagedMedia(*state.Receipt, media.ObjectStoreRef)
+		initial, identityErr := gen.InitialReferenceStagedMedia(media)
+		if err != nil || identityErr != nil || initial.ContentHash != expected.ContentHash {
+			return flow.NodeExecutorResult{}, errors.New("Reference staged media differs from receipt")
+		}
 		output, _, _, err := flow.BuildNodeOutput(flow.NodeOutputSnapshot{SchemaVersion: flow.NodeOutputSchemaVersion, Bindings: []flow.NodeOutputBinding{{Port: "receipt", ValueType: "reference_call_receipt", ReferenceID: state.Receipt.SubmissionToken, ReferenceVersion: "1", ContentHash: state.Receipt.ContentHash}}})
 		if err != nil {
 			return flow.NodeExecutorResult{}, err

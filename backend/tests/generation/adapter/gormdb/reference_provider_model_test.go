@@ -22,3 +22,18 @@ func TestReferenceProviderCallBelongsToFrozenJob(t *testing.T) {
 		t.Fatal("Provider call foreign key has the wrong owner")
 	}
 }
+
+func TestReferenceStagedMediaBelongsToCall(t *testing.T) {
+	parsed, err := schema.Parse(&model.GenerationReferenceStagedMedia{}, &sync.Map{}, schema.NamingStrategy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := parsed.Relationships.Relations["Call"]
+	if call == nil || call.Type != schema.BelongsTo {
+		t.Fatalf("staged media must reference Call, not own it: %+v", call)
+	}
+	constraint := call.ParseConstraint()
+	if constraint == nil || constraint.Schema.Table != "gen_reference_staged_media" || constraint.ReferenceSchema.Table != "gen_reference_provider_calls" {
+		t.Fatal("staged media foreign key has wrong owner")
+	}
+}

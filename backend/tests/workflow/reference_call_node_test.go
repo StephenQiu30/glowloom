@@ -1,9 +1,14 @@
 package workflow_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +29,34 @@ type referenceCallNodeOwner struct {
 	command                 app.ClaimReferenceCallCommand
 	actor                   app.Actor
 	expire                  func(gen.ReferenceCallState) gen.ReferenceCallState
+	mediaFailure            string
+}
+
+func referenceNodePNG() ([]byte, error) {
+	var contents bytes.Buffer
+	err := png.Encode(&contents, image.NewRGBA(image.Rect(0, 0, 1024, 1024)))
+	return contents.Bytes(), err
+}
+
+func (o *referenceCallNodeOwner) Materialize(_ context.Context, actor app.Actor, command app.MaterializeReferenceStagedMediaCommand) (gen.ReferenceStagedMedia, error) {
+	if o.mediaFailure == "error" {
+		return gen.ReferenceStagedMedia{}, errors.New("private staging credential")
+	}
+	if actor != o.actor || command.ReceiptRef.ContentHash != o.state.Receipt.ContentHash || command.ReceiptRef.ID != o.state.Receipt.SubmissionToken || command.CallKey != o.state.CallKey || command.ExecutionRef != o.command.ExecutionRef {
+		return gen.ReferenceStagedMedia{}, errors.New("wrong media identity")
+	}
+	media, err := gen.NewReferenceStagedMedia(*o.state.Receipt, gen.ReferenceObjectStoreRef{Profile: "minio", Bucket: "lanverse", ObjectKey: o.state.Receipt.Output.StagingObjectKey})
+	if err != nil {
+		return media, err
+	}
+	contents, err := referenceNodePNG()
+	if err != nil {
+		return gen.ReferenceStagedMedia{}, err
+	}
+	if o.mediaFailure == "rejected" {
+		contents = nil
+	}
+	return gen.CompleteReferenceStagedMedia(media, contents, media.CreatedAt.Add(time.Second))
 }
 
 func (o *referenceCallNodeOwner) Execute(_ context.Context, actor app.Actor, command app.ClaimReferenceCallCommand) (gen.ReferenceCallState, error) {
@@ -62,7 +95,12 @@ func referenceCallNodeFixture(t *testing.T) (flow.NodeExecutorCommand, gen.Refer
 		t.Fatal(err)
 	}
 	slot := gen.ReferenceOutputSlot{SlotKey: "front", ViewRole: "front", Required: true, AllowedMediaTypes: []string{"image/png"}, AspectRatio: "1:1", MinWidth: 1024, MinHeight: 1024, MaxBytes: 10 << 20, SemanticRequirements: []string{"preserve identity"}, QCRubricRefs: []gen.ReferenceOutputQCRubricRef{{ContractID: "reference-qc", ContentHash: ref.ContentHash}}}
-	receipt, err := gen.BuildReferenceCallReceipt(gen.ReferenceCallReceiptInput{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, Call: calls[0], SubmissionToken: state.Dispatch.SubmissionToken, Slot: slot, ObservedAt: now.Add(time.Second), Disposition: "staged", Usage: gen.ProviderUsageObservation{ImageCount: 1}, Output: &gen.ProviderOutput{OutputKey: "image", StagingObjectKey: "staging/reference/" + command.WorkspaceID + "/" + command.ProjectID + "/" + ref.ID + "/" + calls[0].CallKey + "/" + state.Dispatch.SubmissionToken + "/image.png", SHA256: ref.ContentHash, MediaType: "image/png", Bytes: 100, Width: 1024, Height: 1024}})
+	contents, err := referenceNodePNG()
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(contents)
+	receipt, err := gen.BuildReferenceCallReceipt(gen.ReferenceCallReceiptInput{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, Call: calls[0], SubmissionToken: state.Dispatch.SubmissionToken, Slot: slot, ObservedAt: now.Add(time.Second), Disposition: "staged", Usage: gen.ProviderUsageObservation{ImageCount: 1}, Output: &gen.ProviderOutput{OutputKey: "image", StagingObjectKey: "staging/reference/" + command.WorkspaceID + "/" + command.ProjectID + "/" + ref.ID + "/" + calls[0].CallKey + "/" + state.Dispatch.SubmissionToken + "/image.png", SHA256: hex.EncodeToString(digest[:]), MediaType: "image/png", Bytes: int64(len(contents)), Width: 1024, Height: 1024}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,12 +108,13 @@ func referenceCallNodeFixture(t *testing.T) (flow.NodeExecutorCommand, gen.Refer
 }
 
 func TestReferenceCallNodeExecutesRecoversAndFailsClosed(t *testing.T) {
-	for _, mode := range []string{"success", "dispatching", "expired", "unknown", "failed", "pending", "corrupt", "foreign", "error"} {
+	for _, mode := range []string{"success", "dispatching", "expired", "unknown", "failed", "pending", "corrupt", "foreign", "error", "media_error", "media_rejected"} {
 		t.Run(mode, func(t *testing.T) {
 			command, state, receipt := referenceCallNodeFixture(t)
 			owner := &referenceCallNodeOwner{state: state}
 			switch mode {
-			case "success", "foreign":
+			case "success", "foreign", "media_error", "media_rejected":
+				owner.mediaFailure = strings.TrimPrefix(mode, "media_")
 				if mode == "foreign" {
 					receipt.WorkspaceID = uuid.NewString()
 					receipt.Output.StagingObjectKey = "staging/reference/" + receipt.WorkspaceID + "/" + receipt.ProjectID + "/" + receipt.Call.ExecutionRef.ID + "/" + receipt.Call.CallKey + "/" + receipt.SubmissionToken + "/image.png"
@@ -103,7 +142,7 @@ func TestReferenceCallNodeExecutesRecoversAndFailsClosed(t *testing.T) {
 			case "error":
 				owner.err = errors.New("synthetic provider credential must not enter history")
 			}
-			executor, err := adapter.NewReferenceCallNodeExecutor(owner, owner)
+			executor, err := adapter.NewReferenceCallNodeExecutor(owner, owner, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -160,7 +199,7 @@ func TestReferenceCallNodeRejectsInvalidInputBeforeOwnerIO(t *testing.T) {
 				command.Input.Config = json.RawMessage(`null`)
 			}
 			owner := &referenceCallNodeOwner{state: state}
-			executor, err := adapter.NewReferenceCallNodeExecutor(owner, owner)
+			executor, err := adapter.NewReferenceCallNodeExecutor(owner, owner, owner)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -169,11 +208,14 @@ func TestReferenceCallNodeRejectsInvalidInputBeforeOwnerIO(t *testing.T) {
 			}
 		})
 	}
-	if _, err := adapter.NewReferenceCallNodeExecutor(nil, &referenceCallNodeOwner{}); err == nil {
+	if _, err := adapter.NewReferenceCallNodeExecutor(nil, &referenceCallNodeOwner{}, &referenceCallNodeOwner{}); err == nil {
 		t.Fatal("missing execution accepted")
 	}
-	if _, err := adapter.NewReferenceCallNodeExecutor(&referenceCallNodeOwner{}, nil); err == nil {
+	if _, err := adapter.NewReferenceCallNodeExecutor(&referenceCallNodeOwner{}, nil, &referenceCallNodeOwner{}); err == nil {
 		t.Fatal("missing recovery accepted")
+	}
+	if _, err := adapter.NewReferenceCallNodeExecutor(&referenceCallNodeOwner{}, &referenceCallNodeOwner{}, nil); err == nil {
+		t.Fatal("missing media owner accepted")
 	}
 }
 

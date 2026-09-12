@@ -542,6 +542,12 @@ GenerationStagedMediaObject
 
 Provider URL、对象存储临时 URL、原始响应和 Base64 不进入正式事实。下载、解码、MIME、尺寸、字节上限、恶意文件和 digest 校验全部通过后才是 `ready_for_review`。Staged Media 仍由 Generation 拥有，未选择或失败对象按版本化 retention policy 清理；清理不删除 Receipt、digest 和审计身份。
 
+首次 PNG 媒体持久化消费既有成功 Call Receipt，不再次请求 Provider。Backend 在短事务内验证当前操作者权限、exact Execution/Job/Call/Receipt 和冻结输出槽位，登记 `quarantined` 媒体；`staged_media_id` 使用唯一 submission token，Call key 唯一，记录私有存储 profile/bucket/object key、Receipt 引用、digest、尺寸和字节数。记录由 Generation 的 GORM Catalog 管理，不借用 Asset Artifact/Readiness 发布路径。rights provenance 只记录 `not_assessed` 和来源 Receipt，不推断商业授权或许可。
+
+对象读取发生在事务之外，复用私有对象 `ReadVerified` 端口并再次校验实际字节、SHA-256、PNG 完整解码、尺寸、比例和无尾随内容；解码合同以语义名称和内容 Hash 标识。对象存储暂时不可读时保留 quarantined，重试同一媒体身份；校验明确失败则 CAS 为 rejected，不能人工覆盖为 ready。成功 CAS 为 ready_for_review，原始 Receipt 和 Provider 状态不变。完成状态不可原位改写；Bundle/Vision/Owner Apply 仍须重新核对所消费媒体与 Policy，ready 不代表 rights、语义或最终资产通过。
+
+现有 Reference Call Activity 在收到成功 Receipt 后调用该媒体服务，只有媒体 ready 才完成节点；读取或提交后丢失响应可安全重入，不再次 Submit、不生成新媒体身份。节点继续只输出 Receipt 引用，后续 Bundle 按 exact Call 读取 Generation-owned 媒体。此步骤不新增 Workflow 类型或 Provider 参数，不提前发布 CandidateBundle、Selection 或 AssetVersion。
+
 ### 8.2 CandidateBundle
 
 ```text

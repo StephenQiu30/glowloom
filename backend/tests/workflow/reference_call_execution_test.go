@@ -3,7 +3,9 @@ package workflow_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -288,7 +291,7 @@ func (factory *referenceExecutionFactory) Submit(_ context.Context, input app.Re
 
 // Real TLS/JSON/PNG transport, with a private-object boundary spy. No paid
 // Provider or external storage is involved; PostgreSQL receipt writes are real.
-func referenceExecutionHTTPFactory(t *testing.T, assertCommitted func()) *openaiadapter.Factory {
+func referenceExecutionHTTPFactory(t *testing.T, assertCommitted func()) (*openaiadapter.Factory, *referenceExecutionHTTPObjects) {
 	t.Helper()
 	requests := 0
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +336,7 @@ func referenceExecutionHTTPFactory(t *testing.T, assertCommitted func()) *openai
 		r.URL.Host = server.Listener.Addr().String()
 		return transport.RoundTrip(r)
 	})
-	return openaiadapter.NewFactory(client, store, time.Now)
+	return openaiadapter.NewFactory(client, store, time.Now), store
 }
 
 func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, database *generationtestgorm.Database, actor app.Actor, fixture referencePreparationFixture, configuration referenceExecutionFixture, userID string) {
@@ -355,7 +358,7 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 		})
 		return state, err
 	}
-	factory := referenceExecutionHTTPFactory(t, func() {
+	factory, objects := referenceExecutionHTTPFactory(t, func() {
 		// The HTTP handler is independent of the execution goroutine/connection.
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
@@ -364,6 +367,18 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 			t.Errorf("HTTP did not observe a committed dispatch: %+v %v", state, err)
 		}
 	})
+	objects.beforeRead = func() error {
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		var quarantined model.GenerationReferenceStagedMedia
+		if err := database.WithContext(checkCtx).Where("call_key = ?", command.CallKey).First(&quarantined).Error; err != nil {
+			return err
+		}
+		if quarantined.State != "quarantined" || quarantined.Revision != 1 {
+			return errors.New("object read did not observe committed quarantine")
+		}
+		return nil
+	}
 	registry, err := app.NewMediaFactoryRegistry([]app.MediaAdapterFactory{factory})
 	if err != nil {
 		t.Fatal(err)
@@ -372,12 +387,16 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 	if err != nil {
 		t.Fatal(err)
 	}
+	media, err := app.NewReferenceStagedMediaService(store, objects, domain.ReferenceObjectStoreRef{Profile: "minio", Bucket: "lanverse"}, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if address := os.Getenv("LANVERSE_TEST_TEMPORAL_ADDRESS"); address != "" {
 		recovery, err := app.NewReferenceCallDispatchService(store, registry, time.Now, uuid.NewString)
 		if err != nil {
 			t.Fatal(err)
 		}
-		executeReferenceCallThroughTemporal(t, ctx, database, address, actor, command, service, recovery, false, nil)
+		executeReferenceCallThroughTemporal(t, ctx, database, address, actor, command, service, recovery, media, false, nil)
 		// A different, already-fenced call simulates a Worker lost after Claim.
 		// Backdate only the injected dispatch clock; production still freezes its
 		// full 180-second timeout and recovery uses the real wall clock.
@@ -386,7 +405,7 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 		}
 		lost := command
 		lost.CallKey = rows[1].CallKey
-		executeReferenceCallThroughTemporal(t, ctx, database, address, actor, lost, service, recovery, true, func() {
+		executeReferenceCallThroughTemporal(t, ctx, database, address, actor, lost, service, recovery, media, true, func() {
 			claimClock := time.Now().UTC().Add(-165 * time.Second)
 			dispatch, err := app.NewReferenceCallDispatchService(store, registry, func() time.Time { return claimClock }, uuid.NewString)
 			if err != nil {
@@ -416,6 +435,23 @@ func assertReferenceStandaloneExecution(t *testing.T, ctx context.Context, datab
 	if err != nil || !reflect.DeepEqual(replay, result) {
 		t.Fatalf("committed execution replay: %v", err)
 	}
+	mediaCommand := app.MaterializeReferenceStagedMediaCommand{WorkspaceID: command.WorkspaceID, ProjectID: command.ProjectID, ExecutionRef: command.ExecutionRef, CallKey: command.CallKey, ReceiptRef: domain.GenerationActionRef{ID: result.Receipt.SubmissionToken, ContentHash: result.Receipt.ContentHash}}
+	staged, err := media.Materialize(ctx, actor, mediaCommand)
+	if err != nil || staged.State != "ready_for_review" || staged.RightsObservation != "not_assessed" {
+		t.Fatalf("committed media: %+v %v", staged, err)
+	}
+	repeated, err := media.Materialize(ctx, actor, mediaCommand)
+	if err != nil || !reflect.DeepEqual(staged, repeated) {
+		t.Fatalf("committed media replay: %v", err)
+	}
+	var stored model.GenerationReferenceStagedMedia
+	if err := database.Where("id = ?", staged.ID).First(&stored).Error; err != nil || stored.ContentHash != staged.ContentHash {
+		t.Fatalf("media commit not visible: %v", err)
+	}
+	var artifacts int64
+	if err := database.Model(&model.Artifact{}).Where("project_id = ?", command.ProjectID).Count(&artifacts).Error; err != nil || artifacts != 0 {
+		t.Fatalf("staging published an Artifact: %d %v", artifacts, err)
+	}
 }
 
 type referenceExecutionHTTPRoundTrip func(*http.Request) (*http.Response, error)
@@ -424,12 +460,36 @@ func (f referenceExecutionHTTPRoundTrip) RoundTrip(r *http.Request) (*http.Respo
 	return f(r)
 }
 
-type referenceExecutionHTTPObjects struct{ writes int }
+type referenceExecutionHTTPObjects struct {
+	mu         sync.Mutex
+	writes     int
+	contents   []byte
+	key        string
+	beforeRead func() error
+}
 
 func (store *referenceExecutionHTTPObjects) EnsurePrivateObject(ctx context.Context, key string, contents []byte, mime, hash string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
 	store.writes++
 	if ctx.Err() != nil || !strings.HasPrefix(key, "staging/reference/") || mime != "image/png" || len(hash) != 64 || len(contents) == 0 {
 		return errors.New("invalid staged object")
 	}
+	store.key, store.contents = key, bytes.Clone(contents)
 	return nil
+}
+
+func (store *referenceExecutionHTTPObjects) ReadVerified(ctx context.Context, key string, size int64, hash string, max int64) ([]byte, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	digest := sha256.Sum256(store.contents)
+	if store.beforeRead != nil {
+		if err := store.beforeRead(); err != nil {
+			return nil, err
+		}
+	}
+	if ctx.Err() != nil || key != store.key || size != int64(len(store.contents)) || size > max || hash != hex.EncodeToString(digest[:]) {
+		return nil, errors.New("invalid private object read")
+	}
+	return bytes.Clone(store.contents), nil
 }

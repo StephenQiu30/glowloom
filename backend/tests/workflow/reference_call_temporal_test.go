@@ -63,7 +63,7 @@ func (a *referenceCallTemporalActivities) ExecuteNode(ctx context.Context, comma
 	return result, err
 }
 
-func executeReferenceCallThroughTemporal(t *testing.T, parent context.Context, database *generationtestgorm.Database, address string, actor genapp.Actor, command genapp.ClaimReferenceCallCommand, execution *genapp.ReferenceCallExecutionService, recovery *genapp.ReferenceCallDispatchService, expectAttention bool, beforeStart func()) {
+func executeReferenceCallThroughTemporal(t *testing.T, parent context.Context, database *generationtestgorm.Database, address string, actor genapp.Actor, command genapp.ClaimReferenceCallCommand, execution *genapp.ReferenceCallExecutionService, recovery *genapp.ReferenceCallDispatchService, media *genapp.ReferenceStagedMediaService, expectAttention bool, beforeStart func()) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(parent, 4*time.Minute)
 	defer cancel()
@@ -94,7 +94,7 @@ func executeReferenceCallThroughTemporal(t *testing.T, parent context.Context, d
 	if err != nil {
 		t.Fatal(err)
 	}
-	callExecutor, err := workflowgeneration.NewReferenceCallNodeExecutor(execution, recovery)
+	callExecutor, err := workflowgeneration.NewReferenceCallNodeExecutor(execution, recovery, media)
 	if err != nil {
 		t.Fatal(err)
 	}
