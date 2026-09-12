@@ -188,8 +188,8 @@
   - [x] 实现 plan-free `ReferencePlanSeedInventory` 编译器：只从同一正式 Production StoryGraph 的 P0 Scene/Occurrence/ProductionBinding/Interaction 与 P1 Scope 机械冻结 Character Identity-only Anchor、全部实际 State option、Location/Prop 固定 Target 以及 Scene/Interaction production closure；不读取候选 Plan 或 Reference Target，节点/边重排产生相同结果，未知 Scope 失败关闭。
   - [x] 实现 `plan_reference_assets` Backend 应用层 Input Compiler：消费 plan-free Seed Inventory、已持久化 VisualFoundationCandidate 精确 Revision/内容 Hash/严格候选快照和不可变 PresetRelease；显式映射正式 Owner Ref，重算候选与 Release 内容身份及 faithful 守恒约束，编译六类有序 PurposeProfile 并经严格 Input Decoder 复验，任一 lineage、Hash、Preset 或候选内容漂移均失败关闭。
   - [x] 接通 `plan_reference_assets` Stage Registry/DefinitionCore/StageRelease、专用 Go/Python Invocation/AttemptResult Wire、授权校验、一次受限 Codex CLI 文本 Harness 与 Agent 私有调用入口；Harness 只加载 Skill 入口和 `references/reference-planning.md`，使用调用预算并对 Candidate 再执行完整冻结输入校验，不调用 Provider、不写任何事实源。
-  - [ ] 接通 `plan_reference_assets` 精确 GORM 候选读取、正式 coverage/constraints 投影、持久执行与 Workflow 节点，并复用 `ExpectedReferenceTargetSet` 做最终 Plan 前像校验。
-- [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
+  - [x] 接通 `plan_reference_assets` 精确 GORM 候选读取、正式 coverage/constraints 投影、持久执行与 Workflow 节点，并复用 `ExpectedReferenceTargetSet` 做最终 Plan 前像校验。Workflow 只消费 exact production StoryGraph、ProjectPresetSelection 与已持久化 VisualFoundationCandidate ID/revision/hash；Backend 在 dispatch 和 accept 前均通过正式 GORM Reader 重编译同一 Input，Agent 只能提交合法 Anchor State、fulfillment 与用途规格，Backend 再机械恢复 Owner refs、coverage、constraints、dependencies 并执行 `ExpectedReferenceTargetSet` proof 校验。执行复用既有 Release/Manifest/Invocation/Attempt/Authorization/Result/Candidate/Head 表，accepted 重放返回同一 Candidate，未知终态保留 `outcome_unknown`；真实 PostgreSQL + Temporal 系统边界已通过。该子项不创建 Approved Reference Plan 或 Gate 3 事实。
+- [x] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I06 — 六类 Target 与 Provider-neutral Brief
 
