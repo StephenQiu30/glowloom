@@ -480,6 +480,13 @@
 
 ### `VP-I07` — 图片执行、Bundle、确定性 QC 与 Vision Review
 
+- 基础 Vision 完整输入：`vision-review-input-production` 绑定 Subject、完整 accepted Brief 与内容 Hash、实际 Preset 视觉语法/Style Policy/用途与世界约束、内部用途准入及整组附件。输入 Hash 排除 `subject.input_hash` 自身，wire 仍要求该字段；保留 Brief/Review 两类 Release。Backend 唯一编译器重算 Style/Policy 完整内容 Hash、精确 Target/Brief/Bundle 身份，返回与原事实无可变引用共享的闭合输入。三种基础用途可编译，另三种依赖用途明确拒绝，不空置依赖降级。
+- 基础输入 GORM 落地：复用既有 Bundle facts loader；旧只读 Query 继续使用 Repeatable Read/read-only。新输入准备在独立 Serializable 事务重验项目写权限、当前 Execution Head、Target 发布与 Head、accepted Brief/Plan/Preset，再读取精确视觉快照；没有新增表、字段、事实写入、HTTP 端点或 Stage 派发。未来 dispatch/accept 必须再次重验当前事实、Release/Control 和授权，准备结果不是执行许可。
+- 基础输入 Red→Green：Go 最初因 `DecodeVisionReviewInput` 缺失编译失败，Python 因模块缺失导入失败。共享输入 Hash 为 `9702a0c7bd5822c091597da38ab2c76a21b9f49ac03795dc11ba607cbcf09999`；Go/Python 独立验证重算、字段漂移、非法内容重新签名、零值字段遗漏/null、权限输出、附件漂移和六用途边界。`go test -race ./tests/agent ./tests/generation -run '^TestVisionReview|^TestReferenceBundleAdmission' -count=1` 两包通过（3.213/4.645 秒），Python 输入定向 27 项通过。
+- 基础输入完整系统验证：同一已有固定 PostgreSQL/Temporal 上运行现有三条 Workflow System Boundary 用例、`-count=1 -timeout=5m -v`，138.250 秒全部通过（持久化 68.83 秒、Gate 12.27 秒、Source Evidence 55.37 秒）。新增实际完整组/失败组、输入重放、actor/token/project/execution/bundle/release/外层事务拒绝、Preset 内容漂移和 Execution Head 漂移断言。首次 111.195 秒运行在测试的 JSON 故障注入处失败（普通字节数组导致 SQLSTATE 22P02），修正为 `json.RawMessage` 后重跑通过，未更改生产判定或 CI 限制。
+- 基础输入全量质量：Backend 无外部变量全量 `go test -count=1 ./...`（含架构门）、`go vet ./...`、gofmt 和 diff 检查通过；Agent ruff check/format、pyright 通过。Agent 全量首次为 382 passed/60 skipped/1 failed，既有输出限额用例出现 2 秒超时；未证明原因，未更改代码或超时。其独立复核 0.87 秒通过，同一全量重跑为 383 passed/60 skipped（7.37 秒）。goimports、golangci-lint、govulncheck 本机缺失，未运行；未执行完整系统 Race。本提交完整远端 CI 推送后核验。
+- 基础输入剩余范围：拟绑定的 Review Release Hash 仍是合同身份，不代表正式 Release 可用；有依赖目标的已选 AssetVersion/比较附件、授权只读 bytes transport、Harness、Invocation/Attempt 与候选持久化仍未接通。既有环境未启动或重启，应用容器未更新，最终 agent-browser 验收尚未开始。
+
 - 待审附件编译：从同 scope/Execution/候选组的精确 `ready_for_review` Staged Media 构造整组只读描述，按冻结槽位排序，保留 Receipt 来源及 `not_assessed` 权利；不暴露私有对象位置。Go/Python 拒绝缺项、多项、重复、混组、媒体身份漂移、非 PNG、非法尺寸、页帧、缺失/null/未知字段，单图 10 MiB、单组 32 MiB、最大 16777216 像素与既有解码策略一致。
 - 附件 Red→Green：Go 定向测试首先因 `BuildVisionReviewAttachments` 未定义失败，Python 因模块缺失导入失败；实现后，`go test -race ./tests/agent ./tests/generation -run '^TestVisionReview' -count=1` 两包通过（5.907/6.986 秒）；Python 附件与候选定向 70 项通过。共享附件 JSON 的 canonical SHA-256 为 `bfefa99207bf28ebcb6dd1df22cbdbb7cf8761d0c9df138a7caab5fe4035da7d`，两端独立重算，覆盖全部六种用途和四视图 32 MiB 边界。
 - 附件全量本地验证：Backend `go vet ./...`、无外部测试变量的 `go test -count=1 ./...`（含架构门）、gofmt、diff 检查通过；Agent 全量 ruff check/format、pyright 通过，pytest 为 356 passed/60 skipped（5.74 秒），跳过的真实 Codex/旧 creation 集成不计通过。本机缺少 goimports、golangci-lint、govulncheck，本轮未运行。

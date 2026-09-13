@@ -604,6 +604,12 @@ Vision Reviewer 不能发布、选择、修改 Artifact 或降低 Backend determ
 
 `vision-review-candidate-production` 按固定顺序恰好返回 `identity / interaction_geometry / state / style_fidelity / view_role` 五项；身份/状态项同时承担与冻结依赖资产的比较。每项含 status、issue_code、confidence_bps（0–10000 的整数基点）、summary、recommendation 和证据区域。证据只能定位 Subject 中的 slot，区域采用整数基点 x/y/width/height（10000 表示完整边长），必须在图内且面积为正；按 slot/区域排序、去重。pass 必须覆盖该组每个槽位，issue_code 为 none 且无修复建议；warn/fail 必须有问题码、建议和至少一个证据区域；not_assessable 保留原因和建议、confidence_bps=0，可无证据，绝不隐式视为通过。每项最多 16 个区域，拒绝浮点数/越界、重复或缺少类别、混组图片、unknown 字段，以及 selected/eligible/publish 等越权输出。
 
+`vision-review-input-production` 将 Subject、完整 accepted Brief Input/Candidate 与 Candidate Content Hash、派生用途准入、整组附件，以及实际视觉上下文绑定为一个闭合输入。视觉上下文从精确 Effective Style/Policy 投影完整视觉语法、application mode、Style Policy、Production World root、fidelity invariants、adaptation/conflict/creative-fill、当前用途 profile 和 QC policy ref，不只传 Snapshot Hash。Owner Snapshot Ref 保留在 Brief 中，Backend 编译前重算完整 Snapshot Hash 并核对 scope/版本/Style–Policy 关系；投影不替代 Owner 事实或当前 Head/权限重验。输入 Hash 覆盖全部字段，唯一排除 `subject.input_hash` 自身，wire 仍要求该字段并验证重算值；Brief 内的 Release 保持原 `compile_reference_brief`，Subject Release 是独立的 `review_reference_artifact` Release，不允许相互覆盖。
+
+首批实际可编译输入沿用已发布的无依赖基础 Target（identity anchor、location board、prop sheet）。输入、Brief、Target 中的依赖必须明确为空；appearance/interaction/scene 不能降级为空依赖，必须等待正式已选 AssetVersion 及其只读比较附件闭合，再按同一总体设计接通。该先后顺序不取消六用途和跨资产审核要求，也不把基础输入合同、Hash 或技术准入作为模型已执行的证据。
+
+基础输入的 GORM 读取复用同一个 Bundle facts loader，在独立 Serializable 事务内要求当前项目写权限，重验 Execution Head、生成 Target 的原授权与当前 Head、accepted Brief 及其当前 Plan/Preset，再读取精确 Style/Policy 内容并调用唯一应用编译器。旧 Bundle 查询仍保持自身 Repeatable Read/read-only 事务和只读权限，不因该复用改变查询合同。输入准备不创建 Invocation/Attempt/Candidate，不发送 bytes；传入的 Review Release Hash 只是拟绑定身份，正式 Release/Control、当前授权和输入必须在后续 dispatch/accept 事务再次核对，不能把准备结果当作持久执行许可。
+
 Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同阶段不登记可执行 Stage、不创建 Invocation/候选持久事实、不赋予 Vision/Selection 权限。按用户确认的用途边界，完整且技术 QC 合格的 Bundle 可由后续服务授权进行内部视觉质量审核；rights not_assessed 保持原事实，仅阻断正式选择和资产发布。发送服务必须重验 Backend 编译的用途准入与当前授权，不能由 Agent 或客户端移除阻塞；媒体失败、缺项、重复图片或未知结果均不可送审。内部审核候选不构成权利批准，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
 
 ## 12. Shard、Coverage 与固定点

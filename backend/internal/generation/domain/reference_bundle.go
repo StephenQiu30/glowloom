@@ -82,6 +82,16 @@ type ReferenceBundleAdmission struct {
 	FormalUseBlockers      []string              `json:"formal_use_blockers"`
 }
 
+// ValidateInternalReview checks the exact material policy for a complete,
+// technically valid bundle. It does not authorize a caller or formal use.
+func (admission ReferenceBundleAdmission) ValidateInternalReview() error {
+	expected := referenceBundleAdmission(ReferenceCandidateBundleInput{BundleCompleteness: "complete"}, ReferenceDeterministicQC{Issues: []string{"rights_not_assessed"}})
+	if !reflect.DeepEqual(admission, expected) {
+		return errors.New("Reference Bundle is not eligible for internal review")
+	}
+	return nil
+}
+
 func referenceBundleAdmission(input ReferenceCandidateBundleInput, qc ReferenceDeterministicQC) ReferenceBundleAdmission {
 	const policy = `{"formal_use_requires":["rights_assessment","vision_review"],"internal_review_requires":["complete_bundle","technical_qc"],"rights_not_assessed":"internal_review_only"}`
 	hash, _ := canonical.Hash([]byte(policy))

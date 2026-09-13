@@ -190,6 +190,7 @@ func assertReferenceExecutionCollection(t *testing.T, parent context.Context, da
 		t.Fatal("bundle query omitted required outcomes")
 	}
 	assertPersistedVisionReviewAttachments(t, ctx, store, fixture.execution, bundles)
+	assertCompiledBaseVisionReviewInput(t, ctx, database, actor, fixture.execution, bundles)
 	if replay, err := bundleQuery.Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID); err != nil || !reflect.DeepEqual(replay, bundles) {
 		t.Fatal("bundle replay changed frozen identity")
 	}

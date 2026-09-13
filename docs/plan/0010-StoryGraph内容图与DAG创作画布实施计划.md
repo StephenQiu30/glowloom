@@ -244,6 +244,8 @@
 - [ ] 实现 deterministic QC 与 review_reference_artifact 五类 typed issue。
   - [x] 从精确已就绪 Staged Media 编译整组待审附件，Go/Python 固定槽位、来源、媒体元数据和预算闭合；保留未评估权利，拒绝混组、缺项和漂移，不暴露私有对象位置。
   - [ ] 将附件接入同时绑定用途准入、Brief、Style/Policy 和依赖资产的完整 Input，再接入授权 transport 和 Harness；附件合同不代表真实审核完成。
+    - [x] 基础 Target 的完整 typed Input、唯一内容 Hash 和 GORM 事务编译：重验当前权限/Head/accepted Brief/Preset，带实际视觉语法与策略；保留权利阻断与两类 Release，拒绝漂移及非法重签名，不新增事实或派发。
+    - [ ] 接通有依赖 Target 的正式已选 AssetVersion 与比较附件，禁止空依赖降级；接通正式 Review Release/Control、授权 transport、Harness 和候选持久化。
   - [x] 按已确认的用途边界拆分内部视觉质量审核与正式使用准入：保留 not_assessed/QC blocked，只允许完整技术合格组满足内部送审条件；正式选择/发布仍阻断。失败测试、现有 Bundle 编译/Query 的可重算 admission、OpenAPI 与真实系统旅程均已验证，不新增表或修改 CI。素材条件不是操作者授权，真实 Vision 执行仍待下步接通。
   - [x] 固定整组 Vision Review 候选的五类结果、逐槽位证据区域与完整冻结 Subject，Go/Python 一致验证六种用途、输入漂移和越权输出；共享 canonical golden、整数基点和缺失字段拒绝已验证。不登记虚假的可执行 Stage，不绕过未通过技术 QC 的素材；权利未评估按已确认的用途边界保留正式使用阻断。完整 Input/附件 transport、真实审核执行与持久化仍待接通。
   - [x] 从完整已终结 Job/Call/媒体事实编译同组 Bundle Input、per-slot 与 bundle 确定性 QC，提供一致快照只读查询；拒绝混组、缺项和漂移，权利未评估保持 blocked，不冒充 CandidateBundle/Vision/Selection 发布。真实 PostgreSQL/Temporal 旅程验证全槽位、明确失败、重放与跨连接一致快照；完整权利策略、Vision 和正式发布仍按后续步骤完成。

@@ -1,0 +1,558 @@
+{
+  "contract_id": "vision-review-input-production",
+  "subject": {
+    "workspace_id": "00000000-0000-0000-0000-000000000010",
+    "project_id": "00000000-0000-0000-0000-000000000001",
+    "target_kind": "character_identity_anchor",
+    "generation_round": 1,
+    "generation_target_ref": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "revision": 1,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "execution_ref": {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "revision": 1,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "bundle_input_ref": {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "candidate_bundle_index": 0,
+    "brief_revision_id": "00000000-0000-4000-8000-000000000006",
+    "brief_revision_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "stage_release_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "slots": [
+      {
+        "slot_key": "back",
+        "view_role": "back",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "slot_key": "front",
+        "view_role": "front",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "slot_key": "profile",
+        "view_role": "profile",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    ],
+    "input_hash": "9702a0c7bd5822c091597da38ab2c76a21b9f49ac03795dc11ba607cbcf09999"
+  },
+  "brief_input": {
+    "workspace_id": "00000000-0000-0000-0000-000000000010",
+    "project_id": "00000000-0000-0000-0000-000000000001",
+    "approved_reference_plan_version_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "production/reference",
+      "version_family": "reference_plan_set",
+      "owner_logical_id": "reference-plan:one",
+      "owner_version_id": "00000000-0000-4000-8000-64879f7d6b96",
+      "owner_revision": 1,
+      "owner_content_hash": "da7b6a1ccab4e9d4692d3a7a6de1d3677eeb6fe930acbc0efbd21c099b47e9d2",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "reference_plan_target_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "production/reference",
+      "version_family": "reference_plan_set",
+      "owner_logical_id": "[\"character_identity_anchor\",[\"asset\",\"asset_identity_state_set\",\"subject:one\",\"\"]]",
+      "owner_version_id": "00000000-0000-4000-8000-34a04005bcaf",
+      "owner_revision": 1,
+      "owner_content_hash": "680e6dc591104c67aa8339e8c9530092367f1a1e201301437a8cfebdadf748ae",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "target_business_key": "[\"character_identity_anchor\",[\"asset\",\"asset_identity_state_set\",\"subject:one\",\"\"]]",
+    "target_kind": "character_identity_anchor",
+    "target_fulfillment": "required",
+    "visual_foundation_version_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "preset",
+      "version_family": "preset_effective_set",
+      "owner_logical_id": "00000000-0000-0000-0000-000000000001",
+      "owner_version_id": "00000000-0000-4000-8000-2bd8b7b0d83e",
+      "owner_revision": 1,
+      "owner_content_hash": "88b47437d7648c538575fed9bff1a8cf1b99a181143fb4d7421e2c93a1ba7a71",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "effective_style_snapshot_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "preset",
+      "version_family": "preset_effective_set",
+      "owner_logical_id": "00000000-0000-0000-0000-000000000001:style",
+      "owner_version_id": "00000000-0000-4000-8000-cb86eb2d914d",
+      "owner_revision": 1,
+      "owner_content_hash": "53a04663e2bf05a0575f5a290deebf2489a17cba6817cc197e0c13cf96981382",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "effective_policy_snapshot_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "preset",
+      "version_family": "preset_effective_set",
+      "owner_logical_id": "00000000-0000-0000-0000-000000000001:policy",
+      "owner_version_id": "00000000-0000-4000-8000-823412d1eacb",
+      "owner_revision": 1,
+      "owner_content_hash": "42fd7cbccdf99fa2fdf9008fffd84ea5b8c7d77a6f411e7235f8cc4eabe1a15a",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "dependency_selections": [],
+    "stage_release": {
+      "stage_key": "compile_reference_brief",
+      "stage_release_hash": "8ad7bbc1dbe9e077037d03650d394db290f92d90bd80591ee1e2dfa807acd053"
+    },
+    "typed_read_set_root": "3449ad53383d43e73260da086bd8379e2217589e474d83d9909698990d7a8122",
+    "source_refs": {
+      "identity": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "asset",
+          "version_family": "asset_identity_state_set",
+          "owner_logical_id": "identity:one",
+          "owner_version_id": "00000000-0000-4000-8000-689f6a627384",
+          "owner_revision": 1,
+          "owner_content_hash": "211c6ac1cadf5062f22f8e0c1d25aadc8d73f7f20e2b4c092909f430f08b702a",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "specification": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "production/bible",
+          "version_family": "bible_production_world_set",
+          "owner_logical_id": "specification:one",
+          "owner_version_id": "00000000-0000-4000-8000-83ae2f5a38db",
+          "owner_revision": 1,
+          "owner_content_hash": "5093986c29be636fec56d60ca871d39baee3b55e8079395d7772d1f10db5670f",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "state": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "asset",
+          "version_family": "asset_identity_state_set",
+          "owner_logical_id": "state:one",
+          "owner_version_id": "00000000-0000-4000-8000-4ba69735ca53",
+          "owner_revision": 1,
+          "owner_content_hash": "dfe3af2f0f3c61351bfcf26f47a014fc6bd700e7ef097f2248ea6de63979a94e",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "scene": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "production/planning",
+          "version_family": "planning_scene_set",
+          "owner_logical_id": "scene:one",
+          "owner_version_id": "00000000-0000-4000-8000-4f48f7207ceb",
+          "owner_revision": 1,
+          "owner_content_hash": "1b6544ab0877eceb83399cd03396f805402c0471a3df5381246fdf4e3bd7a0ff",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "occurrence": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "production/planning",
+          "version_family": "planning_scene_set",
+          "owner_logical_id": "occurrence:one",
+          "owner_version_id": "00000000-0000-4000-8000-5363303936b0",
+          "owner_revision": 1,
+          "owner_content_hash": "c814b4000c722c47946c8c2043f1cb05b63a7cddefcd1437cec5fcc1d0957377",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "interaction": []
+    },
+    "design_focus": [
+      "preserve exact approved identity and state"
+    ],
+    "forbidden_changes": [
+      "do not add unapproved identities or props"
+    ],
+    "required_view_roles": [
+      "back",
+      "front",
+      "profile"
+    ]
+  },
+  "brief_candidate": {
+    "workspace_id": "00000000-0000-0000-0000-000000000010",
+    "project_id": "00000000-0000-0000-0000-000000000001",
+    "approved_reference_plan_version_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "production/reference",
+      "version_family": "reference_plan_set",
+      "owner_logical_id": "reference-plan:one",
+      "owner_version_id": "00000000-0000-4000-8000-64879f7d6b96",
+      "owner_revision": 1,
+      "owner_content_hash": "da7b6a1ccab4e9d4692d3a7a6de1d3677eeb6fe930acbc0efbd21c099b47e9d2",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "reference_plan_target_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "production/reference",
+      "version_family": "reference_plan_set",
+      "owner_logical_id": "[\"character_identity_anchor\",[\"asset\",\"asset_identity_state_set\",\"subject:one\",\"\"]]",
+      "owner_version_id": "00000000-0000-4000-8000-34a04005bcaf",
+      "owner_revision": 1,
+      "owner_content_hash": "680e6dc591104c67aa8339e8c9530092367f1a1e201301437a8cfebdadf748ae",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "target_business_key": "[\"character_identity_anchor\",[\"asset\",\"asset_identity_state_set\",\"subject:one\",\"\"]]",
+    "target_kind": "character_identity_anchor",
+    "visual_foundation_version_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "preset",
+      "version_family": "preset_effective_set",
+      "owner_logical_id": "00000000-0000-0000-0000-000000000001",
+      "owner_version_id": "00000000-0000-4000-8000-2bd8b7b0d83e",
+      "owner_revision": 1,
+      "owner_content_hash": "88b47437d7648c538575fed9bff1a8cf1b99a181143fb4d7421e2c93a1ba7a71",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "effective_style_snapshot_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "preset",
+      "version_family": "preset_effective_set",
+      "owner_logical_id": "00000000-0000-0000-0000-000000000001:style",
+      "owner_version_id": "00000000-0000-4000-8000-cb86eb2d914d",
+      "owner_revision": 1,
+      "owner_content_hash": "53a04663e2bf05a0575f5a290deebf2489a17cba6817cc197e0c13cf96981382",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "effective_policy_snapshot_ref": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "owner_kind": "preset",
+      "version_family": "preset_effective_set",
+      "owner_logical_id": "00000000-0000-0000-0000-000000000001:policy",
+      "owner_version_id": "00000000-0000-4000-8000-823412d1eacb",
+      "owner_revision": 1,
+      "owner_content_hash": "42fd7cbccdf99fa2fdf9008fffd84ea5b8c7d77a6f411e7235f8cc4eabe1a15a",
+      "fragment_key": null,
+      "fragment_content_hash": null
+    },
+    "dependency_selections": [],
+    "stage_release": {
+      "stage_key": "compile_reference_brief",
+      "stage_release_hash": "8ad7bbc1dbe9e077037d03650d394db290f92d90bd80591ee1e2dfa807acd053"
+    },
+    "typed_read_set_root": "3449ad53383d43e73260da086bd8379e2217589e474d83d9909698990d7a8122",
+    "source_design_slots": [
+      {
+        "slot_key": "primary_form",
+        "source_requirement": "preserve confirmed production fact",
+        "design_requirement": "apply the approved visual policy only"
+      }
+    ],
+    "positive_instructions": [
+      "preserve exact approved identity and state"
+    ],
+    "negative_instructions": [
+      "do not add unapproved identities or props"
+    ],
+    "required_view_roles": [
+      "back",
+      "front",
+      "profile"
+    ],
+    "layout_requirements": [
+      "keep every required view independently assessable"
+    ],
+    "scale_requirements": [
+      "preserve approved relative scale"
+    ],
+    "rights_requirements": [
+      "use only authorized source and dependency material"
+    ],
+    "provenance_requirements": [
+      "preserve exact source and dependency lineage"
+    ],
+    "qc_rubric_refs": [
+      {
+        "contract_id": "reference-visual-qc-production",
+        "content_hash": "fc5768a337f314544fecc642e5fdaad093c7090447a879065183e0d62f7410ba"
+      }
+    ],
+    "source_refs": {
+      "identity": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "asset",
+          "version_family": "asset_identity_state_set",
+          "owner_logical_id": "identity:one",
+          "owner_version_id": "00000000-0000-4000-8000-689f6a627384",
+          "owner_revision": 1,
+          "owner_content_hash": "211c6ac1cadf5062f22f8e0c1d25aadc8d73f7f20e2b4c092909f430f08b702a",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "specification": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "production/bible",
+          "version_family": "bible_production_world_set",
+          "owner_logical_id": "specification:one",
+          "owner_version_id": "00000000-0000-4000-8000-83ae2f5a38db",
+          "owner_revision": 1,
+          "owner_content_hash": "5093986c29be636fec56d60ca871d39baee3b55e8079395d7772d1f10db5670f",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "state": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "asset",
+          "version_family": "asset_identity_state_set",
+          "owner_logical_id": "state:one",
+          "owner_version_id": "00000000-0000-4000-8000-4ba69735ca53",
+          "owner_revision": 1,
+          "owner_content_hash": "dfe3af2f0f3c61351bfcf26f47a014fc6bd700e7ef097f2248ea6de63979a94e",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "scene": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "production/planning",
+          "version_family": "planning_scene_set",
+          "owner_logical_id": "scene:one",
+          "owner_version_id": "00000000-0000-4000-8000-4f48f7207ceb",
+          "owner_revision": 1,
+          "owner_content_hash": "1b6544ab0877eceb83399cd03396f805402c0471a3df5381246fdf4e3bd7a0ff",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "occurrence": [
+        {
+          "workspace_id": "00000000-0000-0000-0000-000000000010",
+          "project_id": "00000000-0000-0000-0000-000000000001",
+          "owner_kind": "production/planning",
+          "version_family": "planning_scene_set",
+          "owner_logical_id": "occurrence:one",
+          "owner_version_id": "00000000-0000-4000-8000-5363303936b0",
+          "owner_revision": 1,
+          "owner_content_hash": "c814b4000c722c47946c8c2043f1cb05b63a7cddefcd1437cec5fcc1d0957377",
+          "fragment_key": null,
+          "fragment_content_hash": null
+        }
+      ],
+      "interaction": []
+    },
+    "brief": {
+      "target_kind": "character_identity_anchor",
+      "identity_invariant_slots": [
+        "body_shape",
+        "facial_structure",
+        "hair",
+        "permanent_marks",
+        "proportions"
+      ]
+    }
+  },
+  "brief_content_hash": "d9d0f3725a0dcdddb46178ac23adf046ea84b806da6a755ed9d1fdb8c8581e59",
+  "visual_context": {
+    "application_mode": "faithful",
+    "production_world_owner_set_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "visual_grammar": {
+      "medium": "consistent visual grammar",
+      "realism": "consistent visual grammar",
+      "shape_language": "consistent visual grammar",
+      "proportion": "consistent visual grammar",
+      "palette": "consistent visual grammar",
+      "linework": "consistent visual grammar",
+      "texture": "consistent visual grammar",
+      "material_rendering": "consistent visual grammar",
+      "lighting": "consistent visual grammar",
+      "contrast": "consistent visual grammar",
+      "composition": "consistent visual grammar",
+      "camera": "consistent visual grammar",
+      "negative_constraints": [
+        "no identity drift"
+      ]
+    },
+    "style_policy": {
+      "palette_rules": [
+        "preserve the accepted design"
+      ],
+      "material_rules": [
+        "preserve the accepted design"
+      ],
+      "lighting_rules": [
+        "preserve the accepted design"
+      ],
+      "camera_rules": [
+        "preserve the accepted design"
+      ],
+      "forbidden_changes": [
+        "character_identity",
+        "holder_relation",
+        "scene_continuity",
+        "story_fact"
+      ]
+    },
+    "fidelity_invariants": [
+      "character_identity",
+      "holder_relation",
+      "scene_continuity",
+      "story_fact"
+    ],
+    "world_adaptations": [],
+    "world_conflicts": [],
+    "creative_fill_proposals": [],
+    "purpose_profile": {
+      "target_kind": "character_identity_anchor",
+      "design_focus": [
+        "preserve identity"
+      ],
+      "forbidden_changes": [
+        "replace identity"
+      ]
+    },
+    "qc_policy_ref": {
+      "owner": "preset",
+      "key": "reference-quality",
+      "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "admission": {
+    "policy_ref": {
+      "contract_id": "reference-bundle-purpose-admission",
+      "content_hash": "be13bfabab4d727db3d3caa4dd58a839b8d19e4723d9ad1c2e3b1ac1dd39b345"
+    },
+    "internal_review_ready": true,
+    "selection_ready": false,
+    "publication_ready": false,
+    "internal_review_blockers": [],
+    "formal_use_blockers": [
+      "rights_not_assessed",
+      "vision_review_required"
+    ]
+  },
+  "attachments": [
+    {
+      "slot": {
+        "slot_key": "back",
+        "view_role": "back",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "provider_receipt_ref": {
+        "id": "00000000-0000-4000-8000-000000000021",
+        "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "media_type": "image/png",
+      "byte_length": 1024,
+      "pixel_width": 32,
+      "pixel_height": 32,
+      "page_count": 1,
+      "frame_count": 1,
+      "rights_observation": "not_assessed"
+    },
+    {
+      "slot": {
+        "slot_key": "front",
+        "view_role": "front",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "provider_receipt_ref": {
+        "id": "00000000-0000-4000-8000-000000000022",
+        "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "media_type": "image/png",
+      "byte_length": 1024,
+      "pixel_width": 32,
+      "pixel_height": 32,
+      "page_count": 1,
+      "frame_count": 1,
+      "rights_observation": "not_assessed"
+    },
+    {
+      "slot": {
+        "slot_key": "profile",
+        "view_role": "profile",
+        "staged_media_ref": {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "revision": 2,
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "provider_receipt_ref": {
+        "id": "00000000-0000-4000-8000-000000000023",
+        "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "media_type": "image/png",
+      "byte_length": 1024,
+      "pixel_width": 32,
+      "pixel_height": 32,
+      "page_count": 1,
+      "frame_count": 1,
+      "rights_observation": "not_assessed"
+    }
+  ]
+}
