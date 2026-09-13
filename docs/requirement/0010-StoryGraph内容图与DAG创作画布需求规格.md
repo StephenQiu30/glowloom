@@ -129,6 +129,8 @@
 
 真实待审 bytes 必须匹配冻结附件，且在对象读取前后重验完整 Input 和当前权限。对象读取不占用 SQL 事务、不写对象或数据事实；只能读取既有配置所绑定的私有 profile/bucket，沿用单图/整组预算并重验 SHA、尺寸与完整 PNG。任一图错误、读取中取消或权限/事实漂移均不得返回部分组；失败缓冲立即清零，成功缓冲由消费方释放，JSON 不包含图片 bytes、对象位置或下载 URL。读取成功不抵扣正式派发与模型审核验收。
 
+整组审核 Invocation 必须独立绑定 bundle scope/shard、Release/Control/Budget；内容 Hash 与信封 Hash 分开重算，Dispatch Authorization 绑定具体 attempt 和信封 Hash。Agent 仅通过私有有界 multipart 接收完整槽位 PNG，校验真实字节并以只读临时文件输入既有单次 Codex 执行器；缺项/混组/漂移/超限/越权均不得调用模型。候选五类结论须匹配冻结 Subject，unknown 不伪装 accepted；返回候选不授予选择或发布权限。
+
 首次基础生成必须可通过 Backend 的四个独立 HTTP 命令完成生成授权、Target 构建、执行授权和执行准备，再显式启动既有全量 Call 工作流。每个命令只调用对应 Owner，严格验证有界闭合请求和当前权限/Token；不接受路径身份覆盖、自由 Prompt/Provider 参数、发送指令或首次 Head revision 覆盖。响应只暴露精确身份并设置 no-store。幂等重放复用同一事实，输入冲突为 409；无效槽位 Policy 为 422，失败不能遗留 Target/Head/准备回执。公开入口不意味着自动执行、重新生成或六类目标和媒体验收已完成。
 
 | ID | 必须满足的合同 | 最低验证 |

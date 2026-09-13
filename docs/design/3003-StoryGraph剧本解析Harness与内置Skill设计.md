@@ -612,6 +612,10 @@ Vision Reviewer 不能发布、选择、修改 Artifact 或降低 Backend determ
 
 内部审核媒体读取复用上述事务编译器，以调用方冻结的完整 Input 为预期值，逐字段匹配后才读取同组私有 Staged Media。对象 I/O 必须在事务结束后执行，且只使用注入的既有对象存储 profile/bucket；不跟随外部 URL、不签发下载地址、不创建对象或切换环境。按冻结 slot 顺序读取完整组，沿用 `ReadVerified` 的有界读取，再复用 Staged Media 的 SHA/尺寸/完整 PNG 解码规则，不能仅相信数据库 ready 标记或对象 Adapter 声称成功。读取完成后重新进入独立事务，重验当前权限、同一完整 Input 与媒体事实；取消、撤权、Head/内容漂移、对象缺失或任一图损坏时整组失败，不返回部分 bytes。成功返回的短生命周期内存由消费方显式清零，失败清零所有已读缓冲；JSON 不携带图片 bytes 或私有对象位置。该内部读取能力不等于 Stage 派发授权，后续执行仍需正式 Release/Control/Invocation/Attempt，不提前开放公共下载或审核入口。
 
+`review_reference_artifact` 使用整组级独立 Invocation/AttemptResult，Scope 为 workspace/project/bundle_input_id，shard key 为 `vision_bundle:<bundle_input_id>`。Subject 的 `input_hash` 绑定完整审核内容；外层 Invocation `input_hash` 进一步覆盖 Release、Control、Budget、Scope/Shard 与完整 Payload。两者职责不同，不能互相覆盖或要求相等，否则形成 Hash 环。外层 Release 必须等于 Subject Review Release，accepted Candidate 必须逐字段等于冻结 Subject；Brief 原 Release 始终保留。复用既有 Dispatch Authorization claims/signature 域，绑定 attempt/调用 Hash/Release/Control/image/expiry。
+
+Agent capability 只加载同一内置 Bundle 的入口和 `references/vision-review.md`，在固定一次模型调用、120 秒与 128 KiB 输出上限内复用现有 Codex 图片执行器（ephemeral/read-only/strict schema），不开放工具。私有 multipart 请求携带一个闭合 Invocation 和按 slot 排序的完整 PNG 文件组，不接受 URL、任意文件路径或未知 part；真实流量与声明长度均受有界限制，逐文件校验长度、Hash、PNG 解码及宽高后写入请求级只读临时文件，取消/成功/失败均清理。候选 Schema、身份或媒体非法为 rejected，运行时结果不可信保留 outcome_unknown，不自动重发。登记 Stage/Definition/Release 与可调用 Harness 仅证明运行能力，Backend 当前事实重验、持久执行授权/回执和 Candidate Owner 写入仍需后续服务接通，不提前宣称业务端到端完成。
+
 Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同阶段不登记可执行 Stage、不创建 Invocation/候选持久事实、不赋予 Vision/Selection 权限。按用户确认的用途边界，完整且技术 QC 合格的 Bundle 可由后续服务授权进行内部视觉质量审核；rights not_assessed 保持原事实，仅阻断正式选择和资产发布。发送服务必须重验 Backend 编译的用途准入与当前授权，不能由 Agent 或客户端移除阻塞；媒体失败、缺项、重复图片或未知结果均不可送审。内部审核候选不构成权利批准，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
 
 ## 12. Shard、Coverage 与固定点
