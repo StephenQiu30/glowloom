@@ -1,0 +1,71 @@
+[
+  {
+    "slot": {
+      "slot_key": "back",
+      "view_role": "back",
+      "staged_media_ref": {
+        "id": "00000000-0000-4000-8000-000000000021",
+        "revision": 2,
+        "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "provider_receipt_ref": {
+      "id": "00000000-0000-4000-8000-000000000021",
+      "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "media_type": "image/png",
+    "byte_length": 1024,
+    "pixel_width": 32,
+    "pixel_height": 32,
+    "page_count": 1,
+    "frame_count": 1,
+    "rights_observation": "not_assessed"
+  },
+  {
+    "slot": {
+      "slot_key": "front",
+      "view_role": "front",
+      "staged_media_ref": {
+        "id": "00000000-0000-4000-8000-000000000022",
+        "revision": 2,
+        "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "provider_receipt_ref": {
+      "id": "00000000-0000-4000-8000-000000000022",
+      "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "media_type": "image/png",
+    "byte_length": 1024,
+    "pixel_width": 32,
+    "pixel_height": 32,
+    "page_count": 1,
+    "frame_count": 1,
+    "rights_observation": "not_assessed"
+  },
+  {
+    "slot": {
+      "slot_key": "profile",
+      "view_role": "profile",
+      "staged_media_ref": {
+        "id": "00000000-0000-4000-8000-000000000023",
+        "revision": 2,
+        "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "provider_receipt_ref": {
+      "id": "00000000-0000-4000-8000-000000000023",
+      "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "media_type": "image/png",
+    "byte_length": 1024,
+    "pixel_width": 32,
+    "pixel_height": 32,
+    "page_count": 1,
+    "frame_count": 1,
+    "rights_observation": "not_assessed"
+  }
+]

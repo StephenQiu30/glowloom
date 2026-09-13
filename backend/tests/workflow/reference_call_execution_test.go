@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -317,7 +318,11 @@ func referenceExecutionHTTPFactory(t *testing.T, expectedRequests, rejectedReque
 			return
 		}
 		var output bytes.Buffer
-		if err := png.Encode(&output, image.NewRGBA(image.Rect(0, 0, width, height))); err != nil {
+		img := image.NewRGBA(image.Rect(0, 0, width, height))
+		// Distinct fixture views exercise complete-bundle admission, while the
+		// configured rejected response still exercises partial failure recovery.
+		img.SetRGBA(0, 0, color.RGBA{R: uint8(requests), A: 255})
+		if err := png.Encode(&output, img); err != nil {
 			t.Error(err)
 			w.WriteHeader(500)
 			return
