@@ -597,6 +597,10 @@ GenerationCandidateSetProduction
 
 ### 8.3 两层审查
 
+整组审核后的首个 Owner 落地步骤为 `generation.reference_candidate_bundle`：只消费上游持久化的 exact Vision Candidate revision，在独立短事务中按 Control → 原审核 Workflow/当前 Target/Execution → Invocation/Attempt 的顺序重验，随后写入 Generation-owned 不可变 Bundle。重试复用同一 Bundle 身份；不再调用模型，不复用旧单图 CandidateSelection，也不写 Asset。Bundle 使用独立的精确查询，返回 Bundle 与审核引用而不是私有媒体路径；查询重验当前权限、Control 和输入事实，历史失效不能冒充当前可用。此步骤保留完整审核诊断，包括 fail/warn/not_assessable；accepted 指审核结果被接收而非素材通过。权利仍为 not_assessed，正式选择和发布仍阻断。CandidateSet 聚合、逐项风险确认和 Owner Apply 在其后独立实施。
+
+原审核节点必须已经成功才能在下游失败、需要人工检查或等待 Human Gate 的 Run 中复用结果；这些下游状态不撤销已接收诊断。取消/暂停、审核节点自身未成功、Control 或当前输入失效仍阻断。成功节点不能创建新发送权，恢复只读取既有 Candidate，不因后续 Owner 故障重新审核。
+
 首个 Bundle Input 编译器只消费已完成明确结果的冻结 Job/Call 和不可变已验证 Staged Media，按完整输出合同逐组生成内容定址的槽位清单、per-slot QC 和 bundle QC；部分明确失败保留诊断，pending/unknown 或成功 Call 缺少媒体事实直接拒绝。QC 的 input root 位于 Bundle Input 之前，禁止反向引用 Bundle/Vision。首个只读 Query 在同一 SQL 快照内读取并重验这些既有事实，返回确定性派生结果，不另建可变状态表、不发布 CandidateBundle、不赋予 Vision/选择权限。后续 Invocation 必须冻结并重验精确 Bundle Input，不能仅凭一次查询获得审核授权。
 
 PNG 字节完整性沿用已提交的媒体验证事实；编译器再检查 Receipt/媒体/槽位身份及完整覆盖、尺寸/比例/字节合同和同组重复 digest，不将语义 rubric 或 rights 文本当作已执行证明。权利事实仍为 not_assessed 时 QC 保留 blocked，不能自动通过或人工覆盖；明确媒体/传输/重复图片失败为 failed。每组查询增加 Backend 派生的 admission：内容定址用途 Policy、internal_review_ready、selection_ready、publication_ready、internal_review_blockers、formal_use_blockers。内部送审只容许 rights_not_assessed 这一非技术阻塞项，其余问题仍拒绝；正式使用还必须经过独立权利评估与 Vision，目前保持阻断。admission 纳入 Collection Hash，Decoder 重算，不能接收客户端覆盖；原 Bundle Input/QC 身份不因展示用途划分改变。它只表达素材条件，不授予操作者执行权限，不启动模型、不写 Selection 或资产。派生结果不包含私有路径、token、Prompt 或临时 URL，提供 no-store 的精确 Execution 查询；它不替代未来完整 rights policy、恶意内容策略、Vision 与正式 Owner Apply。

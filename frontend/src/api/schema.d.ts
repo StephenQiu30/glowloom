@@ -909,6 +909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/reference-candidate-bundles/{bundle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 读取已持久化整组视觉审核候选 Bundle，重验当前权限、精确输入和审核 Control；不代表权利批准、人工选择或资产发布。 */
+        get: operations["getReferenceCandidateBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/reference-executions/{execution_id}/bundle-inputs": {
         parameters: {
             query?: never;
@@ -2966,6 +2983,44 @@ export interface components {
             /** @enum {string} */
             status: "passed" | "blocked" | "failed";
             issues: ("rights_not_assessed" | "provider_explicit_failure" | "media_rejected" | "media_policy_failed" | "duplicate_image")[];
+            content_hash: string;
+        };
+        ReferenceCandidateBundleResponse: {
+            /** @constant */
+            contract_id: "generation-candidate-bundle-production";
+            /** Format: uuid */
+            candidate_bundle_id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            generation_target_ref: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            execution_ref: {
+                /** Format: uuid */
+                id: string;
+                /** @constant */
+                revision: 1;
+                content_hash: string;
+            };
+            /** @constant */
+            generation_round: 1;
+            candidate_bundle_index: number;
+            bundle_input_ref: components["schemas"]["ReferenceCommandActionRef"];
+            bundle_vision_review_candidate_revision_ref: {
+                /** Format: uuid */
+                id: string;
+                /** @constant */
+                revision: 1;
+                content_hash: string;
+            };
+            dependency_root_hash: string;
+            /** Format: date-time */
+            created_at: string;
             content_hash: string;
         };
         ReferenceCandidateBundleInputResponse: {
@@ -7336,6 +7391,38 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["StructureIdentitySnapshotResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    getReferenceCandidateBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                bundle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 精确身份和读取权限校验后的派生快照。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceCandidateBundleResponse"];
                     };
                 };
             };

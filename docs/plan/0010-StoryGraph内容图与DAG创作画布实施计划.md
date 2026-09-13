@@ -254,6 +254,7 @@
   - [x] 固定整组 Vision Review 候选的五类结果、逐槽位证据区域与完整冻结 Subject，Go/Python 一致验证六种用途、输入漂移和越权输出；共享 canonical golden、整数基点和缺失字段拒绝已验证。不登记虚假的可执行 Stage，不绕过未通过技术 QC 的素材；权利未评估按已确认的用途边界保留正式使用阻断。完整 Input/附件 transport、真实审核执行与持久化仍待接通。
   - [x] 从完整已终结 Job/Call/媒体事实编译同组 Bundle Input、per-slot 与 bundle 确定性 QC，提供一致快照只读查询；拒绝混组、缺项和漂移，权利未评估保持 blocked，不冒充 CandidateBundle/Vision/Selection 发布。真实 PostgreSQL/Temporal 旅程验证全槽位、明确失败、重放与跨连接一致快照；完整权利策略、Vision 和正式发布仍按后续步骤完成。
 - [ ] 用真实媒体验证六类 schema 中至少一个基础 Target 和一个缺陷样本。
+- [x] 接通基础整组审核后的 Generation CandidateBundle Owner：独立 GORM 不可变事实、精确审核来源和当前 Control/input 重验、Workflow 下游落库节点与 no-store 查询。提交后丢失响应、并发重入、错引用及撤销拒绝已有现有 PostgreSQL/Temporal 证据；不生成 CandidateSet，不提前开放人工选择/发布。剩余 CandidateSet 聚合及完整状态机继续实施。
 - [ ] 定向验证、全量 CI、Acceptance Evidence 与独立提交完成。
 
 #### VP-I08 — Gate 4 基础 Bundle 选择与 checkpoint

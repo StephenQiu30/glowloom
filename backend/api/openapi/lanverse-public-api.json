@@ -1989,6 +1989,73 @@
         }
       }
     },
+    "/api/projects/{project_id}/reference-candidate-bundles/{bundle_id}": {
+      "get": {
+        "operationId": "getReferenceCandidateBundle",
+        "description": "读取已持久化整组视觉审核候选 Bundle，重验当前权限、精确输入和审核 Control；不代表权利批准、人工选择或资产发布。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "name": "bundle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "精确身份和读取权限校验后的派生快照。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceCandidateBundleResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/api/projects/{project_id}/reference-executions/{execution_id}/bundle-inputs": {
       "get": {
         "operationId": "getReferenceBundleInputs",
@@ -8187,6 +8254,136 @@
                 "duplicate_image"
               ]
             }
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ReferenceCandidateBundleResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contract_id",
+          "candidate_bundle_id",
+          "workspace_id",
+          "project_id",
+          "generation_target_ref",
+          "execution_ref",
+          "generation_round",
+          "candidate_bundle_index",
+          "bundle_input_ref",
+          "bundle_vision_review_candidate_revision_ref",
+          "dependency_root_hash",
+          "created_at",
+          "content_hash"
+        ],
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "const": "generation-candidate-bundle-production"
+          },
+          "candidate_bundle_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generation_target_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "execution_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "const": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "generation_round": {
+            "type": "integer",
+            "const": 1
+          },
+          "candidate_bundle_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "bundle_input_ref": {
+            "$ref": "#/components/schemas/ReferenceCommandActionRef"
+          },
+          "bundle_vision_review_candidate_revision_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "const": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "dependency_root_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           },
           "content_hash": {
             "type": "string",

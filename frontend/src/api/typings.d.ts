@@ -160,6 +160,7 @@ declare global {
     type ReferenceBundleInputsResponse = components["schemas"]["ReferenceBundleInputsResponse"];
     type ReferenceBundleSlotResponse = components["schemas"]["ReferenceBundleSlotResponse"];
     type ReferenceCandidateBundleInputResponse = components["schemas"]["ReferenceCandidateBundleInputResponse"];
+    type ReferenceCandidateBundleResponse = components["schemas"]["ReferenceCandidateBundleResponse"];
     type ReferenceCommandActionRef = components["schemas"]["ReferenceCommandActionRef"];
     type ReferenceCoverageBlockerResponse = components["schemas"]["ReferenceCoverageBlockerResponse"];
     type ReferenceCoverageMatrixResponse = components["schemas"]["ReferenceCoverageMatrixResponse"];

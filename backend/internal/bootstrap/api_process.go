@@ -419,6 +419,15 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	}
 	referenceExecutionStartHandler := workflowhttp.NewReferenceExecutionStartHandler(referenceExecutionStart, tokenVerifier)
 	referenceBundleHandler := generationhttp.NewReferenceBundleHandler(generationapp.NewReferenceBundleQuery(generationgorm.New(database)), tokenVerifier)
+	visionReviewStore, err := agentgorm.NewVisionReviewStore(database, generationgorm.ValidateCurrentVisionReviewInput)
+	if err != nil {
+		return fmt.Errorf("candidate Bundle review reader composition failed: %w", err)
+	}
+	candidateBundleStore, err := generationgorm.NewReferenceCandidateBundleStore(database, visionReviewStore.ReadAcceptedVisionReview)
+	if err != nil {
+		return fmt.Errorf("candidate Bundle query composition failed: %w", err)
+	}
+	candidateBundleHandler := generationhttp.NewReferenceCandidateBundleHandler(generationapp.NewReferenceCandidateBundleService(candidateBundleStore), tokenVerifier)
 	referenceStore := generationgorm.New(database)
 	referenceGenerationHandler := generationhttp.NewReferenceGenerationHandler(generationapp.NewReferenceGenerationQuery(referenceStore), tokenVerifier)
 	referenceGenerationAuthorization, err := generationapp.NewReferenceGenerationAuthorizationService(referenceStore, time.Now, uuid.NewString)
@@ -509,6 +518,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				referenceGenerationHandler.Register(mux)
 				referenceExecutionStartHandler.Register(mux)
 				referenceBundleHandler.Register(mux)
+				candidateBundleHandler.Register(mux)
 				referencePreparationHandler.Register(mux)
 			},
 		}),

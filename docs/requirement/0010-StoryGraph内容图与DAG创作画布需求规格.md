@@ -169,6 +169,8 @@ Bundle Input 必须完整覆盖同一 Execution、同一候选组的所有 requi
 
 正式生成输入只消费 Backend Agent Owner 验证后的精确 accepted Brief Revision：当前 source facts、Candidate Head、Release Control、来源 Result、已完成 Attempt 与 Dispatch Authorization 必须闭合，且重算内容和 Revision Hash。错 scope、旧 Head、Control 撤销/隔离、来源漂移或未完成 Attempt 均不可消费；Coverage 的 accepted 展示遵守同一边界。后续出现的新 Attempt 不能替代 Candidate 已绑定的来源 Attempt。
 
+审核后的 CandidateBundle 必须绑定同一组 Bundle Input 与持久化 Vision Candidate 的精确 revision/hash，由 Generation Owner 落库，不借用单图 Candidate。每次写入和当前精确查询都重验权限、Target/Execution 输入、审核来源与 Control；提交后响应丢失或并发重投收敛到同一不可变 Bundle。审核结果 accepted 只代表收到了有效诊断，fail/warn/not_assessable 必须保留原引用，不得冒充视觉通过、rights 批准、CandidateSet 完整、人工选择或 AssetVersion 发布。公共接口只读，不接受 approve、临时 URL 或自由替换输入。
+
 首次生成必须有独立用户授权：Backend 在同一事务校验当前项目写权限、Token Version 与 accepted Brief，再把 exact Plan/Target 和候选 Bundle 数量冻结到不可变 Command Receipt。重复命令必须重新校验当前权限与事实，不能只命中缓存就返回成功；同一 key 的输入变化必须拒绝。授权不是 Target/Execution/Provider 已启动的证明，不能用于冒充重新生成或 Provider 重试。
 
 ## 8. 五个 Human Gate 的公共合同

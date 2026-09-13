@@ -89,6 +89,7 @@ type SceneAnalysisDependencies struct {
 	ReferencePlan       *ReferencePlanDependencies
 	ReferenceBrief      *ReferenceBriefDependencies
 	VisionReview        *VisionReviewDependencies
+	ReferenceBundles    ReferenceCandidateBundleOwner
 }
 
 type ProjectPresetSelectionSource interface {
@@ -239,6 +240,7 @@ type NodeExecutor struct {
 	referencePlan       *ReferencePlanDependencies
 	referenceBrief      *ReferenceBriefDependencies
 	visionReview        *VisionReviewDependencies
+	referenceBundles    ReferenceCandidateBundleOwner
 	evidence            SourceEvidenceOwner
 	stories             StoryAnalysisOwner
 	storyReviews        StoryReviewOwner
@@ -283,6 +285,7 @@ func NewNodeExecutor(
 		executor.referencePlan = sceneAnalysis[0].ReferencePlan
 		executor.referenceBrief = sceneAnalysis[0].ReferenceBrief
 		executor.visionReview = sceneAnalysis[0].VisionReview
+		executor.referenceBundles = sceneAnalysis[0].ReferenceBundles
 	}
 	return executor
 }
@@ -329,6 +332,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeReferenceBriefs(ctx, command)
 	case "activity.review_reference_artifact":
 		return executor.executeVisionReview(ctx, command)
+	case "activity.materialize_reference_candidate_bundle":
+		return executor.executeReferenceCandidateBundle(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:

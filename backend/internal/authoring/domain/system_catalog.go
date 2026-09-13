@@ -3,7 +3,7 @@ package domain
 import "encoding/json"
 
 func SystemCatalog() (Catalog, error) {
-	return NewCatalog("lanverse.production", "31.0.0", []NodeDefinition{
+	return NewCatalog("lanverse.production", "32.0.0", []NodeDefinition{
 		systemNodeDefinition(
 			"input.script_revision", "Script Revision", "input", "workflow.input.script_revision", "never", "low",
 			nil, []PortDefinition{requiredPort("script", "script_revision")},
@@ -143,6 +143,10 @@ func SystemCatalog() (Catalog, error) {
 			"agent.vision_review", "Reference Bundle Vision Review", "agent", "activity.review_reference_artifact", "never", "external_ai",
 			nil, []PortDefinition{requiredPort("candidate", "vision_review_candidate")},
 			json.RawMessage(`{"type":"object","properties":{"execution_ref":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1},"content_hash":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"required":["id","revision","content_hash"],"additionalProperties":false},"bundle_index":{"type":"integer","minimum":0}},"required":["execution_ref","bundle_index"],"additionalProperties":false}`),
+		),
+		systemNodeDefinition(
+			"generation.reference_candidate_bundle", "Reviewed Reference Candidate Bundle", "generation", "activity.materialize_reference_candidate_bundle", "never", "low",
+			[]PortDefinition{requiredPort("review", "vision_review_candidate")}, []PortDefinition{requiredPort("bundle", "reference_candidate_bundle")}, emptyNodeConfig(),
 		),
 		systemNodeDefinition(
 			"generation.reference_image_call", "Reference Image Call", "generation", "activity.reference_image_call", "never", "external_ai",

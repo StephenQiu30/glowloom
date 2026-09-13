@@ -37,9 +37,14 @@ func ValidateCurrentVisionReviewInput(ctx context.Context, tx *gorm.DB, command 
 		return err
 	}
 	subject := command.Input.Subject
+	// A downstream failure does not revoke an already successful review. This
+	// permits Owner recovery without another model call; CreateVisionReviewExecution
+	// still refuses dispatch from a completed node. Cancellation remains fenced.
+	runReadable := run.Status == "RUNNING" || run.Status == "RETRYING" || run.Status == "SUCCEEDED" ||
+		(node.Status == "SUCCEEDED" && (run.Status == "FAILED" || run.Status == "NEEDS_ATTENTION" || run.Status == "WAITING_HUMAN"))
 	if node.WorkflowRunID != run.ID || node.WorkspaceID != run.WorkspaceID || run.WorkspaceID.String() != subject.WorkspaceID || run.ProjectID.String() != subject.ProjectID ||
 		run.CreatedBy.String() != command.UserID || run.InitiatorTokenVersion != command.TokenVersion || node.Executor != "activity.review_reference_artifact" || node.DefinitionKey != "agent.vision_review" ||
-		(run.Status != "RUNNING" && run.Status != "RETRYING" && run.Status != "SUCCEEDED") || (node.Status != "RUNNING" && node.Status != "RETRYING" && node.Status != "SUCCEEDED") {
+		!runReadable || (node.Status != "RUNNING" && node.Status != "RETRYING" && node.Status != "SUCCEEDED") {
 		return errors.New("Vision Review Workflow ownership changed")
 	}
 	input, _, hash, err := flow.ParseNodeInput(json.RawMessage(node.Input))

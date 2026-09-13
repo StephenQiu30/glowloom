@@ -129,6 +129,7 @@ func Catalog() []any {
 		&model.GenerationReferenceProviderJob{},
 		&model.GenerationReferenceProviderCall{},
 		&model.GenerationReferenceStagedMedia{},
+		&model.GenerationReferenceCandidateBundle{},
 		&model.ReferencePlanScopeHead{},
 		&model.ProjectReferencePlanActivationHead{},
 		&model.VisualFoundationScopeCollectionReceipt{},

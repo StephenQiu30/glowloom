@@ -59,6 +59,12 @@ func assertVisionReviewWorkflow(t *testing.T, ctx context.Context, db *generatio
 			if err != nil {
 				t.Fatal(err)
 			}
+			bundleStore, err := generationgorm.NewReferenceCandidateBundleStore(db, persistence.ReadAcceptedVisionReview)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bundleService := genapp.NewReferenceCandidateBundleService(bundleStore)
+			bundleLoss := &referenceBundleReplyLoss{owner: bundleService}
 			signer, err := grant.NewSigner("synthetic-vision-workflow-test-not-a-credential", time.Now)
 			if err != nil {
 				t.Fatal(err)
@@ -81,7 +87,7 @@ func assertVisionReviewWorkflow(t *testing.T, ctx context.Context, db *generatio
 				t.Fatal(err)
 			}
 			executor := workflowproduction.NewNodeExecutor(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-				workflowproduction.SceneAnalysisDependencies{VisionReview: &workflowproduction.VisionReviewDependencies{Inputs: store, Execution: service, StageReleaseHash: release.Identity.StageReleaseHash}})
+				workflowproduction.SceneAnalysisDependencies{VisionReview: &workflowproduction.VisionReviewDependencies{Inputs: store, Execution: service, StageReleaseHash: release.Identity.StageReleaseHash}, ReferenceBundles: bundleLoss})
 			replyLoss := &referenceCallNodeReplyLoss{NodeExecutor: executor}
 			workflowStore := workflowgorm.New(db)
 			activities := &referenceCallTemporalActivities{RuntimeService: workflowapp.NewRuntimeService(workflowStore, workflowapp.RuntimeConfig{Now: time.Now, NewID: uuid.NewString, Executor: replyLoss}), dropResponse: true}
@@ -111,7 +117,7 @@ func assertVisionReviewWorkflow(t *testing.T, ctx context.Context, db *generatio
 			key := "vision-review-" + outcome
 			author := authoringapp.Actor{UserID: actor.UserID, TokenVersion: actor.TokenVersion}
 			draft, err := authors.Create(ctx, author, authoringapp.CreateCommand{ProjectID: execution.ProjectID, AuthoringMode: "GUIDED",
-				Graph: authoring.Graph{Nodes: []authoring.Node{{ID: "vision-review", DefinitionKey: "agent.vision_review", DefinitionVersion: "1.0.0", Config: config}}}, Layout: json.RawMessage(`{"guided":{"step":1}}`),
+				Graph: authoring.Graph{Nodes: []authoring.Node{{ID: "vision-review", DefinitionKey: "agent.vision_review", DefinitionVersion: "1.0.0", Config: config}, {ID: "reviewed-bundle", DefinitionKey: "generation.reference_candidate_bundle", DefinitionVersion: "1.0.0", Config: json.RawMessage(`{}`)}}, Edges: []authoring.Edge{{ID: "review-to-bundle", FromNodeID: "vision-review", FromPort: "candidate", ToNodeID: "reviewed-bundle", ToPort: "review"}}}, Layout: json.RawMessage(`{"guided":{"step":1}}`),
 				FrozenInputs: []authoring.FrozenReference{{Kind: "reference_execution", ID: execution.ID, Version: "1", Hash: execution.ContentHash}}, CatalogKey: catalog.Key, CatalogVersion: catalog.Version, IdempotencyKey: key})
 			if err != nil {
 				t.Fatal(err)
@@ -153,7 +159,7 @@ func assertVisionReviewWorkflow(t *testing.T, ctx context.Context, db *generatio
 			}
 			var node model.NodeRunProjection
 			var invocation model.SceneAnalysisInvocationRecord
-			if err := db.WithContext(ctx).Where("workflow_run_id = ?", run.ID).First(&node).Error; err != nil {
+			if err := db.WithContext(ctx).Where("workflow_run_id = ? AND definition_key = ?", run.ID, "agent.vision_review").First(&node).Error; err != nil {
 				t.Fatal(err)
 			}
 			if err := db.WithContext(ctx).Where("workflow_run_id = ? AND node_run_id = ?", run.ID, node.ID).First(&invocation).Error; err != nil {
@@ -174,7 +180,7 @@ func assertVisionReviewWorkflow(t *testing.T, ctx context.Context, db *generatio
 				t.Fatalf("Vision Review created multiple attempts: %v", err)
 			}
 			if outcome == "accepted" {
-				if !replyLoss.lost.Load() || !activities.lost.Load() || activities.activityCalls.Load() != 3 {
+				if !replyLoss.lost.Load() || !activities.lost.Load() || !bundleLoss.lost.Load() || activities.activityCalls.Load() != 5 {
 					t.Fatal("Vision Review did not exercise both lost commit responses")
 				}
 				input, err := store.CompileBaseVisionReviewInput(ctx, actor, execution.ProjectID, execution.ID, index, release.Identity.StageReleaseHash)
@@ -190,6 +196,7 @@ func assertVisionReviewWorkflow(t *testing.T, ctx context.Context, db *generatio
 				if err != nil || len(output.Bindings) != 1 || output.Bindings[0].ReferenceID != state.Candidate.ID || output.Bindings[0].ContentHash != state.Candidate.CandidateRevisionHash {
 					t.Fatal("Workflow did not output its persisted Candidate")
 				}
+				assertReferenceCandidateBundleOwner(t, ctx, db, bundleService, actor, execution, state, run.ID)
 				// Invalid current authorization fails even when a Candidate is cached.
 				command.TokenVersion++
 				if _, err := service.Execute(ctx, command); err == nil {
@@ -371,6 +378,15 @@ func (i *persistedVisionInvoker) InvokeVisionReview(ctx context.Context, invocat
 		check := contract.VisionReviewCheck{Category: category, Status: "pass", IssueCode: "none", ConfidenceBPS: 9000, Summary: "受控视觉运行夹具，不代表真实模型判断", Evidence: []contract.VisionReviewEvidence{}}
 		for _, slot := range candidate.Subject.Slots {
 			check.Evidence = append(check.Evidence, contract.VisionReviewEvidence{SlotKey: slot.SlotKey, Region: contract.VisionReviewRegion{Width: 10000, Height: 10000}})
+		}
+		// Accepted means the structured review was received, not visual approval.
+		switch category {
+		case "identity":
+			check.Status, check.IssueCode, check.Recommendation = "fail", "identity_drift", "重新生成并审核整组"
+		case "interaction_geometry":
+			check.Status, check.IssueCode, check.Recommendation, check.ConfidenceBPS = "not_assessable", "no_interaction", "后续组合目标另行审核", 0
+		case "style_fidelity":
+			check.Status, check.IssueCode, check.Recommendation = "warn", "style_difference", "人工确认风格差异"
 		}
 		candidate.Checks = append(candidate.Checks, check)
 	}

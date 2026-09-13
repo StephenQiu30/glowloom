@@ -260,6 +260,10 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("workflow Vision Review store composition failed: %w", err)
 	}
+	referenceBundleStore, err := generationgorm.NewReferenceCandidateBundleStore(database, visionStore.ReadAcceptedVisionReview)
+	if err != nil {
+		return fmt.Errorf("workflow candidate Bundle store composition failed: %w", err)
+	}
 	visionService, err := agentapp.NewVisionReviewExecutionService(visionStore, visionReader, agentHTTPClient, agentSigner, agentapp.VisionReviewExecutionConfig{Now: now, NewID: uuid.NewString, AgentImageDigest: configuration.AgentRuntimeImageDigest})
 	if err != nil {
 		return fmt.Errorf("workflow Vision Review service composition failed: %w", err)
@@ -336,7 +340,8 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 				Inputs: referencegorm.NewStore(database), Candidates: referenceBriefService,
 				StageRelease: referenceBriefStageRelease,
 			},
-			VisionReview: &workflowproduction.VisionReviewDependencies{Inputs: referenceStore, Execution: visionService, StageReleaseHash: visionRelease.Identity.StageReleaseHash},
+			VisionReview:     &workflowproduction.VisionReviewDependencies{Inputs: referenceStore, Execution: visionService, StageReleaseHash: visionRelease.Identity.StageReleaseHash},
+			ReferenceBundles: generationapp.NewReferenceCandidateBundleService(referenceBundleStore),
 		},
 	)
 	if err != nil {

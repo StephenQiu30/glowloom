@@ -634,6 +634,17 @@
 
 ### `VP-I08` — Gate 4 基础 Bundle 选择与 checkpoint
 
+前置整组审核 CandidateBundle Owner 的增量证据（2026-09-13）：
+
+- Design 2051 §8.3 与 Requirement 明确“审核结果被接收”不等于素材获准使用。新增 `generation.reference_candidate_bundle` / `activity.materialize_reference_candidate_bundle`，消费 exact Vision Candidate 与冻结 Execution，只输出 Bundle ID/revision/hash；新 Catalog 保留既有节点定义，不改旧 Workflow History。
+- Generation 在已有 PostgreSQL/GORM Catalog 中持久化不可变 `gen_reference_candidate_bundles`，精确 Vision Candidate 唯一；不新增数据库、迁移脚本或 CI 门禁。Agent Owner 在同一短事务按 Control → 原 Workflow/当前输入 → Invocation/Attempt 重验完整 Result/Manifest/Candidate/Head 身份，JSONB 先 canonical 再严格校验。重入不会重复调用模型，生成事实与审核事实分属原 Owner。
+- `GET /api/projects/{project_id}/reference-candidate-bundles/{bundle_id}` 重验读取权限与当前来源，拒绝 body/query selector，返回 no-store 精确事实。OpenAPI 与前端生成类型同步，不提供公共写入或 approve 参数，不包含私有媒体路径、Prompt 或发送授权。
+- Red：领域/Decoder 测试先因新构造器缺失而构建失败。Green 覆盖稳定身份、完整组、技术 QC 失败、哈希/引用/缺字段拒绝、Service scope、HTTP 错身份/鉴权/私有错误屏蔽，以及 Workflow 端口、冻结版本、配置、输入 Hash、Owner 失败和取消。数据库模型禁止普通更新/删除。
+- 真实固定 `lanverse_test` + 现有 Temporal 旅程串联 Vision → Bundle，保留已发送唯一模型调用。一次审核中分别保留 fail、warn、not_assessable；不将任何诊断改为 pass。测试注入审核业务提交、Activity 回执及 Bundle 提交后的响应丢失；恢复到一条 Bundle 并验证 Workflow output、跨连接精确 HTTP 查询、并发幂等、撤销 Control、错 scope/ref/token 与持久 Hash 损坏拒绝。History 不含图片、Prompt 或授权，Replay 验证仍沿用完整旅程。
+- 本机已通过领域/HTTP/Workflow 定向测试与 `go test -race ./tests/generation ./tests/workflow -run '^TestReferenceCandidateBundle' -count=1`（3.383 秒、2.521 秒）、Backend `go vet ./...`/全量无外部变量测试、OpenAPI 生成及前端 typecheck/lint/25 files 73 tests；无外部变量测试中的集成跳过不算真实集成证据。第一轮现有数据库/Temporal 旅程 76.730 秒通过。补充混合诊断及真实 HTTP 查询后，现有固定库与 Temporal 的最终三条系统旅程 147.738 秒全部通过：`TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays`、`TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow`、`TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce`；使用 `-count=1 -timeout=5m`，未改变既有业务等待时间或 CI。中途新增测试出现过 Go struct 字段位置及 OpenAPI path parameters 解码错误，均修正测试本身后重跑通过，不删减断言；远端须按本次提交 SHA 核验完整 CI。
+- 未完成边界：CandidateSet 聚合、完整 Bundle 状态机、rights 评估、逐 Target HumanTask、Selection、Asset Owner Apply 与依赖解锁仍未完成。模型和私有媒体对象使用受控测试适配器，不代表真实模型、MinIO 或最终 agent-browser 验收。未启动/重启基础环境，未更新运行中的应用容器；goimports/golangci-lint/govulncheck 未安装，未执行。
+- 提交前恢复补充：成功审核节点在下游 FAILED/NEEDS_ATTENTION/WAITING_HUMAN 时仍可消费已接收结果，CANCELLED 保持拒绝，且完成节点不能创建新的发送权。固定库状态故障探针与完整三条系统旅程再次通过（150.263 秒）；旧节点未成功不能沿用此分支。另以重算 Hash 的非首轮 Bundle 为 Red 反例，收紧 Decoder 与已冻结首轮输入/OpenAPI 一致，未预建未来轮次兼容。
+
 - 状态：未开始
 - Git 基线/提交：待记录
 - Red 命令与失败：待记录
