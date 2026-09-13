@@ -12,6 +12,7 @@ from app.modules.storygraph.scene_analysis_bundle import (
     SCENE_ANALYSIS_SKILL_BUNDLE_HASH,
     SceneAnalysisBundle,
 )
+from app.modules.storygraph.vision_review_bundle import VisionReviewBundle
 from app.modules.storygraph.visual_foundation_bundle import (
     VISUAL_FOUNDATION_SKILL_BUNDLE_HASH,
     VisualFoundationBundle,
@@ -48,6 +49,10 @@ def _scene_analysis(root: Path | None) -> SceneAnalysisBundle:
 
 def _visual_foundation(root: Path | None) -> VisualFoundationBundle:
     return VisualFoundationBundle(root)
+
+
+def _vision_review(root: Path | None) -> VisionReviewBundle:
+    return VisionReviewBundle(root)
 
 
 def _text_storyboard(root: Path | None) -> TextSkill:
@@ -100,6 +105,13 @@ class SkillCatalog:
                 expected_hash=VISUAL_FOUNDATION_SKILL_BUNDLE_HASH,
                 factory=_visual_foundation,
                 verifier=_verify_visual_foundation,
+            ),
+            SkillRegistration(
+                key="vision_review",
+                bundle="build-storygraph",
+                expected_hash=SCENE_ANALYSIS_SKILL_BUNDLE_HASH,
+                factory=_vision_review,
+                verifier=_verify_scene_analysis,
             ),
             SkillRegistration(
                 key="text_storyboard",

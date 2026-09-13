@@ -36,6 +36,7 @@ var sceneAnalysisInputSchemas = []SceneAnalysisInputSchema{
 	{StageKey: "resolve_identities", ProfileKey: "default", InputContractID: "identity-resolution-input-production", SchemaHash: "80e96d4dbc18fcf727c98bbb3e9b54b1b846f7b39df342b7e3518f4df55eeb2f"},
 	{StageKey: VisualFoundationStageKey, ProfileKey: "default", InputContractID: VisualFoundationInputContractID, SchemaHash: VisualFoundationInputSchemaHash},
 	{StageKey: "review_candidate", ProfileKey: "structure_identity", InputContractID: "structure-identity-review-input-production", SchemaHash: "2d738a97a051aacd164558eac74564100ed7b12546dd397015ed3e2f0f25c9e0"},
+	{StageKey: "review_reference_artifact", ProfileKey: "default", InputContractID: "vision-review-input-production", SchemaHash: "a32f1fa3e59ebb5f8e5390a8fdf077b3d49a030376299df92acf40e0f6e92252"},
 }
 
 func SceneAnalysisInputSchemas() []SceneAnalysisInputSchema {

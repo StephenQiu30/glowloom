@@ -616,6 +616,10 @@ Vision Reviewer 不能发布、选择、修改 Artifact 或降低 Backend determ
 
 Agent capability 只加载同一内置 Bundle 的入口和 `references/vision-review.md`，在固定一次模型调用、120 秒与 128 KiB 输出上限内复用现有 Codex 图片执行器（ephemeral/read-only/strict schema），不开放工具。私有 multipart 请求携带一个闭合 Invocation 和按 slot 排序的完整 PNG 文件组，不接受 URL、任意文件路径或未知 part；真实流量与声明长度均受有界限制，逐文件校验长度、Hash、PNG 解码及宽高后写入请求级只读临时文件，取消/成功/失败均清理。候选 Schema、身份或媒体非法为 rejected，运行时结果不可信保留 outcome_unknown，不自动重发。登记 Stage/Definition/Release 与可调用 Harness 仅证明运行能力，Backend 当前事实重验、持久执行授权/回执和 Candidate Owner 写入仍需后续服务接通，不提前宣称业务端到端完成。
 
+传输入口固定为 `POST /internal/storygraph/vision-review/invocations`：一个 `invocation` 文本字段（最多 1 MiB）和完整有序 `media` 文件组，filename 必须等于冻结 slot_key，Content-Type 为 image/png；最多四图，沿用单图 10 MiB、整组 32 MiB 限制，总请求硬上限为 32 MiB + 1 MiB + 64 KiB。缺失/无效/超限 Content-Length 或实际流量与其不符均拒绝，解析失败或取消由已有解析器关闭已暂存文件；PNG 要求静态单帧、完整解码、合法 IEND 且无尾随内容。授权在素材校验前和模型执行前分别重验。Backend 的 typed HTTP Client 先核对全部长度/Hash 和 exact Bundle/镜像，再单次发送；禁止重定向、自动重发与可重放 GetBody，响应最多 1 MiB，并重验完整 AttemptResult。请求沿用调用方 context，总期限不超过模型预算加 30 秒传输余量。该 Client 不签发授权、不写数据库，不能独立替代 application 层持久发送权。
+
+新增审核资源改变固定 Bundle 内容身份；Stage/Definition/Schema 清单和内置 Preset 的 Skill 引用必须一起重算。内置 Preset 使用新的 `2026.09.13` Release，不静默改写已选择的旧 Release/Hash，不把新运行时冒充旧运行时。部署新镜像前仍须完成正式 Release/Control 与当前项目选择核验；旧选择不自动升级，继续执行须通过已有明确选择及失效处理流程。
+
 Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同阶段不登记可执行 Stage、不创建 Invocation/候选持久事实、不赋予 Vision/Selection 权限。按用户确认的用途边界，完整且技术 QC 合格的 Bundle 可由后续服务授权进行内部视觉质量审核；rights not_assessed 保持原事实，仅阻断正式选择和资产发布。发送服务必须重验 Backend 编译的用途准入与当前授权，不能由 Agent 或客户端移除阻塞；媒体失败、缺项、重复图片或未知结果均不可送审。内部审核候选不构成权利批准，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
 
 ## 12. Shard、Coverage 与固定点

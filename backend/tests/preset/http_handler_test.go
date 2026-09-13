@@ -28,7 +28,7 @@ func TestProjectPresetHandlerListsExactCuratedReleases(t *testing.T) {
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"key":"urban-cinematic-realism"`) ||
-		!strings.Contains(response.Body.String(), `"release":"2026.09.12"`) || strings.Contains(response.Body.String(), `"release":"current"`) {
+		!strings.Contains(response.Body.String(), `"release":"2026.09.13"`) || strings.Contains(response.Body.String(), `"release":"current"`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 }
@@ -42,7 +42,7 @@ func TestProjectPresetHandlerSelectsForAuthorizedProject(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(http.MethodPut, "/api/projects/"+selection.ProjectID+"/preset-selection", strings.NewReader(
-		`{"preset_key":"urban-cinematic-realism","preset_release":"2026.09.12","application_mode":"faithful","expected_revision":0,"idempotency_key":"select-preset-1"}`,
+		`{"preset_key":"urban-cinematic-realism","preset_release":"2026.09.13","application_mode":"faithful","expected_revision":0,"idempotency_key":"select-preset-1"}`,
 	))
 	request.Header.Set("Authorization", "Bearer valid")
 	response := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestProjectPresetHandlerRejectsUnknownSelectionFields(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.Register(mux)
 	request := httptest.NewRequest(http.MethodPut, "/api/projects/"+uuid.NewString()+"/preset-selection", strings.NewReader(
-		`{"preset_key":"urban-cinematic-realism","preset_release":"2026.09.12","application_mode":"faithful","expected_revision":0,"idempotency_key":"select-preset-1","visual_style":"free"}`,
+		`{"preset_key":"urban-cinematic-realism","preset_release":"2026.09.13","application_mode":"faithful","expected_revision":0,"idempotency_key":"select-preset-1","visual_style":"free"}`,
 	))
 	request.Header.Set("Authorization", "Bearer valid")
 	response := httptest.NewRecorder()
@@ -150,7 +150,7 @@ func (stub *presetSelectionStub) Current(_ context.Context, workspaceID string, 
 
 func validProjectSelection(t *testing.T) presetdomain.ProjectSelection {
 	t.Helper()
-	release, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.12")
+	release, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.13")
 	if err != nil || !found {
 		t.Fatalf("curated release: found=%v err=%v", found, err)
 	}

@@ -3,7 +3,7 @@
   "definition_version": "storygraph-stage-harness",
   "prompt_version": "build-storygraph-prompt",
   "skill_bundle_version": "build-storygraph",
-  "skill_bundle_hash": "c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42",
+  "skill_bundle_hash": "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5",
   "output_schema_version": "storygraph-candidate-schema",
   "model_capability": "structured_text",
   "codex_runtime_contract": "codex-cli-ephemeral-read-only",
@@ -29,18 +29,85 @@
     "references/story-analysis.md",
     "references/storyboard-table.md",
     "references/structure-identity-review.md",
+    "references/vision-review.md",
     "references/visual-identity.md"
   ],
   "stages": [
-    {"stage":"extract_source_evidence","candidate_type":"source_evidence_candidate","references":["source-evidence.md"]},
-    {"stage":"analyze_story","candidate_type":"story_analysis_candidate","references":["story-analysis.md","entity-reconciliation.md"]},
-    {"stage":"reconcile_story","candidate_type":"story_reconciliation_candidate","references":["entity-reconciliation.md","story-analysis.md"]},
-    {"stage":"segment_episodes","candidate_type":"episode_segmentation_candidate","references":["episode-segmentation.md"]},
-    {"stage":"analyze_episode","candidate_type":"episode_analysis_candidate","references":["scene-structure.md","visual-identity.md"]},
-    {"stage":"reconcile_episode","candidate_type":"episode_reconciliation_candidate","references":["scene-structure.md","continuity-review.md"]},
-    {"stage":"draft_storyboard","candidate_type":"storyboard_row_candidate","references":["storyboard-table.md","visual-identity.md"]},
-    {"stage":"detail_shots","candidate_type":"shot_detail_candidate","references":["shot-detail.md","visual-identity.md"]},
-    {"stage":"review_storygraph","candidate_type":"storygraph_review_candidate","references":["continuity-review.md"]},
-    {"stage":"repair_candidate","candidate_type":"candidate_repair_patch","references":["continuity-review.md"]}
+    {
+      "stage": "extract_source_evidence",
+      "candidate_type": "source_evidence_candidate",
+      "references": [
+        "source-evidence.md"
+      ]
+    },
+    {
+      "stage": "analyze_story",
+      "candidate_type": "story_analysis_candidate",
+      "references": [
+        "story-analysis.md",
+        "entity-reconciliation.md"
+      ]
+    },
+    {
+      "stage": "reconcile_story",
+      "candidate_type": "story_reconciliation_candidate",
+      "references": [
+        "entity-reconciliation.md",
+        "story-analysis.md"
+      ]
+    },
+    {
+      "stage": "segment_episodes",
+      "candidate_type": "episode_segmentation_candidate",
+      "references": [
+        "episode-segmentation.md"
+      ]
+    },
+    {
+      "stage": "analyze_episode",
+      "candidate_type": "episode_analysis_candidate",
+      "references": [
+        "scene-structure.md",
+        "visual-identity.md"
+      ]
+    },
+    {
+      "stage": "reconcile_episode",
+      "candidate_type": "episode_reconciliation_candidate",
+      "references": [
+        "scene-structure.md",
+        "continuity-review.md"
+      ]
+    },
+    {
+      "stage": "draft_storyboard",
+      "candidate_type": "storyboard_row_candidate",
+      "references": [
+        "storyboard-table.md",
+        "visual-identity.md"
+      ]
+    },
+    {
+      "stage": "detail_shots",
+      "candidate_type": "shot_detail_candidate",
+      "references": [
+        "shot-detail.md",
+        "visual-identity.md"
+      ]
+    },
+    {
+      "stage": "review_storygraph",
+      "candidate_type": "storygraph_review_candidate",
+      "references": [
+        "continuity-review.md"
+      ]
+    },
+    {
+      "stage": "repair_candidate",
+      "candidate_type": "candidate_repair_patch",
+      "references": [
+        "continuity-review.md"
+      ]
+    }
   ]
 }

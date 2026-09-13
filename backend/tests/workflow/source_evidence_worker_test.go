@@ -90,7 +90,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	selectedPreset, err := presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
-		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 0,
+		PresetRelease: "2026.09.13", ApplicationMode: "faithful", ExpectedRevision: 0,
 		IdempotencyKey: "select-project-preset-1",
 	})
 	if err != nil || selectedPreset.Revision != 1 {
@@ -103,7 +103,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	replayedPreset, err := presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
-		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 0,
+		PresetRelease: "2026.09.13", ApplicationMode: "faithful", ExpectedRevision: 0,
 		IdempotencyKey: "select-project-preset-1",
 	})
 	if err != nil || replayedPreset.ID != selectedPreset.ID {
@@ -112,7 +112,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
-		PresetRelease: "2026.09.12", ApplicationMode: "world_adaptation", ExpectedRevision: 0,
+		PresetRelease: "2026.09.13", ApplicationMode: "world_adaptation", ExpectedRevision: 0,
 		IdempotencyKey: "select-project-preset-1",
 	}); !presetapp.IsProjectSelectionIdempotencyConflict(err) {
 		t.Fatalf("reuse Project Preset selection idempotency key: %v", err)
@@ -120,7 +120,7 @@ func TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce(t *testin
 	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "urban-cinematic-realism",
-		PresetRelease: "2026.09.12", ApplicationMode: "world_adaptation", ExpectedRevision: 0,
+		PresetRelease: "2026.09.13", ApplicationMode: "world_adaptation", ExpectedRevision: 0,
 		IdempotencyKey: "select-project-preset-stale",
 	}); !presetapp.IsProjectSelectionConflict(err) {
 		t.Fatalf("stale Project Preset selection CAS: %v", err)

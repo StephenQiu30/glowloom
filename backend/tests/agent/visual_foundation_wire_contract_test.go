@@ -23,8 +23,8 @@ func TestVisualFoundationInvocationFreezesProjectMediaAndInputHash(t *testing.T)
 		t.Fatal(err)
 	}
 	if invocation.InputHash != computed ||
-		invocation.InputHash != "2f29e94e5f29d194dc0dea83587b26fd6a93c7b445198640428ef8368cbc33c4" ||
-		invocation.StageInstanceKey() != "7b98988445792eb8d7ff01d71e6fa85a38a713945dc78de579a8a5cf6ee578bc" {
+		invocation.InputHash != "4a766671538a285c6b11db1b39aade8b305d9423b82c084aa5c3e4216607f689" ||
+		invocation.StageInstanceKey() != "42a3b13d2d7f349a361fbdeaee2ac618cefb386b022073fca7c172859b0843aa" {
 		t.Fatalf("Visual Foundation invocation identity is not deterministic: input=%s stage=%s", invocation.InputHash, invocation.StageInstanceKey())
 	}
 	_, current, _, _ := runtime.Caller(0)
@@ -212,7 +212,7 @@ func TestVisualFoundationAttemptResultValidatesCandidateAndTerminalStates(t *tes
 		t.Fatal(err)
 	}
 	if outputHash != "3c89f9503800ac661d25bc41ee15127ee392ad32601329442c04177ac192c7eb" ||
-		accepted.ResultHash != "76abedd1750ffb9b9326941e3fa58445f6463028a7162a3f677261f7e6850cfd" {
+		accepted.ResultHash != "f773fbe1841f02d41cd9fea167360c32666418623f11f0644348997f8938fd0c" {
 		t.Fatal("Visual Foundation output or result hash drifted across runtimes")
 	}
 	if err = accepted.ValidateFor(invocation, 1, authorizationHash); err != nil {

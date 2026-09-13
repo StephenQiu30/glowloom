@@ -37,6 +37,7 @@ var sceneAnalysisCandidateSchemas = []SceneAnalysisCandidateSchema{
 	{StageKey: "resolve_identities", ProfileKey: "default", CandidateType: "identity_resolution_candidate", OutputSchemaVersion: IdentityResolutionCandidateSchemaVersion, SchemaHash: "0e7cdc46d4bdd4335b962166eb783e4789551cd83de634da1b0736729e86552a"},
 	{StageKey: VisualFoundationStageKey, ProfileKey: "default", CandidateType: "visual_foundation_candidate", OutputSchemaVersion: VisualFoundationCandidateSchemaVersion, SchemaHash: VisualFoundationCandidateSchemaHash},
 	{StageKey: "review_candidate", ProfileKey: "structure_identity", CandidateType: "structure_identity_review_candidate", OutputSchemaVersion: StructureIdentityReviewCandidateSchemaVersion, SchemaHash: "8668ace7b898b3136034b1904c2acfa27489064b05a6736c3145f254e3df7281"},
+	{StageKey: "review_reference_artifact", ProfileKey: "default", CandidateType: "vision_review_candidate", OutputSchemaVersion: "vision-review-candidate-production", SchemaHash: "46c7c2d79aa004f00f11abbe8368fa9f56c39e05f014c95bbfc748a7874cdfa0"},
 }
 
 func SceneAnalysisCandidateSchemas() []SceneAnalysisCandidateSchema {

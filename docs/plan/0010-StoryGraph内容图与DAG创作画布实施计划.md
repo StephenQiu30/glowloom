@@ -248,7 +248,8 @@
     - [x] 接通整组私有 bytes 内部读取：同一编译器在对象 I/O 前后重验输入/权限，复用有界对象读取与 PNG 校验；定向 Race 与真实 PostgreSQL/Temporal 旅程验证取消/撤权/漂移/损坏时零部分返回及内存释放。对象适配器使用旅程测试数据，真实 MinIO/模型仍待最终链路验收；不开放派发或下载入口。
     - [ ] 接通有依赖 Target 的正式已选 AssetVersion 与比较附件，禁止空依赖降级；接通正式 Review Release/Control、授权 transport、Harness 和候选持久化。
       - [x] 固定基础整组调用与授权合同：Go/Python 双层 Hash 的 Invocation/AttemptResult、bundle scope/shard、单次模型预算、既有签名授权与共享 golden；缺失字段、过期/串用授权和重算 Hash 后身份漂移均拒绝。不登记可执行 Stage，不提前持久化或派发。
-      - [ ] 接通基础整组 Agent capability：严格授权 multipart、既有 Codex 图片 Harness、Stage/Definition/Release；随后接入 Backend 当前事实重验、持久 Invocation/Attempt/Candidate 与 Workflow，不冒充依赖型审核完成。
+      - [x] 接通基础整组 Agent capability：严格授权 multipart、完整静态 PNG 校验、既有单次 Codex 图片 Harness、Stage/Definition/Release 与 Backend typed HTTP Client。真实子进程受控输出、HTTP 拒绝路径和临时文件清理可执行验证；Bundle 变更同步更新 Schema/资源身份及内置 Preset Release，不放宽固定身份检查。该完成项不抵扣真实模型语义质量。
+      - [ ] 接入 Backend 当前事实重验、持久 Invocation/Attempt/Candidate 与 Workflow；当前 Client/Agent 运行能力不等于已获得业务派发权，不冒充依赖型审核完成。最终真实模型及 agent-browser 验收继续在完整链路开发后执行。
   - [x] 按已确认的用途边界拆分内部视觉质量审核与正式使用准入：保留 not_assessed/QC blocked，只允许完整技术合格组满足内部送审条件；正式选择/发布仍阻断。失败测试、现有 Bundle 编译/Query 的可重算 admission、OpenAPI 与真实系统旅程均已验证，不新增表或修改 CI。素材条件不是操作者授权，真实 Vision 执行仍待下步接通。
   - [x] 固定整组 Vision Review 候选的五类结果、逐槽位证据区域与完整冻结 Subject，Go/Python 一致验证六种用途、输入漂移和越权输出；共享 canonical golden、整数基点和缺失字段拒绝已验证。不登记虚假的可执行 Stage，不绕过未通过技术 QC 的素材；权利未评估按已确认的用途边界保留正式使用阻断。完整 Input/附件 transport、真实审核执行与持久化仍待接通。
   - [x] 从完整已终结 Job/Call/媒体事实编译同组 Bundle Input、per-slot 与 bundle 确定性 QC，提供一致快照只读查询；拒绝混组、缺项和漂移，权利未评估保持 blocked，不冒充 CandidateBundle/Vision/Selection 发布。真实 PostgreSQL/Temporal 旅程验证全槽位、明确失败、重放与跨连接一致快照；完整权利策略、Vision 和正式发布仍按后续步骤完成。

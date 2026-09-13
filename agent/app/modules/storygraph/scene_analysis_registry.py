@@ -16,6 +16,7 @@ from app.modules.storygraph.scene_analysis_candidates import (
     ScriptSpanCandidate,
     StructureIdentityReviewCandidate,
 )
+from app.modules.storygraph.vision_review_contract import VisionReviewCandidate
 from app.modules.storygraph.visual_foundation_contract import VisualFoundationCandidate
 from app.protocol.canonical import production_canonical_hash
 
@@ -30,6 +31,7 @@ SceneAnalysisCandidateType = Literal[
     "reference_brief_candidate",
     "reference_plan_candidate",
     "visual_foundation_candidate",
+    "vision_review_candidate",
 ]
 
 
@@ -42,6 +44,12 @@ class SceneAnalysisStageSpec:
 
 
 SCENE_ANALYSIS_REGISTRY: dict[tuple[str, str], SceneAnalysisStageSpec] = {
+    ("review_reference_artifact", "default"): SceneAnalysisStageSpec(
+        candidate_type="vision_review_candidate",
+        candidate_model=VisionReviewCandidate,
+        output_schema_version="vision-review-candidate-production",
+        references=("vision-review.md",),
+    ),
     ("propose_script_spans", "default"): SceneAnalysisStageSpec(
         candidate_type="script_span_candidate",
         candidate_model=ScriptSpanCandidate,

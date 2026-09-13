@@ -25,7 +25,7 @@ func TestSceneAnalysisStageReleasesBindCoreBundleAndLoadedResources(t *testing.T
 
 	imageDigest := "sha256:" + strings.Repeat("7", 64)
 	releases, err := contract.BuildSceneAnalysisStageReleases(imageDigest)
-	if err != nil || len(releases) != 10 {
+	if err != nil || len(releases) != 11 {
 		t.Fatalf("build Scene Analysis Stage Releases: count=%d err=%v", len(releases), err)
 	}
 	core, _, err := contract.BuildSceneAnalysisDefinitionCore()

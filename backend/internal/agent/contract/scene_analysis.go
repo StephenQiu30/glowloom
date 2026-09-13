@@ -37,6 +37,7 @@ type SceneAnalysisStageVariant struct {
 
 func (value SceneAnalysisStageVariant) Validate() error {
 	expectedSchema := map[string]string{
+		"review_reference_artifact\x00default":        VisionReviewCandidateContractID,
 		"compile_reference_brief\x00default":          ReferenceBriefCandidateContractID,
 		"propose_script_spans\x00default":             ScriptSpanCandidateSchemaVersion,
 		"extract_scene_facts\x00default":              SceneFactCandidateSchemaVersion,

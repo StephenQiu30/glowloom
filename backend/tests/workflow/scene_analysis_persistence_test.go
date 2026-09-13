@@ -2251,7 +2251,7 @@ func TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays(t *testi
 	if _, err = presetSelectionService.Select(ctx, presetapp.SelectProjectPresetCommand{
 		WorkspaceID: fixture.workspaceID.String(), ProjectID: fixture.projectID.String(),
 		SelectedBy: fixture.userID.String(), PresetKey: "chinese-fantasy-animation",
-		PresetRelease: "2026.09.12", ApplicationMode: "faithful", ExpectedRevision: 1,
+		PresetRelease: "2026.09.13", ApplicationMode: "faithful", ExpectedRevision: 1,
 		IdempotencyKey: "scene-analysis-visual-preset-switch",
 	}); err != nil {
 		t.Fatalf("switch Project Preset selection before stale validation: %v", err)
@@ -3145,7 +3145,7 @@ func freezeVisualFoundationPreset(
 	idempotencyKey string,
 ) (presetdomain.Release, presetdomain.ProjectSelection, *presetapp.ProjectSelectionService) {
 	t.Helper()
-	release, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.12")
+	release, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.13")
 	if err != nil || !found {
 		t.Fatalf("load curated Visual Foundation Preset: found=%v err=%v", found, err)
 	}

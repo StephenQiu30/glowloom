@@ -9,7 +9,7 @@
       "skill_release_id": "66666666-6666-4666-8666-666666666666",
       "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
       "stage_release_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-      "bundle_content_hash": "c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42",
+      "bundle_content_hash": "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5",
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     },
     "control": {
@@ -602,7 +602,7 @@
         ]
       }
     },
-    "input_hash": "2be750aeab9db9eeae4557f29d6295fa67409725f3bb01c233d55ea4879585ec"
+    "input_hash": "aa46e6d49f0fc89534b949f74c936d57fb45996fbea686d6066a77854c63a133"
   },
   "accepted_result": {
     "invocation_id": "00000000-0000-0000-0000-000000000680",
@@ -619,7 +619,7 @@
       "skill_release_id": "66666666-6666-4666-8666-666666666666",
       "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
       "stage_release_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-      "bundle_content_hash": "c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42",
+      "bundle_content_hash": "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5",
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     },
     "control": {
@@ -630,7 +630,7 @@
       "release_fence": 0
     },
     "claim_version": 1,
-    "dispatch_authorization_hash": "22f1e2b1962cb18beddf5cf5d2316fd83fb148e5d0890cc2762182b854b70ae9",
+    "dispatch_authorization_hash": "2e2c54345e936db5c8619c9bbde18ef85c7bf0efda68687918f4110a49ba7ee1",
     "status": "accepted",
     "candidate_type": "vision_review_candidate",
     "candidate": {
@@ -880,7 +880,7 @@
         }
       ]
     },
-    "input_hash": "2be750aeab9db9eeae4557f29d6295fa67409725f3bb01c233d55ea4879585ec",
+    "input_hash": "aa46e6d49f0fc89534b949f74c936d57fb45996fbea686d6066a77854c63a133",
     "output_hash": "0f81b7aad82924a6e4c2b6ecfc1bad084202f21d0dacebbe940f0471ef1c011e",
     "diagnostics": [],
     "diagnostic_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
@@ -892,27 +892,27 @@
       "model": "codex-cli-default"
     },
     "error": null,
-    "result_hash": "1e9512eb4ec91ba138dd6f29f91b33ac1cacaf589d26ec6f033b976c35deb4ef"
+    "result_hash": "f419652ed96868fc632a2cd0c9076fc56f3c22b3dc4309b010d046420a2dd9d9"
   },
-  "stage_instance_key": "376f9bc858ed10de098182f29dab39cf167623cda105878adede051bfbb0795f",
+  "stage_instance_key": "23b2a5c41567f6b49172920cd5c6afe8a133f931392733c6df18d3001425c3b9",
   "authorization": {
-    "hash": "22f1e2b1962cb18beddf5cf5d2316fd83fb148e5d0890cc2762182b854b70ae9",
+    "hash": "2e2c54345e936db5c8619c9bbde18ef85c7bf0efda68687918f4110a49ba7ee1",
     "claim_version": 1,
     "expires_at": "1970-01-01T00:06:40Z",
     "claims": {
       "invocation_id": "00000000-0000-0000-0000-000000000680",
       "attempt_id": "00000000-0000-0000-0000-000000000690",
-      "input_hash": "2be750aeab9db9eeae4557f29d6295fa67409725f3bb01c233d55ea4879585ec",
+      "input_hash": "aa46e6d49f0fc89534b949f74c936d57fb45996fbea686d6066a77854c63a133",
       "skill_release_id": "66666666-6666-4666-8666-666666666666",
       "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
       "stage_release_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-      "bundle_content_hash": "c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42",
+      "bundle_content_hash": "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5",
       "control_hash": "5555555555555555555555555555555555555555555555555555555555555555",
       "release_fence": 0,
       "claim_version": 1,
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
       "expires_at": 400
     },
-    "signature_hex": "acde744cb7d76c0aa1f37daa2418fc60a61089956a873058c4b65890a538121d"
+    "signature_hex": "c23d625467cde379717a535399f6fff0429bfe68925d496bdc2d1540d2c47f7f"
   }
 }

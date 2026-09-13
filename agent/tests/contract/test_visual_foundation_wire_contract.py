@@ -175,10 +175,10 @@ def test_visual_foundation_invocation_freezes_project_media_and_input_hash() -> 
     assert VisualFoundationInvocation.model_validate(fixture) == invocation
     assert invocation.input_hash == invocation.compute_input_hash()
     assert (
-        invocation.input_hash == "2f29e94e5f29d194dc0dea83587b26fd6a93c7b445198640428ef8368cbc33c4"
+        invocation.input_hash == "4a766671538a285c6b11db1b39aade8b305d9423b82c084aa5c3e4216607f689"
     )
     assert invocation.stage_instance_key() == (
-        "7b98988445792eb8d7ff01d71e6fa85a38a713945dc78de579a8a5cf6ee578bc"
+        "42a3b13d2d7f349a361fbdeaee2ac618cefb386b022073fca7c172859b0843aa"
     )
     assert invocation.payload.media_attachments[0].attachment_id == (
         invocation.payload.stage_input.reference_attachments[0].attachment_id
@@ -236,7 +236,7 @@ def test_visual_foundation_attempt_result_validates_candidate_and_terminal_state
         "3c89f9503800ac661d25bc41ee15127ee392ad32601329442c04177ac192c7eb"
     )
     assert accepted.result_hash == (
-        "76abedd1750ffb9b9326941e3fa58445f6463028a7162a3f677261f7e6850cfd"
+        "f773fbe1841f02d41cd9fea167360c32666418623f11f0644348997f8938fd0c"
     )
     accepted.validate_for(invocation, 1, authorization_hash)
     assert accepted.result_hash == accepted.compute_result_hash()

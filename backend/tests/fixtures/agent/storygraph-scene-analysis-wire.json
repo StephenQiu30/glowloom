@@ -1,5 +1,12 @@
 {
-  "canonical_unicode_root": {"z":"e\u0301","html":"<>&","a":["😀","é"]},
+  "canonical_unicode_root": {
+    "z": "é",
+    "html": "<>&",
+    "a": [
+      "😀",
+      "é"
+    ]
+  },
   "canonical_unicode_json": "{\"a\":[\"😀\",\"é\"],\"html\":\"<>&\",\"z\":\"é\"}",
   "canonical_unicode_hash": "abee9ba30af8613def7c36078aa9eae4b3fb4df4307eb3de61df7fd5a9b9295d",
   "valid_invocation": {
@@ -11,7 +18,7 @@
       "skill_release_id": "66666666-6666-4666-8666-666666666666",
       "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
       "stage_release_hash": "3333333333333333333333333333333333333333333333333333333333333333",
-      "bundle_content_hash": "c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42",
+      "bundle_content_hash": "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5",
       "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     },
     "control": {
@@ -68,7 +75,7 @@
         "newline_normalization": "lf"
       }
     },
-    "input_hash": "182d8aab7d2a712349d03f5e9c38187a9147324cd8a1a559f9d1cb55611c663b"
+    "input_hash": "85fce020f7e1d853f6b45a03fda1ba63ee5d39d8163564b66f447e0346e2ce1e"
   },
   "valid_script_span_candidate": {
     "source_version_id": "33333333-3333-4333-8333-333333333333",
@@ -88,7 +95,10 @@
         "codepoint_end": 29,
         "heading": null,
         "evidence": null,
-        "scene_span_ids": ["span_0001", "span_0002"]
+        "scene_span_ids": [
+          "span_0001",
+          "span_0002"
+        ]
       }
     ],
     "spans": [
@@ -134,35 +144,139 @@
         "span_id": "span_0001",
         "source_start": 0,
         "source_end": 16,
-        "location": {"text":"内","evidence":{"source_start":6,"source_end":7,"text_hash":"b2126ce9c100bff0cc963326e29fadc751106ad7fd7f34aa46cddc06d8198c6a","exact_anchor":"内"}},
-        "time": {"text":"夜","evidence":{"source_start":4,"source_end":5,"text_hash":"a519542a5fb4163581e0630644fb105b0f0b53e4e0c5c3a176155465fe6592a9","exact_anchor":"夜"}},
-        "actions": [{"text":"林舟握住门把。","evidence":{"source_start":8,"source_end":15,"text_hash":"f2ffbd1d3cb0f5e0d95b211b12a0bdee451dd82d38bf673915e42420f7ed9ff1","exact_anchor":"林舟握住门把。"}}],
+        "location": {
+          "text": "内",
+          "evidence": {
+            "source_start": 6,
+            "source_end": 7,
+            "text_hash": "b2126ce9c100bff0cc963326e29fadc751106ad7fd7f34aa46cddc06d8198c6a",
+            "exact_anchor": "内"
+          }
+        },
+        "time": {
+          "text": "夜",
+          "evidence": {
+            "source_start": 4,
+            "source_end": 5,
+            "text_hash": "a519542a5fb4163581e0630644fb105b0f0b53e4e0c5c3a176155465fe6592a9",
+            "exact_anchor": "夜"
+          }
+        },
+        "actions": [
+          {
+            "text": "林舟握住门把。",
+            "evidence": {
+              "source_start": 8,
+              "source_end": 15,
+              "text_hash": "f2ffbd1d3cb0f5e0d95b211b12a0bdee451dd82d38bf673915e42420f7ed9ff1",
+              "exact_anchor": "林舟握住门把。"
+            }
+          }
+        ],
         "dialogues": [],
-        "raw_character_mentions": [{"text":"林舟","occurrence_role":"actual","evidence":{"source_start":8,"source_end":10,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
-        "raw_prop_mentions": [{"text":"门把","occurrence_role":"actual","evidence":{"source_start":12,"source_end":14,"text_hash":"3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9","exact_anchor":"门把"}}]
+        "raw_character_mentions": [
+          {
+            "text": "林舟",
+            "occurrence_role": "actual",
+            "evidence": {
+              "source_start": 8,
+              "source_end": 10,
+              "text_hash": "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+              "exact_anchor": "林舟"
+            }
+          }
+        ],
+        "raw_prop_mentions": [
+          {
+            "text": "门把",
+            "occurrence_role": "actual",
+            "evidence": {
+              "source_start": 12,
+              "source_end": 14,
+              "text_hash": "3ff7bc50c9533059a629804286be3602fd8805c9454949ba69ce9b1e8c0b96d9",
+              "exact_anchor": "门把"
+            }
+          }
+        ]
       },
       {
         "temporary_scene_id": "scene_0002",
         "span_id": "span_0002",
         "source_start": 16,
         "source_end": 29,
-        "location": {"text":"外","evidence":{"source_start":22,"source_end":23,"text_hash":"0e826095b60ccf039478a7e093220d79a4614158557924383bd3c7ef1bb06d8a","exact_anchor":"外"}},
-        "time": {"text":"日","evidence":{"source_start":20,"source_end":21,"text_hash":"85217f7aff77841438439fb3e7cf37bb3062fb026453c7692247d3a5641a0115","exact_anchor":"日"}},
-        "actions": [{"text":"林舟离开。","evidence":{"source_start":24,"source_end":29,"text_hash":"d6e8609481cb01d70f08f80f286f4c2e752f1e471b55c96ca1cc5879036445c4","exact_anchor":"林舟离开。"}}],
+        "location": {
+          "text": "外",
+          "evidence": {
+            "source_start": 22,
+            "source_end": 23,
+            "text_hash": "0e826095b60ccf039478a7e093220d79a4614158557924383bd3c7ef1bb06d8a",
+            "exact_anchor": "外"
+          }
+        },
+        "time": {
+          "text": "日",
+          "evidence": {
+            "source_start": 20,
+            "source_end": 21,
+            "text_hash": "85217f7aff77841438439fb3e7cf37bb3062fb026453c7692247d3a5641a0115",
+            "exact_anchor": "日"
+          }
+        },
+        "actions": [
+          {
+            "text": "林舟离开。",
+            "evidence": {
+              "source_start": 24,
+              "source_end": 29,
+              "text_hash": "d6e8609481cb01d70f08f80f286f4c2e752f1e471b55c96ca1cc5879036445c4",
+              "exact_anchor": "林舟离开。"
+            }
+          }
+        ],
         "dialogues": [],
-        "raw_character_mentions": [{"text":"林舟","occurrence_role":"actual","evidence":{"source_start":24,"source_end":26,"text_hash":"475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1","exact_anchor":"林舟"}}],
+        "raw_character_mentions": [
+          {
+            "text": "林舟",
+            "occurrence_role": "actual",
+            "evidence": {
+              "source_start": 24,
+              "source_end": 26,
+              "text_hash": "475fe7b6fbd3ec67f16c535eb23fb4630efa5a8958a041408682f88e9685d4f1",
+              "exact_anchor": "林舟"
+            }
+          }
+        ],
         "raw_prop_mentions": []
       }
     ],
     "review_issues": []
   },
-  "expected_input_hash": "182d8aab7d2a712349d03f5e9c38187a9147324cd8a1a559f9d1cb55611c663b",
-  "expected_stage_instance_key": "faa7f881abdf55589f46db07d197708ece3be949d785b196b60e5ad41d73baef",
-  "expected_result_hash": "fdb2a3c0be48bc9ca63bcd50567540a69377fec87c3f4d1ece3c2e0f71ec1fc8",
+  "expected_input_hash": "85fce020f7e1d853f6b45a03fda1ba63ee5d39d8163564b66f447e0346e2ce1e",
+  "expected_stage_instance_key": "7eadb2d770ec07b610904fe972db2d31448c01e12aacf4e45d12b786735d20ed",
+  "expected_result_hash": "60711edd111c1ab9b167d489271ebb328a6b05293c4cb43058d5d521116d4a13",
   "reject_mutations": [
-    {"name": "missing_attempt_id", "operation": "remove", "path": "attempt_id"},
-    {"name": "unknown_style_field", "operation": "add_stage_input", "path": "visual_style", "value": "赛博朋克"},
-    {"name": "input_hash_drift", "operation": "replace", "path": "input_hash", "value": "0000000000000000000000000000000000000000000000000000000000000000"},
-    {"name": "cross_project_scope_drift", "operation": "replace_scope", "path": "project_id", "value": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+    {
+      "name": "missing_attempt_id",
+      "operation": "remove",
+      "path": "attempt_id"
+    },
+    {
+      "name": "unknown_style_field",
+      "operation": "add_stage_input",
+      "path": "visual_style",
+      "value": "赛博朋克"
+    },
+    {
+      "name": "input_hash_drift",
+      "operation": "replace",
+      "path": "input_hash",
+      "value": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "cross_project_scope_drift",
+      "operation": "replace_scope",
+      "path": "project_id",
+      "value": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    }
   ]
 }

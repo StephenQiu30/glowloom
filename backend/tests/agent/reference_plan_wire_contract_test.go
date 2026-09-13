@@ -13,8 +13,8 @@ func TestReferencePlanInvocationFreezesProjectInputAndIdentity(t *testing.T) {
 	invocation := validReferencePlanInvocation(t)
 	computed, err := invocation.ComputeInputHash()
 	if err != nil || invocation.InputHash != computed ||
-		invocation.InputHash != "f4d42820086b7afb8ff972039c8ca983c4acd7c655085e31ad6ec012585fe496" ||
-		invocation.StageInstanceKey() != "548fbb5b68210ae231e2a83d5c9f9e5cf127d0fb80c01a83b8b4d135d6268227" {
+		invocation.InputHash != "07a196e9aaf91cab604e5004f813b64d022efccad1cce90195127b0a70590205" ||
+		invocation.StageInstanceKey() != "7f96e70fd3f67b9802b7d985c87b2ef0f8ecb5159ac0778e1a3b25caafeed468" {
 		t.Fatalf(
 			"Reference Plan invocation identity is not deterministic: input=%s stage=%s err=%v",
 			invocation.InputHash,
@@ -100,7 +100,7 @@ func TestReferencePlanAttemptResultValidatesCandidateAndTerminalStates(t *testin
 		t.Fatalf("valid Reference Plan result was rejected: %v", err)
 	}
 	if outputHash != "9176e76d8c146a3e92899322b88e4a92e87002c3f17f94527f8cc174371d3ba1" ||
-		accepted.ResultHash != "98fb434c47ad0f3a8da518d736ef04b2616a064d19c0152d9df550101774dde8" {
+		accepted.ResultHash != "f17ea8c8543bb034a1d74ac38a97d438cf890bb05e7cc17faa97e4e86e03c6b1" {
 		t.Fatalf(
 			"Reference Plan output or result hash is not deterministic: output=%s result=%s",
 			outputHash,

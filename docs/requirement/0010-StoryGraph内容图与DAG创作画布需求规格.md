@@ -131,6 +131,8 @@
 
 整组审核 Invocation 必须独立绑定 bundle scope/shard、Release/Control/Budget；内容 Hash 与信封 Hash 分开重算，Dispatch Authorization 绑定具体 attempt 和信封 Hash。Agent 仅通过私有有界 multipart 接收完整槽位 PNG，校验真实字节并以只读临时文件输入既有单次 Codex 执行器；缺项/混组/漂移/超限/越权均不得调用模型。候选五类结论须匹配冻结 Subject，unknown 不伪装 accepted；返回候选不授予选择或发布权限。
 
+整组传输须拒绝重定向、过期授权、上传声明与真实字节不符，以及 Hash 一致但无法完整解码、带尾部内容或多帧的 PNG。上传后、模型执行前再次检查授权；模型预算只能缩小，候选必须绑定本次冻结 Subject。正常完成、模型异常、上传中断及取消均关闭临时文件；错误响应不回显私有路径、Prompt 或执行器原始异常。Agent capability 验收包含实际子进程及严格输出链路，但受控子进程结果不能代替真实模型语义质量、候选持久化和最终业务验收。
+
 首次基础生成必须可通过 Backend 的四个独立 HTTP 命令完成生成授权、Target 构建、执行授权和执行准备，再显式启动既有全量 Call 工作流。每个命令只调用对应 Owner，严格验证有界闭合请求和当前权限/Token；不接受路径身份覆盖、自由 Prompt/Provider 参数、发送指令或首次 Head revision 覆盖。响应只暴露精确身份并设置 no-store。幂等重放复用同一事实，输入冲突为 409；无效槽位 Policy 为 422，失败不能遗留 Target/Head/准备回执。公开入口不意味着自动执行、重新生成或六类目标和媒体验收已完成。
 
 | ID | 必须满足的合同 | 最低验证 |

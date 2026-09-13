@@ -14,7 +14,7 @@ const (
 	SceneAnalysisDefinitionCoreContractID = "storygraph-agent-definition-core-production"
 	sceneAnalysisDefinitionCoreID         = "storygraph-scene-analysis-definition-core-production"
 	sceneAnalysisDefinitionCoreVersion    = "2026.09.12"
-	sceneAnalysisWireSchemaContentHash    = "69f812c1775ce96df775ec986bdc0829f7cbbb3bba1ba1d0b5ab23cbc14755f2"
+	sceneAnalysisWireSchemaContentHash    = "58ac69822bdeea788f23fd2595a28becc0710f7e81de69868bd4efa66ef78835"
 )
 
 type SceneAnalysisPatchApplication struct {
@@ -173,6 +173,11 @@ func buildSceneAnalysisDefinitionVariant(
 		runtimeClass = "vision"
 		modelCapability = "vision"
 		invariantEnforcement = "backend-visual-foundation-attempt-result-validate-for"
+	} else if output.StageKey == VisionReviewStageKey {
+		lane = "preset_visual"
+		runtimeClass = "vision"
+		modelCapability = "vision"
+		invariantEnforcement = "backend-vision-review-attempt-result-validate-for"
 	} else if output.StageKey == "plan_reference_assets" || output.StageKey == ReferenceBriefStageKey {
 		lane = "preset_visual"
 		if output.StageKey == "plan_reference_assets" {
@@ -260,6 +265,8 @@ func sceneAnalysisCapabilityKey(stageKey string) string {
 		return "plan-reference-assets"
 	case ReferenceBriefStageKey:
 		return "compile-reference-brief"
+	case VisionReviewStageKey:
+		return "review-reference-artifact"
 	case "review_candidate":
 		return "review-production"
 	default:
@@ -276,6 +283,7 @@ func sceneAnalysisReferencePath(stageKey string) string {
 		ReferenceBriefStageKey:             "references/reference-brief.md",
 		"plan_reference_assets":            "references/reference-planning.md",
 		VisualFoundationStageKey:           "references/visual-identity.md",
+		VisionReviewStageKey:               "references/vision-review.md",
 	}[stageKey]
 }
 

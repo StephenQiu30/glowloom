@@ -32,6 +32,8 @@ var sceneAnalysisWireSchemas = []SceneAnalysisWireSchema{
 	{ContractID: "storygraph-reference-plan-stage-invocation-production", SchemaHash: "6324794b82348d02f99002ed08c3bdc590be44a9d1e94838dff2e47e35d40e33"},
 	{ContractID: "storygraph-stage-attempt-result-production", SchemaHash: "3b8294b376964bf52c48d7a2767ac89f5bee40d9d2732e33fc45318fd5f4fb2d"},
 	{ContractID: "storygraph-stage-invocation-production", SchemaHash: "6cc980590ed9aacb9a70755fb843b3ac20cd467abbd4572bd1470be66ae044ac"},
+	{ContractID: "storygraph-vision-review-stage-attempt-result-production", SchemaHash: "3f452ab23012f36913ac1fbf4c092ca5fea141955290ecc40c0eb558cf8fe306"},
+	{ContractID: "storygraph-vision-review-stage-invocation-production", SchemaHash: "59cba4fd588bf3d4dbeceb723707e111e2a377eed0a7ab4255c84382560aaf23"},
 	{ContractID: "storygraph-visual-foundation-stage-attempt-result-production", SchemaHash: "cea6d4ac4c15d024d2084ffb50d4d45d4e2b278d10ab6721aca50abddb444f13"},
 	{ContractID: "storygraph-visual-foundation-stage-invocation-production", SchemaHash: "a0bb29d82a1c5b7e7eca6aef8c067a27fa9c636255df43c771c891d7c61b857b"},
 }

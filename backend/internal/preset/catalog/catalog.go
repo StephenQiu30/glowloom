@@ -10,7 +10,7 @@ import (
 	preset "github.com/StephenQiu30/lanverse/backend/internal/preset/domain"
 )
 
-const curatedRelease = "2026.09.12"
+const curatedRelease = "2026.09.13"
 
 const (
 	referenceQCPolicyHash           = "cd2edeb49a2e29803a62ce395f8ce7b5f3ff45f69706bb529278a2a648573aec"
@@ -18,10 +18,10 @@ const (
 )
 
 var curatedReleaseHashes = map[string]string{
-	"chinese-fantasy-animation": "8f18bcf2001151a4793a859fb8f43978cfe58ef8c9ce48eb7c530cab3ff33956",
-	"cyberpunk-animation":       "1b0d565f6f5311111564b0f7dbed9267ad0b9411bf8e98c5555ea43661f41205",
-	"period-cinematic-realism":  "c18e1f89585553dc18ac1716e1ee13412cc0972ef05101cb60424606e09ced96",
-	"urban-cinematic-realism":   "fbbe69ef45d178bd414872bf4160befa6bd5db9df8c2055e92b43c25be5492c4",
+	"chinese-fantasy-animation": "1ce0d5bef265a2ca9a47ed8e72610d34b94bc1abbeb0b2cb956dbc8f5e7f0fe1",
+	"cyberpunk-animation":       "4c8fa17d000ede0f3c3ffaa9acba460444c605996bf50e1da321dde0769a339a",
+	"period-cinematic-realism":  "b1251061a4f9dd46db77fae8e055dd1225dcc0db12cc550f6022e20c6b02dff0",
+	"urban-cinematic-realism":   "178ac3194a4dc91f11cea4131a444e28a5e2f3a2320bb22516116a3ee2fd4666",
 }
 
 type ImageQCPolicy struct {

@@ -10,11 +10,16 @@ from app.harness.scene_analysis_schemas import (
     SceneAnalysisInvocation,
 )
 from app.harness.schemas import StoryGraphStageInvocation
+from app.harness.vision_review_schemas import VisionReviewInvocation
 from app.harness.visual_foundation_schemas import VisualFoundationInvocation
 from app.modules.storygraph.harness import StoryGraphHarness
 from app.modules.storygraph.reference_brief_harness import ReferenceBriefHarness
 from app.modules.storygraph.reference_plan_harness import ReferencePlanHarness
 from app.modules.storygraph.scene_analysis_harness import SceneAnalysisHarness
+from app.modules.storygraph.vision_review_harness import (
+    VisionReviewHarness,
+    VisionReviewMediaBinding,
+)
 from app.modules.storygraph.visual_foundation_harness import (
     VisualFoundationHarness,
     VisualFoundationMediaBinding,
@@ -84,3 +89,17 @@ class HarnessService:
     async def text_storyboard(self, task: TextTask) -> TextResult:
         harness = TextHarness(skill_catalog=self.skill_runtime.catalog)
         return await harness.execute(task)
+
+    async def vision_review(
+        self,
+        invocation: VisionReviewInvocation,
+        media_bindings: tuple[VisionReviewMediaBinding, ...],
+    ) -> tuple[BaseModel, str]:
+        harness = VisionReviewHarness(
+            invocation.payload.stage_input,
+            media_bindings=media_bindings,
+            max_execution_seconds=invocation.budget.max_execution_seconds,
+            max_output_bytes=invocation.budget.max_output_bytes,
+            skill_catalog=self.skill_runtime.catalog,
+        )
+        return await harness.execute(), harness.model_name

@@ -30,6 +30,8 @@ def test_scene_analysis_wire_schema_manifest_matches_the_backend_fixture() -> No
         "storygraph-reference-plan-stage-invocation-production",
         "storygraph-stage-attempt-result-production",
         "storygraph-stage-invocation-production",
+        "storygraph-vision-review-stage-attempt-result-production",
+        "storygraph-vision-review-stage-invocation-production",
         "storygraph-visual-foundation-stage-attempt-result-production",
         "storygraph-visual-foundation-stage-invocation-production",
     ]

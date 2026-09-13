@@ -16,7 +16,7 @@ func TestSceneAnalysisDefinitionCoreFreezesOnlyPreReleaseContracts(t *testing.T)
 		t.Fatalf("build Scene Analysis Definition Core: %v", err)
 	}
 	if core.ContractID != contract.SceneAnalysisDefinitionCoreContractID ||
-		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 10 {
+		core.WireSchemaID != contract.SceneAnalysisWireSchemaVersion || len(core.VariantContracts) != 11 {
 		t.Fatalf("unexpected Scene Analysis Definition Core: %#v", core)
 	}
 	visualIndex := slices.IndexFunc(core.VariantContracts, func(candidate contract.SceneAnalysisDefinitionVariant) bool {

@@ -39,7 +39,7 @@ def _stage_invocation(stage: str, payload: dict[str, object]) -> StoryGraphStage
                 "prompt_version": "build-storygraph-prompt",
                 "skill_bundle_version": "build-storygraph",
                 "skill_bundle_hash": (
-                    "c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42"
+                    "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5"
                 ),
                 "output_schema_version": "storygraph-candidate-schema",
                 "model_capability": "structured_text",

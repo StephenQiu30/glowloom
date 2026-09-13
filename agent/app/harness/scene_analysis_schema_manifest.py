@@ -22,12 +22,14 @@ from app.harness.scene_analysis_schemas import (
     ScriptSpanProposalInput,
     StructureIdentityReviewInput,
 )
+from app.harness.vision_review_schemas import VisionReviewAttemptResult, VisionReviewInvocation
 from app.harness.visual_foundation_schemas import (
     VisualFoundationAttemptResult,
     VisualFoundationInvocation,
 )
 from app.modules.storygraph.reference_brief_contract import ReferenceBriefInput
 from app.modules.storygraph.reference_plan_contract import ReferencePlanInput
+from app.modules.storygraph.vision_review_input import VisionReviewInput
 from app.modules.storygraph.visual_foundation_contract import VisualFoundationInput
 from app.protocol.canonical import production_canonical_hash
 
@@ -58,6 +60,8 @@ _WIRE_SCHEMAS: tuple[tuple[str, type[BaseModel]], ...] = (
     ),
     ("storygraph-stage-attempt-result-production", SceneAnalysisAttemptResult),
     ("storygraph-stage-invocation-production", SceneAnalysisInvocation),
+    ("storygraph-vision-review-stage-attempt-result-production", VisionReviewAttemptResult),
+    ("storygraph-vision-review-stage-invocation-production", VisionReviewInvocation),
     (
         "storygraph-visual-foundation-stage-attempt-result-production",
         VisualFoundationAttemptResult,
@@ -129,6 +133,7 @@ _INPUT_SCHEMAS: tuple[tuple[str, str, str, type[BaseModel]], ...] = (
         "structure-identity-review-input-production",
         StructureIdentityReviewInput,
     ),
+    ("review_reference_artifact", "default", "vision-review-input-production", VisionReviewInput),
 )
 
 

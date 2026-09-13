@@ -1,1 +1,125 @@
-{"attempt_result":{"attempt_id":"00000000-0000-0000-0000-000000000090","candidate":{"application_mode":"world_adaptation","creative_fill_proposals":[{"affected_scope_keys":["scene:00000000-0000-0000-0000-000000000002"],"decision_status":"needs_creator_decision","design_domain":"wardrobe","gap_key":"gap_uniform_material","proposal":"使用低反光织物并保留角色身份轮廓，具体纹样等待创作者确认。"}],"fidelity_invariants":["character_identity","holder_relation","scene_continuity","story_fact"],"preset_release_content_hash":"d410850fd5f4e0a3cbffa317eb15d8e3c8fe4bcdb7d77433d8618e0ddaca25cb","production_world_owner_set_hash":"95d7199367c0a741c38d4f9f76c087a6a9fd0ae9af244c565d56056e1d6d5a7b","project_id":"00000000-0000-0000-0000-000000000001","reference_attachments_hash":"6b720b3635481085a97925508a3d1abf5eb61781930fd5e0f4d5f9f10a7825de","style_policy":{"camera_rules":["grounded_cinematic"],"forbidden_changes":["character_identity","holder_relation","scene_continuity","story_fact"],"lighting_rules":["motivated_soft_cinematic"],"material_rules":["grounded_material_identity","ink_wash_surface_language"],"palette_rules":["muted_jade_and_ink"]},"typed_overrides_hash":"71a369be91a82ff0ab6d6827df0034544101dacec0483aa3b3fea7d6bb905db2","workspace_id":"00000000-0000-0000-0000-000000000010","world_adaptations":[{"affected_scope_keys":["scene:00000000-0000-0000-0000-000000000002"],"decision_status":"needs_creator_decision","design_value":"手机传信改编为传音符，但发送者、接收者、信息内容与剧情结果不变。","mapping_key":"mapping_phone_message","preserved_invariant_keys":["character_identity","holder_relation","scene_continuity","story_fact"],"preset_rule_key":"translate-technology-language","source_fact_key":"fact_phone_message"}],"world_conflicts":[]},"candidate_type":"visual_foundation_candidate","claim_version":1,"completed_at":"2026-09-12T00:00:00Z","control":{"control_hash":"5555555555555555555555555555555555555555555555555555555555555555","control_record_id":"77777777-7777-4777-8777-777777777777","control_revision":1,"release_fence":0,"status":"approved"},"diagnostic_hash":"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945","diagnostics":[],"dispatch_authorization_hash":"ff48afcee1ebff28448688fca6c6f480c788e5e9a1e135081710acc875c4994e","error":null,"executor":{"harness_version":"visual-foundation-harness","model":"codex-cli-default","runtime_class":"vision","runtime_image_digest":"sha256:4444444444444444444444444444444444444444444444444444444444444444"},"input_hash":"2f29e94e5f29d194dc0dea83587b26fd6a93c7b445198640428ef8368cbc33c4","invocation_id":"00000000-0000-0000-0000-000000000080","kind":"storygraph_stage","output_hash":"3c89f9503800ac661d25bc41ee15127ee392ad32601329442c04177ac192c7eb","result_hash":"76abedd1750ffb9b9326941e3fa58445f6463028a7162a3f677261f7e6850cfd","stage_release":{"agent_image_digest":"sha256:4444444444444444444444444444444444444444444444444444444444444444","bundle_content_hash":"c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42","skill_release_hash":"1111111111111111111111111111111111111111111111111111111111111111","skill_release_id":"66666666-6666-4666-8666-666666666666","stage_release_hash":"2222222222222222222222222222222222222222222222222222222222222222"},"status":"accepted","variant":{"lane_key":"primary","output_schema_version":"visual-foundation-candidate-production","profile_key":"default","stage_key":"resolve_visual_foundation"},"wire_schema_version":"storygraph-stage-wire-production"},"authorization_claims":{"agent_image_digest":"sha256:4444444444444444444444444444444444444444444444444444444444444444","attempt_id":"00000000-0000-0000-0000-000000000090","bundle_content_hash":"c1b3da8229d3ff184ea8360b21e87d0fff36008d200943833d36e93e56cb2b42","claim_version":1,"control_hash":"5555555555555555555555555555555555555555555555555555555555555555","expires_at":200,"input_hash":"2f29e94e5f29d194dc0dea83587b26fd6a93c7b445198640428ef8368cbc33c4","invocation_id":"00000000-0000-0000-0000-000000000080","release_fence":0,"skill_release_hash":"1111111111111111111111111111111111111111111111111111111111111111","skill_release_id":"66666666-6666-4666-8666-666666666666","stage_release_hash":"2222222222222222222222222222222222222222222222222222222222222222"}}
+{
+  "attempt_result": {
+    "invocation_id": "00000000-0000-0000-0000-000000000080",
+    "attempt_id": "00000000-0000-0000-0000-000000000090",
+    "kind": "storygraph_stage",
+    "wire_schema_version": "storygraph-stage-wire-production",
+    "variant": {
+      "stage_key": "resolve_visual_foundation",
+      "profile_key": "default",
+      "lane_key": "primary",
+      "output_schema_version": "visual-foundation-candidate-production"
+    },
+    "stage_release": {
+      "skill_release_id": "66666666-6666-4666-8666-666666666666",
+      "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "stage_release_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "bundle_content_hash": "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5",
+      "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "control": {
+      "control_record_id": "77777777-7777-4777-8777-777777777777",
+      "control_revision": 1,
+      "status": "approved",
+      "control_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+      "release_fence": 0
+    },
+    "claim_version": 1,
+    "dispatch_authorization_hash": "ff48afcee1ebff28448688fca6c6f480c788e5e9a1e135081710acc875c4994e",
+    "status": "accepted",
+    "candidate_type": "visual_foundation_candidate",
+    "candidate": {
+      "workspace_id": "00000000-0000-0000-0000-000000000010",
+      "project_id": "00000000-0000-0000-0000-000000000001",
+      "production_world_owner_set_hash": "95d7199367c0a741c38d4f9f76c087a6a9fd0ae9af244c565d56056e1d6d5a7b",
+      "preset_release_content_hash": "d410850fd5f4e0a3cbffa317eb15d8e3c8fe4bcdb7d77433d8618e0ddaca25cb",
+      "application_mode": "world_adaptation",
+      "typed_overrides_hash": "71a369be91a82ff0ab6d6827df0034544101dacec0483aa3b3fea7d6bb905db2",
+      "reference_attachments_hash": "6b720b3635481085a97925508a3d1abf5eb61781930fd5e0f4d5f9f10a7825de",
+      "fidelity_invariants": [
+        "character_identity",
+        "holder_relation",
+        "scene_continuity",
+        "story_fact"
+      ],
+      "style_policy": {
+        "palette_rules": [
+          "muted_jade_and_ink"
+        ],
+        "material_rules": [
+          "grounded_material_identity",
+          "ink_wash_surface_language"
+        ],
+        "lighting_rules": [
+          "motivated_soft_cinematic"
+        ],
+        "camera_rules": [
+          "grounded_cinematic"
+        ],
+        "forbidden_changes": [
+          "character_identity",
+          "holder_relation",
+          "scene_continuity",
+          "story_fact"
+        ]
+      },
+      "world_adaptations": [
+        {
+          "mapping_key": "mapping_phone_message",
+          "source_fact_key": "fact_phone_message",
+          "preset_rule_key": "translate-technology-language",
+          "design_value": "手机传信改编为传音符，但发送者、接收者、信息内容与剧情结果不变。",
+          "preserved_invariant_keys": [
+            "character_identity",
+            "holder_relation",
+            "scene_continuity",
+            "story_fact"
+          ],
+          "affected_scope_keys": [
+            "scene:00000000-0000-0000-0000-000000000002"
+          ],
+          "decision_status": "needs_creator_decision"
+        }
+      ],
+      "world_conflicts": [],
+      "creative_fill_proposals": [
+        {
+          "gap_key": "gap_uniform_material",
+          "design_domain": "wardrobe",
+          "proposal": "使用低反光织物并保留角色身份轮廓，具体纹样等待创作者确认。",
+          "affected_scope_keys": [
+            "scene:00000000-0000-0000-0000-000000000002"
+          ],
+          "decision_status": "needs_creator_decision"
+        }
+      ]
+    },
+    "input_hash": "4a766671538a285c6b11db1b39aade8b305d9423b82c084aa5c3e4216607f689",
+    "output_hash": "3c89f9503800ac661d25bc41ee15127ee392ad32601329442c04177ac192c7eb",
+    "diagnostics": [],
+    "diagnostic_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "completed_at": "2026-09-12T00:00:00Z",
+    "executor": {
+      "runtime_class": "vision",
+      "runtime_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "harness_version": "visual-foundation-harness",
+      "model": "codex-cli-default"
+    },
+    "error": null,
+    "result_hash": "f773fbe1841f02d41cd9fea167360c32666418623f11f0644348997f8938fd0c"
+  },
+  "authorization_claims": {
+    "agent_image_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "attempt_id": "00000000-0000-0000-0000-000000000090",
+    "bundle_content_hash": "f6ed99c298475d7132c0dfe5cdefcb6682e1396884cd767d08ff0e12015663d5",
+    "claim_version": 1,
+    "control_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+    "expires_at": 200,
+    "input_hash": "4a766671538a285c6b11db1b39aade8b305d9423b82c084aa5c3e4216607f689",
+    "invocation_id": "00000000-0000-0000-0000-000000000080",
+    "release_fence": 0,
+    "skill_release_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+    "skill_release_id": "66666666-6666-4666-8666-666666666666",
+    "stage_release_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+  }
+}

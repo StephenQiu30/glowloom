@@ -13,6 +13,7 @@ def test_catalog_declares_the_current_agent_skill_capabilities() -> None:
         ("storygraph", "build-storygraph"),
         ("scene_analysis", "build-storygraph"),
         ("visual_foundation", "build-storygraph"),
+        ("vision_review", "build-storygraph"),
         ("text_storyboard", "text-storyboard"),
     ]
 
@@ -24,6 +25,7 @@ def test_catalog_verifies_every_installed_skill_release() -> None:
         "storygraph",
         "scene_analysis",
         "visual_foundation",
+        "vision_review",
         "text_storyboard",
     }
     assert all(len(value) == 64 for value in verified.values())

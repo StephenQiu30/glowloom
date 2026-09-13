@@ -151,7 +151,7 @@ func faithfulVisualFoundationSources(
 
 func curatedFaithfulRelease(t *testing.T) presetdomain.Release {
 	t.Helper()
-	release, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.12")
+	release, found, err := presetcatalog.FindCuratedRelease("urban-cinematic-realism", "2026.09.13")
 	if err != nil || !found {
 		t.Fatalf("load curated faithful Preset release: found=%v err=%v", found, err)
 	}
