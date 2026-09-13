@@ -109,6 +109,20 @@ var (
 	BuildTime    = "unknown"
 )
 
+// NewAgentRuntimeCatalog assembles the API's configured, exact-bundle runtime routes.
+func NewAgentRuntimeCatalog(configuration config.Config) (agentcontract.RuntimeCatalog, error) {
+	revisions := []agentcontract.RuntimeRevision{{
+		BundleHash: agentcontract.StoryGraphSkillBundleHash, BaseURL: configuration.AgentURL,
+		ImageDigest: configuration.AgentRuntimeImageDigest,
+	}}
+	for _, revision := range configuration.AgentRuntimeAdditionalRevisions {
+		revisions = append(revisions, agentcontract.RuntimeRevision{
+			BundleHash: revision.BundleHash, BaseURL: revision.BaseURL, ImageDigest: revision.ImageDigest,
+		})
+	}
+	return agentcontract.NewRuntimeCatalog(revisions)
+}
+
 func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	configuration, err := config.Load()
 	if err != nil {
@@ -244,19 +258,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("agent execution grant configuration failed: %w", err)
 	}
-	agentRuntimeRevisions := []agentcontract.RuntimeRevision{{
-		BundleHash: agentcontract.StoryGraphSkillBundleHash, BaseURL: configuration.AgentURL,
-		ImageDigest: configuration.AgentRuntimeImageDigest,
-	}, {
-		BundleHash: agentcontract.SceneAnalysisSkillBundleHash, BaseURL: configuration.AgentURL,
-		ImageDigest: configuration.AgentRuntimeImageDigest,
-	}}
-	for _, revision := range configuration.AgentRuntimeAdditionalRevisions {
-		agentRuntimeRevisions = append(agentRuntimeRevisions, agentcontract.RuntimeRevision{
-			BundleHash: revision.BundleHash, BaseURL: revision.BaseURL, ImageDigest: revision.ImageDigest,
-		})
-	}
-	agentRuntimeCatalog, err := agentcontract.NewRuntimeCatalog(agentRuntimeRevisions)
+	agentRuntimeCatalog, err := NewAgentRuntimeCatalog(configuration)
 	if err != nil {
 		return fmt.Errorf("agent runtime configuration failed: %w", err)
 	}
