@@ -88,6 +88,7 @@ type SceneAnalysisDependencies struct {
 	VisualFoundation    *VisualFoundationDependencies
 	ReferencePlan       *ReferencePlanDependencies
 	ReferenceBrief      *ReferenceBriefDependencies
+	VisionReview        *VisionReviewDependencies
 }
 
 type ProjectPresetSelectionSource interface {
@@ -237,6 +238,7 @@ type NodeExecutor struct {
 	visualFoundation    *VisualFoundationDependencies
 	referencePlan       *ReferencePlanDependencies
 	referenceBrief      *ReferenceBriefDependencies
+	visionReview        *VisionReviewDependencies
 	evidence            SourceEvidenceOwner
 	stories             StoryAnalysisOwner
 	storyReviews        StoryReviewOwner
@@ -280,6 +282,7 @@ func NewNodeExecutor(
 		executor.visualFoundation = sceneAnalysis[0].VisualFoundation
 		executor.referencePlan = sceneAnalysis[0].ReferencePlan
 		executor.referenceBrief = sceneAnalysis[0].ReferenceBrief
+		executor.visionReview = sceneAnalysis[0].VisionReview
 	}
 	return executor
 }
@@ -324,6 +327,8 @@ func (executor *NodeExecutor) Execute(
 		return executor.executeReferencePlan(ctx, command)
 	case referenceBriefExecutor:
 		return executor.executeReferenceBriefs(ctx, command)
+	case "activity.review_reference_artifact":
+		return executor.executeVisionReview(ctx, command)
 	case sourceEvidenceExecutor:
 		return executor.executeSourceEvidence(ctx, command)
 	case storyAnalysisExecutor:

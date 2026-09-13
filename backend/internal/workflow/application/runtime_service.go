@@ -272,8 +272,7 @@ func (service *RuntimeService) ExecuteNode(ctx context.Context, command domain.N
 
 func validNeedsAttentionResult(result domain.NodeActivityResult) bool {
 	return result.Status == domain.NodeActivityNeedsAttention &&
-		result.ErrorCode == domain.ProviderOutcomeUnknownErrorCode &&
-		result.NextAction == domain.ManualProviderReconciliationNextAction &&
+		domain.ValidNodeAttentionReason(result.ErrorCode, result.NextAction) &&
 		result.OutputHash == "" && result.Output.SchemaVersion == "" && len(result.Output.Bindings) == 0
 }
 

@@ -187,8 +187,7 @@ func executeNodeUntilTerminal(
 		}
 		if result.Status == workflowdomain.NodeActivityNeedsAttention {
 			if result.OutputHash != "" || result.Output.SchemaVersion != "" || len(result.Output.Bindings) != 0 ||
-				result.ErrorCode != workflowdomain.ProviderOutcomeUnknownErrorCode ||
-				result.NextAction != workflowdomain.ManualProviderReconciliationNextAction {
+				!workflowdomain.ValidNodeAttentionReason(result.ErrorCode, result.NextAction) {
 				return NodeActivityResult{}, contractViolation("node activity returned an invalid attention result")
 			}
 			return result, nil

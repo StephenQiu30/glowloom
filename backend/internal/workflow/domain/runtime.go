@@ -9,7 +9,14 @@ const (
 	NodeActivityNeedsAttention             = "NEEDS_ATTENTION"
 	ProviderOutcomeUnknownErrorCode        = "provider_outcome_unknown"
 	ManualProviderReconciliationNextAction = "manual_provider_reconciliation_required"
+	VisionReviewUnconfirmedErrorCode       = "vision_review_unconfirmed"
+	ManualVisionReviewNextAction           = "manual_vision_review_required"
 )
+
+func ValidNodeAttentionReason(code, nextAction string) bool {
+	return (code == ProviderOutcomeUnknownErrorCode && nextAction == ManualProviderReconciliationNextAction) ||
+		(code == VisionReviewUnconfirmedErrorCode && nextAction == ManualVisionReviewNextAction)
+}
 
 type ExecutionPlan struct {
 	WorkflowRunID         string          `json:"workflow_run_id"`

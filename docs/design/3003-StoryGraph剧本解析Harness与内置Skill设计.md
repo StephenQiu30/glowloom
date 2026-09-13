@@ -614,13 +614,19 @@ Vision Reviewer 不能发布、选择、修改 Artifact 或降低 Backend determ
 
 `review_reference_artifact` 使用整组级独立 Invocation/AttemptResult，Scope 为 workspace/project/bundle_input_id，shard key 为 `vision_bundle:<bundle_input_id>`。Subject 的 `input_hash` 绑定完整审核内容；外层 Invocation `input_hash` 进一步覆盖 Release、Control、Budget、Scope/Shard 与完整 Payload。两者职责不同，不能互相覆盖或要求相等，否则形成 Hash 环。外层 Release 必须等于 Subject Review Release，accepted Candidate 必须逐字段等于冻结 Subject；Brief 原 Release 始终保留。复用既有 Dispatch Authorization claims/signature 域，绑定 attempt/调用 Hash/Release/Control/image/expiry。
 
-Agent capability 只加载同一内置 Bundle 的入口和 `references/vision-review.md`，在固定一次模型调用、120 秒与 128 KiB 输出上限内复用现有 Codex 图片执行器（ephemeral/read-only/strict schema），不开放工具。私有 multipart 请求携带一个闭合 Invocation 和按 slot 排序的完整 PNG 文件组，不接受 URL、任意文件路径或未知 part；真实流量与声明长度均受有界限制，逐文件校验长度、Hash、PNG 解码及宽高后写入请求级只读临时文件，取消/成功/失败均清理。候选 Schema、身份或媒体非法为 rejected，运行时结果不可信保留 outcome_unknown，不自动重发。登记 Stage/Definition/Release 与可调用 Harness 仅证明运行能力，Backend 当前事实重验、持久执行授权/回执和 Candidate Owner 写入仍需后续服务接通，不提前宣称业务端到端完成。
+Agent capability 只加载同一内置 Bundle 的入口和 `references/vision-review.md`，在固定一次模型调用、120 秒与 128 KiB 输出上限内复用现有 Codex 图片执行器（ephemeral/read-only/strict schema），不开放工具。私有 multipart 请求携带一个闭合 Invocation 和按 slot 排序的完整 PNG 文件组，不接受 URL、任意文件路径或未知 part；真实流量与声明长度均受有界限制，逐文件校验长度、Hash、PNG 解码及宽高后写入请求级只读临时文件，取消/成功/失败均清理。候选 Schema、身份或媒体非法为 rejected，运行时结果不可信保留 outcome_unknown，不自动重发。登记 Stage/Definition/Release 与可调用 Harness 本身只证明运行能力；实际业务执行必须经过下述 Backend 当前事实重验、持久发送权和 Candidate 写入，不能直接调用 capability 代替业务授权。
 
 传输入口固定为 `POST /internal/storygraph/vision-review/invocations`：一个 `invocation` 文本字段（最多 1 MiB）和完整有序 `media` 文件组，filename 必须等于冻结 slot_key，Content-Type 为 image/png；最多四图，沿用单图 10 MiB、整组 32 MiB 限制，总请求硬上限为 32 MiB + 1 MiB + 64 KiB。缺失/无效/超限 Content-Length 或实际流量与其不符均拒绝，解析失败或取消由已有解析器关闭已暂存文件；PNG 要求静态单帧、完整解码、合法 IEND 且无尾随内容。授权在素材校验前和模型执行前分别重验。Backend 的 typed HTTP Client 先核对全部长度/Hash 和 exact Bundle/镜像，再单次发送；禁止重定向、自动重发与可重放 GetBody，响应最多 1 MiB，并重验完整 AttemptResult。请求沿用调用方 context，总期限不超过模型预算加 30 秒传输余量。该 Client 不签发授权、不写数据库，不能独立替代 application 层持久发送权。
 
 新增审核资源改变固定 Bundle 内容身份；Stage/Definition/Schema 清单和内置 Preset 的 Skill 引用必须一起重算。内置 Preset 使用新的 `2026.09.13` Release，不静默改写已选择的旧 Release/Hash，不把新运行时冒充旧运行时。部署新镜像前仍须完成正式 Release/Control 与当前项目选择核验；旧选择不自动升级，继续执行须通过已有明确选择及失效处理流程。
 
-Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同阶段不登记可执行 Stage、不创建 Invocation/候选持久事实、不赋予 Vision/Selection 权限。按用户确认的用途边界，完整且技术 QC 合格的 Bundle 可由后续服务授权进行内部视觉质量审核；rights not_assessed 保持原事实，仅阻断正式选择和资产发布。发送服务必须重验 Backend 编译的用途准入与当前授权，不能由 Agent 或客户端移除阻塞；媒体失败、缺项、重复图片或未知结果均不可送审。内部审核候选不构成权利批准，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
+基础整组执行复用 Backend Agent 的既有 Release/Control、ShardManifest、Invocation、Attempt、Dispatch Authorization、Result、Candidate Revision/Head 表。一个 Workflow 节点只审核一个冻结 Execution 的一个 Bundle，不创建第二套执行事实。先在事务内检查当前 Release Control、Workflow/Node scope、发起人及完整 Input；若已有执行，只恢复持久状态。首次执行在事务外读取完整私有媒体，再重入事务重验同一事实并原子创建 Invocation、唯一 Attempt 和签名授权摘要，提交成功后才允许单次 HTTP 调用。任何事务失败都不得触发模型。当前节点不自动追加 Attempt；明确重跑仍通过已有 Workflow 操作产生新的调用身份。
+
+同一节点重试不得改换 Input/Bundle/Release，也不得把 running/unknown 重置为待发送。已提交但未收妥结果的执行在冻结模型时限加 30 秒内返回运行中，由既有 Temporal durable polling 观察；到期只写 outcome_unknown，转人工检查，绝不再发送。发送和结果事务统一按 Control→Workflow/Node→当前 Owner 事实→Invocation→Attempt 加锁；Result 与 Candidate/Head 原子保存，并重验当前权限、Workflow scope、输入和授权摘要。提交后响应丢失重放返回完全相同的 Candidate；取消或写入失败保留已提交发送事实供恢复，不用新的 context 绕过取消继续发布。内部审核保留 rights not_assessed、五类候选结论及全部来源，不发布 AssetVersion、不作 Human Selection。
+
+基础审核节点为 `agent.vision_review`，执行器为 `activity.review_reference_artifact`，使用 `never` 缓存策略。配置只含 exact `execution_ref` 和必填 `bundle_index`，同时要求 Authoring 的 `reference_execution` frozen input；启动时必须已经存在可完整编译的技术合格组，不将尚未完成或失败的组当作输入。输出仅为 `vision_review_candidate` 的 Revision ID/序号/Hash。running 走现有 Temporal polling；rejected/outcome_unknown 进入 `NEEDS_ATTENTION`，使用 `vision_review_unconfirmed` 与 `manual_vision_review_required`，不冒充 Provider 错误或视觉通过。本节点复用现有登记 Release/Control 的机制；完整 Eval/Shadow/签名发布治理仍按供给链实施顺序验收，不能由自动登记或此节点通过替代。
+
+Go 与 Python 使用同一候选语义和 canonical golden，逐字段重验冻结 Subject。该合同本身不登记可执行 Stage、不创建 Invocation/候选持久事实，也不赋予 Vision/Selection 权限；执行与持久化由上述 Backend 服务负责。按用户确认的用途边界，完整且技术 QC 合格的 Bundle 可由后续服务授权进行内部视觉质量审核；rights not_assessed 保持原事实，仅阻断正式选择和资产发布。发送服务必须重验 Backend 编译的用途准入与当前授权，不能由 Agent 或客户端移除阻塞；媒体失败、缺项、重复图片或未知结果均不可送审。内部审核候选不构成权利批准，不以合同测试数据替代真实权利证明、审核模型调用或正式选择。
 
 ## 12. Shard、Coverage 与固定点
 

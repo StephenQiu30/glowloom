@@ -252,6 +252,22 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("workflow Reference call composition failed: %w", err)
 	}
+	visionReader, err := generationapp.NewVisionReviewMediaReader(referenceStore, objects, generationdomain.ReferenceObjectStoreRef{Profile: "minio", Bucket: configuration.ObjectStoreBucket})
+	if err != nil {
+		return fmt.Errorf("workflow Vision Review media composition failed: %w", err)
+	}
+	visionStore, err := agentgorm.NewVisionReviewStore(database, generationgorm.ValidateCurrentVisionReviewInput)
+	if err != nil {
+		return fmt.Errorf("workflow Vision Review store composition failed: %w", err)
+	}
+	visionService, err := agentapp.NewVisionReviewExecutionService(visionStore, visionReader, agentHTTPClient, agentSigner, agentapp.VisionReviewExecutionConfig{Now: now, NewID: uuid.NewString, AgentImageDigest: configuration.AgentRuntimeImageDigest})
+	if err != nil {
+		return fmt.Errorf("workflow Vision Review service composition failed: %w", err)
+	}
+	visionRelease, err := agentapp.BuildStageReleaseRecord(agentcontract.VisionReviewStageKey, configuration.AgentRuntimeImageDigest, now())
+	if err != nil {
+		return fmt.Errorf("workflow Vision Review release composition failed: %w", err)
+	}
 	providerConfigurationService := generationapp.NewProviderConfigurationService(
 		generationgorm.NewProviderConfigurationStore(database), providerCatalog, providerSecrets,
 		generationapp.ProviderConfigurationConfig{Now: now, NewID: uuid.NewString},
@@ -320,6 +336,7 @@ func RunWorkflowWorker(ctx context.Context, logger *slog.Logger) error {
 				Inputs: referencegorm.NewStore(database), Candidates: referenceBriefService,
 				StageRelease: referenceBriefStageRelease,
 			},
+			VisionReview: &workflowproduction.VisionReviewDependencies{Inputs: referenceStore, Execution: visionService, StageReleaseHash: visionRelease.Identity.StageReleaseHash},
 		},
 	)
 	if err != nil {

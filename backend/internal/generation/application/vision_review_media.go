@@ -40,6 +40,19 @@ type VisionReviewMediaReader struct {
 	location domain.ReferenceObjectStoreRef
 }
 
+// LoadVisionReviewMedia transfers buffer ownership to the execution service.
+func (reader *VisionReviewMediaReader) LoadVisionReviewMedia(ctx context.Context, userID string, tokenVersion int, input contract.VisionReviewInput) ([][]byte, error) {
+	media, err := reader.Load(ctx, Actor{UserID: userID, TokenVersion: tokenVersion}, input)
+	if err != nil {
+		return nil, err
+	}
+	images := make([][]byte, len(media))
+	for i := range media {
+		images[i] = media[i].Contents
+	}
+	return images, nil
+}
+
 func NewVisionReviewMediaReader(facts VisionReviewMediaFactsReader, objects ReferenceStagedObjectReader, location domain.ReferenceObjectStoreRef) (*VisionReviewMediaReader, error) {
 	if facts == nil || objects == nil || !location.Valid() || location.ObjectKey != "" {
 		return nil, errors.New("Vision Review requires bound private object and facts readers")

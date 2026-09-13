@@ -133,6 +133,8 @@
 
 整组传输须拒绝重定向、过期授权、上传声明与真实字节不符，以及 Hash 一致但无法完整解码、带尾部内容或多帧的 PNG。上传后、模型执行前再次检查授权；模型预算只能缩小，候选必须绑定本次冻结 Subject。正常完成、模型异常、上传中断及取消均关闭临时文件；错误响应不回显私有路径、Prompt 或执行器原始异常。Agent capability 验收包含实际子进程及严格输出链路，但受控子进程结果不能代替真实模型语义质量、候选持久化和最终业务验收。
 
+Backend 审核执行须证明模型调用发生在唯一 Attempt/授权提交之后，媒体 I/O 不占用 SQL 事务。重复节点执行、并发领取和提交后响应丢失不得增加模型调用；已发送但未确认的执行只能观察或到期转 outcome_unknown，不自动重发。接受候选必须与 Result、Attempt 完成状态和 Candidate Head 原子提交；当前权限、Workflow scope、Input、Release Control 或授权漂移时拒绝发布。Workflow 只消费持久 Candidate 身份，不在 History 存储媒体、授权 token 或完整 Prompt。
+
 首次基础生成必须可通过 Backend 的四个独立 HTTP 命令完成生成授权、Target 构建、执行授权和执行准备，再显式启动既有全量 Call 工作流。每个命令只调用对应 Owner，严格验证有界闭合请求和当前权限/Token；不接受路径身份覆盖、自由 Prompt/Provider 参数、发送指令或首次 Head revision 覆盖。响应只暴露精确身份并设置 no-store。幂等重放复用同一事实，输入冲突为 409；无效槽位 Policy 为 422，失败不能遗留 Target/Head/准备回执。公开入口不意味着自动执行、重新生成或六类目标和媒体验收已完成。
 
 | ID | 必须满足的合同 | 最低验证 |

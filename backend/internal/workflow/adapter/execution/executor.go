@@ -50,6 +50,7 @@ func (executor *NodeExecutor) Execute(
 		"activity.resolve_visual_foundation",
 		"activity.plan_reference_assets",
 		"activity.compile_reference_briefs",
+		"activity.review_reference_artifact",
 		"activity.source_evidence",
 		"activity.story_analysis",
 		"activity.story_review",

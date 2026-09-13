@@ -350,8 +350,7 @@ func (store *Store) MarkNodeNeedsAttention(
 	result domain.NodeActivityResult,
 	now time.Time,
 ) (bool, error) {
-	if result.Status != domain.NodeActivityNeedsAttention || result.ErrorCode != domain.ProviderOutcomeUnknownErrorCode ||
-		result.NextAction != domain.ManualProviderReconciliationNextAction || result.OutputHash != "" ||
+	if result.Status != domain.NodeActivityNeedsAttention || !domain.ValidNodeAttentionReason(result.ErrorCode, result.NextAction) || result.OutputHash != "" ||
 		result.Output.SchemaVersion != "" || len(result.Output.Bindings) != 0 {
 		return false, errors.New("workflow node attention result is invalid")
 	}
@@ -543,7 +542,7 @@ func completedNodeResult(node model.NodeRunProjection) (domain.NodeActivityResul
 
 func needsAttentionNodeResult(run model.WorkflowRun, node model.NodeRunProjection) (domain.NodeActivityResult, error) {
 	if run.Status != "NEEDS_ATTENTION" || node.Status != "FAILED" || run.NextAction == nil ||
-		*run.NextAction != domain.ManualProviderReconciliationNextAction || len(run.Error) == 0 ||
+		len(run.Error) == 0 ||
 		len(node.Output) != 0 || node.OutputHash != nil || node.ActiveClaimToken != nil {
 		return domain.NodeActivityResult{}, errors.New("workflow node attention projection has drifted")
 	}
@@ -552,7 +551,7 @@ func needsAttentionNodeResult(run model.WorkflowRun, node model.NodeRunProjectio
 		NodeID string `json:"node_id"`
 	}
 	if err := json.Unmarshal(run.Error, &failure); err != nil ||
-		failure.Code != domain.ProviderOutcomeUnknownErrorCode || failure.NodeID != node.NodeID {
+		!domain.ValidNodeAttentionReason(failure.Code, *run.NextAction) || failure.NodeID != node.NodeID {
 		return domain.NodeActivityResult{}, errors.New("workflow node attention error has drifted")
 	}
 	return domain.NodeActivityResult{
