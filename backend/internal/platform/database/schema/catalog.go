@@ -130,6 +130,7 @@ func Catalog() []any {
 		&model.GenerationReferenceProviderCall{},
 		&model.GenerationReferenceStagedMedia{},
 		&model.GenerationReferenceCandidateBundle{},
+		&model.GenerationReferenceCandidateSet{},
 		&model.ReferencePlanScopeHead{},
 		&model.ProjectReferencePlanActivationHead{},
 		&model.VisualFoundationScopeCollectionReceipt{},

@@ -634,6 +634,17 @@
 
 ### `VP-I08` — Gate 4 基础 Bundle 选择与 checkpoint
 
+前置 CandidateSet 聚合 Owner 的增量证据（2026-09-13）：
+
+- Design 2051 §8.4、Requirement 与 Plan 明确：集合冻结 Execution、完整进度 Hash 和显式已审核 Bundle；技术合格缺少审核不算完成。领域工厂按组排序并重算身份，区分 complete、partial_explicit_failure、outcome_unknown。未知结果只生成无候选的对账快照，不调用模型或预建第二套工作流引擎。
+- Backend 使用现有 GORM Catalog 持久化不可变 `gen_reference_candidate_sets`；同事务核验权限、原授权者、Target/Execution Head、完整 Call/媒体事实、Bundle 和 Agent Owner 的审核来源。消费多个审核时先按稳定顺序锁定全部 Control，再加载当前业务事实。逻辑时间来自已接收事实，重投不依赖墙钟，不新增数据库或迁移脚本。
+- `POST /api/projects/{project_id}/reference-executions/{execution_id}/candidate-sets` 和精确 `GET /api/projects/{project_id}/reference-candidate-sets/{set_id}` 已接入服务启动组合；均 no-store。OpenAPI 和前端生成类型同步，拒绝缺少显式数组、重复字段、超限 body、query selector、越权和客户端批准字段，不暴露私有媒体路径或授权内容。
+- Red：新增领域测试因 CandidateSet 类型与构造器缺失而失败；实现后完整覆盖、排序幂等、缺少/重复审核、技术失败、未知与正在发送的区分、闭合 Decoder 通过。Service/HTTP 覆盖当前身份、存储返回损坏、错误屏蔽与输入边界。`go test -race ./tests/generation ./tests/openapi -run '^TestReferenceCandidateSet' -count=1` 通过（3.236 秒、1.593 秒）。
+- 第一轮现有固定 `lanverse_test` 与本机 Temporal 的真实持久化旅程 74.182 秒通过：Vision → Bundle 后调用真实 Owner HTTP，保留一组审核和一组明确失败，跨请求读取不改变持久事实，并发重投不增行，错 scope/ref/progress/token、审核撤销及持久 Hash 损坏均拒绝。模型和媒体对象仍为受控适配器，不能据此宣称真实模型、MinIO 或最终浏览器通过。
+- 后续增加插入后事务回滚及有效未知状态故障注入：恢复原已提交回执模拟对账，不另发 Provider 请求；旧进度集合读取和重投必须失败。最终使用现有固定库与 Temporal，`go test ./tests/workflow -run '^(TestSourceEvidenceAndStoryAnalysisWorkflowRecoverBoundedMapReduce|TestSceneAnalysisGatesAndBoundedRepairsResumeRealTemporalWorkflow|TestSceneAnalysisWorkflowPersistsStructureIdentityReviewAndReplays)$' -count=1 -timeout=5m -v` 三条系统旅程全部通过（127.738 秒），包括上述回滚、对账前后读取与重投断言。中途 OpenAPI 测试误将公共 path parameters 解析为 operation，修正定向解码后通过；GORM 故障注入因测试依赖边界失败，移入既有 tests/generation/adapter/gormdb 后架构及 Backend 全量检查通过，未删改 CI 门禁。
+- 已通过 `go vet ./...`、无外部集成变量的 Backend 全量测试、OpenAPI 生成、前端 typecheck/lint/25 files 73 tests。无外部变量测试中的集成跳过不算真实环境证据。goimports/golangci-lint/govulncheck 未安装、未执行；未启动或重启基础环境、未更新应用容器。
+- 未完成边界：完整 Bundle 状态机、rights 评估、逐 Target HumanTask、逐项 warning 确认、Selection、Asset Owner Apply 和依赖解锁仍未完成。集合完整只表示证据收齐，不是素材可选/可发布。最终 agent-browser 仍待全部开发完成后执行；远端 CI 按本次提交 SHA 全部核验，不沿用前次绿灯。
+
 前置整组审核 CandidateBundle Owner 的增量证据（2026-09-13）：
 
 - Design 2051 §8.3 与 Requirement 明确“审核结果被接收”不等于素材获准使用。新增 `generation.reference_candidate_bundle` / `activity.materialize_reference_candidate_bundle`，消费 exact Vision Candidate 与冻结 Execution，只输出 Bundle ID/revision/hash；新 Catalog 保留既有节点定义，不改旧 Workflow History。

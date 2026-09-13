@@ -197,6 +197,7 @@ func assertVisionReviewWorkflow(t *testing.T, ctx context.Context, db *generatio
 					t.Fatal("Workflow did not output its persisted Candidate")
 				}
 				assertReferenceCandidateBundleOwner(t, ctx, db, bundleService, actor, execution, state, run.ID)
+				assertReferenceCandidateSetOwner(t, ctx, db, bundleService, persistence, actor, execution, state)
 				// Invalid current authorization fails even when a Candidate is cached.
 				command.TokenVersion++
 				if _, err := service.Execute(ctx, command); err == nil {

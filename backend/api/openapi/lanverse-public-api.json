@@ -16,6 +16,150 @@
     }
   ],
   "paths": {
+    "/api/projects/{project_id}/reference-candidate-sets/{set_id}": {
+      "get": {
+        "operationId": "getReferenceCandidateSet",
+        "description": "精确读取候选集并重验当前权限、执行进度和审核 Control；结果未知只用于对账，不代表可选择或发布。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "name": "set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "精确身份和读取权限校验后的派生快照。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceCandidateSetResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/reference-executions/{execution_id}/candidate-sets": {
+      "post": {
+        "operationId": "materializeReferenceCandidateSet",
+        "description": "按冻结的完整执行进度 Hash 和已审核 Bundle 引用原子生成候选集；拒绝缺失审核或陈旧进度，同一输入重试收敛到同一事实。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "精确身份和读取权限校验后的派生快照。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReferenceCandidateSetResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceCandidateSetRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/creation-runs/{run_id}/resume": {
       "post": {
         "operationId": "resumeCreationRun",
@@ -4268,6 +4412,316 @@
   },
   "components": {
     "schemas": {
+      "ReferenceCandidateSetRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "execution_hash",
+          "expected_progress_hash",
+          "candidate_bundle_refs"
+        ],
+        "properties": {
+          "execution_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expected_progress_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "candidate_bundle_refs": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "revision",
+                "content_hash"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "revision": {
+                  "type": "integer",
+                  "const": 1
+                },
+                "content_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReferenceCandidateSetResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contract_id",
+          "candidate_set_id",
+          "workspace_id",
+          "project_id",
+          "generation_target_ref",
+          "execution_ref",
+          "generation_round",
+          "expected_bundle_count",
+          "execution_progress_hash",
+          "ordered_candidate_bundle_refs",
+          "failed_or_unknown_slot_refs",
+          "generation_completion_state",
+          "dependency_root_hash",
+          "created_at",
+          "content_hash"
+        ],
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "const": "generation-candidate-set-production"
+          },
+          "candidate_set_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generation_target_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "execution_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "revision",
+              "content_hash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "const": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "generation_round": {
+            "type": "integer",
+            "const": 1
+          },
+          "expected_bundle_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "execution_progress_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "ordered_candidate_bundle_refs": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "candidate_bundle_index",
+                "candidate_bundle_ref"
+              ],
+              "properties": {
+                "candidate_bundle_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                },
+                "candidate_bundle_ref": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "revision",
+                    "content_hash"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "content_hash": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "failed_or_unknown_slot_refs": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "provider_call_ref",
+                "call_state_hash",
+                "deterministic_qc_ref",
+                "issues"
+              ],
+              "properties": {
+                "provider_call_ref": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "contract_id",
+                    "execution_ref",
+                    "bundle_index",
+                    "slot_key",
+                    "compiled_request_hash",
+                    "call_key"
+                  ],
+                  "properties": {
+                    "contract_id": {
+                      "type": "string",
+                      "const": "reference-provider-call"
+                    },
+                    "execution_ref": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "revision",
+                        "content_hash"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "const": 1
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        }
+                      }
+                    },
+                    "bundle_index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3
+                    },
+                    "slot_key": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9._-]{1,119}$"
+                    },
+                    "compiled_request_hash": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "call_key": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "call_state_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "deterministic_qc_ref": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ReferenceCommandActionRef"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "provider_explicit_failure",
+                      "media_rejected",
+                      "media_policy_failed",
+                      "duplicate_image",
+                      "outcome_unknown"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "generation_completion_state": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial_explicit_failure",
+              "outcome_unknown"
+            ]
+          },
+          "dependency_root_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
       "PresetContentRef": {
         "type": "object",
         "additionalProperties": false,

@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/api/projects/{project_id}/reference-candidate-sets/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 精确读取候选集并重验当前权限、执行进度和审核 Control；结果未知只用于对账，不代表可选择或发布。 */
+        get: operations["getReferenceCandidateSet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/reference-executions/{execution_id}/candidate-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 按冻结的完整执行进度 Hash 和已审核 Bundle 引用原子生成候选集；拒绝缺失审核或陈旧进度，同一输入重试收敛到同一事实。 */
+        post: operations["materializeReferenceCandidateSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/creation-runs/{run_id}/resume": {
         parameters: {
             query?: never;
@@ -1872,6 +1906,80 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ReferenceCandidateSetRequest: {
+            execution_hash: string;
+            expected_progress_hash: string;
+            candidate_bundle_refs: {
+                /** Format: uuid */
+                id: string;
+                /** @constant */
+                revision: 1;
+                content_hash: string;
+            }[];
+        };
+        ReferenceCandidateSetResponse: {
+            /** @constant */
+            contract_id: "generation-candidate-set-production";
+            /** Format: uuid */
+            candidate_set_id: string;
+            /** Format: uuid */
+            workspace_id: string;
+            /** Format: uuid */
+            project_id: string;
+            generation_target_ref: {
+                /** Format: uuid */
+                id: string;
+                revision: number;
+                content_hash: string;
+            };
+            execution_ref: {
+                /** Format: uuid */
+                id: string;
+                /** @constant */
+                revision: 1;
+                content_hash: string;
+            };
+            /** @constant */
+            generation_round: 1;
+            expected_bundle_count: number;
+            execution_progress_hash: string;
+            ordered_candidate_bundle_refs: {
+                candidate_bundle_index: number;
+                candidate_bundle_ref: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @constant */
+                    revision: 1;
+                    content_hash: string;
+                };
+            }[];
+            failed_or_unknown_slot_refs: {
+                provider_call_ref: {
+                    /** @constant */
+                    contract_id: "reference-provider-call";
+                    execution_ref: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @constant */
+                        revision: 1;
+                        content_hash: string;
+                    };
+                    bundle_index: number;
+                    slot_key: string;
+                    compiled_request_hash: string;
+                    call_key: string;
+                };
+                call_state_hash: string;
+                deterministic_qc_ref: components["schemas"]["ReferenceCommandActionRef"] | null;
+                issues: ("provider_explicit_failure" | "media_rejected" | "media_policy_failed" | "duplicate_image" | "outcome_unknown")[];
+            }[];
+            /** @enum {string} */
+            generation_completion_state: "complete" | "partial_explicit_failure" | "outcome_unknown";
+            dependency_root_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            content_hash: string;
+        };
         PresetContentRef: {
             owner: string;
             key: string;
@@ -5832,6 +5940,74 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getReferenceCandidateSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 精确身份和读取权限校验后的派生快照。 */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceCandidateSetResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
+    materializeReferenceCandidateSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["project_id"];
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferenceCandidateSetRequest"];
+            };
+        };
+        responses: {
+            /** @description 精确身份和读取权限校验后的派生快照。 */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReferenceCandidateSetResponse"];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+        };
+    };
     resumeCreationRun: {
         parameters: {
             query?: never;

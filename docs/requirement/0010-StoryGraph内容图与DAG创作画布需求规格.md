@@ -171,6 +171,8 @@ Bundle Input 必须完整覆盖同一 Execution、同一候选组的所有 requi
 
 审核后的 CandidateBundle 必须绑定同一组 Bundle Input 与持久化 Vision Candidate 的精确 revision/hash，由 Generation Owner 落库，不借用单图 Candidate。每次写入和当前精确查询都重验权限、Target/Execution 输入、审核来源与 Control；提交后响应丢失或并发重投收敛到同一不可变 Bundle。审核结果 accepted 只代表收到了有效诊断，fail/warn/not_assessable 必须保留原引用，不得冒充视觉通过、rights 批准、CandidateSet 完整、人工选择或 AssetVersion 发布。公共接口只读，不接受 approve、临时 URL 或自由替换输入。
 
+CandidateSet 必须固定同一 Target/Execution/round、完整执行进度 Hash、预期组数与显式已审核 Bundle 引用，由 Backend 原子聚合成不可变事实。完整状态覆盖所有组，部分明确失败保留失败槽位的 Call/状态/QC 引用；技术合格但缺少审核的组不能冒充失败或完整。结果未知只保留对账诊断，不提供可选 Bundle，不能重新发送模型请求。POST 不接受 selected/approved/rights 或客户端计算的状态；重复请求收敛到同一事实，GET 与重投均重验当前权限、审核 Control 和精确执行进度，对账后旧进度快照不再作为当前候选集消费。候选集完整不等于视觉通过、权利批准或人工选择。
+
 首次生成必须有独立用户授权：Backend 在同一事务校验当前项目写权限、Token Version 与 accepted Brief，再把 exact Plan/Target 和候选 Bundle 数量冻结到不可变 Command Receipt。重复命令必须重新校验当前权限与事实，不能只命中缓存就返回成功；同一 key 的输入变化必须拒绝。授权不是 Target/Execution/Provider 已启动的证明，不能用于冒充重新生成或 Provider 重试。
 
 ## 8. 五个 Human Gate 的公共合同

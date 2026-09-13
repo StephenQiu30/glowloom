@@ -428,6 +428,11 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("candidate Bundle query composition failed: %w", err)
 	}
 	candidateBundleHandler := generationhttp.NewReferenceCandidateBundleHandler(generationapp.NewReferenceCandidateBundleService(candidateBundleStore), tokenVerifier)
+	candidateSetStore, err := generationgorm.NewReferenceCandidateSetStore(database, visionReviewStore.ReadAcceptedVisionReviewSet)
+	if err != nil {
+		return fmt.Errorf("candidate Set Owner composition failed: %w", err)
+	}
+	candidateSetHandler := generationhttp.NewReferenceCandidateSetHandler(generationapp.NewReferenceCandidateSetService(candidateSetStore), tokenVerifier)
 	referenceStore := generationgorm.New(database)
 	referenceGenerationHandler := generationhttp.NewReferenceGenerationHandler(generationapp.NewReferenceGenerationQuery(referenceStore), tokenVerifier)
 	referenceGenerationAuthorization, err := generationapp.NewReferenceGenerationAuthorizationService(referenceStore, time.Now, uuid.NewString)
@@ -519,6 +524,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				referenceExecutionStartHandler.Register(mux)
 				referenceBundleHandler.Register(mux)
 				candidateBundleHandler.Register(mux)
+				candidateSetHandler.Register(mux)
 				referencePreparationHandler.Register(mux)
 			},
 		}),

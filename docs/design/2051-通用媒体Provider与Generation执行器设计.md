@@ -616,6 +616,10 @@ Vision Review 一次读取同一 complete `ReferenceCandidateBundleInputContract
 
 ### 8.4 CandidateSelection
 
+CandidateSet 在选择前由 Backend 单独物化：调用方固定 Execution、所观察完整 Call 进度的 Hash，以及每个技术合格组的精确 CandidateBundle refs；不按时间选择最新审核，也不默补缺失审核。集合按 bundle index 排序并记录 expected bundle count、进度 Hash 和失败/未知槽位的 Call/state/QC 引用。终态必须覆盖每个组：完整组恰好一个已重验 Bundle，技术或 Provider 明确失败组保留失败槽位；未完成传输或缺少审核不能成为 complete/partial_explicit_failure。存在 outcome_unknown 时只物化无候选的对账快照，不消费部分媒体或授予选择权；恢复后的新进度必须重新提交精确 Hash，旧请求拒绝。
+
+集合是 Generation-owned 的不可变内容定址事实，逻辑时间来自已接收 Call/媒体/审核事实。落库前先按稳定顺序锁定所消费审核的全部 Control，再重验 Target/Execution、各 Bundle 来源；同命令重投收敛，不追加表级版本 Head、模型调用或 Selection。公共 POST 只提供这个原子 Owner 命令，GET 只读精确集合并重验当前事实；均 no-store，不接受客户端 completion state、自由媒体或批准字段。完整集合只表示生成和审核证据已收齐，权利评估、问题确认及 Gate 4 选择仍独立执行。
+
 ```text
 GenerationCandidateSelectionProduction
 ├── selection_id / selection_revision / workspace_id / project_id
