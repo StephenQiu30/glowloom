@@ -480,6 +480,11 @@
 
 ### `VP-I07` — 图片执行、Bundle、确定性 QC 与 Vision Review
 
+- 整组内部媒体读取：`VisionReviewMediaReader` 在既有 GORM 输入编译器的两次独立事务之间读取冻结完整组，严格匹配注入对象存储的 profile/bucket；复用 `ReadVerified` 和原 Staged Media 完整 PNG 校验，不把 ready 元数据或 Adapter 成功当作像素证据。对象 I/O 不持有 SQL 事务，读取后再重验当前权限/完整 Input/媒体事实。错误返回 nil 而非部分组，并清零服务持有的已读缓冲；成功缓冲提供幂等 Clear，JSON 排除 bytes 和私有位置。未新增表、字段、下载 URL、HTTP 端点或派发授权。
+- 媒体读取 Red→Green：定向测试首次因 `NewVisionReviewMediaReader` 缺失编译失败；实现后 `go test ./tests/generation -run '^TestVisionReviewMedia' -count=1 -v` 通过（1.458 秒），覆盖完整组顺序与释放、12 类失败，以及 Hash 与 ready 元数据匹配时的尾随字节/尺寸错误/非法 PNG。`go test -race ./tests/generation -run '^TestVisionReviewMedia|^TestReferenceStagedMedia' -count=1` 通过（29.688 秒）。Backend `go vet ./...`、无外部变量全量 `go test -count=1 ./...`、gofmt、diff 检查通过；goimports/golangci-lint/govulncheck 本机缺失，未执行，完整系统 Race 未执行。
+- 媒体读取真实系统证据：复用已有固定 PostgreSQL/Temporal，现有三条完整 Workflow System Boundary 用例在 `-count=1 -timeout=5m -v` 下全部通过（135.120 秒；持久化 71.83、Gate 7.27、Source Evidence 52.23 秒）。新增正常完整组、合法重新计算 Hash 的伪造 Input 拒绝、对象读取过程中独立连接提交 Token 撤销/Execution Head 漂移后整组拒绝、对象失败和零额外对象写入。成功和失败均验证缓冲清零；现有 TLS Provider 测试生成实际 PNG，对象读取使用内存测试 Adapter，不把此证据称为真实 MinIO/模型执行。未更改 CI，本提交完整远端 CI 推送后核验。
+- 媒体读取剩余范围：这是 Backend 内部字节准备能力，尚未装配正式 Review Release/Control/Invocation/Attempt、Agent transport/Harness 和候选持久化；依赖资产与最终浏览器验收仍未完成。环境服务未启动或重启，应用容器未更新；未执行真实模型调用或最终 agent-browser 验收。
+
 - 基础 Vision 完整输入：`vision-review-input-production` 绑定 Subject、完整 accepted Brief 与内容 Hash、实际 Preset 视觉语法/Style Policy/用途与世界约束、内部用途准入及整组附件。输入 Hash 排除 `subject.input_hash` 自身，wire 仍要求该字段；保留 Brief/Review 两类 Release。Backend 唯一编译器重算 Style/Policy 完整内容 Hash、精确 Target/Brief/Bundle 身份，返回与原事实无可变引用共享的闭合输入。三种基础用途可编译，另三种依赖用途明确拒绝，不空置依赖降级。
 - 基础输入 GORM 落地：复用既有 Bundle facts loader；旧只读 Query 继续使用 Repeatable Read/read-only。新输入准备在独立 Serializable 事务重验项目写权限、当前 Execution Head、Target 发布与 Head、accepted Brief/Plan/Preset，再读取精确视觉快照；没有新增表、字段、事实写入、HTTP 端点或 Stage 派发。未来 dispatch/accept 必须再次重验当前事实、Release/Control 和授权，准备结果不是执行许可。
 - 基础输入 Red→Green：Go 最初因 `DecodeVisionReviewInput` 缺失编译失败，Python 因模块缺失导入失败。共享输入 Hash 为 `9702a0c7bd5822c091597da38ab2c76a21b9f49ac03795dc11ba607cbcf09999`；Go/Python 独立验证重算、字段漂移、非法内容重新签名、零值字段遗漏/null、权限输出、附件漂移和六用途边界。`go test -race ./tests/agent ./tests/generation -run '^TestVisionReview|^TestReferenceBundleAdmission' -count=1` 两包通过（3.213/4.645 秒），Python 输入定向 27 项通过。

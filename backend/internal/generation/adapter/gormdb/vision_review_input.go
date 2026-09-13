@@ -3,6 +3,7 @@ package gormdb
 import (
 	"context"
 	"errors"
+	"reflect"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/agent/contract"
 	"github.com/StephenQiu30/lanverse/backend/internal/generation/application"
@@ -17,13 +18,36 @@ import (
 // CompileBaseVisionReviewInput prepares exact input in its own consistent
 // transaction. It does not publish a Stage, authorize dispatch, or send bytes.
 func (store *Store) CompileBaseVisionReviewInput(ctx context.Context, actor application.Actor, projectID, executionID string, bundleIndex int, stageReleaseHash string) (contract.VisionReviewInput, error) {
+	input, _, err := store.compileBaseVisionReviewMediaFacts(ctx, actor, projectID, executionID, bundleIndex, stageReleaseHash)
+	return input, err
+}
+
+// ReadBaseVisionReviewMediaFacts is an internal exact read, not a download or
+// dispatch endpoint. Private locations remain inside the Backend service.
+func (store *Store) ReadBaseVisionReviewMediaFacts(ctx context.Context, actor application.Actor, expected contract.VisionReviewInput) ([]domain.ReferenceStagedMedia, error) {
+	if err := expected.Validate(); err != nil {
+		return nil, err
+	}
+	subject := expected.Subject
+	input, media, err := store.compileBaseVisionReviewMediaFacts(ctx, actor, subject.ProjectID, subject.ExecutionRef.ID, subject.CandidateBundleIndex, subject.StageReleaseHash)
+	if err != nil {
+		return nil, err
+	}
+	if !reflect.DeepEqual(input, expected) {
+		return nil, errors.New("Vision Review input differs from current facts")
+	}
+	return media, nil
+}
+
+func (store *Store) compileBaseVisionReviewMediaFacts(ctx context.Context, actor application.Actor, projectID, executionID string, bundleIndex int, stageReleaseHash string) (contract.VisionReviewInput, []domain.ReferenceStagedMedia, error) {
 	if store == nil || store.database == nil || store.database.Statement == nil {
-		return contract.VisionReviewInput{}, errors.New("Vision Review facts reader is unavailable")
+		return contract.VisionReviewInput{}, nil, errors.New("Vision Review facts reader is unavailable")
 	}
 	if _, nested := store.database.Statement.ConnPool.(gorm.TxCommitter); nested {
-		return contract.VisionReviewInput{}, errors.New("Vision Review preparation requires its own consistent snapshot")
+		return contract.VisionReviewInput{}, nil, errors.New("Vision Review preparation requires its own consistent snapshot")
 	}
 	var result contract.VisionReviewInput
+	var media []domain.ReferenceStagedMedia
 	err := platformdatabase.WithinSerializableTransaction(ctx, store.database, func(tx *gorm.DB) error {
 		repo := repository{database: tx}
 		scope, err := repo.authorizeProject(ctx, actor, "", projectID, "write")
@@ -67,7 +91,7 @@ func (store *Store) CompileBaseVisionReviewInput(ctx context.Context, actor appl
 		if err := canonical.Decode(policyRow.Content, &policy); err != nil {
 			return err
 		}
-		media := make([]domain.ReferenceStagedMedia, 0)
+		media = make([]domain.ReferenceStagedMedia, 0)
 		for _, item := range snapshot.media {
 			if item.Call.BundleIndex == bundleIndex {
 				media = append(media, item)
@@ -80,7 +104,9 @@ func (store *Store) CompileBaseVisionReviewInput(ctx context.Context, actor appl
 		return err
 	})
 	if err != nil {
-		return contract.VisionReviewInput{}, err
+		return contract.VisionReviewInput{}, nil, err
 	}
-	return result, nil
+	return result, media, nil
 }
+
+var _ application.VisionReviewMediaFactsReader = (*Store)(nil)

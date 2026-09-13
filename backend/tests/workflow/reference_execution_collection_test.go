@@ -191,6 +191,7 @@ func assertReferenceExecutionCollection(t *testing.T, parent context.Context, da
 	}
 	assertPersistedVisionReviewAttachments(t, ctx, store, fixture.execution, bundles)
 	assertCompiledBaseVisionReviewInput(t, ctx, database, actor, fixture.execution, bundles)
+	assertPersistedVisionReviewMedia(t, ctx, database, actor, fixture.execution, bundles, objects)
 	if replay, err := bundleQuery.Get(ctx, actor, command.ProjectID, command.ExecutionRef.ID); err != nil || !reflect.DeepEqual(replay, bundles) {
 		t.Fatal("bundle replay changed frozen identity")
 	}

@@ -26,6 +26,8 @@ type ReferenceStagedMediaTransactions interface {
 }
 
 type ReferenceStagedObjectReader interface {
+	// ReadVerified returns a bounded, caller-owned buffer. Implementations must
+	// not return shared storage/cache memory; consumers may clear returned bytes.
 	ReadVerified(context.Context, string, int64, string, int64) ([]byte, error)
 }
 
