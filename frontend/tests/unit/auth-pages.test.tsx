@@ -103,6 +103,10 @@ describe("authentication pages", () => {
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
     expect(screen.queryByLabelText("显示名称")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "发送验证码" })).toBeInTheDocument();
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+    expect(screen.getByRole("banner", { name: "Lanverse 全局页眉" })).toBeInTheDocument();
+    expect(screen.getByRole("contentinfo", { name: "Lanverse 页脚" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "她从画中来项目画面" })).toHaveAttribute("src", "/assets/lanverse-studio/painting-girl-cover.png");
   });
 
   it("logs in through the generated API and stores the returned access token", async () => {

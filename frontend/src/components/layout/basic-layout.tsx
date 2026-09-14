@@ -9,6 +9,7 @@ import { type StudioNavigation, type WorkspaceRole } from "@/lib/access-control"
 export function BasicLayout({
   active,
   authState,
+  artwork,
   children,
   currentStep,
   projectName,
@@ -17,6 +18,7 @@ export function BasicLayout({
 }: {
   active?: StudioNavigation;
   authState: LayoutAuthState;
+  artwork?: ReactNode;
   children: ReactNode;
   currentStep?: number;
   projectName?: string;
@@ -28,26 +30,30 @@ export function BasicLayout({
 
   return (
     <div
-      className="basic-layout"
+      className={artwork ? "basic-layout basic-layout--authentication" : "basic-layout"}
       data-auth-state={authState}
       data-has-progress={hasProgress ? "true" : "false"}
       data-has-project-context={hasProjectContext ? "true" : "false"}
     >
-      <a className="basic-layout__skip-link" href="#main">
-        跳到主要内容
-      </a>
-      <BasicHeader
-        active={active}
-        authState={authState}
-        currentStep={currentStep}
-        projectName={projectName}
-        role={role}
-        viewer={viewer}
-      />
-      <main className="basic-layout__main" id="main">
-        {children}
-      </main>
-      <BasicFooter />
+      <div className="basic-layout__body">
+        <a className="basic-layout__skip-link" href="#main">
+          跳到主要内容
+        </a>
+        <BasicHeader
+          active={active}
+          compact={Boolean(artwork)}
+          authState={authState}
+          currentStep={currentStep}
+          projectName={projectName}
+          role={role}
+          viewer={viewer}
+        />
+        <main className="basic-layout__main" id="main" tabIndex={-1}>
+          {children}
+        </main>
+        <BasicFooter compact={Boolean(artwork)} />
+      </div>
+      {artwork ? <aside className="basic-layout__artwork">{artwork}</aside> : null}
     </div>
   );
 }

@@ -323,7 +323,7 @@ export function ScriptDocumentImportCard({
             </div>
 
             {file ? (
-              <Item variant="outline">
+              <Item className="border-0">
                 <ItemMedia variant="icon">
                   <FileText className="size-5" aria-hidden="true" />
                 </ItemMedia>
@@ -339,7 +339,7 @@ export function ScriptDocumentImportCard({
 
             {analysis && !file && !preview ? (
               <>
-                <Item variant="outline">
+                <Item className="border-0">
                   <ItemMedia variant="icon">
                     <FileText className="size-5" aria-hidden="true" />
                   </ItemMedia>
@@ -401,7 +401,7 @@ export function ScriptDocumentImportCard({
                   </div>
                   <Badge variant="outline">等待确认</Badge>
                 </div>
-                <div className="max-h-[520px] overflow-auto rounded-lg border bg-background p-5 text-sm leading-7 whitespace-pre-wrap [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:my-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:text-lg [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:bg-muted [&_pre]:p-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:bg-muted [&_th]:p-2">
+                <div className="max-h-[520px] overflow-auto bg-transparent p-5 text-sm leading-7 whitespace-pre-wrap [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:my-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:text-lg [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:bg-muted [&_pre]:p-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:bg-muted [&_th]:p-2">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {preview.raw_text}
                   </ReactMarkdown>

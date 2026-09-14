@@ -27,19 +27,19 @@ export function TaskQueue({
   tasks: API.HumanTaskListItemResponse[];
 }) {
   return (
-    <aside aria-label="审核任务队列" className="h-fit border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b p-4">
+    <aside aria-label="审核任务队列" className="h-fit bg-transparent">
+      <div className="flex items-center justify-between gap-3 p-4">
         <div>
           <h2 className="font-semibold">项目任务</h2>
           <p className="mt-1 text-xs text-muted-foreground">服务端稳定排序，10 秒自动刷新</p>
         </div>
         <Badge variant="outline">{tasks.length}</Badge>
       </div>
-      <div className="border-b p-4">
+      <div className="p-4">
         <label className="grid gap-1.5 text-xs font-medium" htmlFor="review-task-status">
           任务状态筛选
           <select
-            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+            className="h-9 rounded-md border-0 bg-background shadow-border focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring px-3 text-sm"
             id="review-task-status"
             onChange={(event) => onFilterChange(event.target.value as TaskFilter)}
             value={statusFilter}

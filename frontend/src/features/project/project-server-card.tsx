@@ -6,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ProjectServerCard({ project }: { project: API.ProjectResponse }) {
   return (
-    <Card className="group relative rounded-2xl border bg-card py-5 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+    <Card className="group relative py-5 transition-colors hover:bg-muted/50">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className={project.status === "active" ? "border-border bg-muted text-foreground" : ""} variant="outline">
+              <Badge className={project.status === "active" ? "bg-muted text-foreground" : ""} variant="outline">
                 {project.status === "active" ? "制作中" : "已归档"}
               </Badge>
               <Badge variant="outline">{project.aspect_ratio}</Badge>
@@ -27,7 +27,7 @@ export function ProjectServerCard({ project }: { project: API.ProjectResponse })
           <span className="flex items-center gap-1.5"><Layers3 className="size-3.5" aria-hidden="true" />{project.visual_style ?? "未设视觉风格"}</span>
           <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{Math.round(project.target_duration_ms / 1_000)} 秒/集</span>
         </div>
-        <Link aria-label={`打开项目 ${project.name}`} className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" href={`/projects/${project.id}`} />
+        <Link aria-label={`打开项目 ${project.name}`} className="absolute inset-0 rounded-md focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring" href={`/projects/${project.id}`} />
       </CardContent>
     </Card>
   );

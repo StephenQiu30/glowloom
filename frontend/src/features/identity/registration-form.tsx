@@ -131,6 +131,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
           <Label htmlFor="registration-email">邮箱</Label>
           <Input
             autoComplete="email"
+            className="h-10"
             disabled={!hydrated || requesting}
             id="registration-email"
             onChange={(event) => setEmail(event.target.value)}
@@ -182,6 +183,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
           <Label htmlFor="registration-code">验证码</Label>
           <Input
             autoComplete="one-time-code"
+            className="h-10"
             disabled={!hydrated || confirming}
             id="registration-code"
             inputMode="numeric"
@@ -237,6 +239,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
         <Label htmlFor="displayName">显示名称</Label>
         <Input
           autoComplete="name"
+          className="h-10"
           disabled={!hydrated || registering}
           id="displayName"
           name="displayName"
@@ -248,6 +251,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
         <Label htmlFor="registration-password">密码</Label>
         <Input
           autoComplete="new-password"
+          className="h-10"
           disabled={!hydrated || registering}
           id="registration-password"
           minLength={12}

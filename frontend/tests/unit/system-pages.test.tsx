@@ -32,7 +32,7 @@ describe("system status pages", () => {
     );
 
     const heading = screen.getByRole("heading", { name: "需要登录后继续" });
-    expect(heading.closest("section")).toHaveClass("max-w-[1440px]");
+    expect(heading.closest("section")).toHaveClass("max-w-[1200px]");
     expect(screen.getByRole("banner", { name: "Lanverse 全局页眉" })).not.toHaveClass("border-b");
     expect(screen.getByRole("group", { name: "恢复访问操作" })).toBeInTheDocument();
   });

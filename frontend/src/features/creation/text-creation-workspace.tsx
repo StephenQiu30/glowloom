@@ -14,13 +14,14 @@ import {
 } from "./endpoints";
 import { stageLabels } from "./proposal-content";
 import { ProposalReview } from "./proposal-review";
+import { ProposalNavigation } from "./proposal-navigation";
 
 const deliveryLabels: Record<API.CreationRunResponse["status"], string> = {
-  queued: "等待交接", delivery_unknown: "正在核对原交接结果", delivery_blocked: "交接受阻",
-  accepted: "Agent 已接受，等待执行状态",
+  queued: "正在准备解析", delivery_unknown: "正在确认本次创作是否启动", delivery_blocked: "暂时无法开始解析",
+  accepted: "已接收剧本，正在准备创作",
 };
 const executionLabels: Record<API.CreationExecution["status"], string> = {
-  queued: "已接受，等待 Worker 开始创作",
+  queued: "已接收剧本，等待开始解析",
   running: "正在创作", waiting_review: "等待人工审阅与采纳", blocked: "执行受阻", rejected: "审阅未通过", completed: "文本分镜已完成",
 };
 const polling = { pollingInterval: 5000, refetchOnFocus: true, refetchOnReconnect: true };
@@ -108,18 +109,18 @@ export function TextCreationWorkspace({ projectId, source, canWrite, initialRunI
   }
 
   return <div className="space-y-6">
-    <section aria-label="固定原稿与启动" className="space-y-4 rounded-lg border bg-card p-5">
+    <section aria-label="固定原稿与启动" className="space-y-4 bg-transparent py-4">
       <h2 className="text-lg font-semibold">固定原稿</h2>
       {source ? <><p className="font-medium">{source.title}</p><details><summary className="cursor-pointer text-sm text-muted-foreground">查看此次原稿</summary><pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-4 font-sans text-sm">{source.text}</pre></details><p className="break-all text-xs text-muted-foreground">版本：{source.revisionId}</p>{canWrite && <Button disabled={busy || head.isLoading || Boolean(head.error) || runs.isLoading} onClick={() => void startCreation()}>{existing ? "查看当前原稿的创作" : "固定原稿并开始创作"}</Button>}</> : <p className="text-sm">先<Link className="underline" href={`/projects/${projectId}#script-import`}>导入剧本</Link>，再开始文本创作。</p>}
       {head.error && <Alert variant="destructive"><AlertDescription>{appApiErrorMessage(head.error)}</AlertDescription></Alert>}
       <p className="text-sm text-muted-foreground">依次确认分集、剧稿结构、世界设定和导演分镜。修改原稿将保留已有运行和回执。</p>
     </section>
     {runs.error && <Alert variant="destructive"><AlertDescription>{appApiErrorMessage(runs.error)}</AlertDescription></Alert>}
-    {(runs.data?.length ?? 0) > 0 && <div className="space-y-2"><Label htmlFor="creation-run">创作记录</Label><select id="creation-run" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={run?.id ?? ""} onChange={(event) => chooseRun(event.target.value)}>{runs.data!.map((item) => <option key={item.id} value={item.id}>{new Date(item.created_at).toLocaleString("zh-CN")} · {item.source.revision_id.slice(0, 8)} · {deliveryLabels[item.status]}</option>)}</select></div>}
+    {(runs.data?.length ?? 0) > 0 && <div className="space-y-2"><Label htmlFor="creation-run">创作记录</Label><select id="creation-run" className="h-10 w-full rounded-md border-0 bg-background shadow-border focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring px-3 text-sm" value={run?.id ?? ""} onChange={(event) => chooseRun(event.target.value)}>{runs.data!.map((item) => <option key={item.id} value={item.id}>{new Date(item.created_at).toLocaleString("zh-CN")} · {item.source.revision_id.slice(0, 8)} · {deliveryLabels[item.status]}</option>)}</select></div>}
     {chosenRunId && exactRun.error && <Alert variant="destructive"><AlertDescription>{appApiErrorMessage(exactRun.error)}</AlertDescription></Alert>}
-    {run && <section aria-label="创作状态" className="space-y-4 rounded-lg border bg-card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">{state ? executionLabels[state.status] : deliveryLabels[run.status]}</h2>{canWrite && <div className="flex flex-wrap gap-2">{run.status === "delivery_blocked" && <Button disabled={busy} variant="outline" onClick={() => void retry()}>恢复原运行交接</Button>}{run.status === "accepted" && <Button disabled={busy} variant="outline" onClick={() => void synchronize()}>同步执行与提案</Button>}</div>}</div>
-      <ol aria-label="创作阶段" className="grid gap-2 sm:grid-cols-4">{Object.entries(stageLabels).map(([stage, label]) => { const items = proposals.filter((item) => item.stage === stage); return <li className="space-y-1 rounded-md border p-3 text-sm" key={stage}><p className="font-medium">{label}</p><p className="text-xs text-muted-foreground">{state?.stage === stage && state.status === "running" ? `已生成 ${state.steps.filter((step) => step.step_key.split("/")[0] === stage && step.state === "needs_review").length} 份草案，正在分析` : items.length ? `${items.filter((item) => item.status === "accepted").length}/${items.length} 已采纳` : "尚未开始"}</p>{state?.stage === stage && <Badge variant="outline">当前阶段</Badge>}</li>; })}</ol>
+    {run && <section aria-label="创作状态" className="space-y-4 bg-transparent py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">{state ? executionLabels[state.status] : deliveryLabels[run.status]}</h2>{canWrite && <div className="flex flex-wrap gap-2">{run.status === "delivery_blocked" && <Button disabled={busy} variant="outline" onClick={() => void retry()}>继续本次创作</Button>}{run.status === "accepted" && <Button disabled={busy} variant="outline" onClick={() => void synchronize()}>刷新创作内容</Button>}</div>}</div>
+      <ol aria-label="创作阶段" className="grid gap-2 sm:grid-cols-4">{Object.entries(stageLabels).map(([stage, label]) => { const items = proposals.filter((item) => item.stage === stage); return <li className="space-y-1 py-3 text-sm" key={stage}><p className="font-medium">{label}</p><p className="text-xs text-muted-foreground">{state?.stage === stage && state.status === "running" ? `已生成 ${state.steps.filter((step) => step.step_key.split("/")[0] === stage && step.state === "needs_review").length} 份草案，正在分析` : items.length ? `${items.filter((item) => item.status === "accepted").length}/${items.length} 已采纳` : "尚未开始"}</p>{state?.stage === stage && <Badge variant="outline">当前阶段</Badge>}</li>; })}</ol>
       {state && state.status !== "queued" && <p className="text-xs text-muted-foreground">已预留模型调用 {state.reserved_calls}/{state.call_limit} 次；额度在原运行内固定。</p>}
       {canWrite && state?.status === "blocked" && state.can_resume && <Button disabled={busy} onClick={() => void resumeRun()}>恢复原运行</Button>}
       {failureCode && <Alert variant="destructive"><AlertDescription>{executionErrors[failureCode] ?? "本次创作已暂停，请联系管理员核查；原稿和已保存结果仍可查回。"}<details className="mt-2"><summary>故障信息</summary>{failureCode}</details></AlertDescription></Alert>}
@@ -129,7 +130,9 @@ export function TextCreationWorkspace({ projectId, source, canWrite, initialRunI
       <details><summary className="cursor-pointer text-xs text-muted-foreground">运行与原稿身份</summary><p className="mt-2 break-all text-xs text-muted-foreground">运行：{run.id}<br />原稿：{run.source.revision_id}<br />摘要：{run.source.content_hash}</p></details>
     </section>}
     {proposalsQuery.error && <Alert variant="destructive"><AlertDescription>{appApiErrorMessage(proposalsQuery.error)}</AlertDescription></Alert>}
-    {proposals.length > 0 && <div className="grid items-start gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]"><nav aria-label="阶段提案" className="flex gap-2 overflow-auto lg:flex-col">{proposals.map((proposal, index) => <button type="button" aria-current={selected?.id === proposal.id ? "true" : undefined} className={`min-w-36 rounded-md border p-3 text-left text-sm ${selected?.id === proposal.id ? "border-primary bg-accent" : "bg-card"}`} key={proposal.id} onClick={() => setChosenProposalId(proposal.id)}><span className="block font-medium">{index + 1}. {stageLabels[proposal.stage]}</span><span className="mt-1 block text-xs text-muted-foreground">{proposal.status === "accepted" ? "已采纳" : "待审阅"} · {proposal.step_key.split("/").slice(1).join(" / ")}</span></button>)}</nav>{selected && <ProposalReview key={selected.id} proposal={selected} proposals={proposals} projectId={projectId} canWrite={canWrite} />}</div>}
+    {run && proposalsQuery.isLoading && <p role="status" className="py-8 text-sm text-muted-foreground">正在读取剧集、设定与分镜…</p>}
+    {run && !proposalsQuery.isLoading && !proposalsQuery.error && proposals.length === 0 && <section className="space-y-2 py-8"><h2 className="font-semibold">创作内容将在这里呈现</h2><p className="text-sm text-muted-foreground">生成后可逐步查看分集、场景、人物与分镜。{state?.status === "blocked" ? "当前创作受阻，请先查看上方说明。" : "每个阶段确认并采纳后，才会进入下一阶段。"}</p></section>}
+    {proposals.length > 0 && <div className="grid items-start gap-8 py-6 lg:grid-cols-[15rem_minmax(0,1fr)]"><ProposalNavigation key={run?.id} proposals={proposals} selectedId={selected?.id} onSelect={setChosenProposalId} />{selected && <ProposalReview key={selected.id} proposal={selected} proposals={proposals} projectId={projectId} canWrite={canWrite} />}</div>}
     {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
   </div>;

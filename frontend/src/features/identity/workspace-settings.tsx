@@ -186,7 +186,7 @@ export function WorkspaceSettings() {
     >
       <LayoutContainer className="py-9">
         {!authenticated ? (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription><Link className="underline" href="/login">登录后管理账户与工作空间</Link></AlertDescription></Alert>
+          <Alert className="bg-amber-50 text-amber-800"><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription><Link className="underline" href="/login">登录后管理账户与工作空间</Link></AlertDescription></Alert>
         ) : pageError ? (
           <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>账户设置暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription></Alert>
         ) : !me.data || !workspacesQuery.data ? (
@@ -200,7 +200,7 @@ export function WorkspaceSettings() {
               title="账户与工作空间"
             />
 
-            {notice ? <div className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><CheckCircle2 className="size-4" aria-hidden="true" />{notice}</div> : null}
+            {notice ? <div className="mt-6 flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><CheckCircle2 className="size-4" aria-hidden="true" />{notice}</div> : null}
             {actionError ? <Alert className="mt-6" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
 
             <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_340px]">
@@ -241,9 +241,9 @@ export function WorkspaceSettings() {
                 {workspacesQuery.data.map((workspace) => {
                   const current = workspace.id === currentWorkspaceId;
                   return (
-                    <article className={`flex flex-wrap items-center gap-5 rounded-2xl border bg-card p-5 ${current ? "shadow-sm" : ""}`} key={workspace.id}>
+                    <article className={`flex flex-wrap items-center gap-5 p-5 ${current ? "bg-muted/50" : ""}`} key={workspace.id}>
                       <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-foreground"><Settings2 className="size-5" aria-hidden="true" /></span>
-                      <div className="min-w-48 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{current ? <Badge className="border-border bg-muted text-foreground" variant="outline">当前空间</Badge> : null}{workspace.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{roleLabels[workspace.role]} · revision {workspace.revision}</p></div>
+                      <div className="min-w-48 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{workspace.name}</h3>{current ? <Badge className="bg-muted text-foreground" variant="outline">当前空间</Badge> : null}{workspace.status === "archived" ? <Badge variant="secondary">已归档</Badge> : null}</div><p className="mt-1 text-xs text-slate-500">{roleLabels[workspace.role]} · revision {workspace.revision}</p></div>
                       <div className="flex flex-1 flex-wrap items-end justify-end gap-2">
                         {workspace.role === "owner" ? (
                           <form className="flex min-w-64 flex-1 gap-2" onSubmit={(event) => renameWorkspace(event, workspace)}>
@@ -298,7 +298,7 @@ export function WorkspaceSettings() {
                   </form>
                 </CardContent>
               </Card>
-              <Card className="border-rose-200">
+              <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-rose-700"><UserX className="size-5" aria-hidden="true" />停用账户</CardTitle>
                   <CardDescription>这会撤销当前凭据并禁止再次登录；已有业务事实依据留存规则保留。</CardDescription>

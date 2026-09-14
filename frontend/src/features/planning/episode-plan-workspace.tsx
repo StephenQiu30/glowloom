@@ -138,7 +138,7 @@ export function EpisodePlanWorkspace({
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {plan.proposals.map((proposal) => (
-                <article className="border p-4" key={proposal.id}>
+                <article className="py-4" key={proposal.id}>
                   <Label htmlFor={`episode-title-${proposal.id}`}>第 {proposal.position} 集标题</Label>
                   <Input className="mt-2" id={`episode-title-${proposal.id}`} readOnly value={proposal.title} />
                   <p className="mt-3 text-sm">{proposal.reason}</p>
@@ -147,7 +147,7 @@ export function EpisodePlanWorkspace({
                 </article>
               ))}
             </div>
-            <div className="flex flex-wrap justify-end gap-3 border-t pt-5">
+            <div className="flex flex-wrap justify-end gap-3 pt-5">
               {plan.plan.status === "review_ready" ? <Button disabled={!canWrite || busy} onClick={confirm}>确认分集计划</Button> : null}
               {plan.plan.status === "confirmed" && !commit ? <Button disabled={!canWrite || busy} onClick={materialize}>原子创建 {plan.proposals.length} 集</Button> : null}
               {commit?.commit.status === "materialized" ? <Button disabled={!canWrite || busy} onClick={publish}>发布 {plan.proposals.length} 集剧本</Button> : null}

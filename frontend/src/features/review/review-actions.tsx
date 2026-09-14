@@ -47,14 +47,14 @@ export function ReviewActions({
       || (decision?.decision === "changes_requested" && !coordination.repair_workflow_run_id));
 
   return (
-    <Card className="border">
-      <CardHeader className="border-b">
+    <Card>
+      <CardHeader>
         <CardTitle>可执行动作</CardTitle>
         <CardDescription>所有写入都重新校验服务端 revision、租约和冻结事实。</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 pt-1">
         {task.claim ? (
-          <div aria-label="审核租约" className="grid gap-2 border p-3 text-sm sm:grid-cols-2">
+          <div aria-label="审核租约" className="grid gap-2 py-3 text-sm sm:grid-cols-2">
             <Fact
               label={claimToken ? "当前租约" : "租约所有者"}
               value={claimToken ? "当前账号持有" : shortId(task.claim.claimed_by)}
@@ -84,7 +84,7 @@ export function ReviewActions({
           </div>
         ) : null}
         {canUseClaim ? (
-          <div className="flex flex-wrap gap-3 border-t pt-4">
+          <div className="flex flex-wrap gap-3 pt-4">
             {task.allowed_decisions.map((value) => (
               <Button
                 disabled={busy

@@ -71,9 +71,9 @@ describe("文本核心闭环", () => {
       throw new ApiClientError("not_found", "not_found");
     });
     render(<AppProviders><TextCreationWorkspace projectId={projectId} source={source} canWrite={false} /></AppProviders>);
-    expect(await screen.findByText("Agent 已接受，等待执行状态")).toBeInTheDocument();
+    expect(await screen.findByText("已接收剧本，正在准备创作")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "固定原稿并开始创作" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "同步执行与提案" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "刷新创作内容" })).not.toBeInTheDocument();
     expect(screen.queryByText("创作已完成")).not.toBeInTheDocument();
   });
 

@@ -281,7 +281,7 @@ export function ProductionBibleWorkspace({
             {(bible.entities?.length ?? 0) > 0 ? (
               <section aria-label="制作圣经实体" className="grid gap-3 sm:grid-cols-2">
                 {bible.entities?.map((entity) => (
-                  <article className="border p-4" key={entity.id}>
+                  <article className="py-4" key={entity.id}>
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-medium">{entity.canonical_name}</p>
                       <Badge variant="secondary">{kindLabels[entity.kind]}</Badge>
@@ -341,7 +341,7 @@ export function ProductionBibleWorkspace({
             ) : null}
 
             {bible.status === "needs_review" ? (
-              <div className="border-t pt-5">
+              <div className="pt-5">
                 <p className="text-sm text-muted-foreground">
                   {unresolvedBlockingIssues.length
                     ? `仍有 ${unresolvedBlockingIssues.length} 个阻断问题需要明确人工决议。`
@@ -349,7 +349,7 @@ export function ProductionBibleWorkspace({
                 </p>
               </div>
             ) : (
-              <Alert className="border-emerald-200 bg-emerald-50" role="status">
+              <Alert className="bg-emerald-50" role="status">
                 <CheckCircle2 aria-hidden="true" />
                 <AlertTitle>制作圣经已确认</AlertTitle>
                 <AlertDescription>分集发布与后续场景、任务、分镜都将固定引用此版本。</AlertDescription>

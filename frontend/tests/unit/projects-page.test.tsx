@@ -85,7 +85,8 @@ describe("真实项目库", () => {
     );
 
     expect(await screen.findByText("个人创作空间")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "项目管理" }).closest(".mx-auto")).toHaveClass("max-w-[1440px]");
+    expect(screen.getByRole("heading", { name: "我的作品" }).closest(".mx-auto")).toHaveClass("max-w-[1200px]");
+    expect(screen.queryByRole("group", { name: "项目数量摘要" })).not.toBeInTheDocument();
     expect(await screen.findByRole("link", { name: `打开项目 ${project.name}` })).toHaveAttribute(
       "href",
       `/projects/${project.id}`,

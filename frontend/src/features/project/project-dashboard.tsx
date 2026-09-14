@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
 import { StudioShell } from "@/components/studio/studio-shell";
-import { MetricGroup } from "@/components/studio/metric-group";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -94,7 +93,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
       } : undefined}
     >
       {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background" role="status">{notice}</div> : null}
-      <LayoutContainer className="py-12 md:py-14">
+      <LayoutContainer className="py-8 sm:py-10">
         {!authenticated ? (
           <Alert><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>
         ) : pageError ? (
@@ -105,19 +104,9 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
           <>
             <PageHeader
               actions={<Button disabled={!workspaceId} onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建项目</Button>}
-              description="以项目和单集组织生产事实，继续当前阶段，或追踪归档内容。"
+              description="从一份剧本开始，或打开已有作品，继续分集、人物设定与分镜。"
               eyebrow={workspace.name}
-              title="项目管理"
-            />
-            <MetricGroup
-              className="mt-8"
-              columns={3}
-              items={[
-                { label: "全部", value: projects.length },
-                { label: "制作中", value: projects.filter((item) => item.status === "active").length },
-                { label: "已归档", value: projects.filter((item) => item.status === "archived").length },
-              ]}
-              label="项目数量摘要"
+              title="我的作品"
             />
 
             {actionError ? <Alert className="mt-6" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>创建失败</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}

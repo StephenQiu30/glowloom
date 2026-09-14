@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Bell,
   Check,
   ChevronDown,
   Command as CommandIcon,
@@ -256,9 +255,6 @@ function AccountMenu({
 
   return (
     <>
-      <Button aria-label="任务通知" className="hidden sm:inline-flex" size="icon" variant="ghost">
-        <Bell aria-hidden="true" />
-      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button className="gap-2 px-1.5" variant="ghost">
@@ -296,6 +292,7 @@ function AccountMenu({
 export function BasicHeader({
   active,
   authState,
+  compact = false,
   currentStep,
   projectName,
   role,
@@ -303,12 +300,19 @@ export function BasicHeader({
 }: {
   active?: StudioNavigation;
   authState: LayoutAuthState;
+  compact?: boolean;
   currentStep?: number;
   projectName?: string;
   role?: WorkspaceRole;
   viewer?: LayoutViewer;
 }) {
   const showAppNavigation = authState !== "anonymous";
+
+  if (compact) {
+    return <header aria-label="Lanverse 全局页眉" className="basic-layout__header bg-background">
+      <LayoutContainer className="flex h-18 items-center justify-between gap-4"><StudioBrand size="l" /><ThemeToggle /></LayoutContainer>
+    </header>;
+  }
 
   return (
     <header aria-label="Lanverse 全局页眉" className="basic-layout__header bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">

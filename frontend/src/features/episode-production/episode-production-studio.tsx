@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
+import { StudioShell } from "@/components/studio/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
@@ -295,32 +296,32 @@ export function EpisodeProductionStudio({
   }
 
   if (authState === "checking" || loading) {
-    return <main className="grid min-h-[60vh] place-items-center"><LoaderCircle className="size-6 animate-spin" aria-label="正在加载剧集工作台" /></main>;
+    return <StudioShell active="projects"><div className="grid min-h-[60vh] place-items-center"><LoaderCircle className="size-6 animate-spin" aria-label="正在加载剧集工作台" /></div></StudioShell>;
   }
   if (authState !== "authenticated") {
-    return <main className="grid min-h-[60vh] place-items-center"><Link className="underline" href="/login">请先登录</Link></main>;
+    return <StudioShell active="projects"><div className="grid min-h-[60vh] place-items-center"><Link className="underline" href="/login">请先登录</Link></div></StudioShell>;
   }
 
   return (
-    <main className="py-8">
-      <LayoutContainer>
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b pb-6">
+    <StudioShell active="projects" projectName={project?.name}>
+      <LayoutContainer className="py-8 sm:py-10">
+        <div className="flex flex-wrap items-end justify-between gap-4 pb-6">
           <div>
             <Link className="text-sm text-muted-foreground hover:underline" href={episode ? `/projects/${episode.project_id}` : "/projects"}>{project?.name ?? "项目"}</Link>
             <h1 className="mt-2 text-3xl font-semibold">第 {episode?.position} 集 · {episode?.name}</h1>
             <p className="mt-2 text-sm text-muted-foreground">确认结构事实后生成候选分镜，再经人工决议原子写入与导出。</p>
           </div>
-          <select aria-label="切换当前剧集" className="h-10 rounded-md border bg-background px-3 text-sm" onChange={(event) => { window.location.href = `/studio/${event.target.value}/${initialPanel}`; }} value={episodeId}>
+          <select aria-label="切换当前剧集" className="h-10 rounded-md border-0 bg-background shadow-border focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring px-3 text-sm" onChange={(event) => { window.location.href = `/studio/${event.target.value}/${initialPanel}`; }} value={episodeId}>
             {episodes.map((item) => <option key={item.id} value={item.id}>第 {item.position} 集 · {item.name}</option>)}
           </select>
         </div>
 
         <nav aria-label="剧集制作流程" className="my-6 flex flex-wrap gap-2">
-          {panels.map((panel) => <Link aria-current={panel.id === initialPanel ? "page" : undefined} className={panel.id === initialPanel ? "rounded-full bg-foreground px-4 py-2 text-sm text-background" : "rounded-full border px-4 py-2 text-sm hover:bg-muted"} href={`/studio/${episodeId}/${panel.id}`} key={panel.id}>{panel.label}</Link>)}
+          {panels.map((panel) => <Link aria-current={panel.id === initialPanel ? "page" : undefined} className={panel.id === initialPanel ? "rounded-full bg-foreground px-4 py-2 text-sm text-background" : "rounded-full px-4 py-2 text-sm hover:bg-muted"} href={`/studio/${episodeId}/${panel.id}`} key={panel.id}>{panel.label}</Link>)}
         </nav>
 
         {error ? <Alert className="mb-5" variant="destructive"><AlertCircle className="size-4" /><AlertTitle>操作未完成</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
-        {notice ? <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><CheckCircle2 className="mr-2 inline size-4" />{notice}</div> : null}
+        {notice ? <div className="mb-5 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status"><CheckCircle2 className="mr-2 inline size-4" />{notice}</div> : null}
 
         {initialPanel === "script" || initialPanel === "tasks" ? (
           <StructurePanel allTasksAccepted={allTasksAccepted} busy={busy} confirmStructure={confirmStructure} onAcceptTask={acceptTask} structure={structure} />
@@ -331,7 +332,7 @@ export function EpisodeProductionStudio({
         {initialPanel === "assets" ? <BoundaryPanel title="项目事实" description="MVP 使用已确认的制作圣经作为角色与世界观事实，不在剧集层复制资产写模型。" /> : null}
         {initialPanel === "media" ? <BoundaryPanel title="媒体" description="媒体上传与版本由 Backend 的对象存储模块统一管理；分镜 MVP 不生成或复制媒体文件。" /> : null}
       </LayoutContainer>
-    </main>
+    </StudioShell>
   );
 }
 
@@ -339,32 +340,32 @@ function StructurePanel({ allTasksAccepted, busy, confirmStructure, onAcceptTask
   if (!structure) return <BoundaryPanel title="剧本结构" description="尚未发布剧集剧本。请先从项目页完成分集计划、原子创建剧集并发布剧本。" />;
   const unitCount = structure.scenes.reduce((sum, scene) => sum + scene.narrative_units.length + scene.dialogues.length + 1, 0);
   return <div className="grid gap-5">
-    <section className="rounded-2xl border bg-card p-6">
+    <section className="bg-transparent p-6">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">{structure.scenes.length} 项建议 · {structure.status === "confirmed" ? "已完成" : "待确认"}</p><h2 className="mt-1 text-xl font-semibold">场景与制作任务</h2></div>{structure.status === "needs_review" ? <Button disabled={busy || !allTasksAccepted} onClick={confirmStructure}>确认剧本结构</Button> : <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">结构已确认</span>}</div>
-      <div className="mt-6 grid gap-4">{structure.scenes.map((scene) => <section aria-label={`${scene.heading} 制作任务`} className="rounded-xl border p-4" key={scene.id}><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">场景 {scene.position} · {scene.heading}</h3><span className="text-xs text-muted-foreground">{scene.narrative_units.length} 个叙事段 · {scene.dialogues.length} 段对白</span></div><div className="mt-3 grid gap-2">{scene.tasks.map((task) => <article className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2" key={task.id}><p className="text-sm"><span className="font-medium">{task.label}</span><span className="ml-2 text-xs text-muted-foreground">{task.required ? "必需" : "可选"} · {task.status}</span></p>{task.status === "pending" ? <Button disabled={busy} onClick={() => onAcceptTask(task)} size="sm">接受</Button> : <CheckCircle2 className="size-4 text-emerald-600" aria-label="已接受" />}</article>)}</div></section>)}</div>
+      <div className="mt-6 grid gap-4">{structure.scenes.map((scene) => <section aria-label={`${scene.heading} 制作任务`} className="py-4" key={scene.id}><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">场景 {scene.position} · {scene.heading}</h3><span className="text-xs text-muted-foreground">{scene.narrative_units.length} 个叙事段 · {scene.dialogues.length} 段对白</span></div><div className="mt-3 grid gap-2">{scene.tasks.map((task) => <article className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2" key={task.id}><p className="text-sm"><span className="font-medium">{task.label}</span><span className="ml-2 text-xs text-muted-foreground">{task.required ? "必需" : "可选"} · {task.status}</span></p>{task.status === "pending" ? <Button disabled={busy} onClick={() => onAcceptTask(task)} size="sm">接受</Button> : <CheckCircle2 className="size-4 text-emerald-600" aria-label="已接受" />}</article>)}</div></section>)}</div>
     </section>
-    <section className="rounded-2xl border bg-card p-6"><p className="text-sm text-muted-foreground">稳定叙事单元</p><p className="mt-2 text-3xl font-semibold">{unitCount}</p><p className="mt-2 text-sm text-muted-foreground">场景标题、动作/叙述与对白均以来源 UUID 固定，作为分镜覆盖输入。</p></section>
+    <section className="bg-transparent p-6"><p className="text-sm text-muted-foreground">稳定叙事单元</p><p className="mt-2 text-3xl font-semibold">{unitCount}</p><p className="mt-2 text-sm text-muted-foreground">场景标题、动作/叙述与对白均以来源 UUID 固定，作为分镜覆盖输入。</p></section>
   </div>;
 }
 
 function StoryboardPanel({ acceptedDrafts, applyDraft, applyPreflight, approveBatch, batch, busy, createDraft, createExportPackage, downloadExportPackage, exportPreflight, onAcceptDraft, preflightApply, preflightExportPackage, shots, storyboardExport, structure }: { acceptedDrafts: number; applyDraft: () => void; applyPreflight?: ApplyPreflight; approveBatch: () => void; batch?: DraftBatch; busy: boolean; createDraft: () => void; createExportPackage: () => void; downloadExportPackage: () => void; exportPreflight?: ExportPreflight; onAcceptDraft: (shot: DraftShot) => void; preflightApply: () => void; preflightExportPackage: () => void; shots: Shot[]; storyboardExport?: StoryboardExport; structure?: Structure }) {
   return <div className="grid gap-5">
     {structure?.status !== "confirmed" ? <Alert><AlertCircle className="size-4" /><AlertTitle>需先确认剧本结构</AlertTitle><AlertDescription>分镜候选只能引用已确认的稳定叙事单元。</AlertDescription></Alert> : null}
-    <section className="rounded-2xl border bg-card p-6">
+    <section className="bg-transparent p-6">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">Agent 仅生成候选，不写正式业务数据</p><h2 className="mt-1 text-xl font-semibold">待审核分镜草案</h2></div><Button disabled={busy || structure?.status !== "confirmed" || batch?.status === "queued" || batch?.status === "running"} onClick={createDraft}><Clapperboard className="mr-2 size-4" />生成待审核草案</Button></div>
       {batch?.status === "queued" || batch?.status === "running" ? <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />候选生成中，页面会自动刷新</div> : null}
       {batch?.status === "failed" || batch?.status === "unknown" ? <p className="mt-5 text-sm text-destructive">候选生成失败，可检查私有 Agent 后创建新批次。</p> : null}
-      {batch?.candidate.shots.length ? <div className="mt-6 grid gap-3">{batch.candidate.shots.map((shot) => { const accepted = batch.decisions[shot.proposal_key] === "accepted"; return <article className="rounded-xl border p-4" key={shot.proposal_key}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">镜头 {shot.position} · {shot.spec.duration_ms ?? "—"} ms</p><h3 className="mt-1 font-semibold">{shot.title}</h3><p className="mt-2 text-sm text-muted-foreground">覆盖 {shot.narrative_unit_version_ids.length} 个叙事单元</p></div>{accepted ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">accepted</span> : <Button disabled={busy || batch.status !== "needs_review"} onClick={() => onAcceptDraft(shot)} size="sm">接受此镜</Button>}</div></article>; })}</div> : <p className="mt-5 text-sm text-muted-foreground">尚无分镜候选。</p>}
-      {batch?.status === "needs_review" && batch.candidate.shots.length > 0 ? <div className="mt-5 flex items-center justify-between gap-3 border-t pt-5"><span className="text-sm text-muted-foreground">已接受 {acceptedDrafts}/{batch.candidate.shots.length}</span><Button disabled={busy || acceptedDrafts !== batch.candidate.shots.length} onClick={approveBatch}>批准整批草案</Button></div> : null}
-      {batch?.status === "approved" ? <div className="mt-5 flex flex-wrap gap-3 border-t pt-5"><Button disabled={busy} onClick={preflightApply} variant="outline">预检写入影响</Button><Button disabled={busy || !applyPreflight} onClick={applyDraft}>原子写入正式分镜</Button>{applyPreflight ? <span className="self-center text-sm text-muted-foreground">将创建 {applyPreflight.created} 个镜头</span> : null}</div> : null}
+      {batch?.candidate.shots.length ? <div className="mt-6 grid gap-3">{batch.candidate.shots.map((shot) => { const accepted = batch.decisions[shot.proposal_key] === "accepted"; return <article className="py-4" key={shot.proposal_key}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">镜头 {shot.position} · {shot.spec.duration_ms ?? "—"} ms</p><h3 className="mt-1 font-semibold">{shot.title}</h3><p className="mt-2 text-sm text-muted-foreground">覆盖 {shot.narrative_unit_version_ids.length} 个叙事单元</p></div>{accepted ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">accepted</span> : <Button disabled={busy || batch.status !== "needs_review"} onClick={() => onAcceptDraft(shot)} size="sm">接受此镜</Button>}</div></article>; })}</div> : <p className="mt-5 text-sm text-muted-foreground">尚无分镜候选。</p>}
+      {batch?.status === "needs_review" && batch.candidate.shots.length > 0 ? <div className="mt-5 flex items-center justify-between gap-3 pt-5"><span className="text-sm text-muted-foreground">已接受 {acceptedDrafts}/{batch.candidate.shots.length}</span><Button disabled={busy || acceptedDrafts !== batch.candidate.shots.length} onClick={approveBatch}>批准整批草案</Button></div> : null}
+      {batch?.status === "approved" ? <div className="mt-5 flex flex-wrap gap-3 pt-5"><Button disabled={busy} onClick={preflightApply} variant="outline">预检写入影响</Button><Button disabled={busy || !applyPreflight} onClick={applyDraft}>原子写入正式分镜</Button>{applyPreflight ? <span className="self-center text-sm text-muted-foreground">将创建 {applyPreflight.created} 个镜头</span> : null}</div> : null}
     </section>
 
-    <section aria-label="分镜准备度摘要" className="rounded-2xl border bg-card p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">正式分镜</p><h2 className="mt-1 text-xl font-semibold">{shots.length} 个镜头</h2></div>{shots.length > 0 ? <CheckCircle2 className="size-6 text-emerald-600" /> : <AlertCircle className="size-6 text-muted-foreground" />}</div>{shots.length > 0 ? <ol className="mt-4 grid gap-2">{shots.map((shot) => <li className="flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2 text-sm" key={shot.id}><span>{shot.position}. {shot.title}</span><code className="text-xs text-muted-foreground">{shot.content_hash.slice(0, 8)}</code></li>)}</ol> : null}</section>
+    <section aria-label="分镜准备度摘要" className="bg-transparent p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">正式分镜</p><h2 className="mt-1 text-xl font-semibold">{shots.length} 个镜头</h2></div>{shots.length > 0 ? <CheckCircle2 className="size-6 text-emerald-600" /> : <AlertCircle className="size-6 text-muted-foreground" />}</div>{shots.length > 0 ? <ol className="mt-4 grid gap-2">{shots.map((shot) => <li className="flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2 text-sm" key={shot.id}><span>{shot.position}. {shot.title}</span><code className="text-xs text-muted-foreground">{shot.content_hash.slice(0, 8)}</code></li>)}</ol> : null}</section>
 
-    <section className="rounded-2xl border bg-card p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">确定性 ZIP · manifest + JSON + CSV + HTML</p><h2 className="mt-1 text-xl font-semibold">分镜包导出</h2></div><Button disabled={busy} onClick={preflightExportPackage} variant="outline">检查导出条件</Button></div>{exportPreflight ? <div aria-label="分镜包预检结果" className="mt-4 rounded-lg bg-muted p-4 text-sm" role="region">{exportPreflight.allowed ? `允许导出 · ${exportPreflight.shot_count} 个镜头` : exportPreflight.blockers.map((blocker) => blocker.summary).join("；")}</div> : null}<div className="mt-4 flex flex-wrap items-center gap-3"><Button disabled={busy || !exportPreflight?.allowed} onClick={createExportPackage}><FileText className="mr-2 size-4" />生成分镜包</Button>{storyboardExport ? <Button disabled={busy} onClick={downloadExportPackage} variant="outline"><Download className="mr-2 size-4" />下载分镜包</Button> : null}{storyboardExport ? <code className="text-xs text-muted-foreground">SHA-256 {storyboardExport.content_hash}</code> : null}</div></section>
+    <section className="bg-transparent p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">确定性 ZIP · manifest + JSON + CSV + HTML</p><h2 className="mt-1 text-xl font-semibold">分镜包导出</h2></div><Button disabled={busy} onClick={preflightExportPackage} variant="outline">检查导出条件</Button></div>{exportPreflight ? <div aria-label="分镜包预检结果" className="mt-4 rounded-lg bg-muted p-4 text-sm" role="region">{exportPreflight.allowed ? `允许导出 · ${exportPreflight.shot_count} 个镜头` : exportPreflight.blockers.map((blocker) => blocker.summary).join("；")}</div> : null}<div className="mt-4 flex flex-wrap items-center gap-3"><Button disabled={busy || !exportPreflight?.allowed} onClick={createExportPackage}><FileText className="mr-2 size-4" />生成分镜包</Button>{storyboardExport ? <Button disabled={busy} onClick={downloadExportPackage} variant="outline"><Download className="mr-2 size-4" />下载分镜包</Button> : null}{storyboardExport ? <code className="text-xs text-muted-foreground">SHA-256 {storyboardExport.content_hash}</code> : null}</div></section>
   </div>;
 }
 
 function BoundaryPanel({ description, title }: { description: string; title: string }) {
-  return <section className="rounded-2xl border bg-card p-8"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p></section>;
+  return <section className="bg-transparent p-8"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p></section>;
 }

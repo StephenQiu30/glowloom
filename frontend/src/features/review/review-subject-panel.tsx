@@ -9,7 +9,7 @@ import Link from "next/link";
 
 export function EmptyDetail() {
   return (
-    <div className="grid min-h-96 place-items-center border bg-card p-8 text-center">
+    <div className="grid min-h-96 place-items-center bg-muted/50 p-8 text-center">
       <div>
         <Clock3 aria-hidden="true" className="mx-auto size-6 text-muted-foreground" />
         <h2 className="mt-3 font-semibold">选择一个审核任务</h2>
@@ -43,8 +43,8 @@ export function SubjectPanel({
     ? subject
     : null;
   return (
-    <Card className="border" id="subject-fact">
-      <CardHeader className="border-b">
+    <Card id="subject-fact">
+      <CardHeader>
         <CardTitle>冻结 Subject</CardTitle>
         <CardDescription>
           revision、hash、候选和 rubric 均来自 HumanTask，页面不能改写。
@@ -69,7 +69,7 @@ export function SubjectPanel({
           <fieldset className="grid gap-2" disabled={!canDecide}>
             <legend className="mb-2 text-sm font-semibold">冻结候选</legend>
             {task.candidate_ids.map((candidateId) => (
-              <label className="flex cursor-pointer items-center gap-3 border p-3 text-sm has-checked:border-foreground has-checked:bg-muted/50" key={candidateId}>
+              <label className="flex cursor-pointer items-center gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted" key={candidateId}>
                 <input
                   checked={effectiveCandidate === candidateId}
                   className="size-4"
@@ -87,19 +87,19 @@ export function SubjectPanel({
             <h3 className="text-sm font-semibold">冻结输入引用</h3>
             <ul className="mt-2 grid gap-2">
               {task.candidate_ids.map((candidateId) => (
-                <li className="border p-3 font-mono text-xs" key={candidateId}>{candidateId}</li>
+                <li className="py-3 font-mono text-xs" key={candidateId}>{candidateId}</li>
               ))}
             </ul>
           </div>
         ) : null}
         {task.subject_type === "structure_identity_gate_input" && structureSubject ? (
-          <fieldset className="grid gap-3 border-t pt-5" disabled={!canDecide}>
+          <fieldset className="grid gap-3 pt-5" disabled={!canDecide}>
             <legend className="text-sm font-semibold">冻结修复选项</legend>
             <p className="text-xs text-muted-foreground">
               只能选择 Backend 已冻结的错误项、证据、目标和影响场景；提交后会生成新的候选与审核任务。
             </p>
             {structureSubject.repair_options.map((option) => (
-              <div className="grid gap-2 border p-3" key={option.issue_key}>
+              <div className="grid gap-2 py-3" key={option.issue_key}>
                 <div>
                   <p className="text-sm font-medium">{option.summary}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -117,7 +117,7 @@ export function SubjectPanel({
                   const request = repairRequestFrom(option, change);
                   const choiceKey = repairChoiceKey(request);
                   return (
-                    <label className="flex cursor-pointer items-start gap-3 border p-3 text-sm has-checked:border-foreground has-checked:bg-muted/50" key={`${change.operation}:${index}`}>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted" key={`${change.operation}:${index}`}>
                       <input
                         checked={repairRequest ? repairChoiceKey(repairRequest) === choiceKey : false}
                         className="mt-0.5 size-4"

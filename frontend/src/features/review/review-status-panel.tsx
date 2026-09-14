@@ -43,7 +43,7 @@ export function TaskStatusPanel({
     ?? coordination?.workflow_signal_receipt_id;
 
   return (
-    <section aria-label="审核状态" className="grid gap-px overflow-hidden border bg-border sm:grid-cols-2 xl:grid-cols-4" role="region">
+    <section aria-label="审核状态" className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4" role="region">
       <StatusCell label="任务状态" value={taskStatusLabels[task.status]} />
       <StatusCell
         label="决议状态"

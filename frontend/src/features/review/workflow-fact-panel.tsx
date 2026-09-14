@@ -23,8 +23,8 @@ export function WorkflowFactPanel({
   verified: boolean;
 }) {
   return (
-    <Card className="border" id="workflow-run">
-      <CardHeader className="border-b">
+    <Card id="workflow-run">
+      <CardHeader>
         <CardTitle>WorkflowRun 复核</CardTitle>
         <CardDescription>
           Resume 完成后仍需重取匹配的 NodeRun 和 Gate Output，不能用本地成功代替。

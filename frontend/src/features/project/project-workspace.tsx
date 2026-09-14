@@ -61,7 +61,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             <PageHeader
               actions={(
                 <div className="flex flex-wrap gap-2">
-                  <Button asChild><Link href={`/projects/${project.id}/creation`}>文本创作<ArrowRight aria-hidden="true" /></Link></Button>
+                  <Button asChild><Link href={currentScriptQuery.data ? `/projects/${project.id}/creation` : "#script-import"}>{currentScriptQuery.data ? "继续剧本创作" : "导入剧本"}<ArrowRight aria-hidden="true" /></Link></Button>
                   <Button asChild variant="outline">
                     <Link href={`/projects/${project.id}/reviews`}>
                       <ClipboardCheck aria-hidden="true" />
@@ -69,16 +69,13 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                     </Link>
                   </Button>
                   {episodes[0] ? (
-                    <Button asChild><Link href={`/studio/${episodes[0].id}/script`}>继续制作<ArrowRight aria-hidden="true" /></Link></Button>
-                  ) : (
-                    <Button asChild><Link href="#script-import">导入剧本<ArrowRight aria-hidden="true" /></Link></Button>
-                  )}
+                    <Button asChild variant="ghost"><Link href="#episodes">查看剧集<ArrowRight aria-hidden="true" /></Link></Button>
+                  ) : null}
                 </div>
               )}
               badges={[{ label: project.aspect_ratio }, { label: project.visual_style ?? "未设视觉风格" }]}
               breadcrumbs={[{ label: "项目", href: "/projects" }, { label: project.name }]}
               description={project.description || "从不可变原稿开始，依次审阅分集、场景、人物设定和分镜。"}
-              note="当前页面只呈现这条 MVP 主链所需的服务端事实。"
               title={project.name}
             />
 
@@ -90,8 +87,8 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
               workspaceId={project.workspace_id}
             />
 
-            <section aria-label="单集工作区" className="border bg-card" id="episodes">
-              <div className="flex items-center justify-between border-b p-5">
+            <section aria-label="单集工作区" className="bg-transparent" id="episodes">
+              <div className="flex items-center justify-between p-5">
                 <div><h2 className="text-xl font-semibold">单集工作区</h2><p className="mt-1 text-sm text-muted-foreground">每集从已发布剧本进入结构审阅和分镜制作。</p></div>
                 <Badge variant="outline">{episodes.length} 集</Badge>
               </div>

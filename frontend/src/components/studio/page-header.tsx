@@ -95,7 +95,7 @@ export function PageHeader({
             </ItemHeader>
           ) : null}
 
-          <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             {title}
           </h1>
           {accessibleTitle ? <h2 className="sr-only">{accessibleTitle}</h2> : null}

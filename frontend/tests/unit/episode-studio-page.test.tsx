@@ -108,6 +108,7 @@ function installBackend(initial: BackendState) {
 
   requestMock.mockImplementation(async (url: string, options?: { method?: string }) => {
     const method = options?.method ?? "GET";
+    if (method === "GET" && url === "/api/me") return { data: { user: { display_name: "创作者", email: "fixture@example.invalid" }, workspace: { name: "创作空间", role: "owner" } } };
     if (method === "GET" && url === `/api/episodes/${episodeId}`) return { data: episode };
     if (method === "GET" && url === `/api/projects/${projectId}`) return { data: project };
     if (method === "GET" && url === `/api/projects/${projectId}/episodes`) return { data: [episode] };
@@ -200,6 +201,9 @@ describe("单集 MVP 生产工作台", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "第 1 集 · 雨巷相逢" })).toBeInTheDocument();
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+    expect(screen.getByRole("banner", { name: "Lanverse 全局页眉" })).toBeInTheDocument();
+    expect(screen.getByRole("contentinfo", { name: "Lanverse 页脚" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "雨巷，夜 制作任务" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "确认剧本结构" })).toBeDisabled();
 

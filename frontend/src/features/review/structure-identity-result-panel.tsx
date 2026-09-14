@@ -19,8 +19,8 @@ export function StructureIdentityResultPanel({
   verified: boolean;
 }) {
   return (
-    <Card aria-label="正式结构身份结果" className="border" id="structure-identity-result" role="region">
-      <CardHeader className="border-b">
+    <Card aria-label="正式结构身份结果" id="structure-identity-result" role="region">
+      <CardHeader>
         <CardTitle>正式结构身份结果</CardTitle>
         <CardDescription>
           直接读取 Backend 已发布版本，并核对当前审核决议、Gate 输入和 Owner Receipt。
@@ -60,7 +60,7 @@ export function StructureIdentityResultPanel({
               <Fact label="内容 Hash" value={shortHash(data.version.content_hash)} mono />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              <section aria-label="正式剧集范围" className="border p-4">
+              <section aria-label="正式剧集范围" className="py-4">
                 <h3 className="text-sm font-semibold">剧集范围</h3>
                 <ul className="mt-3 grid gap-2 text-sm">
                   {data.version.episode_refs.map((episode) => (
@@ -73,7 +73,7 @@ export function StructureIdentityResultPanel({
                   ))}
                 </ul>
               </section>
-              <section aria-label="正式身份列表" className="border p-4">
+              <section aria-label="正式身份列表" className="py-4">
                 <h3 className="text-sm font-semibold">身份列表</h3>
                 <ul className="mt-3 grid gap-2 text-sm">
                   {data.version.identities.map((identity) => (

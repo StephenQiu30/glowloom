@@ -313,7 +313,7 @@ export function ReviewWorkbench({
               {!requestedTaskId ? (
                 <EmptyDetail />
               ) : detailQuery.isLoading && !detail ? (
-                <div className="grid min-h-96 place-items-center border bg-card">
+                <div className="grid min-h-96 place-items-center bg-muted/50">
                   <LoaderCircle
                     aria-label="正在加载审核详情"
                     className="size-5 animate-spin"
