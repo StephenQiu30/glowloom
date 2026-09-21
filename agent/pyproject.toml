@@ -8,6 +8,7 @@ dependencies = [
     "fastapi==0.140.12",
     "pillow==12.3.0",
     "pydantic==2.13.4",
+    "pydantic-settings==2.15.0",
     "python-multipart==0.0.32",
     "uvicorn[standard]==0.51.0",
 ]
@@ -15,7 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "httpx==0.28.1",
-    "pyright==1.1.411",
+    "mypy==2.3.1",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "ruff==0.16.0",
@@ -36,15 +37,16 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
-[tool.pyright]
-pythonVersion = "3.11"
-typeCheckingMode = "strict"
-include = ["app", "tests"]
-venvPath = "."
-venv = ".venv"
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 addopts = "-ra"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app"]
+check_untyped_defs = true
+allow_redefinition_new = true
+local_partial_types = true
+plugins = ["pydantic.mypy"]

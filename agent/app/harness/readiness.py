@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 from collections.abc import Callable
+from functools import partial
 from typing import Literal
 
 from pydantic import BaseModel
@@ -35,7 +36,7 @@ def collect_capabilities(catalog: SkillCatalog) -> list[Capability]:
         release_capability(
             registration.key,
             registration.expected_hash,
-            lambda registration=registration: catalog.verify(registration.key),
+            partial(catalog.verify, registration.key),
         )
         for registration in catalog.registrations()
     ]

@@ -1,6 +1,4 @@
-import {
-  getWorkflowRunApiWorkflowRunsWorkflowRunIdGet,
-} from "@/api/workflows";
+import { getWorkflowRunApiWorkflowRunsWorkflowRunIdGet } from "@/api/workflows";
 import { appApi, runRequest } from "@/lib/server-state";
 
 export const workflowApi = appApi.injectEndpoints({
@@ -19,6 +17,4 @@ export const workflowApi = appApi.injectEndpoints({
   }),
 });
 
-export const {
-  useWorkflowRunQuery,
-} = workflowApi;
+export const { useWorkflowRunQuery } = workflowApi;

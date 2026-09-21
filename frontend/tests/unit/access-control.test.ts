@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  canAccessPage,
-  visiblePrimaryNavigation,
-} from "@/lib/access-control";
+import { canAccessPage, visiblePrimaryNavigation } from "@/lib/access-control";
 
 describe("workspace page access", () => {
   it("does not expose protected navigation before authentication", () => {

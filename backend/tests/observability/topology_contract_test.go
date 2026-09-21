@@ -26,7 +26,7 @@ func TestELKRuntimeUsesDirectLogstashTransportWithoutOwningInfrastructure(t *tes
 	t.Parallel()
 	root := repositoryRoot(t)
 	base := readText(t, filepath.Join(root, "docker-compose.yml"))
-	main := readText(t, filepath.Join(root, "backend", "cmd", "main.go"))
+	main := readText(t, filepath.Join(root, "backend", "cmd", "lanverse", "main.go"))
 	combined := base + main
 
 	for _, required := range []string{"LOGSTASH_ADDRESS:", "telemetry.NewLogstashLogger("} {
@@ -69,7 +69,7 @@ func TestELKRuntimeUsesDirectLogstashTransportWithoutOwningInfrastructure(t *tes
 func TestSingleBackendEntrypointOwnsTheRedactingLogstashLogger(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
-	main := readText(t, filepath.Join(root, "backend", "cmd", "main.go"))
+	main := readText(t, filepath.Join(root, "backend", "cmd", "lanverse", "main.go"))
 	if !strings.Contains(main, "telemetry.NewLogstashLogger(") ||
 		!strings.Contains(main, `os.Stdout, "lanverse-backend"`) {
 		t.Error("the single Backend entrypoint does not own the shared Logstash logger")

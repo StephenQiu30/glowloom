@@ -570,13 +570,13 @@ class StoryboardRowCandidate(StrictModel):
                 value.absolute_end,
                 value.text_hash,
             )
-            for source in [
-                stage_input.scene,
-                *stage_input.beats,
-                *stage_input.dialogues,
-                *stage_input.occurrences,
+            for evidence in [
+                stage_input.scene.evidence,
+                *(item.evidence for item in stage_input.beats),
+                *(item.evidence for item in stage_input.dialogues),
+                *(item.evidence for item in stage_input.occurrences),
             ]
-            for value in source.evidence
+            for value in evidence
         }
         covered_beats: set[str] = set()
         covered_occurrences: set[str] = set()

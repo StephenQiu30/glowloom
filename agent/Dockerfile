@@ -2,6 +2,7 @@ ARG PYTHON_IMAGE=python:3.11-slim-bookworm
 ARG NODE_IMAGE=node:22-bookworm-slim
 FROM ${NODE_IMAGE} AS node-runtime
 FROM ${PYTHON_IMAGE}
+COPY --from=ghcr.io/astral-sh/uv:0.11.32 /uv /usr/local/bin/uv
 
 ARG CODEX_CLI_VERSION=0.149.1
 ARG TARGETARCH
@@ -30,8 +31,9 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && codex --version \
     && npm cache clean --force
 
-COPY agent/requirements-creation.txt ./requirements-creation.txt
-RUN python -m pip install --requirement requirements-creation.txt
+COPY agent/pyproject.toml agent/uv.lock ./
+RUN uv sync --locked --extra creation --no-dev --no-install-project
+ENV PATH="/srv/lanverse/agent/.venv/bin:$PATH"
 
 COPY --chown=lanverse:lanverse agent/skills ./skills
 COPY --chown=lanverse:lanverse agent/app/__init__.py agent/app/main.py ./app/

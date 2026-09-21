@@ -1,37 +1,22 @@
 export type WorkspaceRole = "owner" | "editor" | "viewer";
 
-export type StudioNavigation =
-  | "create"
-  | "projects"
-  | "assets"
-  | "settings";
+export type StudioNavigation = "create" | "projects" | "assets" | "settings";
 
-const pageRoles: Record<
-  StudioNavigation,
-  "public" | readonly WorkspaceRole[]
-> = {
+const pageRoles: Record<StudioNavigation, "public" | readonly WorkspaceRole[]> = {
   create: "public",
   projects: ["owner", "editor", "viewer"],
   assets: ["owner", "editor", "viewer"],
   settings: ["owner", "editor", "viewer"],
 };
 
-const primaryNavigation: readonly StudioNavigation[] = [
-  "create",
-  "projects",
-];
+const primaryNavigation: readonly StudioNavigation[] = ["create", "projects"];
 
-export function canAccessPage(
-  role: WorkspaceRole | undefined,
-  page: StudioNavigation,
-): boolean {
+export function canAccessPage(role: WorkspaceRole | undefined, page: StudioNavigation): boolean {
   const allowedRoles = pageRoles[page];
   return allowedRoles === "public" || Boolean(role && allowedRoles.includes(role));
 }
 
-export function visiblePrimaryNavigation(
-  role: WorkspaceRole | undefined,
-): StudioNavigation[] {
+export function visiblePrimaryNavigation(role: WorkspaceRole | undefined): StudioNavigation[] {
   return primaryNavigation.filter(
     (page) => (!role || page !== "create") && canAccessPage(role, page),
   );

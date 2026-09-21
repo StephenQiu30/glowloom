@@ -9,6 +9,7 @@ if (existsSync(repositoryEnvironmentFile)) {
 }
 
 const nextConfig: NextConfig = {
+  turbopack: { root: process.cwd() },
   allowedDevOrigins: ["127.0.0.1"],
   output: "standalone",
 };

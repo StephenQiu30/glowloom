@@ -19,19 +19,14 @@ export const scriptApi = appApi.injectEndpoints({
           ),
         ),
     }),
-    currentScriptDocument: builder.query<
-      API.ScriptDocumentAnalysisResponse,
-      string
-    >({
+    currentScriptDocument: builder.query<API.ScriptDocumentAnalysisResponse, string>({
       queryFn: (projectId) =>
         runRequest(() =>
           getCurrentDocumentApiProjectsProjectIdCurrentScriptDocumentGet({
             project_id: projectId,
           }),
         ),
-      providesTags: (_result, _error, projectId) => [
-        { type: "ScriptDocuments", id: projectId },
-      ],
+      providesTags: (_result, _error, projectId) => [{ type: "ScriptDocuments", id: projectId }],
     }),
     importScriptDocument: builder.mutation<
       API.ScriptDocumentAnalysisResponse,
@@ -39,10 +34,7 @@ export const scriptApi = appApi.injectEndpoints({
     >({
       queryFn: ({ projectId, body }) =>
         runRequest(() =>
-          importDocumentApiProjectsProjectIdScriptImportsPost(
-            { project_id: projectId },
-            body,
-          ),
+          importDocumentApiProjectsProjectIdScriptImportsPost({ project_id: projectId }, body),
         ),
       invalidatesTags: (_result, _error, { projectId }) => [
         { type: "Project", id: projectId },

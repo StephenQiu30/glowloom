@@ -16,14 +16,8 @@ function getBrowserSnapshot(): AuthSessionState {
 }
 
 export function useAuthSessionState(): AuthSessionState {
-  const token = useSyncExternalStore(
-    subscribeAuthSession,
-    getBrowserSnapshot,
-    getServerSnapshot,
-  );
-  const [restoring, setRestoring] = useState(
-    () => !isTestEnvironment && !hasAccessToken(),
-  );
+  const token = useSyncExternalStore(subscribeAuthSession, getBrowserSnapshot, getServerSnapshot);
+  const [restoring, setRestoring] = useState(() => !isTestEnvironment && !hasAccessToken());
 
   useEffect(() => {
     if (!restoring || token === "authenticated") return;

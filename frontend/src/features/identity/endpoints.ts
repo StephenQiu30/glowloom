@@ -29,9 +29,7 @@ export const identityApi = appApi.injectEndpoints({
       API.RegistrationVerificationRequest
     >({
       queryFn: (body) =>
-        runRequest(() =>
-          requestRegistrationVerificationApiAuthRegistrationVerificationsPost(body),
-        ),
+        runRequest(() => requestRegistrationVerificationApiAuthRegistrationVerificationsPost(body)),
     }),
     confirmRegistrationVerification: builder.mutation<
       API.RegistrationVerificationConfirmed,
@@ -39,9 +37,7 @@ export const identityApi = appApi.injectEndpoints({
     >({
       queryFn: (body) =>
         runRequest(() =>
-          confirmRegistrationVerificationApiAuthRegistrationVerificationsConfirmPost(
-            body,
-          ),
+          confirmRegistrationVerificationApiAuthRegistrationVerificationsConfirmPost(body),
         ),
     }),
     me: builder.query<API.MeResponse, void>({
@@ -58,23 +54,14 @@ export const identityApi = appApi.injectEndpoints({
     changePassword: builder.mutation<API.RevocationResponse, API.ChangePasswordRequest>({
       queryFn: (body) => runRequest(() => changePasswordApiAuthChangePasswordPost(body)),
     }),
-    deactivateAccount: builder.mutation<
-      API.RevocationResponse,
-      API.DeactivateAccountRequest
-    >({
+    deactivateAccount: builder.mutation<API.RevocationResponse, API.DeactivateAccountRequest>({
       queryFn: (body) => runRequest(() => deactivateMeApiMeDeactivatePost(body)),
     }),
     workspaces: builder.query<API.WorkspaceResponse[], void>({
-      queryFn: () =>
-        runRequest(() =>
-          listWorkspacesApiWorkspacesGet({ include_archived: true }),
-        ),
+      queryFn: () => runRequest(() => listWorkspacesApiWorkspacesGet({ include_archived: true })),
       providesTags: ["Workspaces"],
     }),
-    createWorkspace: builder.mutation<
-      API.WorkspaceResponse,
-      API.WorkspaceCreateRequest
-    >({
+    createWorkspace: builder.mutation<API.WorkspaceResponse, API.WorkspaceCreateRequest>({
       queryFn: (body) => runRequest(() => createWorkspaceApiWorkspacesPost(body)),
       invalidatesTags: ["Workspaces"],
     }),
@@ -84,10 +71,7 @@ export const identityApi = appApi.injectEndpoints({
     >({
       queryFn: ({ workspaceId, body }) =>
         runRequest(() =>
-          updateWorkspaceApiWorkspacesWorkspaceIdPatch(
-            { workspace_id: workspaceId },
-            body,
-          ),
+          updateWorkspaceApiWorkspacesWorkspaceIdPatch({ workspace_id: workspaceId }, body),
         ),
       invalidatesTags: ["Me", "Workspaces"],
     }),

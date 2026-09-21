@@ -37,19 +37,11 @@ describe("公共人工审核 API Client", () => {
     });
     await getHumanTaskApiHumanTasksHumanTaskIdGet({ human_task_id: taskId });
 
-    expect(requestMock).toHaveBeenNthCalledWith(
-      1,
-      `/api/projects/${projectId}/human-tasks`,
-      {
-        method: "GET",
-        params: { status: "active", limit: 50 },
-      },
-    );
-    expect(requestMock).toHaveBeenNthCalledWith(
-      2,
-      `/api/human-tasks/${taskId}`,
-      { method: "GET" },
-    );
+    expect(requestMock).toHaveBeenNthCalledWith(1, `/api/projects/${projectId}/human-tasks`, {
+      method: "GET",
+      params: { status: "active", limit: 50 },
+    });
+    expect(requestMock).toHaveBeenNthCalledWith(2, `/api/human-tasks/${taskId}`, { method: "GET" });
     expect(JSON.stringify(requestMock.mock.calls)).not.toContain(claimToken);
   });
 
@@ -73,10 +65,7 @@ describe("公共人工审核 API Client", () => {
       idempotency_key: "human-task-decision:one",
     };
 
-    await claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost(
-      { human_task_id: taskId },
-      claimBody,
-    );
+    await claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost({ human_task_id: taskId }, claimBody);
     await renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost(
       { human_task_id: taskId },
       tokenBody,
@@ -109,8 +98,6 @@ describe("公共人工审核 API Client", () => {
     expect(requestMock.mock.calls[1]?.[1]).toMatchObject({ data: tokenBody });
     expect(requestMock.mock.calls[2]?.[1]).toMatchObject({ data: tokenBody });
     expect(requestMock.mock.calls[3]?.[1]).toMatchObject({ data: decisionBody });
-    expect(requestMock.mock.calls.map(([url]) => url).join(" ")).not.toContain(
-      claimToken,
-    );
+    expect(requestMock.mock.calls.map(([url]) => url).join(" ")).not.toContain(claimToken);
   });
 });

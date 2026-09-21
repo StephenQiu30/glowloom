@@ -6,10 +6,11 @@ export function initializeUploadApiMediaUploadsPost(
   body: API.UploadDeclaration,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.UploadInitializationResponse>>(
-    "/api/media/uploads",
-    { method: "POST", data: body, ...(options ?? {}) },
-  );
+  return request<Envelope<API.UploadInitializationResponse>>("/api/media/uploads", {
+    method: "POST",
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
 export function completeUploadApiMediaUploadsUploadSessionIdCompletePost(
@@ -26,8 +27,8 @@ export function getMediaApiMediaVersionIdGet(
   params: { version_id: string },
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.MediaVersionResponse>>(
-    `/api/media/${params.version_id}`,
-    { method: "GET", ...(options ?? {}) },
-  );
+  return request<Envelope<API.MediaVersionResponse>>(`/api/media/${params.version_id}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }

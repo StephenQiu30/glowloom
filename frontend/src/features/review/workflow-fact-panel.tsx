@@ -39,7 +39,9 @@ export function WorkflowFactPanel({
           </Alert>
         ) : !run || !gateNode ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {isFetching ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : null}
+            {isFetching ? (
+              <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+            ) : null}
             正在重取 WorkflowRun 与审核节点事实。
           </p>
         ) : (
@@ -51,13 +53,15 @@ export function WorkflowFactPanel({
             <Fact label="Gate Output hash" value={shortHash(gateNode.output_hash)} mono />
             <Fact
               label="复核结论"
-              value={coordination?.repair_workflow_run_id
-                ? `有界修复已创建 ${shortId(coordination.repair_workflow_run_id)}`
-                : verified
-                  ? "工作流已继续"
-                : coordination?.workflow_resume_status === "completed"
-                  ? "恢复已确认，运行事实尚未收敛"
-                  : "等待 Workflow Resume 完成"}
+              value={
+                coordination?.repair_workflow_run_id
+                  ? `有界修复已创建 ${shortId(coordination.repair_workflow_run_id)}`
+                  : verified
+                    ? "工作流已继续"
+                    : coordination?.workflow_resume_status === "completed"
+                      ? "恢复已确认，运行事实尚未收敛"
+                      : "等待 Workflow Resume 完成"
+              }
             />
           </div>
         )}

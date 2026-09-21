@@ -11,8 +11,7 @@ import {
 
 const projectId = "019ffb00-a000-7000-8000-000000000001";
 const profileId = "019ffb00-a000-7000-8000-000000000002";
-const exactPath =
-  `/api/projects/${projectId}/media-model-profiles/${profileId}/cost-price`;
+const exactPath = `/api/projects/${projectId}/media-model-profiles/${profileId}/cost-price`;
 
 describe("exact ModelProfile Cost API", () => {
   beforeEach(() => {
@@ -28,10 +27,12 @@ describe("exact ModelProfile Cost API", () => {
       idempotency_key: "exact-price:create",
     };
 
-    await getCurrentCostPriceQuoteApiProjectsProjectIdMediaModelProfilesProfileVersionIdCostPriceGet({
-      project_id: projectId,
-      profile_version_id: profileId,
-    });
+    await getCurrentCostPriceQuoteApiProjectsProjectIdMediaModelProfilesProfileVersionIdCostPriceGet(
+      {
+        project_id: projectId,
+        profile_version_id: profileId,
+      },
+    );
     await setCostPriceQuoteApiProjectsProjectIdMediaModelProfilesProfileVersionIdCostPricePost(
       { project_id: projectId, profile_version_id: profileId },
       body,

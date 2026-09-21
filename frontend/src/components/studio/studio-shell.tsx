@@ -28,20 +28,20 @@ export function StudioShell({
   const authenticated = sessionState === "authenticated";
   const me = useMeQuery(undefined, { skip: !authenticated });
   const role = me.data?.workspace.role;
-  const resolvedViewer = viewer ?? (me.data ? {
-    displayName: me.data.user.display_name?.trim() || me.data.user.email,
-    workspaceName: me.data.workspace.name,
-  } : undefined);
+  const resolvedViewer =
+    viewer ??
+    (me.data
+      ? {
+          displayName: me.data.user.display_name?.trim() || me.data.user.email,
+          workspaceName: me.data.workspace.name,
+        }
+      : undefined);
 
   return (
     <BasicLayout
       active={active}
       authState={
-        sessionState === "checking"
-          ? "loading"
-          : authenticated
-            ? "authenticated"
-            : "anonymous"
+        sessionState === "checking" ? "loading" : authenticated ? "authenticated" : "anonymous"
       }
       currentStep={currentStep}
       projectName={projectName}

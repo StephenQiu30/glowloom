@@ -16,9 +16,7 @@ export const productionBibleApi = appApi.injectEndpoints({
             project_id: projectId,
           }),
         ),
-      providesTags: (_result, _error, projectId) => [
-        { type: "ProductionBible", id: projectId },
-      ],
+      providesTags: (_result, _error, projectId) => [{ type: "ProductionBible", id: projectId }],
     }),
     productionBible: builder.query<API.ProductionBibleResponse, string>({
       queryFn: (bibleId) =>
@@ -27,9 +25,7 @@ export const productionBibleApi = appApi.injectEndpoints({
             bible_id: bibleId,
           }),
         ),
-      providesTags: (_result, _error, bibleId) => [
-        { type: "ProductionBible", id: bibleId },
-      ],
+      providesTags: (_result, _error, bibleId) => [{ type: "ProductionBible", id: bibleId }],
     }),
     createProductionBible: builder.mutation<
       API.ProductionBibleResponse,
@@ -55,12 +51,7 @@ export const productionBibleApi = appApi.injectEndpoints({
       }
     >({
       queryFn: ({ bibleId, body }) =>
-        runRequest(() =>
-          decideProductionBibleReviewIssue(
-            { bible_id: bibleId },
-            body,
-          ),
-        ),
+        runRequest(() => decideProductionBibleReviewIssue({ bible_id: bibleId }, body)),
       invalidatesTags: (_result, _error, { projectId, bibleId }) => [
         { type: "ProductionBible", id: projectId },
         { type: "ProductionBible", id: bibleId },
@@ -72,10 +63,7 @@ export const productionBibleApi = appApi.injectEndpoints({
     >({
       queryFn: ({ bibleId, body }) =>
         runRequest(() =>
-          resumeBibleApiProductionBiblesBibleIdResumePost(
-            { bible_id: bibleId },
-            body,
-          ),
+          resumeBibleApiProductionBiblesBibleIdResumePost({ bible_id: bibleId }, body),
         ),
       invalidatesTags: (_result, _error, { projectId, bibleId }) => [
         { type: "ProductionBible", id: projectId },

@@ -10,10 +10,9 @@ export function getCurrentStructureIdentity(
   params: CurrentStructureIdentityOperation["parameters"]["path"],
   options?: RequestOptions,
 ) {
-  return request<CurrentStructureIdentityOperation["responses"][200]["content"]["application/json"]>(
-    `/api/projects/${params.project_id}/structure-identity`,
-    { method: "GET", ...(options ?? {}) },
-  );
+  return request<
+    CurrentStructureIdentityOperation["responses"][200]["content"]["application/json"]
+  >(`/api/projects/${params.project_id}/structure-identity`, { method: "GET", ...(options ?? {}) });
 }
 
 export function decideProductionBibleReviewIssue(

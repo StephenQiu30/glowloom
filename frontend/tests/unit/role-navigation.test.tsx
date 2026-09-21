@@ -80,7 +80,10 @@ describe("role-aware global navigation", () => {
       expect(within(navigation).getByRole("link", { name: "项目" })).toBeInTheDocument();
     });
     await user.click(screen.getByRole("button", { name: /owner/ }));
-    expect(await screen.findByRole("menuitem", { name: "账户与空间" })).toHaveAttribute("href", "/workspaces");
+    expect(await screen.findByRole("menuitem", { name: "账户与空间" })).toHaveAttribute(
+      "href",
+      "/workspaces",
+    );
     await waitFor(() => expect(apiMocks.me).toHaveBeenCalled());
   });
 
@@ -106,9 +109,14 @@ describe("role-aware global navigation", () => {
     await user.type(search, "空间");
 
     const destination = within(dialog).getByRole("option", { name: /空间/ });
-    expect(within(destination).getByRole("link", { name: /空间/ })).toHaveAttribute("href", "/workspaces");
+    expect(within(destination).getByRole("link", { name: /空间/ })).toHaveAttribute(
+      "href",
+      "/workspaces",
+    );
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "前往 Lanverse" })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "前往 Lanverse" })).not.toBeInTheDocument(),
+    );
     expect(trigger).toHaveFocus();
   });
 

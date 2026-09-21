@@ -13,13 +13,7 @@ import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { appApiErrorMessage } from "@/lib/server-state";
 import {
   useCreateProductionBibleMutation,
@@ -78,8 +72,7 @@ export function ProductionBibleWorkspace({
 
   const queriedBible = detailQuery.data ?? currentQuery.data;
   const outdatedBible =
-    queriedBible &&
-    queriedBible.document_revision_id !== analysis.revision.id
+    queriedBible && queriedBible.document_revision_id !== analysis.revision.id
       ? queriedBible
       : undefined;
   const bible = outdatedBible ? undefined : queriedBible;
@@ -90,7 +83,7 @@ export function ProductionBibleWorkspace({
   const unresolvedBlockingIssues = blockingIssues.filter(
     (issue) => reviewDecisions[issue.issue_key] !== "accepted",
   );
-  const unavailableError = (currentQuery.error as { code?: string } | undefined);
+  const unavailableError = currentQuery.error as { code?: string } | undefined;
   const queryError =
     detailQuery.error ??
     (unavailableError?.code && unavailableError.code !== "not_found"
@@ -135,11 +128,7 @@ export function ProductionBibleWorkspace({
         bibleId: bible.id,
         body: {
           expected_revision: bible.revision,
-          idempotency_key: actionKey(
-            "resume-production-bible",
-            bible.id,
-            bible.revision,
-          ),
+          idempotency_key: actionKey("resume-production-bible", bible.id, bible.revision),
         },
       }).unwrap(),
     );
@@ -148,10 +137,7 @@ export function ProductionBibleWorkspace({
     setNotice("已从最近的安全检查点恢复制作圣经任务。");
   }
 
-  async function decideIssue(
-    issueKey: string,
-    action: "accepted" | "rejected",
-  ): Promise<void> {
+  async function decideIssue(issueKey: string, action: "accepted" | "rejected"): Promise<void> {
     if (!bible) return;
     const decided = await runAction(() =>
       decideReviewIssue({
@@ -186,10 +172,12 @@ export function ProductionBibleWorkspace({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <BookOpenCheck className="size-5" aria-hidden="true" />项目制作圣经
+              <BookOpenCheck className="size-5" aria-hidden="true" />
+              项目制作圣经
             </CardTitle>
             <CardDescription className="mt-1">
-              本地 Codex 从不可变整剧原稿提取统一角色、场景、道具和世界观；Workflow 审核通过后冻结为不可变版本。
+              本地 Codex 从不可变整剧原稿提取统一角色、场景、道具和世界观；Workflow
+              审核通过后冻结为不可变版本。
             </CardDescription>
           </div>
           {bible ? <Badge variant="outline">{statusLabels[bible.status]}</Badge> : null}
@@ -200,9 +188,7 @@ export function ProductionBibleWorkspace({
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" />
             <AlertTitle>制作圣经操作未完成</AlertTitle>
-            <AlertDescription>
-              {actionError ?? appApiErrorMessage(queryError)}
-            </AlertDescription>
+            <AlertDescription>{actionError ?? appApiErrorMessage(queryError)}</AlertDescription>
           </Alert>
         ) : null}
         {notice ? (
@@ -224,7 +210,11 @@ export function ProductionBibleWorkspace({
               </p>
             </div>
             <Button disabled={!canWrite || busy} onClick={create}>
-              {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
+              {busy ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Sparkles aria-hidden="true" />
+              )}
               生成项目制作圣经
             </Button>
           </div>
@@ -258,7 +248,8 @@ export function ProductionBibleWorkspace({
               ) : null}
             </div>
             <Button disabled={!canWrite || busy} onClick={resume} variant="outline">
-              <RotateCcw aria-hidden="true" />恢复生成
+              <RotateCcw aria-hidden="true" />
+              恢复生成
             </Button>
           </div>
         ) : (
@@ -287,7 +278,8 @@ export function ProductionBibleWorkspace({
                       <Badge variant="secondary">{kindLabels[entity.kind]}</Badge>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      出现于第 {entity.episode_numbers.join("、") || "未标注"} 集 · {entity.states?.length ?? 0} 个状态
+                      出现于第 {entity.episode_numbers.join("、") || "未标注"} 集 ·{" "}
+                      {entity.states?.length ?? 0} 个状态
                     </p>
                   </article>
                 ))}
@@ -297,7 +289,10 @@ export function ProductionBibleWorkspace({
             {bible.review_issues.length ? (
               <section aria-label="制作圣经审阅问题" className="grid gap-3">
                 {bible.review_issues.map((issue) => (
-                  <Alert key={issue.issue_key} variant={issue.severity === "blocking" ? "destructive" : "default"}>
+                  <Alert
+                    key={issue.issue_key}
+                    variant={issue.severity === "blocking" ? "destructive" : "default"}
+                  >
                     <AlertCircle aria-hidden="true" />
                     <AlertTitle>{issue.code}</AlertTitle>
                     <AlertDescription>
@@ -352,7 +347,9 @@ export function ProductionBibleWorkspace({
               <Alert className="bg-emerald-50" role="status">
                 <CheckCircle2 aria-hidden="true" />
                 <AlertTitle>制作圣经已确认</AlertTitle>
-                <AlertDescription>分集发布与后续场景、任务、分镜都将固定引用此版本。</AlertDescription>
+                <AlertDescription>
+                  分集发布与后续场景、任务、分镜都将固定引用此版本。
+                </AlertDescription>
               </Alert>
             )}
           </>

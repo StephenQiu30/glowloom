@@ -28,9 +28,7 @@ const analysis = {
   },
 } as API.ScriptDocumentAnalysisResponse;
 
-function bible(
-  status: API.ProductionBibleResponse["status"],
-): API.ProductionBibleResponse {
+function bible(status: API.ProductionBibleResponse["status"]): API.ProductionBibleResponse {
   return {
     checkpoint_revision: 2,
     checkpoint_stage: "synthesis",
@@ -78,13 +76,7 @@ function bible(
 }
 
 function renderWorkspace() {
-  return render(
-    <ProductionBibleWorkspace
-      analysis={analysis}
-      canWrite
-      projectId="project-1"
-    />,
-  );
+  return render(<ProductionBibleWorkspace analysis={analysis} canWrite projectId="project-1" />);
 }
 
 describe("ProductionBibleWorkspace", () => {

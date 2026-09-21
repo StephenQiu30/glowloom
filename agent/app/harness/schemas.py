@@ -672,7 +672,7 @@ class StoryReconciliationStageInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_candidates(self) -> StoryReconciliationStageInput:
-        model: type[BaseModel] = (
+        model: type[StoryAnalysisCandidate] | type[StoryReconciliationCandidate] = (
             StoryAnalysisCandidate
             if self.candidate_type == "story_analysis_candidate"
             else StoryReconciliationCandidate

@@ -8,10 +8,7 @@ const frontendRoot = resolve(import.meta.dirname, "../..");
 const repositoryRoot = resolve(frontendRoot, "..");
 const fixture = JSON.parse(
   readFileSync(
-    resolve(
-      repositoryRoot,
-      "backend/tests/fixtures/agent/storygraph-scene-analysis-wire.json",
-    ),
+    resolve(repositoryRoot, "backend/tests/fixtures/agent/storygraph-scene-analysis-wire.json"),
     "utf8",
   ),
 ) as Record<string, unknown>;
@@ -47,10 +44,7 @@ function productionCanonicalJson(value: unknown): string {
     }
     return `{${[...normalized.entries()]
       .sort(([left], [right]) => compareUtf8(left, right))
-      .map(
-        ([key, item]) =>
-          `${JSON.stringify(key)}:${productionCanonicalJson(item)}`,
-      )
+      .map(([key, item]) => `${JSON.stringify(key)}:${productionCanonicalJson(item)}`)
       .join(",")}}`;
   }
   throw new Error("production canonical JSON contains an unsupported value");
@@ -79,9 +73,7 @@ describe("production StoryGraph wire", () => {
       payload: {
         ...payload,
         source_refs: [...(payload.source_refs as Record<string, unknown>[])],
-        upstream_candidates: [
-          ...(payload.upstream_candidates as Record<string, unknown>[]),
-        ],
+        upstream_candidates: [...(payload.upstream_candidates as Record<string, unknown>[])],
       },
     };
     const inputHash = productionCanonicalHash(material);
@@ -96,8 +88,6 @@ describe("production StoryGraph wire", () => {
       shard_key: shard.shard_key,
       input_hash: inputHash,
     };
-    expect(productionCanonicalHash(stageIdentity)).toBe(
-      fixture.expected_stage_instance_key,
-    );
+    expect(productionCanonicalHash(stageIdentity)).toBe(fixture.expected_stage_instance_key);
   });
 });

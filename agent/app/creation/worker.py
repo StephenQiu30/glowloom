@@ -1,7 +1,6 @@
-"""Run the trusted worker: python -m app.creation.worker."""
+"""Temporal registration; resources are injected by the application container."""
 
 import asyncio
-import signal
 from datetime import timedelta
 
 import httpx
@@ -9,40 +8,27 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from app.core.config import WorkerSettings
-from app.creation.activities import CreationActivities
+from app.creation.activities import CreationActivities, TextInvoker
 from app.creation.execution import ExecutionStore
-from app.creation.platform import HarnessClient, PlatformClient
+from app.creation.platform import PlatformClient
 from app.creation.repository import Repository
 from app.creation.workflow import TextStoryboardWorkflow
 
 
 async def run_worker(
-    stop: asyncio.Event | None = None,
-    ready: asyncio.Event | None = None,
+    stop: asyncio.Event,
+    ready: asyncio.Event,
     *,
-    settings: WorkerSettings | None = None,
-    repository: Repository | None = None,
-    client: Client | None = None,
+    settings: WorkerSettings,
+    repository: Repository,
+    client: Client,
+    harness: TextInvoker,
 ) -> None:
-    if stop is None:
-        stop = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        for signum in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(signum, stop.set)
-    assert stop is not None
-    settings = settings or WorkerSettings.from_environment()
-    repository = repository or Repository(settings.base.database_url)
-    await repository.ready()
-    client = client or await Client.connect(
-        settings.base.temporal_address,
-        namespace=settings.base.temporal_namespace,
-        tls=settings.base.temporal_tls,
-    )
     async with httpx.AsyncClient(follow_redirects=False, trust_env=False) as http:
         activities = CreationActivities(
             ExecutionStore(repository),
             PlatformClient(http, settings.platform_url, settings.base.secret),
-            HarnessClient(http, settings.harness_url, settings.harness_secret),
+            harness,
             settings.release_hash,
             settings.call_limit,
             settings.invocation_timeout_seconds,
@@ -56,10 +42,5 @@ async def run_worker(
             graceful_shutdown_timeout=timedelta(seconds=settings.invocation_timeout_seconds + 20),
         )
         async with worker:
-            if ready is not None:
-                ready.set()
+            ready.set()
             await stop.wait()
-
-
-if __name__ == "__main__":
-    asyncio.run(run_worker())

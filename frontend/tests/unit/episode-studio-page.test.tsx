@@ -84,7 +84,11 @@ const proposals = [
   },
 ];
 
-function draft(status: "needs_review" | "approved" | "applied", revision: number, decisions: Record<string, string> = {}) {
+function draft(
+  status: "needs_review" | "approved" | "applied",
+  revision: number,
+  decisions: Record<string, string> = {},
+) {
   return {
     id: batchId,
     status,
@@ -98,7 +102,13 @@ function draft(status: "needs_review" | "approved" | "applied", revision: number
 type BackendState = {
   structure: ReturnType<typeof structure>;
   batch?: ReturnType<typeof draft>;
-  shots?: Array<{ id: string; position: number; title: string; content_hash: string; spec: object }>;
+  shots?: Array<{
+    id: string;
+    position: number;
+    title: string;
+    content_hash: string;
+    spec: object;
+  }>;
 };
 
 function installBackend(initial: BackendState) {
@@ -108,12 +118,21 @@ function installBackend(initial: BackendState) {
 
   requestMock.mockImplementation(async (url: string, options?: { method?: string }) => {
     const method = options?.method ?? "GET";
-    if (method === "GET" && url === "/api/me") return { data: { user: { display_name: "创作者", email: "fixture@example.invalid" }, workspace: { name: "创作空间", role: "owner" } } };
+    if (method === "GET" && url === "/api/me")
+      return {
+        data: {
+          user: { display_name: "创作者", email: "fixture@example.invalid" },
+          workspace: { name: "创作空间", role: "owner" },
+        },
+      };
     if (method === "GET" && url === `/api/episodes/${episodeId}`) return { data: episode };
     if (method === "GET" && url === `/api/projects/${projectId}`) return { data: project };
-    if (method === "GET" && url === `/api/projects/${projectId}/episodes`) return { data: [episode] };
-    if (method === "GET" && url === `/api/episodes/${episodeId}/structure`) return { data: currentStructure };
-    if (method === "GET" && url === `/api/episodes/${episodeId}/shots`) return { data: currentShots };
+    if (method === "GET" && url === `/api/projects/${projectId}/episodes`)
+      return { data: [episode] };
+    if (method === "GET" && url === `/api/episodes/${episodeId}/structure`)
+      return { data: currentStructure };
+    if (method === "GET" && url === `/api/episodes/${episodeId}/shots`)
+      return { data: currentShots };
     if (method === "GET" && url === `/api/episodes/${episodeId}/storyboard-draft`) {
       if (currentBatch) return { data: currentBatch };
       throw new ApiClientError("尚无候选", "not_found");
@@ -124,7 +143,10 @@ function installBackend(initial: BackendState) {
     if (method === "GET" && url.includes("/api/storyboard-exports/") && url.endsWith("/download")) {
       return new Blob(["zip-bytes"], { type: "application/zip" });
     }
-    if (method === "POST" && url === `/api/episode-structures/${structureId}/tasks/${taskId}/accept`) {
+    if (
+      method === "POST" &&
+      url === `/api/episode-structures/${structureId}/tasks/${taskId}/accept`
+    ) {
       currentStructure = structure("needs_review", 2, "accepted");
       return { data: currentStructure };
     }
@@ -148,7 +170,15 @@ function installBackend(initial: BackendState) {
       return { data: currentBatch };
     }
     if (method === "POST" && url === `/api/storyboard-draft-batches/${batchId}/apply-preflight`) {
-      return { data: { batch_id: batchId, batch_revision: 8, order_hash: "b".repeat(64), impact_hash: "c".repeat(64), created: 2 } };
+      return {
+        data: {
+          batch_id: batchId,
+          batch_revision: 8,
+          order_hash: "b".repeat(64),
+          impact_hash: "c".repeat(64),
+          created: 2,
+        },
+      };
     }
     if (method === "POST" && url === `/api/storyboard-draft-batches/${batchId}/apply`) {
       currentBatch = draft("applied", 9, {
@@ -186,7 +216,10 @@ describe("单集 MVP 生产工作台", () => {
     sessionStorage.clear();
     setAccessToken("test-access-token");
     requestMock.mockReset();
-    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:test") });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:test"),
+    });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
   });
@@ -211,7 +244,10 @@ describe("单集 MVP 生产工作台", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "确认剧本结构" })).toBeEnabled());
     expect(requestMock).toHaveBeenCalledWith(
       `/api/episode-structures/${structureId}/tasks/${taskId}/accept`,
-      expect.objectContaining({ method: "POST", data: expect.objectContaining({ expected_revision: 1 }) }),
+      expect.objectContaining({
+        method: "POST",
+        data: expect.objectContaining({ expected_revision: 1 }),
+      }),
     );
 
     await user.click(screen.getByRole("button", { name: "确认剧本结构" }));
@@ -219,7 +255,10 @@ describe("单集 MVP 生产工作台", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(requestMock).toHaveBeenCalledWith(
       `/api/episode-structures/${structureId}/confirm`,
-      expect.objectContaining({ method: "POST", data: expect.objectContaining({ expected_revision: 2 }) }),
+      expect.objectContaining({
+        method: "POST",
+        data: expect.objectContaining({ expected_revision: 2 }),
+      }),
     );
   });
 
@@ -251,7 +290,9 @@ describe("单集 MVP 生产工作台", () => {
     expect(screen.getByRole("region", { name: "分镜准备度摘要" })).toHaveTextContent("顾清禾近景");
 
     await user.click(screen.getByRole("button", { name: "检查导出条件" }));
-    expect(await screen.findByRole("region", { name: "分镜包预检结果" })).toHaveTextContent("允许导出 · 2 个镜头");
+    expect(await screen.findByRole("region", { name: "分镜包预检结果" })).toHaveTextContent(
+      "允许导出 · 2 个镜头",
+    );
     await user.click(screen.getByRole("button", { name: "生成分镜包" }));
     const download = await screen.findByRole("button", { name: "下载分镜包" });
     await user.click(download);

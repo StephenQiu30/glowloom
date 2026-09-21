@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const requestMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/request", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/lib/request")>(),
+  ...(await importOriginal<typeof import("@/lib/request")>()),
   default: requestMock,
 }));
 

@@ -72,14 +72,18 @@ describe("真实账户与工作空间设置", () => {
     await user.clear(displayName);
     await user.type(displayName, "总导演");
     await user.click(screen.getByRole("button", { name: "保存个人资料" }));
-    await waitFor(() => expect(apiMocks.updateMe).toHaveBeenCalledWith({
-      display_name: "总导演",
-      avatar_url: null,
-    }));
+    await waitFor(() =>
+      expect(apiMocks.updateMe).toHaveBeenCalledWith({
+        display_name: "总导演",
+        avatar_url: null,
+      }),
+    );
 
     await user.type(screen.getByRole("textbox", { name: "空间名称" }), "青墨工作室");
     await user.click(screen.getByRole("button", { name: "创建工作空间" }));
-    await waitFor(() => expect(apiMocks.createWorkspace).toHaveBeenCalledWith({ name: "青墨工作室" }));
+    await waitFor(() =>
+      expect(apiMocks.createWorkspace).toHaveBeenCalledWith({ name: "青墨工作室" }),
+    );
     expect(await screen.findByRole("status")).toHaveTextContent("青墨工作室");
   });
 });

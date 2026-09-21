@@ -77,14 +77,8 @@ describe("创作首页", () => {
         name: /把剧本，变成.*可追踪的成片。/,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "导入剧本" })).toHaveAttribute(
-      "href",
-      "/register",
-    );
-    expect(screen.getByRole("link", { name: "继续制作" })).toHaveAttribute(
-      "href",
-      "/login",
-    );
+    expect(screen.getByRole("link", { name: "导入剧本" })).toHaveAttribute("href", "/register");
+    expect(screen.getByRole("link", { name: "继续制作" })).toHaveAttribute("href", "/login");
     expect(screen.queryByText("项目草稿已生成")).not.toBeInTheDocument();
   });
 
@@ -98,10 +92,14 @@ describe("创作首页", () => {
     const introduction = await screen.findByRole("region", { name: "产品欢迎" });
     const pipeline = screen.getByRole("region", { name: "可恢复的生产链" });
 
-    expect(within(introduction).getByRole("heading", { name: /把剧本，变成.*可追踪的成片。/ })).toBeInTheDocument();
+    expect(
+      within(introduction).getByRole("heading", { name: /把剧本，变成.*可追踪的成片。/ }),
+    ).toBeInTheDocument();
     expect(within(introduction).getByRole("img", { name: "长安夜航项目封面" })).toBeInTheDocument();
     expect(within(pipeline).getAllByRole("listitem")).toHaveLength(5);
-    expect(introduction.compareDocumentPosition(pipeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      introduction.compareDocumentPosition(pipeline) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("已登录时不展示首页并直接进入项目工作区", async () => {

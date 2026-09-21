@@ -8,20 +8,10 @@ test("首页展示平台定位和后端状态", async ({ page }) => {
       name: /把剧本，变成.*可追踪的成片。/,
     }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "导入剧本" })).toHaveAttribute(
-    "href",
-    "/register",
-  );
-  await expect(page.getByRole("link", { name: "继续制作" })).toHaveAttribute(
-    "href",
-    "/login",
-  );
+  await expect(page.getByRole("link", { name: "导入剧本" })).toHaveAttribute("href", "/register");
+  await expect(page.getByRole("link", { name: "继续制作" })).toHaveAttribute("href", "/login");
 
-  const readiness = await page.request.get(
-    `http://127.0.0.1:${backendPort}/readyz`,
-  );
+  const readiness = await page.request.get(`http://127.0.0.1:${backendPort}/readyz`);
   expect(readiness.ok()).toBe(true);
-  expect(await readiness.json()).toMatchObject(
-    { status: "ready" },
-  );
+  expect(await readiness.json()).toMatchObject({ status: "ready" });
 });

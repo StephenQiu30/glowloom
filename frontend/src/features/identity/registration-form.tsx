@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  LoaderCircle,
-  Mail,
-} from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 
@@ -38,10 +31,8 @@ function ErrorAlert({ message }: { message: string }) {
 
 export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
   const router = useRouter();
-  const [requestVerification, requestState] =
-    useRequestRegistrationVerificationMutation();
-  const [confirmVerification, confirmState] =
-    useConfirmRegistrationVerificationMutation();
+  const [requestVerification, requestState] = useRequestRegistrationVerificationMutation();
+  const [confirmVerification, confirmState] = useConfirmRegistrationVerificationMutation();
   const [register, registerState] = useRegisterMutation();
   const [step, setStep] = useState<RegistrationStep>("email");
   const [email, setEmail] = useState("");
@@ -156,15 +147,9 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
 
   if (step === "verification") {
     return (
-      <form
-        className="mt-8 grid gap-5"
-        key="verification"
-        onSubmit={handleVerificationSubmit}
-      >
+      <form className="mt-8 grid gap-5" key="verification" onSubmit={handleVerificationSubmit}>
         <div className="flex items-center justify-between gap-4">
-          <p className="text-xs font-medium text-muted-foreground">
-            步骤 2 / 3 · 输入验证码
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">步骤 2 / 3 · 输入验证码</p>
           <Button onClick={editEmail} size="sm" type="button" variant="ghost">
             <ArrowLeft aria-hidden="true" />
             修改邮箱
@@ -188,9 +173,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
             id="registration-code"
             inputMode="numeric"
             maxLength={6}
-            onChange={(event) =>
-              setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-            }
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
             pattern="\d{6}"
             placeholder="6 位数字"
             required
@@ -203,9 +186,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
           disabled={!hydrated || confirming || code.length !== 6}
           type="submit"
         >
-          {confirming ? (
-            <LoaderCircle className="animate-spin" aria-hidden="true" />
-          ) : null}
+          {confirming ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
           确认验证码
           <ArrowRight aria-hidden="true" />
         </Button>
@@ -224,11 +205,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
   }
 
   return (
-    <form
-      className="mt-8 grid gap-5"
-      key="profile"
-      onSubmit={handleRegistrationSubmit}
-    >
+    <form className="mt-8 grid gap-5" key="profile" onSubmit={handleRegistrationSubmit}>
       <p className="text-xs font-medium text-muted-foreground">步骤 3 / 3 · 创建账号</p>
       <Alert>
         <CheckCircle2 aria-hidden="true" />
@@ -260,9 +237,7 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
           required
           type="password"
         />
-        <p className="text-xs text-muted-foreground">
-          至少 12 个字符，建议包含数字与符号。
-        </p>
+        <p className="text-xs text-muted-foreground">至少 12 个字符，建议包含数字与符号。</p>
       </div>
       <div className="flex items-start gap-2">
         <Checkbox
@@ -279,14 +254,8 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
         </Label>
       </div>
       {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
-      <Button
-        className="h-11"
-        disabled={!hydrated || registering || !agreed}
-        type="submit"
-      >
-        {registering ? (
-          <LoaderCircle className="animate-spin" aria-hidden="true" />
-        ) : null}
+      <Button className="h-11" disabled={!hydrated || registering || !agreed} type="submit">
+        {registering ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
         注册并开始创作
         <ArrowRight aria-hidden="true" />
       </Button>

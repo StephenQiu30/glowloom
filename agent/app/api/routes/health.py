@@ -39,7 +39,7 @@ async def readyz(
     catalog: Annotated[SkillCatalog, Depends(get_skill_catalog)],
 ) -> JSONResponse:
     await creation.ready()
-    if runtime.runtime_ready is not None and not runtime.runtime_ready():
+    if not runtime.is_ready:
         raise HTTPException(status_code=503, detail="agent_runtime_unavailable")
     capabilities = collect_capabilities(catalog)
     ready = all(item.status == "ready" for item in capabilities)

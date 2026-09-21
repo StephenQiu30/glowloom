@@ -17,7 +17,10 @@ import { cn } from "@/lib/class-names";
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
-      className={cn("flex size-full flex-col overflow-hidden bg-popover text-popover-foreground", className)}
+      className={cn(
+        "flex size-full flex-col overflow-hidden bg-popover text-popover-foreground",
+        className,
+      )}
       data-slot="command"
       {...props}
     />
@@ -54,7 +57,10 @@ function CommandDialog({
   );
 }
 
-function CommandInput({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Input>) {
+function CommandInput({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div className="flex h-12 items-center gap-3 border-b px-4" data-slot="command-input-wrapper">
       <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
@@ -80,7 +86,10 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
   );
 }
 
-function CommandEmpty({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Empty>) {
+function CommandEmpty({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Empty>) {
   return (
     <CommandPrimitive.Empty
       className={cn("py-10 text-center text-sm text-muted-foreground", className)}
@@ -90,7 +99,10 @@ function CommandEmpty({ className, ...props }: React.ComponentProps<typeof Comma
   );
 }
 
-function CommandGroup({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Group>) {
+function CommandGroup({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Group>) {
   return (
     <CommandPrimitive.Group
       className={cn(
@@ -116,7 +128,10 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
   );
 }
 
-function CommandSeparator({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Separator>) {
+function CommandSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Separator>) {
   return (
     <CommandPrimitive.Separator
       className={cn("-mx-2 h-px bg-border", className)}

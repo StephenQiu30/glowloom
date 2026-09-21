@@ -35,11 +35,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const [login, loginState] = useLoginMutation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const hydrated = useSyncExternalStore(
-    subscribeToHydration,
-    clientIsHydrated,
-    serverIsHydrated,
-  );
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientIsHydrated, serverIsHydrated);
   const isRegister = mode === "register";
   const submitting = loginState.isLoading;
 
@@ -60,30 +56,45 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   }
 
   return (
-    <BasicLayout authState="anonymous" artwork={(
-      <>
-        <Image
-          alt="她从画中来项目画面"
-          className="object-cover opacity-70 grayscale"
-          fill
-          priority
-          sizes="55vw"
-          src="/assets/lanverse-studio/painting-girl-cover.png"
-          unoptimized
-        />
-        <div className="absolute inset-0 bg-linear-to-t from-black via-black/10 to-transparent" />
-        <div className="absolute right-12 bottom-12 left-12 pt-8 text-white">
-          <p className="font-mono text-xs text-white/60">视觉概念示例 · 她从画中来</p>
-          <blockquote className="mt-4 max-w-xl text-3xl leading-11 font-medium tracking-[-0.03em]">“从已确认的事实继续，而不是从头重来。”</blockquote>
-          <div className="mt-6 flex gap-5 text-sm text-white/70"><span>16 集</span><span>水墨幻想</span><span>9:16</span></div>
-        </div>
-      </>
-    )}>
+    <BasicLayout
+      authState="anonymous"
+      artwork={
+        <>
+          <Image
+            alt="她从画中来项目画面"
+            className="object-cover opacity-70 grayscale"
+            fill
+            priority
+            sizes="55vw"
+            src="/assets/lanverse-studio/painting-girl-cover.png"
+            unoptimized
+          />
+          <div className="absolute inset-0 bg-linear-to-t from-black via-black/10 to-transparent" />
+          <div className="absolute right-12 bottom-12 left-12 pt-8 text-white">
+            <p className="font-mono text-xs text-white/60">视觉概念示例 · 她从画中来</p>
+            <blockquote className="mt-4 max-w-xl text-3xl leading-11 font-medium tracking-[-0.03em]">
+              “从已确认的事实继续，而不是从头重来。”
+            </blockquote>
+            <div className="mt-6 flex gap-5 text-sm text-white/70">
+              <span>16 集</span>
+              <span>水墨幻想</span>
+              <span>9:16</span>
+            </div>
+          </div>
+        </>
+      }
+    >
       <LayoutContainer>
         <div className="mx-auto w-full max-w-md py-12">
           <p className="text-sm font-medium">AI 竖屏短剧生产系统</p>
-          <h1 className="mt-5 text-4xl font-semibold tracking-[-0.045em]">{isRegister ? "创建账号" : "登录 Lanverse"}</h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">{isRegister ? "创建你的创作空间，开始第一部可追溯的 AI 漫剧。" : "从已确认的剧本、资产与分镜继续制作。"}</p>
+          <h1 className="mt-5 text-4xl font-semibold tracking-[-0.045em]">
+            {isRegister ? "创建账号" : "登录 Lanverse"}
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            {isRegister
+              ? "创建你的创作空间，开始第一部可追溯的 AI 漫剧。"
+              : "从已确认的剧本、资产与分镜继续制作。"}
+          </p>
 
           {isRegister ? (
             <RegistrationForm hydrated={hydrated} />
@@ -125,20 +136,22 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
                   <AlertDescription>{errorMessage}</AlertDescription>
                 </Alert>
               ) : null}
-              <Button
-                className="h-11"
-                disabled={!hydrated || submitting}
-                type="submit"
-              >
-                {submitting ? (
-                  <LoaderCircle className="animate-spin" aria-hidden="true" />
-                ) : null}
+              <Button className="h-11" disabled={!hydrated || submitting} type="submit">
+                {submitting ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
                 登录
                 <ArrowRight aria-hidden="true" />
               </Button>
             </form>
           )}
-          <p className="mt-6 text-center text-sm text-muted-foreground">{isRegister ? "已有账号？" : "还没有账号？"}<Link className="ml-1 font-medium text-foreground underline-offset-4 hover:underline" href={isRegister ? "/login" : "/register"}>{isRegister ? "直接登录" : "创建账号"}</Link></p>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            {isRegister ? "已有账号？" : "还没有账号？"}
+            <Link
+              className="ml-1 font-medium text-foreground underline-offset-4 hover:underline"
+              href={isRegister ? "/login" : "/register"}
+            >
+              {isRegister ? "直接登录" : "创建账号"}
+            </Link>
+          </p>
         </div>
       </LayoutContainer>
     </BasicLayout>

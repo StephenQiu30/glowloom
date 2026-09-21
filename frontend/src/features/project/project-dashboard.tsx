@@ -32,7 +32,8 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
   const workspacesQuery = useWorkspacesQuery(undefined, { skip: !authenticated });
   const meWorkspace = me.data?.workspace;
   const workspaceId = requestedWorkspaceId ?? meWorkspace?.id;
-  const workspace = workspacesQuery.data?.find((item) => item.id === workspaceId) ??
+  const workspace =
+    workspacesQuery.data?.find((item) => item.id === workspaceId) ??
     (meWorkspace?.id === workspaceId ? meWorkspace : undefined);
   const projectsQuery = useProjectsQuery(workspaceId ?? "", { skip: !workspaceId });
   const [createProject, createState] = useCreateProjectMutation();
@@ -46,8 +47,11 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
     const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
     return projects.filter((project) => {
       const statusMatches = filter === "all" || project.status === filter;
-      const queryMatches = !normalizedQuery || [project.name, project.description ?? "", project.visual_style ?? ""]
-        .some((value) => value.toLocaleLowerCase("zh-CN").includes(normalizedQuery));
+      const queryMatches =
+        !normalizedQuery ||
+        [project.name, project.description ?? "", project.visual_style ?? ""].some((value) =>
+          value.toLocaleLowerCase("zh-CN").includes(normalizedQuery),
+        );
       return statusMatches && queryMatches;
     });
   }, [filter, projects, query]);
@@ -87,29 +91,61 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
   return (
     <StudioShell
       active="projects"
-      viewer={me.data ? {
-        displayName: me.data.user.display_name?.trim() || me.data.user.email,
-        workspaceName: me.data.workspace.name,
-      } : undefined}
+      viewer={
+        me.data
+          ? {
+              displayName: me.data.user.display_name?.trim() || me.data.user.email,
+              workspaceName: me.data.workspace.name,
+            }
+          : undefined
+      }
     >
-      {notice ? <div className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background" role="status">{notice}</div> : null}
+      {notice ? (
+        <div
+          className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background"
+          role="status"
+        >
+          {notice}
+        </div>
+      ) : null}
       <LayoutContainer className="py-8 sm:py-10">
         {!authenticated ? (
-          <Alert><AlertCircle aria-hidden="true" /><AlertTitle>需要登录</AlertTitle><AlertDescription>登录后管理真实项目与单集。</AlertDescription></Alert>
+          <Alert>
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>需要登录</AlertTitle>
+            <AlertDescription>登录后管理真实项目与单集。</AlertDescription>
+          </Alert>
         ) : pageError ? (
-          <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>项目库暂时无法读取</AlertTitle><AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription></Alert>
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>项目库暂时无法读取</AlertTitle>
+            <AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription>
+          </Alert>
         ) : !workspace || !projectsQuery.data ? (
-          <div className="grid min-h-96 place-items-center"><LoaderCircle aria-label="正在加载项目库" className="animate-spin" /></div>
+          <div className="grid min-h-96 place-items-center">
+            <LoaderCircle aria-label="正在加载项目库" className="animate-spin" />
+          </div>
         ) : (
           <>
             <PageHeader
-              actions={<Button disabled={!workspaceId} onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建项目</Button>}
+              actions={
+                <Button disabled={!workspaceId} onClick={() => setCreateOpen(true)}>
+                  <Plus aria-hidden="true" />
+                  创建项目
+                </Button>
+              }
               description="从一份剧本开始，或打开已有作品，继续分集、人物设定与分镜。"
               eyebrow={workspace.name}
               title="我的作品"
             />
 
-            {actionError ? <Alert className="mt-6" variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>创建失败</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert> : null}
+            {actionError ? (
+              <Alert className="mt-6" variant="destructive">
+                <AlertCircle aria-hidden="true" />
+                <AlertTitle>创建失败</AlertTitle>
+                <AlertDescription>{actionError}</AlertDescription>
+              </Alert>
+            ) : null}
 
             <div className="mt-8 flex flex-wrap items-center gap-2 bg-muted/45 p-1.5">
               <div className="flex items-center gap-1" aria-label="项目状态筛选" role="group">
@@ -127,31 +163,63 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
                 ))}
               </div>
               <div className="relative ml-auto w-full sm:w-80">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                <Input aria-label="搜索项目" className="h-9 border-0 bg-background pl-9 shadow-none focus-visible:ring-2" placeholder="按名称、简介或风格搜索" value={query} onChange={(event) => setQuery(event.target.value)} />
+                <Search
+                  className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  aria-label="搜索项目"
+                  className="h-9 border-0 bg-background pl-9 shadow-none focus-visible:ring-2"
+                  placeholder="按名称、简介或风格搜索"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
               </div>
             </div>
 
             {visibleProjects.length ? (
               <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {visibleProjects.map((project) => <ProjectServerCard key={project.id} project={project} />)}
+                {visibleProjects.map((project) => (
+                  <ProjectServerCard key={project.id} project={project} />
+                ))}
               </div>
             ) : (
-              <section className="mt-3 grid min-h-80 place-items-center bg-muted/30 px-6 py-16 text-center" aria-labelledby="project-empty-title">
+              <section
+                className="mt-3 grid min-h-80 place-items-center bg-muted/30 px-6 py-16 text-center"
+                aria-labelledby="project-empty-title"
+              >
                 <div className="max-w-sm">
                   <div className="mx-auto grid size-11 place-items-center text-muted-foreground">
-                    {hasProjects ? <SearchX aria-hidden="true" className="size-5" /> : <FolderPlus aria-hidden="true" className="size-5" />}
+                    {hasProjects ? (
+                      <SearchX aria-hidden="true" className="size-5" />
+                    ) : (
+                      <FolderPlus aria-hidden="true" className="size-5" />
+                    )}
                   </div>
-                  <h2 className="mt-5 text-lg font-semibold tracking-tight" id="project-empty-title">
+                  <h2
+                    className="mt-5 text-lg font-semibold tracking-tight"
+                    id="project-empty-title"
+                  >
                     {hasProjects ? "没有匹配的项目" : "还没有项目"}
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {hasProjects ? "调整关键词或状态，或恢复全部项目继续浏览。" : "创建第一个项目，把剧本、单集与制作事实组织在一起。"}
+                    {hasProjects
+                      ? "调整关键词或状态，或恢复全部项目继续浏览。"
+                      : "创建第一个项目，把剧本、单集与制作事实组织在一起。"}
                   </p>
                   {hasProjects ? (
-                    <Button className="mt-5" onClick={clearFilters} variant="secondary">清除搜索和筛选</Button>
+                    <Button className="mt-5" onClick={clearFilters} variant="secondary">
+                      清除搜索和筛选
+                    </Button>
                   ) : (
-                    <Button className="mt-5" disabled={!workspaceId} onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" />创建第一个项目</Button>
+                    <Button
+                      className="mt-5"
+                      disabled={!workspaceId}
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      <Plus aria-hidden="true" />
+                      创建第一个项目
+                    </Button>
                   )}
                 </div>
               </section>

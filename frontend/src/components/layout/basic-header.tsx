@@ -41,7 +41,12 @@ import {
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
 import { Separator } from "@/components/ui/separator";
-import { canAccessPage, type StudioNavigation, visiblePrimaryNavigation, type WorkspaceRole } from "@/lib/access-control";
+import {
+  canAccessPage,
+  type StudioNavigation,
+  visiblePrimaryNavigation,
+  type WorkspaceRole,
+} from "@/lib/access-control";
 import { clearAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/class-names";
 import { useLogoutMutation } from "@/features/identity/endpoints";
@@ -67,7 +72,13 @@ const navigationItems: Array<{
 }> = [
   { id: "create", label: "首页", description: "欢迎与工作概览", href: "/", icon: Home },
   { id: "projects", label: "项目", description: "项目与短剧生产", href: "/projects", icon: Folder },
-  { id: "settings", label: "空间", description: "账户与工作空间", href: "/workspaces", icon: Settings },
+  {
+    id: "settings",
+    label: "空间",
+    description: "账户与工作空间",
+    href: "/workspaces",
+    icon: Settings,
+  },
 ];
 
 const roleLabels: Record<WorkspaceRole, string> = {
@@ -92,10 +103,16 @@ function ProductionProgress({ currentStep }: { currentStep: number }) {
                 )}
                 aria-current={index === currentStep ? "step" : undefined}
               >
-                {index < currentStep ? <Check className="size-3.5" aria-hidden="true" /> : <span className="font-mono">0{index + 1}</span>}
+                {index < currentStep ? (
+                  <Check className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <span className="font-mono">0{index + 1}</span>
+                )}
                 {stage}
               </span>
-              {index < productionStages.length - 1 ? <span className="mx-1 h-px w-5 bg-border lg:w-9" /> : null}
+              {index < productionStages.length - 1 ? (
+                <span className="mx-1 h-px w-5 bg-border lg:w-9" />
+              ) : null}
             </li>
           ))}
         </ol>
@@ -146,15 +163,7 @@ function StudioNavigationMenu({
 }
 
 function NavigationPlaceholder({ mobile = false }: { mobile?: boolean }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        "bg-muted/35",
-        mobile ? "h-8 w-56" : "h-8 w-56",
-      )}
-    />
-  );
+  return <div aria-hidden="true" className={cn("bg-muted/35", mobile ? "h-8 w-56" : "h-8 w-56")} />;
 }
 
 function GlobalSearch({ role }: { role: WorkspaceRole }) {
@@ -181,7 +190,7 @@ function GlobalSearch({ role }: { role: WorkspaceRole }) {
       onOpenChange={setOpen}
       open={open}
       title="前往 Lanverse"
-      trigger={(
+      trigger={
         <Button
           aria-label="搜索或执行命令"
           className="hidden w-64 justify-start text-muted-foreground xl:flex"
@@ -194,7 +203,7 @@ function GlobalSearch({ role }: { role: WorkspaceRole }) {
             <span className="font-mono">K</span>
           </kbd>
         </Button>
-      )}
+      }
     >
       <Command label="全局搜索">
         <CommandInput aria-label="全局搜索" placeholder="搜索页面或命令…" />
@@ -226,7 +235,12 @@ function CommandDestination({
       onSelect={() => linkRef.current?.click()}
       value={`${item.label} ${item.description}`}
     >
-      <Link className="flex min-w-0 flex-1 items-center gap-3" href={item.href} onClick={onNavigate} ref={linkRef}>
+      <Link
+        className="flex min-w-0 flex-1 items-center gap-3"
+        href={item.href}
+        onClick={onNavigate}
+        ref={linkRef}
+      >
         <item.icon className="size-4 text-muted-foreground" aria-hidden="true" />
         <span>{item.label}</span>
         <span className="ml-auto truncate text-xs text-muted-foreground">{item.description}</span>
@@ -235,13 +249,7 @@ function CommandDestination({
   );
 }
 
-function AccountMenu({
-  role,
-  viewer,
-}: {
-  role: WorkspaceRole;
-  viewer?: LayoutViewer;
-}) {
+function AccountMenu({ role, viewer }: { role: WorkspaceRole; viewer?: LayoutViewer }) {
   const [logout, logoutState] = useLogoutMutation();
 
   async function handleLogout() {
@@ -259,19 +267,33 @@ function AccountMenu({
         <DropdownMenuTrigger asChild>
           <Button className="gap-2 px-1.5" variant="ghost">
             <Avatar size="sm">
-              <AvatarFallback>{(viewer?.displayName ?? "L").slice(0, 1).toUpperCase()}</AvatarFallback>
+              <AvatarFallback>
+                {(viewer?.displayName ?? "L").slice(0, 1).toUpperCase()}
+              </AvatarFallback>
             </Avatar>
-            <span className="hidden max-w-28 truncate text-sm md:block">{viewer?.displayName ?? "账户"}</span>
-            <ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden="true" />
+            <span className="hidden max-w-28 truncate text-sm md:block">
+              {viewer?.displayName ?? "账户"}
+            </span>
+            <ChevronDown
+              className="hidden size-3.5 text-muted-foreground sm:block"
+              aria-hidden="true"
+            />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>
             <span className="block text-foreground">{viewer?.displayName ?? "Lanverse"}</span>
-            <span className="mt-0.5 block font-normal">{viewer?.workspaceName ?? "工作空间"} · {roleLabels[role]}</span>
+            <span className="mt-0.5 block font-normal">
+              {viewer?.workspaceName ?? "工作空间"} · {roleLabels[role]}
+            </span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild><Link href="/workspaces"><UserRound aria-hidden="true" />账户与空间</Link></DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/workspaces">
+              <UserRound aria-hidden="true" />
+              账户与空间
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={logoutState.isLoading}
@@ -281,7 +303,8 @@ function AccountMenu({
             }}
             variant="destructive"
           >
-            <LogOut aria-hidden="true" />退出登录
+            <LogOut aria-hidden="true" />
+            退出登录
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -309,13 +332,21 @@ export function BasicHeader({
   const showAppNavigation = authState !== "anonymous";
 
   if (compact) {
-    return <header aria-label="Lanverse 全局页眉" className="basic-layout__header bg-background">
-      <LayoutContainer className="flex h-18 items-center justify-between gap-4"><StudioBrand size="l" /><ThemeToggle /></LayoutContainer>
-    </header>;
+    return (
+      <header aria-label="Lanverse 全局页眉" className="basic-layout__header bg-background">
+        <LayoutContainer className="flex h-18 items-center justify-between gap-4">
+          <StudioBrand size="l" />
+          <ThemeToggle />
+        </LayoutContainer>
+      </header>
+    );
   }
 
   return (
-    <header aria-label="Lanverse 全局页眉" className="basic-layout__header bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+    <header
+      aria-label="Lanverse 全局页眉"
+      className="basic-layout__header bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85"
+    >
       <div className="basic-layout__primary-header">
         <LayoutContainer className="flex h-full items-center gap-6">
           <StudioBrand size="l" />
@@ -336,7 +367,11 @@ export function BasicHeader({
               <GlobalSearch role={role} />
             ) : null}
             <ThemeToggle />
-            {authState === "anonymous" ? <Button asChild><Link href="/login">登录</Link></Button> : null}
+            {authState === "anonymous" ? (
+              <Button asChild>
+                <Link href="/login">登录</Link>
+              </Button>
+            ) : null}
             {authState === "authenticated" && role ? (
               <AccountMenu role={role} viewer={viewer} />
             ) : null}
@@ -364,7 +399,9 @@ export function BasicHeader({
               <span className="font-medium">{projectName}</span>
             </LayoutContainer>
           ) : null}
-          {typeof currentStep === "number" ? <ProductionProgress currentStep={currentStep} /> : null}
+          {typeof currentStep === "number" ? (
+            <ProductionProgress currentStep={currentStep} />
+          ) : null}
         </div>
       ) : null}
     </header>

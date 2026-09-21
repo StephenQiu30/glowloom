@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  AlertCircle,
-  CheckCircle2,
-  FileText,
-  FileUp,
-  LoaderCircle,
-  RotateCcw,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, FileUp, LoaderCircle, RotateCcw } from "lucide-react";
 import { type FormEvent, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -15,21 +8,9 @@ import remarkGfm from "remark-gfm";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from "@/components/ui/item";
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
 import { appApiErrorMessage } from "@/lib/server-state";
 import {
@@ -45,14 +26,10 @@ import {
 import { TextCreationWorkspace } from "@/features/creation/text-creation-workspace";
 
 const RIGHTS_DECLARATION = "我确认拥有该剧本用于本项目制作与分析的权利";
-const DOCX_MIME_TYPE =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const ACCEPTED_SCRIPT_FILES = `.docx,.md,${DOCX_MIME_TYPE},text/markdown`;
 
-const analysisLabels: Record<
-  API.DocumentRevisionResponse["analysis_status"],
-  string
-> = {
+const analysisLabels: Record<API.DocumentRevisionResponse["analysis_status"], string> = {
   deterministic: "可确定性分集",
   ai_candidate_required: "需要 AI 分集候选",
   rejected: "需要修正格式",
@@ -80,9 +57,7 @@ const nextActionLabels: Record<string, string> = {
 
 async function sha256(value: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", value);
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function sha256Text(value: string): Promise<string> {
@@ -90,15 +65,11 @@ async function sha256Text(value: string): Promise<string> {
 }
 
 function documentMimeType(file: File): "text/markdown" | typeof DOCX_MIME_TYPE {
-  return file.name.toLowerCase().endsWith(".docx")
-    ? DOCX_MIME_TYPE
-    : "text/markdown";
+  return file.name.toLowerCase().endsWith(".docx") ? DOCX_MIME_TYPE : "text/markdown";
 }
 
 function documentKind(file: File): string {
-  return file.name.toLowerCase().endsWith(".docx")
-    ? "DOCX 剧本"
-    : "Markdown 剧本";
+  return file.name.toLowerCase().endsWith(".docx") ? "DOCX 剧本" : "Markdown 剧本";
 }
 
 function fileSize(size: number): string {
@@ -132,22 +103,16 @@ export function ScriptDocumentImportCard({
   const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mediaVersionId, setMediaVersionId] = useState<string | null>(null);
-  const [preview, setPreview] =
-    useState<API.ScriptDocumentPreviewResponse | null>(null);
+  const [preview, setPreview] = useState<API.ScriptDocumentPreviewResponse | null>(null);
   const [importedAnalysis, setImportedAnalysis] =
     useState<API.ScriptDocumentAnalysisResponse | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const uploadBusy =
-    initializeState.isLoading ||
-    completeState.isLoading ||
-    previewState.isLoading;
+  const uploadBusy = initializeState.isLoading || completeState.isLoading || previewState.isLoading;
   const busy = uploadBusy || importState.isLoading;
-  const analysis = importedAnalysis ?? (file ? null : currentAnalysis ?? null);
+  const analysis = importedAnalysis ?? (file ? null : (currentAnalysis ?? null));
   const episodeMarkerCount = useMemo(
-    () =>
-      analysis?.blocks.filter((block) => block.kind === "episode_marker").length ??
-      0,
+    () => analysis?.blocks.filter((block) => block.kind === "episode_marker").length ?? 0,
     [analysis],
   );
 
@@ -155,13 +120,8 @@ export function ScriptDocumentImportCard({
     for (let attempt = 0; attempt < 25; attempt += 1) {
       const version = await loadMediaVersion(versionId, false).unwrap();
       if (version.probe_status === "ready") return;
-      if (
-        version.probe_status === "failed" ||
-        version.probe_status === "quarantined"
-      ) {
-        throw new Error(
-          version.probe_error_summary ?? "剧本文档读取失败，请检查文件格式。",
-        );
+      if (version.probe_status === "failed" || version.probe_status === "quarantined") {
+        throw new Error(version.probe_error_summary ?? "剧本文档读取失败，请检查文件格式。");
       }
       await sleep(400);
     }
@@ -174,9 +134,7 @@ export function ScriptDocumentImportCard({
     }
     const fileHash = await sha256(await selected.arrayBuffer());
     const mimeType = documentMimeType(selected);
-    const uploadKey = await sha256Text(
-      `${selected.name}\u0000${mimeType}\u0000${fileHash}`,
-    );
+    const uploadKey = await sha256Text(`${selected.name}\u0000${mimeType}\u0000${fileHash}`);
     const initialized = await initializeUpload({
       workspace_id: workspaceId,
       kind: "document",
@@ -239,9 +197,7 @@ export function ScriptDocumentImportCard({
       setPreview(result);
       setNotice("文档读取完成，请确认预览内容后开始解析。");
     } catch (error: unknown) {
-      setActionError(
-        error instanceof Error ? error.message : appApiErrorMessage(error),
-      );
+      setActionError(error instanceof Error ? error.message : appApiErrorMessage(error));
     }
   }
 
@@ -305,7 +261,11 @@ export function ScriptDocumentImportCard({
             上传 DOCX 或 Markdown 原稿，先确认内容预览，再固定版本并进入剧本解析。
           </CardDescription>
         </CardHeader>
-        <CardContent className={analysis ? "grid gap-7 pt-6 xl:grid-cols-[minmax(0,1fr)_360px]" : "grid gap-7 pt-6"}>
+        <CardContent
+          className={
+            analysis ? "grid gap-7 pt-6 xl:grid-cols-[minmax(0,1fr)_360px]" : "grid gap-7 pt-6"
+          }
+        >
           <form className="grid gap-5" onSubmit={createPreview}>
             <div className="grid gap-2">
               <Label htmlFor="scriptDocumentFile">剧本文档</Label>
@@ -346,7 +306,8 @@ export function ScriptDocumentImportCard({
                   <ItemContent>
                     <ItemTitle>{analysis.document.title}</ItemTitle>
                     <ItemDescription>
-                      不可变版本 v{analysis.revision.version_no} · {analysis.revision.codepoint_count.toLocaleString()} 个字符
+                      不可变版本 v{analysis.revision.version_no} ·{" "}
+                      {analysis.revision.codepoint_count.toLocaleString()} 个字符
                     </ItemDescription>
                   </ItemContent>
                   <Badge variant="outline">已固定</Badge>
@@ -354,7 +315,9 @@ export function ScriptDocumentImportCard({
                 <Alert className="border-0 bg-muted/50" role="status">
                   <CheckCircle2 aria-hidden="true" />
                   <AlertTitle>原稿已固定</AlertTitle>
-                  <AlertDescription>已恢复当前原稿版本，可在下方查看或启动 AI 分集、场景与人物分析。</AlertDescription>
+                  <AlertDescription>
+                    已恢复当前原稿版本，可在下方查看或启动 AI 分集、场景与人物分析。
+                  </AlertDescription>
                 </Alert>
               </>
             ) : null}
@@ -375,10 +338,7 @@ export function ScriptDocumentImportCard({
             ) : null}
 
             {!preview ? (
-              <Button
-                disabled={!canWrite || uploadBusy || !file}
-                type="submit"
-              >
+              <Button disabled={!canWrite || uploadBusy || !file} type="submit">
                 {uploadBusy ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />
                 ) : (
@@ -402,9 +362,7 @@ export function ScriptDocumentImportCard({
                   <Badge variant="outline">等待确认</Badge>
                 </div>
                 <div className="max-h-[520px] overflow-auto bg-transparent p-5 text-sm leading-7 whitespace-pre-wrap [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:my-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:text-lg [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:bg-muted [&_pre]:p-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:bg-muted [&_th]:p-2">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {preview.raw_text}
-                  </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.raw_text}</ReactMarkdown>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button disabled={busy} onClick={resetFile} type="button" variant="outline">
@@ -435,9 +393,7 @@ export function ScriptDocumentImportCard({
                   <p className="font-medium">基础格式检查</p>
                   <Badge
                     variant={
-                      analysis.revision.analysis_status === "rejected"
-                        ? "destructive"
-                        : "outline"
+                      analysis.revision.analysis_status === "rejected" ? "destructive" : "outline"
                     }
                   >
                     {analysisLabels[analysis.revision.analysis_status]}
@@ -450,9 +406,7 @@ export function ScriptDocumentImportCard({
                   </div>
                   <div className="bg-background p-3">
                     <dt className="text-muted-foreground">结构块</dt>
-                    <dd className="mt-1 text-lg font-semibold">
-                      {analysis.blocks.length}
-                    </dd>
+                    <dd className="mt-1 text-lg font-semibold">{analysis.blocks.length}</dd>
                   </div>
                 </dl>
                 {analysis.issues.length ? (
@@ -480,12 +434,16 @@ export function ScriptDocumentImportCard({
         </CardContent>
       </Card>
       {analysis ? (
-        <TextCreationWorkspace projectId={projectId} canWrite={canWrite} source={{
-          revisionId: analysis.revision.id,
-          contentHash: analysis.revision.normalized_hash,
-          title: analysis.document.title,
-          text: analysis.revision.normalized_text,
-        }} />
+        <TextCreationWorkspace
+          projectId={projectId}
+          canWrite={canWrite}
+          source={{
+            revisionId: analysis.revision.id,
+            contentHash: analysis.revision.normalized_hash,
+            title: analysis.document.title,
+            text: analysis.revision.normalized_text,
+          }}
+        />
       ) : null}
     </>
   );

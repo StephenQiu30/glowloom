@@ -12,20 +12,18 @@ async function waitForBibleCandidate(region: Locator, timeout: number): Promise<
   const deadline = Date.now() + timeout;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await expect
-      .poll(
-        async () => (await ready.isVisible()) || (await resume.isVisible()),
-        { timeout: Math.max(1, deadline - Date.now()) },
-      )
+      .poll(async () => (await ready.isVisible()) || (await resume.isVisible()), {
+        timeout: Math.max(1, deadline - Date.now()),
+      })
       .toBe(true);
     if (await ready.isVisible()) return;
     await resume.click();
     await expect(resume).toBeHidden({ timeout: 30_000 });
   }
   await expect
-    .poll(
-      async () => (await ready.isVisible()) || (await resume.isVisible()),
-      { timeout: Math.max(1, deadline - Date.now()) },
-    )
+    .poll(async () => (await ready.isVisible()) || (await resume.isVisible()), {
+      timeout: Math.max(1, deadline - Date.now()),
+    })
     .toBe(true);
   if (await ready.isVisible()) return;
   throw new Error(
@@ -39,20 +37,18 @@ async function waitForStoryboardCandidate(page: Page, timeout: number): Promise<
   const deadline = Date.now() + timeout;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await expect
-      .poll(
-        async () => (await ready.isVisible()) || (await retry.isEnabled()),
-        { timeout: Math.max(1, deadline - Date.now()) },
-      )
+      .poll(async () => (await ready.isVisible()) || (await retry.isEnabled()), {
+        timeout: Math.max(1, deadline - Date.now()),
+      })
       .toBe(true);
     if (await ready.isVisible()) return;
     await retry.click();
     await expect(retry).toBeDisabled({ timeout: 30_000 });
   }
   await expect
-    .poll(
-      async () => (await ready.isVisible()) || (await retry.isEnabled()),
-      { timeout: Math.max(1, deadline - Date.now()) },
-    )
+    .poll(async () => (await ready.isVisible()) || (await retry.isEnabled()), {
+      timeout: Math.max(1, deadline - Date.now()),
+    })
     .toBe(true);
   if (await ready.isVisible()) return;
   throw new Error("Storyboard generation failed after three retry attempts");
@@ -63,13 +59,15 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   const codexStageTimeout = 5_400_000;
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const projectName = `MVP-A-分集计划-${unique}`;
-  const fixture = JSON.parse(readFileSync(
-    path.resolve(
-      process.cwd(),
-      "../agent/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
+  const fixture = JSON.parse(
+    readFileSync(
+      path.resolve(
+        process.cwd(),
+        "../agent/tests/fixtures/mvp_a/golden_candidate_harbor_countdown.json",
+      ),
+      "utf8",
     ),
-    "utf8",
-  )) as { full_script: string };
+  ) as { full_script: string };
 
   await registerUser(page, {
     displayName: "分集计划验收创作者",
@@ -89,15 +87,11 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
     buffer: Buffer.from(fixture.full_script, "utf8"),
   });
   await importCard.getByRole("button", { name: "上传并预览" }).click();
-  await expect(
-    importCard.getByRole("region", { name: "剧本内容预览" }),
-  ).toContainText(fixture.full_script.slice(0, 24));
-  await importCard
-    .getByRole("button", { name: "确认剧本并开始解析" })
-    .click();
-  await expect(importCard.getByRole("status")).toContainText(
-    "剧本已固定为不可变修订",
+  await expect(importCard.getByRole("region", { name: "剧本内容预览" })).toContainText(
+    fixture.full_script.slice(0, 24),
   );
+  await importCard.getByRole("button", { name: "确认剧本并开始解析" }).click();
+  await expect(importCard.getByRole("status")).toContainText("剧本已固定为不可变修订");
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
 
   await page.reload();
@@ -110,30 +104,21 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   const productionBible = page.getByRole("region", {
     name: "项目制作圣经",
   });
-  await productionBible
-    .getByRole("button", { name: "生成项目制作圣经" })
-    .click();
+  await productionBible.getByRole("button", { name: "生成项目制作圣经" }).click();
   await waitForBibleCandidate(productionBible, codexStageTimeout);
-  await expect(
-    productionBible.getByRole("region", { name: "制作圣经实体" }),
-  ).not.toBeEmpty();
+  await expect(productionBible.getByRole("region", { name: "制作圣经实体" })).not.toBeEmpty();
   const unresolvedBibleIssues = productionBible.getByRole("button", {
     name: "接受风险并继续",
   });
   while ((await unresolvedBibleIssues.count()) > 0) {
     const before = await productionBible.getByText("已接受风险", { exact: true }).count();
     await unresolvedBibleIssues.first().click();
-    await expect(productionBible.getByText("已接受风险", { exact: true })).toHaveCount(
-      before + 1,
-      { timeout: 30_000 },
-    );
+    await expect(productionBible.getByText("已接受风险", { exact: true })).toHaveCount(before + 1, {
+      timeout: 30_000,
+    });
   }
-  await expect(
-    productionBible.getByRole("button", { name: "确认制作圣经" }),
-  ).toBeEnabled();
-  await productionBible
-    .getByRole("button", { name: "确认制作圣经" })
-    .click();
+  await expect(productionBible.getByRole("button", { name: "确认制作圣经" })).toBeEnabled();
+  await productionBible.getByRole("button", { name: "确认制作圣经" }).click();
   await expect(productionBible.getByText("制作圣经已确认", { exact: true })).toBeVisible({
     timeout: 30_000,
   });
@@ -141,16 +126,10 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   const planner = page.getByRole("region", {
     name: "分集计划与批量创建",
   });
-  await planner
-    .getByRole("button", { name: "生成确定性分集计划" })
-    .click();
+  await planner.getByRole("button", { name: "生成确定性分集计划" }).click();
   await expect(planner.getByText("候选集数").locator("..")).toContainText("5");
-  await expect(
-    planner.getByRole("textbox", { name: "第 1 集标题" }),
-  ).toHaveValue("警报前夜");
-  await expect(
-    planner.getByRole("textbox", { name: "第 5 集标题" }),
-  ).toHaveValue("公开日志");
+  await expect(planner.getByRole("textbox", { name: "第 1 集标题" })).toHaveValue("警报前夜");
+  await expect(planner.getByRole("textbox", { name: "第 5 集标题" })).toHaveValue("公开日志");
   await expect(planner.getByText(/置信度\s*100%/)).toHaveCount(5);
   await expect(planner.getByText(/沈岚把铜制检修钥匙插进手动井/)).toBeVisible();
   await expect(page.getByRole("link", { name: /进入第/ })).toHaveCount(0);
@@ -168,15 +147,11 @@ test("整剧经制作圣经、分集、结构提取和人工审核生成正式�
   await expect(reloadedEpisodeWorkspace.getByRole("link", { name: "进入警报前夜" })).toBeVisible();
   await expect(reloadedEpisodeWorkspace.getByRole("link", { name: "进入公开日志" })).toBeVisible();
 
-  await reloadedEpisodeWorkspace
-    .getByRole("link", { name: "进入警报前夜" })
-    .click();
+  await reloadedEpisodeWorkspace.getByRole("link", { name: "进入警报前夜" }).click();
   await expect(page).toHaveURL(/\/studio\/[^/]+\/script$/);
   await expect(page.getByText(/^\d+ 项建议 · 待确认$/)).toBeVisible();
 
-  const productionTaskRegions = page.locator(
-    'section[aria-label$="制作任务"]',
-  );
+  const productionTaskRegions = page.locator('section[aria-label$="制作任务"]');
   await expect(productionTaskRegions.first()).toBeVisible();
 
   const pendingRequiredCandidates = page

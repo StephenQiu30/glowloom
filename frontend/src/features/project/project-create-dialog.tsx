@@ -50,27 +50,46 @@ export function ProjectCreateDialog({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>创建项目</DialogTitle>
-            <DialogDescription>创建后在项目页继续制作。</DialogDescription>
-          </DialogHeader>
-          <form className="mt-6 grid gap-5" onSubmit={submit}>
-            <div className="grid gap-2">
-              <Label htmlFor="projectName">项目名称</Label>
-              <Input id="projectName" name="name" placeholder="例如：镜中长安" required maxLength={120} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="projectDescription">项目简介</Label>
-              <Textarea className="min-h-24 resize-y" id="projectDescription" name="description" maxLength={1_000} />
-            </div>
-            <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline">取消</Button></DialogClose>
-              <Button disabled={isSubmitting} type="submit">
-                {isSubmitting ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                确认创建
+        <DialogHeader>
+          <DialogTitle>创建项目</DialogTitle>
+          <DialogDescription>创建后在项目页继续制作。</DialogDescription>
+        </DialogHeader>
+        <form className="mt-6 grid gap-5" onSubmit={submit}>
+          <div className="grid gap-2">
+            <Label htmlFor="projectName">项目名称</Label>
+            <Input
+              id="projectName"
+              name="name"
+              placeholder="例如：镜中长安"
+              required
+              maxLength={120}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="projectDescription">项目简介</Label>
+            <Textarea
+              className="min-h-24 resize-y"
+              id="projectDescription"
+              name="description"
+              maxLength={1_000}
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                取消
               </Button>
-            </DialogFooter>
-          </form>
+            </DialogClose>
+            <Button disabled={isSubmitting} type="submit">
+              {isSubmitting ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Plus aria-hidden="true" />
+              )}
+              确认创建
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -19,10 +19,12 @@ JSON Logs → Logstash → Elasticsearch Log Index → Kibana
 
 - `frontend/`：Next.js 创作工作台，只读取服务端事实并提交人工决议。
 - `backend/`：唯一公共业务 API 与唯一业务 Writer；认证、项目、剧本、制作圣经、分集、结构、分镜、正式镜头、导出和持久任务都在此实现。
-- `backend/cmd/main.go`：唯一 Go 启动入口；同一 `lanverse` 进程装配 API、Workflow 与 Event 三个职责运行时，不创建 Worker Binary 或 Compose 服务。
+- `backend/cmd/lanverse/main.go`：唯一 Go 启动入口；同一 `lanverse` 进程装配 API、Workflow 与 Event 三个职责运行时，不创建 Worker Binary 或 Compose 服务。
 - `agent/`：一个 Python Agent 服务，内部包含 Creation 编排、运行库、失败恢复和受限 Harness 模块；正式业务事实仍由 Go 写入，模型子进程不会继承数据库或平台凭据。
 - `backend/internal/platform/database/model`：唯一 GORM Model Catalog 与表结构事实源。
-- `backend/api/openapi/lanverse-public-api.json`：唯一公共 REST 契约源。
+- `PROJECT.md`：跨服务职责、目录和工具链规范。
+- `backend/api/openapi/lanverse-public-api.json`：当前在线公共 REST 契约产物；Handler 注解生成迁移尚未完成，不能视作目标维护方式。
+- [首轮改造验收](docs/acceptance/工程规范首轮改造验收.md)：本轮变更、验证与过渡状态。
 - `backend/internal/agent/contract`：Backend ↔ Agent 的版本化调用/结果线协议所有者；`agent/app/harness/schemas.py` 以禁止额外字段的 Pydantic 模型校验同一协议。
 - `docs/`：Design → PRD/Requirement → Plan → Acceptance 的事实链路。
 
@@ -74,17 +76,20 @@ go vet ./...
 go test -count=1 -p 1 ./...
 
 cd ../agent
-uv run --all-extras ruff check app tests
-uv run --all-extras ruff format --check app tests
-uv run --all-extras pyright app tests
-uv run --all-extras pytest -q
+uv sync --locked --all-extras
+uv run --locked --all-extras ruff check app tests
+uv run --locked --all-extras ruff format --check app tests
+uv run --locked --all-extras mypy app
+uv run --locked --all-extras pytest -q
 
 cd ../frontend
-npm run openapi2ts
-npm run lint
-npm run typecheck
-npm test
-npm run build
+pnpm install --frozen-lockfile
+OPENAPI_SCHEMA_URL=http://127.0.0.1:8686/openapi.json pnpm openapi
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
 最终 `agent-browser` 验收只在所有 StoryGraph 实施任务、真实依赖全旅程与自动化回归全部完成后执行；当前进度和未决风险以 [StoryGraph 验收标准](docs/acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md)为准。

@@ -1,10 +1,6 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
-import {
-  clearAccessToken,
-  getAccessToken,
-  setAccessToken,
-} from "@/lib/auth-session";
+import { clearAccessToken, getAccessToken, setAccessToken } from "@/lib/auth-session";
 
 export type RequestOptions = AxiosRequestConfig & {
   skipAuthRefresh?: boolean;
@@ -24,12 +20,7 @@ export class ApiClientError extends Error {
   readonly nextAction?: string;
   readonly details?: unknown;
 
-  constructor(
-    message: string,
-    code = "request_failed",
-    nextAction?: string,
-    details?: unknown,
-  ) {
+  constructor(message: string, code = "request_failed", nextAction?: string, details?: unknown) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
@@ -49,11 +40,7 @@ let refreshPromise: Promise<string | null> | null = null;
 export async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = client
-    .post<{ data: API.AuthResponse }>(
-      "/api/auth/refresh",
-      undefined,
-      { withCredentials: true },
-    )
+    .post<{ data: API.AuthResponse }>("/api/auth/refresh", undefined, { withCredentials: true })
     .then((response) => {
       const token = response.data.data.access_token;
       setAccessToken(token);
@@ -75,10 +62,7 @@ const AUTH_REFRESH_EXCLUDED_PATHS = new Set([
   "/api/auth/refresh",
 ]);
 
-export default async function request<T>(
-  url: string,
-  options: RequestOptions = {},
-): Promise<T> {
+export default async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const { skipAuthRefresh = false, ...axiosOptions } = options;
   try {
     const accessToken = getAccessToken();

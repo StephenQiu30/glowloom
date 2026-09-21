@@ -11,13 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemHeader,
-} from "@/components/ui/item";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemHeader } from "@/components/ui/item";
 import { cn } from "@/lib/class-names";
 
 type BadgeVariant = VariantProps<typeof badgeVariants>["variant"];
@@ -110,7 +104,11 @@ export function PageHeader({
             </ItemDescription>
           ) : null}
         </ItemContent>
-        {actions ? <ItemActions className="w-full justify-start sm:w-auto sm:justify-end">{actions}</ItemActions> : null}
+        {actions ? (
+          <ItemActions className="w-full justify-start sm:w-auto sm:justify-end">
+            {actions}
+          </ItemActions>
+        ) : null}
       </Item>
     </header>
   );

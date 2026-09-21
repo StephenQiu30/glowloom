@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
 
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@/components/ui/item";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
 import { cn } from "@/lib/class-names";
 
 const columnClasses = {
@@ -33,10 +27,7 @@ export function MetricGroup({
 }) {
   return (
     <section aria-label={label} className={cn("grid gap-6", className)}>
-      <ItemGroup
-        className={cn("grid gap-6 sm:grid-cols-2", columnClasses[columns])}
-        role="list"
-      >
+      <ItemGroup className={cn("grid gap-6 sm:grid-cols-2", columnClasses[columns])} role="list">
         {items.map((item, index) => (
           <Item
             className="rounded-none border-0 px-0 py-0"
@@ -44,7 +35,9 @@ export function MetricGroup({
             role="listitem"
           >
             <ItemContent className="gap-2">
-              <ItemDescription className="line-clamp-none text-xs font-medium tracking-wide">{item.label}</ItemDescription>
+              <ItemDescription className="line-clamp-none text-xs font-medium tracking-wide">
+                {item.label}
+              </ItemDescription>
               <ItemTitle className="font-mono text-3xl font-semibold tracking-[-0.04em]">
                 {item.value}
               </ItemTitle>

@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
     -X github.com/StephenQiu30/lanverse/backend/internal/bootstrap.BuildVersion=${BUILD_VERSION} \
     -X github.com/StephenQiu30/lanverse/backend/internal/bootstrap.BuildCommit=${BUILD_COMMIT} \
     -X github.com/StephenQiu30/lanverse/backend/internal/bootstrap.BuildTime=${BUILD_TIME}" \
-    -o /out/lanverse ./cmd
+    -o /out/lanverse ./cmd/lanverse
 
 FROM alpine:3.23
 

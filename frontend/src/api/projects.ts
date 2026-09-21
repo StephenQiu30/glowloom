@@ -36,10 +36,10 @@ export function getProjectApiProjectsProjectIdGet(
   params: { project_id: string },
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.ProjectResponse>>(
-    `/api/projects/${params.project_id}`,
-    { method: "GET", ...(options ?? {}) },
-  );
+  return request<Envelope<API.ProjectResponse>>(`/api/projects/${params.project_id}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
 export function listEpisodesApiProjectsProjectIdEpisodesGet(
@@ -47,8 +47,9 @@ export function listEpisodesApiProjectsProjectIdEpisodesGet(
   options?: RequestOptions,
 ) {
   const { project_id: projectId, ...query } = params;
-  return request<Envelope<API.EpisodeResponse[]>>(
-    `/api/projects/${projectId}/episodes`,
-    { method: "GET", params: query, ...(options ?? {}) },
-  );
+  return request<Envelope<API.EpisodeResponse[]>>(`/api/projects/${projectId}/episodes`, {
+    method: "GET",
+    params: query,
+    ...(options ?? {}),
+  });
 }

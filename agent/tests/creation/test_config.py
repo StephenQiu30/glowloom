@@ -56,26 +56,22 @@ def test_configuration_requires_distinct_harness_key(monkeypatch: pytest.MonkeyP
         Settings.from_environment()
 
 
-def test_worker_fails_fast_without_independent_trusted_endpoints(
+def test_worker_requires_platform_but_not_a_self_http_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.core.config import WorkerSettings
 
     configure(monkeypatch)
-    monkeypatch.setenv("CREATION_HARNESS_SECRET", "independent-harness-key-" * 3)
+    monkeypatch.delenv("CREATION_HARNESS_SECRET", raising=False)
     monkeypatch.setenv("CREATION_TEXT_RELEASE_HASH", "a" * 64)
     monkeypatch.setenv("CREATION_PLATFORM_URL", "https://platform.test")
-    monkeypatch.setenv("CREATION_HARNESS_URL", "http://127.0.0.1:8787")
+    monkeypatch.delenv("CREATION_HARNESS_URL", raising=False)
     worker = WorkerSettings.from_environment()
     assert worker.call_limit == 1000
     assert worker.invocation_timeout_seconds == 600
-    assert worker.harness_secret not in repr(worker)
     for key, value in [
         ("CREATION_PLATFORM_URL", "http://platform.test"),
         ("CREATION_PLATFORM_URL", "https://user:pass@platform.test"),
-        ("CREATION_HARNESS_URL", "https://harness.test/arbitrary/path"),
-        ("CREATION_HARNESS_URL", "https://harness.test?override=1"),
-        ("CREATION_HARNESS_SECRET", SECRET),
         ("CREATION_TEXT_RELEASE_HASH", ""),
         ("CREATION_CALL_LIMIT", "1001"),
         ("CREATION_INVOCATION_TIMEOUT_SECONDS", "901"),
@@ -102,7 +98,6 @@ def test_docker_transport_is_explicit_and_limited_to_compose_peers(
     monkeypatch.setenv("CREATION_TEMPORAL_ADDRESS", "temporal:7233")
     for key, value in [
         ("CREATION_PLATFORM_URL", "http://backend:8686"),
-        ("CREATION_HARNESS_URL", "http://agent:8787"),
     ]:
         monkeypatch.setenv(key, value)
         assert trusted_url(key) == value

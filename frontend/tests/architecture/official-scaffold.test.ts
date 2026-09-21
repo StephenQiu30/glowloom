@@ -7,15 +7,11 @@ const projectRoot = resolve(import.meta.dirname, "../..");
 
 describe("create-next-app baseline", () => {
   it("keeps the official TypeScript App Router scaffold contract", () => {
-    const packageJson = JSON.parse(
-      readFileSync(resolve(projectRoot, "package.json"), "utf8"),
-    ) as {
+    const packageJson = JSON.parse(readFileSync(resolve(projectRoot, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
       dependencies: Record<string, string>;
     };
-    const tsconfig = JSON.parse(
-      readFileSync(resolve(projectRoot, "tsconfig.json"), "utf8"),
-    ) as {
+    const tsconfig = JSON.parse(readFileSync(resolve(projectRoot, "tsconfig.json"), "utf8")) as {
       compilerOptions: {
         strict: boolean;
         plugins: Array<{ name: string }>;

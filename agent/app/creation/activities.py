@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Protocol
 
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from app.creation.contract import Command
 from app.creation.execution import ExecutionConflict, ExecutionStore, InvocationLease
-from app.creation.platform import HarnessClient, PlatformClient
+from app.creation.platform import PlatformClient
 from app.protocol.canonical import canonical_hash
 from app.text_contract.failure import HarnessFailed
 from app.text_contract.schemas import EpisodeAnalysis, EpisodeMap, WorldBook
 from app.text_contract.task import Stage, TextTask
+
+
+class TextInvoker(Protocol):
+    async def invoke(self, task: TextTask) -> dict[str, Any]: ...
 
 
 class CreationActivities:
@@ -20,7 +24,7 @@ class CreationActivities:
         self,
         store: ExecutionStore,
         platform: PlatformClient,
-        harness: HarnessClient,
+        harness: TextInvoker,
         release_hash: str,
         call_limit: int,
         invocation_timeout_seconds: int = 300,

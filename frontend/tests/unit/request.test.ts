@@ -9,11 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { clearAccessToken, getAccessToken, setAccessToken } from "@/lib/auth-session";
 import request from "@/lib/request";
 
-function response<T>(
-  config: InternalAxiosRequestConfig,
-  data: T,
-  status = 200,
-): AxiosResponse<T> {
+function response<T>(config: InternalAxiosRequestConfig, data: T, status = 200): AxiosResponse<T> {
   return { config, data, headers: {}, status, statusText: String(status) };
 }
 

@@ -1,6 +1,11 @@
 "use client";
 
-import { type DecisionValue, shortId, formatTimestamp, decisionLabels } from "./review-presentation";
+import {
+  type DecisionValue,
+  shortId,
+  formatTimestamp,
+  decisionLabels,
+} from "./review-presentation";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Fact } from "./review-fact";
 import { Button } from "@/components/ui/button";
@@ -35,16 +40,16 @@ export function ReviewActions({
   repairRequest: API.HumanGateChangeRequest | null;
   task: API.HumanTaskResponse;
 }) {
-  const canClaim = canWrite
-    && !decision
-    && (task.status === "OPEN" || (task.status === "CLAIMED" && !claimToken));
+  const canClaim =
+    canWrite && !decision && (task.status === "OPEN" || (task.status === "CLAIMED" && !claimToken));
   const canUseClaim = canWrite && !decision && task.status === "CLAIMED" && Boolean(claimToken);
-  const canResume = canWrite
-    && Boolean(decision)
-    && coordination?.workflow_resume_status !== "conflict"
-    && coordination?.owner_apply_status !== "conflict"
-    && (coordination?.workflow_resume_status !== "completed"
-      || (decision?.decision === "changes_requested" && !coordination.repair_workflow_run_id));
+  const canResume =
+    canWrite &&
+    Boolean(decision) &&
+    coordination?.workflow_resume_status !== "conflict" &&
+    coordination?.owner_apply_status !== "conflict" &&
+    (coordination?.workflow_resume_status !== "completed" ||
+      (decision?.decision === "changes_requested" && !coordination.repair_workflow_run_id));
 
   return (
     <Card>
@@ -79,17 +84,23 @@ export function ReviewActions({
         ) : null}
         {canUseClaim ? (
           <div className="flex flex-wrap gap-3">
-            <Button disabled={busy} onClick={onRenew} variant="outline">续期租约</Button>
-            <Button disabled={busy} onClick={onRelease} variant="outline">释放审核</Button>
+            <Button disabled={busy} onClick={onRenew} variant="outline">
+              续期租约
+            </Button>
+            <Button disabled={busy} onClick={onRelease} variant="outline">
+              释放审核
+            </Button>
           </div>
         ) : null}
         {canUseClaim ? (
           <div className="flex flex-wrap gap-3 pt-4">
             {task.allowed_decisions.map((value) => (
               <Button
-                disabled={busy
-                  || (value === "selected" && !effectiveCandidate)
-                  || (value === "changes_requested" && !repairRequest)}
+                disabled={
+                  busy ||
+                  (value === "selected" && !effectiveCandidate) ||
+                  (value === "changes_requested" && !repairRequest)
+                }
                 key={value}
                 onClick={() => onDecision(value)}
                 variant={value === "rejected" ? "outline" : "default"}
@@ -102,8 +113,8 @@ export function ReviewActions({
         {canResume ? (
           <Button className="w-fit" disabled={busy} onClick={onResume}>
             <RefreshCcw aria-hidden="true" />
-            {decision?.decision === "changes_requested"
-              && coordination?.workflow_resume_status === "completed"
+            {decision?.decision === "changes_requested" &&
+            coordination?.workflow_resume_status === "completed"
               ? "启动有界修复"
               : "按原决议恢复工作流"}
           </Button>

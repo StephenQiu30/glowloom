@@ -22,10 +22,7 @@ export function confirmRegistrationVerificationApiAuthRegistrationVerificationsC
   );
 }
 
-export function registerApiAuthRegisterPost(
-  body: API.RegisterRequest,
-  options?: RequestOptions,
-) {
+export function registerApiAuthRegisterPost(body: API.RegisterRequest, options?: RequestOptions) {
   return request<Envelope<API.AuthResponse>>("/api/auth/register", {
     method: "POST",
     data: body,
@@ -33,10 +30,7 @@ export function registerApiAuthRegisterPost(
   });
 }
 
-export function loginApiAuthLoginPost(
-  body: API.LoginRequest,
-  options?: RequestOptions,
-) {
+export function loginApiAuthLoginPost(body: API.LoginRequest, options?: RequestOptions) {
   return request<Envelope<API.AuthResponse>>("/api/auth/login", {
     method: "POST",
     data: body,
@@ -55,10 +49,11 @@ export function changePasswordApiAuthChangePasswordPost(
   body: API.ChangePasswordRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.RevocationResponse>>(
-    "/api/auth/change-password",
-    { method: "POST", data: body, ...(options ?? {}) },
-  );
+  return request<Envelope<API.RevocationResponse>>("/api/auth/change-password", {
+    method: "POST",
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
 export function meApiMeGet(options?: RequestOptions) {
@@ -68,10 +63,7 @@ export function meApiMeGet(options?: RequestOptions) {
   });
 }
 
-export function updateMeApiMePatch(
-  body: API.ProfileUpdateRequest,
-  options?: RequestOptions,
-) {
+export function updateMeApiMePatch(body: API.ProfileUpdateRequest, options?: RequestOptions) {
   return request<Envelope<API.MeResponse>>("/api/me", {
     method: "PATCH",
     data: body,
@@ -117,10 +109,11 @@ export function updateWorkspaceApiWorkspacesWorkspaceIdPatch(
   body: API.WorkspaceUpdateRequest,
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.WorkspaceResponse>>(
-    `/api/workspaces/${params.workspace_id}`,
-    { method: "PATCH", data: body, ...(options ?? {}) },
-  );
+  return request<Envelope<API.WorkspaceResponse>>(`/api/workspaces/${params.workspace_id}`, {
+    method: "PATCH",
+    data: body,
+    ...(options ?? {}),
+  });
 }
 
 export function archiveWorkspaceApiWorkspacesWorkspaceIdArchivePost(

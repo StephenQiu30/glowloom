@@ -21,12 +21,9 @@ vi.mock("@/api/humanReviews", () => ({
   decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost: apiMocks.decideTask,
   getHumanTaskApiHumanTasksHumanTaskIdGet: apiMocks.getTask,
   listHumanTasksApiProjectsProjectIdHumanTasksGet: apiMocks.listTasks,
-  releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost:
-    apiMocks.releaseClaim,
-  renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost:
-    apiMocks.renewClaim,
-  resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost:
-    apiMocks.resumeDecision,
+  releaseHumanTaskClaimApiHumanTasksHumanTaskIdClaimReleasesPost: apiMocks.releaseClaim,
+  renewHumanTaskClaimApiHumanTasksHumanTaskIdClaimRenewalsPost: apiMocks.renewClaim,
+  resumeHumanGateApiReviewDecisionsReviewDecisionIdResumePost: apiMocks.resumeDecision,
 }));
 
 vi.mock("@/api/workflows", () => ({
@@ -79,9 +76,7 @@ const project: API.ProjectResponse = {
   revision: 1,
 };
 
-function task(
-  overrides: Partial<API.HumanTaskResponse> = {},
-): API.HumanTaskResponse {
+function task(overrides: Partial<API.HumanTaskResponse> = {}): API.HumanTaskResponse {
   return {
     id: taskId,
     workspace_id: workspaceId,
@@ -105,10 +100,15 @@ function task(
 }
 
 function listItem(value: API.HumanTaskResponse): API.HumanTaskListItemResponse {
-  return { ...value, claim: value.claim ? {
-    claimed_by: value.claim.claimed_by,
-    expires_at: value.claim.expires_at,
-  } : null };
+  return {
+    ...value,
+    claim: value.claim
+      ? {
+          claimed_by: value.claim.claimed_by,
+          expires_at: value.claim.expires_at,
+        }
+      : null,
+  };
 }
 
 function decision(): API.ReviewDecisionResponse {
@@ -147,35 +147,43 @@ function structureSubject(): API.StructureIdentityReviewSubjectResponse {
     schema_version: "structure-identity-human-gate-input-production",
     gate_key: "structure_identity",
     input_hash: "a".repeat(64),
-    evidence_refs: [{
-      source_version_id: "019ffa00-a000-7000-8000-000000000018",
-      source_start: 8,
-      source_end: 10,
-      text_hash: "d".repeat(64),
-    }],
+    evidence_refs: [
+      {
+        source_version_id: "019ffa00-a000-7000-8000-000000000018",
+        source_start: 8,
+        source_end: 10,
+        text_hash: "d".repeat(64),
+      },
+    ],
     impact_summary: {
       affected_scope_keys: ["scene:019ffa00-a000-7000-8000-000000000019"],
       preserved_families: ["script_source", "script_spans", "scene_facts"],
       invalidated_families: ["production_world", "storyboard"],
     },
-    repair_options: [{
-      issue_key: "issue_identity_ambiguous",
-      code: "identity_ambiguous",
-      severity: "warning",
-      scope: "scene:019ffa00-a000-7000-8000-000000000019",
-      summary: "林舟的身份归属需要确认",
-      evidence_refs: [{
-        source_version_id: "019ffa00-a000-7000-8000-000000000018",
-        source_start: 8,
-        source_end: 10,
-        text_hash: "d".repeat(64),
-      }],
-      allowed_changes: [{
-        operation: "resolve_mention",
-        target_keys: ["mention:8:10"],
-        affected_scope_keys: ["scene:019ffa00-a000-7000-8000-000000000019"],
-      }],
-    }],
+    repair_options: [
+      {
+        issue_key: "issue_identity_ambiguous",
+        code: "identity_ambiguous",
+        severity: "warning",
+        scope: "scene:019ffa00-a000-7000-8000-000000000019",
+        summary: "林舟的身份归属需要确认",
+        evidence_refs: [
+          {
+            source_version_id: "019ffa00-a000-7000-8000-000000000018",
+            source_start: 8,
+            source_end: 10,
+            text_hash: "d".repeat(64),
+          },
+        ],
+        allowed_changes: [
+          {
+            operation: "resolve_mention",
+            target_keys: ["mention:8:10"],
+            affected_scope_keys: ["scene:019ffa00-a000-7000-8000-000000000019"],
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -201,47 +209,55 @@ function structureSnapshot(): API.StructureIdentitySnapshotResponse {
       document_revision_id: "019ffa00-a000-7000-8000-000000000018",
       span_index_id: "019ffa00-a000-7000-8000-000000000026",
       candidate_refs: [],
-      episode_refs: [{
-        temporary_episode_id: "episode_001",
-        episode_id: episodeId,
-        episode_revision: 1,
-        position: 1,
-        script_version_id: scriptVersionId,
-        script_version: 1,
-        source_start: 0,
-        source_end: 20,
-        content_hash: "b".repeat(64),
-      }],
-      scene_refs: [{
-        temporary_episode_id: "episode_001",
-        episode_id: episodeId,
-        temporary_span_id: "span_scene_001",
-        temporary_scene_id: "scene_001",
-        scene_owner_logical_id: sceneId,
-        scope_key: `scene:${sceneId}`,
-        source_start: 0,
-        source_end: 20,
-        evidence_hash: "c".repeat(64),
-      }],
-      identities: [{
-        temporary_identity_key: "identity_character_linzou",
-        identity_key: identityId,
-        kind: "character",
-        resolution: "new",
-        reuse_identity_key: null,
-        canonical_name: "林舟",
-        aliases: ["林舟", "小林"],
-      }],
-      mention_mappings: [{
-        kind: "character",
-        temporary_scene_id: "scene_001",
-        source_start: 8,
-        source_end: 10,
-        text_hash: "d".repeat(64),
-        exact_anchor: "林舟",
-        resolution: "resolved",
-        identity_key: identityId,
-      }],
+      episode_refs: [
+        {
+          temporary_episode_id: "episode_001",
+          episode_id: episodeId,
+          episode_revision: 1,
+          position: 1,
+          script_version_id: scriptVersionId,
+          script_version: 1,
+          source_start: 0,
+          source_end: 20,
+          content_hash: "b".repeat(64),
+        },
+      ],
+      scene_refs: [
+        {
+          temporary_episode_id: "episode_001",
+          episode_id: episodeId,
+          temporary_span_id: "span_scene_001",
+          temporary_scene_id: "scene_001",
+          scene_owner_logical_id: sceneId,
+          scope_key: `scene:${sceneId}`,
+          source_start: 0,
+          source_end: 20,
+          evidence_hash: "c".repeat(64),
+        },
+      ],
+      identities: [
+        {
+          temporary_identity_key: "identity_character_linzou",
+          identity_key: identityId,
+          kind: "character",
+          resolution: "new",
+          reuse_identity_key: null,
+          canonical_name: "林舟",
+          aliases: ["林舟", "小林"],
+        },
+      ],
+      mention_mappings: [
+        {
+          kind: "character",
+          temporary_scene_id: "scene_001",
+          source_start: 8,
+          source_end: 10,
+          text_hash: "d".repeat(64),
+          exact_anchor: "林舟",
+          resolution: "resolved",
+          identity_key: identityId,
+        },
+      ],
       coverage: {
         scene_count: 1,
         identity_count: 1,
@@ -298,25 +314,27 @@ function workflowRun(
       created_at: "2026-08-27T02:00:00Z",
       updated_at: "2026-08-27T02:06:00Z",
     },
-    nodes: [{
-      id: nodeId,
-      workspace_id: workspaceId,
-      workflow_run_id: runId,
-      node_id: "review",
-      definition_key: "production.workflow",
-      definition_version: "1.0.0",
-      executor: "gate.production_bible_review",
-      risk_level: "high",
-      status: nodeStatus,
-      attempt: 1,
-      reused_from_node_run_id: null,
-      input_hash: "a".repeat(64),
-      cache_key: "review-node",
-      output_hash: outputHash,
-      revision: 3,
-      created_at: "2026-08-27T02:00:00Z",
-      updated_at: "2026-08-27T02:06:00Z",
-    }],
+    nodes: [
+      {
+        id: nodeId,
+        workspace_id: workspaceId,
+        workflow_run_id: runId,
+        node_id: "review",
+        definition_key: "production.workflow",
+        definition_version: "1.0.0",
+        executor: "gate.production_bible_review",
+        risk_level: "high",
+        status: nodeStatus,
+        attempt: 1,
+        reused_from_node_run_id: null,
+        input_hash: "a".repeat(64),
+        cache_key: "review-node",
+        output_hash: outputHash,
+        revision: 3,
+        created_at: "2026-08-27T02:00:00Z",
+        updated_at: "2026-08-27T02:06:00Z",
+      },
+    ],
   };
 }
 
@@ -376,7 +394,11 @@ describe("公共审核工作台", () => {
       coordination: coordination(),
     };
     const user = userEvent.setup();
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     const statusRegion = await screen.findByRole("region", { name: "审核状态" });
     expect(within(statusRegion).getByText("决议已记录")).toBeInTheDocument();
@@ -401,7 +423,11 @@ describe("公共审核工作台", () => {
       decision: null,
       coordination: null,
     };
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     expect(await screen.findAllByText("结构与身份审核输入")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "领取审核" })).toBeEnabled();
@@ -437,7 +463,11 @@ describe("公共审核工作台", () => {
       },
     });
     const user = userEvent.setup();
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     const requestButton = await screen.findByRole("button", { name: "要求修改" });
     expect(requestButton).toBeDisabled();
@@ -452,12 +482,14 @@ describe("公共审核工作台", () => {
         selected_candidate_id: null,
         change_request: {
           issue_refs: ["issue_identity_ambiguous"],
-          evidence_refs: [{
-            source_version_id: "019ffa00-a000-7000-8000-000000000018",
-            source_start: 8,
-            source_end: 10,
-            text_hash: "d".repeat(64),
-          }],
+          evidence_refs: [
+            {
+              source_version_id: "019ffa00-a000-7000-8000-000000000018",
+              source_start: 8,
+              source_end: 10,
+              text_hash: "d".repeat(64),
+            },
+          ],
           change_spec: {
             operation: "resolve_mention",
             target_keys: ["mention:8:10"],
@@ -471,7 +503,11 @@ describe("公共审核工作台", () => {
 
   it("原流程结束但修复运行未创建时仍允许幂等启动修复", async () => {
     currentDetail = {
-      task: task({ status: "COMPLETED", revision: 3, subject_type: "structure_identity_gate_input" }),
+      task: task({
+        status: "COMPLETED",
+        revision: 3,
+        subject_type: "structure_identity_gate_input",
+      }),
       subject: structureSubject(),
       decision: { ...decision(), decision: "changes_requested" },
       coordination: coordination({
@@ -481,7 +517,11 @@ describe("公共审核工作台", () => {
       }),
     };
     const user = userEvent.setup();
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     expect(await screen.findByText("原流程已结束，等待启动修复")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "启动有界修复" }));
@@ -503,7 +543,11 @@ describe("公共审核工作台", () => {
         workflow_signal_receipt_id: "019ffa00-a000-7000-8000-000000000015",
       }),
     };
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     const result = await screen.findByRole("region", { name: "正式结构身份结果" });
     expect(await within(result).findByText("第 1 集")).toBeInTheDocument();
@@ -555,7 +599,11 @@ describe("公共审核工作台", () => {
       return { data: { ...currentDetail, decision: recorded, coordination: state } };
     });
     const user = userEvent.setup();
-    render(<AppProviders><ReviewWorkbench projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench projectId={projectId} />
+      </AppProviders>,
+    );
 
     const claimButton = await screen.findByRole("button", { name: "领取审核" });
     claimButton.focus();
@@ -584,10 +632,12 @@ describe("公共审核工作台", () => {
       },
     );
     expect(window.location.href).not.toContain(claimToken);
-    expect(JSON.stringify({
-      local: { ...localStorage },
-      session: { ...sessionStorage },
-    })).not.toContain(claimToken);
+    expect(
+      JSON.stringify({
+        local: { ...localStorage },
+        session: { ...sessionStorage },
+      }),
+    ).not.toContain(claimToken);
   });
 
   it("刷新后从详情恢复租约，并用同一 Token 续期或释放", async () => {
@@ -612,7 +662,11 @@ describe("公共审核工作台", () => {
       return { data: { task: released } };
     });
     const user = userEvent.setup();
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     await user.click(await screen.findByRole("button", { name: "续期租约" }));
     expect(apiMocks.renewClaim).toHaveBeenCalledWith(
@@ -651,7 +705,11 @@ describe("公共审核工作台", () => {
     };
     apiMocks.claimTask.mockResolvedValue({ data: { task: currentDetail.task } });
     const user = userEvent.setup();
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     expect(await screen.findByLabelText("审核租约")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "尝试接管审核" }));
@@ -694,7 +752,11 @@ describe("公共审核工作台", () => {
       );
     });
     const user = userEvent.setup();
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     await user.click(await screen.findByRole("button", { name: "接受" }));
     expect(await screen.findByText("决议已记录")).toBeInTheDocument();
@@ -727,7 +789,11 @@ describe("公共审核工作台", () => {
       decision: null,
       coordination: null,
     };
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     expect(await screen.findByText("当前 Subject 类型仅支持只读查看")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "领取审核" })).not.toBeInTheDocument();
@@ -743,7 +809,11 @@ describe("公共审核工作台", () => {
         workflow_signal_receipt_id: "019ffa00-a000-7000-8000-000000000015",
       }),
     };
-    render(<AppProviders><ReviewWorkbench initialTaskId={taskId} projectId={projectId} /></AppProviders>);
+    render(
+      <AppProviders>
+        <ReviewWorkbench initialTaskId={taskId} projectId={projectId} />
+      </AppProviders>,
+    );
 
     expect(await screen.findAllByText("工作流已继续")).toHaveLength(2);
     expect(apiMocks.getWorkflowRun).toHaveBeenCalledWith({ workflow_run_id: runId });

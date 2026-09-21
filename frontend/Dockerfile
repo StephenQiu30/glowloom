@@ -1,17 +1,20 @@
 ARG NODE_IMAGE=node:22-alpine
 
-FROM ${NODE_IMAGE} AS dependencies
-WORKDIR /srv/lanverse/frontend
-COPY package.json package-lock.json ./
-RUN npm ci
+FROM ${NODE_IMAGE} AS toolchain
+RUN npm install --global pnpm@12.4.2
 
-FROM ${NODE_IMAGE} AS builder
+FROM toolchain AS dependencies
+WORKDIR /srv/lanverse/frontend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM toolchain AS builder
 WORKDIR /srv/lanverse/frontend
 COPY --from=dependencies /srv/lanverse/frontend/node_modules ./node_modules
 COPY . .
 ARG NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8686
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-RUN npm run build
+RUN pnpm build
 
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production \

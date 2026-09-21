@@ -11,8 +11,6 @@ x-agent-environment: &agent-environment
   CREATION_DATABASE_URL: ${CREATION_DATABASE_URL:?Set the existing dedicated Creation database URL}
   CREATION_AGENT_SECRET: ${CREATION_AGENT_SECRET:?Set the independent Creation authorization secret}
   CREATION_PLATFORM_URL: http://backend:8686
-  CREATION_HARNESS_URL: http://agent:8787
-  CREATION_HARNESS_SECRET: ${AGENT_EXECUTION_SECRET:?Set the Harness authorization secret}
   CREATION_TEXT_RELEASE_HASH: ${CREATION_TEXT_RELEASE_HASH:?Set the reviewed frozen text release hash}
   CREATION_CALL_LIMIT: ${CREATION_CALL_LIMIT:-1000}
   CREATION_INVOCATION_TIMEOUT_SECONDS: ${CREATION_INVOCATION_TIMEOUT_SECONDS:-900}

@@ -45,7 +45,9 @@ export function TaskQueue({
             value={statusFilter}
           >
             {Object.entries(taskFilterLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
           </select>
         </label>
@@ -70,7 +72,9 @@ export function TaskQueue({
                 type="button"
               >
                 <span className="flex items-center justify-between gap-3">
-                  <span className="truncate text-sm font-medium">{subjectLabel(task.subject_type)}</span>
+                  <span className="truncate text-sm font-medium">
+                    {subjectLabel(task.subject_type)}
+                  </span>
                   <Badge variant={task.status === "STALE" ? "destructive" : "outline"}>
                     {taskStatusLabels[task.status]}
                   </Badge>

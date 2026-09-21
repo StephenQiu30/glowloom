@@ -6,10 +6,7 @@ import { type ReactNode } from "react";
 import { BasicLayout } from "@/components/layout/basic-layout";
 import { SystemStatusPage } from "@/components/system/system-status-page";
 import { useAuthSessionState } from "@/hooks/use-auth-session";
-import {
-  canAccessPage,
-  type StudioNavigation,
-} from "@/lib/access-control";
+import { canAccessPage, type StudioNavigation } from "@/lib/access-control";
 import { useMeQuery } from "@/features/identity/endpoints";
 
 export function ProtectedRoute({

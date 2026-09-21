@@ -41,7 +41,7 @@ export function SystemStatusPage({
     <BasicLayout authState="anonymous">
       <section className={`${layoutContainerClassName} py-12 md:py-14`}>
         <PageHeader
-          actions={(
+          actions={
             <div aria-label="恢复访问操作" className="flex flex-wrap gap-3" role="group">
               <Button asChild className="h-10 px-4">
                 <Link href={primaryAction.href}>
@@ -55,14 +55,14 @@ export function SystemStatusPage({
                 </Button>
               ) : null}
             </div>
-          )}
+          }
           description={description}
-          eyebrow={(
+          eyebrow={
             <span className="flex items-center gap-2 text-muted-foreground">
               <StatusIcon className="size-4" aria-hidden="true" />
               <span className="font-mono text-xs">HTTP {status}</span>
             </span>
-          )}
+          }
           title={title}
         />
 

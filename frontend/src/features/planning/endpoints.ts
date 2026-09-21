@@ -11,12 +11,8 @@ export const planningApi = appApi.injectEndpoints({
   endpoints: (builder) => ({
     episodePlan: builder.query<API.EpisodePlanDetailResponse, string>({
       queryFn: (planId) =>
-        runRequest(() =>
-          getEpisodePlanApiEpisodePlansPlanIdGet({ plan_id: planId }),
-        ),
-      providesTags: (_result, _error, planId) => [
-        { type: "EpisodePlans", id: planId },
-      ],
+        runRequest(() => getEpisodePlanApiEpisodePlansPlanIdGet({ plan_id: planId })),
+      providesTags: (_result, _error, planId) => [{ type: "EpisodePlans", id: planId }],
     }),
     createEpisodePlan: builder.mutation<
       API.EpisodePlanDetailResponse,
@@ -37,14 +33,9 @@ export const planningApi = appApi.injectEndpoints({
     >({
       queryFn: ({ planId, body }) =>
         runRequest(() =>
-          confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost(
-            { plan_id: planId },
-            body,
-          ),
+          confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost({ plan_id: planId }, body),
         ),
-      invalidatesTags: (_result, _error, { planId }) => [
-        { type: "EpisodePlans", id: planId },
-      ],
+      invalidatesTags: (_result, _error, { planId }) => [{ type: "EpisodePlans", id: planId }],
     }),
     materializeEpisodePlan: builder.mutation<
       API.ImportCommitDetailResponse,
@@ -65,10 +56,7 @@ export const planningApi = appApi.injectEndpoints({
     >({
       queryFn: ({ commitId, body }) =>
         runRequest(() =>
-          publishImportCommitApiImportCommitsCommitIdPublishPost(
-            { commit_id: commitId },
-            body,
-          ),
+          publishImportCommitApiImportCommitsCommitIdPublishPost({ commit_id: commitId }, body),
         ),
       invalidatesTags: ["EpisodePlans", "Episodes", "Project"],
     }),

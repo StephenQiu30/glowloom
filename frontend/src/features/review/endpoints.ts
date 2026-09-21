@@ -15,9 +15,7 @@ export const reviewApi = appApi.injectEndpoints({
     structureIdentity: builder.query<API.StructureIdentitySnapshotResponse, string>({
       queryFn: (projectId) =>
         runRequest(() => getCurrentStructureIdentity({ project_id: projectId })),
-      providesTags: (_result, _error, projectId) => [
-        { type: "StructureIdentity", id: projectId },
-      ],
+      providesTags: (_result, _error, projectId) => [{ type: "StructureIdentity", id: projectId }],
     }),
     humanTasks: builder.query<
       API.HumanTaskListEnvelope["data"],
@@ -48,12 +46,8 @@ export const reviewApi = appApi.injectEndpoints({
     }),
     humanTask: builder.query<API.HumanTaskDetailEnvelope["data"], string>({
       queryFn: (taskId) =>
-        runRequest(() =>
-          getHumanTaskApiHumanTasksHumanTaskIdGet({ human_task_id: taskId }),
-        ),
-      providesTags: (_result, _error, taskId) => [
-        { type: "HumanTasks", id: taskId },
-      ],
+        runRequest(() => getHumanTaskApiHumanTasksHumanTaskIdGet({ human_task_id: taskId })),
+      providesTags: (_result, _error, taskId) => [{ type: "HumanTasks", id: taskId }],
     }),
     claimHumanTask: builder.mutation<
       API.HumanTaskCommandEnvelope["data"],
@@ -61,10 +55,7 @@ export const reviewApi = appApi.injectEndpoints({
     >({
       queryFn: ({ taskId, body }) =>
         runRequest(() =>
-          claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost(
-            { human_task_id: taskId },
-            body,
-          ),
+          claimHumanTaskApiHumanTasksHumanTaskIdClaimsPost({ human_task_id: taskId }, body),
         ),
       invalidatesTags: (_result, _error, { projectId, taskId }) => [
         { type: "HumanTasks", id: taskId },
@@ -114,10 +105,7 @@ export const reviewApi = appApi.injectEndpoints({
     >({
       queryFn: ({ taskId, body }) =>
         runRequest(() =>
-          decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost(
-            { human_task_id: taskId },
-            body,
-          ),
+          decideHumanTaskApiHumanTasksHumanTaskIdDecisionsPost({ human_task_id: taskId }, body),
         ),
       invalidatesTags: (_result, _error, { projectId, taskId, workflowRunId }) => [
         { type: "HumanTasks", id: taskId },

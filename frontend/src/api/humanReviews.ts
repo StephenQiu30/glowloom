@@ -14,13 +14,7 @@ export function listHumanTasksApiProjectsProjectIdHumanTasksGet(
   params: HumanTaskListParams,
   options?: RequestOptions,
 ) {
-  const {
-    project_id: projectId,
-    status,
-    subject_type: subjectType,
-    limit,
-    after,
-  } = params;
+  const { project_id: projectId, status, subject_type: subjectType, limit, after } = params;
   return request<Envelope<API.HumanTaskListEnvelope["data"]>>(
     `/api/projects/${projectId}/human-tasks`,
     {

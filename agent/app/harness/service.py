@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 from app.harness.reference_brief_schemas import ReferenceBriefInvocation
@@ -10,6 +12,7 @@ from app.harness.scene_analysis_schemas import (
     SceneAnalysisInvocation,
 )
 from app.harness.schemas import StoryGraphStageInvocation
+from app.harness.text_execution import execute_text
 from app.harness.vision_review_schemas import VisionReviewInvocation
 from app.harness.visual_foundation_schemas import VisualFoundationInvocation
 from app.modules.storygraph.harness import StoryGraphHarness
@@ -85,6 +88,9 @@ class HarnessService:
             skill_catalog=self.skill_runtime.catalog,
         )
         return await harness.execute(), harness.model_name
+
+    async def invoke(self, task: TextTask) -> dict[str, Any]:
+        return await execute_text(task, self.text_storyboard)
 
     async def text_storyboard(self, task: TextTask) -> TextResult:
         harness = TextHarness(skill_catalog=self.skill_runtime.catalog)

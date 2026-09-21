@@ -16,11 +16,11 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].IsDir() || entries[0].Name() != "main.go" {
-		t.Fatalf("backend/cmd must contain only main.go, got %v", entryNames(entries))
+	if len(entries) != 1 || !entries[0].IsDir() || entries[0].Name() != "lanverse" {
+		t.Fatalf("backend/cmd must contain only lanverse/, got %v", entryNames(entries))
 	}
 
-	mainSource := readArchitectureFile(t, filepath.Join(commandRoot, "main.go"))
+	mainSource := readArchitectureFile(t, filepath.Join(commandRoot, "lanverse", "main.go"))
 	for _, runtime := range []string{
 		"bootstrap.RunAPI(runtimeContext, logger)",
 		"bootstrap.RunWorkflowWorker(ctx, logger)",
@@ -91,7 +91,7 @@ func TestBackendHasOneRuntimeEntrypoint(t *testing.T) {
 	}
 
 	playwrightConfig := readArchitectureFile(t, filepath.Join(repositoryRoot, "frontend", "playwright.config.ts"))
-	if !strings.Contains(playwrightConfig, "go run ./cmd") || strings.Contains(playwrightConfig, "go run ./cmd/api") {
+	if !strings.Contains(playwrightConfig, "go run ./cmd/lanverse") || strings.Contains(playwrightConfig, "go run ./cmd/api") {
 		t.Error("Playwright must start the single Backend entrypoint")
 	}
 

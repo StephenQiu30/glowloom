@@ -10,17 +10,14 @@ type RegistrationValues = {
 
 export async function registerUser(
   page: Page,
-  {
-    displayName,
-    email,
-    password = "playwright-secure-password",
-  }: RegistrationValues,
+  { displayName, email, password = "playwright-secure-password" }: RegistrationValues,
 ) {
   await page.goto("/register");
   await page.getByLabel("邮箱").fill(email);
   await page.getByRole("button", { name: "发送验证码" }).click();
-  await expect(page.getByText("本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"))
-    .toBeVisible();
+  await expect(
+    page.getByText("本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"),
+  ).toBeVisible();
 
   await page.getByLabel("验证码").fill(E2E_REGISTRATION_CODE);
   await page.getByRole("button", { name: "确认验证码" }).click();

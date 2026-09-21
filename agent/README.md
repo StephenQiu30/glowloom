@@ -1,5 +1,7 @@
 # Lanverse Agent 服务
 
+工程规范：[PROJECT](../PROJECT.md) · [Agent 目录与 Harness 工作流](../docs/design/Agent服务目录与Harness工作流设计.md)。
+
 实现依据：[创作编排架构](../docs/design/0013-创作编排与多媒体画布架构调整设计.md)、[Harness 专业能力](../docs/design/3004-AgentHarness专业能力与创作流程设计.md)。
 
 ## 模块边界
@@ -15,7 +17,7 @@
 | `app/harness/` | Harness 输入/输出合同、就绪探针和执行服务；不创建 FastAPI 应用 |
 | `app/creation/` | 可信命令、执行存储、Temporal 编排和失败恢复；不注册 HTTP 路由 |
 
-这些模块部署在一个 Agent 镜像和一个容器中；模块边界仍由导入、凭据白名单和 HTTP 合同维护，不把模块误拆成多个产品服务。跨语言编码和专业发布摘要保持原合同。实施与检查见 [Agent 单服务设计](../docs/design/0021-Agent单服务架构调整设计.md)。
+这些模块部署在一个 Agent 镜像和一个容器中；模块边界由显式依赖、凭据白名单和跨服务合同维护；Worker 通过注入的 HarnessService 执行，不经自身 HTTP，不把模块误拆成多个产品服务。跨语言编码和专业发布摘要保持原合同。实施与检查见 [Agent 单服务设计](../docs/design/0021-Agent单服务架构调整设计.md)。
 
 受限服务的 `GET /readyz`：在统一 `app/skills/catalog.py` 注册表上逐项校验 StoryGraph、SceneAnalysis、文本分镜的安装发布摘要，并检查本地 Codex 可执行文件和内部签名配置。Agent 正式入口会先检查 Creation 存储，再检查 Skill 注册表；任一项缺失/漂移返回 503 与明确错误码，不返回路径或密钥；检查不会运行模型。该接口只证明本地候选执行前置条件，不证明模型认证、真实推理、Temporal 或正式采纳可用。
 
@@ -61,8 +63,6 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 | `CREATION_TEMPORAL_TLS` | 默认 `false`；非 loopback 地址必须为 `true` |
 | `CREATION_TASK_QUEUE` | 默认 `lanverse-creation-text`，首次接受后固定保存 |
 | `CREATION_PLATFORM_URL` | Worker 必填，Go 平台 origin；HTTPS，或 loopback HTTP；不接受任意路径、userinfo、query |
-| `CREATION_HARNESS_URL` | Worker 必填，统一 Agent 自身的受限 Harness origin；Docker 中为 `http://agent:8787` |
-| `CREATION_HARNESS_SECRET` | Worker 必填，与 Harness 的 `AGENT_EXECUTION_SECRET` 对应，必须独立于平台交接密钥 |
 | `CREATION_TEXT_RELEASE_HASH` | Worker 必填，显式固定已发布文本 Skill 摘要；不能从可信镜像导入专业 Harness |
 | `CREATION_CALL_LIMIT` | Worker 调用总上限，默认 1000，范围 1–1000；运行首次使用时冻结，恢复不能重置 |
 | `CREATION_INVOCATION_TIMEOUT_SECONDS` | Worker 单次推理时限，默认 600 秒，范围 1–900；写入固定 TextTask，恢复时修改将发生输入冲突 |
@@ -83,7 +83,7 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 ```sh
 .venv/bin/ruff check app tests
 .venv/bin/ruff format --check app tests
-.venv/bin/pyright app tests
+uv run --locked --all-extras mypy app
 .venv/bin/pytest -q
 ```
 
@@ -91,7 +91,7 @@ LANVERSE_TEST_REAL_CODEX=1 LANVERSE_TEXT_EVAL_OUTPUT=/tmp/lanverse-text-storyboa
 
 本机集成测试运行短生命周期 Agent HTTP 进程，使用真实 Go HTTP 客户端和现有 Temporal，退出后关闭测试进程并终止精确的合成 Workflow。`tests/creation/test_workflow.py` 注册真实生产 Workflow 与 Activity，使用合成专业结果验证四道人工门、Worker 重启和草案复用；这些测试不调用真实模型。Temporal 测试历史由既有保留策略清理，不改其他 Workflow 或 Namespace。
 
-Agent 服务使用一个 `Dockerfile` 和一个 `requirements-creation.txt`，同一镜像包含可信编排、Temporal Worker、受限 Harness 和 Codex CLI。可信依赖从唯一锁文件导出：
+Agent 服务使用一个 `Dockerfile`，镜像通过固定版本 uv 从 `pyproject.toml` / `uv.lock` 冻结安装依赖，包含可信编排、Temporal Worker、受限 Harness 和 Codex CLI。requirements 文件仅为外部工具保留的生成导出，不参与镜像安装：
 
 ```sh
 uv export --locked --extra creation --no-dev --no-hashes --no-emit-project --output-file requirements-creation.txt
@@ -135,3 +135,9 @@ Go 的门查询可同步拉取候选并建立审阅任务；这不是 HTTPS 业�
 `ExecutionStore.freeze` 在首次模型调用前，将执行策略与初始 Manifest 同事务保存。清单包含四个文本阶段、必要审阅门、尚未展开的逐集/逐场集合，以及固定输入/配置/模板摘要。重复启动读取原清单，不用部署后的模板覆盖历史。
 
 签名 GET `/internal/creation/commands/{command_id}/manifest` 返回 `recorded`、`not_frozen` 或 `unavailable`；后两者的清单为空。接口不执行推理，不返回原稿或候选正文。新增独立 `text-manifest` 迁移，须通过既有显式迁移入口应用；旧执行不回填虚构清单。动态实例、多产物和 Go/画布消费不在此切片内。规范及验收见 [Spec](../docs/requirement/0015-Agent执行清单与尝试追踪需求规格.md) 与 [验收记录](../docs/acceptance/0015-Agent执行可追踪性验收记录.md)。
+
+## 生命周期与内部执行
+
+Worker 与 Dispatcher 由应用生命周期统一启动和收敛。关键后台任务异常结束或意外正常退出时，就绪状态立即失效，并请求 Uvicorn 正常关闭；启动失败也回收已经启动的任务。停止时先停止 Dispatcher 领取，再停止 Worker。
+
+文本执行的成功与失败合同由 Harness 层统一处理，本地调用和保留的签名 HTTP 路由使用相同实现。取消继续传播给可信执行层，未知结果保留原预算与尝试记录；移除 HTTP 回环不会改变 wire 格式、冻结 Skill 摘要或采纳规则。

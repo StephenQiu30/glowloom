@@ -15,25 +15,16 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/episodePlanning", async () => ({
-  ...(await vi.importActual<typeof import("@/api/episodePlanning")>(
-    "@/api/episodePlanning",
-  )),
+  ...(await vi.importActual<typeof import("@/api/episodePlanning")>("@/api/episodePlanning")),
   confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost: apiMocks.confirmPlan,
-  createEpisodePlanApiDocumentRevisionsRevisionIdEpisodePlansPost:
-    apiMocks.createPlan,
+  createEpisodePlanApiDocumentRevisionsRevisionIdEpisodePlansPost: apiMocks.createPlan,
   getEpisodePlanApiEpisodePlansPlanIdGet: apiMocks.getPlan,
-  materializeEpisodePlanApiEpisodePlansPlanIdMaterializationsPost:
-    apiMocks.materializePlan,
-  mergeEpisodeProposalsApiEpisodePlansPlanIdMergePost:
-    apiMocks.mergeProposals,
-  moveEpisodeBoundaryApiEpisodePlansPlanIdMoveBoundaryPost:
-    apiMocks.moveBoundary,
-  publishImportCommitApiImportCommitsCommitIdPublishPost:
-    apiMocks.publishCommit,
-  renameEpisodeProposalApiEpisodePlansPlanIdRenamePost:
-    apiMocks.renameProposal,
-  splitEpisodeProposalApiEpisodePlansPlanIdSplitPost:
-    apiMocks.splitProposal,
+  materializeEpisodePlanApiEpisodePlansPlanIdMaterializationsPost: apiMocks.materializePlan,
+  mergeEpisodeProposalsApiEpisodePlansPlanIdMergePost: apiMocks.mergeProposals,
+  moveEpisodeBoundaryApiEpisodePlansPlanIdMoveBoundaryPost: apiMocks.moveBoundary,
+  publishImportCommitApiImportCommitsCommitIdPublishPost: apiMocks.publishCommit,
+  renameEpisodeProposalApiEpisodePlansPlanIdRenamePost: apiMocks.renameProposal,
+  splitEpisodeProposalApiEpisodePlansPlanIdSplitPost: apiMocks.splitProposal,
 }));
 
 import { AppProviders } from "@/app/providers";
@@ -183,9 +174,7 @@ function commitSegments(published: boolean): API.EpisodeSegmentOriginResponse[] 
     episode_id: episodeId,
     source_id: `019ff900-a000-7000-8000-00000000005${index}`,
     draft_version_id: `019ff900-a000-7000-8000-00000000006${index}`,
-    published_version_id: published
-      ? `019ff900-a000-7000-8000-00000000007${index}`
-      : null,
+    published_version_id: published ? `019ff900-a000-7000-8000-00000000007${index}` : null,
     position: index + 1,
     source_start: index === 0 ? 0 : source.indexOf("第二集"),
     source_end: index === 0 ? source.indexOf("第二集") : source.length,
@@ -250,17 +239,11 @@ describe("分集计划向导", () => {
     const user = userEvent.setup();
     render(
       <AppProviders>
-        <EpisodePlanWorkspace
-          analysis={analysis}
-          canWrite
-          targetDurationMs={90_000}
-        />
+        <EpisodePlanWorkspace analysis={analysis} canWrite targetDurationMs={90_000} />
       </AppProviders>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "生成确定性分集计划" }),
-    );
+    await user.click(screen.getByRole("button", { name: "生成确定性分集计划" }));
     expect(await screen.findByText("冲突建立并以警报作为钩子")).toBeInTheDocument();
     expect(screen.getByText(/置信度\s*100%/)).toBeInTheDocument();
     expect(screen.getByText(/场景1：控制室/)).toBeInTheDocument();

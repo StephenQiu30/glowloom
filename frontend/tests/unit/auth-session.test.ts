@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  clearAccessToken,
-  getAccessToken,
-  setAccessToken,
-} from "@/lib/auth-session";
+import { clearAccessToken, getAccessToken, setAccessToken } from "@/lib/auth-session";
 
 describe("JWT browser session", () => {
   afterEach(() => {

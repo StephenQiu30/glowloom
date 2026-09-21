@@ -17,10 +17,10 @@ export function getEpisodePlanApiEpisodePlansPlanIdGet(
   params: { plan_id: string },
   options?: RequestOptions,
 ) {
-  return request<Envelope<API.EpisodePlanDetailResponse>>(
-    `/api/episode-plans/${params.plan_id}`,
-    { method: "GET", ...(options ?? {}) },
-  );
+  return request<Envelope<API.EpisodePlanDetailResponse>>(`/api/episode-plans/${params.plan_id}`, {
+    method: "GET",
+    ...(options ?? {}),
+  });
 }
 
 export function confirmEpisodePlanApiEpisodePlansPlanIdConfirmPost(

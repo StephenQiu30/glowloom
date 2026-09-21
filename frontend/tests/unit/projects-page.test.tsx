@@ -65,13 +65,15 @@ describe("真实项目库", () => {
       data: { items: [project], total: 1, limit: 50, offset: 0 },
     });
     apiMocks.listWorkspaces.mockResolvedValue({
-      data: [{
-        id: workspaceId,
-        name: "个人创作空间",
-        status: "active",
-        role: "owner",
-        revision: 1,
-      } satisfies API.WorkspaceResponse],
+      data: [
+        {
+          id: workspaceId,
+          name: "个人创作空间",
+          status: "active",
+          role: "owner",
+          revision: 1,
+        } satisfies API.WorkspaceResponse,
+      ],
     });
     apiMocks.createProject.mockResolvedValue({ data: project });
   });
@@ -85,14 +87,18 @@ describe("真实项目库", () => {
     );
 
     expect(await screen.findByText("个人创作空间")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "我的作品" }).closest(".mx-auto")).toHaveClass("max-w-[1200px]");
+    expect(screen.getByRole("heading", { name: "我的作品" }).closest(".mx-auto")).toHaveClass(
+      "max-w-[1200px]",
+    );
     expect(screen.queryByRole("group", { name: "项目数量摘要" })).not.toBeInTheDocument();
     expect(await screen.findByRole("link", { name: `打开项目 ${project.name}` })).toHaveAttribute(
       "href",
       `/projects/${project.id}`,
     );
     await user.type(screen.getByRole("textbox", { name: "搜索项目" }), "不存在");
-    expect(screen.queryByRole("link", { name: `打开项目 ${project.name}` })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: `打开项目 ${project.name}` }),
+    ).not.toBeInTheDocument();
   });
 
   it("搜索无结果时可以一键恢复全部项目", async () => {
@@ -103,7 +109,9 @@ describe("真实项目库", () => {
       </AppProviders>,
     );
 
-    expect(await screen.findByRole("link", { name: `打开项目 ${project.name}` })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: `打开项目 ${project.name}` }),
+    ).toBeInTheDocument();
     await user.type(screen.getByRole("textbox", { name: "搜索项目" }), "不存在");
 
     expect(screen.getByRole("heading", { name: "没有匹配的项目" })).toBeInTheDocument();
@@ -142,12 +150,14 @@ describe("真实项目库", () => {
     await user.click(screen.getByRole("button", { name: "确认创建" }));
 
     await waitFor(() => expect(apiMocks.createProject).toHaveBeenCalledTimes(1));
-    expect(apiMocks.createProject).toHaveBeenCalledWith(expect.objectContaining({
-      workspace_id: workspaceId,
-      name: "镜中长安",
-      aspect_ratio: "9:16",
-      language: "zh-CN",
-    }));
+    expect(apiMocks.createProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspace_id: workspaceId,
+        name: "镜中长安",
+        aspect_ratio: "9:16",
+        language: "zh-CN",
+      }),
+    );
     expect(await screen.findByRole("status")).toHaveTextContent("项目已创建");
   });
 });

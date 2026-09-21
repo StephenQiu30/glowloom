@@ -29,12 +29,8 @@ export const projectApi = appApi.injectEndpoints({
     }),
     project: builder.query<API.ProjectResponse, string>({
       queryFn: (projectId) =>
-        runRequest(() =>
-          getProjectApiProjectsProjectIdGet({ project_id: projectId }),
-        ),
-      providesTags: (_result, _error, projectId) => [
-        { type: "Project", id: projectId },
-      ],
+        runRequest(() => getProjectApiProjectsProjectIdGet({ project_id: projectId })),
+      providesTags: (_result, _error, projectId) => [{ type: "Project", id: projectId }],
     }),
     episodes: builder.query<API.EpisodeResponse[], string>({
       queryFn: (projectId) =>
@@ -44,16 +40,10 @@ export const projectApi = appApi.injectEndpoints({
             include_archived: true,
           }),
         ),
-      providesTags: (_result, _error, projectId) => [
-        { type: "Episodes", id: projectId },
-      ],
+      providesTags: (_result, _error, projectId) => [{ type: "Episodes", id: projectId }],
     }),
   }),
 });
 
-export const {
-  useCreateProjectMutation,
-  useEpisodesQuery,
-  useProjectQuery,
-  useProjectsQuery,
-} = projectApi;
+export const { useCreateProjectMutation, useEpisodesQuery, useProjectQuery, useProjectsQuery } =
+  projectApi;

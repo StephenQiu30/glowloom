@@ -14,7 +14,6 @@ const executionSecret = "playwright-agent-execution-secret-with-32-bytes";
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: ["**/*.spec.ts"],
-  globalTeardown: "./tests/e2e/global-teardown.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -26,14 +25,14 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "./scripts/e2e-postgres.sh",
+      command: "node tests/e2e/service-process.mjs postgres",
       env: { LANVERSE_E2E_POSTGRES_PORT: postgresPort },
       port: Number(postgresPort),
       reuseExistingServer: false,
       timeout: 30_000,
     },
     {
-      command: "./scripts/e2e-minio.sh",
+      command: "node tests/e2e/service-process.mjs minio",
       env: { LANVERSE_E2E_MINIO_PORT: minioPort },
       url: `http://${minioEndpoint}/minio/health/live`,
       reuseExistingServer: false,
@@ -41,7 +40,7 @@ export default defineConfig({
     },
     {
       command:
-        "cd ../agent && uv run --all-extras python -m uvicorn tests.app_factory:create_test_app --factory --host 127.0.0.1 --port " +
+        "cd ../agent && uv run --locked --all-extras python -m uvicorn tests.app_factory:create_test_app --factory --host 127.0.0.1 --port " +
         agentPort,
       env: {
         AGENT_EXECUTION_SECRET: executionSecret,
@@ -52,7 +51,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "cd ../backend && go run ./cmd",
+      command: "cd ../backend && go run ./cmd/lanverse",
       env: {
         AGENT_EXECUTION_SECRET: executionSecret,
         AGENT_POLL_INTERVAL_MS: "250",
@@ -78,7 +77,7 @@ export default defineConfig({
     },
     {
       command:
-        "npm run build && mkdir -p .next/standalone/.next && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public && node .next/standalone/server.js",
+        "pnpm build && mkdir -p .next/standalone/.next && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public && node .next/standalone/server.js",
       env: {
         HOSTNAME: "127.0.0.1",
         NEXT_PUBLIC_API_BASE_URL: backendBaseUrl,

@@ -39,9 +39,8 @@ export function SubjectPanel({
   task: API.HumanTaskResponse;
 }) {
   const selectionSubject = task.subject_type === "generation_candidate_selection";
-  const structureSubject = subject?.schema_version === "structure-identity-human-gate-input-production"
-    ? subject
-    : null;
+  const structureSubject =
+    subject?.schema_version === "structure-identity-human-gate-input-production" ? subject : null;
   return (
     <Card id="subject-fact">
       <CardHeader>
@@ -69,7 +68,10 @@ export function SubjectPanel({
           <fieldset className="grid gap-2" disabled={!canDecide}>
             <legend className="mb-2 text-sm font-semibold">冻结候选</legend>
             {task.candidate_ids.map((candidateId) => (
-              <label className="flex cursor-pointer items-center gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted" key={candidateId}>
+              <label
+                className="flex cursor-pointer items-center gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted"
+                key={candidateId}
+              >
                 <input
                   checked={effectiveCandidate === candidateId}
                   className="size-4"
@@ -87,7 +89,9 @@ export function SubjectPanel({
             <h3 className="text-sm font-semibold">冻结输入引用</h3>
             <ul className="mt-2 grid gap-2">
               {task.candidate_ids.map((candidateId) => (
-                <li className="py-3 font-mono text-xs" key={candidateId}>{candidateId}</li>
+                <li className="py-3 font-mono text-xs" key={candidateId}>
+                  {candidateId}
+                </li>
               ))}
             </ul>
           </div>
@@ -96,20 +100,28 @@ export function SubjectPanel({
           <fieldset className="grid gap-3 pt-5" disabled={!canDecide}>
             <legend className="text-sm font-semibold">冻结修复选项</legend>
             <p className="text-xs text-muted-foreground">
-              只能选择 Backend 已冻结的错误项、证据、目标和影响场景；提交后会生成新的候选与审核任务。
+              只能选择 Backend
+              已冻结的错误项、证据、目标和影响场景；提交后会生成新的候选与审核任务。
             </p>
             {structureSubject.repair_options.map((option) => (
               <div className="grid gap-2 py-3" key={option.issue_key}>
                 <div>
                   <p className="text-sm font-medium">{option.summary}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {option.severity === "blocking" ? "阻塞" : "警告"} · {option.scope} · {option.code}
+                    {option.severity === "blocking" ? "阻塞" : "警告"} · {option.scope} ·{" "}
+                    {option.code}
                   </p>
                 </div>
-                <ul aria-label={`${option.summary}的冻结证据`} className="grid gap-1 text-xs text-muted-foreground">
+                <ul
+                  aria-label={`${option.summary}的冻结证据`}
+                  className="grid gap-1 text-xs text-muted-foreground"
+                >
                   {option.evidence_refs.map((evidence) => (
-                    <li key={`${evidence.source_version_id}:${evidence.source_start}:${evidence.source_end}`}>
-                      原文区间 [{evidence.source_start}, {evidence.source_end}) · {shortHash(evidence.text_hash)}
+                    <li
+                      key={`${evidence.source_version_id}:${evidence.source_start}:${evidence.source_end}`}
+                    >
+                      原文区间 [{evidence.source_start}, {evidence.source_end}) ·{" "}
+                      {shortHash(evidence.text_hash)}
                     </li>
                   ))}
                 </ul>
@@ -117,18 +129,26 @@ export function SubjectPanel({
                   const request = repairRequestFrom(option, change);
                   const choiceKey = repairChoiceKey(request);
                   return (
-                    <label className="flex cursor-pointer items-start gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted" key={`${change.operation}:${index}`}>
+                    <label
+                      className="flex cursor-pointer items-start gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted"
+                      key={`${change.operation}:${index}`}
+                    >
                       <input
-                        checked={repairRequest ? repairChoiceKey(repairRequest) === choiceKey : false}
+                        checked={
+                          repairRequest ? repairChoiceKey(repairRequest) === choiceKey : false
+                        }
                         className="mt-0.5 size-4"
                         name={`repair-${task.id}`}
                         onChange={() => onRepairChange(request)}
                         type="radio"
                       />
                       <span>
-                        <span className="block font-medium">{repairOperationLabel(change.operation)}</span>
+                        <span className="block font-medium">
+                          {repairOperationLabel(change.operation)}
+                        </span>
                         <span className="mt-1 block text-xs text-muted-foreground">
-                          {change.target_keys.join("、")} · {change.affected_scope_keys.length} 个场景
+                          {change.target_keys.join("、")} · {change.affected_scope_keys.length}{" "}
+                          个场景
                         </span>
                       </span>
                     </label>
@@ -151,11 +171,13 @@ function repairRequestFrom(
     issue_refs: [option.issue_key],
     evidence_refs: option.evidence_refs,
     change_spec: change,
-    reason_code: change.operation === "inspect_source"
-      ? "source_interpretation_incorrect"
-      : change.operation === "adjust_episode_boundary" || change.operation === "adjust_scene_boundary"
-        ? "structure_boundary_incorrect"
-        : "identity_resolution_incorrect",
+    reason_code:
+      change.operation === "inspect_source"
+        ? "source_interpretation_incorrect"
+        : change.operation === "adjust_episode_boundary" ||
+            change.operation === "adjust_scene_boundary"
+          ? "structure_boundary_incorrect"
+          : "identity_resolution_incorrect",
   };
 }
 
@@ -169,13 +191,17 @@ function repairChoiceKey(value: API.HumanGateChangeRequest): string {
 }
 
 function repairOperationLabel(value: string): string {
-  return ({
-    inspect_source: "重新核对原文",
-    adjust_episode_boundary: "调整剧集边界",
-    adjust_scene_boundary: "调整场景边界",
-    separate_identity: "拆分身份",
-    merge_identity: "合并身份",
-    resolve_mention: "确认提及归属",
-    reject_mention: "排除错误提及",
-  } as Record<string, string>)[value] ?? value;
+  return (
+    (
+      {
+        inspect_source: "重新核对原文",
+        adjust_episode_boundary: "调整剧集边界",
+        adjust_scene_boundary: "调整场景边界",
+        separate_identity: "拆分身份",
+        merge_identity: "合并身份",
+        resolve_mention: "确认提及归属",
+        reject_mention: "排除错误提及",
+      } as Record<string, string>
+    )[value] ?? value
+  );
 }

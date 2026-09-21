@@ -35,7 +35,9 @@ export function StructureIdentityResultPanel({
           </Alert>
         ) : !data ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {isFetching ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : null}
+            {isFetching ? (
+              <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+            ) : null}
             正在核对正式结构身份结果。
           </p>
         ) : !verified ? (
@@ -47,8 +49,15 @@ export function StructureIdentityResultPanel({
         ) : (
           <>
             <div className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-              <Fact label="正式版本" value={`${data.version.version} · ${shortId(data.version.id)}`} mono />
-              <Fact label="剧集 / 场景" value={`${data.version.episode_refs.length} / ${data.version.scene_refs.length}`} />
+              <Fact
+                label="正式版本"
+                value={`${data.version.version} · ${shortId(data.version.id)}`}
+                mono
+              />
+              <Fact
+                label="剧集 / 场景"
+                value={`${data.version.episode_refs.length} / ${data.version.scene_refs.length}`}
+              />
               <Fact label="身份" value={String(data.version.identities.length)} />
               <Fact
                 label="提及覆盖"
@@ -56,7 +65,11 @@ export function StructureIdentityResultPanel({
               />
               <Fact label="未决提及" value={String(data.version.coverage.unresolved_count)} />
               <Fact label="Owner Receipt" value={shortId(data.command_receipt_id)} mono />
-              <Fact label="Collection Root" value={shortHash(data.receipt.collection_root_hash)} mono />
+              <Fact
+                label="Collection Root"
+                value={shortHash(data.receipt.collection_root_hash)}
+                mono
+              />
               <Fact label="内容 Hash" value={shortHash(data.version.content_hash)} mono />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">

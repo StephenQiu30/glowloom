@@ -58,10 +58,8 @@ export function ReviewWorkbench({
       refetchOnReconnect: true,
     },
   );
-  const requestedTaskId = selectedTaskId
-    || initialTaskId?.trim()
-    || listQuery.data?.items[0]?.id
-    || "";
+  const requestedTaskId =
+    selectedTaskId || initialTaskId?.trim() || listQuery.data?.items[0]?.id || "";
   const detailQuery = useHumanTaskQuery(requestedTaskId, {
     skip: !authenticated || !requestedTaskId,
     pollingInterval: 5_000,
@@ -83,25 +81,27 @@ export function ReviewWorkbench({
   const [decideTask, decideState] = useDecideHumanTaskMutation();
   const [resumeHumanGate, resumeState] = useResumeHumanGateMutation();
 
-  const canWrite = projectQuery.data?.status === "active"
-    && me.data?.workspace.role !== "viewer";
+  const canWrite = projectQuery.data?.status === "active" && me.data?.workspace.role !== "viewer";
   const knownSubject = Boolean(task && knownSubjectTypes.has(task.subject_type));
   const claimToken = task?.claim?.claim_token;
   const effectiveCandidate = task?.candidate_ids.includes(selectedCandidateId)
     ? selectedCandidateId
     : "";
-  const busy = claimState.isLoading
-    || renewState.isLoading
-    || releaseState.isLoading
-    || decideState.isLoading
-    || resumeState.isLoading;
+  const busy =
+    claimState.isLoading ||
+    renewState.isLoading ||
+    releaseState.isLoading ||
+    decideState.isLoading ||
+    resumeState.isLoading;
   const gateNode = workflowQuery.data?.nodes.find((node) => node.id === task?.node_run_id);
   const coordination = detail?.coordination;
-  const structureIdentityRequired = task?.subject_type === "structure_identity_gate_input"
-    && detail?.decision?.decision === "approved";
-  const structureIdentityReady = structureIdentityRequired
-    && coordination?.owner_apply_status === "completed"
-    && Boolean(coordination.owner_receipt_id);
+  const structureIdentityRequired =
+    task?.subject_type === "structure_identity_gate_input" &&
+    detail?.decision?.decision === "approved";
+  const structureIdentityReady =
+    structureIdentityRequired &&
+    coordination?.owner_apply_status === "completed" &&
+    Boolean(coordination.owner_receipt_id);
   const structureIdentityQuery = useStructureIdentityQuery(projectId, {
     skip: !authenticated || !structureIdentityReady,
     pollingInterval: 5_000,
@@ -109,37 +109,35 @@ export function ReviewWorkbench({
     refetchOnReconnect: true,
   });
   const structureIdentityVerified = Boolean(
-    !structureIdentityRequired
-    || (structureIdentityQuery.data
-      && detail?.decision
-      && structureIdentityQuery.data.command_receipt_id === coordination?.owner_receipt_id
-      && structureIdentityQuery.data.version.review_decision_id === detail.decision.id
-      && structureIdentityQuery.data.version.gate_input_id === task?.subject_id
-      && structureIdentityQuery.data.version.gate_input_hash === task?.subject_hash),
+    !structureIdentityRequired ||
+    (structureIdentityQuery.data &&
+      detail?.decision &&
+      structureIdentityQuery.data.command_receipt_id === coordination?.owner_receipt_id &&
+      structureIdentityQuery.data.version.review_decision_id === detail.decision.id &&
+      structureIdentityQuery.data.version.gate_input_id === task?.subject_id &&
+      structureIdentityQuery.data.version.gate_input_hash === task?.subject_hash),
   );
-  const ownerEvidenceReady = coordination?.owner_apply_status === "not_required"
-    || (coordination?.owner_apply_status === "completed"
-      && Boolean(coordination.owner_receipt_id));
-  const workflowFactVerified = coordination?.workflow_resume_status === "completed"
-    && ownerEvidenceReady
-    && (detail?.decision?.decision === "changes_requested"
+  const ownerEvidenceReady =
+    coordination?.owner_apply_status === "not_required" ||
+    (coordination?.owner_apply_status === "completed" && Boolean(coordination.owner_receipt_id));
+  const workflowFactVerified =
+    coordination?.workflow_resume_status === "completed" &&
+    ownerEvidenceReady &&
+    (detail?.decision?.decision === "changes_requested"
       ? Boolean(coordination.repair_workflow_run_id)
-      : Boolean(gateNode)
-        && gateNode?.status !== "WAITING_HUMAN"
-        && gateNode?.status !== "QUEUED"
-        && gateNode?.status !== "RUNNING"
-        && gateNode?.status !== "RETRYING"
-        && Boolean(gateNode?.output_hash.trim()))
-    && structureIdentityVerified;
+      : Boolean(gateNode) &&
+        gateNode?.status !== "WAITING_HUMAN" &&
+        gateNode?.status !== "QUEUED" &&
+        gateNode?.status !== "RUNNING" &&
+        gateNode?.status !== "RETRYING" &&
+        Boolean(gateNode?.output_hash.trim())) &&
+    structureIdentityVerified;
 
   function commandKey(action: string, identity: string): string {
     return `${action}:${identity}`;
   }
 
-  async function runCommand(
-    operation: () => Promise<unknown>,
-    successMessage: string,
-  ) {
+  async function runCommand(operation: () => Promise<unknown>, successMessage: string) {
     setCommandMessage(undefined);
     setCommandFailed(false);
     try {
@@ -155,17 +153,15 @@ export function ReviewWorkbench({
   async function handleClaim() {
     if (!task) return;
     await runCommand(
-      () => claimTask({
-        projectId,
-        taskId: task.id,
-        body: {
-          expected_revision: task.revision,
-          idempotency_key: commandKey(
-            "human-task-claim",
-            `${task.id}:${task.revision}`,
-          ),
-        },
-      }).unwrap(),
+      () =>
+        claimTask({
+          projectId,
+          taskId: task.id,
+          body: {
+            expected_revision: task.revision,
+            idempotency_key: commandKey("human-task-claim", `${task.id}:${task.revision}`),
+          },
+        }).unwrap(),
       "审核已领取；租约只保存在当前受保护详情中。",
     );
   }
@@ -174,18 +170,16 @@ export function ReviewWorkbench({
     if (!task || !claimToken) return;
     const mutation = action === "renew" ? renewClaim : releaseClaim;
     await runCommand(
-      () => mutation({
-        projectId,
-        taskId: task.id,
-        body: {
-          claim_token: claimToken,
-          expected_revision: task.revision,
-          idempotency_key: commandKey(
-            `human-task-${action}`,
-            `${task.id}:${task.revision}`,
-          ),
-        },
-      }).unwrap(),
+      () =>
+        mutation({
+          projectId,
+          taskId: task.id,
+          body: {
+            claim_token: claimToken,
+            expected_revision: task.revision,
+            idempotency_key: commandKey(`human-task-${action}`, `${task.id}:${task.revision}`),
+          },
+        }).unwrap(),
       action === "renew" ? "审核租约已续期。" : "审核已释放。",
     );
   }
@@ -195,28 +189,27 @@ export function ReviewWorkbench({
     if (decision === "selected" && !effectiveCandidate) return;
     if (decision === "changes_requested" && !repairRequest) return;
     await runCommand(
-      () => decideTask({
-        projectId,
-        taskId: task.id,
-        workflowRunId: task.workflow_run_id,
-        body: {
-          claim_token: claimToken,
-          expected_task_revision: task.revision,
-          expected_subject_revision: task.subject_revision,
-          expected_subject_hash: task.subject_hash,
-          decision,
-          selected_candidate_id: decision === "selected"
-            ? effectiveCandidate
-            : null,
-          ...(decision === "changes_requested" && repairRequest
-            ? { change_request: repairRequest }
-            : {}),
-          idempotency_key: commandKey(
-            "human-task-decision",
-            `${task.id}:${task.revision}:${decision}:${effectiveCandidate}:${repairRequest?.change_spec.operation ?? ""}`,
-          ),
-        },
-      }).unwrap(),
+      () =>
+        decideTask({
+          projectId,
+          taskId: task.id,
+          workflowRunId: task.workflow_run_id,
+          body: {
+            claim_token: claimToken,
+            expected_task_revision: task.revision,
+            expected_subject_revision: task.subject_revision,
+            expected_subject_hash: task.subject_hash,
+            decision,
+            selected_candidate_id: decision === "selected" ? effectiveCandidate : null,
+            ...(decision === "changes_requested" && repairRequest
+              ? { change_request: repairRequest }
+              : {}),
+            idempotency_key: commandKey(
+              "human-task-decision",
+              `${task.id}:${task.revision}:${decision}:${effectiveCandidate}:${repairRequest?.change_spec.operation ?? ""}`,
+            ),
+          },
+        }).unwrap(),
       "决议已记录；页面会继续核对业务应用和工作流恢复。",
     );
   }
@@ -224,12 +217,13 @@ export function ReviewWorkbench({
   async function handleResume() {
     if (!task || !detail?.decision) return;
     await runCommand(
-      () => resumeHumanGate({
-        projectId,
-        taskId: task.id,
-        decisionId: detail.decision!.id,
-        workflowRunId: task.workflow_run_id,
-      }).unwrap(),
+      () =>
+        resumeHumanGate({
+          projectId,
+          taskId: task.id,
+          decisionId: detail.decision!.id,
+          workflowRunId: task.workflow_run_id,
+        }).unwrap(),
       "已按原决议恢复；页面会从服务端重取运行事实。",
     );
   }
@@ -240,10 +234,7 @@ export function ReviewWorkbench({
     return (
       <StudioShell active="projects">
         <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle
-            aria-label="正在读取审核权限"
-            className="size-5 animate-spin"
-          />
+          <LoaderCircle aria-label="正在读取审核权限" className="size-5 animate-spin" />
         </div>
       </StudioShell>
     );
@@ -253,18 +244,22 @@ export function ReviewWorkbench({
     <StudioShell
       active="projects"
       projectName={projectQuery.data?.name}
-      viewer={me.data ? {
-        displayName: me.data.user.display_name?.trim() || me.data.user.email,
-        workspaceName: me.data.workspace.name,
-      } : undefined}
+      viewer={
+        me.data
+          ? {
+              displayName: me.data.user.display_name?.trim() || me.data.user.email,
+              workspaceName: me.data.workspace.name,
+            }
+          : undefined
+      }
     >
       <LayoutContainer className="py-8 sm:py-10">
         <PageHeader
-          actions={(
+          actions={
             <Button asChild variant="outline">
               <Link href={`/projects/${projectId}`}>返回项目</Link>
             </Button>
-          )}
+          }
           badges={[{ label: "Backend 事实" }, { label: "自动刷新" }]}
           breadcrumbs={[
             { label: "项目", href: "/projects" },
@@ -280,7 +275,9 @@ export function ReviewWorkbench({
           <Alert className="mt-6">
             <AlertCircle aria-hidden="true" />
             <AlertTitle>需要登录</AlertTitle>
-            <AlertDescription><Link href="/login">登录后查看审核队列</Link></AlertDescription>
+            <AlertDescription>
+              <Link href="/login">登录后查看审核队列</Link>
+            </AlertDescription>
           </Alert>
         ) : pageError ? (
           <Alert className="mt-6" variant="destructive">
@@ -314,10 +311,7 @@ export function ReviewWorkbench({
                 <EmptyDetail />
               ) : detailQuery.isLoading && !detail ? (
                 <div className="grid min-h-96 place-items-center bg-muted/50">
-                  <LoaderCircle
-                    aria-label="正在加载审核详情"
-                    className="size-5 animate-spin"
-                  />
+                  <LoaderCircle aria-label="正在加载审核详情" className="size-5 animate-spin" />
                 </div>
               ) : detailQuery.error || !task ? (
                 <Alert variant="destructive">
@@ -355,11 +349,11 @@ export function ReviewWorkbench({
 
                   <SubjectPanel
                     canDecide={Boolean(
-                      canWrite
-                      && knownSubject
-                      && claimToken
-                      && task.status === "CLAIMED"
-                      && !detail.decision,
+                      canWrite &&
+                      knownSubject &&
+                      claimToken &&
+                      task.status === "CLAIMED" &&
+                      !detail.decision,
                     )}
                     effectiveCandidate={effectiveCandidate}
                     onCandidateChange={setSelectedCandidateId}
@@ -388,9 +382,11 @@ export function ReviewWorkbench({
 
                   {commandMessage ? (
                     <Alert variant={commandFailed ? "destructive" : "default"}>
-                      {commandFailed
-                        ? <AlertCircle aria-hidden="true" />
-                        : <CheckCircle2 aria-hidden="true" />}
+                      {commandFailed ? (
+                        <AlertCircle aria-hidden="true" />
+                      ) : (
+                        <CheckCircle2 aria-hidden="true" />
+                      )}
                       <AlertTitle>{commandFailed ? "命令未完成" : "服务端事实已更新"}</AlertTitle>
                       <AlertDescription>{commandMessage}</AlertDescription>
                     </Alert>

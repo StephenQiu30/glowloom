@@ -39,11 +39,15 @@ export function TaskStatusPanel({
         : coordination.workflow_resume_status === "conflict"
           ? "工作流恢复冲突"
           : "等待恢复";
-  const workflowReference = coordination?.repair_workflow_run_id
-    ?? coordination?.workflow_signal_receipt_id;
+  const workflowReference =
+    coordination?.repair_workflow_run_id ?? coordination?.workflow_signal_receipt_id;
 
   return (
-    <section aria-label="审核状态" className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4" role="region">
+    <section
+      aria-label="审核状态"
+      className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4"
+      role="region"
+    >
       <StatusCell label="任务状态" value={taskStatusLabels[task.status]} />
       <StatusCell
         label="决议状态"
@@ -64,7 +68,15 @@ export function TaskStatusPanel({
   );
 }
 
-export function StatusCell({ label, meta, value }: { label: string; meta?: string; value: string }) {
+export function StatusCell({
+  label,
+  meta,
+  value,
+}: {
+  label: string;
+  meta?: string;
+  value: string;
+}) {
   return (
     <div className="min-h-28 bg-card p-4">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>

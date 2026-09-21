@@ -16,9 +16,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/api/identity", async () => {
-  const actual = await vi.importActual<typeof import("@/api/identity")>(
-    "@/api/identity",
-  );
+  const actual = await vi.importActual<typeof import("@/api/identity")>("@/api/identity");
   return {
     ...actual,
     confirmRegistrationVerificationApiAuthRegistrationVerificationsConfirmPost:
@@ -106,7 +104,10 @@ describe("authentication pages", () => {
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getByRole("banner", { name: "Lanverse 全局页眉" })).toBeInTheDocument();
     expect(screen.getByRole("contentinfo", { name: "Lanverse 页脚" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "她从画中来项目画面" })).toHaveAttribute("src", "/assets/lanverse-studio/painting-girl-cover.png");
+    expect(screen.getByRole("img", { name: "她从画中来项目画面" })).toHaveAttribute(
+      "src",
+      "/assets/lanverse-studio/painting-girl-cover.png",
+    );
   });
 
   it("logs in through the generated API and stores the returned access token", async () => {
@@ -168,8 +169,7 @@ describe("authentication pages", () => {
     expect(apiMocks.register).toHaveBeenCalledWith({
       display_name: "漫剧创作者",
       password: "secure-password-123",
-      registration_ticket:
-        "registration-ticket-with-more-than-forty-three-characters",
+      registration_ticket: "registration-ticket-with-more-than-forty-three-characters",
     });
     expect(getAccessToken()).toBe("real-api-access-token");
     expect(routerReplace).toHaveBeenCalledWith("/projects");
@@ -190,8 +190,9 @@ describe("authentication pages", () => {
     await user.click(screen.getByRole("button", { name: "发送验证码" }));
 
     await waitFor(() =>
-      expect(screen.getByText("本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"))
-        .toBeInTheDocument(),
+      expect(
+        screen.getByText("本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"),
+      ).toBeInTheDocument(),
     );
     expect(screen.queryByText(/验证码已经发送至/)).not.toBeInTheDocument();
   });

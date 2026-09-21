@@ -25,11 +25,7 @@ export function StudioBrand({
   mdSize?: StudioBrandSize;
 }) {
   return (
-    <Link
-      className="inline-flex shrink-0 items-center"
-      href="/"
-      aria-label="Lanverse 首页"
-    >
+    <Link className="inline-flex shrink-0 items-center" href="/" aria-label="Lanverse 首页">
       <Image
         alt="Lanverse"
         className={cn(

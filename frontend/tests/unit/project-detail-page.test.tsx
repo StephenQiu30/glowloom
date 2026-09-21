@@ -27,30 +27,22 @@ vi.mock("@/api/projects", async () => ({
   createEpisodeApiProjectsProjectIdEpisodesPost: apiMocks.createEpisode,
   getProjectApiProjectsProjectIdGet: apiMocks.getProject,
   listEpisodesApiProjectsProjectIdEpisodesGet: apiMocks.listEpisodes,
-  projectProductionSnapshotApiProjectsProjectIdProductionSnapshotGet:
-    apiMocks.getSnapshot,
+  projectProductionSnapshotApiProjectsProjectIdProductionSnapshotGet: apiMocks.getSnapshot,
 }));
 
 vi.mock("@/api/media", async () => ({
   ...(await vi.importActual<typeof import("@/api/media")>("@/api/media")),
-  completeUploadApiMediaUploadsUploadSessionIdCompletePost:
-    apiMocks.completeUpload,
+  completeUploadApiMediaUploadsUploadSessionIdCompletePost: apiMocks.completeUpload,
   getMediaApiMediaVersionIdGet: apiMocks.getMedia,
   initializeUploadApiMediaUploadsPost: apiMocks.initializeUpload,
 }));
 
 vi.mock("@/api/scriptDocuments", async () => ({
-  ...(await vi.importActual<typeof import("@/api/scriptDocuments")>(
-    "@/api/scriptDocuments",
-  )),
-  importDocumentApiProjectsProjectIdScriptImportsPost:
-    apiMocks.importScriptDocument,
-  getCurrentDocumentApiProjectsProjectIdCurrentScriptDocumentGet:
-    apiMocks.getCurrentScriptDocument,
-  listDocumentsApiProjectsProjectIdScriptDocumentsGet:
-    apiMocks.listScriptDocuments,
-  previewDocumentApiProjectsProjectIdScriptImportPreviewsPost:
-    apiMocks.previewScriptDocument,
+  ...(await vi.importActual<typeof import("@/api/scriptDocuments")>("@/api/scriptDocuments")),
+  importDocumentApiProjectsProjectIdScriptImportsPost: apiMocks.importScriptDocument,
+  getCurrentDocumentApiProjectsProjectIdCurrentScriptDocumentGet: apiMocks.getCurrentScriptDocument,
+  listDocumentsApiProjectsProjectIdScriptDocumentsGet: apiMocks.listScriptDocuments,
+  previewDocumentApiProjectsProjectIdScriptImportPreviewsPost: apiMocks.previewScriptDocument,
 }));
 
 vi.mock("@/api/creation", async () => ({
@@ -106,17 +98,21 @@ const episodeSnapshot = {
   episode_id: episodeId,
   current_stage: "script_import",
   completion: 0,
-  blocking_reasons: [{
-    code: "SCRIPT_MISSING",
-    summary: "单集尚未导入剧本",
-    resource_type: "episode",
-    resource_id: episodeId,
-  }],
-  next_actions: [{
-    code: "import_script",
-    label: "导入第一集剧本",
-    href: `/studio/${episodeId}/script`,
-  }],
+  blocking_reasons: [
+    {
+      code: "SCRIPT_MISSING",
+      summary: "单集尚未导入剧本",
+      resource_type: "episode",
+      resource_id: episodeId,
+    },
+  ],
+  next_actions: [
+    {
+      code: "import_script",
+      label: "导入第一集剧本",
+      href: `/studio/${episodeId}/script`,
+    },
+  ],
   script_summary: {
     status: "not_started",
     current_version_id: null,
@@ -458,8 +454,14 @@ describe("真实项目生产入口", () => {
     expect(apiMocks.getCurrentScriptDocument).toHaveBeenCalledWith({
       project_id: projectId,
     });
-    await waitFor(() => expect(within(creation).getByRole("button", { name: "固定原稿并开始创作" })).toBeEnabled());
-    expect(within(creation).getByText(documentAnalysis.revision.normalized_text, { normalizer: (text) => text })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(creation).getByRole("button", { name: "固定原稿并开始创作" })).toBeEnabled(),
+    );
+    expect(
+      within(creation).getByText(documentAnalysis.revision.normalized_text, {
+        normalizer: (text) => text,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("只接受 Markdown 或 DOCX，并在用户确认预览后才执行整剧解析", async () => {
@@ -469,9 +471,7 @@ describe("真实项目生产入口", () => {
         digest: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
       },
     });
-    const uploadFetch = vi
-      .fn()
-      .mockResolvedValue({ ok: true, status: 200 });
+    const uploadFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     vi.stubGlobal("fetch", uploadFetch);
     render(
       <AppProviders>
@@ -488,14 +488,11 @@ describe("真实项目生产入口", () => {
       "accept",
       ".docx,.md,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown",
     );
-    const file = new File(
-      ["第一集\n场景1：控制室，夜\n甲：开始。"],
-      "whole-script.md",
-      { type: "text/markdown" },
-    );
+    const file = new File(["第一集\n场景1：控制室，夜\n甲：开始。"], "whole-script.md", {
+      type: "text/markdown",
+    });
     Object.defineProperty(file, "arrayBuffer", {
-      value: async () =>
-        new TextEncoder().encode("第一集\n场景1：控制室，夜\n甲：开始。").buffer,
+      value: async () => new TextEncoder().encode("第一集\n场景1：控制室，夜\n甲：开始。").buffer,
     });
     await user.upload(fileInput, file);
     expect(screen.getByText("whole-script.md")).toBeInTheDocument();
@@ -516,9 +513,7 @@ describe("真实项目生产入口", () => {
         kind: "document",
         filename: "whole-script.md",
         mime_type: "text/markdown",
-        idempotency_key: expect.stringMatching(
-          /^script-document-upload:[a-f0-9]{64}$/,
-        ),
+        idempotency_key: expect.stringMatching(/^script-document-upload:[a-f0-9]{64}$/),
       }),
     );
     expect(uploadFetch).toHaveBeenCalledWith(
@@ -536,9 +531,7 @@ describe("真实项目生产入口", () => {
     expect(within(preview).getByRole("heading", { name: "第一集" })).toBeInTheDocument();
     expect(preview).toHaveTextContent("场景1：控制室，夜");
 
-    await user.click(
-      screen.getByRole("button", { name: "确认并固定原稿" }),
-    );
+    await user.click(screen.getByRole("button", { name: "确认并固定原稿" }));
     await waitFor(() => expect(apiMocks.importScriptDocument).toHaveBeenCalled());
     expect(apiMocks.importScriptDocument).toHaveBeenCalledWith(
       { project_id: projectId },
@@ -582,8 +575,7 @@ describe("真实项目生产入口", () => {
     expect(apiMocks.initializeUpload).toHaveBeenCalledWith(
       expect.objectContaining({
         filename: "empress.docx",
-        mime_type:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       }),
     );
     vi.unstubAllGlobals();

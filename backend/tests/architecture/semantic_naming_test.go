@@ -24,7 +24,6 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 	for _, relativeRoot := range []string{
 		"backend/api", "backend/cmd", "backend/internal", "backend/tests",
 		"agent/app", "agent/skills", "agent/tests", "frontend/src", "frontend/tests", ".github", "docs",
-		"frontend/scripts",
 	} {
 		root := filepath.Join(repositoryRoot, relativeRoot)
 		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
@@ -54,7 +53,7 @@ func TestProjectContractsUseSemanticNames(t *testing.T) {
 		}
 	}
 	for _, relativePath := range []string{
-		"README.md", "AGENTS.md", "AGENTS.local.md", "LICENSE",
+		"README.md", "AGENTS.md", "PROJECT.md", "LICENSE",
 		"backend/Dockerfile", "agent/Dockerfile", "frontend/Dockerfile",
 		"agent/pyproject.toml", "agent/requirements.txt",
 		"frontend/components.json", "frontend/eslint.config.mjs", "frontend/next.config.ts",
