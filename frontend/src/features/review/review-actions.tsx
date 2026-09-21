@@ -112,7 +112,7 @@ export function ReviewActions({
         ) : null}
         {canResume ? (
           <Button className="w-fit" disabled={busy} onClick={onResume}>
-            <RefreshCcw aria-hidden="true" />
+            <RefreshCcw data-icon="inline-start" aria-hidden="true" />
             {decision?.decision === "changes_requested" &&
             coordination?.workflow_resume_status === "completed"
               ? "启动有界修复"

@@ -1,15 +1,26 @@
 "use client";
 
-import { AlertCircle, FolderPlus, LoaderCircle, Plus, Search, SearchX } from "lucide-react";
+import { AlertCircle, FolderPlus, Plus, Search, SearchX } from "lucide-react";
+import { PageLoading } from "@/components/system/page-loading";
+import { toast } from "sonner";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useMemo, useState } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell } from "@/features/identity/studio-shell";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
 import { appApiErrorMessage } from "@/lib/server-state";
 import { useCreateProjectMutation, useProjectsQuery } from "@/features/project/endpoints";
 import { useMeQuery, useWorkspacesQuery } from "@/features/identity/endpoints";
@@ -40,7 +51,6 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ProjectFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const projects = useMemo(() => projectsQuery.data?.items ?? [], [projectsQuery.data?.items]);
   const visibleProjects = useMemo(() => {
@@ -64,11 +74,10 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
 
   async function handleCreate(request: API.ProjectCreateRequest): Promise<boolean> {
     setActionError(null);
-    setNotice(null);
     try {
       const created = await createProject(request).unwrap();
       setCreateOpen(false);
-      setNotice(`项目已创建：${created.name}`);
+      toast.success(`项目已创建：${created.name}`);
       return true;
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
@@ -81,9 +90,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
   if (sessionState === "checking") {
     return (
       <StudioShell active="projects">
-        <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle aria-label="正在读取登录状态" className="animate-spin" />
-        </div>
+        <PageLoading label="正在读取登录状态" />
       </StudioShell>
     );
   }
@@ -100,14 +107,6 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
           : undefined
       }
     >
-      {notice ? (
-        <div
-          className="pointer-events-none fixed top-24 right-6 z-50 bg-foreground px-4 py-3 text-sm text-background"
-          role="status"
-        >
-          {notice}
-        </div>
-      ) : null}
       <LayoutContainer className="py-8 sm:py-10">
         {!authenticated ? (
           <Alert>
@@ -122,15 +121,13 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
             <AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription>
           </Alert>
         ) : !workspace || !projectsQuery.data ? (
-          <div className="grid min-h-96 place-items-center">
-            <LoaderCircle aria-label="正在加载项目库" className="animate-spin" />
-          </div>
+          <PageLoading label="正在加载项目库" />
         ) : (
           <>
             <PageHeader
               actions={
                 <Button disabled={!workspaceId} onClick={() => setCreateOpen(true)}>
-                  <Plus aria-hidden="true" />
+                  <Plus data-icon="inline-start" aria-hidden="true" />
                   创建项目
                 </Button>
               }
@@ -139,7 +136,7 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
               title="我的作品"
             />
 
-            {actionError ? (
+            {actionError && !createOpen ? (
               <Alert className="mt-6" variant="destructive">
                 <AlertCircle aria-hidden="true" />
                 <AlertTitle>创建失败</AlertTitle>
@@ -148,33 +145,31 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
             ) : null}
 
             <div className="mt-8 flex flex-wrap items-center gap-2 bg-muted/45 p-1.5">
-              <div className="flex items-center gap-1" aria-label="项目状态筛选" role="group">
+              <ToggleGroup
+                type="single"
+                value={filter}
+                onValueChange={(value) => {
+                  if (value) setFilter(value as ProjectFilter);
+                }}
+                aria-label="项目状态筛选"
+              >
                 {filters.map((item) => (
-                  <Button
-                    aria-pressed={filter === item.id}
-                    className={filter === item.id ? "bg-background hover:bg-background" : undefined}
-                    key={item.id}
-                    onClick={() => setFilter(item.id)}
-                    size="sm"
-                    variant="ghost"
-                  >
+                  <ToggleGroupItem key={item.id} value={item.id}>
                     {item.label}
-                  </Button>
+                  </ToggleGroupItem>
                 ))}
-              </div>
-              <div className="relative ml-auto w-full sm:w-80">
-                <Search
-                  className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
+              </ToggleGroup>
+              <InputGroup className="ml-auto w-full sm:w-80">
+                <InputGroupAddon>
+                  <Search data-icon="inline-start" aria-hidden="true" />
+                </InputGroupAddon>
+                <InputGroupInput
                   aria-label="搜索项目"
-                  className="h-9 border-0 bg-background pl-9 shadow-none focus-visible:ring-2"
                   placeholder="按名称、简介或风格搜索"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
-              </div>
+              </InputGroup>
             </div>
 
             {visibleProjects.length ? (
@@ -184,51 +179,40 @@ export function ProjectDashboard({ requestedWorkspaceId }: { requestedWorkspaceI
                 ))}
               </div>
             ) : (
-              <section
-                className="mt-3 grid min-h-80 place-items-center bg-muted/30 px-6 py-16 text-center"
-                aria-labelledby="project-empty-title"
-              >
-                <div className="max-w-sm">
-                  <div className="mx-auto grid size-11 place-items-center text-muted-foreground">
+              <Empty className="mt-3 min-h-80" aria-labelledby="project-empty-title">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
                     {hasProjects ? (
-                      <SearchX aria-hidden="true" className="size-5" />
+                      <SearchX data-icon="inline-start" aria-hidden="true" />
                     ) : (
-                      <FolderPlus aria-hidden="true" className="size-5" />
+                      <FolderPlus data-icon="inline-start" aria-hidden="true" />
                     )}
-                  </div>
-                  <h2
-                    className="mt-5 text-lg font-semibold tracking-tight"
-                    id="project-empty-title"
-                  >
+                  </EmptyMedia>
+                  <EmptyTitle id="project-empty-title" role="heading" aria-level={2}>
                     {hasProjects ? "没有匹配的项目" : "还没有项目"}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  </EmptyTitle>
+                  <EmptyDescription>
                     {hasProjects
-                      ? "调整关键词或状态，或恢复全部项目继续浏览。"
-                      : "创建第一个项目，把剧本、单集与制作事实组织在一起。"}
-                  </p>
-                  {hasProjects ? (
-                    <Button className="mt-5" onClick={clearFilters} variant="secondary">
-                      清除搜索和筛选
-                    </Button>
-                  ) : (
-                    <Button
-                      className="mt-5"
-                      disabled={!workspaceId}
-                      onClick={() => setCreateOpen(true)}
-                    >
-                      <Plus aria-hidden="true" />
-                      创建第一个项目
-                    </Button>
-                  )}
-                </div>
-              </section>
+                      ? "试试其他关键词，或清除筛选条件。"
+                      : "创建第一个项目，导入剧本开始制作。"}
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button
+                    onClick={hasProjects ? clearFilters : () => setCreateOpen(true)}
+                    variant="outline"
+                  >
+                    {hasProjects ? "清除搜索和筛选" : "创建第一个项目"}
+                  </Button>
+                </EmptyContent>
+              </Empty>
             )}
           </>
         )}
       </LayoutContainer>
       {workspaceId ? (
         <ProjectCreateDialog
+          errorMessage={actionError ?? undefined}
           isSubmitting={createState.isLoading}
           onOpenChange={setCreateOpen}
           onSubmit={handleCreate}

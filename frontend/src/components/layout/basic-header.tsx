@@ -1,5 +1,7 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   Check,
   ChevronDown,
@@ -29,6 +31,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -47,9 +50,7 @@ import {
   visiblePrimaryNavigation,
   type WorkspaceRole,
 } from "@/lib/access-control";
-import { clearAccessToken } from "@/lib/auth-session";
 import { cn } from "@/lib/class-names";
-import { useLogoutMutation } from "@/features/identity/endpoints";
 
 import { LayoutContainer } from "./layout-container";
 import { ThemeToggle } from "./theme-toggle";
@@ -162,8 +163,8 @@ function StudioNavigationMenu({
   );
 }
 
-function NavigationPlaceholder({ mobile = false }: { mobile?: boolean }) {
-  return <div aria-hidden="true" className={cn("bg-muted/35", mobile ? "h-8 w-56" : "h-8 w-56")} />;
+function NavigationPlaceholder() {
+  return <Skeleton aria-hidden="true" className="h-8 w-56" />;
 }
 
 function GlobalSearch({ role }: { role: WorkspaceRole }) {
@@ -196,10 +197,10 @@ function GlobalSearch({ role }: { role: WorkspaceRole }) {
           className="hidden w-64 justify-start text-muted-foreground xl:flex"
           variant="outline"
         >
-          <Search aria-hidden="true" />
+          <Search data-icon="inline-start" aria-hidden="true" />
           <span>搜索或执行命令…</span>
           <kbd className="ml-auto inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
-            <CommandIcon aria-hidden="true" className="size-3" />
+            <CommandIcon data-icon="inline-start" aria-hidden="true" />
             <span className="font-mono">K</span>
           </kbd>
         </Button>
@@ -249,18 +250,17 @@ function CommandDestination({
   );
 }
 
-function AccountMenu({ role, viewer }: { role: WorkspaceRole; viewer?: LayoutViewer }) {
-  const [logout, logoutState] = useLogoutMutation();
-
-  async function handleLogout() {
-    try {
-      await logout().unwrap();
-    } finally {
-      clearAccessToken();
-      window.location.replace("/login");
-    }
-  }
-
+function AccountMenu({
+  role,
+  viewer,
+  onLogout,
+  loggingOut,
+}: {
+  role: WorkspaceRole;
+  viewer?: LayoutViewer;
+  onLogout?: () => void;
+  loggingOut?: boolean;
+}) {
   return (
     <>
       <DropdownMenu>
@@ -274,38 +274,37 @@ function AccountMenu({ role, viewer }: { role: WorkspaceRole; viewer?: LayoutVie
             <span className="hidden max-w-28 truncate text-sm md:block">
               {viewer?.displayName ?? "账户"}
             </span>
-            <ChevronDown
-              className="hidden size-3.5 text-muted-foreground sm:block"
-              aria-hidden="true"
-            />
+            <ChevronDown data-icon="inline-start" className="hidden sm:block" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>
-            <span className="block text-foreground">{viewer?.displayName ?? "Lanverse"}</span>
-            <span className="mt-0.5 block font-normal">
-              {viewer?.workspaceName ?? "工作空间"} · {roleLabels[role]}
-            </span>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href="/workspaces">
-              <UserRound aria-hidden="true" />
-              账户与空间
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={logoutState.isLoading}
-            onSelect={(event) => {
-              event.preventDefault();
-              void handleLogout();
-            }}
-            variant="destructive"
-          >
-            <LogOut aria-hidden="true" />
-            退出登录
-          </DropdownMenuItem>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              <span className="block text-foreground">{viewer?.displayName ?? "Lanverse"}</span>
+              <span className="mt-0.5 block font-normal">
+                {viewer?.workspaceName ?? "工作空间"} · {roleLabels[role]}
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/workspaces">
+                <UserRound data-icon="inline-start" aria-hidden="true" />
+                账户与空间
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={loggingOut || !onLogout}
+              onSelect={(event) => {
+                event.preventDefault();
+                onLogout?.();
+              }}
+              variant="destructive"
+            >
+              <LogOut data-icon="inline-start" aria-hidden="true" />
+              退出登录
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </>
@@ -316,6 +315,8 @@ export function BasicHeader({
   active,
   authState,
   compact = false,
+  onLogout,
+  loggingOut,
   currentStep,
   projectName,
   role,
@@ -324,6 +325,8 @@ export function BasicHeader({
   active?: StudioNavigation;
   authState: LayoutAuthState;
   compact?: boolean;
+  onLogout?: () => void;
+  loggingOut?: boolean;
   currentStep?: number;
   projectName?: string;
   role?: WorkspaceRole;
@@ -373,7 +376,12 @@ export function BasicHeader({
               </Button>
             ) : null}
             {authState === "authenticated" && role ? (
-              <AccountMenu role={role} viewer={viewer} />
+              <AccountMenu
+                role={role}
+                viewer={viewer}
+                onLogout={onLogout}
+                loggingOut={loggingOut}
+              />
             ) : null}
           </div>
         </LayoutContainer>
@@ -382,7 +390,7 @@ export function BasicHeader({
       {authState === "anonymous" ? null : (
         <div className="basic-layout__mobile-nav flex items-center overflow-x-auto bg-muted/35 px-5 md:hidden">
           {authState === "loading" || (authState === "authenticated" && !role) ? (
-            <NavigationPlaceholder mobile />
+            <NavigationPlaceholder />
           ) : showAppNavigation ? (
             <StudioNavigationMenu active={active} mobile role={role} />
           ) : (

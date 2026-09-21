@@ -1,11 +1,23 @@
 "use client";
+import { toast } from "sonner";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import { PageLoading } from "@/components/system/page-loading";
 import { useState } from "react";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import Link from "next/link";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { appApiErrorMessage } from "@/lib/server-state";
 import {
   useAcceptCreationSourceMutation,
@@ -82,7 +94,7 @@ export function TextCreationWorkspace({
   const [resume, resumeState] = useResumeCreationMutation();
   const [chosenProposalId, setChosenProposalId] = useState("");
   const [error, setError] = useState<string>();
-  const [notice, setNotice] = useState<string>();
+
   const run = chosenRunId
     ? (exactRun.currentData ??
       runs.data?.find((item) => item.id === chosenRunId) ??
@@ -118,7 +130,7 @@ export function TextCreationWorkspace({
     setChosenRunId(id);
     setChosenProposalId("");
     setError(undefined);
-    setNotice(undefined);
+
     const url = new URL(window.location.href);
     url.searchParams.set("run", id);
     window.history.replaceState(null, "", url);
@@ -130,7 +142,7 @@ export function TextCreationWorkspace({
       return;
     }
     setError(undefined);
-    setNotice(undefined);
+
     try {
       if (head.data?.identity.version_id !== source.revisionId) {
         const accepted = await acceptSource({
@@ -158,7 +170,7 @@ export function TextCreationWorkspace({
         },
       }).unwrap();
       chooseRun(created.id);
-      setNotice("已创建运行。每个阶段审阅并正式采纳后，系统才会继续。");
+      toast.success("已创建运行。每个阶段审阅并正式采纳后，系统才会继续。");
     } catch (cause) {
       setError(appApiErrorMessage(cause));
       void head.refetch();
@@ -170,7 +182,7 @@ export function TextCreationWorkspace({
     setError(undefined);
     try {
       await sync(run.id).unwrap();
-      setNotice("已同步执行状态与提案。");
+      toast.success("已同步执行状态与提案。");
     } catch (cause) {
       setError(appApiErrorMessage(cause));
     }
@@ -180,7 +192,7 @@ export function TextCreationWorkspace({
     setError(undefined);
     try {
       await retryDelivery({ projectId, runId: run.id, revision: run.revision }).unwrap();
-      setNotice("已按原运行恢复交接。");
+      toast.success("已按原运行恢复交接。");
     } catch (cause) {
       setError(appApiErrorMessage(cause));
     }
@@ -191,27 +203,35 @@ export function TextCreationWorkspace({
     setError(undefined);
     try {
       await resume({ runId: run.id, revision: run.revision }).unwrap();
-      setNotice("恢复请求已接受，将沿用本次原稿、草案和剩余额度。");
+      toast.success("恢复请求已接受，将沿用本次原稿、草案和剩余额度。");
     } catch (cause) {
       setError(appApiErrorMessage(cause));
     }
   }
 
   return (
-    <div className="space-y-6">
-      <section aria-label="固定原稿与启动" className="space-y-4 bg-transparent py-4">
+    <div className="flex flex-col gap-6">
+      <section aria-label="固定原稿与启动" className="flex flex-col gap-4 bg-transparent py-4">
         <h2 className="text-lg font-semibold">固定原稿</h2>
         {source ? (
           <>
             <p className="font-medium">{source.title}</p>
-            <details>
-              <summary className="cursor-pointer text-sm text-muted-foreground">
-                查看此次原稿
-              </summary>
-              <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-4 font-sans text-sm">
-                {source.text}
-              </pre>
-            </details>
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  type="button"
+                  className="h-auto justify-start px-0 text-left whitespace-normal"
+                >
+                  查看此次原稿
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-4 font-sans text-sm">
+                  {source.text}
+                </pre>
+              </CollapsibleContent>
+            </Collapsible>
             <p className="break-all text-xs text-muted-foreground">版本：{source.revisionId}</p>
             {canWrite && (
               <Button
@@ -246,22 +266,24 @@ export function TextCreationWorkspace({
         </Alert>
       )}
       {(runs.data?.length ?? 0) > 0 && (
-        <div className="space-y-2">
-          <Label htmlFor="creation-run">创作记录</Label>
-          <select
-            id="creation-run"
-            className="h-10 w-full rounded-md border-0 bg-background shadow-border focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring px-3 text-sm"
-            value={run?.id ?? ""}
-            onChange={(event) => chooseRun(event.target.value)}
-          >
-            {runs.data!.map((item) => (
-              <option key={item.id} value={item.id}>
-                {new Date(item.created_at).toLocaleString("zh-CN")} ·{" "}
-                {item.source.revision_id.slice(0, 8)} · {deliveryLabels[item.status]}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Field>
+          <FieldLabel htmlFor="creation-run">创作记录</FieldLabel>
+          <Select value={run?.id ?? ""} onValueChange={chooseRun}>
+            <SelectTrigger id="creation-run" className="w-full">
+              <SelectValue placeholder="选择创作记录" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {runs.data!.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {new Date(item.created_at).toLocaleString("zh-CN")} ·{" "}
+                    {item.source.revision_id.slice(0, 8)} · {deliveryLabels[item.status]}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
       )}
       {chosenRunId && exactRun.error && (
         <Alert variant="destructive">
@@ -269,7 +291,7 @@ export function TextCreationWorkspace({
         </Alert>
       )}
       {run && (
-        <section aria-label="创作状态" className="space-y-4 bg-transparent py-4">
+        <section aria-label="创作状态" className="flex flex-col gap-4 bg-transparent py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">
               {state ? executionLabels[state.status] : deliveryLabels[run.status]}
@@ -293,7 +315,7 @@ export function TextCreationWorkspace({
             {Object.entries(stageLabels).map(([stage, label]) => {
               const items = proposals.filter((item) => item.stage === stage);
               return (
-                <li className="space-y-1 py-3 text-sm" key={stage}>
+                <li className="flex flex-col gap-1 py-3 text-sm" key={stage}>
                   <p className="font-medium">{label}</p>
                   <p className="text-xs text-muted-foreground">
                     {state?.stage === stage && state.status === "running"
@@ -322,10 +344,18 @@ export function TextCreationWorkspace({
               <AlertDescription>
                 {executionErrors[failureCode] ??
                   "本次创作已暂停，请联系管理员核查；原稿和已保存结果仍可查回。"}
-                <details className="mt-2">
-                  <summary>故障信息</summary>
-                  {failureCode}
-                </details>
+                <Collapsible className="mt-2">
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      className="h-auto justify-start px-0 text-left whitespace-normal"
+                    >
+                      故障信息
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>{failureCode}</CollapsibleContent>
+                </Collapsible>
               </AlertDescription>
             </Alert>
           )}
@@ -344,18 +374,26 @@ export function TextCreationWorkspace({
               执行状态暂未读到：{appApiErrorMessage(execution.error)}
             </p>
           )}
-          <details>
-            <summary className="cursor-pointer text-xs text-muted-foreground">
-              运行与原稿身份
-            </summary>
-            <p className="mt-2 break-all text-xs text-muted-foreground">
-              运行：{run.id}
-              <br />
-              原稿：{run.source.revision_id}
-              <br />
-              摘要：{run.source.content_hash}
-            </p>
-          </details>
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                type="button"
+                className="h-auto justify-start px-0 text-left whitespace-normal"
+              >
+                运行与原稿身份
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <p className="mt-2 break-all text-xs text-muted-foreground">
+                运行：{run.id}
+                <br />
+                原稿：{run.source.revision_id}
+                <br />
+                摘要：{run.source.content_hash}
+              </p>
+            </CollapsibleContent>
+          </Collapsible>
         </section>
       )}
       {proposalsQuery.error && (
@@ -363,21 +401,19 @@ export function TextCreationWorkspace({
           <AlertDescription>{appApiErrorMessage(proposalsQuery.error)}</AlertDescription>
         </Alert>
       )}
-      {run && proposalsQuery.isLoading && (
-        <p role="status" className="py-8 text-sm text-muted-foreground">
-          正在读取剧集、设定与分镜…
-        </p>
-      )}
+      {run && proposalsQuery.isLoading && <PageLoading label="正在读取剧集、设定与分镜" />}
       {run && !proposalsQuery.isLoading && !proposalsQuery.error && proposals.length === 0 && (
-        <section className="space-y-2 py-8">
-          <h2 className="font-semibold">创作内容将在这里呈现</h2>
-          <p className="text-sm text-muted-foreground">
-            生成后可逐步查看分集、场景、人物与分镜。
-            {state?.status === "blocked"
-              ? "当前创作受阻，请先查看上方说明。"
-              : "每个阶段确认并采纳后，才会进入下一阶段。"}
-          </p>
-        </section>
+        <Empty className="py-8">
+          <EmptyHeader>
+            <EmptyTitle>创作内容将在这里呈现</EmptyTitle>
+            <EmptyDescription>
+              生成后可逐步查看分集、场景、人物与分镜。
+              {state?.status === "blocked"
+                ? "当前创作受阻，请先查看上方说明。"
+                : "每个阶段确认并采纳后，才会进入下一阶段。"}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
       {proposals.length > 0 && (
         <div className="grid items-start gap-8 py-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
@@ -402,11 +438,6 @@ export function TextCreationWorkspace({
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      )}
-      {notice && (
-        <p role="status" className="text-sm">
-          {notice}
-        </p>
       )}
     </div>
   );

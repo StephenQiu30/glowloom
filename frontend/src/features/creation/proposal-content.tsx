@@ -58,7 +58,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 function Quotes({ items }: { items: API.CreationTextEvidence[] }) {
   return (
-    <ul className="mt-2 space-y-1 border-l-2 pl-3 text-xs text-muted-foreground">
+    <ul className="flex flex-col mt-2 gap-1 border-l-2 pl-3 text-xs text-muted-foreground">
       {items.map((item, i) => (
         <li key={i}>
           原文块 {item.block + 1}：「{item.quote}」
@@ -78,7 +78,7 @@ function Range({ value }: { value: { first_block: number; last_block: number } }
 function ContentIssues({ issues }: { issues: API.CreationTextIssue[] }) {
   if (!issues.length) return null;
   return (
-    <section className="space-y-2 text-sm">
+    <section className="flex flex-col gap-2 text-sm">
       <h4 className="font-medium">本场待确认</h4>
       {issues.map((issue, index) => (
         <p key={index}>
@@ -103,12 +103,12 @@ export function ProposalContent({
   if (proposal.stage === "map_manuscript") {
     const value = proposal.candidate as API.CreationTextEpisodeMap;
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
           {value.mode === "preserve" ? "保留原稿集划分" : "建议重新划分剧集"}
         </p>
         {value.episodes.map((episode, i) => (
-          <section className="space-y-2 py-4" key={episode.key}>
+          <section className="flex flex-col gap-2 py-4" key={episode.key}>
             <h3 className="font-semibold">
               第 {episode.number ?? i + 1} 集 · {episode.title}
             </h3>
@@ -121,7 +121,7 @@ export function ProposalContent({
         {value.excluded.length > 0 && (
           <section>
             <h3 className="font-semibold">未纳入剧集的原文</h3>
-            <ul className="mt-2 space-y-2 text-sm">
+            <ul className="flex flex-col mt-2 gap-2 text-sm">
               {value.excluded.map((item, i) => (
                 <li key={i}>
                   <Range value={item} /> · {excludedLabels[item.kind]}：{item.reason}
@@ -136,7 +136,7 @@ export function ProposalContent({
   if (proposal.stage === "analyze_episode") {
     const value = proposal.candidate as API.CreationTextEpisodeAnalysis;
     return (
-      <div className="space-y-5">
+      <div className="flex flex-col gap-5">
         <Facts>
           <Fact label="剧情概述">{value.summary}</Fact>
           <Fact label="主要冲突">{value.conflict}</Fact>
@@ -156,7 +156,7 @@ export function ProposalContent({
         </nav>
         {value.scenes.map((scene, i) => (
           <section
-            className="scroll-mt-6 space-y-4 py-4"
+            className="flex flex-col scroll-mt-6 gap-4 py-4"
             id={`scene-${encodeURIComponent(scene.key)}`}
             key={scene.key}
           >
@@ -171,7 +171,7 @@ export function ProposalContent({
             <p className="whitespace-pre-wrap text-sm">{scene.summary}</p>
             <div>
               <h4 className="text-sm font-medium">剧情节拍</h4>
-              <ol className="mt-2 space-y-3">
+              <ol className="flex flex-col mt-2 gap-3">
                 {scene.beats.map((beat) => (
                   <li className="text-sm" key={beat.key}>
                     {beat.required ? "必需 · " : ""}
@@ -186,7 +186,7 @@ export function ProposalContent({
             </div>
             <div>
               <h4 className="text-sm font-medium">对白与声音</h4>
-              <ul className="mt-2 space-y-3">
+              <ul className="flex flex-col mt-2 gap-3">
                 {scene.dialogues.map((dialogue) => (
                   <li className="text-sm" key={dialogue.key}>
                     <span className="text-muted-foreground">
@@ -202,7 +202,7 @@ export function ProposalContent({
             </div>
             <div>
               <h4 className="text-sm font-medium">人物、场景与道具</h4>
-              <ul className="mt-2 space-y-3">
+              <ul className="flex flex-col mt-2 gap-3">
                 {scene.mentions.map((mention) => (
                   <li className="text-sm" key={mention.key}>
                     {kindLabels[mention.kind]} · {mention.name} ·{" "}
@@ -227,7 +227,7 @@ export function ProposalContent({
   if (proposal.stage === "build_world") {
     const value = proposal.candidate as API.CreationTextWorldBook;
     return (
-      <div className="space-y-8">
+      <div className="flex flex-col gap-8">
         <nav aria-label="设定分类" className="flex flex-wrap gap-2">
           {Object.entries(kindLabels).map(([kind, label]) => (
             <a
@@ -240,7 +240,7 @@ export function ProposalContent({
           ))}
         </nav>
         {Object.entries(kindLabels).map(([kind, label]) => (
-          <section id={`world-${kind}`} className="scroll-mt-6 space-y-5" key={kind}>
+          <section id={`world-${kind}`} className="flex flex-col scroll-mt-6 gap-5" key={kind}>
             <h3 className="text-lg font-semibold">{label}资料</h3>
             {!value.entities.some((entity) => entity.kind === kind) && (
               <p className="text-sm text-muted-foreground">本次分析没有明确的{label}记录。</p>
@@ -262,7 +262,7 @@ export function ProposalContent({
                 return (
                   <section
                     aria-label={`${label}资料：${entity.label}`}
-                    className="space-y-5 py-4"
+                    className="flex flex-col gap-5 py-4"
                     key={entity.key}
                   >
                     <header>
@@ -282,7 +282,7 @@ export function ProposalContent({
                     <Quotes items={entity.evidence} />
                     <div>
                       <h5 className="text-sm font-medium">出现与提及</h5>
-                      <ul className="mt-2 space-y-2 text-sm">
+                      <ul className="flex flex-col mt-2 gap-2 text-sm">
                         {mentions.map(({ ref, mention }, i) => (
                           <li key={i}>
                             {context.location(ref.episode_key, ref.scene_key)} ·{" "}
@@ -307,7 +307,7 @@ export function ProposalContent({
                         </p>
                       )}
                     </div>
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-3">
                       <h5 className="text-sm font-medium">状态变化</h5>
                       {states.length ? (
                         states.map((item, i) => (
@@ -329,7 +329,7 @@ export function ProposalContent({
                         </p>
                       )}
                     </div>
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-3">
                       <h5 className="text-sm font-medium">关联关系</h5>
                       {relations.length ? (
                         relations.map((item, i) => (
@@ -347,7 +347,7 @@ export function ProposalContent({
                         <p className="text-sm text-muted-foreground">暂无明确关系。</p>
                       )}
                     </div>
-                    <div className="space-y-3">
+                    <div className="flex flex-col gap-3">
                       <h5 className="text-sm font-medium">视觉参考需求</h5>
                       {needs.map((item, i) => (
                         <div className="text-sm" key={i}>
@@ -367,7 +367,7 @@ export function ProposalContent({
           </section>
         ))}
         {value.unresolved_mentions.length > 0 && (
-          <section className="space-y-3">
+          <section className="flex flex-col gap-3">
             <h3 className="font-semibold">尚未归属的提及</h3>
             {value.unresolved_mentions.map((item, i) => (
               <p className="text-sm" key={i}>
@@ -386,7 +386,7 @@ export function ProposalContent({
   const value = proposal.candidate as API.CreationTextSceneDirection;
   const scene = context.scene(value.episode_key, value.scene_key);
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       <Facts>
         <Fact label="戏剧意图">{value.dramatic_intent}</Fact>
         <Fact label="观众已知">{value.audience_knows.join("；")}</Fact>
@@ -418,7 +418,7 @@ export function ProposalContent({
         <section
           aria-label={`镜头 ${i + 1}`}
           id={`shot-${encodeURIComponent(shot.key)}`}
-          className="scroll-mt-6 space-y-4 py-4"
+          className="flex flex-col scroll-mt-6 gap-4 py-4"
           key={shot.key}
         >
           <h3 className="font-semibold">

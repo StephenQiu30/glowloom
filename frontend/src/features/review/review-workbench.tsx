@@ -1,6 +1,8 @@
 "use client";
 
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { PageLoading } from "@/components/system/page-loading";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
+import { Spinner } from "@/components/ui/spinner";
 import { useMeQuery } from "@/features/identity/endpoints";
 import { useProjectQuery } from "@/features/project/endpoints";
 import { useState } from "react";
@@ -17,8 +19,8 @@ import {
 } from "@/features/review/endpoints";
 import { useWorkflowRunQuery } from "@/features/workflow/endpoints";
 import { appApiErrorMessage } from "@/lib/server-state";
-import { StudioShell } from "@/components/studio/studio-shell";
-import { LoaderCircle, AlertCircle, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { StudioShell } from "@/features/identity/studio-shell";
+import { AlertCircle, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { LayoutContainer } from "@/components/layout/layout-container";
 import { PageHeader } from "@/components/studio/page-header";
 import { Button } from "@/components/ui/button";
@@ -233,9 +235,7 @@ export function ReviewWorkbench({
   if (sessionState === "checking") {
     return (
       <StudioShell active="projects">
-        <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle aria-label="正在读取审核权限" className="size-5 animate-spin" />
-        </div>
+        <PageLoading label="正在读取审核权限" />
       </StudioShell>
     );
   }
@@ -311,7 +311,7 @@ export function ReviewWorkbench({
                 <EmptyDetail />
               ) : detailQuery.isLoading && !detail ? (
                 <div className="grid min-h-96 place-items-center bg-muted/50">
-                  <LoaderCircle aria-label="正在加载审核详情" className="size-5 animate-spin" />
+                  <Spinner aria-label="正在加载审核详情" className="size-5 animate-spin" />
                 </div>
               ) : detailQuery.error || !task ? (
                 <Alert variant="destructive">
@@ -320,7 +320,7 @@ export function ReviewWorkbench({
                   <AlertDescription>{appApiErrorMessage(detailQuery.error)}</AlertDescription>
                 </Alert>
               ) : (
-                <div className="space-y-5">
+                <div className="flex flex-col gap-5">
                   {!canWrite ? (
                     <Alert>
                       <ShieldAlert aria-hidden="true" />

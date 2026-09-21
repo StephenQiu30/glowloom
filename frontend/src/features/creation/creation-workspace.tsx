@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { LoaderCircle } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { LayoutContainer } from "@/components/layout/layout-container";
 import { PageHeader } from "@/components/studio/page-header";
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell } from "@/features/identity/studio-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMeQuery } from "@/features/identity/endpoints";
 import { useProjectQuery } from "@/features/project/endpoints";
 import { useCurrentScriptDocumentQuery } from "@/features/script/endpoints";
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
 import { appApiErrorMessage } from "@/lib/server-state";
 import { TextCreationWorkspace } from "./text-creation-workspace";
 
@@ -43,7 +43,7 @@ export function CreationWorkspace({
           : undefined
       }
     >
-      <LayoutContainer className="space-y-7 py-8 sm:py-10">
+      <LayoutContainer className="flex flex-col gap-7 py-8 sm:py-10">
         <PageHeader
           title="文本创作"
           description="从固定原稿到逐场导演分镜，审阅每一步，保存可追溯的正式结果。"
@@ -55,7 +55,7 @@ export function CreationWorkspace({
         />
         {session === "checking" ||
         (authenticated && (project.isLoading || me.isLoading || script.isLoading)) ? (
-          <LoaderCircle className="animate-spin" aria-label="正在读取创作项目" />
+          <Spinner className="animate-spin" aria-label="正在读取创作项目" />
         ) : !authenticated ? (
           <Link className="underline" href="/login">
             登录后开始创作

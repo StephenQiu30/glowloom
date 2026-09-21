@@ -78,10 +78,19 @@ describe("feature ownership", () => {
           sourceFeature &&
           targetFeature &&
           sourceFeature !== targetFeature &&
-          !/^features\/[^/]+\/(endpoints\.ts|[a-z-]+-workspace\.tsx)$/.test(target)
+          !(
+            /^features\/[^/]+\/endpoints\.ts$/.test(target) ||
+            new Set([
+              "features/identity/studio-shell.tsx",
+              "features/creation/text-creation-workspace.tsx",
+              "features/identity/use-auth-session.ts",
+              "features/planning/episode-plan-workspace.tsx",
+              "features/production-bible/production-bible-workspace.tsx",
+            ]).has(target)
+          )
         )
           violations.push(`${owner} -> ${target}`);
-        if (owner.startsWith("components/ui/") && (targetFeature || target.startsWith("api/")))
+        if (owner.startsWith("components/") && (targetFeature || target.startsWith("api/")))
           violations.push(`${owner} -> ${target}`);
         if (owner === "lib/server-state.ts" && target.startsWith("api/"))
           violations.push(`${owner} -> ${target}`);

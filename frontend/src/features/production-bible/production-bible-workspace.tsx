@@ -1,14 +1,9 @@
 "use client";
+import { toast } from "sonner";
 
-import {
-  AlertCircle,
-  BookOpenCheck,
-  CheckCircle2,
-  LoaderCircle,
-  RotateCcw,
-  Sparkles,
-} from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, RotateCcw, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +63,6 @@ export function ProductionBibleWorkspace({
   const [decideReviewIssue, decideState] = useDecideProductionBibleReviewIssueMutation();
   const [resumeBible, resumeState] = useResumeProductionBibleMutation();
   const [actionError, setActionError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const queriedBible = detailQuery.data ?? currentQuery.data;
   const outdatedBible =
@@ -92,7 +86,7 @@ export function ProductionBibleWorkspace({
 
   async function runAction<T>(action: () => Promise<T>): Promise<T | null> {
     setActionError(null);
-    setNotice(null);
+
     try {
       return await action();
     } catch (error: unknown) {
@@ -117,7 +111,7 @@ export function ProductionBibleWorkspace({
     );
     if (!created) return;
     setActiveBibleId(created.id);
-    setNotice("制作圣经任务已创建；页面会从服务端恢复生成进度。");
+    toast.success("制作圣经任务已创建；页面会从服务端恢复生成进度。");
   }
 
   async function resume(): Promise<void> {
@@ -134,7 +128,7 @@ export function ProductionBibleWorkspace({
     );
     if (!resumed) return;
     setActiveBibleId(resumed.id);
-    setNotice("已从最近的安全检查点恢复制作圣经任务。");
+    toast.success("已从最近的安全检查点恢复制作圣经任务。");
   }
 
   async function decideIssue(issueKey: string, action: "accepted" | "rejected"): Promise<void> {
@@ -159,7 +153,7 @@ export function ProductionBibleWorkspace({
     );
     if (!decided) return;
     setActiveBibleId(decided.id);
-    setNotice(
+    toast.success(
       action === "accepted"
         ? "已明确接受该审阅风险；决议会与制作圣经一起保留。"
         : "该问题继续阻断确认，后续可以重新审阅并更改决议。",
@@ -191,13 +185,6 @@ export function ProductionBibleWorkspace({
             <AlertDescription>{actionError ?? appApiErrorMessage(queryError)}</AlertDescription>
           </Alert>
         ) : null}
-        {notice ? (
-          <Alert className="border-0 bg-muted/50" role="status">
-            <CheckCircle2 aria-hidden="true" />
-            <AlertTitle>制作圣经状态已更新</AlertTitle>
-            <AlertDescription>{notice}</AlertDescription>
-          </Alert>
-        ) : null}
 
         {!bible ? (
           <div className="flex flex-wrap items-center justify-between gap-4 bg-muted/45 p-5">
@@ -211,16 +198,16 @@ export function ProductionBibleWorkspace({
             </div>
             <Button disabled={!canWrite || busy} onClick={create}>
               {busy ? (
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
+                <Spinner data-icon="inline-start" aria-hidden="true" />
               ) : (
-                <Sparkles aria-hidden="true" />
+                <Sparkles data-icon="inline-start" aria-hidden="true" />
               )}
               生成项目制作圣经
             </Button>
           </div>
         ) : ["queued", "running"].includes(bible.status) ? (
           <div aria-live="polite" className="flex items-center gap-3 bg-muted/45 p-5">
-            <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+            <Spinner className="size-5 animate-spin" aria-hidden="true" />
             <div>
               <p className="font-medium">本地 Codex 正在分析整剧原稿</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -248,7 +235,7 @@ export function ProductionBibleWorkspace({
               ) : null}
             </div>
             <Button disabled={!canWrite || busy} onClick={resume} variant="outline">
-              <RotateCcw aria-hidden="true" />
+              <RotateCcw data-icon="inline-start" aria-hidden="true" />
               恢复生成
             </Button>
           </div>
@@ -344,7 +331,7 @@ export function ProductionBibleWorkspace({
                 </p>
               </div>
             ) : (
-              <Alert className="bg-emerald-50" role="status">
+              <Alert className="bg-muted" role="status">
                 <CheckCircle2 aria-hidden="true" />
                 <AlertTitle>制作圣经已确认</AlertTitle>
                 <AlertDescription>

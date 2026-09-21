@@ -158,6 +158,6 @@ describe("真实项目库", () => {
         language: "zh-CN",
       }),
     );
-    expect(await screen.findByRole("status")).toHaveTextContent("项目已创建");
+    expect(await screen.findByText(/^项目已创建：/)).toBeInTheDocument();
   });
 });

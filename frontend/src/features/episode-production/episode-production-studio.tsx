@@ -1,21 +1,25 @@
 "use client";
+import { PageLoading } from "@/components/system/page-loading";
+import { toast } from "sonner";
 
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clapperboard,
-  Download,
-  FileText,
-  LoaderCircle,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Clapperboard, Download, FileText } from "lucide-react";
 import Link from "next/link";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell } from "@/features/identity/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
 import request, { ApiClientError } from "@/lib/request";
 
 import type { EpisodePanel } from "@/features/episode-production/episode-studio-model";
@@ -132,7 +136,6 @@ export function EpisodeProductionStudio({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [notice, setNotice] = useState<string>();
 
   const loadBatch = useCallback(async () => {
     const value = await optional(
@@ -200,7 +203,7 @@ export function EpisodeProductionStudio({
   async function run(operation: () => Promise<void>) {
     setBusy(true);
     setError(undefined);
-    setNotice(undefined);
+
     try {
       await operation();
     } catch (cause) {
@@ -221,7 +224,7 @@ export function EpisodeProductionStudio({
         },
       );
       setStructure(response.data);
-      setNotice(`已接受制作任务：${task.label}`);
+      toast.success(`已接受制作任务：${task.label}`);
     });
   }
 
@@ -239,7 +242,7 @@ export function EpisodeProductionStudio({
         },
       );
       setStructure(response.data);
-      setNotice(`结构已确认，生成剧本 v${response.data.revision} 的稳定叙事单元`);
+      toast.success(`结构已确认，生成剧本 v${response.data.revision} 的稳定叙事单元`);
     });
   }
 
@@ -251,7 +254,7 @@ export function EpisodeProductionStudio({
       );
       setBatch(response.data);
       setApplyPreflight(undefined);
-      setNotice("分镜候选任务已进入队列");
+      toast.success("分镜候选任务已进入队列");
     });
   }
 
@@ -271,7 +274,7 @@ export function EpisodeProductionStudio({
         },
       );
       setBatch(response.data);
-      setNotice(`已接受此镜：${shot.title}`);
+      toast.success(`已接受此镜：${shot.title}`);
     });
   }
 
@@ -286,7 +289,7 @@ export function EpisodeProductionStudio({
         },
       );
       setBatch(response.data);
-      setNotice("整批分镜草案已批准");
+      toast.success("整批分镜草案已批准");
     });
   }
 
@@ -298,7 +301,7 @@ export function EpisodeProductionStudio({
         { method: "POST", data: { expected_revision: batch.revision } },
       );
       setApplyPreflight(response.data);
-      setNotice(`预检完成：将创建 ${response.data.created} 个正式镜头`);
+      toast.success(`预检完成：将创建 ${response.data.created} 个正式镜头`);
     });
   }
 
@@ -320,7 +323,7 @@ export function EpisodeProductionStudio({
       setBatch(response.data.batch);
       setShots(response.data.shots);
       setExportPreflight(undefined);
-      setNotice(`已原子写入 ${response.data.shots.length} 个正式镜头`);
+      toast.success(`已原子写入 ${response.data.shots.length} 个正式镜头`);
     });
   }
 
@@ -331,7 +334,7 @@ export function EpisodeProductionStudio({
         { method: "POST", data: {} },
       );
       setExportPreflight(response.data);
-      setNotice(response.data.allowed ? "分镜包导出条件已满足" : "分镜包仍有阻塞项");
+      toast.success(response.data.allowed ? "分镜包导出条件已满足" : "分镜包仍有阻塞项");
     });
   }
 
@@ -349,7 +352,7 @@ export function EpisodeProductionStudio({
         },
       );
       setStoryboardExport(response.data);
-      setNotice(`分镜包已生成，内容哈希 ${response.data.content_hash.slice(0, 12)}…`);
+      toast.success(`分镜包已生成，内容哈希 ${response.data.content_hash.slice(0, 12)}…`);
     });
   }
 
@@ -365,16 +368,14 @@ export function EpisodeProductionStudio({
       anchor.download = `storyboard-${episodeId}.zip`;
       anchor.click();
       URL.revokeObjectURL(objectURL);
-      setNotice("分镜包下载已开始");
+      toast.success("分镜包下载已开始");
     });
   }
 
   if (authState === "checking" || loading) {
     return (
       <StudioShell active="projects">
-        <div className="grid min-h-[60vh] place-items-center">
-          <LoaderCircle className="size-6 animate-spin" aria-label="正在加载剧集工作台" />
-        </div>
+        <PageLoading label="正在加载剧集工作台" />
       </StudioShell>
     );
   }
@@ -408,20 +409,25 @@ export function EpisodeProductionStudio({
               确认结构事实后生成候选分镜，再经人工决议原子写入与导出。
             </p>
           </div>
-          <select
-            aria-label="切换当前剧集"
-            className="h-10 rounded-md border-0 bg-background shadow-border focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring px-3 text-sm"
-            onChange={(event) => {
-              window.location.href = `/studio/${event.target.value}/${initialPanel}`;
-            }}
+          <Select
             value={episodeId}
+            onValueChange={(value) => {
+              window.location.href = `/studio/${value}/${initialPanel}`;
+            }}
           >
-            {episodes.map((item) => (
-              <option key={item.id} value={item.id}>
-                第 {item.position} 集 · {item.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="切换当前剧集" className="w-full sm:w-auto">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {episodes.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    第 {item.position} 集 · {item.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
 
         <nav aria-label="剧集制作流程" className="my-6 flex flex-wrap gap-2">
@@ -447,15 +453,6 @@ export function EpisodeProductionStudio({
             <AlertTitle>操作未完成</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        ) : null}
-        {notice ? (
-          <div
-            className="mb-5 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-            role="status"
-          >
-            <CheckCircle2 className="mr-2 inline size-4" />
-            {notice}
-          </div>
         ) : null}
 
         {initialPanel === "script" || initialPanel === "tasks" ? (
@@ -544,7 +541,7 @@ function StructurePanel({
               确认剧本结构
             </Button>
           ) : (
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">
+            <span className="rounded-full bg-muted px-3 py-1 text-sm text-foreground">
               结构已确认
             </span>
           )}
@@ -577,7 +574,7 @@ function StructurePanel({
                         接受
                       </Button>
                     ) : (
-                      <CheckCircle2 className="size-4 text-emerald-600" aria-label="已接受" />
+                      <CheckCircle2 className="size-4 text-foreground" aria-label="已接受" />
                     )}
                   </article>
                 ))}
@@ -656,13 +653,13 @@ function StoryboardPanel({
             }
             onClick={createDraft}
           >
-            <Clapperboard className="mr-2 size-4" />
+            <Clapperboard data-icon="inline-start" className="mr-2" />
             生成待审核草案
           </Button>
         </div>
         {batch?.status === "queued" || batch?.status === "running" ? (
           <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
+            <Spinner className="size-4 animate-spin" />
             候选生成中，页面会自动刷新
           </div>
         ) : null}
@@ -688,7 +685,7 @@ function StoryboardPanel({
                       </p>
                     </div>
                     {accepted ? (
-                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">
+                      <span className="rounded-full bg-muted px-3 py-1 text-sm text-foreground">
                         accepted
                       </span>
                     ) : (
@@ -745,7 +742,7 @@ function StoryboardPanel({
             <h2 className="mt-1 text-xl font-semibold">{shots.length} 个镜头</h2>
           </div>
           {shots.length > 0 ? (
-            <CheckCircle2 className="size-6 text-emerald-600" />
+            <CheckCircle2 className="size-6 text-foreground" />
           ) : (
             <AlertCircle className="size-6 text-muted-foreground" />
           )}
@@ -794,12 +791,12 @@ function StoryboardPanel({
         ) : null}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button disabled={busy || !exportPreflight?.allowed} onClick={createExportPackage}>
-            <FileText className="mr-2 size-4" />
+            <FileText data-icon="inline-start" className="mr-2" />
             生成分镜包
           </Button>
           {storyboardExport ? (
             <Button disabled={busy} onClick={downloadExportPackage} variant="outline">
-              <Download className="mr-2 size-4" />
+              <Download data-icon="inline-start" className="mr-2" />
               下载分镜包
             </Button>
           ) : null}

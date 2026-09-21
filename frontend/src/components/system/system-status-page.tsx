@@ -1,5 +1,6 @@
 import { ArrowRight, FileQuestion, LogIn, ServerCrash, ShieldX } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/class-names";
 
 import { BasicLayout } from "@/components/layout/basic-layout";
 import { layoutContainerClassName } from "@/components/layout/layout-container";
@@ -39,14 +40,14 @@ export function SystemStatusPage({
 
   return (
     <BasicLayout authState="anonymous">
-      <section className={`${layoutContainerClassName} py-12 md:py-14`}>
+      <section className={cn(layoutContainerClassName, "py-12 md:py-14")}>
         <PageHeader
           actions={
             <div aria-label="恢复访问操作" className="flex flex-wrap gap-3" role="group">
               <Button asChild className="h-10 px-4">
                 <Link href={primaryAction.href}>
                   {primaryAction.label}
-                  <ArrowRight aria-hidden="true" />
+                  <ArrowRight data-icon="inline-start" aria-hidden="true" />
                 </Link>
               </Button>
               {secondaryAction ? (

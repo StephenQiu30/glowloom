@@ -1,11 +1,11 @@
 "use client";
 
-import { LoaderCircle } from "lucide-react";
+import { PageLoading } from "@/components/system/page-loading";
 import { type ReactNode } from "react";
 
 import { BasicLayout } from "@/components/layout/basic-layout";
 import { SystemStatusPage } from "@/components/system/system-status-page";
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
 import { canAccessPage, type StudioNavigation } from "@/lib/access-control";
 import { useMeQuery } from "@/features/identity/endpoints";
 
@@ -23,12 +23,7 @@ export function ProtectedRoute({
   if (sessionState === "checking" || (authenticated && me.isLoading)) {
     return (
       <BasicLayout active={page} authState="loading">
-        <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle
-            aria-label="正在核对页面权限"
-            className="size-5 animate-spin text-muted-foreground"
-          />
-        </div>
+        <PageLoading label="正在核对页面权限" />
       </BasicLayout>
     );
   }

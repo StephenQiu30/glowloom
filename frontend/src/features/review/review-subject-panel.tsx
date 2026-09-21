@@ -4,18 +4,36 @@ import { Clock3, ExternalLink } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Fact } from "./review-fact";
 import { subjectLabel, shortId, shortHash } from "./review-presentation";
+import {
+  Field,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+  FieldDescription,
+  FieldContent,
+} from "@/components/ui/field";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 export function EmptyDetail() {
   return (
-    <div className="grid min-h-96 place-items-center bg-muted/50 p-8 text-center">
-      <div>
-        <Clock3 aria-hidden="true" className="mx-auto size-6 text-muted-foreground" />
-        <h2 className="mt-3 font-semibold">选择一个审核任务</h2>
-        <p className="mt-1 text-sm text-muted-foreground">详情只读取 Backend 已冻结的事实。</p>
-      </div>
-    </div>
+    <Empty className="min-h-96">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Clock3 data-icon="inline-start" aria-hidden="true" />
+        </EmptyMedia>
+        <EmptyTitle>选择一个审核任务</EmptyTitle>
+        <EmptyDescription>选择后查看待确认内容和可执行操作。</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 
@@ -61,29 +79,28 @@ export function SubjectPanel({
         <Button asChild className="w-fit" size="sm" variant="outline">
           <Link href={`/projects/${projectId}/reviews?task=${task.id}#subject-fact`}>
             打开固定 Subject 链接
-            <ExternalLink aria-hidden="true" />
+            <ExternalLink data-icon="inline-start" aria-hidden="true" />
           </Link>
         </Button>
         {selectionSubject ? (
-          <fieldset className="grid gap-2" disabled={!canDecide}>
-            <legend className="mb-2 text-sm font-semibold">冻结候选</legend>
-            {task.candidate_ids.map((candidateId) => (
-              <label
-                className="flex cursor-pointer items-center gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted"
-                key={candidateId}
-              >
-                <input
-                  checked={effectiveCandidate === candidateId}
-                  className="size-4"
-                  name={`candidate-${task.id}`}
-                  onChange={() => onCandidateChange(candidateId)}
-                  type="radio"
-                  value={candidateId}
-                />
-                <span className="font-mono text-xs">{candidateId}</span>
-              </label>
-            ))}
-          </fieldset>
+          <FieldSet disabled={!canDecide}>
+            <FieldLegend id={`candidate-label-${task.id}`} variant="label">
+              冻结候选
+            </FieldLegend>
+            <RadioGroup
+              aria-labelledby={`candidate-label-${task.id}`}
+              disabled={!canDecide}
+              value={effectiveCandidate}
+              onValueChange={onCandidateChange}
+            >
+              {task.candidate_ids.map((candidateId) => (
+                <Field key={candidateId} orientation="horizontal" data-disabled={!canDecide}>
+                  <RadioGroupItem value={candidateId} id={`candidate-${candidateId}`} />
+                  <FieldLabel htmlFor={`candidate-${candidateId}`}>{candidateId}</FieldLabel>
+                </Field>
+              ))}
+            </RadioGroup>
+          </FieldSet>
         ) : task.candidate_ids.length > 0 ? (
           <div>
             <h3 className="text-sm font-semibold">冻结输入引用</h3>
@@ -97,66 +114,78 @@ export function SubjectPanel({
           </div>
         ) : null}
         {task.subject_type === "structure_identity_gate_input" && structureSubject ? (
-          <fieldset className="grid gap-3 pt-5" disabled={!canDecide}>
-            <legend className="text-sm font-semibold">冻结修复选项</legend>
+          <FieldSet className="pt-5" disabled={!canDecide}>
+            <FieldLegend id={`repair-label-${task.id}`} variant="label">
+              冻结修复选项
+            </FieldLegend>
             <p className="text-xs text-muted-foreground">
               只能选择 Backend
               已冻结的错误项、证据、目标和影响场景；提交后会生成新的候选与审核任务。
             </p>
-            {structureSubject.repair_options.map((option) => (
-              <div className="grid gap-2 py-3" key={option.issue_key}>
-                <div>
-                  <p className="text-sm font-medium">{option.summary}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {option.severity === "blocking" ? "阻塞" : "警告"} · {option.scope} ·{" "}
-                    {option.code}
-                  </p>
+            <RadioGroup
+              aria-labelledby={`repair-label-${task.id}`}
+              disabled={!canDecide}
+              value={repairRequest ? repairChoiceKey(repairRequest) : ""}
+              onValueChange={(value) => {
+                const request = structureSubject.repair_options
+                  .flatMap((option) =>
+                    option.allowed_changes.map((change) => repairRequestFrom(option, change)),
+                  )
+                  .find((candidate) => repairChoiceKey(candidate) === value);
+                if (request) onRepairChange(request);
+              }}
+            >
+              {structureSubject.repair_options.map((option) => (
+                <div className="grid gap-2 py-3" key={option.issue_key}>
+                  <div>
+                    <p className="text-sm font-medium">{option.summary}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {option.severity === "blocking" ? "阻塞" : "警告"} · {option.scope} ·{" "}
+                      {option.code}
+                    </p>
+                  </div>
+                  <ul
+                    aria-label={`${option.summary}的冻结证据`}
+                    className="grid gap-1 text-xs text-muted-foreground"
+                  >
+                    {option.evidence_refs.map((evidence) => (
+                      <li
+                        key={`${evidence.source_version_id}:${evidence.source_start}:${evidence.source_end}`}
+                      >
+                        原文区间 [{evidence.source_start}, {evidence.source_end}) ·{" "}
+                        {shortHash(evidence.text_hash)}
+                      </li>
+                    ))}
+                  </ul>
+                  {option.allowed_changes.map((change, index) => {
+                    const request = repairRequestFrom(option, change);
+                    const choiceKey = repairChoiceKey(request);
+                    return (
+                      <Field
+                        orientation="horizontal"
+                        key={`${change.operation}:${index}`}
+                        data-disabled={!canDecide}
+                      >
+                        <RadioGroupItem
+                          value={choiceKey}
+                          id={`repair-${option.issue_key}-${index}`}
+                        />
+                        <FieldContent>
+                          <FieldLabel htmlFor={`repair-${option.issue_key}-${index}`}>
+                            {repairOperationLabel(change.operation)}
+                          </FieldLabel>
+                          <FieldDescription>
+                            {change.target_keys.join("、")} · {change.affected_scope_keys.length}{" "}
+                            个场景
+                          </FieldDescription>
+                        </FieldContent>
+                      </Field>
+                    );
+                  })}
                 </div>
-                <ul
-                  aria-label={`${option.summary}的冻结证据`}
-                  className="grid gap-1 text-xs text-muted-foreground"
-                >
-                  {option.evidence_refs.map((evidence) => (
-                    <li
-                      key={`${evidence.source_version_id}:${evidence.source_start}:${evidence.source_end}`}
-                    >
-                      原文区间 [{evidence.source_start}, {evidence.source_end}) ·{" "}
-                      {shortHash(evidence.text_hash)}
-                    </li>
-                  ))}
-                </ul>
-                {option.allowed_changes.map((change, index) => {
-                  const request = repairRequestFrom(option, change);
-                  const choiceKey = repairChoiceKey(request);
-                  return (
-                    <label
-                      className="flex cursor-pointer items-start gap-3 rounded-md p-3 text-sm hover:bg-muted/30 has-checked:bg-muted"
-                      key={`${change.operation}:${index}`}
-                    >
-                      <input
-                        checked={
-                          repairRequest ? repairChoiceKey(repairRequest) === choiceKey : false
-                        }
-                        className="mt-0.5 size-4"
-                        name={`repair-${task.id}`}
-                        onChange={() => onRepairChange(request)}
-                        type="radio"
-                      />
-                      <span>
-                        <span className="block font-medium">
-                          {repairOperationLabel(change.operation)}
-                        </span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {change.target_keys.join("、")} · {change.affected_scope_keys.length}{" "}
-                          个场景
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            ))}
-          </fieldset>
+              ))}
+            </RadioGroup>
+          </FieldSet>
         ) : null}
       </CardContent>
     </Card>

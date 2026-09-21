@@ -457,6 +457,7 @@ describe("真实项目生产入口", () => {
     await waitFor(() =>
       expect(within(creation).getByRole("button", { name: "固定原稿并开始创作" })).toBeEnabled(),
     );
+    await userEvent.setup().click(within(creation).getByRole("button", { name: "查看此次原稿" }));
     expect(
       within(creation).getByText(documentAnalysis.revision.normalized_text, {
         normalizer: (text) => text,

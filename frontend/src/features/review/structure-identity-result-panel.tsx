@@ -1,9 +1,10 @@
 "use client";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { appApiErrorMessage } from "@/lib/server-state";
-import { AlertCircle, LoaderCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Fact } from "./review-fact";
 import { shortHash, shortId } from "./review-presentation";
 
@@ -35,9 +36,7 @@ export function StructureIdentityResultPanel({
           </Alert>
         ) : !data ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {isFetching ? (
-              <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-            ) : null}
+            {isFetching ? <Spinner aria-hidden="true" className="size-4 animate-spin" /> : null}
             正在核对正式结构身份结果。
           </p>
         ) : !verified ? (

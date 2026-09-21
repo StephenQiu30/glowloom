@@ -84,6 +84,6 @@ describe("真实账户与工作空间设置", () => {
     await waitFor(() =>
       expect(apiMocks.createWorkspace).toHaveBeenCalledWith({ name: "青墨工作室" }),
     );
-    expect(await screen.findByRole("status")).toHaveTextContent("青墨工作室");
+    expect(await screen.findByText(/已创建工作空间.*青墨工作室|青墨工作室.*已创建/)).toBeVisible();
   });
 });

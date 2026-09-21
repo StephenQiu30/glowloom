@@ -1,6 +1,8 @@
 "use client";
 
-import { AlertCircle, ArrowRight, LoaderCircle } from "lucide-react";
+import { AlertCircle, ArrowRight } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,7 +14,6 @@ import { LayoutContainer } from "@/components/layout/layout-container";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { setAccessToken } from "@/lib/auth-session";
 import { appApiErrorMessage } from "@/lib/server-state";
 import { useLoginMutation } from "@/features/identity/endpoints";
@@ -69,13 +70,15 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             src="/assets/lanverse-studio/painting-girl-cover.png"
             unoptimized
           />
-          <div className="absolute inset-0 bg-linear-to-t from-black via-black/10 to-transparent" />
-          <div className="absolute right-12 bottom-12 left-12 pt-8 text-white">
-            <p className="font-mono text-xs text-white/60">视觉概念示例 · 她从画中来</p>
+          <div className="absolute inset-0 bg-linear-to-t from-artwork via-artwork/10 to-transparent" />
+          <div className="absolute right-12 bottom-12 left-12 pt-8 text-artwork-foreground">
+            <p className="font-mono text-xs text-artwork-foreground/60">
+              视觉概念示例 · 她从画中来
+            </p>
             <blockquote className="mt-4 max-w-xl text-3xl leading-11 font-medium tracking-[-0.03em]">
               “从已确认的事实继续，而不是从头重来。”
             </blockquote>
-            <div className="mt-6 flex gap-5 text-sm text-white/70">
+            <div className="mt-6 flex gap-5 text-sm text-artwork-foreground/70">
               <span>16 集</span>
               <span>水墨幻想</span>
               <span>9:16</span>
@@ -99,48 +102,48 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           {isRegister ? (
             <RegistrationForm hydrated={hydrated} />
           ) : (
-            <form className="mt-8 grid gap-5" onSubmit={handleSubmit}>
-              <div className="grid gap-2">
-                <Label htmlFor="email">邮箱</Label>
-                <Input
-                  className="h-10"
-                  autoComplete="email"
-                  disabled={!hydrated || submitting}
-                  id="email"
-                  name="email"
-                  placeholder="creator@example.com"
-                  required
-                  type="email"
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">密码</Label>
-                  <span className="text-xs text-muted-foreground">使用你的账户密码</span>
-                </div>
-                <Input
-                  className="h-10"
-                  autoComplete="current-password"
-                  disabled={!hydrated || submitting}
-                  id="password"
-                  name="password"
-                  placeholder="输入账户密码"
-                  required
-                  type="password"
-                />
-              </div>
-              {errorMessage ? (
-                <Alert variant="destructive">
-                  <AlertCircle aria-hidden="true" />
-                  <AlertTitle>登录失败</AlertTitle>
-                  <AlertDescription>{errorMessage}</AlertDescription>
-                </Alert>
-              ) : null}
-              <Button className="h-11" disabled={!hydrated || submitting} type="submit">
-                {submitting ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
-                登录
-                <ArrowRight aria-hidden="true" />
-              </Button>
+            <form onSubmit={handleSubmit}>
+              <FieldGroup className="mt-8 grid gap-5">
+                <Field data-disabled={!hydrated || submitting}>
+                  <FieldLabel htmlFor="email">邮箱</FieldLabel>
+                  <Input
+                    autoComplete="email"
+                    disabled={!hydrated || submitting}
+                    id="email"
+                    name="email"
+                    placeholder="creator@example.com"
+                    required
+                    type="email"
+                  />
+                </Field>
+                <Field data-disabled={!hydrated || submitting}>
+                  <div className="flex items-center justify-between">
+                    <FieldLabel htmlFor="password">密码</FieldLabel>
+                    <span className="text-xs text-muted-foreground">使用你的账户密码</span>
+                  </div>
+                  <Input
+                    autoComplete="current-password"
+                    disabled={!hydrated || submitting}
+                    id="password"
+                    name="password"
+                    placeholder="输入账户密码"
+                    required
+                    type="password"
+                  />
+                </Field>
+                {errorMessage ? (
+                  <Alert variant="destructive">
+                    <AlertCircle aria-hidden="true" />
+                    <AlertTitle>登录失败</AlertTitle>
+                    <AlertDescription>{errorMessage}</AlertDescription>
+                  </Alert>
+                ) : null}
+                <Button size="lg" disabled={!hydrated || submitting} type="submit">
+                  {submitting ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
+                  登录
+                  <ArrowRight data-icon="inline-start" aria-hidden="true" />
+                </Button>
+              </FieldGroup>
             </form>
           )}
           <p className="mt-6 text-center text-sm text-muted-foreground">

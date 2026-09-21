@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { stageLabels } from "./proposal-content";
 import { proposalTitle } from "./proposal-context";
@@ -24,9 +25,9 @@ export function ProposalNavigation({
   return (
     <nav
       aria-label="创作内容目录"
-      className="min-w-0 space-y-5 lg:sticky lg:top-6 lg:max-h-[85dvh] lg:overflow-y-auto lg:pr-3"
+      className="flex flex-col min-w-0 gap-5 lg:sticky lg:top-6 lg:max-h-[85dvh] lg:overflow-y-auto lg:pr-3"
     >
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold">创作内容</h2>
         <Input
           aria-label="查找剧集或场景"
@@ -39,18 +40,19 @@ export function ProposalNavigation({
         const items = filtered.filter((item) => item.stage === stage);
         if (query && !items.length) return null;
         return (
-          <section className="space-y-2" key={stage}>
+          <section className="flex flex-col gap-2" key={stage}>
             <h3 className="text-xs font-medium text-muted-foreground">
               {label} · {items.length}
             </h3>
             {items.length ? (
-              <ul className="space-y-1">
+              <ul className="flex flex-col gap-1">
                 {items.map((proposal) => (
                   <li key={proposal.id}>
-                    <button
+                    <Button
+                      variant="ghost"
                       type="button"
                       aria-current={selectedId === proposal.id ? "true" : undefined}
-                      className={`w-full rounded-md px-3 py-3 text-left text-sm ${selectedId === proposal.id ? "bg-accent" : "hover:bg-muted"}`}
+                      className="h-auto w-full flex-col items-start gap-1 px-3 py-3 text-left whitespace-normal"
                       onClick={() => onSelect(proposal.id)}
                     >
                       <span className="block break-words font-medium">
@@ -59,7 +61,7 @@ export function ProposalNavigation({
                       <span className="mt-1 block text-xs text-muted-foreground">
                         {proposal.status === "accepted" ? "已采纳" : "待审阅"}
                       </span>
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>

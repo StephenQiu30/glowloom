@@ -11,10 +11,7 @@ export function ProjectServerCard({ project }: { project: API.ProjectResponse })
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                className={project.status === "active" ? "bg-muted text-foreground" : ""}
-                variant="outline"
-              >
+              <Badge variant={project.status === "active" ? "secondary" : "outline"}>
                 {project.status === "active" ? "制作中" : "已归档"}
               </Badge>
               <Badge variant="outline">{project.aspect_ratio}</Badge>
@@ -22,13 +19,13 @@ export function ProjectServerCard({ project }: { project: API.ProjectResponse })
             <CardTitle className="mt-4 truncate text-xl">{project.name}</CardTitle>
           </div>
           <ArrowUpRight
-            className="size-5 shrink-0 text-slate-300 transition group-hover:text-foreground"
+            className="size-5 shrink-0 text-muted-foreground transition group-hover:text-foreground"
             aria-hidden="true"
           />
         </div>
       </CardHeader>
       <CardContent>
-        <p className="line-clamp-2 min-h-12 text-sm leading-6 text-slate-500">
+        <p className="line-clamp-2 min-h-12 text-sm leading-6 text-muted-foreground">
           {project.description || "尚未填写项目简介"}
         </p>
         <div className="mt-5 flex flex-wrap gap-4 pt-4 text-xs text-muted-foreground">

@@ -1,5 +1,3 @@
-"use client";
-
 import { type ReactNode } from "react";
 
 import { BasicFooter } from "./basic-footer";
@@ -14,6 +12,8 @@ export function BasicLayout({
   currentStep,
   projectName,
   role,
+  onLogout,
+  loggingOut,
   viewer,
 }: {
   active?: StudioNavigation;
@@ -23,6 +23,8 @@ export function BasicLayout({
   currentStep?: number;
   projectName?: string;
   role?: WorkspaceRole;
+  onLogout?: () => void;
+  loggingOut?: boolean;
   viewer?: LayoutViewer;
 }) {
   const hasProjectContext = Boolean(projectName);
@@ -46,6 +48,8 @@ export function BasicLayout({
           currentStep={currentStep}
           projectName={projectName}
           role={role}
+          onLogout={onLogout}
+          loggingOut={loggingOut}
           viewer={viewer}
         />
         <main className="basic-layout__main" id="main" tabIndex={-1}>

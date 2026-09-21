@@ -1,6 +1,8 @@
 "use client";
 
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Mail } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Mail } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 
@@ -8,7 +10,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { setAccessToken } from "@/lib/auth-session";
 import { appApiErrorMessage } from "@/lib/server-state";
 import {
@@ -116,149 +117,151 @@ export function RegistrationForm({ hydrated }: { hydrated: boolean }) {
 
   if (step === "email") {
     return (
-      <form className="mt-8 grid gap-5" key="email" onSubmit={handleEmailSubmit}>
-        <p className="text-xs font-medium text-muted-foreground">步骤 1 / 3 · 验证邮箱</p>
-        <div className="grid gap-2">
-          <Label htmlFor="registration-email">邮箱</Label>
-          <Input
-            autoComplete="email"
-            className="h-10"
-            disabled={!hydrated || requesting}
-            id="registration-email"
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="creator@example.com"
-            required
-            type="email"
-            value={email}
-          />
-        </div>
-        {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
-        <Button className="h-11" disabled={!hydrated || requesting} type="submit">
-          {requesting ? (
-            <LoaderCircle className="animate-spin" aria-hidden="true" />
-          ) : (
-            <Mail aria-hidden="true" />
-          )}
-          发送验证码
-        </Button>
+      <form key="email" onSubmit={handleEmailSubmit}>
+        <FieldGroup className="mt-8 grid gap-5">
+          <p className="text-xs font-medium text-muted-foreground">步骤 1 / 3 · 验证邮箱</p>
+          <Field data-disabled={!hydrated || requesting}>
+            <FieldLabel htmlFor="registration-email">邮箱</FieldLabel>
+            <Input
+              autoComplete="email"
+              disabled={!hydrated || requesting}
+              id="registration-email"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="creator@example.com"
+              required
+              type="email"
+              value={email}
+            />
+          </Field>
+          {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
+          <Button size="lg" disabled={!hydrated || requesting} type="submit">
+            {requesting ? (
+              <Spinner data-icon="inline-start" aria-hidden="true" />
+            ) : (
+              <Mail data-icon="inline-start" aria-hidden="true" />
+            )}
+            发送验证码
+          </Button>
+        </FieldGroup>
       </form>
     );
   }
 
   if (step === "verification") {
     return (
-      <form className="mt-8 grid gap-5" key="verification" onSubmit={handleVerificationSubmit}>
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-xs font-medium text-muted-foreground">步骤 2 / 3 · 输入验证码</p>
-          <Button onClick={editEmail} size="sm" type="button" variant="ghost">
-            <ArrowLeft aria-hidden="true" />
-            修改邮箱
+      <form key="verification" onSubmit={handleVerificationSubmit}>
+        <FieldGroup className="mt-8 grid gap-5">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs font-medium text-muted-foreground">步骤 2 / 3 · 输入验证码</p>
+            <Button onClick={editEmail} size="sm" type="button" variant="ghost">
+              <ArrowLeft data-icon="inline-start" aria-hidden="true" />
+              修改邮箱
+            </Button>
+          </div>
+          <Alert>
+            {emailSent ? <Mail aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}
+            <AlertTitle>{emailSent ? "检查你的邮箱" : "未发送验证码"}</AlertTitle>
+            <AlertDescription>
+              {emailSent
+                ? `验证码已经发送至 ${email}。`
+                : "本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"}
+            </AlertDescription>
+          </Alert>
+          <Field data-disabled={!hydrated || confirming}>
+            <FieldLabel htmlFor="registration-code">验证码</FieldLabel>
+            <Input
+              autoComplete="one-time-code"
+              disabled={!hydrated || confirming}
+              id="registration-code"
+              inputMode="numeric"
+              maxLength={6}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              pattern="\d{6}"
+              placeholder="6 位数字"
+              required
+              value={code}
+            />
+          </Field>
+          {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
+          <Button size="lg" disabled={!hydrated || confirming || code.length !== 6} type="submit">
+            {confirming ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
+            确认验证码
+            <ArrowRight data-icon="inline-start" aria-hidden="true" />
           </Button>
-        </div>
-        <Alert>
-          {emailSent ? <Mail aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}
-          <AlertTitle>{emailSent ? "检查你的邮箱" : "未发送验证码"}</AlertTitle>
-          <AlertDescription>
-            {emailSent
-              ? `验证码已经发送至 ${email}。`
-              : "本次未发送验证码，请检查邮箱是否可用于注册，或直接登录。"}
-          </AlertDescription>
-        </Alert>
-        <div className="grid gap-2">
-          <Label htmlFor="registration-code">验证码</Label>
-          <Input
-            autoComplete="one-time-code"
-            className="h-10"
-            disabled={!hydrated || confirming}
-            id="registration-code"
-            inputMode="numeric"
-            maxLength={6}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            pattern="\d{6}"
-            placeholder="6 位数字"
-            required
-            value={code}
-          />
-        </div>
-        {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
-        <Button
-          className="h-11"
-          disabled={!hydrated || confirming || code.length !== 6}
-          type="submit"
-        >
-          {confirming ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
-          确认验证码
-          <ArrowRight aria-hidden="true" />
-        </Button>
-        <Button
-          disabled={!hydrated || requesting || retryAfter > 0}
-          onClick={sendCode}
-          type="button"
-          variant="ghost"
-        >
-          <span aria-live="polite">
-            {retryAfter > 0 ? `${retryAfter} 秒后可重新发送` : "重新发送验证码"}
-          </span>
-        </Button>
+          <Button
+            disabled={!hydrated || requesting || retryAfter > 0}
+            onClick={sendCode}
+            type="button"
+            variant="ghost"
+          >
+            <span aria-live="polite">
+              {retryAfter > 0 ? `${retryAfter} 秒后可重新发送` : "重新发送验证码"}
+            </span>
+          </Button>
+        </FieldGroup>
       </form>
     );
   }
 
   return (
-    <form className="mt-8 grid gap-5" key="profile" onSubmit={handleRegistrationSubmit}>
-      <p className="text-xs font-medium text-muted-foreground">步骤 3 / 3 · 创建账号</p>
-      <Alert>
-        <CheckCircle2 aria-hidden="true" />
-        <AlertTitle>邮箱已验证</AlertTitle>
-        <AlertDescription>{email}</AlertDescription>
-      </Alert>
-      <div className="grid gap-2">
-        <Label htmlFor="displayName">显示名称</Label>
-        <Input
-          autoComplete="name"
-          className="h-10"
-          disabled={!hydrated || registering}
-          id="displayName"
-          name="displayName"
-          placeholder="你的创作署名"
-          required
-        />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="registration-password">密码</Label>
-        <Input
-          autoComplete="new-password"
-          className="h-10"
-          disabled={!hydrated || registering}
-          id="registration-password"
-          minLength={12}
-          name="password"
-          placeholder="输入账户密码"
-          required
-          type="password"
-        />
-        <p className="text-xs text-muted-foreground">至少 12 个字符，建议包含数字与符号。</p>
-      </div>
-      <div className="flex items-start gap-2">
-        <Checkbox
-          checked={agreed}
-          disabled={!hydrated || registering}
-          id="registration-agreement"
-          onCheckedChange={(checked) => setAgreed(checked === true)}
-        />
-        <Label
-          className="pt-0.5 leading-5 font-normal text-muted-foreground"
-          htmlFor="registration-agreement"
+    <form key="profile" onSubmit={handleRegistrationSubmit}>
+      <FieldGroup className="mt-8 grid gap-5">
+        <p className="text-xs font-medium text-muted-foreground">步骤 3 / 3 · 创建账号</p>
+        <Alert>
+          <CheckCircle2 aria-hidden="true" />
+          <AlertTitle>邮箱已验证</AlertTitle>
+          <AlertDescription>{email}</AlertDescription>
+        </Alert>
+        <Field data-disabled={!hydrated || registering}>
+          <FieldLabel htmlFor="displayName">显示名称</FieldLabel>
+          <Input
+            autoComplete="name"
+            disabled={!hydrated || registering}
+            id="displayName"
+            name="displayName"
+            placeholder="你的创作署名"
+            required
+          />
+        </Field>
+        <Field data-disabled={!hydrated || registering}>
+          <FieldLabel htmlFor="registration-password">密码</FieldLabel>
+          <Input
+            autoComplete="new-password"
+            disabled={!hydrated || registering}
+            id="registration-password"
+            minLength={12}
+            name="password"
+            placeholder="输入账户密码"
+            required
+            type="password"
+          />
+          <p className="text-xs text-muted-foreground">至少 12 个字符，建议包含数字与符号。</p>
+        </Field>
+        <Field
+          data-disabled={!hydrated || registering}
+          orientation="horizontal"
+          className="flex items-start gap-2"
         >
-          我已阅读并同意服务协议与隐私政策
-        </Label>
-      </div>
-      {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
-      <Button className="h-11" disabled={!hydrated || registering || !agreed} type="submit">
-        {registering ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
-        注册并开始创作
-        <ArrowRight aria-hidden="true" />
-      </Button>
+          <Checkbox
+            checked={agreed}
+            disabled={!hydrated || registering}
+            id="registration-agreement"
+            onCheckedChange={(checked) => setAgreed(checked === true)}
+          />
+          <FieldLabel
+            className="pt-0.5 leading-5 font-normal text-muted-foreground"
+            htmlFor="registration-agreement"
+          >
+            我已阅读并同意服务协议与隐私政策
+          </FieldLabel>
+        </Field>
+        {errorMessage ? <ErrorAlert message={errorMessage} /> : null}
+        <Button size="lg" disabled={!hydrated || registering || !agreed} type="submit">
+          {registering ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
+          注册并开始创作
+          <ArrowRight data-icon="inline-start" aria-hidden="true" />
+        </Button>
+      </FieldGroup>
     </form>
   );
 }

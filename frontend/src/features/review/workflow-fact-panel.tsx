@@ -1,8 +1,9 @@
 "use client";
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, LoaderCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { appApiErrorMessage } from "@/lib/server-state";
 import { Fact } from "./review-fact";
 import { shortId, shortHash } from "./review-presentation";
@@ -39,9 +40,7 @@ export function WorkflowFactPanel({
           </Alert>
         ) : !run || !gateNode ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {isFetching ? (
-              <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-            ) : null}
+            {isFetching ? <Spinner aria-hidden="true" className="size-4 animate-spin" /> : null}
             正在重取 WorkflowRun 与审核节点事实。
           </p>
         ) : (

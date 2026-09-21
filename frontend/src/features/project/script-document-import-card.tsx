@@ -1,6 +1,8 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, FileText, FileUp, LoaderCircle, RotateCcw } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, FileUp, RotateCcw } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
 import { type FormEvent, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -11,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { Label } from "@/components/ui/label";
 import { appApiErrorMessage } from "@/lib/server-state";
 import {
   useCompleteMediaUploadMutation,
@@ -266,124 +267,126 @@ export function ScriptDocumentImportCard({
             analysis ? "grid gap-7 pt-6 xl:grid-cols-[minmax(0,1fr)_360px]" : "grid gap-7 pt-6"
           }
         >
-          <form className="grid gap-5" onSubmit={createPreview}>
-            <div className="grid gap-2">
-              <Label htmlFor="scriptDocumentFile">剧本文档</Label>
-              <Input
-                accept={ACCEPTED_SCRIPT_FILES}
-                disabled={!canWrite || busy}
-                id="scriptDocumentFile"
-                ref={fileInput}
-                type="file"
-                onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
-              />
-              <p className="text-xs text-muted-foreground">
-                支持 .docx 和 .md；文件容量由对象存储安全策略校验，不设置剧本业务上限。
-              </p>
-            </div>
+          <form onSubmit={createPreview}>
+            <FieldGroup className="grid gap-5">
+              <Field data-disabled={!canWrite || busy}>
+                <FieldLabel htmlFor="scriptDocumentFile">剧本文档</FieldLabel>
+                <Input
+                  accept={ACCEPTED_SCRIPT_FILES}
+                  disabled={!canWrite || busy}
+                  id="scriptDocumentFile"
+                  ref={fileInput}
+                  type="file"
+                  onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  支持 .docx 和 .md；文件容量由对象存储安全策略校验，不设置剧本业务上限。
+                </p>
+              </Field>
 
-            {file ? (
-              <Item className="border-0">
-                <ItemMedia variant="icon">
-                  <FileText className="size-5" aria-hidden="true" />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle>{file.name}</ItemTitle>
-                  <ItemDescription>
-                    {documentKind(file)} · {fileSize(file.size)}
-                  </ItemDescription>
-                </ItemContent>
-                <Badge variant="outline">{preview ? "已读取" : "等待预览"}</Badge>
-              </Item>
-            ) : null}
-
-            {analysis && !file && !preview ? (
-              <>
+              {file ? (
                 <Item className="border-0">
                   <ItemMedia variant="icon">
-                    <FileText className="size-5" aria-hidden="true" />
+                    <FileText data-icon="inline-start" aria-hidden="true" />
                   </ItemMedia>
                   <ItemContent>
-                    <ItemTitle>{analysis.document.title}</ItemTitle>
+                    <ItemTitle>{file.name}</ItemTitle>
                     <ItemDescription>
-                      不可变版本 v{analysis.revision.version_no} ·{" "}
-                      {analysis.revision.codepoint_count.toLocaleString()} 个字符
+                      {documentKind(file)} · {fileSize(file.size)}
                     </ItemDescription>
                   </ItemContent>
-                  <Badge variant="outline">已固定</Badge>
+                  <Badge variant="outline">{preview ? "已读取" : "等待预览"}</Badge>
                 </Item>
-                <Alert className="border-0 bg-muted/50" role="status">
-                  <CheckCircle2 aria-hidden="true" />
-                  <AlertTitle>原稿已固定</AlertTitle>
-                  <AlertDescription>
-                    已恢复当前原稿版本，可在下方查看或启动 AI 分集、场景与人物分析。
-                  </AlertDescription>
+              ) : null}
+
+              {analysis && !file && !preview ? (
+                <>
+                  <Item className="border-0">
+                    <ItemMedia variant="icon">
+                      <FileText data-icon="inline-start" aria-hidden="true" />
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>{analysis.document.title}</ItemTitle>
+                      <ItemDescription>
+                        不可变版本 v{analysis.revision.version_no} ·{" "}
+                        {analysis.revision.codepoint_count.toLocaleString()} 个字符
+                      </ItemDescription>
+                    </ItemContent>
+                    <Badge variant="outline">已固定</Badge>
+                  </Item>
+                  <Alert role="status">
+                    <CheckCircle2 aria-hidden="true" />
+                    <AlertTitle>原稿已固定</AlertTitle>
+                    <AlertDescription>
+                      已恢复当前原稿版本，可在下方查看或启动 AI 分集、场景与人物分析。
+                    </AlertDescription>
+                  </Alert>
+                </>
+              ) : null}
+
+              {actionError ? (
+                <Alert variant="destructive">
+                  <AlertCircle aria-hidden="true" />
+                  <AlertTitle>操作未完成</AlertTitle>
+                  <AlertDescription>{actionError}</AlertDescription>
                 </Alert>
-              </>
-            ) : null}
+              ) : null}
+              {notice ? (
+                <Alert role="status">
+                  <CheckCircle2 aria-hidden="true" />
+                  <AlertTitle>{analysis ? "原稿已固定" : "预览已就绪"}</AlertTitle>
+                  <AlertDescription>{notice}</AlertDescription>
+                </Alert>
+              ) : null}
 
-            {actionError ? (
-              <Alert variant="destructive">
-                <AlertCircle aria-hidden="true" />
-                <AlertTitle>操作未完成</AlertTitle>
-                <AlertDescription>{actionError}</AlertDescription>
-              </Alert>
-            ) : null}
-            {notice ? (
-              <Alert className="border-0 bg-muted/50" role="status">
-                <CheckCircle2 aria-hidden="true" />
-                <AlertTitle>{analysis ? "原稿已固定" : "预览已就绪"}</AlertTitle>
-                <AlertDescription>{notice}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {!preview ? (
-              <Button disabled={!canWrite || uploadBusy || !file} type="submit">
-                {uploadBusy ? (
-                  <LoaderCircle className="animate-spin" aria-hidden="true" />
-                ) : (
-                  <FileUp aria-hidden="true" />
-                )}
-                上传并预览
-              </Button>
-            ) : (
-              <section
-                aria-label="剧本内容预览"
-                className="grid gap-4 bg-muted/35 p-5"
-                role="region"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-medium">剧本内容预览</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {preview.codepoint_count.toLocaleString()} 个字符 · 尚未创建剧集
-                    </p>
+              {!preview ? (
+                <Button disabled={!canWrite || uploadBusy || !file} type="submit">
+                  {uploadBusy ? (
+                    <Spinner data-icon="inline-start" aria-hidden="true" />
+                  ) : (
+                    <FileUp data-icon="inline-start" aria-hidden="true" />
+                  )}
+                  上传并预览
+                </Button>
+              ) : (
+                <section
+                  aria-label="剧本内容预览"
+                  className="grid gap-4 bg-muted/35 p-5"
+                  role="region"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-medium">剧本内容预览</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {preview.codepoint_count.toLocaleString()} 个字符 · 尚未创建剧集
+                      </p>
+                    </div>
+                    <Badge variant="outline">等待确认</Badge>
                   </div>
-                  <Badge variant="outline">等待确认</Badge>
-                </div>
-                <div className="max-h-[520px] overflow-auto bg-transparent p-5 text-sm leading-7 whitespace-pre-wrap [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:my-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:text-lg [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:bg-muted [&_pre]:p-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:bg-muted [&_th]:p-2">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.raw_text}</ReactMarkdown>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button disabled={busy} onClick={resetFile} type="button" variant="outline">
-                    <RotateCcw aria-hidden="true" />
-                    重新选择
-                  </Button>
-                  <Button
-                    disabled={!canWrite || busy || Boolean(analysis)}
-                    onClick={confirmAndAnalyze}
-                    type="button"
-                  >
-                    {importState.isLoading ? (
-                      <LoaderCircle className="animate-spin" aria-hidden="true" />
-                    ) : (
-                      <CheckCircle2 aria-hidden="true" />
-                    )}
-                    {analysis ? "原稿已固定" : "确认并固定原稿"}
-                  </Button>
-                </div>
-              </section>
-            )}
+                  <div className="max-h-[520px] overflow-auto bg-transparent p-5 text-sm leading-7 whitespace-pre-wrap [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:my-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:text-lg [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:bg-muted [&_pre]:p-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:bg-muted [&_th]:p-2">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.raw_text}</ReactMarkdown>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={busy} onClick={resetFile} type="button" variant="outline">
+                      <RotateCcw data-icon="inline-start" aria-hidden="true" />
+                      重新选择
+                    </Button>
+                    <Button
+                      disabled={!canWrite || busy || Boolean(analysis)}
+                      onClick={confirmAndAnalyze}
+                      type="button"
+                    >
+                      {importState.isLoading ? (
+                        <Spinner data-icon="inline-start" aria-hidden="true" />
+                      ) : (
+                        <CheckCircle2 data-icon="inline-start" aria-hidden="true" />
+                      )}
+                      {analysis ? "原稿已固定" : "确认并固定原稿"}
+                    </Button>
+                  </div>
+                </section>
+              )}
+            </FieldGroup>
           </form>
 
           {analysis ? (

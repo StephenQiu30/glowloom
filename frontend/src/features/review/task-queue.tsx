@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "@/components/system/page-loading";
 import {
   type TaskFilter,
   taskFilterLabels,
@@ -8,8 +9,17 @@ import {
   shortId,
 } from "./review-presentation";
 import { Badge } from "@/components/ui/badge";
-import { LoaderCircle } from "lucide-react";
-import { cn } from "@/lib/class-names";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
 
 export function TaskQueue({
   isLoading,
@@ -36,38 +46,43 @@ export function TaskQueue({
         <Badge variant="outline">{tasks.length}</Badge>
       </div>
       <div className="p-4">
-        <label className="grid gap-1.5 text-xs font-medium" htmlFor="review-task-status">
-          任务状态筛选
-          <select
-            className="h-9 rounded-md border-0 bg-background shadow-border focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring px-3 text-sm"
-            id="review-task-status"
-            onChange={(event) => onFilterChange(event.target.value as TaskFilter)}
+        <Field>
+          <FieldLabel htmlFor="review-task-status">任务状态筛选</FieldLabel>
+          <Select
             value={statusFilter}
+            onValueChange={(value) => onFilterChange(value as TaskFilter)}
           >
-            {Object.entries(taskFilterLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger id="review-task-status" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {Object.entries(taskFilterLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
       </div>
       {isLoading ? (
-        <div className="grid min-h-32 place-items-center">
-          <LoaderCircle aria-label="正在加载审核队列" className="size-4 animate-spin" />
-        </div>
+        <PageLoading label="正在加载审核队列" />
       ) : tasks.length === 0 ? (
-        <p className="p-6 text-center text-sm text-muted-foreground">当前筛选下没有审核任务。</p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyDescription>当前筛选下没有审核任务。</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <ul className="divide-y">
+        <ul className="flex flex-col gap-1">
           {tasks.map((task) => (
             <li key={task.id}>
-              <button
+              <Button
+                variant="ghost"
                 aria-pressed={selectedTaskId === task.id}
-                className={cn(
-                  "w-full p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                  selectedTaskId === task.id && "bg-muted/70",
-                )}
+                className="h-auto w-full flex-col items-stretch gap-2 p-4 text-left whitespace-normal"
                 onClick={() => onSelect(task.id)}
                 type="button"
               >
@@ -82,7 +97,7 @@ export function TaskQueue({
                 <span className="mt-2 block truncate font-mono text-[11px] text-muted-foreground">
                   {shortId(task.id)} · revision {task.revision}
                 </span>
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

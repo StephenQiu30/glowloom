@@ -1,6 +1,9 @@
 "use client";
+import { toast } from "sonner";
 
-import { AlertCircle, CheckCircle2, LoaderCircle, Sparkles } from "lucide-react";
+import { AlertCircle, Sparkles } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { FieldLabel } from "@/components/ui/field";
 import { useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { appApiErrorMessage } from "@/lib/server-state";
 import {
   useConfirmEpisodePlanMutation,
@@ -37,7 +39,7 @@ export function EpisodePlanWorkspace({
   const [plan, setPlan] = useState<API.EpisodePlanDetailResponse | null>(null);
   const [commit, setCommit] = useState<API.ImportCommitDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+
   const busy =
     createState.isLoading ||
     confirmState.isLoading ||
@@ -46,7 +48,7 @@ export function EpisodePlanWorkspace({
 
   async function run<T>(operation: () => Promise<T>): Promise<T | null> {
     setError(null);
-    setNotice(null);
+
     try {
       return await operation();
     } catch (cause: unknown) {
@@ -122,7 +124,9 @@ export function EpisodePlanWorkspace({
     );
     if (published) {
       setCommit(published);
-      setNotice(`${plan.proposals.length} 集剧本已批量发布；每集均已生成待确认的场景与制作任务。`);
+      toast.success(
+        `${plan.proposals.length} 集剧本已批量发布；每集均已生成待确认的场景与制作任务。`,
+      );
     }
   }
 
@@ -145,13 +149,6 @@ export function EpisodePlanWorkspace({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
-        {notice ? (
-          <Alert role="status">
-            <CheckCircle2 aria-hidden="true" />
-            <AlertTitle>批量发布完成</AlertTitle>
-            <AlertDescription>{notice}</AlertDescription>
-          </Alert>
-        ) : null}
 
         {!plan ? (
           <div className="flex flex-wrap items-center justify-between gap-4 bg-muted/45 p-5">
@@ -162,7 +159,7 @@ export function EpisodePlanWorkspace({
               </p>
             </div>
             <Button disabled={!canWrite || busy} onClick={create}>
-              {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
+              {busy ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
               生成确定性分集计划
             </Button>
           </div>
@@ -191,9 +188,9 @@ export function EpisodePlanWorkspace({
             <div className="grid gap-4 md:grid-cols-2">
               {plan.proposals.map((proposal) => (
                 <article className="py-4" key={proposal.id}>
-                  <Label htmlFor={`episode-title-${proposal.id}`}>
+                  <FieldLabel htmlFor={`episode-title-${proposal.id}`}>
                     第 {proposal.position} 集标题
-                  </Label>
+                  </FieldLabel>
                   <Input
                     className="mt-2"
                     id={`episode-title-${proposal.id}`}

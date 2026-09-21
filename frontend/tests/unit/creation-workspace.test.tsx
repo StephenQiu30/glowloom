@@ -209,6 +209,7 @@ describe("文本核心闭环", () => {
     );
     expect(await screen.findByRole("button", { name: "批准草案" })).toBeDisabled();
     expect(screen.getByRole("region", { name: "镜头 1" })).toHaveTextContent("门把上的手，停顿。");
+    await user.click(screen.getByRole("button", { name: /原文来源与固定版本/ }));
     expect(screen.getByText("甲😀")).toBeInTheDocument();
     await user.type(
       screen.getByLabelText("处理说明：跨场状态与披露需要人工核对"),

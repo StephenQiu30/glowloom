@@ -269,8 +269,8 @@ describe("分集计划向导", () => {
       { commit_id: "019ff900-a000-7000-8000-000000000030" },
       expect.objectContaining({ expected_revision: 2 }),
     );
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "2 集剧本已批量发布；每集均已生成待确认的场景与制作任务。",
-    );
+    expect(
+      await screen.findByText("2 集剧本已批量发布；每集均已生成待确认的场景与制作任务。"),
+    ).toBeInTheDocument();
   });
 });

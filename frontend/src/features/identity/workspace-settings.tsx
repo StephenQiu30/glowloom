@@ -1,12 +1,11 @@
 "use client";
 
+import { PageLoading } from "@/components/system/page-loading";
 import {
   AlertCircle,
   Archive,
   ArrowRight,
-  CheckCircle2,
   KeyRound,
-  LoaderCircle,
   Plus,
   RotateCcw,
   Save,
@@ -14,10 +13,19 @@ import {
   UserX,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { cn } from "@/lib/class-names";
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+  InputGroupButton,
+} from "@/components/ui/input-group";
+import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
 import { type FormEvent, useState } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell } from "@/features/identity/studio-shell";
 import { PageHeader } from "@/components/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -26,8 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { Label } from "@/components/ui/label";
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
 import { clearAccessToken } from "@/lib/auth-session";
 import { appApiErrorMessage } from "@/lib/server-state";
 import {
@@ -58,14 +65,12 @@ export function WorkspaceSettings() {
   const [setWorkspaceArchived, archiveState] = useSetWorkspaceArchivedMutation();
   const [changePassword, passwordState] = useChangePasswordMutation();
   const [deactivateAccount, deactivateState] = useDeactivateAccountMutation();
-  const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function runAction(action: () => Promise<string>): Promise<boolean> {
-    setNotice(null);
     setActionError(null);
     try {
-      setNotice(await action());
+      toast.success(await action());
       return true;
     } catch (error: unknown) {
       setActionError(appApiErrorMessage(error));
@@ -169,9 +174,7 @@ export function WorkspaceSettings() {
   if (sessionState === "checking") {
     return (
       <StudioShell active="settings">
-        <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle aria-label="正在读取登录状态" className="animate-spin text-foreground" />
-        </div>
+        <PageLoading label="正在读取登录状态" />
       </StudioShell>
     );
   }
@@ -190,7 +193,7 @@ export function WorkspaceSettings() {
     >
       <LayoutContainer className="py-9">
         {!authenticated ? (
-          <Alert className="bg-amber-50 text-amber-800">
+          <Alert>
             <AlertCircle aria-hidden="true" />
             <AlertTitle>需要登录</AlertTitle>
             <AlertDescription>
@@ -206,9 +209,7 @@ export function WorkspaceSettings() {
             <AlertDescription>{appApiErrorMessage(pageError)}</AlertDescription>
           </Alert>
         ) : !me.data || !workspacesQuery.data ? (
-          <div className="grid min-h-96 place-items-center">
-            <LoaderCircle aria-label="正在加载账户设置" className="animate-spin text-foreground" />
-          </div>
+          <PageLoading label="正在加载账户设置" />
         ) : (
           <>
             <PageHeader
@@ -216,7 +217,7 @@ export function WorkspaceSettings() {
                 <Button asChild>
                   <Link href="/projects">
                     返回项目
-                    <ArrowRight aria-hidden="true" />
+                    <ArrowRight data-icon="inline-start" aria-hidden="true" />
                   </Link>
                 </Button>
               }
@@ -225,15 +226,6 @@ export function WorkspaceSettings() {
               title="账户与工作空间"
             />
 
-            {notice ? (
-              <div
-                className="mt-6 flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-                role="status"
-              >
-                <CheckCircle2 className="size-4" aria-hidden="true" />
-                {notice}
-              </div>
-            ) : null}
             {actionError ? (
               <Alert className="mt-6" variant="destructive">
                 <AlertCircle aria-hidden="true" />
@@ -243,67 +235,79 @@ export function WorkspaceSettings() {
             ) : null}
 
             <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_340px]">
-              <Card className="p-6">
-                <Item className="p-0">
-                  <ItemMedia>
-                    <Avatar size="lg">
-                      <AvatarFallback>
-                        {(me.data.user.display_name || me.data.user.email)
-                          .slice(0, 1)
-                          .toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle className="text-lg">个人资料</ItemTitle>
-                    <ItemDescription>{me.data.user.email}</ItemDescription>
-                  </ItemContent>
-                </Item>
-                <form className="mt-6 grid gap-5" onSubmit={saveProfile}>
-                  <div className="grid gap-2">
-                    <Label htmlFor="displayName">显示名称</Label>
-                    <Input
-                      defaultValue={me.data.user.display_name ?? ""}
-                      id="displayName"
-                      name="displayName"
-                      maxLength={120}
-                    />
-                  </div>
-                  <div>
-                    <Button disabled={busy} type="submit">
-                      <Save aria-hidden="true" />
-                      保存个人资料
-                    </Button>
-                  </div>
-                </form>
+              <Card>
+                <CardHeader>
+                  <Item className="p-0">
+                    <ItemMedia>
+                      <Avatar size="lg">
+                        <AvatarFallback>
+                          {(me.data.user.display_name || me.data.user.email)
+                            .slice(0, 1)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle className="text-lg">个人资料</ItemTitle>
+                      <ItemDescription>{me.data.user.email}</ItemDescription>
+                    </ItemContent>
+                  </Item>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={saveProfile}>
+                    <FieldGroup className="mt-6 grid gap-5">
+                      <Field>
+                        <FieldLabel htmlFor="displayName">显示名称</FieldLabel>
+                        <Input
+                          defaultValue={me.data.user.display_name ?? ""}
+                          id="displayName"
+                          name="displayName"
+                          maxLength={120}
+                        />
+                      </Field>
+                      <div>
+                        <Button disabled={busy} type="submit">
+                          <Save data-icon="inline-start" aria-hidden="true" />
+                          保存个人资料
+                        </Button>
+                      </div>
+                    </FieldGroup>
+                  </form>
+                </CardContent>
               </Card>
 
-              <Card className="p-6">
-                <Item className="p-0">
-                  <ItemMedia variant="icon">
-                    <Plus aria-hidden="true" />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>创建工作空间</ItemTitle>
-                    <ItemDescription>隔离不同团队与项目</ItemDescription>
-                  </ItemContent>
-                </Item>
-                <form className="mt-6 grid gap-4" onSubmit={createNewWorkspace}>
-                  <div className="grid gap-2">
-                    <Label htmlFor="workspaceName">空间名称</Label>
-                    <Input
-                      id="workspaceName"
-                      name="workspaceName"
-                      placeholder="例如：青墨工作室"
-                      required
-                      maxLength={120}
-                    />
-                  </div>
-                  <Button disabled={busy} type="submit">
-                    <Plus aria-hidden="true" />
-                    创建工作空间
-                  </Button>
-                </form>
+              <Card>
+                <CardHeader>
+                  <Item className="p-0">
+                    <ItemMedia variant="icon">
+                      <Plus data-icon="inline-start" aria-hidden="true" />
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>创建工作空间</ItemTitle>
+                      <ItemDescription>隔离不同团队与项目</ItemDescription>
+                    </ItemContent>
+                  </Item>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={createNewWorkspace}>
+                    <FieldGroup className="mt-6 grid gap-4">
+                      <Field>
+                        <FieldLabel htmlFor="workspaceName">空间名称</FieldLabel>
+                        <Input
+                          id="workspaceName"
+                          name="workspaceName"
+                          placeholder="例如：青墨工作室"
+                          required
+                          maxLength={120}
+                        />
+                      </Field>
+                      <Button disabled={busy} type="submit">
+                        <Plus data-icon="inline-start" aria-hidden="true" />
+                        创建工作空间
+                      </Button>
+                    </FieldGroup>
+                  </form>
+                </CardContent>
               </Card>
             </div>
 
@@ -311,59 +315,73 @@ export function WorkspaceSettings() {
               <div className="mb-4 flex items-end justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">我的工作空间</h2>
-                  <p className="mt-1 text-sm text-slate-500">角色与状态均来自当前账号权限。</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    角色与状态均来自当前账号权限。
+                  </p>
                 </div>
-                <span className="text-sm text-slate-400">{workspacesQuery.data.length} 个空间</span>
+                <span className="text-sm text-muted-foreground">
+                  {workspacesQuery.data.length} 个空间
+                </span>
               </div>
               <div className="grid gap-4">
                 {workspacesQuery.data.map((workspace) => {
                   const current = workspace.id === currentWorkspaceId;
                   return (
                     <article
-                      className={`flex flex-wrap items-center gap-5 p-5 ${current ? "bg-muted/50" : ""}`}
+                      className={cn(
+                        "flex flex-wrap items-center gap-5 p-5",
+                        current && "bg-muted/50",
+                      )}
                       key={workspace.id}
                     >
-                      <span className="grid size-12 place-items-center rounded-xl bg-slate-100 text-foreground">
+                      <span className="grid size-12 place-items-center rounded-xl bg-muted text-foreground">
                         <Settings2 className="size-5" aria-hidden="true" />
                       </span>
-                      <div className="min-w-48 flex-1">
+                      <div className="min-w-0 flex-1 basis-48">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold">{workspace.name}</h3>
-                          {current ? (
-                            <Badge className="bg-muted text-foreground" variant="outline">
-                              当前空间
-                            </Badge>
-                          ) : null}
+                          <h3 className="break-words font-semibold">{workspace.name}</h3>
+                          {current ? <Badge variant="secondary">当前空间</Badge> : null}
                           {workspace.status === "archived" ? (
                             <Badge variant="secondary">已归档</Badge>
                           ) : null}
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {roleLabels[workspace.role]} · revision {workspace.revision}
                         </p>
                       </div>
-                      <div className="flex flex-1 flex-wrap items-end justify-end gap-2">
+                      <div className="flex min-w-0 flex-1 basis-full flex-wrap items-end justify-end gap-2 xl:basis-96">
                         {workspace.role === "owner" ? (
                           <form
-                            className="flex min-w-64 flex-1 gap-2"
+                            className="min-w-0 flex-1 basis-full sm:basis-48"
                             onSubmit={(event) => renameWorkspace(event, workspace)}
                           >
-                            <Input
-                              aria-label={`重命名 ${workspace.name}`}
-                              defaultValue={workspace.name}
-                              disabled={busy || workspace.status === "archived"}
-                              maxLength={120}
-                              name="workspaceName"
-                              required
-                            />
-                            <Button
-                              aria-label={`保存 ${workspace.name}`}
-                              disabled={busy || workspace.status === "archived"}
-                              type="submit"
-                              variant="outline"
-                            >
-                              <Save aria-hidden="true" />
-                            </Button>
+                            <FieldGroup className="min-w-0">
+                              <Field data-disabled={busy || workspace.status === "archived"}>
+                                <FieldLabel className="sr-only" htmlFor={`rename-${workspace.id}`}>
+                                  重命名 {workspace.name}
+                                </FieldLabel>
+                                <InputGroup>
+                                  <InputGroupInput
+                                    id={`rename-${workspace.id}`}
+                                    defaultValue={workspace.name}
+                                    disabled={busy || workspace.status === "archived"}
+                                    maxLength={120}
+                                    name="workspaceName"
+                                    required
+                                  />
+                                  <InputGroupAddon align="inline-end">
+                                    <InputGroupButton
+                                      aria-label={`保存 ${workspace.name}`}
+                                      disabled={busy || workspace.status === "archived"}
+                                      type="submit"
+                                      size="icon-xs"
+                                    >
+                                      <Save data-icon="inline-start" aria-hidden="true" />
+                                    </InputGroupButton>
+                                  </InputGroupAddon>
+                                </InputGroup>
+                              </Field>
+                            </FieldGroup>
                           </form>
                         ) : null}
                         <Button asChild variant="outline">
@@ -377,9 +395,9 @@ export function WorkspaceSettings() {
                             variant="outline"
                           >
                             {workspace.status === "active" ? (
-                              <Archive aria-hidden="true" />
+                              <Archive data-icon="inline-start" aria-hidden="true" />
                             ) : (
-                              <RotateCcw aria-hidden="true" />
+                              <RotateCcw data-icon="inline-start" aria-hidden="true" />
                             )}
                             {workspace.status === "active" ? "归档" : "恢复"}
                           </Button>
@@ -401,41 +419,43 @@ export function WorkspaceSettings() {
                   <CardDescription>修改成功后当前令牌立即失效，需要重新登录。</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form className="grid gap-4" onSubmit={submitPasswordChange}>
-                    <div className="grid gap-2">
-                      <Label htmlFor="currentPassword">当前密码</Label>
-                      <Input
-                        autoComplete="current-password"
-                        disabled={busy}
-                        id="currentPassword"
-                        minLength={12}
-                        name="currentPassword"
-                        required
-                        type="password"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="newPassword">新密码</Label>
-                      <Input
-                        autoComplete="new-password"
-                        disabled={busy}
-                        id="newPassword"
-                        minLength={12}
-                        name="newPassword"
-                        required
-                        type="password"
-                      />
-                    </div>
-                    <Button disabled={busy} type="submit">
-                      <KeyRound aria-hidden="true" />
-                      修改密码
-                    </Button>
+                  <form onSubmit={submitPasswordChange}>
+                    <FieldGroup className="grid gap-4">
+                      <Field data-disabled={busy}>
+                        <FieldLabel htmlFor="currentPassword">当前密码</FieldLabel>
+                        <Input
+                          autoComplete="current-password"
+                          disabled={busy}
+                          id="currentPassword"
+                          minLength={12}
+                          name="currentPassword"
+                          required
+                          type="password"
+                        />
+                      </Field>
+                      <Field data-disabled={busy}>
+                        <FieldLabel htmlFor="newPassword">新密码</FieldLabel>
+                        <Input
+                          autoComplete="new-password"
+                          disabled={busy}
+                          id="newPassword"
+                          minLength={12}
+                          name="newPassword"
+                          required
+                          type="password"
+                        />
+                      </Field>
+                      <Button disabled={busy} type="submit">
+                        <KeyRound data-icon="inline-start" aria-hidden="true" />
+                        修改密码
+                      </Button>
+                    </FieldGroup>
                   </form>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-rose-700">
+                  <CardTitle className="flex items-center gap-2 text-destructive">
                     <UserX className="size-5" aria-hidden="true" />
                     停用账户
                   </CardTitle>
@@ -444,21 +464,25 @@ export function WorkspaceSettings() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form className="grid gap-4" onSubmit={submitDeactivation}>
-                    <div className="grid gap-2">
-                      <Label htmlFor="deactivateConfirmation">输入 DEACTIVATE 确认</Label>
-                      <Input
-                        disabled={busy}
-                        id="deactivateConfirmation"
-                        name="confirmation"
-                        pattern="DEACTIVATE"
-                        required
-                      />
-                    </div>
-                    <Button disabled={busy} type="submit" variant="destructive">
-                      <UserX aria-hidden="true" />
-                      停用账户
-                    </Button>
+                  <form onSubmit={submitDeactivation}>
+                    <FieldGroup className="grid gap-4">
+                      <Field data-disabled={busy}>
+                        <FieldLabel htmlFor="deactivateConfirmation">
+                          输入 DEACTIVATE 确认
+                        </FieldLabel>
+                        <Input
+                          disabled={busy}
+                          id="deactivateConfirmation"
+                          name="confirmation"
+                          pattern="DEACTIVATE"
+                          required
+                        />
+                      </Field>
+                      <Button disabled={busy} type="submit" variant="destructive">
+                        <UserX data-icon="inline-start" aria-hidden="true" />
+                        停用账户
+                      </Button>
+                    </FieldGroup>
                   </form>
                 </CardContent>
               </Card>

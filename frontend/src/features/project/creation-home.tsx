@@ -1,25 +1,18 @@
 "use client";
 
-import {
-  AudioLines,
-  CirclePlay,
-  Clapperboard,
-  FileText,
-  LoaderCircle,
-  Upload,
-  UsersRound,
-} from "lucide-react";
+import { AudioLines, CirclePlay, Clapperboard, FileText, Upload, UsersRound } from "lucide-react";
 import Image from "next/image";
+import { Spinner } from "@/components/ui/spinner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
 import { BasicLayout } from "@/components/layout/basic-layout";
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell } from "@/features/identity/studio-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
 
 const productionStages = [
   { label: "剧本解析", detail: "场次、对白与实体", icon: FileText },
@@ -43,7 +36,7 @@ export function CreationHome() {
     return (
       <BasicLayout active="create" authState="loading">
         <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle
+          <Spinner
             aria-label={
               sessionState === "authenticated" ? "正在进入项目工作区" : "正在读取登录状态"
             }
@@ -74,15 +67,15 @@ export function CreationHome() {
                 成片，每个资产、镜头、候选、费用与审核决定都可确认、可返工、可追溯。
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Button asChild className="h-11 px-5" size="lg">
+                <Button asChild size="lg">
                   <Link href="/register">
-                    <Upload aria-hidden="true" />
+                    <Upload data-icon="inline-start" aria-hidden="true" />
                     导入剧本
                   </Link>
                 </Button>
-                <Button asChild className="h-11 px-5" size="lg" variant="outline">
+                <Button asChild size="lg" variant="outline">
                   <Link href="/login">
-                    <CirclePlay aria-hidden="true" />
+                    <CirclePlay data-icon="inline-start" aria-hidden="true" />
                     继续制作
                   </Link>
                 </Button>
@@ -99,8 +92,8 @@ export function CreationHome() {
                   sizes="(max-width: 639px) 220px, 240px"
                   src="/assets/lanverse-studio/changan-night-cover.png"
                 />
-                <div className="absolute inset-x-0 bottom-0 bg-black/75 p-5 text-white">
-                  <p className="font-mono text-xs text-white/60">9:16 · CONCEPT</p>
+                <div className="absolute inset-x-0 bottom-0 bg-artwork/75 p-5 text-artwork-foreground">
+                  <p className="font-mono text-xs text-artwork-foreground/60">9:16 · CONCEPT</p>
                   <p className="mt-1 text-lg font-medium">长安夜航</p>
                 </div>
               </div>

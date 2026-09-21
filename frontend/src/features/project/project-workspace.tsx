@@ -1,15 +1,17 @@
 "use client";
 
-import { AlertCircle, ArrowRight, Clapperboard, ClipboardCheck, LoaderCircle } from "lucide-react";
+import { PageLoading } from "@/components/system/page-loading";
+import { AlertCircle, ArrowRight, Clapperboard, ClipboardCheck } from "lucide-react";
+import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
 import Link from "next/link";
 
 import { LayoutContainer } from "@/components/layout/layout-container";
 import { PageHeader } from "@/components/studio/page-header";
-import { StudioShell } from "@/components/studio/studio-shell";
+import { StudioShell } from "@/features/identity/studio-shell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuthSessionState } from "@/hooks/use-auth-session";
+import { useAuthSessionState } from "@/features/identity/use-auth-session";
 import { appApiErrorMessage } from "@/lib/server-state";
 import { useCurrentScriptDocumentQuery } from "@/features/script/endpoints";
 import { useEpisodesQuery, useProjectQuery } from "@/features/project/endpoints";
@@ -41,9 +43,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
   if (sessionState === "checking") {
     return (
       <StudioShell active="projects">
-        <div className="grid min-h-[70dvh] place-items-center">
-          <LoaderCircle aria-label="正在读取登录状态" className="animate-spin" />
-        </div>
+        <PageLoading label="正在读取登录状态" />
       </StudioShell>
     );
   }
@@ -79,11 +79,9 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
             <AlertDescription>{appApiErrorMessage(error)}</AlertDescription>
           </Alert>
         ) : !project ? (
-          <div className="grid min-h-96 place-items-center">
-            <LoaderCircle aria-label="正在加载项目" className="animate-spin" />
-          </div>
+          <PageLoading label="正在加载项目" />
         ) : (
-          <div className="space-y-7">
+          <div className="flex flex-col gap-7">
             <PageHeader
               actions={
                 <div className="flex flex-wrap gap-2">
@@ -96,12 +94,12 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                       }
                     >
                       {currentScriptQuery.data ? "继续剧本创作" : "导入剧本"}
-                      <ArrowRight aria-hidden="true" />
+                      <ArrowRight data-icon="inline-start" aria-hidden="true" />
                     </Link>
                   </Button>
                   <Button asChild variant="outline">
                     <Link href={`/projects/${project.id}/reviews`}>
-                      <ClipboardCheck aria-hidden="true" />
+                      <ClipboardCheck data-icon="inline-start" aria-hidden="true" />
                       审核队列
                     </Link>
                   </Button>
@@ -109,7 +107,7 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                     <Button asChild variant="ghost">
                       <Link href="#episodes">
                         查看剧集
-                        <ArrowRight aria-hidden="true" />
+                        <ArrowRight data-icon="inline-start" aria-hidden="true" />
                       </Link>
                     </Button>
                   ) : null}
@@ -145,11 +143,15 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                 <Badge variant="outline">{episodes.length} 集</Badge>
               </div>
               {episodes.length === 0 ? (
-                <div className="grid min-h-40 place-items-center p-8 text-center text-sm text-muted-foreground">
-                  分集提案审阅并采纳后，每集正文会出现在这里。
-                </div>
+                <Empty className="min-h-40">
+                  <EmptyHeader>
+                    <EmptyDescription>
+                      分集提案审阅并采纳后，每集正文会出现在这里。
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               ) : (
-                <div className="divide-y">
+                <div className="flex flex-col gap-2">
                   {episodes.map((episode) => (
                     <Link
                       aria-label={`进入${episode.name}`}

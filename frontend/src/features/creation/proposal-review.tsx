@@ -1,10 +1,12 @@
 "use client";
+import { toast } from "sonner";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 import { useState } from "react";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useClaimHumanTaskMutation,
@@ -38,7 +40,7 @@ export function ProposalReview({
   const [adopt, adoptionState] = useAdoptCreationMutation();
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
-  const [notice, setNotice] = useState<string>();
+
   const task = detail.data?.task;
   const decision = detail.data?.decision;
   const blockers = proposal.issues.filter((issue) => issue.severity === "blocker");
@@ -58,10 +60,10 @@ export function ProposalReview({
 
   async function command(action: () => Promise<unknown>, message: string) {
     setError(undefined);
-    setNotice(undefined);
+
     try {
       await action();
-      setNotice(message);
+      toast.success(message);
     } catch (cause) {
       setError(appApiErrorMessage(cause));
     } finally {
@@ -145,7 +147,7 @@ export function ProposalReview({
   }
 
   return (
-    <article aria-label="提案审阅" className="min-w-0 space-y-6 bg-transparent">
+    <article aria-label="提案审阅" className="flex flex-col min-w-0 gap-6 bg-transparent">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="mb-2 text-sm text-muted-foreground">{stageLabels[proposal.stage]}</p>
@@ -162,33 +164,43 @@ export function ProposalReview({
         </Badge>
       </header>
       <ProposalContent proposal={proposal} proposals={proposals} />
-      <details className="py-4">
-        <summary className="cursor-pointer text-sm font-medium">
-          原文来源与固定版本 · {proposal.evidence.length} 处引用
-        </summary>
-        <p className="mt-3 break-all text-xs text-muted-foreground">
-          原稿版本：{proposal.source_revision_id}
-          <br />
-          原稿摘要：{proposal.source_hash}
-          <br />
-          草案版本：{proposal.revision} · {proposal.result_hash}
-        </p>
-        <ul className="mt-4 space-y-3">
-          {proposal.evidence.map((item, index) => (
-            <li className="text-sm" key={index}>
-              <blockquote className="whitespace-pre-wrap border-l-2 pl-3">{item.quote}</blockquote>
-              <p className="mt-1 text-xs text-muted-foreground">
-                原文块 {item.block + 1} · 字符 {item.start}–{item.end}（Unicode 码点，右侧不含）
-              </p>
-            </li>
-          ))}
-        </ul>
-      </details>
+      <Collapsible className="py-4">
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            type="button"
+            className="h-auto justify-start px-0 text-left whitespace-normal"
+          >
+            原文来源与固定版本 · {proposal.evidence.length} 处引用
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <p className="mt-3 break-all text-xs text-muted-foreground">
+            原稿版本：{proposal.source_revision_id}
+            <br />
+            原稿摘要：{proposal.source_hash}
+            <br />
+            草案版本：{proposal.revision} · {proposal.result_hash}
+          </p>
+          <ul className="flex flex-col mt-4 gap-3">
+            {proposal.evidence.map((item, index) => (
+              <li className="text-sm" key={index}>
+                <blockquote className="whitespace-pre-wrap border-l-2 pl-3">
+                  {item.quote}
+                </blockquote>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  原文块 {item.block + 1} · 字符 {item.start}–{item.end}（Unicode 码点，右侧不含）
+                </p>
+              </li>
+            ))}
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
       {proposal.issues.length > 0 && (
-        <section aria-label="待确认问题" className="space-y-4 pt-5">
+        <section aria-label="待确认问题" className="flex flex-col gap-4 pt-5">
           <h3 className="font-semibold">待确认问题</h3>
           {proposal.issues.map((issue, index) => (
-            <div className="space-y-2" key={riskKey(issue)}>
+            <div className="flex flex-col gap-2" key={riskKey(issue)}>
               <p className="text-sm">
                 <Badge variant="outline">
                   {issue.severity === "blocker" ? "采纳前必需处理" : "提示"}
@@ -197,10 +209,10 @@ export function ProposalReview({
               </p>
               <p className="text-xs text-muted-foreground">范围：{issue.scope}</p>
               {issue.severity === "blocker" && !accepted && canWrite && (
-                <div className="space-y-2">
-                  <Label htmlFor={`resolution-${proposal.id}-${index}`}>
+                <Field className="flex flex-col gap-2">
+                  <FieldLabel htmlFor={`resolution-${proposal.id}-${index}`}>
                     处理说明：{issue.summary}
-                  </Label>
+                  </FieldLabel>
                   <Textarea
                     id={`resolution-${proposal.id}-${index}`}
                     maxLength={4000}
@@ -210,17 +222,17 @@ export function ProposalReview({
                     }
                     placeholder="写明核对依据、状态与披露处理结果。"
                   />
-                </div>
+                </Field>
               )}
             </div>
           ))}
         </section>
       )}
       {accepted ? (
-        <section aria-label="正式采纳回执" className="space-y-3 pt-5">
+        <section aria-label="正式采纳回执" className="flex flex-col gap-3 pt-5">
           <h3 className="font-semibold">正式采纳回执</h3>
           <p className="break-all text-xs text-muted-foreground">{accepted.submission_id}</p>
-          <ul className="space-y-2 text-sm">
+          <ul className="flex flex-col gap-2 text-sm">
             {accepted.formal_refs.map((ref) => (
               <li className="break-all" key={`${ref.type}:${ref.id}`}>
                 {ref.type} · {ref.id} · 版本 {ref.revision}
@@ -237,7 +249,7 @@ export function ProposalReview({
           )}
         </section>
       ) : canWrite ? (
-        <section className="space-y-3 pt-5">
+        <section className="flex flex-col gap-3 pt-5">
           {detail.error && (
             <Alert variant="destructive">
               <AlertDescription>{appApiErrorMessage(detail.error)}</AlertDescription>
@@ -290,11 +302,6 @@ export function ProposalReview({
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      )}
-      {notice && (
-        <p role="status" className="text-sm">
-          {notice}
-        </p>
       )}
     </article>
   );
