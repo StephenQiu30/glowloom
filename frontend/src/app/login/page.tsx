@@ -1,4 +1,4 @@
-import { AuthForm } from "@/features/identity/auth-form";
+import { AuthForm } from "@/components/identity/auth-form";
 
 export default function LoginPage() {
   return <AuthForm mode="login" />;

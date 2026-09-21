@@ -2,8 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { ProposalContent } from "@/features/creation/proposal-content";
-import { ProposalNavigation } from "@/features/creation/proposal-navigation";
+import { ProposalContent } from "@/components/creation/proposal-content";
+import { ProposalNavigation } from "@/components/creation/proposal-navigation";
 
 const evidence = { block: 0, quote: "阿宁披着红衣，手臂受伤。", occurrence: null };
 const base = { run_id: "run", source_revision_id: "source", source_hash: "hash", revision: 1 };

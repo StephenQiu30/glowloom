@@ -1,4 +1,4 @@
-import { ReviewWorkbench } from "@/features/review/review-workbench";
+import { ReviewWorkbench } from "@/components/review/review-workbench";
 
 export default async function ProjectReviewsPage({
   params,

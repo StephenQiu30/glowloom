@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutContainer } from "@/components/layout/layout-container";
+import { LayoutContainer } from "@/layout/layout-container";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 

@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { ProjectServerCard } from "@/features/project/project-server-card";
+import { ProjectServerCard } from "@/components/project/project-server-card";
 
 describe("共享视觉基础", () => {
   it("内容卡片无边框且不以轮廓阴影模拟边框", () => {

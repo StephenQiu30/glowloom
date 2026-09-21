@@ -1,4 +1,4 @@
-import { CreationWorkspace } from "@/features/creation/creation-workspace";
+import { CreationWorkspace } from "@/components/creation/creation-workspace";
 
 export default async function CreationPage({
   params,

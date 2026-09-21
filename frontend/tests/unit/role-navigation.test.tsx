@@ -12,7 +12,7 @@ vi.mock("@/api/identity", async () => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { StudioShell } from "@/features/identity/studio-shell";
+import { StudioShell } from "@/components/identity/studio-shell";
 import { setAccessToken } from "@/lib/auth-session";
 
 const workspaceId = "019fb2e0-a000-7000-8000-000000000001";

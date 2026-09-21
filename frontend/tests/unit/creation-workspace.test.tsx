@@ -9,8 +9,8 @@ vi.mock("@/lib/request", async () => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { TextCreationWorkspace } from "@/features/creation/text-creation-workspace";
-import { ProposalReview } from "@/features/creation/proposal-review";
+import { TextCreationWorkspace } from "@/components/creation/text-creation-workspace";
+import { ProposalReview } from "@/components/creation/proposal-review";
 import { ApiClientError } from "@/lib/request";
 
 const projectId = "41000000-0000-4000-8000-000000000001";

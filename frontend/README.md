@@ -4,17 +4,20 @@
 
 ## 目录职责
 
-| 目录                                        | 职责                                                                          |
-| ------------------------------------------- | ----------------------------------------------------------------------------- |
-| `src/app`                                   | Next.js 路由、全局 Provider、主题、加载与错误边界                             |
-| `src/features/<业务>`                       | 页面实现、业务交互、RTK Query endpoints；身份会话与 StudioShell 属于 identity |
-| `src/components/ui`                         | 官方 shadcn/Radix 基础组件及统一 variant                                      |
-| `src/components/layout`、`studio`、`system` | 不依赖 Feature 或 API 的共享展示组件                                          |
-| `src/api/generated`                         | 根据在线 Swagger 生成的 API；不得手改                                         |
-| `src/lib`                                   | 请求、状态、权限、主题等明确命名的基础设施                                    |
-| `tests/architecture`、`unit`、`e2e`         | 依赖边界、组件/业务契约、真实浏览器流程                                       |
+| 目录                                | 职责                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------- |
+| `src/app`                           | Next.js 路由、Provider、主题与路由反馈装配                                       |
+| `src/components/<业务>`             | 按 Feature 分类的业务组件、endpoint、专用 Hook 与展示模型；身份装配属于 identity |
+| `src/components/ui`                 | 官方 shadcn/Radix 基础组件及统一 variant                                         |
+| `src/components/studio`、`system`   | 不依赖业务模块的共享展示组件                                                     |
+| `src/layout`                        | 独立的 BasicLayout、BasicHeader、BasicFooter、LayoutContainer 与主题切换         |
+| `src/api/generated`                 | 根据在线 Swagger 生成的 API；不得手改                                            |
+| `src/lib`                           | 请求、状态、权限、主题等明确命名的基础设施                                       |
+| `tests/architecture`、`unit`、`e2e` | 依赖边界、组件/业务契约、真实浏览器流程                                          |
 
-业务请求归属 Feature。跨 Feature 仅调用明确公共入口，架构测试检查依赖方向和循环；不以新增 index、utils 或转发层隐藏依赖。
+当前 BasicLayout 使用顶部导航，页面统一通过它组合 Header、主内容和 Footer；身份查询由 `components/identity/studio-shell.tsx` 完成，通过属性注入布局。后续有侧边导航页面时可以增加独立侧边布局，复用结构组件；目前不预建无消费者的实现。
+
+不设置 `features/` 目录。每个业务目录内通过文件职责区分 UI、endpoint 和 Hook；endpoint/Hook 不反向导入 UI，基础组件与布局不依赖业务；跨业务仅调用明确公共入口。架构测试检查边界与循环，不建立迁移兼容层。
 
 ## UI 约定
 

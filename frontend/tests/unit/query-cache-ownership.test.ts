@@ -1,5 +1,5 @@
-import { identityApi } from "@/features/identity/endpoints";
-import { projectApi } from "@/features/project/endpoints";
+import { identityApi } from "@/components/identity/endpoints";
+import { projectApi } from "@/components/project/endpoints";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const requestMock = vi.hoisted(() => vi.fn());

@@ -64,39 +64,51 @@ describe("feature ownership", () => {
     expect(misplaced.map((file) => relative(sourceRoot, file))).toEqual([]);
   });
 
-  it("keeps shared state independent and cross-feature imports on public boundaries", () => {
+  it("keeps layout and shared UI independent, and business imports on public boundaries", () => {
+    const sharedGroups = new Set(["ui", "studio", "system"]);
+    function business(path: string) {
+      const parts = path.split("/");
+      return parts[0] === "components" && parts.length > 2 && !sharedGroups.has(parts[1])
+        ? parts[1]
+        : undefined;
+    }
+    const publicEntries = new Set([
+      "components/identity/studio-shell.tsx",
+      "components/identity/use-auth-session.ts",
+      "components/creation/text-creation-workspace.tsx",
+      "components/planning/episode-plan-workspace.tsx",
+      "components/production-bible/production-bible-workspace.tsx",
+    ]);
     const violations: string[] = [];
     for (const file of sourceFiles(sourceRoot)) {
       const owner = relative(sourceRoot, file);
+      const sourceFeature = business(owner);
+      const shared =
+        owner.startsWith("layout/") || (owner.startsWith("components/") && !sourceFeature);
       for (const dependency of dependencies(file)) {
         const target = relative(sourceRoot, dependency);
-        const sourceFeature = owner.startsWith("features/") ? owner.split("/")[1] : undefined;
-        const targetFeature = target.startsWith("features/") ? target.split("/")[1] : undefined;
-        if (owner.startsWith("lib/") && targetFeature) violations.push(`${owner} -> ${target}`);
-        if (sourceFeature && target.startsWith("app/")) violations.push(`${owner} -> ${target}`);
+        const targetFeature = business(target);
+        if ((owner.startsWith("lib/") || shared) && targetFeature)
+          violations.push(`${owner} -> ${target}`);
+        if ((sourceFeature || shared) && target.startsWith("app/"))
+          violations.push(`${owner} -> ${target}`);
         if (
           sourceFeature &&
           targetFeature &&
           sourceFeature !== targetFeature &&
-          !(
-            /^features\/[^/]+\/endpoints\.ts$/.test(target) ||
-            new Set([
-              "features/identity/studio-shell.tsx",
-              "features/creation/text-creation-workspace.tsx",
-              "features/identity/use-auth-session.ts",
-              "features/planning/episode-plan-workspace.tsx",
-              "features/production-bible/production-bible-workspace.tsx",
-            ]).has(target)
-          )
+          !/^components\/[^/]+\/endpoints\.ts$/.test(target) &&
+          !publicEntries.has(target)
         )
           violations.push(`${owner} -> ${target}`);
-        if (owner.startsWith("components/") && (targetFeature || target.startsWith("api/")))
+        if (shared && target.startsWith("api/")) violations.push(`${owner} -> ${target}`);
+        if (sourceFeature && /\/(endpoints|use-[^/]+)\.ts$/.test(owner) && target.endsWith(".tsx"))
           violations.push(`${owner} -> ${target}`);
         if (owner === "lib/server-state.ts" && target.startsWith("api/"))
           violations.push(`${owner} -> ${target}`);
       }
     }
     expect(violations).toEqual([]);
+    expect(existsSync(resolve(sourceRoot, "features"))).toBe(false);
   });
 
   it("has no local import cycles after endpoint injection", () => {

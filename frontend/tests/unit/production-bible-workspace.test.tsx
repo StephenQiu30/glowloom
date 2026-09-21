@@ -11,7 +11,7 @@ vi.mock("@/lib/server-state", () => ({
   appApiErrorMessage: (error: { message?: string }) => error?.message ?? "请求失败",
 }));
 
-vi.mock("@/features/production-bible/endpoints", () => ({
+vi.mock("@/components/production-bible/endpoints", () => ({
   useCreateProductionBibleMutation: () => [createBible, { isLoading: false }],
   useCurrentProductionBibleQuery: () => ({ data: currentBible, error: currentError }),
   useDecideProductionBibleReviewIssueMutation: () => [decideReviewIssue, { isLoading: false }],
@@ -19,7 +19,7 @@ vi.mock("@/features/production-bible/endpoints", () => ({
   useResumeProductionBibleMutation: () => [resumeBible, { isLoading: false }],
 }));
 
-import { ProductionBibleWorkspace } from "@/features/production-bible/production-bible-workspace";
+import { ProductionBibleWorkspace } from "@/components/production-bible/production-bible-workspace";
 
 const analysis = {
   revision: {

@@ -184,9 +184,10 @@ agent/
 frontend/
   src/
     app/                         # 路由、layout、页面装配与路由级反馈
-    features/<业务>/             # 业务视图、交互、endpoint、派生视图模型
-    components/                  # 被多个业务使用的组件
-      ui/                        # 统一 UI 基础组件
+    components/                  # 所有非路由、非页面布局组件
+      <业务>/                    # 按 Feature 分类的组件、endpoint、专用 Hook 与展示模型
+      ui/                        # 统一 shadcn/Radix UI 基础组件
+    layout/                      # 独立页面结构：BasicLayout、Header、Footer、容器
     hooks/                       # 无特定业务归属的共享 Hook
     api/                         # umi-openapi 自动生成的请求函数与类型
     lib/                         # 职责明确的应用基础设施
@@ -206,13 +207,14 @@ frontend/
   README.md
 ```
 
-1. 路由负责装配，业务代码进入 `features/<业务>/`。共享组件不得反向导入业务模块，跨 Feature 不得依赖对方内部实现。
-2. 浏览器交互请求路径为 `页面 → Feature → RTK Query endpoint → umi-openapi 生成的 API 函数 → 统一 request → Go`。Server Component 按请求调用生成的 API 函数读取 Go 数据，不创建全局用户 Store。两条路径均不重复维护 URL、请求参数类型及请求函数。
-3. 使用 `@umijs/openapi` 从后端在线 Swagger JSON 地址生成完整 API 请求函数及 TypeScript 类型，统一输出到 `src/api/`，不只生成类型声明。该目录仅放生成产物，禁止手工修改；统一请求适配放在 `src/lib/request.ts`，缓存与业务编排放在 Feature。
+1. 路由负责装配，业务组件及其 endpoint、专用 Hook、展示辅助代码统一进入 `components/<业务>/`，不再设置平行的 `features/` 目录。`components/ui`、共享展示组件及 `layout` 不得反向依赖业务模块。跨业务只依赖明确公共入口。
+2. 浏览器交互请求路径为 `页面 → 业务组件 → RTK Query endpoint → umi-openapi 生成的 API 函数 → 统一 request → Go`。Server Component 按请求调用生成的 API 函数读取 Go 数据，不创建全局用户 Store。两条路径均不重复维护 URL、请求参数类型及请求函数。
+3. 使用 `@umijs/openapi` 从后端在线 Swagger JSON 地址生成完整 API 请求函数及 TypeScript 类型，统一输出到 `src/api/`，不只生成类型声明。该目录仅放生成产物，禁止手工修改；统一请求适配放在 `src/lib/request.ts`，缓存与业务编排放在对应的 `components/<业务>/`。
 4. URL 管理可分享的页面范围；RTK Query 管理服务端事实；React 本地状态管理临时交互；展示模型从事实派生，不另存一份可写业务事实。
-5. 普通组件和业务文件使用语义明确的 `kebab-case.ts(x)`；Next.js 约定文件及生成文件保留各自约定。业务专用组件或 Hook 先留在 Feature 内，有真实复用需求再提升。
+5. 普通组件和业务文件使用语义明确的 `kebab-case.ts(x)`；Next.js 约定文件及生成文件保留各自约定。业务专用组件、Hook 和 endpoint 就近放在 `components/<业务>/`，通过 `endpoints.ts`、`use-*.ts` 等明确文件名区分职责，不建立平行业务目录。
 6. `lib/` 只能容纳职责明确的基础设施，不成为业务逻辑或万能工具集合。静态资源进入 `public/`；用户上传文件由对象存储管理。
 7. 遵循 `DESIGN.md` 的无边框内容组织、键盘可访问性及状态反馈规范；加载、空数据、失败、禁用和完成状态必须可辨认。
+8. `src/layout/` 独立封装 BasicLayout、BasicHeader、BasicFooter 和 LayoutContainer；当前 BasicLayout 采用顶部导航，页面不得重复拼接 Header/Footer。身份查询由 `components/identity/studio-shell.tsx` 装配后通过属性传入布局。允许未来增加侧边布局，复用同一内容槽与结构组件；在实际页面需要前不创建空实现或布局切换状态。
 
 ### 6.1 shadcn/ui + Radix UI 组件优先
 

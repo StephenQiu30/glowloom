@@ -8,11 +8,8 @@ const eslintConfig = defineConfig([
   ...nextTs,
   prettier,
   {
-    files: [
-      "src/features/**/*.tsx",
-      "src/components/layout/**/*.tsx",
-      "src/components/studio/**/*.tsx",
-    ],
+    files: ["src/components/**/*.tsx", "src/layout/**/*.tsx"],
+    ignores: ["src/components/ui/**"],
     rules: {
       "no-restricted-syntax": [
         "error",

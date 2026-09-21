@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 
-import { ProjectCreateDialog } from "@/features/project/project-create-dialog";
+import { ProjectCreateDialog } from "@/components/project/project-create-dialog";
 
 it("rejects a whitespace-only project name with an accessible field error", async () => {
   const submit = vi.fn().mockResolvedValue(true);

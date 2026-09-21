@@ -76,8 +76,8 @@ func TestOptionalInfrastructureDependenciesRequireTheirFirstConsumer(t *testing.
 		{"github.com/twmb/franz-go", string(goModule), []string{"backend/internal/eventing/adapter/kafka", "backend/internal/bootstrap/event_process.go"}},
 		{"github.com/elastic/go-elasticsearch", string(goModule), []string{"backend/internal/search/adapter/elasticsearch", "backend/internal/bootstrap/event_process.go"}},
 		{"github.com/elastic/elastic-transport-go", string(goModule), []string{"backend/internal/search/adapter/elasticsearch"}},
-		{"@xyflow/react", string(frontendPackage), []string{"frontend/src/features/storygraph"}},
-		{"@dagrejs/dagre", string(frontendPackage), []string{"frontend/src/features/storygraph"}},
+		{"@xyflow/react", string(frontendPackage), []string{"frontend/src/components/storygraph"}},
+		{"@dagrejs/dagre", string(frontendPackage), []string{"frontend/src/components/storygraph"}},
 	}
 	for _, check := range checks {
 		if !strings.Contains(check.manifest, check.dependency) {

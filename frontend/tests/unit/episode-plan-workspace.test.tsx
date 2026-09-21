@@ -28,7 +28,7 @@ vi.mock("@/api/episodePlanning", async () => ({
 }));
 
 import { AppProviders } from "@/app/providers";
-import { EpisodePlanWorkspace } from "@/features/planning/episode-plan-workspace";
+import { EpisodePlanWorkspace } from "@/components/planning/episode-plan-workspace";
 import { setAccessToken } from "@/lib/auth-session";
 
 const revisionId = "019ff900-a000-7000-8000-000000000001";

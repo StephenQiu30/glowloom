@@ -2,8 +2,8 @@ import { ArrowRight, FileQuestion, LogIn, ServerCrash, ShieldX } from "lucide-re
 import Link from "next/link";
 import { cn } from "@/lib/class-names";
 
-import { BasicLayout } from "@/components/layout/basic-layout";
-import { layoutContainerClassName } from "@/components/layout/layout-container";
+import { BasicLayout } from "@/layout/basic-layout";
+import { layoutContainerClassName } from "@/layout/layout-container";
 import { PageHeader } from "@/components/studio/page-header";
 import { Button } from "@/components/ui/button";
 

@@ -1,4 +1,4 @@
-import { productionBibleApi } from "@/features/production-bible/endpoints";
+import { productionBibleApi } from "@/components/production-bible/endpoints";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const requestMock = vi.hoisted(() => vi.fn());
