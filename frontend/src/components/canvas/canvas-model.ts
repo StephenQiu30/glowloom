@@ -68,19 +68,22 @@ export function createNodes(
   ];
   return [
     ...contextual,
-    ...[...document.nodes].sort((left, right) => depth(left) - depth(right)).map((node) => {
-      const world = position(node);
-      return {
-        id: node.id,
-        kind: node.kind,
-        title: node.title,
-        subtitle: node.content || node.prompt || (node.media_version_id ? "已关联媒体版本" : "等待内容"),
-        x: world.x,
-        y: world.y,
-        width: node.width,
-        height: node.height,
-        saved: node,
-      };
-    }),
+    ...[...document.nodes]
+      .sort((left, right) => depth(left) - depth(right))
+      .map((node) => {
+        const world = position(node);
+        return {
+          id: node.id,
+          kind: node.kind,
+          title: node.title,
+          subtitle:
+            node.content || node.prompt || (node.media_version_id ? "已关联媒体版本" : "等待内容"),
+          x: world.x,
+          y: world.y,
+          width: node.width,
+          height: node.height,
+          saved: node,
+        };
+      }),
   ];
 }

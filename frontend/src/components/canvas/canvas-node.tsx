@@ -1,5 +1,14 @@
 import type { MouseEventHandler, PointerEventHandler } from "react";
-import { AudioLines, Clapperboard, FileText, Group, ImageIcon, Layers3, StickyNote, Video } from "lucide-react";
+import {
+  AudioLines,
+  Clapperboard,
+  FileText,
+  Group,
+  ImageIcon,
+  Layers3,
+  StickyNote,
+  Video,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { CanvasNode } from "./canvas-model";
@@ -42,7 +51,11 @@ export function CanvasNodeCard({
         {node.subtitle}
       </span>
       {node.saved && canEdit ? (
-        <span aria-hidden="true" className="absolute bottom-2 right-2 size-4 cursor-nwse-resize rounded-br-md bg-foreground/15" data-canvas-resize="" />
+        <span
+          aria-hidden="true"
+          className="absolute bottom-2 right-2 size-4 cursor-nwse-resize rounded-br-md bg-foreground/15"
+          data-canvas-resize=""
+        />
       ) : null}
     </Button>
   );
@@ -51,14 +64,22 @@ export function CanvasNodeCard({
 function NodeIcon({ kind }: { kind: CanvasNode["kind"] }) {
   const className = "size-4";
   switch (kind) {
-    case "project": return <Layers3 className={className} aria-hidden="true" />;
-    case "episode": return <Clapperboard className={className} aria-hidden="true" />;
-    case "image": return <ImageIcon className={className} aria-hidden="true" />;
-    case "video": return <Video className={className} aria-hidden="true" />;
-    case "audio": return <AudioLines className={className} aria-hidden="true" />;
-    case "group": return <Group className={className} aria-hidden="true" />;
-    case "note": return <StickyNote className={className} aria-hidden="true" />;
-    default: return <FileText className={className} aria-hidden="true" />;
+    case "project":
+      return <Layers3 className={className} aria-hidden="true" />;
+    case "episode":
+      return <Clapperboard className={className} aria-hidden="true" />;
+    case "image":
+      return <ImageIcon className={className} aria-hidden="true" />;
+    case "video":
+      return <Video className={className} aria-hidden="true" />;
+    case "audio":
+      return <AudioLines className={className} aria-hidden="true" />;
+    case "group":
+      return <Group className={className} aria-hidden="true" />;
+    case "note":
+      return <StickyNote className={className} aria-hidden="true" />;
+    default:
+      return <FileText className={className} aria-hidden="true" />;
   }
 }
 

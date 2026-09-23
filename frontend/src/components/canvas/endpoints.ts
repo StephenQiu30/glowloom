@@ -1,7 +1,4 @@
-import {
-  applyProjectCanvasOperations,
-  getProjectCanvas,
-} from "@/api/generated/backend";
+import { applyProjectCanvasOperations, getProjectCanvas } from "@/api/generated/backend";
 import { appApi, runRequest } from "@/lib/server-state";
 
 export const canvasApi = appApi.injectEndpoints({

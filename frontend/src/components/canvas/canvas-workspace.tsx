@@ -50,7 +50,9 @@ export function CanvasWorkspace({ projectId }: { projectId: string }) {
           <PageLoading label="正在加载项目画布" />
         ) : (
           <CanvasBoard
-            canEdit={meQuery.data?.workspace.role !== "viewer" && projectQuery.data.status === "active"}
+            canEdit={
+              meQuery.data?.workspace.role !== "viewer" && projectQuery.data.status === "active"
+            }
             document={canvasQuery.data}
             episodes={episodesQuery.data}
             onApply={(operations) =>

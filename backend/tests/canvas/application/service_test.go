@@ -1,4 +1,4 @@
-package application
+package application_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
 	platformcommand "github.com/StephenQiu30/lanverse/backend/internal/platform/command"
 )
@@ -23,7 +24,7 @@ type testStore struct {
 	canWrite bool
 }
 
-func (store *testStore) WithinTransaction(_ context.Context, run func(Repository) error) error {
+func (store *testStore) WithinTransaction(_ context.Context, run func(application.Repository) error) error {
 	copyStore := *store
 	copyStore.receipts = make(map[string]platformcommand.Receipt, len(store.receipts))
 	for key, value := range store.receipts {
@@ -40,9 +41,9 @@ func (store *testStore) WithinTransaction(_ context.Context, run func(Repository
 	return nil
 }
 
-func (store *testStore) ProjectScope(_ context.Context, _ Actor, requested string, write bool) (string, error) {
+func (store *testStore) ProjectScope(_ context.Context, _ application.Actor, requested string, write bool) (string, error) {
 	if requested != projectID || (write && !store.canWrite) {
-		return "", &Error{Code: "forbidden", Status: 403}
+		return "", &application.Error{Code: "forbidden", Status: 403}
 	}
 	return "019fb2d0-a000-7000-8000-000000000004", nil
 }
@@ -73,13 +74,13 @@ func (store *testStore) CreateReceipt(_ context.Context, receipt platformcommand
 
 func TestCanvasOperationPersistsAndReplaysWithoutDuplicateMutation(t *testing.T) {
 	store := &testStore{canWrite: true, receipts: map[string]platformcommand.Receipt{}}
-	service := NewService(store, func() time.Time { return time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC) }, func() string { return "019fb2d0-a000-7000-8000-000000000005" })
-	actor := Actor{UserID: userID, TokenVersion: 1}
+	service := application.NewService(store, func() time.Time { return time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC) }, func() string { return "019fb2d0-a000-7000-8000-000000000005" })
+	actor := application.Actor{UserID: userID, TokenVersion: 1}
 	empty, err := service.Get(context.Background(), actor, projectID)
 	if err != nil || empty.Revision != 0 || len(empty.Nodes) != 0 {
 		t.Fatalf("unexpected empty canvas: %+v, %v", empty, err)
 	}
-	command := ApplyCommand{ProjectID: projectID, IdempotencyKey: "create-one", Operations: []domain.Operation{{Kind: "create_node", Node: domain.Node{ID: nodeID, Kind: "text", Title: "提示词", Width: 280, Height: 180}}}}
+	command := application.ApplyCommand{ProjectID: projectID, IdempotencyKey: "create-one", Operations: []domain.Operation{{Kind: "create_node", Node: domain.Node{ID: nodeID, Kind: "text", Title: "提示词", Width: 280, Height: 180}}}}
 	first, err := service.Apply(context.Background(), actor, command)
 	if err != nil || first.Document.Revision != 1 || len(first.Document.Nodes) != 1 || first.Replayed {
 		t.Fatalf("first operation failed: %+v, %v", first, err)
@@ -96,9 +97,9 @@ func TestCanvasOperationPersistsAndReplaysWithoutDuplicateMutation(t *testing.T)
 
 func TestCanvasOperationRejectsMediaAndViewerWithoutSaving(t *testing.T) {
 	store := &testStore{canWrite: true, receipts: map[string]platformcommand.Receipt{}, mediaErr: errors.New("media not ready")}
-	service := NewService(store, time.Now, func() string { return "019fb2d0-a000-7000-8000-000000000005" })
-	actor := Actor{UserID: userID, TokenVersion: 1}
-	command := ApplyCommand{ProjectID: projectID, IdempotencyKey: "with-media", Operations: []domain.Operation{{Kind: "create_node", Node: domain.Node{ID: nodeID, Kind: "image", Title: "图", Width: 280, Height: 220, MediaVersionID: "019fb2d0-a000-7000-8000-000000000006"}}}}
+	service := application.NewService(store, time.Now, func() string { return "019fb2d0-a000-7000-8000-000000000005" })
+	actor := application.Actor{UserID: userID, TokenVersion: 1}
+	command := application.ApplyCommand{ProjectID: projectID, IdempotencyKey: "with-media", Operations: []domain.Operation{{Kind: "create_node", Node: domain.Node{ID: nodeID, Kind: "image", Title: "图", Width: 280, Height: 220, MediaVersionID: "019fb2d0-a000-7000-8000-000000000006"}}}}
 	if _, err := service.Apply(context.Background(), actor, command); err == nil || store.document != nil {
 		t.Fatalf("unready media created a canvas node: %v", err)
 	}
