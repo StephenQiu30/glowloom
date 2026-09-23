@@ -29,6 +29,8 @@ func TestDocumentIsThePublicAPIContract(t *testing.T) {
 		"/api/projects/{project_id}/cost-budget",
 		"/api/projects/{project_id}/media-model-profiles/{profile_version_id}/cost-price",
 		"/api/projects/{project_id}/current-script-document",
+		"/api/projects/{project_id}/canvas",
+		"/api/projects/{project_id}/canvas/operations",
 		"/api/projects/{project_id}/script-sources",
 		"/api/projects/{project_id}/script-sources/{revision_id}",
 		"/api/projects/{project_id}/scene-analysis-candidates/{candidate_id}",

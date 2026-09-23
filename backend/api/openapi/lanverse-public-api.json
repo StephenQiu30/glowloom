@@ -16,6 +16,48 @@
     }
   ],
   "paths": {
+    "/api/projects/{project_id}/canvas": {
+      "get": {
+        "operationId": "getProjectCanvas",
+        "description": "读取项目画布节点与视觉连线；不存在时返回 revision 0 的空文档。",
+        "parameters": [{ "$ref": "#/components/parameters/project_id" }],
+        "responses": {
+          "200": {
+            "description": "当前授权画布文档。",
+            "headers": { "Cache-Control": { "schema": { "type": "string", "const": "no-store" } } },
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["data"], "properties": { "data": { "$ref": "#/components/schemas/CanvasDocument" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/api/projects/{project_id}/canvas/operations": {
+      "post": {
+        "operationId": "applyProjectCanvasOperations",
+        "description": "按节点 revision 原子提交有界画布操作；幂等重放返回当前文档与原应用 revision。",
+        "parameters": [{ "$ref": "#/components/parameters/project_id" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CanvasOperationRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "已提交的画布操作及最新文档。",
+            "headers": { "Cache-Control": { "schema": { "type": "string", "const": "no-store" } } },
+            "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["data"], "properties": { "data": { "$ref": "#/components/schemas/CanvasApplyResponse" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Problem" },
+          "403": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" },
+          "409": { "$ref": "#/components/responses/Problem" },
+          "422": { "$ref": "#/components/responses/Problem" },
+          "500": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/api/projects/{project_id}/reference-candidate-sets/{set_id}": {
       "get": {
         "operationId": "getReferenceCandidateSet",
@@ -4412,6 +4454,82 @@
   },
   "components": {
     "schemas": {
+      "CanvasNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "title", "x", "y", "width", "height", "revision"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "kind": { "type": "string", "enum": ["text", "image", "video", "audio", "group", "note"] },
+          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "content": { "type": "string", "maxLength": 16000 },
+          "prompt": { "type": "string", "maxLength": 32000 },
+          "media_version_id": { "type": "string", "format": "uuid" },
+          "group_id": { "type": "string", "format": "uuid" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "width": { "type": "number", "minimum": 120, "maximum": 3000 },
+          "height": { "type": "number", "minimum": 80, "maximum": 3000 },
+          "revision": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "CanvasConnection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "from_node_id", "to_node_id", "purpose", "revision"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "from_node_id": { "type": "string", "format": "uuid" },
+          "to_node_id": { "type": "string", "format": "uuid" },
+          "purpose": { "type": "string", "const": "visual" },
+          "revision": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "CanvasDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "project_id", "revision", "nodes", "connections", "tombstones"],
+        "properties": {
+          "schema_version": { "type": "integer", "const": 1 },
+          "project_id": { "type": "string", "format": "uuid" },
+          "revision": { "type": "integer", "minimum": 0 },
+          "nodes": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/CanvasNode" } },
+          "connections": { "type": "array", "maxItems": 2000, "items": { "$ref": "#/components/schemas/CanvasConnection" } },
+          "tombstones": { "type": "array", "items": { "type": "string", "format": "uuid" } }
+        }
+      },
+      "CanvasOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "expected_revision"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["create_node", "update_node", "delete_node", "create_edge", "delete_edge"] },
+          "node": { "$ref": "#/components/schemas/CanvasNode" },
+          "node_id": { "type": "string", "format": "uuid" },
+          "connection": { "$ref": "#/components/schemas/CanvasConnection" },
+          "connection_id": { "type": "string", "format": "uuid" },
+          "expected_revision": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "CanvasOperationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operations", "idempotency_key"],
+        "properties": {
+          "operations": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "#/components/schemas/CanvasOperation" } },
+          "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+      },
+      "CanvasApplyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["document", "applied_revision", "replayed"],
+        "properties": {
+          "document": { "$ref": "#/components/schemas/CanvasDocument" },
+          "applied_revision": { "type": "integer", "minimum": 1 },
+          "replayed": { "type": "boolean" }
+        }
+      },
       "ReferenceCandidateSetRequest": {
         "type": "object",
         "additionalProperties": false,

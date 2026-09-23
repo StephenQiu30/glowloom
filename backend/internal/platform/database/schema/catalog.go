@@ -43,6 +43,7 @@ func Catalog() []any {
 		&model.NodeCatalogVersion{},
 		&model.AuthoringDraft{},
 		&model.AuthoringRevision{},
+		&model.CanvasDocument{},
 		&model.WorkflowDefinitionVersion{},
 		&model.RunInputSnapshot{},
 		&model.WorkflowRun{},

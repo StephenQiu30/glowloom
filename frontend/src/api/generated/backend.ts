@@ -766,6 +766,42 @@ export async function archiveProject(
   });
 }
 
+/** 读取项目画布节点与视觉连线；不存在时返回 revision 0 的空文档。 GET /api/projects/${param0}/canvas */
+export async function getProjectCanvas(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: GeneratedAPI.getProjectCanvasParams,
+  options?: RequestOptions,
+) {
+  const { project_id: param0, ...queryParams } = params;
+  return request<{ data: GeneratedAPI.CanvasDocument }>(`/api/projects/${param0}/canvas`, {
+    method: "GET",
+    params: { ...queryParams },
+    ...(options || {}),
+  });
+}
+
+/** 按节点 revision 原子提交有界画布操作；幂等重放返回当前文档与原应用 revision。 POST /api/projects/${param0}/canvas/operations */
+export async function applyProjectCanvasOperations(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: GeneratedAPI.applyProjectCanvasOperationsParams,
+  body: GeneratedAPI.CanvasOperationRequest,
+  options?: RequestOptions,
+) {
+  const { project_id: param0, ...queryParams } = params;
+  return request<{ data: GeneratedAPI.CanvasApplyResponse }>(
+    `/api/projects/${param0}/canvas/operations`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
 /** 此处后端没有提供注释 GET /api/projects/${param0}/cost-budget */
 export async function getCostBudget(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

@@ -27,6 +27,9 @@ import (
 	authoringgorm "github.com/StephenQiu30/lanverse/backend/internal/authoring/adapter/gormdb"
 	authoringapp "github.com/StephenQiu30/lanverse/backend/internal/authoring/application"
 	authoringdomain "github.com/StephenQiu30/lanverse/backend/internal/authoring/domain"
+	canvasgorm "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/gormdb"
+	canvashttp "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/httpapi"
+	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/config"
 	creationagent "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/agenthttp"
 	creationgorm "github.com/StephenQiu30/lanverse/backend/internal/production/creation/adapter/gormdb"
@@ -212,6 +215,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 	logger.Info("Media Provider configuration ready", "secret_store_available", providerSecrets.Available(),
 		"connection_presets", len(providerCatalogView.Connections), "model_presets", len(providerCatalogView.Models))
 	tokenVerifier := authentication.NewVerifier(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, func() time.Time { return time.Now().UTC() })
+	canvasHandler := canvashttp.New(canvasapp.NewService(canvasgorm.New(database), time.Now, uuid.NewString), tokenVerifier)
 	presetHandler := presethttp.New(presetcatalog.CuratedReleases, presetSelectionService, projectService, tokenVerifier)
 	tokenIssuer := authentication.NewIssuer(configuration.JWTSecret, configuration.JWTIssuer, configuration.JWTAudience, configuration.AccessTokenTTL, func() time.Time { return time.Now().UTC() }, uuid.NewString)
 	verificationCode := authentication.RandomNumericCode
@@ -498,6 +502,7 @@ func RunAPI(ctx context.Context, logger *slog.Logger) error {
 				identityHandler.Register(mux)
 				mediaHandler.Register(mux)
 				projectHandler.Register(mux)
+				canvasHandler.Register(mux)
 				presetHandler.Register(mux)
 				costHandler.Register(mux)
 				scriptHandler.Register(mux)

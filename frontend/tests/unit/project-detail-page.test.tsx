@@ -434,6 +434,10 @@ describe("真实项目生产入口", () => {
       "href",
       `/projects/${projectId}/reviews`,
     );
+    expect(screen.getByRole("link", { name: "Canvas 画布" })).toHaveAttribute(
+      "href",
+      `/projects/${projectId}/canvas`,
+    );
     expect(screen.getByRole("link", { name: "进入第一集 · 雨巷相逢" })).toHaveAttribute(
       "href",
       `/studio/${episodeId}/script`,

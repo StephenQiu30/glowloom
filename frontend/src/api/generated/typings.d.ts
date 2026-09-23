@@ -46,6 +46,10 @@ declare namespace GeneratedAPI {
     risk_resolutions: CreationRiskResolution[];
   };
 
+  type applyProjectCanvasOperationsParams = {
+    project_id: string;
+  };
+
   type applyStoryboardDraftParams = {
     batch_id: string;
   };
@@ -188,6 +192,58 @@ declare namespace GeneratedAPI {
 
   type buildInitialReferenceGenerationTargetParams = {
     project_id: string;
+  };
+
+  type CanvasApplyResponse = {
+    document: CanvasDocument;
+    applied_revision: number;
+    replayed: boolean;
+  };
+
+  type CanvasConnection = {
+    id: string;
+    from_node_id: string;
+    to_node_id: string;
+    purpose: string;
+    revision: number;
+  };
+
+  type CanvasDocument = {
+    schema_version: number;
+    project_id: string;
+    revision: number;
+    nodes: CanvasNode[];
+    connections: CanvasConnection[];
+    tombstones: string[];
+  };
+
+  type CanvasNode = {
+    id: string;
+    kind: "text" | "image" | "video" | "audio" | "group" | "note";
+    title: string;
+    content?: string;
+    prompt?: string;
+    media_version_id?: string;
+    group_id?: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    revision: number;
+  };
+
+  type CanvasOperation = {
+    kind: "create_node" | "update_node" | "delete_node" | "create_edge" | "delete_edge";
+    node?: CanvasNode;
+    node_id?: string;
+    connection?: CanvasConnection;
+    connection_id?: string;
+    expected_revision: number;
+  };
+
+  type CanvasOperationRequest = {
+    operations: CanvasOperation[];
+    idempotency_key: string;
   };
 
   type ChangePasswordRequest = {
@@ -1215,6 +1271,10 @@ declare namespace GeneratedAPI {
 
   type getProductionBibleParams = {
     bible_id: string;
+  };
+
+  type getProjectCanvasParams = {
+    project_id: string;
   };
 
   type getProjectParams = {

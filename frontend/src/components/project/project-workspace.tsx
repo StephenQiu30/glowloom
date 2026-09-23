@@ -1,7 +1,13 @@
 "use client";
 
 import { PageLoading } from "@/components/system/page-loading";
-import { AlertCircle, ArrowRight, Clapperboard, ClipboardCheck } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  Clapperboard,
+  ClipboardCheck,
+  LayoutDashboard,
+} from "lucide-react";
 import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
 import Link from "next/link";
 
@@ -101,6 +107,12 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
                     <Link href={`/projects/${project.id}/reviews`}>
                       <ClipboardCheck data-icon="inline-start" aria-hidden="true" />
                       审核队列
+                    </Link>
+                  </Button>
+                  <Button asChild variant="ghost">
+                    <Link href={`/projects/${project.id}/canvas`}>
+                      <LayoutDashboard data-icon="inline-start" aria-hidden="true" />
+                      Canvas 画布
                     </Link>
                   </Button>
                   {episodes[0] ? (
