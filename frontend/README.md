@@ -1,43 +1,39 @@
-# Frontend
+# Lanverse Web 前端
 
-本服务负责创作界面、交互和服务端状态展示；正式边界见 [PROJECT](../PROJECT.md)，本轮整改依据与验收见 [前端规范化实施设计](../docs/design/前端规范化实施设计.md)。
+> **当前状态（2026-09-25）：** 本目录下的代码是旧实现（RTK Query、`@umijs/openapi` 生成链、只读画布切片等），不符合新设计，处置方式见 [0004 第 5 节](../docs/design/0004-实施路线与交付计划.md#5-现有代码的处置待确认)。旧实现说明可通过 `git show c99a5528:frontend/README.md` 查看。以下为新设计下本单元的目标职责。
 
-## 目录职责
+## 职责
 
-| 目录                                | 职责                                                                             |
-| ----------------------------------- | -------------------------------------------------------------------------------- |
-| `src/app`                           | Next.js 路由、Provider、主题与路由反馈装配                                       |
-| `src/components/<业务>`             | 按 Feature 分类的业务组件、endpoint、专用 Hook 与展示模型；身份装配属于 identity |
-| `src/components/ui`                 | 官方 shadcn/Radix 基础组件及统一 variant                                         |
-| `src/components/studio`、`system`   | 不依赖业务模块的共享展示组件                                                     |
-| `src/layout`                        | 独立的 BasicLayout、BasicHeader、BasicFooter、LayoutContainer 与主题切换         |
-| `src/api/generated`                 | 根据在线 Swagger 生成的 API；不得手改                                            |
-| `src/lib`                           | 请求、状态、权限、主题等明确命名的基础设施                                       |
-| `tests/architecture`、`unit`、`e2e` | 依赖边界、组件/业务契约、真实浏览器流程                                          |
+| 负责 | 不负责 |
+| --- | --- |
+| 流水线视图（按阶段推进）、画布视图、审阅、时间线编辑 | 持有供应商密钥，直连 Worker / Temporal / 供应商 |
+| 通过后端 REST 读写业务数据，通过 SSE 接收变更通知 | 把本地状态当作已保存的业务事实 |
+| 编辑器局部状态（选中、拖拽、视口、撤销栈） | 业务授权与计费判断 |
 
-当前 BasicLayout 使用顶部导航，页面统一通过它组合 Header、主内容和 Footer；身份查询由 `components/identity/studio-shell.tsx` 完成，通过属性注入布局。后续有侧边导航页面时可以增加独立侧边布局，复用结构组件；目前不预建无消费者的实现。
+设计依据：[0001 产品定义](../docs/design/0001-产品定义与需求分析.md)、[0002 §6 画布架构](../docs/design/0002-系统架构设计.md#6-画布架构)、[0003 §5–6](../docs/design/0003-技术选型决策.md)、视觉规范 [DESIGN.md](../DESIGN.md)。
 
-不设置 `features/` 目录。每个业务目录内通过文件职责区分 UI、endpoint 和 Hook；endpoint/Hook 不反向导入 UI，基础组件与布局不依赖业务；跨业务仅调用明确公共入口。架构测试检查边界与循环，不建立迁移兼容层。
+## 技术栈
 
-## UI 约定
+Next.js App Router、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui（Radix）、TanStack Query、Zustand、React Hook Form + Zod、`@xyflow/react`；测试使用 Vitest、React Testing Library、Playwright。
 
-使用 `components.json` 配置的官方 Radix registry；新增组件前执行 `pnpm dlx shadcn@latest docs <组件>`，新增后检查 diff，不能批量覆盖本地样式。表单使用 Field 系列；复杂校验使用 React Hook Form 与 Zod。Table 使用 shadcn Table，选择和展开使用 Select、RadioGroup、Collapsible。基础层可以使用实现组件所必需的原生标签，业务层保留 form 的提交语义和必要的布局语义标签；Radix 并不提供所有 HTML 元素的替代品。
+## 目标目录
 
-页面错误使用 Alert，字段错误使用 FieldError，短时成功使用 Sonner；空态和加载使用 Empty、Skeleton、Spinner。使用语义颜色、variant、size，保持明暗主题与无边框视觉规范。ESLint 限制业务层重复实现原生交互控件。
-
-## 开发与检查
-
-```sh
-pnpm install --frozen-lockfile
-pnpm dev
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm test:e2e tests/e2e/platform-health.spec.ts tests/e2e/frontend-normalization.spec.ts
+```text
+frontend/src/
+  app/                  # 路由与布局装配
+  features/<业务>/      # 业务组件、queries.ts、store.ts（按需）
+  features/canvas/      # engine / document / nodes / panels
+  components/ui/        # shadcn/ui 基础组件
+  lib/                  # api 客户端封装、sse、auth
+  gen/api/              # 由 contracts/openapi 生成，禁止手改
 ```
 
-API 生成入口为 `pnpm openapi`，由 `openapi2ts.config.ts` 读取在线契约；不恢复已删除的 `scripts/` 入口。当前旧 API 调用仍有迁移遗留，须配合 Go 注解和响应 schema 完整化，不能把现有生成目录视作全量迁移完成。
+## 画布要点
 
-浏览器测试通过 `playwright.config.ts` 启动独立服务与测试数据，相关系统工具须可用。上述两个用例不调用真实模型；分集生成验收需要单独具备真实 Agent/模型条件，不能与界面验收混淆。
+1. 引擎使用 React Flow；卡片与交互界面移植自 infinite-canvas（MIT），保留版权声明。
+2. 节点只存 `{ref_type, ref_id}`，卡片按 ID 订阅业务数据。
+3. 修改表达为命令，松手提交；带 `expected_revision` 与幂等键，409 时基于最新文档重放。
+4. 只渲染视口内节点，按缩放级别切换缩略图，视频默认封面、同时播放不超过 3 个。
+5. 进入画布开发前须通过 [0003 §6.3](../docs/design/0003-技术选型决策.md#63-方案-c-的落地约束) 的性能 PoC。
+
+完整工程约定见 [PROJECT.md 第 6 节](../PROJECT.md#6-前端)。

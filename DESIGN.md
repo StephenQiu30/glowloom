@@ -11,7 +11,7 @@
 - 选中项使用背景、字重及原有 `aria-current` / checked 状态表达，不依靠边框颜色。引用与表格的语义分隔、DAG 关系线不作全局清除。
 - 不使用全局 `border: none !important` 或 `box-shadow: none !important`；在共享组件和实际页面中修正样式。
 
-实施与验收见 [前端视觉规范落地](docs/design/前端视觉规范落地.md)。以下保留用户指定的参考原文，用于追溯，不能把参考中的“阴影代替边框”误当作本项目所有内容块都应带框。
+实施与验收见 「前端视觉规范落地」（已移除，见 Git 历史）。以下保留用户指定的参考原文，用于追溯，不能把参考中的“阴影代替边框”误当作本项目所有内容块都应带框。
 
 ---
 
@@ -332,4 +332,4 @@ What distinguishes Vercel from other monochrome design systems is its shadow-as-
 
 来源：https://fchangjun.github.io/awesome-design-md-cn/design-md/vercel/DESIGN.md
 
-本文保存用户指定的第三方 Vercel 风格分析，不代表 Vercel 官方规范。Lanverse 的本地应用范围、实施顺序和验证记录见 `docs/design/前端视觉规范落地.md`；业务设计仍以对应的正式设计文档为准。
+本文保存用户指定的第三方 Vercel 风格分析，不代表 Vercel 官方规范。Lanverse 的本地应用范围、实施顺序和验证记录见 「前端视觉规范落地」（已移除，见 Git 历史）；业务设计仍以对应的正式设计文档为准。

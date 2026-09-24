@@ -1,164 +1,39 @@
 # Lanverse 文档中心
 
-`docs/` 是产品范围、技术决策、可验证需求、实施顺序和验收证据的长期事实入口。目录只保留 `design/`、`prd/`、`requirement/`、`plan/`、`acceptance/` 五类文档；架构与设计决策统一收口到 `design/`，不再建立平行目录。
+2026-09-25 起，Lanverse 从零重新设计。此前的 133 份历史文档（design / prd / requirement / plan / acceptance）已移除，需要追溯时查阅 Git 历史（移除前最后一个版本为 `c99a5528`）。旧文档、旧验收记录和现有代码都**不作为新设计的依据**，只在实施阶段作为“可复用候选”接受审计。
 
-结构治理规范已收口至各模块 Design；验证与清理范围见 [结构治理验收记录](acceptance/0012-项目结构治理与ELK环境边界验收记录.md)。
+## 当前文档
 
-2026-09-08 Harness 与画布完整能力评阅：[0015 能力缺口评审与闭环详细设计](design/0015-Harness能力缺口评审与创作画布闭环详细设计.md)。对照用户提供的三份统一设计稿与阅读索引，逐项评阅 42 项能力、11 类 Flow，补充专业模型、执行/采纳/事件合同和可编辑画布；用户已要求开始 Agent 实现，当前切片与验证见 [Agent 服务实施计划](plan/0015-Agent服务实施计划.md)，不代表全部能力或画布已实现。
+| 编号 | 文档 | 回答的问题 | 状态 |
+| --- | --- | --- | --- |
+| 0001 | [产品定义与需求分析](design/0001-产品定义与需求分析.md) | 为谁解决什么问题、完整工作流、功能与非功能需求、MVP 边界 | 草案，待评审 |
+| 0002 | [系统架构设计](design/0002-系统架构设计.md) | 领域模型、服务与模块划分、关键流程、数据、失败路径、画布架构 | 草案，待评审 |
+| 0003 | [技术选型决策](design/0003-技术选型决策.md) | 每一层用什么技术、为什么、放弃了什么 | 草案，待评审 |
+| 0004 | [实施路线与交付计划](design/0004-实施路线与交付计划.md) | 分几个阶段、每阶段交付什么、如何验收、现有代码如何处置 | 草案，待评审 |
 
-2026-09-08 核心文本闭环已完成本机组合验收：原稿上传 → 四阶段真实模型 → 人工批准/采纳 → 正式文本回执及恢复，见 [0013 实施状态](plan/0013-新架构后端实施计划.md) 与 [0013 最新验收证据](acceptance/0013-新架构后端验收记录.md)。不表示生产切流、完整画布或成片能力完成。
+阅读顺序：0001 → 0002 → 0003 → 0004。后一份依赖前一份的结论。
 
-2026-09-08 当前实现评审与 LibTV 对标调研：[0014 核心闭环能力调研与差距设计](design/0014-LibTV核心闭环能力调研与差距设计.md)、[0014 当前实现评审与闭环核验记录](acceptance/0014-当前实现评审与闭环核验记录.md)。建议先补齐文本分镜采纳与恢复，再闭合必要参考、镜头视频、声音和 MP4 交付；无限画布、模型市场等扩展后置。文本 A 边界已按用户后续要求实施；媒体 B 边界仍是调研建议，不表示成片能力已验收。
+## 文档规则
 
-2026-09-07 用户确认按新设计全面推进，当前优先 Backend：[0013 架构](design/0013-创作编排与多媒体画布架构调整设计.md)、[3004 Harness](design/3004-AgentHarness专业能力与创作流程设计.md)、[1003 画布](design/1003-多媒体创作画布与运行可视化设计.md) 已成为新流程的目标边界。后端执行入口为 [0013 后端实施计划](plan/0013-新架构后端实施计划.md)。旧 VP 队列作为旧切片与待映射业务范围保留，不继续扩大 Go 创作编排。
+1. **先 Design，后实施。** 0001–0003 被接受前不编码新功能；0004 被接受后才按阶段领取任务。
+2. **文档按需产生，不套模板。** 只有当某个模块复杂到 0002 放不下时，才新建专项设计（如画布、生成任务）；每个阶段只维护一份验收记录。
+3. **区分三类信息。** 公开事实（附来源）、合理推断、待确认事项分开写；时效性信息（模型能力、价格、法规）实施前重新核实。
+4. **状态词只有四个：** 草案（待评审）→ 已接受 → 已实施（附验收证据）→ 已取代（写明被谁取代）。“已接受”不等于“已实现”。
+5. **设计变化先改文档再改代码。** 同一决策只在一份文档里维护，其他地方链接过去。
 
-复杂功能先读取当前正式文档、代码、依赖、Schema、接口、测试和真实运行状态，再形成 Design；Design 必须把“当前事实”“目标设计”和“尚未验证”分开。既有实现可以作为设计输入和缺口证据，但不能自动证明新 Requirement、Plan 或 Acceptance 已完成。所有新实施与目标验收 Checklist 初始均为 `[ ]`。
-
-## 目录职责
-
-| 目录 | 回答的问题 | 必须包含 | 不应包含 |
-|---|---|---|---|
-| `design/` | 系统和模块如何设计 | 决策与取舍、边界、数据与接口、状态、失败路径 | 易变排期、未验证的完成声明 |
-| `prd/` | 在已接受设计边界内为什么做、为谁做、做什么 | 产品目标、范围、非目标、发布门 | 推翻 Design 的隐式架构、执行日志 |
-| `requirement/` | 什么契约必须被满足 | 可测试的功能/非功能需求、输入输出、约束 | 方案推演、模糊愿景 |
-| `plan/` | 按什么顺序安全落地 | 依赖、阶段、交付门、回滚点、执行 Checklist | 把计划状态当作实现事实 |
-| `acceptance/` | 如何判定完成、实际验证了什么 | 验收标准、命令、输入、结果、缺失条件与残余风险 | 没有证据的“已通过”结论 |
-
-## 文档链路
-
-默认评审与实施顺序为：
+## 目录
 
 ```text
-Design 集按依赖逐份接受 → 同步受影响既有 Design → PRD → Requirement → Plan → Acceptance Criteria
-                                                              ↓
-                                         Implementation/CI → Acceptance Evidence → agent-browser
+docs/
+  README.md        本索引
+  design/          产品与技术设计（含决策记录）
+  acceptance/      每个阶段一份验收记录（实施开始后才创建）
 ```
 
-先用 Design 基于当前事实固定问题、边界、Owner、数据/接口、状态、失败路径与取舍；同一目标的 Design 集必须按依赖逐份被用户接受，随后才同步它们影响的既有 Design，并在统一边界内派生 PRD 的产品范围、可测试 Requirement、可执行 Plan 和初始全为未通过的 Acceptance Criteria。编码只能从已接受 Plan 中领取一个完整任务；每个任务经真实 CI 后独立提交，并把真实命令、输入和结果回填为 Acceptance Evidence。完整开发和 CI 都通过后才进行浏览器全流程验收。小型变更可以只创建必要文档，但跳过某类文档时必须在 Design 中说明原因，不为凑齐链路批量建立空文件。
+## 与根目录文件的关系
 
-同一主题的文档门禁固定如下：
-
-1. Design 未接受：只允许调研、设计修订和验证当前事实，不派生 PRD/Requirement/Plan，不编码。
-2. 目标 Design 集已按依赖全部接受：先同步所有被它们取代或影响的既有 Design，再创建并逐份接受 PRD、Requirement、Plan。
-3. Plan 已接受：按依赖顺序实施；每个完整任务执行 Red → Green → Refactor 和真实 CI，随后回填该任务 Acceptance Evidence、检查 diff/hygiene，再独立提交，不提前累计多个任务。
-4. Acceptance：初始标准可以在编码前建立但全部未勾选；只有本任务新执行的真实命令、输入和结果才能更新证据，证据属于该任务提交的一部分。
-5. 全部开发切片与全量真实 CI 通过后，才运行 `agent-browser` 完成最终 Web Journey；随后回填浏览器证据、执行文档/diff/hygiene 检查并提交最终验收文档。浏览器验收不能替代单元、契约、集成或后端事实验证。
-
-Plan 内的 Checklist 追踪“下一步做什么和执行到哪里”；Acceptance 内的 Requirement Checklist 追踪“哪些契约已有按新设计重新执行的真实证据”。两者不得互相替代：Plan 勾选不能证明验收通过，历史实现证据也不能预先勾选新设计。
-
-## 当前 StoryGraph 设计文件推进顺序
-
-StoryGraph 的 `SG-D01`–`SG-D21` 已完成历史文档评审，`SG-I01`–`SG-I20` 保留当时实现事实；`SG-I21` 的已有代码增量不代表切片完成。2026-08-30 接受视觉生产设计后，当前执行以以下 VP 队列和 [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) 为准。旧流程不再保留一份重复的逐步解锁表，历史评审过程通过 Git 追溯，旧证据不抵扣当前目标。
-
-## 当前视觉生产重排推进顺序
-
-用户于 2026-08-30 接受 `0011` 的 11 项核心决策并要求开始展开实现。由于该设计改变剧本解析、Production Bible、参考资产与 Storyboard 的正式顺序，必须先逐份同步既有 Design，再重新接受唯一 PRD、Requirement、Plan 与初始全未通过 Acceptance。每一步完成必要修订、文档检查与独立评审并独立提交后才解锁下一步；用户已接受 `VP-D03`，并授权后续 `VP-D04`–`VP-D15` 在独立评审通过后直接按队列实施和提交，不再逐份等待询问，但仍不得跳过前序门禁；`VP-D15` 完成前不编码新目标。
-
-| Step | 唯一对象 | 当前完成门 | 未完成时的限制 |
-|---|---|---|---|
-| `VP-D01` | [0011 视觉生产工作台 Design](design/0011-剧本视觉生产工作台与世界观预设设计.md) | **已完成（2026-08-30）**：用户要求开始展开实现，11 项核心决策全部成为目标事实；本文与索引随本次接受记录独立提交 | 只解锁 `VP-D02`；不表示功能已实现 |
-| `VP-D02` | [0006 领域语言](design/0006-领域语言与模块命名规范.md) | **已完成（2026-08-30）**：用户已接受 Scene Fact、Identity Resolution、Claim-backed Interaction、Reference Plan、组合 Binding 与 Scene Production Packet 规范名；本文与索引随接受记录独立提交 | 只解锁 `VP-D03`；不表示 Wire、数据库或功能已实现 |
-| `VP-D03` | [0001 完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | **已完成（2026-08-30）**：用户已接受 Production-ready Scene Coverage、视觉生产主链、Preset Owner、P0–P4 与当前 MVP/长期平台边界；本文与索引随接受记录独立提交 | 只解锁 `VP-D04`；不表示跨服务架构或功能已实现 |
-| `VP-D04` | [0003 系统总体架构](design/0003-系统总体架构.md) | **已完成（2026-08-30）**：三路独立评审通过，按用户自动实施授权接受各 Owner 先提交、typed Query 驱动主产品、StoryGraph 在后按 Schema 投影，以及 P0–P4 跨模块激活顺序 | 只解锁 `VP-D05`；不表示 StoryGraph Schema 已扩展 |
-| `VP-D05` | [0010 StoryGraph 总设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | **已完成（2026-08-30）**：三路独立反例评审通过，按用户自动实施授权接受 `storygraph-production` Owner Input、Node/Edge/Payload/Manifest、Interaction/Reference 投影、legacy→production 线性升级与 SceneProductionPacket 交接 | 只解锁 `VP-D06`；不表示 StoryGraph Production Schema 已实现 |
-| `VP-D06` | [3001 Production Bible](design/3001-项目制作圣经生成执行框架设计.md) | **已完成（2026-08-30）**：三路独立反例评审通过，固定 SceneFact-first、全剧身份/状态调和、Gate 1/2、四 checkpoint/七 family、Interaction/Continuity 与局部恢复 | 只解锁 `VP-D07`；不表示 Wire、数据库或功能已实现 |
-| `VP-D07` | [3003 Agent/Harness](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | **已完成（2026-08-30）**：三路独立评审通过，固定 SceneFact-first Stage DAG、`StageVariantKeyProduction`、Skill Release 供应链、严格 Vision/Wire 与恢复围栏 | 只解锁 `VP-D08`；不表示 Go/Python Wire 或 Bundle 已实现 |
-| `VP-D08` | [3002 Storyboard Harness](design/3002-本地-Codex-分镜智能体执行框架设计.md) | **已完成（2026-08-30）**：产品主链、Wire/Schema、Owner/恢复三轴隔离反例评审通过，固定 Packet-first `direct_storyboard`、Backend Binding normalizer 与 Gate 5 | 只解锁 `VP-D09`；不表示新 Wire、Bundle 或 Storyboard 功能已实现 |
-| `VP-D09` | [2002 Backend 领域设计](design/2002-后端领域模块功能设计.md) | **已完成（2026-08-30）**：Owner/事务、Hash/Query、恢复/并发三轴隔离反例评审通过，固定 13 family、具体 Record/Head、两层 Receipt、typed Query 与 Compiler | 只解锁 `VP-D10`；不表示 Model/API 或新事务已实现 |
-| `VP-D10` | [2051 Generation](design/2051-通用媒体Provider与Generation执行器设计.md) | **已完成（2026-08-30）**：产品主链、Target/Wire、Owner/恢复三轴隔离反例评审通过，固定 Approved Plan 六类 strict Target、无环 Bundle/Vision、单次发送权与 base/composition Owner Apply | 只解锁 `VP-D11`；不表示 Generation 多候选执行契约 或真实媒体闭环已实现 |
-| `VP-D11` | [2055 Human Gate](design/2055-Workflow公共HumanGate命令与恢复设计.md) | **已完成（2026-08-30）**：五 Gate 产品语义、Subject/Decision Wire、Effect/Resume 三轴隔离反例评审通过，固定 Gate 4 per-target task、显式 Effect Plan 与同 Decision 恢复 | 只解锁 `VP-D12`；不表示 Human Gate 五栅栏契约 或 Workflow 已实现 |
-| `VP-D12` | [1002 Frontend 功能](design/1002-前端功能模块设计.md) | **已完成（2026-08-30）**：主旅程/信息架构、Gate 交互/状态、响应式/失败路径三轴隔离反例评审通过，固定项目级 Guided Studio、五 Gate 时间线、覆盖矩阵、Bundle 对比与影响抽屉 | 只解锁 `VP-D13`；不表示新页面或 Query 已实现 |
-| `VP-D13` | [0010 唯一 PRD](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | **已完成（2026-08-31）**：产品价值/范围、完整旅程/发布门、指标/非目标三轴隔离反例评审通过，北极星改为 Production-ready Scene Coverage | 只解锁 `VP-D14`；不表示 Requirement 或实现已完成 |
-| `VP-D14` | [0010 Requirement](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) 与 [3003 Agent Requirement](requirement/3003-StoryGraph剧本解析Harness与内置Skill需求规格.md) | **已完成（2026-08-31）**：产品映射、Owner/事务、失败/恢复三轴独立反例审阅通过，固定五 Gate、制作世界、Preset/六类参考、Packet-first 分镜与十三 Stage Agent/Harness 可测合同 | 只解锁 `VP-D15`；不表示任何合同已实现或验收 |
-| `VP-D15` | [0010 唯一 Plan](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) 与 [Acceptance](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | **已完成（2026-08-31）**：产品/依赖、合同覆盖、执行/回滚三轴独立反例审阅通过；126 个 VPR 与 95 个 VPA 一一映射到十五个切片，全部目标初始为 `[ ]` | 文档链完成，只解锁 `VP-I01`；历史 `SG-Ixx` 证据不抵扣 |
-| `VP-I01` | P0 Scene Fact 生产契约 首个垂直切片 | **当前步骤**：从已接受 Plan 领取，执行 Red → Green → Refactor、定向验证、当时全量 CI、Evidence 与独立提交 | 不提前实现 Interaction、Preset 或媒体链 |
-
-## 编号与命名
-
-文件统一使用 `NNNN-中文业务主题.md`。四位编号由服务边界决定：
-
-| 编号段 | 目标边界 | 负责内容 |
-|---|---|---|
-| `0001–0999` | 系统级、产品级、跨服务 | 平台产品、架构、资源所有权与总交付计划 |
-| `1000–1999` | Frontend | Web、Canvas、AI UI 与 Collaboration |
-| `2000–2999` | Backend | Go 业务服务、运行程序、契约、数据与基础设施 |
-| `3000–3999` | Production Intelligence / Agent | Production Bible、Storyboard 与受限 Agent Harness |
-
-- 同一业务主题跨目录时复用同一编号，例如 `3002` 同时关联 Requirement、Design、Plan 与 Acceptance。
-- 一个目录内同一编号最多对应一份文档；编号分配后不重排、不复用。
-- 编号表示服务归属和推荐阅读顺序，不表示优先级、版本或完成状态。
-- Compose 运行角色、数据库、中间件和 Worker 不单独占用服务编号；它们归入目标 Owner 或跨服务设计。
-- 架构决策直接作为 Design 保存；被取代时在正文记录替代关系，历史版本由 Git 追溯。
-
-## 状态词
-
-| 状态 | 含义 |
-|---|---|
-| 已接受目标 | 产品或设计已经确认，但不代表代码完成 |
-| 待独立评审 | 从已接受 Design 派生的 PRD/Requirement/Plan/Acceptance 尚未单独接受 |
-| 待实施 | 目标契约已定义，执行 Checklist 尚未完成 |
-| 待验收 | 实施可能存在，但尚无按本设计重新执行的完整证据 |
-| 已验收 | Acceptance 记录了对应范围的真实输入、命令和结果 |
-| 已冻结 | 文档只保留为当前事实或历史方案输入；必须等唯一队列的指定步骤激活，不能直接评审、派生或编码 |
-| 历史记录 | 只保存旧实现事实，不进入 0→1 完成判断 |
-| 已取代 | 仅用于历史追溯，不再指导新实现 |
-
-“Design 已接受”不能写成“功能已实现”，“Plan 已完成”也不能替代 Acceptance。只有目标 Acceptance 才能形成新设计的完成证据。
-
-## 文档集索引
-
-`—` 表示该主题当前不需要对应类型，不创建占位文件。
-
-| 编号 | 主题 | PRD | Design | Requirement | Plan | Acceptance | 当前状态 |
-|---|---|---|---|---|---|---|---|
-| `0001` | 平台产品与完整设计基线 | [产品范围与验收基线](prd/0001-产品范围与验收基线.md) | [完整设计基线](design/0001-AI短剧制作平台完整设计基线.md) | [平台 MVP 需求规格](requirement/0001-平台MVP需求规格.md) | [见 0007 交付计划](plan/0007-平台0到1交付计划.md) | — | `VP-D03` 视觉生产主链与 MVP 边界已接受完成；此前 `SG-D04` 平台事实保留，旧 PRD/Requirement/Plan 不抵扣新目标 |
-| `0003` | 系统总体架构 | — | [总体架构](design/0003-系统总体架构.md) | — | — | — | `VP-D04` 视觉生产跨服务架构已接受完成；此前 `SG-D06` 四图与基础设施事实保留 |
-| `0004` | 架构分层与依赖 | — | [分层规则](design/0004-架构分层与依赖规则.md) | — | — | — | 已接受目标；`SG-D07` StoryGraph 依赖方向复核完成 |
-| `0006` | 领域语言与模块命名 | — | [命名规范](design/0006-领域语言与模块命名规范.md) | — | — | — | `VP-D02` 视觉生产术语已接受（2026-08-30）；此前 `SG-D03` 事实保留 |
-| `0007` | 平台 0→1 交付 | — | — | — | [交付计划](plan/0007-平台0到1交付计划.md) | — | 未来 Platform Complete 目标；当前不是 StoryGraph 执行入口 |
-| `0008` | 资源所有权与交付 | — | — | — | [所有权台账](plan/0008-资源所有权与交付台账.md) | — | 未来 Platform Complete 资源目标；当前不是 StoryGraph 执行入口 |
-| `0009` | 剧本到分镜 MVP 垂直切片 | [产品需求](prd/0009-剧本到分镜MVP产品需求.md) | [垂直切片设计](design/0009-剧本到分镜MVP垂直切片设计.md) | [需求规格](requirement/0009-剧本到分镜MVP需求规格.md) | [实施计划](plan/0009-剧本到分镜MVP实施计划.md) | [验收记录](acceptance/0009-剧本到分镜MVP验收记录.md) | 历史 MVP 已验收；`SG-D08` 演进说明已加入，不回写旧证据 |
-| `0010` | StoryGraph 内容图、DAG 与视觉资产 | [产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [内容图与 DAG 创作画布设计](design/0010-StoryGraph内容图与DAG创作画布设计.md) | [跨服务需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | `VP-D15` 已接受 P0–P4 唯一 Plan 与全未通过 Acceptance；旧 `SG-I01`–`SG-I20` 仅保留历史事实，`SG-I21` 增量暂停，当前实施 `VP-I01` |
-| `0011` | 剧本视觉生产工作台与世界观预设 | — | [跨服务产品设计](design/0011-剧本视觉生产工作台与世界观预设设计.md) | — | — | — | 已接受目标（2026-08-30）；`VP-D01`–`VP-D15` 已完成，当前只实施 `VP-I01`，不表示后续功能已实现 |
-| `0013` | 创作编排与多媒体画布架构调整 | — | [架构调整设计](design/0013-创作编排与多媒体画布架构调整设计.md) | — | — | — | 已接受目标；后端优先，执行和证据见 0013 后端计划 |
-| `0015` | Harness 与创作画布完整能力补齐 | [执行可追踪性 PRD](prd/0015-Agent执行可追踪性产品需求.md) | [能力缺口评审与闭环详细设计](design/0015-Harness能力缺口评审与创作画布闭环详细设计.md) | [Agent Spec](requirement/0015-Agent执行清单与尝试追踪需求规格.md) | [实施 Checklist](plan/0015-Agent服务实施计划.md) | [验收与审查 Checklist](acceptance/0015-Agent执行可追踪性验收记录.md) | Attempt 已推送 eedd57fc；Manifest 按 Spec 完成本地合同验收，尚未提交；完整能力仍按切片验收 |
-| `0016` | Go 后端业务完整性 | [PRD](prd/0016-Go后端业务完整性产品需求.md) | [Design](design/0016-Go后端业务完整性实施设计.md) | [Spec](requirement/0016-Go后端业务完整性需求规格.md) | [Checklist](plan/0016-Go后端业务完整性实施计划.md) | [验收与审查](acceptance/0016-Go后端业务完整性验收记录.md) | 后端优先实施；全量能力按真实证据逐项验收 |
-| `1001` | 前端应用架构与交付 | — | [应用架构](design/1001-前端应用架构.md) | [架构需求规格](requirement/1001-前端应用架构需求规格.md) | [应用与功能交付计划](plan/1001-前端应用与功能交付实施计划.md) | — | `SG-D14` 已同步单应用、Provider Settings、只读双 Lens 与 Query Owner；旧派生文档的 StoryGraph 重叠项冻结至 `SG-D17`–`SG-D21` |
-| `1002` | 前端创作工作台与功能模块 | [创作工作台产品需求](prd/1002-前端创作工作台产品需求.md) | [模块设计](design/1002-前端功能模块设计.md) | [功能需求规格](requirement/1002-前端功能模块需求规格.md) | [合并至 1001 计划](plan/1001-前端应用与功能交付实施计划.md) | — | `VP-D12` 已接受项目级 Guided Studio、五 Gate、逐 Target Bundle 审核、影响抽屉、RTK Query 状态 Owner 与失败/响应式边界；旧派生文档按替代范围清理到 `VP-D13`–`VP-D15` |
-| `1003` | 多媒体创作画布与运行可视化 | — | [画布专项设计](design/1003-多媒体创作画布与运行可视化设计.md) | — | — | — | 已接受目标；联动 0013/3004，定义布局、资源绑定、分镜组、交互、媒体和恢复，尚未实施 |
-| `2001` | 后端服务与运行架构 | — | [服务架构](design/2001-后端服务架构.md) | [运行架构需求规格](requirement/2001-后端运行架构需求规格.md) | [运行架构实施计划](plan/2001-后端运行架构实施计划.md) | [统一入口与本机环境复用](acceptance/2057-Backend统一入口与本机环境复用验收记录.md) | 单 Backend Binary、三层 Compose 与直连现有 Logstash 已通过本机完成门；远端 CI 待后续 push 触发 |
-| `2002` | 后端领域服务与生产闭环 | — | [模块设计](design/2002-后端领域模块功能设计.md) | [领域服务需求规格](requirement/2002-后端领域服务与生产闭环需求规格.md) | [生产闭环实施计划](plan/2002-后端领域服务与生产闭环实施计划.md) | [持久任务恢复](acceptance/2007-Workflow持久任务恢复验收记录.md) · [编译输入前置](acceptance/2008-Workflow编译输入前置验收记录.md) · [确定性编译](acceptance/2009-Workflow确定性编译验收记录.md) · [启动与对账](acceptance/2010-Workflow启动事实与Temporal对账验收记录.md) · [人工信号协调](acceptance/2011-Workflow人工信号协调验收记录.md) · [取消控制协调](acceptance/2012-Workflow取消控制协调验收记录.md) · [人工任务续租与释放](acceptance/2013-Workflow人工任务续租与释放验收记录.md) · [人工任务过期回收](acceptance/2014-Workflow人工任务过期回收验收记录.md) · [暂停与恢复控制](acceptance/2015-Workflow暂停与恢复控制协调验收记录.md) · [Worker 重启恢复](acceptance/2016-Workflow工作者重启恢复验收记录.md) · [Node Cache 确定性事实](acceptance/2017-Workflow节点缓存确定性事实验收记录.md) · [Node 输出绑定](acceptance/2018-Workflow节点输出绑定验收记录.md) · [Node 输入冻结](acceptance/2019-Workflow节点输入冻结验收记录.md) · [Node Runtime Cache](acceptance/2020-Workflow节点运行缓存验收记录.md) · [Human Gate 输入与决议绑定](acceptance/2021-Workflow人工栅栏输入与决议绑定验收记录.md) · [Production Bible Owner Receipt](acceptance/2022-ProductionBible确认回执验收记录.md) · [Workflow Owner Receipt 与 Gate 输出](acceptance/2023-Workflow生产回执与人工栅栏输出验收记录.md) · [Workflow 执行身份与 Script Executor](acceptance/2024-Workflow执行身份与剧本输入节点验收记录.md) · [重复投递收敛](acceptance/2052-Workflow重复投递收敛验收记录.md) · [Agent 执行策略与独立失败](acceptance/2053-Agent执行策略与独立失败验收记录.md) · [Agent 执行总时限](acceptance/2054-Agent执行总时限验收记录.md) · [阶段 5 完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | `SG-D10` 领域 Owner 复核完成；历史验收只证明既有切片，不抵扣 StoryGraph 新链路 |
-| `2003` | 后端语言与运行边界 | — | [运行边界策略](design/2003-后端语言与运行边界策略.md) | — | — | — | 已接受目标；`SG-D05` StoryGraph/Agent 运行边界复核完成 |
-| `2051` | 通用媒体 Provider 与 Generation 执行器 | — | [通用媒体 Provider 与执行器设计](design/2051-通用媒体Provider与Generation执行器设计.md) | — | — | — | `VP-D10` 已接受 Approved Plan 六类 strict Target、Provider-neutral Target/Execution 分层、无环 Bundle/Vision 和精确 Owner Apply；既有 Provider/Secret 事实保留，不抵扣实现 |
-| `2055` | Workflow 公共 Human Gate 命令与恢复 | — | [公共 Human Gate 设计](design/2055-Workflow公共HumanGate命令与恢复设计.md) | — | — | — | `VP-D11` 已接受五 Gate strict Subject/Decision、Gate 4 per-target task、显式 Effect Plan 与 Decision→Effect→Resume 恢复；旧八类 Gate 只保留历史 |
-| `2056` | Workflow 阶段 5 完成度审计 | — | — | — | — | [完成度审计](acceptance/2056-Workflow阶段5完成度审计.md) | 静态证据审计完成，未改变阶段完成状态 |
-| `2057` | Backend 统一入口与本机环境复用 | — | [服务架构](design/2001-后端服务架构.md) | [运行架构需求规格](requirement/2001-后端运行架构需求规格.md) | [运行架构实施计划](plan/2001-后端运行架构实施计划.md) | [验收记录](acceptance/2057-Backend统一入口与本机环境复用验收记录.md) | 阶段 6 本机完成门通过；远端 CI 未触发 |
-| `3001` | 项目制作圣经 | [统一产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [制作圣经设计](design/3001-项目制作圣经生成执行框架设计.md) | [统一需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [统一验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | 当前子设计保留；旧派生链已删除，完成状态以当前验收为准 |
-| `3002` | 本地 Codex 分镜智能体 | [统一产品需求](prd/0010-StoryGraph内容图与DAG创作画布产品需求.md) | [分镜执行框架设计](design/3002-本地-Codex-分镜智能体执行框架设计.md) | [统一需求规格](requirement/0010-StoryGraph内容图与DAG创作画布需求规格.md) | [唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [统一验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | 当前子设计保留；Agent 契约补充见 3003，不从旧计划领取任务 |
-| `3003` | StoryGraph 剧本解析 Harness 与内置 Skill | — | [Harness 与内置 Skill 设计](design/3003-StoryGraph剧本解析Harness与内置Skill设计.md) | [Agent Contract Requirement](requirement/3003-StoryGraph剧本解析Harness与内置Skill需求规格.md) | [合并至 0010 唯一实施计划](plan/0010-StoryGraph内容图与DAG创作画布实施计划.md) | [合并至 0010 验收标准](acceptance/0010-StoryGraph内容图与DAG创作画布验收标准.md) | `VP-D14` 已接受十三 Stage、Skill 供应链、Wire/Release/Candidate 与失败恢复合同；当前尚未编码 |
-| `3004` | Agent Harness 专业能力与创作流程 | — | [Harness 专项设计](design/3004-AgentHarness专业能力与创作流程设计.md) | — | — | — | 已接受目标；联动 0013/1003，定义 42 项能力、11 类 Flow、任务与上下文、预算修复和画布执行合同，尚未实施 |
-
-`2002` 的最新边界审计：[Workflow 阶段 5 完成度审计](acceptance/2056-Workflow阶段5完成度审计.md)；最新运行增量验收为 [Agent 执行总时限](acceptance/2054-Agent执行总时限验收记录.md)，前置边界见 [Workflow 重复投递收敛](acceptance/2052-Workflow重复投递收敛验收记录.md)、[Shot 绑定目标与单 Shot 局部重跑](acceptance/2050-Shot绑定目标与单Shot局部重跑验收记录.md)、[正式 Shot Workflow 后半程](acceptance/2049-正式ShotWorkflow后半程验收记录.md)、[Production Shot 图片绑定](acceptance/2048-ProductionShot图片绑定验收记录.md)、[Generation CandidateSet 与 Workflow 人工选择](acceptance/2047-GenerationCandidateSet与Workflow人工选择验收记录.md)、[Generation Provider 成功输出物化](acceptance/2046-GenerationProvider成功输出物化验收记录.md)、[Generation Provider 提交与结果对账](acceptance/2045-GenerationProvider提交与结果对账验收记录.md)、[Generation 高成本准备与执行授权](acceptance/2044-Generation高成本准备与执行授权验收记录.md)、[Cost 费用预留与追加式账本](acceptance/2043-Cost费用预留与追加式账本验收记录.md)、[Cost 图片价格与不可变估算](acceptance/2042-Cost图片价格与不可变估算验收记录.md)、[Cost Project Budget 唯一事实](acceptance/2041-Cost项目预算唯一事实验收记录.md)、[Quota 图片生成日配额](acceptance/2040-Quota图片生成日配额验收记录.md)、[Generation 人工候选选择](acceptance/2039-Generation人工候选选择验收记录.md)、[Generation 图片候选与确定性 QC](acceptance/2038-Generation图片候选与确定性QC验收记录.md) 与 [Asset 图片产物就绪](acceptance/2037-Asset图片产物就绪验收记录.md)。
-
-## 历史实现记录
-
-下列文件只保存旧实现的验证事实，可作为新 Design 识别当前事实和缺口的输入，但不能决定新目标边界，也不能抵扣上表任何 Plan 或 Acceptance：
-
-| 编号 | 记录 | 适用性 |
-|---|---|---|
-| `2004` | [后端运行边界与事件契约验收记录](acceptance/2004-后端运行边界与事件契约验收记录.md) | 历史记录，不计入 0→1 完成判断 |
-| `2005` | [数据库基线与兼容窗口验收记录](acceptance/2005-数据库基线与兼容窗口验收记录.md) | 历史记录，不计入 0→1 完成判断 |
-| `2006` | [单入口启动与对象存储上传验收记录](acceptance/2006-单入口启动与对象存储上传验收记录.md) | 历史记录，不计入 0→1 完成判断 |
-
-## 事实优先级与维护
-
-1. 已接受的 Design 决定问题、方案、Owner 和技术边界；随后派生的 PRD 决定该边界内的产品范围，不得反向隐式改写 Design。
-2. Requirement 决定可测试契约；既有代码只用于识别缺口，不能让新条款预先变成已满足。
-3. Plan 只描述从当前事实到目标设计的实施依赖与门禁，初始 Checklist 全部为 `[ ]`。
-4. 目标 Acceptance 只证明按新设计重新执行且明确记录的范围；历史记录不得抵扣目标 Checklist。
-5. 新增、改名、取代文档时必须同步更新本索引和相对链接，并检查目标状态、实施状态与历史证据是否被隔离。
-6. 不建立全局 `misc`、重复分类、空占位文档或第二套事实来源。
-
-## 文档归并规则
-
-同一决策只在当前负责文档维护；原 0002/0005 分别归入 0003/0006，不复用已撤销编号。3001/3002 的子设计保留，已被替代的八份旧派生文件删除，当前需求与执行统一进入 0010 链路。历史验收引用旧依据时使用不可变 Git 版本链接，不能直接替换成不同语义的新需求。只有部分内容被替代的文档继续保留，逐项确认剩余契约后再清理。Design 不保存会话日志、Git 工作区清单或重复验收输出。
+- `AGENTS.md`：协作与 Git 规则，长期有效。
+- `PROJECT.md`：已按新设计重写的工程规范（目录、技术栈、质量门禁），与 0001–0004 一同评审。
+- `README.md`、`agent/README.md`、`frontend/README.md`：已按新设计重写；旧实现说明通过 `git show c99a5528:<路径>` 查看。
+- `DESIGN.md`：视觉与交互规范，保留沿用。
+- 新设计与旧代码的主要差异见 [0003 第 9 节](design/0003-技术选型决策.md#9-与旧实现的差异)。
