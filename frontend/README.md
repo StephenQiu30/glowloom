@@ -19,8 +19,10 @@
 | 框架与语言 | Next.js（App Router）、React、TypeScript strict、pnpm |
 | UI | Tailwind CSS、shadcn/ui、Radix UI、lucide-react、next-themes、Sonner |
 | 代码质量 | ESLint（flat config：eslint-config-next、typescript-eslint、react-hooks、jsx-a11y）、Prettier（含 prettier-plugin-tailwindcss）、eslint-config-prettier |
-| 状态与数据 | TanStack Query、Zustand、openapi-typescript + openapi-fetch |
-| 表单与表格 | React Hook Form + Zod、shadcn Table + TanStack Table |
+| 状态与数据 | TanStack Query、Zustand + Immer、openapi-typescript + openapi-fetch |
+| 表单与表格 | React Hook Form + Zod、shadcn Table + TanStack Table + TanStack Virtual |
+| 富文本 | Tiptap（Mention 扩展：`@角色 / @场景 / @道具` 实体引用） |
+| Agent（V2） | CopilotKit + AG-UI 协议、Streamdown |
 | 画布与交互 | @xyflow/react（React Flow）、dnd-kit |
 | 测试 | Vitest、React Testing Library、Playwright |
 

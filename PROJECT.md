@@ -52,17 +52,17 @@ Lanverse/
 | 范围 | 技术 |
 | --- | --- |
 | 前端 | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier |
-| 前端组件 | TanStack Query、Zustand、React Hook Form + Zod、@xyflow/react、TanStack Table、dnd-kit、Sonner、next-themes、openapi-typescript + openapi-fetch |
+| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、openapi-typescript + openapi-fetch；V2：CopilotKit（AG-UI） |
 | 后端 | Go、Gin、GORM（pgx 驱动）、golang-migrate、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator |
 | 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go |
-| Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK |
+| Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；V2：ag-ui-protocol |
 | 工作流 | Temporal（自建，PostgreSQL 持久化） |
 | 中间件 | PostgreSQL、Redis、Kafka（KRaft）、MinIO |
 | 媒体 | FFmpeg / ffprobe |
 | 可观测 | OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo / Jaeger、Temporal UI、Kafka UI |
 | 部署 | Docker、Docker Compose；规模化后 Kubernetes |
 
-每个中间件的职责边界见 [0301 §6](docs/design/0301-技术选型决策.md#6-中间件职责)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
+每个中间件的职责边界见 [0301 §6](docs/design/0301-技术选型决策.md#6-中间件职责)；与 LibTV 的技术对齐与差异见 [0301 §10](docs/design/0301-技术选型决策.md#10-与-libtv-的技术对齐)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
 
 ## 4. Go 后端
 
@@ -166,13 +166,16 @@ frontend/
 ```
 
 1. 服务端事实只来自 TanStack Query；SSE 事件只用于让相关查询失效。
-2. 编辑器高频交互状态放 Zustand；持久化一律通过后端命令接口。
-3. 基础控件、表单、弹窗、菜单、表格一律用 shadcn/ui；不混用其他组件体系。
-4. 模型参数表单只由 `param_schema` 驱动。
-5. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
-6. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。
-7. 付费操作先展示报价并由用户确认。
-8. 脚本：`pnpm dev`、`pnpm build`、`pnpm lint`、`pnpm format`、`pnpm format:check`、`pnpm typecheck`、`pnpm test`、`pnpm test:e2e`、`pnpm openapi`；检查脚本不修改文件。
+2. 编辑器高频交互状态放 Zustand（嵌套更新用 Immer）；持久化一律通过后端命令接口。
+3. 基础控件、表单、弹窗、菜单、表格一律用 shadcn/ui；不混用其他组件体系（不引入 Ant Design）。
+4. 富文本与实体引用用 Tiptap；`@角色 / @场景 / @道具` 保存为结构化引用，不只保存纯文本。
+5. 超过 100 行的列表（镜头表、资产库、任务中心）使用 TanStack Virtual。
+6. V2 Agent 界面使用 CopilotKit + AG-UI；Agent 下发的画布修改只作为提案展示，用户确认后经命令接口提交。
+7. 模型参数表单只由 `param_schema` 驱动。
+8. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
+9. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。
+10. 付费操作先展示报价并由用户确认。
+11. 脚本：`pnpm dev`、`pnpm build`、`pnpm lint`、`pnpm format`、`pnpm format:check`、`pnpm typecheck`、`pnpm test`、`pnpm test:e2e`、`pnpm openapi`；检查脚本不修改文件。
 
 ## 7. 契约与生成
 

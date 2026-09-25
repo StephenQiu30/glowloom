@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | S1 [liblib.tv 首页](https://www.liblib.tv/) | 导航、功能入口、模型入口、模板分类 | 2026-09-25 |
 | S2 [liblib.tv 产品介绍页](https://www.liblib.tv/wappro?sourceid=040004) | 产品定位与宣传数据 | 2026-09-25 |
-| S3 首页与画布页的公开前端资源（HTML 内嵌数据与 147 个公开 JS 文件，静态文本分析） | 模型注册表、节点类型、节点动作、任务可写字段、合规字段 | 2026-09-25 |
+| S3 首页与画布页的公开前端资源（HTML 内嵌数据、147 个公开 JS 文件与 16 个样式文件，解压后静态文本分析） | 模型注册表、节点类型、节点动作、任务可写字段、合规字段、前端技术栈、Agent 协议 | 2026-09-25 |
 | S4 [libtv-labs/libtv-skills](https://github.com/libtv-labs/libtv-skills)（提交 `c609246`） | 公开 OpenAPI：会话、消息、上传；Agent 调用方式 | 2026-09-25 |
 
 **限制：**
@@ -94,7 +94,35 @@
 - Skill 说明中的原则：**调用方只传原话，不拆任务、不写提示词**；拆分镜、选模型、写提示词、编排工作流都由后端 Agent 完成。
 - 宣称的复杂能力：一句话生成短剧（剧本 → 分镜 → 成片）、复刻视频风格、音乐生成 MV、局部修改、元素替换、镜头调整、风格迁移、视频续写。
 
-### 3.6 合规与资产【事实，S3】
+### 3.6 前端技术栈【事实，S3】
+
+依据代码中的库特征与运行时标记识别（只能证明前端使用，不代表后端）：
+
+| 类别 | 识别结果 |
+| --- | --- |
+| 框架与构建 | Next.js（Turbopack 构建产物）、React 19 |
+| 样式与组件 | Tailwind CSS；Radix UI（`data-radix-*`）；同时存在 Ant Design v5（CSS-in-JS 变量），即两套组件体系混用 |
+| 画布 | React Flow |
+| 状态 | Zustand + Immer |
+| 数据校验与请求 | Zod（大量使用）、axios |
+| 富文本 | ProseMirror（Tiptap 相关代码），用于脚本 / 文本编辑与实体引用 |
+| 长列表 | TanStack Virtual（`useVirtualizer`） |
+| AI 输出渲染 | Streamdown（流式 Markdown） |
+| 图标 | lucide |
+| 未发现 | TanStack Query、Redux、i18next、Yjs、socket.io |
+
+### 3.7 Agent 实现【事实，S3】
+
+| 项 | 识别结果 |
+| --- | --- |
+| 前端框架 | **CopilotKit**（`useAgent`、`frontendTools`、`humanInTheLoop`、`useFrontendTool`、Agent 状态渲染） |
+| 协议 | **AG-UI** 事件流：`RUN_STARTED`、`TEXT_MESSAGE_CONTENT`、`REASONING_MESSAGE_CONTENT`、`TOOL_CALL_START`、`TOOL_CALL_RESULT`、`STATE_SNAPSHOT`、`CUSTOM` |
+| 传输 | 自建 WebSocket：`wss://<媒体 API 域名>/ws?token=…&project_id=…&agent_name=…&agent_version=…`，按项目建立连接；另有基于 SSE 的 AG-UI HTTP 通道代码 |
+| 改画布 | 后端通过 `CUSTOM` 事件 `canvas_patch`（会话、序号、动作、节点列表、连线列表）下发画布补丁；前端校验节点属于当前项目后应用，并定位到新节点 |
+| 发起生成 | 服务端工具 `create_generation_task`；结果以 `TOOL_CALL_RESULT` 返回，业务错误（如积分不足）带错误码 |
+| 调试 | Agent 调试抽屉：Context、Events、Send、Local state |
+
+### 3.8 合规与资产【事实，S3】
 
 - 图片节点：`portraitAssetId`、`portraitCompliantExempt`、`portraitComplianceCheckedAtMs`、`protectionType`、`copyrightChain`。
 - 视频节点：`assetVideoAssetId`、合规豁免与检查时间、`assetVideoCertifiedInPlace`、字幕地址。
@@ -113,7 +141,9 @@
 | D7 | 镜头表是一个节点 | 【事实】`SCRIPT_V2.rows[]` 含镜头全部字段、图片 / 视频版本 | 【推断】LibTV 的分镜是“画布里的一张表”；我们的镜头是一等业务对象，画布上的镜头表节点是它的视图 |
 | D8 | 版本以列表挂在节点上 | 【事实】`imageVersions`、`videoVersions`、`textHash`、`payloadHash` | 与我们的“候选 / 选定 / 输入 hash”思路一致 |
 | D9 | 对话式 Agent 驱动画布 | 【事实】会话、消息序号、结果写入项目画布 | 【推断】Agent 与人使用同一套画布操作；我们需要一层 UI / Agent / 开放接口共用的命令层 |
-| D10 | 协作 | 【事实】存在协作开关（`createCollabFlag`）与 WebSocket 使用 | 【未知】协作协议与冲突处理方式 |
+| D10 | 协作 | 【事实】存在协作开关（`createCollabFlag`）；未发现 Yjs 等 CRDT 库；WebSocket 主要用于 Agent 通道 | 【未知】多人协作协议与冲突处理方式 |
+| D13 | Agent 通过工具与事件操作画布 | 【事实】CopilotKit + AG-UI；`canvas_patch` 自定义事件改画布；`create_generation_task` 服务端工具发起生成 | Agent 与人使用同一套画布操作语义；我们采用同样的协议，但画布修改与付费生成须经命令层与用户确认（见 0201 §7.4） |
+| D14 | 前端技术栈 | 【事实】Next.js、Tailwind、Radix、React Flow、Zustand + Immer、Zod、ProseMirror、TanStack Virtual | 与 Lanverse 选型高度一致；技术对齐见 0301 §10 |
 | D11 | 模板与社区 | 【事实】作品带 `projectUuid`、`templateUuid`、`snapshotId`、最终成片地址 | 【推断】项目有快照；模板是某个快照的可复制副本 |
 | D12 | 合规字段进入数据模型 | 【事实】肖像合规、版权链、保护类型 | 合规状态应是媒体资产的属性，而不是事后检查 |
 

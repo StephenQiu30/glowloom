@@ -17,7 +17,7 @@ Agent 服务是受控的 AI 执行单元：**FastAPI + Temporal Activity Worker 
 
 ## 技术栈
 
-Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；Ruff、mypy、pytest。
+Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；V2 对话式 Agent 使用 ag-ui-protocol（与 LibTV 同为 AG-UI 协议）；Ruff、mypy、pytest。
 
 ## Agent Harness
 
