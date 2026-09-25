@@ -57,10 +57,10 @@ Lanverse/
 | 范围 | 技术 |
 | --- | --- |
 | 前端 | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier |
-| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、openapi-typescript + openapi-fetch；V2：CopilotKit（AG-UI） |
+| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、openapi-typescript + openapi-fetch；CopilotKit（AG-UI） |
 | 后端 | Go、Gin、GORM（pgx 驱动）、golang-migrate、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator |
 | 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go |
-| Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；V2：ag-ui-protocol |
+| Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；ag-ui-protocol |
 | 工作流 | Temporal（自建，PostgreSQL 持久化） |
 | 中间件 | PostgreSQL、Redis、Kafka（KRaft）、对象存储（开发 MinIO，生产火山引擎 TOS，均为 S3 协议） |
 | 媒体 | FFmpeg / ffprobe |
@@ -175,7 +175,7 @@ frontend/
 3. 基础控件、表单、弹窗、菜单、表格一律用 shadcn/ui；不混用其他组件体系（不引入 Ant Design）。
 4. 富文本与实体引用用 Tiptap；`@角色 / @场景 / @道具` 保存为结构化引用，不只保存纯文本。
 5. 超过 100 行的列表（镜头表、资产库、任务中心）使用 TanStack Virtual。
-6. V2 Agent 界面使用 CopilotKit + AG-UI；Agent 下发的画布修改只作为提案展示，用户确认后经命令接口提交；付费生成一律由用户二次确认。
+6. Agent 界面使用 CopilotKit + AG-UI；Agent 下发的画布修改只作为提案展示，用户确认后经命令接口提交；付费生成一律由用户二次确认。
 7. 模型参数表单只由 `param_schema` 驱动。
 8. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
 9. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。

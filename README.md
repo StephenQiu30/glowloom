@@ -11,12 +11,12 @@ Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发�
                     每一步：AI 产出候选 → 人工审阅 / 修改 → 选定为正式版本
 ```
 
-MVP 定位为 POC，做到“配音”为止；剪辑、交付、画布与对话式 Agent 在 V2（[PRD-01 §8](docs/prd/01-产品需求文档.md)）。
+首个版本（MVP）做到“配音”为止，同时提供流水线、画布与对话式 Agent；剪辑与交付在 V2（[PRD-01 §8](docs/prd/01-产品需求文档.md)）。
 
 ## 架构概览
 
 ```text
-Next.js（流水线视图 /（V2）画布 / 审阅 / 时间线）
+Next.js（流水线视图 / 画布 / 审阅 /（V2）时间线）
    │ REST + SSE
 Go backend-api（Gin · 命令层 · 领域模块）──启动 / 信号──→ Temporal
    │                                                  ├─ backend-worker（Go 工作流 · 写库 · FFmpeg）
@@ -59,7 +59,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | [REQ-04 术语表](docs/requirement/04-术语表.md) · [REQ-05 界面与交互需求](docs/requirement/05-界面与交互需求.md) | 统一术语；信息架构、页面与关键交互 |
 | [DES-01 系统架构设计](docs/design/01-系统架构设计.md) | 顶层原则、领域模型、Operation、Temporal 工作流、Agent Harness、事件、画布、扩展点 |
 | [DES-08 技术选型决策](docs/design/08-技术选型决策.md) | 前端、后端、Agent、工作流、中间件、模型的明确选型 |
-| [PLN-01 实施路线与交付计划](docs/plan/01-实施路线与交付计划.md) | P0 与 M1–M4、验收、人力、风险 |
+| [PLN-01 实施路线与交付计划](docs/plan/01-实施路线与交付计划.md) | P0 与 M1–M5、验收、人力、风险 |
 | [PROJECT.md](PROJECT.md) | 仓库结构、目录与编码约定、质量门禁 |
 | [DESIGN.md](DESIGN.md) | 视觉与交互规范 |
 | [AGENTS.md](AGENTS.md) | 协作与 Git 规则 |

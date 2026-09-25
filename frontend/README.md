@@ -10,7 +10,7 @@
 | 通过后端 REST 读写业务数据，通过 SSE 接收变更通知 | 把本地状态当作已保存的业务事实 |
 | 编辑器局部状态（选中、拖拽、视口、撤销栈） | 业务授权与计费判断 |
 
-设计依据：[PRD-01 产品定义](../docs/prd/01-产品需求文档.md)、[DES-01 §9 画布](../docs/design/01-系统架构设计.md#9-画布v2顶层在-mvp-定型)、[DES-08 §2、§7](../docs/design/08-技术选型决策.md)、视觉规范 [DESIGN.md](../DESIGN.md)。
+设计依据：[PRD-01 产品定义](../docs/prd/01-产品需求文档.md)、[DES-01 §9 画布](../docs/design/01-系统架构设计.md#9-画布)、[DES-08 §2、§7](../docs/design/08-技术选型决策.md)、视觉规范 [DESIGN.md](../DESIGN.md)。
 
 ## 技术栈
 
@@ -22,7 +22,7 @@
 | 状态与数据 | TanStack Query、Zustand + Immer、openapi-typescript + openapi-fetch |
 | 表单与表格 | React Hook Form + Zod、shadcn Table + TanStack Table + TanStack Virtual |
 | 富文本 | Tiptap（Mention 扩展：`@角色 / @场景 / @道具` 实体引用） |
-| Agent（V2） | CopilotKit + AG-UI 协议、Streamdown |
+| Agent | CopilotKit + AG-UI 协议、Streamdown |
 | 画布与交互 | @xyflow/react（React Flow）、dnd-kit |
 | 测试 | Vitest、React Testing Library、Playwright |
 

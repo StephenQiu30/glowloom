@@ -11,13 +11,13 @@ Agent 服务是受控的 AI 执行单元：**FastAPI + Temporal Activity Worker 
 | `agent` 队列 Activity：分集、逐集解析、设定集抽取、分镜、提示词编写等 LLM 任务（经 Harness） | 连接业务数据库 |
 | 供应商适配器：生图、视频（图生视频、全能参考）、TTS 的提交 / 查询 / 取消，输入角色映射，用量解析 | 编排业务流程（归 Go 工作流） |
 | 内容审核调用 | 持有对象存储管理凭据（只用预签名 URL） |
-| `agent-api`：健康检查、Harness 调试与评测；V2 对话式 Agent（AG-UI） | 自动重提结果未知的付费请求 |
+| `agent-api`：健康检查、Harness 调试与评测；对话式 Agent（AG-UI） | 自动重提结果未知的付费请求 |
 
 设计依据：[DES-01 §6–7](../docs/design/01-系统架构设计.md#7-agent-服务与-agent-harness)、[DES-08 §4](../docs/design/08-技术选型决策.md#4-agent-服务fastapi--agent-harness)。
 
 ## 技术栈
 
-Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；V2 对话式 Agent 使用 ag-ui-protocol（与 LibTV 同为 AG-UI 协议）；Ruff、mypy、pytest。
+Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；对话式 Agent 使用 ag-ui-protocol（与 LibTV 同为 AG-UI 协议）；Ruff、mypy、pytest。
 
 ## Agent Harness
 
