@@ -1,7 +1,7 @@
 # Lanverse 工程规范
 
 > 目标规范，2026-09-25 按 [0201 系统架构（第 3 版）](docs/design/0201-系统架构设计.md) 与 [0301 技术选型（第 3 版）](docs/design/0301-技术选型决策.md) 编写，随 0101–0401 一同评审。
-> 仓库中现有的 `backend/`、`agent/`、`frontend/` 代码是旧实现，**不符合本规范**，按 [0401 第 5 节](docs/design/0401-实施路线与交付计划.md#5-现有代码的处置待确认) 处置。本文的路径与命令是目标约定，不表示已落地。
+> 仓库中现有的 `backend/`、`agent/`、`frontend/` 代码是旧实现，**不符合本规范**，按 [0401 第 5 节](docs/design/0401-实施路线与交付计划.md#5-现有代码的处置已确认方案-a) 处置。本文的路径与命令是目标约定，不表示已落地。
 
 ## 1. 文件职责
 
@@ -52,12 +52,12 @@ Lanverse/
 | 范围 | 技术 |
 | --- | --- |
 | 前端 | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier |
-| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、openapi-typescript + openapi-fetch；V2：CopilotKit（AG-UI） |
+| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、openapi-typescript + openapi-fetch；V1：CopilotKit（AG-UI） |
 | 后端 | Go、Gin、GORM（pgx 驱动）、golang-migrate、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator |
 | 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go |
-| Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；V2：ag-ui-protocol |
+| Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；V1：ag-ui-protocol |
 | 工作流 | Temporal（自建，PostgreSQL 持久化） |
-| 中间件 | PostgreSQL、Redis、Kafka（KRaft）、MinIO |
+| 中间件 | PostgreSQL、Redis、Kafka（KRaft）、对象存储（开发 MinIO，生产火山引擎 TOS，均为 S3 协议） |
 | 媒体 | FFmpeg / ffprobe |
 | 可观测 | OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo / Jaeger、Temporal UI、Kafka UI |
 | 部署 | Docker、Docker Compose；规模化后 Kubernetes |
@@ -98,7 +98,7 @@ backend/
 10. Operation 状态机、`unknown` 对账、预留与结算遵循 [0201 §4、§6.2](docs/design/0201-系统架构设计.md#4-生成操作operation模型)。
 11. Kafka：主题 `lanverse.<上下文>.<事件>.v<N>`，键为 `project_id`；消费者按事件 ID 去重。
 12. Redis：只放可重建的数据（会话、缓存、限流、锁、Pub/Sub）；键名 `lanverse:<用途>:<标识>`，设置过期时间。
-13. MinIO：桶私有；对象键 `projects/{project_id}/{类别}/{id}`；浏览器只通过预签名 URL 访问。
+13. 对象存储（开发 MinIO / 生产 TOS）：只通过 S3 协议访问，不使用厂商私有 API；桶私有；对象键 `projects/{project_id}/{类别}/{id}`；浏览器只通过预签名 URL 访问。
 14. 依赖由 Wire 在组合根注入（`wire.go` 声明 Provider Set，`wire_gen.go` 为生成物，禁止手改，CI 校验生成一致）；接口由消费方按需定义；不使用 `Ixxx` / `Impl`，不建 `utils`、`common`。
 15. `context.Context` 沿调用链传递；错误用 `%w` 包装并保留可判定的错误链；goroutine 必须有所有者、取消与等待。
 16. 日志统一用 Zap（不混用标准库 `log` / `slog`）的结构化字段（`trace_id`、`project_id`、`operation_id`），不记录凭据与剧本全文。
@@ -170,7 +170,7 @@ frontend/
 3. 基础控件、表单、弹窗、菜单、表格一律用 shadcn/ui；不混用其他组件体系（不引入 Ant Design）。
 4. 富文本与实体引用用 Tiptap；`@角色 / @场景 / @道具` 保存为结构化引用，不只保存纯文本。
 5. 超过 100 行的列表（镜头表、资产库、任务中心）使用 TanStack Virtual。
-6. V2 Agent 界面使用 CopilotKit + AG-UI；Agent 下发的画布修改只作为提案展示，用户确认后经命令接口提交。
+6. V1 Agent 界面使用 CopilotKit + AG-UI；Agent 下发的画布修改只作为提案展示，用户确认后经命令接口提交；付费生成一律由用户二次确认。
 7. 模型参数表单只由 `param_schema` 驱动。
 8. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
 9. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。

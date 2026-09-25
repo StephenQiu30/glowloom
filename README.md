@@ -2,7 +2,7 @@
 
 Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发布成片为终点，把整部剧解析、角色与场景设定、参考定稿、分镜、全能参考视频生成、配音、剪辑和交付放进同一条可审阅、可恢复、成本透明的生产线；并提供 LibTV 式的无限画布作为探索与精修界面。
 
-> **当前状态（2026-09-25）：** 产品与技术设计已从零重做，处于评审阶段。仓库中的 `backend/`、`agent/`、`frontend/` 代码是旧实现，不符合新设计，处置方式见 [0401 第 5 节](docs/design/0401-实施路线与交付计划.md#5-现有代码的处置待确认)。
+> **当前状态（2026-09-25）：** 产品与技术设计已从零重做，处于评审阶段。仓库中的 `backend/`、`agent/`、`frontend/` 代码是旧实现，不符合新设计，处置方式见 [0401 第 5 节](docs/design/0401-实施路线与交付计划.md#5-现有代码的处置已确认方案-a)。
 
 ## 工作流
 
@@ -38,7 +38,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | 后端 | Go：Gin、GORM、golang-migrate、Viper、Zap、Wire、swag、Temporal SDK、go-redis、franz-go、minio-go |
 | Agent 服务 | Python：FastAPI、Pydantic、Temporal Python SDK、Agent Harness、httpx |
 | 工作流 | Temporal |
-| 中间件 | PostgreSQL、Redis、Kafka、MinIO |
+| 中间件 | PostgreSQL、Redis、Kafka；对象存储开发用 MinIO、生产用火山引擎 TOS |
 | 媒体 | FFmpeg / ffprobe |
 | 可观测 | OpenTelemetry、Prometheus、Grafana、Loki |
 
