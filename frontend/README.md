@@ -1,6 +1,6 @@
 # Lanverse Web 前端
 
-> **当前状态（2026-09-25）：** 本目录下的代码是旧实现（RTK Query、`@umijs/openapi` 生成链、只读画布切片等），不符合新设计，处置方式见 [0401 第 5 节](../docs/plan/0401-实施路线与交付计划.md#5-现有代码的处置已确认方案-a)。旧实现说明可通过 `git show c99a5528:frontend/README.md` 查看。以下为新设计下本单元的目标职责。
+> **当前状态（2026-09-25）：** 本目录下的代码是旧实现（RTK Query、`@umijs/openapi` 生成链、只读画布切片等），不符合新设计，处置方式见 [PLN-01 第 5 节](../docs/plan/01-实施路线与交付计划.md#5-现有代码的处置已确认方案-a)。旧实现说明可通过 `git show c99a5528:frontend/README.md` 查看。以下为新设计下本单元的目标职责。
 
 ## 职责
 
@@ -10,7 +10,7 @@
 | 通过后端 REST 读写业务数据，通过 SSE 接收变更通知 | 把本地状态当作已保存的业务事实 |
 | 编辑器局部状态（选中、拖拽、视口、撤销栈） | 业务授权与计费判断 |
 
-设计依据：[0101 产品定义](../docs/prd/0101-产品需求文档.md)、[0301 §9 画布](../docs/design/0301-系统架构设计.md#9-画布v1顶层在-mvp-定型)、[0308 §2、§7](../docs/design/0308-技术选型决策.md)、视觉规范 [DESIGN.md](../DESIGN.md)。
+设计依据：[PRD-01 产品定义](../docs/prd/01-产品需求文档.md)、[DES-01 §9 画布](../docs/design/01-系统架构设计.md#9-画布v2顶层在-mvp-定型)、[DES-08 §2、§7](../docs/design/08-技术选型决策.md)、视觉规范 [DESIGN.md](../DESIGN.md)。
 
 ## 技术栈
 
@@ -22,7 +22,7 @@
 | 状态与数据 | TanStack Query、Zustand + Immer、openapi-typescript + openapi-fetch |
 | 表单与表格 | React Hook Form + Zod、shadcn Table + TanStack Table + TanStack Virtual |
 | 富文本 | Tiptap（Mention 扩展：`@角色 / @场景 / @道具` 实体引用） |
-| Agent（V1） | CopilotKit + AG-UI 协议、Streamdown |
+| Agent（V2） | CopilotKit + AG-UI 协议、Streamdown |
 | 画布与交互 | @xyflow/react（React Flow）、dnd-kit |
 | 测试 | Vitest、React Testing Library、Playwright |
 
@@ -44,6 +44,6 @@ frontend/src/
 2. 节点只存 `{ref_type, ref_id}`，卡片按 ID 订阅业务数据。
 3. 修改表达为命令，松手提交；带 `expected_revision` 与幂等键，409 时基于最新文档重放。
 4. 只渲染视口内节点，按缩放级别切换缩略图，视频默认封面、同时播放不超过 3 个。
-5. 进入画布开发前须通过 [0308 §7](../docs/design/0308-技术选型决策.md#7-画布) 的性能 PoC。
+5. 进入画布开发前须通过 [DES-08 §7](../docs/design/08-技术选型决策.md#7-画布) 的性能 PoC。
 
 完整工程约定见 [PROJECT.md 第 6 节](../PROJECT.md#6-前端)。
