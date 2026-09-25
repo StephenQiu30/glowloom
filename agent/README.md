@@ -1,6 +1,6 @@
 # Lanverse Agent 服务（Python）
 
-> **当前状态（2026-09-25）：** 本目录下的代码是旧实现（自有执行存储 + Python 侧编排 + Codex Harness），不符合新设计，处置方式见 [0401 第 5 节](../docs/design/0401-实施路线与交付计划.md#5-现有代码的处置已确认方案-a)。旧实现说明可通过 `git show c99a5528:agent/README.md` 查看。以下为新设计下本单元的目标职责。
+> **当前状态（2026-09-25）：** 本目录下的代码是旧实现（自有执行存储 + Python 侧编排 + Codex Harness），不符合新设计，处置方式见 [0401 第 5 节](../docs/plan/0401-实施路线与交付计划.md#5-现有代码的处置已确认方案-a)。旧实现说明可通过 `git show c99a5528:agent/README.md` 查看。以下为新设计下本单元的目标职责。
 
 ## 职责
 
@@ -13,7 +13,7 @@ Agent 服务是受控的 AI 执行单元：**FastAPI + Temporal Activity Worker 
 | 内容审核调用 | 持有对象存储管理凭据（只用预签名 URL） |
 | `agent-api`：健康检查、Harness 调试与评测；V1 对话式 Agent（AG-UI） | 自动重提结果未知的付费请求 |
 
-设计依据：[0201 §6–7](../docs/design/0201-系统架构设计.md#7-agent-服务与-agent-harness)、[0301 §4](../docs/design/0301-技术选型决策.md#4-agent-服务fastapi--agent-harness)。
+设计依据：[0301 §6–7](../docs/design/0301-系统架构设计.md#7-agent-服务与-agent-harness)、[0308 §4](../docs/design/0308-技术选型决策.md#4-agent-服务fastapi--agent-harness)。
 
 ## 技术栈
 

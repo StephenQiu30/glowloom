@@ -1,7 +1,7 @@
 # Lanverse 工程规范
 
-> 目标规范，2026-09-25 按 [0201 系统架构（第 3 版）](docs/design/0201-系统架构设计.md) 与 [0301 技术选型（第 3 版）](docs/design/0301-技术选型决策.md) 编写，随 0101–0401 一同评审。
-> 仓库中现有的 `backend/`、`agent/`、`frontend/` 代码是旧实现，**不符合本规范**，按 [0401 第 5 节](docs/design/0401-实施路线与交付计划.md#5-现有代码的处置已确认方案-a) 处置。本文的路径与命令是目标约定，不表示已落地。
+> 目标规范，2026-09-25 按 [0301 系统架构（第 3 版）](docs/design/0301-系统架构设计.md) 与 [0308 技术选型（第 3 版）](docs/design/0308-技术选型决策.md) 编写，随 0101–0401 一同评审；需求规格见 `docs/requirement/`。
+> 仓库中现有的 `backend/`、`agent/`、`frontend/` 代码是旧实现，**不符合本规范**，按 [0401 第 5 节](docs/plan/0401-实施路线与交付计划.md#5-现有代码的处置已确认方案-a) 处置。本文的路径与命令是目标约定，不表示已落地。
 
 ## 1. 文件职责
 
@@ -11,10 +11,15 @@
 | `PROJECT.md` | 仓库结构、技术栈、目录与编码约定、质量门禁（本文件） |
 | `DESIGN.md` | 视觉与交互规范 |
 | `README.md` | 项目简介、启动方式、文档入口 |
-| `docs/design/` | 产品需求、调研、架构、选型、实施计划（编号规则见 `docs/README.md`） |
+| `docs/prd/` | 01xx 产品需求文档与竞品调研（编号规则见 `docs/README.md`） |
+| `docs/requirement/` | 02xx 功能与非功能需求、业务流程与用例、术语、界面与交互需求 |
+| `docs/design/` | 03xx 架构、数据、接口、工作流、Agent、画布、安全设计与技术选型 |
+| `docs/plan/` | 04xx 实施路线、项目管理与变更 |
+| `docs/test/` | 05xx 测试策略、需求追踪矩阵、AI 评测 |
+| `docs/operation/` | 06xx 环境部署、CI/CD、监控告警、备份恢复与故障响应 |
 | `docs/acceptance/` | 每个里程碑的验收记录 |
 
-业务范围与架构决策以 `docs/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改设计文档并评审，再同步本文。
+业务范围以 `docs/prd/` 与 `docs/requirement/` 为准，架构决策以 `docs/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改需求或设计文档并评审，再同步本文。
 
 ## 2. 仓库结构与职责
 
@@ -26,7 +31,7 @@ Lanverse/
   contracts/
     activities/     Go 工作流 ↔ Python Activity 的输入输出 JSON Schema 与样例
   deploy/           Docker Compose、镜像、中间件配置、环境模板
-  docs/             设计与验收文档
+  docs/             生命周期文档：产品需求、需求规格、设计、计划、测试、运维、验收
 ```
 
 | 单元 | 必须负责 | 不得负责 |
@@ -62,7 +67,7 @@ Lanverse/
 | 可观测 | OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo / Jaeger、Temporal UI、Kafka UI |
 | 部署 | Docker、Docker Compose；规模化后 Kubernetes |
 
-每个中间件的职责边界见 [0301 §6](docs/design/0301-技术选型决策.md#6-中间件职责)；与 LibTV 的技术对齐与差异见 [0301 §10](docs/design/0301-技术选型决策.md#10-与-libtv-的技术对齐)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
+每个中间件的职责边界见 [0308 §6](docs/design/0308-技术选型决策.md#6-中间件职责)；与 LibTV 的技术对齐与差异见 [0308 §10](docs/design/0308-技术选型决策.md#10-与-libtv-的技术对齐)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
 
 ## 4. Go 后端
 
@@ -93,9 +98,9 @@ backend/
 5. 一个用例一个事务；需要异步的后续动作写 Outbox，由 relay 投递到 Kafka。
 6. 所有写操作经命令层：权限、幂等键、`expected_version`（不匹配返回 409）、审计。
 7. 所有业务表带 `org_id` / `project_id`，仓储查询强制带项目条件。
-8. **工作流只写结果与状态字段**，不覆盖人工配置（0201 原则 P3）。
+8. **工作流只写结果与状态字段**，不覆盖人工配置（0301 原则 P3）。
 9. 工作流：只用 Go 编写，代码确定性、无 I/O；Workflow ID 用业务 ID；Activity 先查已有结果再执行；代码变更使用 Temporal 版本化机制。
-10. Operation 状态机、`unknown` 对账、预留与结算遵循 [0201 §4、§6.2](docs/design/0201-系统架构设计.md#4-生成操作operation模型)。
+10. Operation 状态机、`unknown` 对账、预留与结算遵循 [0301 §4、§6.2](docs/design/0301-系统架构设计.md#4-生成操作operation模型)。
 11. Kafka：主题 `lanverse.<上下文>.<事件>.v<N>`，键为 `project_id`；消费者按事件 ID 去重。
 12. Redis：只放可重建的数据（会话、缓存、限流、锁、Pub/Sub）；键名 `lanverse:<用途>:<标识>`，设置过期时间。
 13. 对象存储（开发 MinIO / 生产 TOS）：只通过 S3 协议访问，不使用厂商私有 API；桶私有；对象键 `projects/{project_id}/{类别}/{id}`；浏览器只通过预签名 URL 访问。
