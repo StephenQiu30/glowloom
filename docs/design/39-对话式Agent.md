@@ -24,7 +24,7 @@
 
 ## 2. 数据
 
-`agent.session`（`last_seq`、`budget_micros`、`spent_micros`，后两列新增）、`agent.message`（`seq`、`role`、`event_type`、`content`、`run_id`）、`agent.proposal`（`kind`、`commands`、`diff`、`operation_ids`、`status`）；见 DES-02 §5.14。
+`agent.session`（`last_seq`、`budget_micros`、`spent_micros`，后两列新增）、`agent.message`（`seq`、`role`、`event_type`、`content`、`run_id`）、`agent.proposal`（`kind`、`commands`、`diff`、`operation_ids`、`status`）；见 DES-02 §5.13。
 
 ## 3. 接口
 
@@ -69,4 +69,11 @@ PERF-11（首个流式片段 ≤ 3 秒）；SEC-09（提示注入用例集）。
 
 ## 10. 待确认
 
-无。
+| 编号 | 问题 | 默认方案（确认前按此实施） | 确认时机 |
+| --- | --- | --- | --- |
+| DES-39-Q1 | CopilotKit 与 ag-ui-protocol 的许可（原 REQ-37-Q2）。 | MVP 开发前核实；不满足要求时前端改用自研面板直接消费 AG-UI 事件流。 | M5 开始前 |
+| DES-39-Q2 | 对话式 Agent 使用哪个 LLM？ | 经 Model Router 选择，P0 评测后确定（TST-03）；不同 Skill 可配置不同模型。 | P0 结束时 |
+| DES-39-Q3 | 浏览器断线后，服务端的 Agent 运行是否继续？ | 继续运行并逐条落库；重连后按 `after_seq` 续传，不重复执行。 | M5 开始前 |
+| DES-39-Q4 | 会话与消息保留多久？ | 保留 90 天；删除会话为软删除，30 天后清理。 | M5 实施中 |
+
+需求层面的待确认问题见 [REQ-37](../requirement/37-对话式Agent.md) 的“待确认”。

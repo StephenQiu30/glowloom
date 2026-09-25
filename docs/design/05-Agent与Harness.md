@@ -253,7 +253,7 @@ QueryResult   = { state: pending|running|succeeded|failed|not_found, progress?, 
 | `CUSTOM: operation_draft` | 生成草稿：`{proposal_id, quote_items[]}` → 前端调用报价并展示确认组件 |
 | `CUSTOM: canvas_commands` | 画布命令提案（布局 + 业务），同样需用户应用 |
 
-提案由 Go 在转发时落库到 `agent.proposal`（`status = proposed`），前端展示；用户“应用”调用 `POST /agent/proposals/{id}:apply`（DES-03 §4.12）。
+提案由 Go 在转发时落库到 `agent.proposal`（`status = proposed`），前端展示；用户“应用”调用 `POST /agent/proposals/{id}:apply`（DES-03 §4.11）。
 
 ### 7.3 提案结构
 
