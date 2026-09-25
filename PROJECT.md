@@ -12,8 +12,8 @@
 | `DESIGN.md` | 视觉与交互规范 |
 | `README.md` | 项目简介、启动方式、文档入口 |
 | `docs/prd/` | PRD：产品需求文档与竞品调研（编号规则见 `docs/README.md`） |
-| `docs/requirement/` | REQ：功能需求总表、非功能需求、业务流程与用例、术语、界面；06 起为功能文件 |
-| `docs/design/` | DES：架构、数据、接口、工作流、Agent、画布、安全设计与技术选型 |
+| `docs/requirement/` | REQ：功能需求总表、非功能需求、业务流程与用例、术语、界面；06 起为功能需求文件（一个功能一个文件） |
+| `docs/design/` | DES：01–08 架构、数据、接口、工作流、Agent、画布、安全设计与技术选型；09 起为功能设计（与功能需求文件一一对应） |
 | `docs/plan/` | PLN：实施路线、项目管理与变更 |
 | `docs/test/` | TST：测试策略、需求追踪矩阵、AI 评测 |
 | `docs/operation/` | OPS：环境部署、CI/CD、监控告警、备份恢复与故障响应 |
