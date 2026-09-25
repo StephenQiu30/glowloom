@@ -10,11 +10,19 @@
 | 通过后端 REST 读写业务数据，通过 SSE 接收变更通知 | 把本地状态当作已保存的业务事实 |
 | 编辑器局部状态（选中、拖拽、视口、撤销栈） | 业务授权与计费判断 |
 
-设计依据：[0101 产品定义](../docs/design/0101-产品定义与需求分析.md)、[0201 §6 画布架构](../docs/design/0201-系统架构设计.md#6-画布架构)、[0301 §5–6](../docs/design/0301-技术选型决策.md)、视觉规范 [DESIGN.md](../DESIGN.md)。
+设计依据：[0101 产品定义](../docs/design/0101-产品定义与需求分析.md)、[0201 §9 画布](../docs/design/0201-系统架构设计.md#9-画布v1顶层在-mvp-定型)、[0301 §2、§7](../docs/design/0301-技术选型决策.md)、视觉规范 [DESIGN.md](../DESIGN.md)。
 
 ## 技术栈
 
-Next.js App Router、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui（Radix）、TanStack Query、Zustand、React Hook Form + Zod、`@xyflow/react`；测试使用 Vitest、React Testing Library、Playwright。
+| 类别 | 选型 |
+| --- | --- |
+| 框架与语言 | Next.js（App Router）、React、TypeScript strict、pnpm |
+| UI | Tailwind CSS、shadcn/ui、Radix UI、lucide-react、next-themes、Sonner |
+| 代码质量 | ESLint（flat config：eslint-config-next、typescript-eslint、react-hooks、jsx-a11y）、Prettier（含 prettier-plugin-tailwindcss）、eslint-config-prettier |
+| 状态与数据 | TanStack Query、Zustand、openapi-typescript + openapi-fetch |
+| 表单与表格 | React Hook Form + Zod、shadcn Table + TanStack Table |
+| 画布与交互 | @xyflow/react（React Flow）、dnd-kit |
+| 测试 | Vitest、React Testing Library、Playwright |
 
 ## 目标目录
 
@@ -34,6 +42,6 @@ frontend/src/
 2. 节点只存 `{ref_type, ref_id}`，卡片按 ID 订阅业务数据。
 3. 修改表达为命令，松手提交；带 `expected_revision` 与幂等键，409 时基于最新文档重放。
 4. 只渲染视口内节点，按缩放级别切换缩略图，视频默认封面、同时播放不超过 3 个。
-5. 进入画布开发前须通过 [0301 §6.3](../docs/design/0301-技术选型决策.md#63-方案-c-的落地约束) 的性能 PoC。
+5. 进入画布开发前须通过 [0301 §7](../docs/design/0301-技术选型决策.md#7-画布) 的性能 PoC。
 
 完整工程约定见 [PROJECT.md 第 6 节](../PROJECT.md#6-前端)。
