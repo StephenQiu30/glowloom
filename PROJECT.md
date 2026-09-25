@@ -99,9 +99,9 @@ backend/
 11. Kafka：主题 `lanverse.<上下文>.<事件>.v<N>`，键为 `project_id`；消费者按事件 ID 去重。
 12. Redis：只放可重建的数据（会话、缓存、限流、锁、Pub/Sub）；键名 `lanverse:<用途>:<标识>`，设置过期时间。
 13. MinIO：桶私有；对象键 `projects/{project_id}/{类别}/{id}`；浏览器只通过预签名 URL 访问。
-14. 依赖由 Wire 在组合根注入；接口由消费方按需定义；不使用 `Ixxx` / `Impl`，不建 `utils`、`common`。
+14. 依赖由 Wire 在组合根注入（`wire.go` 声明 Provider Set，`wire_gen.go` 为生成物，禁止手改，CI 校验生成一致）；接口由消费方按需定义；不使用 `Ixxx` / `Impl`，不建 `utils`、`common`。
 15. `context.Context` 沿调用链传递；错误用 `%w` 包装并保留可判定的错误链；goroutine 必须有所有者、取消与等待。
-16. 日志用 Zap 结构化字段（`trace_id`、`project_id`、`operation_id`），不记录凭据与剧本全文。
+16. 日志统一用 Zap（不混用标准库 `log` / `slog`）的结构化字段（`trace_id`、`project_id`、`operation_id`），不记录凭据与剧本全文。
 17. 文件名 `snake_case.go`；单元测试就近 `*_test.go`；集成测试放 `backend/tests/`，用 testcontainers 启动 PostgreSQL、Redis、Kafka、MinIO，工作流用 Temporal testsuite 与回放测试。
 
 ## 5. Agent 服务
@@ -197,7 +197,7 @@ frontend/
 
 | 端 | 必须通过 |
 | --- | --- |
-| Go | `gofmt`、`goimports`、`go vet`、`golangci-lint`、`go test -race ./...`、`govulncheck`、swag 生成一致性 |
+| Go | `gofmt`、`goimports`、`go vet`、`golangci-lint`、`go test -race ./...`、`govulncheck`、swag 与 Wire 生成一致性 |
 | Python | ruff check、ruff format --check、mypy、pytest |
 | 前端 | `pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm test`、`pnpm build`；交互变化补 Playwright |
 | 契约 | OpenAPI → 前端客户端生成一致；Activity 样例两端通过 |
