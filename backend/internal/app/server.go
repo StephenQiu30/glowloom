@@ -12,6 +12,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -37,11 +38,19 @@ func RunAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
 			logger.Error("close api Redis", zap.Error(err))
 		}
 	}()
+	temporalConn, err := temporalconn.Open(cfg.TemporalAddr, cfg.TemporalNamespace, logger)
+	if err != nil {
+		return fmt.Errorf("configure api Temporal: %w", err)
+	}
+	defer temporalConn.Close()
 	ready := func(ctx context.Context) error {
 		if err := conn.Ping(ctx); err != nil {
 			return err
 		}
-		return redisConn.Ping(ctx)
+		if err := redisConn.Ping(ctx); err != nil {
+			return err
+		}
+		return temporalConn.Ping(ctx)
 	}
 
 	srv := &http.Server{
