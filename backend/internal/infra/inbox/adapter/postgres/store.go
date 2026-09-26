@@ -77,3 +77,14 @@ func (s *Store) ProcessOnce(ctx context.Context, consumer, eventID string, handl
 	}
 	return applied, nil
 }
+
+// ProcessExternalOnce records an event only after an external effect succeeds.
+// The effect can run twice when PostgreSQL commit fails after it succeeds.
+func (s *Store) ProcessExternalOnce(ctx context.Context, consumer, eventID string, handle func(context.Context) error) (bool, error) {
+	if handle == nil {
+		return false, ErrHandlerRequired
+	}
+	return s.ProcessOnce(ctx, consumer, eventID, func(ctx context.Context, _ *gorm.DB) error {
+		return handle(ctx)
+	})
+}
