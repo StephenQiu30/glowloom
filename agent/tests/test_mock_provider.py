@@ -1,6 +1,8 @@
 import asyncio
+from unittest.mock import patch
 
 from fakeredis.aioredis import FakeRedis
+from redis.exceptions import TimeoutError
 
 from app.providers.mock import MockProvider, SubmitRequest, TaskRef
 
@@ -112,5 +114,24 @@ def test_failed_and_expired_results_have_explicit_states() -> None:
             assert failed_result.error_code == "mock_failure"
             now[0] += 100
             assert (await provider.query(TaskRef(request_key="expired"))).state == "not_found"
+
+    asyncio.run(run())
+
+
+def test_ambiguous_store_timeout_returns_unknown_and_can_reconcile() -> None:
+    async def run() -> None:
+        async with FakeRedis(decode_responses=True) as store:
+            provider = MockProvider(store)
+            original_set = store.set
+
+            async def saved_then_timed_out(name: str, value: str, *, ex: int, nx: bool) -> None:
+                await original_set(name, value, ex=ex, nx=nx)
+                raise TimeoutError("response lost after store write")
+
+            with patch.object(store, "set", side_effect=saved_then_timed_out):
+                result = await provider.submit(request("ambiguous"))
+
+            assert result.outcome == "unknown"
+            assert (await provider.query(TaskRef(request_key="ambiguous"))).state == "succeeded"
 
     asyncio.run(run())
