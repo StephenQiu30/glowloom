@@ -27,6 +27,7 @@ func RunAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
 			logger.Error("close api database", zap.Error(err))
 		}
 	}()
+	redisconn.ConfigureLogging(logger)
 	redisConn, err := redisconn.Open(cfg.RedisURL)
 	if err != nil {
 		return fmt.Errorf("configure api Redis: %w", err)

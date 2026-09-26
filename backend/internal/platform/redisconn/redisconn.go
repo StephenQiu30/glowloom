@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 var (
@@ -21,6 +22,20 @@ var (
 // Connection owns the Redis client and its connection pool.
 type Connection struct {
 	Client *redis.Client
+}
+
+type zapLogger struct {
+	logger *zap.Logger
+}
+
+func (l zapLogger) Printf(_ context.Context, format string, args ...any) {
+	l.logger.Debug("redis client", zap.String("detail", fmt.Sprintf(format, args...)))
+}
+
+// ConfigureLogging routes go-redis process-level diagnostics through Zap.
+// Call it once during startup, before creating any Redis clients.
+func ConfigureLogging(logger *zap.Logger) {
+	redis.SetLogger(zapLogger{logger: logger})
 }
 
 // Open parses a Redis URL and creates a client. Readiness is checked by Ping.
