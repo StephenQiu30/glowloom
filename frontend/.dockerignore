@@ -1,0 +1,8 @@
+node_modules
+.next
+coverage
+tests
+**/*.test.ts
+**/*.test.tsx
+Dockerfile
+.env*

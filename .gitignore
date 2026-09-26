@@ -36,3 +36,13 @@ temp/
 
 data/
 logs/
+
+# Go
+/backend/bin/
+
+# Frontend
+*.tsbuildinfo
+next-env.d.ts
+
+# Local environment (templates *.env.example are committed)
+docker-compose-env.env

@@ -4,7 +4,7 @@
 | --- | --- |
 | 文档状态 | 草案，待评审（2026-09-25） |
 | 上游 | [DES-01 系统架构 §7](01-系统架构设计.md)、[DES-08 技术选型 §4](08-技术选型决策.md)、[DES-04 工作流](04-工作流与生成操作.md)；功能 [REQ-12](../requirement/12-剧本导入与分集.md)、[REQ-13](../requirement/13-逐集结构解析.md)、[REQ-14](../requirement/14-设定集抽取与造型.md)、[REQ-18](../requirement/18-分镜生成与镜头编辑.md)、[REQ-28](../requirement/28-全能参考生视频.md)、[REQ-34](../requirement/34-V2与待定需求池.md) |
-| 下游 | `agent/` 代码、`contracts/activities/`、`agent/skills/`、`agent/evals/`、TST-03 AI 评测方案 |
+| 下游 | `agent/` 代码、`agent/skills/`、`agent/evals/`、TST-03 AI 评测方案 |
 | 范围 | Agent 服务的边界与代码结构；Harness 各组件设计；MVP Skill 规格；供应商适配器；内容审核；对话式 Agent；可观测与测试 |
 
 ## 1. 边界
@@ -25,7 +25,6 @@ agent/
   src/lanverse_agent/
     app/                 FastAPI（agent-api）：health、harness 调试、evals、agent runs
     worker/              Temporal Activity Worker 入口与 Activity 注册
-    contracts/           由 contracts/activities/*.schema.json 生成的 Pydantic 模型（禁止手改）
     harness/
       skills.py          Skill Registry
       context.py         Context Builder
@@ -300,7 +299,7 @@ QueryResult   = { state: pending|running|succeeded|failed|not_found, progress?, 
 | 层 | 内容 |
 | --- | --- |
 | 单元 | Validators、Context Builder 切分与合并、错误映射、用途映射、预算 |
-| 契约 | Pydantic 模型与 `contracts/activities/*.schema.json` 一致（CI 生成比对） |
+| 契约 | Go 与 Python 的 Activity 输入输出手写类型一致，由两端契约测试（同一组示例输入输出）校验，不生成代码 |
 | 集成 | Temporal dev server + 模拟供应商：submit / query / cancel / unknown；Skill 用录制的 LLM 响应回放 |
 | 评测 | `evals/` 按 Skill 的指标（TST-03）；Skill 或模型变更时 CI 运行，指标下降 > 3 个百分点阻断（AIQ-06） |
 | 安全 | 提示注入与越权用例（对话式 Agent） |

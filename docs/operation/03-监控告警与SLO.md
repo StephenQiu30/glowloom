@@ -121,7 +121,7 @@ HTTP RED（otelgin：请求数、错误数、延迟，按路由模板）；Go ru
 | 磁盘 / 内存 | 主机 > 85% | P3 | — |
 | 依赖漏洞 | 每日扫描出现新的高危 | P3 | OPS-02 §9 |
 
-告警规则以代码维护（`deploy/observability/alerts/*.yml`），变更走 PR。每条告警附处置入口链接（Runbook）。
+告警规则以代码维护（根目录 `observability/alerts/*.yml`），变更走 PR。每条告警附处置入口链接（Runbook）。
 
 ## 7. 值守
 

@@ -26,21 +26,21 @@
 
 ```text
 Lanverse/
+  docker-compose.yml       单一 Compose 文件：全部应用服务与本地中间件（PostgreSQL、Redis、Kafka、MinIO、Temporal）
+  docker-compose-env.example  环境变量模板；本地复制为 docker-compose-env.env（不入库）
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
   agent/            Python：FastAPI + Temporal Activity Worker + Agent Harness + 供应商适配器
   frontend/         Next.js：Web 应用（流水线视图、画布、审阅、时间线、任务中心）
-  contracts/
-    activities/     Go 工作流 ↔ Python Activity 的输入输出 JSON Schema 与样例
-  deploy/           Docker Compose、镜像、中间件配置、环境模板
   docs/             生命周期文档：产品需求、需求规格、设计、计划、测试、运维、验收
 ```
+
+不设 `contracts/`：REST 契约仍以后端 swag → OpenAPI 为唯一来源生成前端客户端（见 §7）；Activity 与事件的输入输出由 Go、Python 各自手写类型，用契约测试保证一致，不引入单独的 schema 文件与代码生成流水线，避免为两个语言维护一套额外的中间表示。
 
 | 单元 | 必须负责 | 不得负责 |
 | --- | --- | --- |
 | `backend/` | 全部业务事实、权限、计费、公共 API、全部工作流定义、写库与媒体 Activity、Outbox 与事件消费、SSE | 直接调用模型供应商 |
 | `agent/` | `agent` 队列的 Activity：Harness 执行的 LLM 任务、供应商 submit / query / cancel、内容审核；内部调试接口 | 连接业务数据库；编排业务流程；持有 MinIO 管理凭据；自动重提结果未知的付费请求 |
 | `frontend/` | 界面、交互、服务端状态缓存、编辑器局部状态、按参数 schema 渲染表单 | 持有供应商密钥；直连 Agent 服务、Temporal、Kafka、Redis |
-| `contracts/` | 跨语言契约 | 业务逻辑 |
 
 **调用路径：**
 
@@ -118,7 +118,7 @@ agent/
     main_api.py                  # FastAPI 应用工厂（agent-api）
     main_worker.py               # Temporal Activity Worker 入口（agent-worker）
     config.py                    # pydantic-settings 集中校验配置
-    activities/                  # Activity 定义：输入 → Harness / 适配器 → 输出（对应 contracts/activities）
+    activities/                  # Activity 定义：输入 → Harness / 适配器 → 输出；类型与 DES-03 §7.1 保持一致（不生成代码）
     harness/
       skills/                    # Skill Registry：加载、版本、hash
       context.py                 # Context Builder
@@ -188,13 +188,13 @@ frontend/
 | 契约 | 唯一来源 | 生成物 |
 | --- | --- | --- |
 | 公共 REST | Gin Handler 的 swag 注解 + DTO | `backend/docs`（OpenAPI）→ `frontend/src/gen/api` |
-| Activity | `contracts/activities/<名称>.v<N>.schema.json` + 样例 | Go 结构体、Python Pydantic 模型 |
+| Activity | Go、Python 各自手写的类型（Go struct / Pydantic 模型），DES-03 §7.1 表格为字段的唯一权威描述 | — |
 | 数据库 | `backend/db/migrations/` | — |
-| 事件 | `contracts/events/<主题>.schema.json`（首个消费者出现时创建） | Go 结构体 |
+| 事件 | Go 结构体，按主题版本号 `.v<N>` 手写，生产者与消费者各自维护 | — |
 
-1. 修改顺序：改契约 → 生成代码 → 改实现 → 契约测试。禁止手改生成物。
-2. CI 重新生成并比对，不一致则失败；Activity 样例在两端测试中都要通过。
-3. 不兼容变更升级版本号；旧版本在仍有在途工作流或未消费事件时保留。
+1. REST：改 Handler / DTO → 生成 OpenAPI → 生成前端客户端 → 改前端实现。禁止手改生成物。
+2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 改 Python 类型 → 契约测试（两端对同一组示例输入输出分别断言，发现字段不一致即失败）。不做代码生成，因为两端只是各自的普通类型定义，生成流水线只会增加一层无必要的间接。
+3. 不兼容变更升级版本号（Activity 名称或事件主题后缀 `.v<N>`）；旧版本在仍有在途工作流或未消费事件时保留。
 
 ## 8. 配置、数据与安全
 
