@@ -2,11 +2,17 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// ErrInvalidPruneBatchSize means a cleanup batch cannot make progress.
+var ErrInvalidPruneBatchSize = errors.New("prune batch size must be positive")
+
+const publishedEventRetention = 7 * 24 * time.Hour
 
 // PartitionStore creates Outbox month partitions and moves overflow rows.
 type PartitionStore struct {
@@ -39,6 +45,30 @@ func (s *PartitionStore) EnsurePartitions(ctx context.Context, now time.Time) er
 		return fmt.Errorf("ensure outbox partitions: %w", err)
 	}
 	return nil
+}
+
+// PrunePublished deletes one batch of events published more than seven days ago.
+// Pending and locked events are skipped; run it periodically to revisit them.
+func (s *PartitionStore) PrunePublished(ctx context.Context, now time.Time, batchSize int) (int64, error) {
+	if batchSize <= 0 {
+		return 0, ErrInvalidPruneBatchSize
+	}
+	result := s.db.WithContext(ctx).Exec(`
+		WITH expired AS (
+			SELECT id, create_time FROM infra.outbox
+			WHERE published_at < ?
+			ORDER BY published_at, create_time, id
+			LIMIT ?
+			FOR UPDATE SKIP LOCKED
+		)
+		DELETE FROM infra.outbox AS event
+		USING expired
+		WHERE event.id = expired.id AND event.create_time = expired.create_time
+	`, now.UTC().Add(-publishedEventRetention), batchSize)
+	if result.Error != nil {
+		return 0, fmt.Errorf("prune published outbox events: %w", result.Error)
+	}
+	return result.RowsAffected, nil
 }
 
 func ensureMonth(tx *gorm.DB, month time.Time) error {
