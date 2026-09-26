@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const deliveryTimeout = 10 * time.Second
+const (
+	deliveryTimeout  = 10 * time.Second
+	idlePollInterval = 250 * time.Millisecond
+)
 
 // ErrInvalidEnvelope means the event body cannot be matched to its Outbox row.
 var ErrInvalidEnvelope = errors.New("invalid outbox event envelope")
@@ -61,6 +64,33 @@ func (r *Relay) RunOnce(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("deliver outbox event: %w", err)
 	}
 	return sent, nil
+}
+
+// Run drains pending events, waits when idle, and exits on cancellation.
+// A delivery failure is returned so the process supervisor can report it.
+func (r *Relay) Run(ctx context.Context) error {
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+		sent, err := r.RunOnce(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("run outbox relay: %w", err)
+		}
+		if sent {
+			continue
+		}
+		timer := time.NewTimer(idlePollInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil
+		case <-timer.C:
+		}
+	}
 }
 
 func (event Event) validate() error {
