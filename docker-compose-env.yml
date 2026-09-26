@@ -1,6 +1,7 @@
 # Optional middleware services for a later containerized deployment.
-# Start separately with: docker compose -f docker-compose-env.yml up -d --build --wait
-# Supply LV_PG_PASSWORD and LV_MINIO_PASSWORD from the shell or a protected
+# Object storage is supplied outside this Compose project.
+# Start separately with: docker compose -f docker-compose-env.yml up -d --wait
+# Supply LV_PG_PASSWORD from the shell or a protected
 # deployment env file. Never put real credentials in this file.
 name: lanverse-env
 
@@ -59,26 +60,6 @@ services:
       timeout: 10s
       retries: 20
 
-  minio:
-    build:
-      context: ./docker/minio
-    image: lanverse/minio:release-2025-10-15
-    pull_policy: build
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: ${LV_MINIO_USER:-lanverse}
-      MINIO_ROOT_PASSWORD: ${LV_MINIO_PASSWORD:?Set LV_MINIO_PASSWORD for Compose}
-    ports:
-      - "${LV_MINIO_PORT:-9000}:9000"
-      - "${LV_MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   # Temporal uses separate temporal and temporal_visibility databases in PostgreSQL.
   temporal:
     image: temporalio/auto-setup:1.29.7
@@ -128,5 +109,3 @@ volumes:
     name: lanverse_redis-data
   kafka-data:
     name: lanverse_kafka-data
-  minio-data:
-    name: lanverse_minio-data

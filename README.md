@@ -75,6 +75,8 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | `agent/` | Python 3.12 · uv · FastAPI · pydantic-settings | `cd agent && uv run --env-file ../.env uvicorn app.main_api:create_app --factory --port 8090` | `GET :8090/internal/health` |
 | `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && node --env-file=../.env "$(command -v corepack)" pnpm exec next dev` | `GET :3000/healthz` |
 
+Go API 启动时必须通过根目录 `.env` 中的 `LV_DB_DSN` 连接可用的本机业务库；`.env.example` 的密码只是占位值，不能直接用于连接。其他中间件客户端仍在 M1-05 逐项接入。
+
 ```bash
 pg_isready -h 127.0.0.1 -p 5432
 redis-cli -h 127.0.0.1 ping
@@ -83,6 +85,6 @@ temporal operator cluster health --address 127.0.0.1:7233
 "$(brew --prefix kafka)/bin/kafka-broker-api-versions" --bootstrap-server 127.0.0.1:9092
 ```
 
-各进程在独立终端执行上表命令。前置工具：Go 1.26、uv、Node.js 24 + Corepack / pnpm；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。后续容器化部署保留两份独立 Compose 文件：`docker-compose.yml` 定义应用，`docker-compose-env.yml` 定义 PostgreSQL、Redis、Kafka、MinIO、Temporal 及管理界面，其中 MinIO 从固定的官方社区版源码构建。本地开发不通过 Compose 启动环境。详细步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。
+各进程在独立终端执行上表命令。前置工具：Go 1.26、uv、Node.js 24 + Corepack / pnpm；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。后续容器化部署保留两份独立 Compose 文件：`docker-compose.yml` 定义应用，`docker-compose-env.yml` 定义 PostgreSQL、Redis、Kafka、Temporal 及管理界面。本机 MinIO 由服务管理器单独启动，不纳入 Compose。本地开发不通过 Compose 启动环境。详细步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。
 
 旧实现的代码与运行方式见标签 `legacy-2026-09`（如 `git show legacy-2026-09:README.md`）。
