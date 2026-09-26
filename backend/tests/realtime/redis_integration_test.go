@@ -91,3 +91,48 @@ func TestOperationStatusWithHostPostgresAndRedis(t *testing.T) {
 		t.Fatalf("processed markers = %d, error = %v", markers, err)
 	}
 }
+
+func TestRedisReplayAfterLastEventAndResync(t *testing.T) {
+	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	if url == "" {
+		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	conn, err := redisconn.Open(url)
+	if err != nil {
+		t.Fatalf("open Redis: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	projectID := uuid.NewString()
+	stream := "project:" + projectID + ":events"
+	t.Cleanup(func() {
+		if err := conn.Client.Del(context.Background(), stream).Err(); err != nil {
+			t.Errorf("delete stream: %v", err)
+		}
+	})
+	sink := redisrealtime.NewSink(conn.Client)
+	ids := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
+	for _, id := range ids {
+		if err := sink.Publish(ctx, realtime.Event{ID: id, ProjectID: projectID, Type: "operation.updated", OperationID: uuid.NewString(), TargetType: "shot_frame", Status: "submitted"}); err != nil {
+			t.Fatalf("publish test event: %v", err)
+		}
+	}
+	// A database commit failure can replay the same external effect.
+	if err := sink.Publish(ctx, realtime.Event{ID: ids[1], ProjectID: projectID, Type: "operation.updated", OperationID: uuid.NewString(), TargetType: "shot_frame", Status: "submitted"}); err != nil {
+		t.Fatalf("publish duplicate effect: %v", err)
+	}
+	events, resync, err := sink.Replay(ctx, projectID, ids[0])
+	if err != nil || resync || len(events) != 2 || events[0].ID != ids[1] || events[1].ID != ids[2] {
+		t.Fatalf("replay = %+v, resync = %t, error = %v", events, resync, err)
+	}
+	if events, resync, err := sink.Replay(ctx, projectID, ids[1]); err != nil || resync || len(events) != 0 {
+		t.Fatalf("duplicate cursor = %+v, resync = %t, error = %v", events, resync, err)
+	}
+	if events, resync, err := sink.Replay(ctx, projectID, uuid.NewString()); err != nil || !resync || len(events) != 0 {
+		t.Fatalf("expired cursor = %+v, resync = %t, error = %v", events, resync, err)
+	}
+	if events, resync, err := sink.Replay(ctx, projectID, ""); err != nil || resync || len(events) != 0 {
+		t.Fatalf("initial subscription = %+v, resync = %t, error = %v", events, resync, err)
+	}
+}
