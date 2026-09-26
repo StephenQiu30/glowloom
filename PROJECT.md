@@ -26,8 +26,9 @@
 
 ```text
 Lanverse/
-  docker-compose.yml       单一 Compose 文件：全部应用服务与本地中间件（PostgreSQL、Redis、Kafka、MinIO、Temporal）
-  docker-compose-env.example  环境变量模板；本地复制为 docker-compose-env.env（不入库）
+  .env.example              本机进程配置样例；实际 .env 不入库
+  docker-compose.yml        部署服务拓扑
+  docker-compose-env.yml    Compose 专用环境与端口映射
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
   agent/            Python：FastAPI + Temporal Activity Worker + Agent Harness + 供应商适配器
   frontend/         Next.js：Web 应用（流水线视图、画布、审阅、时间线、任务中心）
@@ -89,7 +90,6 @@ backend/
     platform/                    # config(Viper) log(Zap) db(GORM) redis kafka minio temporal ffmpeg otel auth
   db/migrations/                 # golang-migrate 版本化 SQL（唯一 Schema 来源）
   docs/                          # swag 生成的 OpenAPI，禁止手改
-  Makefile
 ```
 
 1. 依赖方向 `adapter → application → domain`；`domain` 不依赖 Gin、GORM、Temporal、Kafka、Redis 或任何 SDK。
@@ -181,7 +181,7 @@ frontend/
 8. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
 9. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。
 10. 付费操作先展示报价并由用户确认。
-11. 脚本：`pnpm dev`、`pnpm build`、`pnpm lint`、`pnpm format`、`pnpm format:check`、`pnpm typecheck`、`pnpm test`、`pnpm test:e2e`、`pnpm openapi`；检查脚本不修改文件。
+11. 不设置项目脚本或 Makefile；前端开发和检查直接执行 `pnpm exec next`、`pnpm exec eslint`、`pnpm exec prettier`、`pnpm exec tsc`、`pnpm exec vitest`。
 
 ## 7. 契约与生成
 
@@ -208,7 +208,7 @@ frontend/
 | --- | --- |
 | Go | `gofmt`、`goimports`、`go vet`、`golangci-lint`、`go test -race ./...`、`govulncheck`、swag 与 Wire 生成一致性 |
 | Python | ruff check、ruff format --check、mypy、pytest |
-| 前端 | `pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm test`、`pnpm build`；交互变化补 Playwright |
+| 前端 | `pnpm exec eslint .`、`pnpm exec prettier --check .`、`pnpm exec next typegen` + `pnpm exec tsc --noEmit`、`pnpm exec vitest run`、`pnpm exec next build`；交互变化补 Playwright |
 | 契约 | OpenAPI → 前端客户端生成一致；Activity 样例两端通过 |
 
 1. 核心业务逻辑（Operation 状态机、预算与对账、依赖传播、工作流）先写测试再实现。

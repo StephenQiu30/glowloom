@@ -16,18 +16,18 @@
 | --- | --- | --- | --- | --- | --- |
 | 文档（需求 → 设计 → 计划 → 测试 → 运维） | 全生命周期文档与需求设计拆解 | — | — | — | 完成（`bbd42ca7`），待评审 |
 | P0 | 全能参考可用性与成本验证 | — | 6 | 0 | 未开始 |
-| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 2 | 进行中 |
+| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 3 | 进行中 |
 | M2 | 剧本导入、解析、设定集 | 4 | 23 | 0 | 未开始 |
 | M3 | 资产定稿、分镜、生成全链路 | 11 | 60 | 0 | 未开始 |
 | M4 | 视频、配音、生成增强 | 3 | 18 | 0 | 未开始 |
 | M5 | 画布、Agent、运营辅助 = MVP | 4 | 20 | 0 | 未开始 |
-| 合计 | | 33 | 193 | 2 | |
+| 合计 | | 33 | 193 | 3 | |
 
 ## 2. 当前焦点与下一步
 
 1. **评审文档**：PRD-01、REQ、DES 均为“草案（待评审）”；评审通过后把功能 Epic 的状态从 `待办` 改为 `就绪`。
 2. **启动 P0**（P0-01～P0-06）：评测结论决定主供应商、内容审核、Agent LLM 与画布方案，并回填设计中的待确认问题。
-3. **M1 准备**：M1-01、M1-02 已完成（旧实现保留在标签 `legacy-2026-09`，三端骨架与工具链已验证）；下一步从 M1-03 继续搭建本地环境。
+3. **M1 准备**：M1-01～M1-03 已完成（旧实现保留在标签 `legacy-2026-09`，三端骨架、工具链和本机环境已验证）；下一步实施 M1-04 CI 流水线。
 
 ## 3. 待确认事项
 
@@ -72,8 +72,8 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | M1-01 | 旧代码处置 | 标签 `legacy-2026-09` 已推送；旧实现与旧工程配置已删除（2026-09-26，PLN-01 §5 执行记录） | `backend/`、`agent/`、`frontend/` | 完成 | `chore(repo)` 删除旧实现（2026-09-26） |
-| M1-02 | 仓库骨架与工具链 | 三端目录、锁文件、Makefile、`docker-compose-env.example`；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc | `backend/`、`agent/`、`frontend/`、`Makefile` | 完成 | `bdc167a5`、`c214607b` |
-| M1-03 | 本地环境 | 根目录 `.env` 配置三端本机进程，连接已启动的 PostgreSQL、Redis、Kafka、MinIO、Temporal；逐项健康检查与隔离的备份恢复演练；Compose 专用环境映射集中在 `docker-compose-env.yml` | `.env.example`、`docker-compose-env.yml`、`Makefile`、`docs/operation/01-环境与部署.md` | 进行中 | — |
+| M1-02 | 仓库骨架与工具链 | 三端目录、锁文件；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc；初版 Makefile 与 Compose 环境样例已在 M1-03 按新要求移除 | `backend/`、`agent/`、`frontend/` | 完成 | `bdc167a5`、`c214607b` |
+| M1-03 | 本地环境 | 根目录 `.env` 配置三端本机进程，指向已启动的 PostgreSQL、Redis、Kafka、MinIO、Temporal；逐项健康检查与隔离的备份恢复演练；Compose 专用环境映射集中在 `docker-compose-env.yml`；不使用项目脚本或 Makefile | `.env.example`、`docker-compose-env.yml`、`docs/operation/01-环境与部署.md` | 完成（环境底座；业务客户端在 M1-05 接入） | `e4038453`、`a2c11fa6`、`30769030` |
 | M1-04 | CI 流水线 | lint、format、typecheck、test、race、govulncheck、契约一致性、镜像构建（OPS-02） | `.github/workflows/` | 待办 | — |
 | M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、minio、temporal、otel、Wire 组合根，`--role=api|worker|relay` | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/` | 待办 | — |
 | M1-06 | 契约链 | swag → OpenAPI → `frontend/src/gen/api`；Activity 输入输出类型由 Go 与 Python 各自手写，契约测试（同一组示例输入输出）校验一致 | `backend/docs/`、`frontend/src/gen/api/` | 待办 | — |
@@ -82,6 +82,8 @@
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/adapter/workflow/` | 待办 | — |
 | M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器 | `agent/app/` | 待办 | — |
 | M1-11 | 前端骨架 | App Router 布局、shadcn/ui、TanStack Query、SSE 订阅、`param_schema` 表单组件、报价确认组件框架 | `frontend/src/` | 待办 | — |
+
+**M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。Compose 两份 YAML 合并配置校验通过，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
 **功能 Epic**
 

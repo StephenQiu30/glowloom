@@ -67,22 +67,22 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 ## 开发
 
-工程底座（M1）搭建中：三端已初始化最小骨架（健康检查 + 质量门禁），本地中间件由 Docker Compose 提供。
+工程底座（M1）搭建中：三端已初始化最小骨架（健康检查 + 质量门禁）。本机直接启动三端进程，并为后续平台层接入配置已运行的本机中间件；配置写在根目录 `.env`（键名样例见 `.env.example`）。
 
 | 目录 | 技术栈 | 本地启动 | 健康检查 |
 | --- | --- | --- | --- |
-| `backend/` | Go 1.26 · Gin · Viper · Zap | `cd backend && go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
-| `agent/` | Python 3.12 · uv · FastAPI · pydantic-settings | `cd agent && uv run uvicorn app.main_api:create_app --factory --port 8090` | `GET :8090/internal/health` |
-| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && pnpm dev` | `GET :3000/healthz` |
+| `backend/` | Go 1.26 · Gin · Viper · Zap | `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
+| `agent/` | Python 3.12 · uv · FastAPI · pydantic-settings | `cd agent && uv run --env-file ../.env uvicorn app.main_api:create_app --factory --port 8090` | `GET :8090/internal/health` |
+| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && node --env-file=../.env "$(command -v corepack)" pnpm exec next dev` | `GET :3000/healthz` |
 
 ```bash
-cp docker-compose-env.example docker-compose-env.env   # 可选：修改端口避免与本机其他项目冲突
-make up        # 本地中间件：PostgreSQL 18、Redis 8、Kafka 4（KRaft）、Temporal + UI、Kafka UI
-make app-up    # 以容器构建并启动 frontend、backend-api、agent-api
-make check     # 三端质量门禁
-make down
+pg_isready -h 127.0.0.1 -p 5432
+redis-cli -h 127.0.0.1 ping
+curl -fsS http://127.0.0.1:9000/minio/health/live
+temporal operator cluster health --address 127.0.0.1:7233
+"$(brew --prefix kafka)/bin/kafka-broker-api-versions" --bootstrap-server 127.0.0.1:9092
 ```
 
-前置工具：Go 1.26、uv、Node.js 24 + pnpm、Docker；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。目录约定见 [PROJECT.md](PROJECT.md)。
+各进程在独立终端执行上表命令。前置工具：Go 1.26、uv、Node.js 24 + Corepack / pnpm；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。Compose 仅用于后续部署，环境映射见 `docker-compose-env.yml`。详细步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。
 
 旧实现的代码与运行方式见标签 `legacy-2026-09`（如 `git show legacy-2026-09:README.md`）。
