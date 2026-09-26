@@ -85,7 +85,7 @@
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID） | `backend/internal/infra/`、`backend/internal/app/` | 待办 | — |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/adapter/workflow/` | 待办 | — |
 | M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 待办 | — |
-| M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题与项目页异常恢复界面，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7` |
+| M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题、项目页异常恢复及模型参数表单组件，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7`、`a9467f55`、`55a94493`、`ab0d8a37` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
@@ -116,6 +116,8 @@
 **M1-11 错误边界回调修复（2026-09-27）**：[Next.js `error.tsx` 约定](https://nextjs.org/docs/app/api-reference/file-conventions/error)向页面错误组件注入 `reset`。原组件与测试误用 `retry`，导致真实错误页的重试按钮无法调用框架回调；先按 `reset` 修改测试并确认失败，再修复组件，目标测试、ESLint、Prettier 与 Next 生产构建通过。本机 Next 16 开发服务中临时加入 `/projects/recovery-probe` 子路由，点击后抛出客户端渲染异常，浏览器显示项目错误页；点击“重试加载”后原页面重新出现。临时路由与开发服务均已移除、停止；清理该路由留下的 `.next/dev/types` 缓存后，最终生产构建通过且路由表不含探针。该验证覆盖路由错误边界与重试回调，不代表真实项目数据加载故障的端到端恢复。
 
 **M1-11 明暗主题切片（2026-09-27）**：按已接受的 DES-08 §2 接入 `next-themes`，在应用 Provider 管理 `html.dark`，项目页导航提供带可访问名称的切换按钮；默认跟随系统，切换选择由浏览器保存。按 Vercel 界面规范将共享 Button 的 `transition-all` 改为实际变化属性，并保留触控与键盘焦点反馈。本机浏览器验证浅色 → 深色、刷新后仍为深色、再切回浅色；`vitest`、ESLint、Prettier、依赖 peer 检查、冻结锁文件安装与 Next 生产构建通过。登录、真实项目列表、SSE、参数表单、报价组件与局部编辑状态尚未完成，M1-11 仍进行中。
+
+**M1-11 模型参数表单切片（2026-09-27）**：按 DES-11 §3、REQ-08 R2/R3 的字段定义实现 `ModelParamsForm`，用 React Hook Form、Zod 与 shadcn Field 渲染输入、文本、下拉选项、滑块、开关、分段和音色选择；按模式过滤，模型版本或模式切换时清除旧值，整数范围和必填错误就地呈现。组件测试覆盖模式 / 模型切换、可选参数省略、无效输入阻止提交与首个错误聚焦。`pnpm install --frozen-lockfile --ignore-scripts`、`pnpm peers check`、全量 Vitest（6/6）、ESLint 零警告、Prettier、`next typegen`、TypeScript、`next build` 均通过。真实模型注册表与报价接口尚未接入，组件未在生产路由挂载，不能计作生成面板验收；SSE、局部编辑状态和报价确认仍待实施。
 
 **功能 Epic**
 
