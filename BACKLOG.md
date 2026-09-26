@@ -111,9 +111,9 @@
 
 **M1-11 工作台外壳切片（2026-09-27）**：根路径跳转 `/projects`；项目页有语义化主导航、跳转主内容入口、项目功能未接入的真实空状态与创作流程概览，内容分组遵循无边框设计。本机直接启动 Next 开发服务，在浏览器检查根路径跳转、键盘跳转入口及 1024px / 390px 视口无横向溢出；`eslint`、`prettier`、`next typegen`、`tsc`、`vitest`、`next build` 通过。登录、真实项目列表、TanStack Query、SSE、参数表单和报价组件仍待接入；本切片不构成 M1-11 完成或产品验收。
 
-**M1-11 共享查询与错误恢复切片（2026-09-27）**：根布局挂载单一 TanStack Query Provider；组件测试证明同一查询由两个子组件共享、失效后共同更新。项目路由增加 Next 错误边界，提供重试操作且不显示内部错误文本；组件测试验证重试回调。前端类型依赖与 CI 的 Node 24 对齐，`pnpm peers check`、锁文件冻结安装均通过。本机 Next 16 开发服务下浏览器确认 `/projects` 正常渲染，`vitest`、ESLint、Prettier、`next typegen`、TypeScript 与生产构建已通过；尚未在浏览器触发真实异常并验证恢复成功，M1-11 仍进行中。
+**M1-11 共享查询与错误恢复切片（2026-09-27）**：根布局挂载单一 TanStack Query Provider；组件测试证明同一查询由两个子组件共享、失效后共同更新。项目路由增加 Next 错误边界，提供重试操作且不显示内部错误文本；组件测试验证重试回调。前端类型依赖与 CI 的 Node 24 对齐，`pnpm peers check`、锁文件冻结安装均通过。本机 Next 16 开发服务下浏览器确认 `/projects` 正常渲染，`vitest`、ESLint、Prettier、`next typegen`、TypeScript 与生产构建已通过；错误恢复的浏览器验证见下述记录，M1-11 仍进行中。
 
-**M1-11 错误边界回调修复（2026-09-27）**：[Next.js `error.tsx` 约定](https://nextjs.org/docs/app/api-reference/file-conventions/error)向页面错误组件注入 `reset`。原组件与测试误用 `retry`，导致真实错误页的重试按钮无法调用框架回调；先按 `reset` 修改测试并确认失败，再修复组件，目标测试、ESLint、Prettier 与 Next 生产构建通过。尚未在浏览器注入真实路由异常，故实际恢复流程仍待联调验证。
+**M1-11 错误边界回调修复（2026-09-27）**：[Next.js `error.tsx` 约定](https://nextjs.org/docs/app/api-reference/file-conventions/error)向页面错误组件注入 `reset`。原组件与测试误用 `retry`，导致真实错误页的重试按钮无法调用框架回调；先按 `reset` 修改测试并确认失败，再修复组件，目标测试、ESLint、Prettier 与 Next 生产构建通过。本机 Next 16 开发服务中临时加入 `/projects/recovery-probe` 子路由，点击后抛出客户端渲染异常，浏览器显示项目错误页；点击“重试加载”后原页面重新出现。临时路由与开发服务均已移除、停止；清理该路由留下的 `.next/dev/types` 缓存后，最终生产构建通过且路由表不含探针。该验证覆盖路由错误边界与重试回调，不代表真实项目数据加载故障的端到端恢复。
 
 **功能 Epic**
 
