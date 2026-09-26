@@ -14,6 +14,7 @@ jobs:
     env:
       LV_TEST_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_test?sslmode=disable
       LV_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      LV_TEST_KAFKA_BROKERS: 127.0.0.1:9092
     services:
       postgres:
         image: postgres:18.4-alpine
@@ -36,6 +37,15 @@ jobs:
           --health-cmd="redis-cli ping"
           --health-interval=5s
           --health-timeout=3s
+          --health-retries=20
+      kafka:
+        image: apache/kafka:4.1.2
+        ports:
+          - 9092:9092
+        options: >-
+          --health-cmd="/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"
+          --health-interval=10s
+          --health-timeout=10s
           --health-retries=20
     defaults:
       run:
