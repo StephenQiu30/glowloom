@@ -36,6 +36,43 @@ func NewStore(db *gorm.DB) *Store {
 	return &Store{db: db}
 }
 
+// Insert appends a validated audit record. Callers may inject a transaction so
+// the audit row and its processed-event marker commit together.
+func (s *Store) Insert(ctx context.Context, record domain.Record) error {
+	var projectID, actorID, before, after, ip any
+	if record.ProjectID != nil {
+		projectID = record.ProjectID.String()
+	}
+	if record.ActorID != nil {
+		actorID = record.ActorID.String()
+	}
+	if len(record.Before) > 0 {
+		before = string(record.Before)
+	}
+	if len(record.After) > 0 {
+		after = string(record.After)
+	}
+	if record.IP != "" {
+		ip = record.IP
+	}
+	result := s.db.WithContext(ctx).Exec(`
+		INSERT INTO audit.audit_log (
+			id, org_id, project_id, actor_id, actor_kind, action,
+			object_type, object_id, before, after, request_id, trace_id, ip, create_time
+		) VALUES (
+			?::uuid, ?::uuid, ?::uuid, ?::uuid, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?::inet, ?
+		)
+	`, record.ID.String(), record.OrgID.String(), projectID, actorID, record.ActorKind, record.Action,
+		record.ObjectType, record.ObjectID, before, after, record.RequestID, record.TraceID, ip, record.CreateTime.UTC())
+	if result.Error != nil {
+		return fmt.Errorf("insert audit record: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("insert audit record: inserted %d rows", result.RowsAffected)
+	}
+	return nil
+}
+
 // Get returns one record only when it belongs to orgID.
 func (s *Store) Get(ctx context.Context, orgID, recordID uuid.UUID) (domain.Record, error) {
 	if orgID == uuid.Nil {
