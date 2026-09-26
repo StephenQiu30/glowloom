@@ -20,7 +20,7 @@ Next.js（流水线视图 / 画布 / 审阅 /（V2）时间线）
    │ REST + SSE
 Go backend-api（Gin · 命令层 · 领域模块）──启动 / 信号──→ Temporal
    │                                                  ├─ backend-worker（Go 工作流 · 写库 · FFmpeg）
-   │                                                  └─ agent-worker（FastAPI 服务 · Agent Harness · 供应商适配器）
+   │                                                  └─ agent-worker（Activity · Agent Harness · 供应商适配器）
 PostgreSQL（业务事实 + Outbox）→ backend-relay → Kafka → 通知 / 过期传播 / 成本 / 审计
 Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体对象）
 ```
@@ -74,6 +74,8 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | `backend/` | Go 1.26 · Gin · Viper · Zap | `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
 | `agent/` | Python 3.12 · uv · FastAPI · pydantic-settings | `cd agent && uv run --env-file ../.env uvicorn app.main_api:create_app --factory --port 8090` | `GET :8090/internal/health` |
 | `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && node --env-file=../.env "$(command -v corepack)" pnpm exec next dev` | `GET :3000/healthz` |
+
+模拟供应商 Activity Worker 在另一终端运行：`cd agent && uv run --frozen --env-file ../.env python -m app.main_worker`。它连接 `.env` 中本机已运行的 Redis 与 Temporal，监听 `agent.mock` 队列；本地开发不启动 Compose。
 
 Go API 启动时必须通过根目录 `.env` 中的 `LV_DB_DSN` 连接可用的本机业务库，并配置 `LV_REDIS_URL` 与 `LV_TEMPORAL_ADDR`、`LV_TEMPORAL_NAMESPACE`；`.env.example` 的数据库密码只是占位值，不能直接用于连接。`/healthz` 检查进程存活，`/readyz` 检查 PostgreSQL、Redis、Temporal 与命名空间；Redis 或 Temporal 暂不可达时 API 仍运行，就绪探针返回 503。本机首次使用 `lanverse-local` 命名空间时需在已运行的 Temporal 中创建，步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。`LV_KAFKA_BROKERS` 已供 Kafka 客户端连通性测试使用，事件投递与消费在 M1-08 实现；其他中间件客户端仍在 M1-05 逐项接入。
 
