@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function ProjectsLayout({ children }: LayoutProps<"/projects">) {
   return (
@@ -38,9 +39,12 @@ export default function ProjectsLayout({ children }: LayoutProps<"/projects">) {
               项目
             </Link>
           </nav>
-          <span className="hidden text-xs font-medium tracking-wide text-muted-foreground sm:block">
-            创作工作台
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs font-medium tracking-wide text-muted-foreground sm:block">
+              创作工作台
+            </span>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main

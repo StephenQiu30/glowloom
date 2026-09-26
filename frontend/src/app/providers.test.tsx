@@ -6,11 +6,25 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { Providers } from "./providers";
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it("shares a query between children and refetches it after invalidation", async () => {
   let revision = 0;
