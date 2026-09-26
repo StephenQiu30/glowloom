@@ -15,14 +15,19 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
-	Env               string
-	HTTPAddr          string
-	LogLevel          string
-	DBDSN             string
-	RedisURL          string
-	KafkaBrokers      string
-	TemporalAddr      string
-	TemporalNamespace string
+	Env                    string
+	HTTPAddr               string
+	LogLevel               string
+	DBDSN                  string
+	RedisURL               string
+	KafkaBrokers           string
+	TemporalAddr           string
+	TemporalNamespace      string
+	ObjectStorageEndpoint  string
+	ObjectStorageBucket    string
+	ObjectStorageAccessKey string
+	ObjectStorageSecretKey string
+	ObjectStorageRegion    string
 }
 
 var (
@@ -46,14 +51,19 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Env:               strings.TrimSpace(v.GetString("LV_ENV")),
-		HTTPAddr:          strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
-		LogLevel:          strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
-		DBDSN:             strings.TrimSpace(v.GetString("LV_DB_DSN")),
-		RedisURL:          strings.TrimSpace(v.GetString("LV_REDIS_URL")),
-		KafkaBrokers:      strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
-		TemporalAddr:      strings.TrimSpace(v.GetString("LV_TEMPORAL_ADDR")),
-		TemporalNamespace: strings.TrimSpace(v.GetString("LV_TEMPORAL_NAMESPACE")),
+		Env:                    strings.TrimSpace(v.GetString("LV_ENV")),
+		HTTPAddr:               strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
+		LogLevel:               strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
+		DBDSN:                  strings.TrimSpace(v.GetString("LV_DB_DSN")),
+		RedisURL:               strings.TrimSpace(v.GetString("LV_REDIS_URL")),
+		KafkaBrokers:           strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
+		TemporalAddr:           strings.TrimSpace(v.GetString("LV_TEMPORAL_ADDR")),
+		TemporalNamespace:      strings.TrimSpace(v.GetString("LV_TEMPORAL_NAMESPACE")),
+		ObjectStorageEndpoint:  strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_ENDPOINT")),
+		ObjectStorageBucket:    strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_BUCKET")),
+		ObjectStorageAccessKey: v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
+		ObjectStorageSecretKey: v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
+		ObjectStorageRegion:    strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

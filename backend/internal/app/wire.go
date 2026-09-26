@@ -13,6 +13,6 @@ import (
 )
 
 func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (*http.Server, func(), error) {
-	wire.Build(provideDB, provideRedis, provideTemporal, provideReadyCheck, provideAPIServer)
+	wire.Build(provideDB, provideRedis, provideTemporal, provideObjectStorage, provideReadyCheck, provideAPIServer)
 	return nil, nil, nil
 }

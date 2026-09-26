@@ -10,6 +10,7 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
 )
@@ -49,7 +50,15 @@ func provideTemporal(cfg config.Config, logger *zap.Logger) (*temporalconn.Conne
 	return conn, conn.Close, nil
 }
 
-func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, temporalConn *temporalconn.Connection) ReadyCheck {
+func provideObjectStorage(cfg config.Config) (*objectstorage.Client, error) {
+	conn, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket, cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
+	if err != nil {
+		return nil, fmt.Errorf("configure api object storage: %w", err)
+	}
+	return conn, nil
+}
+
+func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, temporalConn *temporalconn.Connection, storageClient *objectstorage.Client) ReadyCheck {
 	return func(ctx context.Context) error {
 		if err := dbConn.Ping(ctx); err != nil {
 			return err
@@ -57,7 +66,10 @@ func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, t
 		if err := redisConn.Ping(ctx); err != nil {
 			return err
 		}
-		return temporalConn.Ping(ctx)
+		if err := temporalConn.Ping(ctx); err != nil {
+			return err
+		}
+		return storageClient.Ping(ctx)
 	}
 }
 

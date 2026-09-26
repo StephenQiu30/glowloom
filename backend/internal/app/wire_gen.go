@@ -10,9 +10,8 @@ import (
 	"context"
 	"net/http"
 
-	"go.uber.org/zap"
-
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	"go.uber.org/zap"
 )
 
 // Injectors from wire.go:
@@ -33,7 +32,14 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 		cleanup()
 		return nil, nil, err
 	}
-	readyCheck := provideReadyCheck(connection, redisconnConnection, temporalconnConnection)
+	client, err := provideObjectStorage(cfg)
+	if err != nil {
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	readyCheck := provideReadyCheck(connection, redisconnConnection, temporalconnConnection, client)
 	server := provideAPIServer(cfg, logger, readyCheck)
 	return server, func() {
 		cleanup3()

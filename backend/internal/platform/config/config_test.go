@@ -80,6 +80,22 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoadObjectStorageFromEnv(t *testing.T) {
+	t.Setenv("LV_OBJECT_STORAGE_ENDPOINT", "http://127.0.0.1:9000")
+	t.Setenv("LV_OBJECT_STORAGE_BUCKET", "lanverse-local")
+	t.Setenv("LV_OBJECT_STORAGE_ACCESS_KEY", "test-access")
+	t.Setenv("LV_OBJECT_STORAGE_SECRET_KEY", "test-secret")
+	t.Setenv("LV_OBJECT_STORAGE_REGION", "us-east-1")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ObjectStorageEndpoint != "http://127.0.0.1:9000" || cfg.ObjectStorageBucket != "lanverse-local" || cfg.ObjectStorageAccessKey != "test-access" || cfg.ObjectStorageSecretKey != "test-secret" || cfg.ObjectStorageRegion != "us-east-1" {
+		t.Fatal("Load() did not preserve object storage configuration")
+	}
+}
+
 func TestLoadRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
 		name string
