@@ -22,9 +22,10 @@
 ```text
 agent/
   pyproject.toml · uv.lock
-  src/lanverse_agent/
-    app/                 FastAPI（agent-api）：health、harness 调试、evals、agent runs
-    worker/              Temporal Activity Worker 入口与 Activity 注册
+  app/
+    main_api.py          FastAPI（agent-api）：health、harness 调试、evals、agent runs
+    main_worker.py       Temporal Activity Worker 入口
+    worker/              Activity 注册与 Go/Python JSON 契约映射
     harness/
       skills.py          Skill Registry
       context.py         Context Builder
@@ -45,7 +46,7 @@ agent/
   tests/
 ```
 
-`agent-api` 与 `agent-worker` 共享代码，以 `lanverse-agent api|worker` 启动。
+`agent-api` 与 `agent-worker` 共享代码。本地直接运行 `uvicorn app.main_api:create_app --factory` 与 `python -m app.main_worker`；`uv run --env-file ../.env` 为两种进程加载根目录配置。当前 `agent-worker` 只注册 `agent.mock` 队列的 `provider.submit/query/cancel`，`agent` 队列的 Harness Activity 与真实供应商队列后续接入。
 
 ## 3. Harness
 
@@ -209,6 +210,8 @@ QueryResult   = { state: pending|running|succeeded|failed|not_found, progress?, 
 | 用量 | 解析供应商返回的计费用量（秒数、张数、token、字符）；无返回时按请求参数计算并标注 `estimated` |
 | 凭据 | Activity 输入带 `credential{id, key_id, ciphertext}`（Go 传入的密文）→ 私钥解封 → 按 `id` 进程内缓存 5 分钟；不落日志（DES-07 §5.2） |
 | 模拟供应商 | `providers/mock`：通过参数控制延迟、失败、提交响应丢失、重复回调、结果过期，用于开发与故障注入（REQ-02 DEP-06）；以 `request_key` 派生稳定任务 ID，用 Redis `SET NX` 保存 24 小时，支持按请求键或任务 ID 查询，Agent 进程重启后仍可对账；`unknown` 表示任务已存但提交响应不提供任务 ID |
+
+模拟 Activity 输入按 DES-03 §7.1 使用 `provider_request_key`，在 Worker 边界映射到适配器的 `request_key`；测试适配器不需要 `credential`。Redis 写入响应丢失时无法证明任务未创建，返回 `unknown` 并按请求键查询，不返回 `not_submitted`。
 
 ### 5.3 MVP 适配器
 
