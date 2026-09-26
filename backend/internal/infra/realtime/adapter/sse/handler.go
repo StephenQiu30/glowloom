@@ -66,10 +66,12 @@ func NewHandler(client *redisclient.Client, authorize AuthorizeProject, logger *
 // ServeProject serves a project route after an outer authentication middleware.
 // It checks project membership before subscribing or reading the replay buffer.
 func (h *Handler) ServeProject(w http.ResponseWriter, r *http.Request, projectID string) {
-	if _, err := uuid.Parse(projectID); err != nil {
+	id, err := uuid.Parse(projectID)
+	if err != nil {
 		http.Error(w, "invalid project ID", http.StatusBadRequest)
 		return
 	}
+	projectID = id.String()
 	if !h.authorize(r, projectID) {
 		http.Error(w, "project access denied", http.StatusForbidden)
 		return

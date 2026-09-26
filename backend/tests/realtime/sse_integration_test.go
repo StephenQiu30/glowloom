@@ -30,6 +30,25 @@ func TestProjectSSERequiresAuthorizer(t *testing.T) {
 	}
 }
 
+func TestProjectSSECanonicalizesProjectIDBeforeAuthorize(t *testing.T) {
+	client := redisclient.NewClient(&redisclient.Options{Addr: "127.0.0.1:0"})
+	t.Cleanup(func() { _ = client.Close() })
+	want := uuid.NewString()
+	var got string
+	handler, err := sse.NewHandler(client, func(_ *http.Request, id string) bool {
+		got = id
+		return false
+	}, zap.NewNop(), sse.Options{})
+	if err != nil {
+		t.Fatalf("new SSE handler: %v", err)
+	}
+	w := httptest.NewRecorder()
+	handler.ServeProject(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/events", nil), strings.ToUpper(want))
+	if got != want || w.Code != http.StatusForbidden {
+		t.Fatalf("authorization project = %q, status = %d, want %q and 403", got, w.Code, want)
+	}
+}
+
 func TestProjectSSEReplaysThenStreamsAndDeduplicates(t *testing.T) {
 	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
 	if url == "" {
