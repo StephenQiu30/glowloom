@@ -75,7 +75,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | `agent/` | Python 3.12 · uv · FastAPI · pydantic-settings | `cd agent && uv run --env-file ../.env uvicorn app.main_api:create_app --factory --port 8090` | `GET :8090/internal/health` |
 | `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && node --env-file=../.env "$(command -v corepack)" pnpm exec next dev` | `GET :3000/healthz` |
 
-Go API 启动时必须通过根目录 `.env` 中的 `LV_DB_DSN` 连接可用的本机业务库；`.env.example` 的密码只是占位值，不能直接用于连接。其他中间件客户端仍在 M1-05 逐项接入。
+Go API 启动时必须通过根目录 `.env` 中的 `LV_DB_DSN` 连接可用的本机业务库，并配置 `LV_REDIS_URL` 指向本机 Redis；`.env.example` 的数据库密码只是占位值，不能直接用于连接。`/healthz` 检查进程存活，`/readyz` 检查 PostgreSQL 与 Redis；Redis 暂不可达时 API 仍运行，就绪探针返回 503。其他中间件客户端仍在 M1-05 逐项接入。
 
 ```bash
 pg_isready -h 127.0.0.1 -p 5432
