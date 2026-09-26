@@ -208,7 +208,7 @@
 | --- | --- | --- | --- | --- | --- |
 | E-09-01 | 数据与领域模型 | 迁移建表 / 加列：`audit.audit_log`、`infra.processed_event`；实现领域对象、状态机与仓储（`audit.audit_log`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤；`infra.processed_event`：组织 / 平台级，按管理员权限访问）。详见 [DES-12 §3](docs/design/12-审计日志.md#3-数据) | `backend/db/migrations/`、`backend/internal/audit/domain/`、`backend/internal/audit/adapter/postgres/` | 进行中（审计月分区、只追加约束、组织隔离查询和事务内写入已建；独立应用数据库角色权限待接） | `eb1f0289`、`f639d9c8`、`091ae31f` |
 | E-09-02 | 用例与接口 | 实现查询接口：GET /api/admin/audit-logs、GET /api/admin/audit-logs:export；swag 注解生成 OpenAPI。详见 [DES-12 §4](docs/design/12-审计日志.md#4-接口) | `backend/internal/audit/application/`、`backend/internal/audit/adapter/http/`、`backend/docs/` | 待办 | — |
-| E-09-03 | 异步、工作流与事件 | 事件 `audit.recorded.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：audit 消费者（`backend-relay`）只消费 `audit.recorded.v1`：命令层对 REQ-09 R1 列出的每个动作（登录与账号变更、凭据、注册表与价格、预算、报价确认、取消、人工核对处理、所… 详见 [DES-12 §5](docs/design/12-审计日志.md#5-异步与工作流) | `backend/internal/audit/adapter/workflow/`、`backend/internal/audit/adapter/event/` | 进行中（Kafka Record Handler 与 PostgreSQL 去重写入已实现；命令层 Outbox、动作字段策略、relay 角色接线及真实 Kafka 联调待实施） | `091ae31f` |
+| E-09-03 | 异步、工作流与事件 | 事件 `audit.recorded.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：audit 消费者（`backend-relay`）只消费 `audit.recorded.v1`：命令层对 REQ-09 R1 列出的每个动作（登录与账号变更、凭据、注册表与价格、预算、报价确认、取消、人工核对处理、所… 详见 [DES-12 §5](docs/design/12-审计日志.md#5-异步与工作流) | `backend/internal/audit/adapter/workflow/`、`backend/internal/audit/adapter/event/` | 进行中（本机 Kafka → Handler → PostgreSQL 已联调；命令层 Outbox、动作字段策略与正式 relay 角色接线待实施） | `091ae31f`、`bfd63e5c` |
 | E-09-04 | 前端 | 筛选栏（时间范围、操作人、项目、对象类型、动作）+ 虚拟滚动表格 + 详情抽屉（前后值差异）。 详见 [DES-12 §7](docs/design/12-审计日志.md#7-界面) | `frontend/src/features/admin/` | 待办 | — |
 | E-09-05 | 测试与验收 | 命令覆盖测试：遍历 R1 中每个命令，断言产生对应审计记录。 消费者幂等：重复投递同一事件只产生一条记录；验收用例 TC-09-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
@@ -217,6 +217,8 @@
 **E-09-01 组织隔离查询仓储切片（2026-09-27）**：`f639d9c8` 增加审计领域记录、组织必填的详情与列表仓储，以及 `(org_id, create_time DESC, id DESC)` 索引。先以缺失包编译失败确认 Red；在本机隔离 PostgreSQL 临时库中执行两次迁移，Race 集成用例验证跨组织不可见、项目/操作人/动作/时间筛选、游标分页和相同时间戳的分页无遗漏；数据在测试事务回滚，迁移按逆序回滚，临时库已删除。全量 Go Race、vet、golangci-lint、格式检查通过；`govulncheck` 为 0 个可达漏洞，另有 1 个未调用模块告警。管理员鉴权、应用数据库 ACL、事件写入与完整接口仍待实施；30 天范围 P95 指标尚未压测，E-09-01 不计完成。
 
 **E-09-03 审计消费切片（2026-09-27）**：`091ae31f` 增加 `audit.recorded.v1` 的事件解析与字段策略，Kafka Record Handler 将审计行和 `infra.processed_event` 标记放在同一 PostgreSQL 事务；未登记动作或摘要字段、凭据字段、预签名 URL 与超长文本被拒绝。先以缺失包编译失败确认 Red；隔离本机 PostgreSQL 临时库中，Race 集成用例验证重复事件只写一条、审计写入冲突时去重标记回滚、无项目动作按组织 ID 路由；单元用例覆盖敏感字段与错误路由，临时库已清理。全量 Go Race、vet、golangci-lint、格式检查通过，`govulncheck` 为 0 个可达漏洞，另有 1 个未调用模块告警。当前字段策略仅在测试中登记示例 `budget.changed`；真实业务动作的字段清单、命令层 Outbox 写入、Kafka 进程挂载、真实 Kafka 联调及 100% 动作覆盖均未完成，E-09-03 不计完成。
+
+**E-09-03 本机 Kafka 联调（2026-09-27）**：`bfd63e5c` 添加显式启用的本机 Kafka 集成用例。确认 `lanverse.audit.recorded.v1` 主题原先不存在后创建，向本机 Broker 发布一条审计事件；同一消费组首次处理故障不提交 offset，重启后由真实 audit Handler 写入一条审计行和一条去重标记，再次启动未重放已提交记录。`go test -race ./tests/audit -run TestAuditKafkaRetriesThenCommitsAfterDatabaseWrite -count=1 -v` 通过（约 9 秒测试执行）；测试主题和隔离 PostgreSQL 临时库随后删除并确认不存在。全量 Go Race、vet、golangci-lint、格式检查通过，`govulncheck` 无可达漏洞、另有 1 个未调用模块告警。此证据覆盖本机 Kafka 客户端与 Handler，不代表正式 `backend-relay` 进程已挂载消费者，也不代表业务命令已生产审计事件。
 
 #### E-10 项目管理
 
