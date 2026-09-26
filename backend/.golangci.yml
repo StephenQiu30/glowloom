@@ -19,4 +19,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/StephenQiu30/lanverse
+        - github.com/StephenQiu30/lanverse/backend

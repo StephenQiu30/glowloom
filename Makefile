@@ -33,7 +33,7 @@ check: check-backend check-agent check-frontend ## Run every quality gate
 
 check-backend: ## gofmt, goimports, vet, golangci-lint, race tests, govulncheck
 	cd backend && test -z "$$(gofmt -l .)" \
-	  && test -z "$$($(GOBIN)/goimports -local github.com/StephenQiu30/lanverse -l .)" \
+	  && test -z "$$($(GOBIN)/goimports -local github.com/StephenQiu30/lanverse/backend -l .)" \
 	  && go vet ./... && $(GOBIN)/golangci-lint run ./... \
 	  && go test -race ./... && $(GOBIN)/govulncheck ./...
 

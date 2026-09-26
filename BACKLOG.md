@@ -72,7 +72,7 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | M1-01 | 旧代码处置 | 标签 `legacy-2026-09` 已推送；旧实现与旧工程配置已删除（2026-09-26，PLN-01 §5 执行记录） | `backend/`、`agent/`、`frontend/` | 完成 | `chore(repo)` 删除旧实现（2026-09-26） |
-| M1-02 | 仓库骨架与工具链 | 三端目录、锁文件、Makefile、`.env.example`；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc | `backend/`、`agent/`、`frontend/`、`Makefile` | 待办 | — |
+| M1-02 | 仓库骨架与工具链 | 三端目录、锁文件、Makefile、`docker-compose-env.example`；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc | `backend/`、`agent/`、`frontend/`、`Makefile` | 进行中 | — |
 | M1-03 | 本地环境 | 根目录单一 Docker Compose 一键启动 PostgreSQL、Redis、Kafka、MinIO、Temporal（含 UI）、可观测栈（profile 可选），含健康检查与备份恢复演练 | `docker-compose.yml`、`docker-compose-env.example`、`docs/operation/01-环境与部署.md` | 待办 | — |
 | M1-04 | CI 流水线 | lint、format、typecheck、test、race、govulncheck、契约一致性、镜像构建（OPS-02） | `.github/workflows/` | 待办 | — |
 | M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、minio、temporal、otel、Wire 组合根，`--role=api|worker|relay` | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/` | 待办 | — |
