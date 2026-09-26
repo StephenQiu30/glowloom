@@ -81,7 +81,7 @@
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID） | `backend/internal/infra/`、`backend/internal/app/` | 待办 | — |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/adapter/workflow/` | 待办 | — |
 | M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 待办 | — |
-| M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳与明确的未接入状态，其余待实施 | `frontend/src/` | 进行中 | `86601dc6` |
+| M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存与项目页异常恢复界面，其余待实施 | `frontend/src/` | 进行中 | `86601dc6` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
@@ -102,6 +102,8 @@
 **M1-05 API 追踪切片（2026-09-27）**：`LV_OTEL_ENDPOINT` 为可选 OTLP/HTTP 根地址；本机未运行 Collector 时留空禁用导出，API 就绪状态不依赖追踪服务。Wire 为 API 显式注入 TracerProvider，Gin 接续入站 `traceparent`，GORM 查询跨度保留父链路且追踪属性不记录 SQL 参数；停机时刷新导出缓冲。使用本地 OTLP 接收端验证实际 protobuf 请求、服务名与跨度，并在本机 PostgreSQL、Redis、Temporal、MinIO 可达时验证整个 API 组合根导出 `/readyz` 请求；未启动 Docker。`govulncheck` 曾发现 GORM 官方插件间接引入的 ClickHouse 可达漏洞，改用不引入该模块的 otelgorm 插件后复测为 0 个可达漏洞。真实 Collector、Temporal 拦截器、Agent 跨进程传递、远端 CI 仍待验证，M1-05 不计完成。
 
 **M1-11 工作台外壳切片（2026-09-27）**：根路径跳转 `/projects`；项目页有语义化主导航、跳转主内容入口、项目功能未接入的真实空状态与创作流程概览，内容分组遵循无边框设计。本机直接启动 Next 开发服务，在浏览器检查根路径跳转、键盘跳转入口及 1024px / 390px 视口无横向溢出；`eslint`、`prettier`、`next typegen`、`tsc`、`vitest`、`next build` 通过。登录、真实项目列表、TanStack Query、SSE、参数表单和报价组件仍待接入；本切片不构成 M1-11 完成或产品验收。
+
+**M1-11 共享查询与错误恢复切片（2026-09-27）**：根布局挂载单一 TanStack Query Provider；组件测试证明同一查询由两个子组件共享、失效后共同更新。项目路由增加 Next 错误边界，提供重试操作且不显示内部错误文本；组件测试验证重试回调。前端类型依赖与 CI 的 Node 24 对齐，`pnpm peers check`、锁文件冻结安装均通过。本机 Next 16 开发服务下浏览器确认 `/projects` 正常渲染，`vitest`、ESLint、Prettier、`next typegen`、TypeScript 与生产构建已通过；尚未在浏览器触发真实异常并验证恢复成功，M1-11 仍进行中。
 
 **功能 Epic**
 
