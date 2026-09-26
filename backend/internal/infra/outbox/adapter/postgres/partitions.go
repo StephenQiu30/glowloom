@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -69,6 +70,81 @@ func (s *PartitionStore) PrunePublished(ctx context.Context, now time.Time, batc
 		return 0, fmt.Errorf("prune published outbox events: %w", result.Error)
 	}
 	return result.RowsAffected, nil
+}
+
+// DropEmptyPastPartitions removes completed UTC month partitions only after
+// every row has been drained. The default and current month partitions remain.
+func (s *PartitionStore) DropEmptyPastPartitions(ctx context.Context, now time.Time) (int, error) {
+	current := now.UTC()
+	first := time.Date(current.Year(), current.Month(), 1, 0, 0, 0, 0, time.UTC)
+	dropped := 0
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("LOCK TABLE infra.outbox IN ACCESS EXCLUSIVE MODE").Error; err != nil {
+			return fmt.Errorf("lock outbox for partition cleanup: %w", err)
+		}
+		names, err := pastPartitionNames(tx, first)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			// Catalog names are checked against the canonical YYYYMM format.
+			table := "infra." + name
+			var containsRows bool
+			if err := tx.Raw("SELECT EXISTS (SELECT 1 FROM " + table + ")").Scan(&containsRows).Error; err != nil {
+				return fmt.Errorf("check outbox partition %s: %w", name, err)
+			}
+			if containsRows {
+				continue
+			}
+			if err := tx.Exec("ALTER TABLE infra.outbox DETACH PARTITION " + table).Error; err != nil {
+				return fmt.Errorf("detach outbox partition %s: %w", name, err)
+			}
+			if err := tx.Exec("DROP TABLE " + table).Error; err != nil {
+				return fmt.Errorf("drop outbox partition %s: %w", name, err)
+			}
+			dropped++
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("drop empty outbox partitions: %w", err)
+	}
+	return dropped, nil
+}
+
+func pastPartitionNames(tx *gorm.DB, currentMonth time.Time) ([]string, error) {
+	rows, err := tx.Raw(`
+		SELECT c.relname
+		FROM pg_inherits AS i
+		JOIN pg_class AS c ON c.oid = i.inhrelid
+		JOIN pg_namespace AS n ON n.oid = c.relnamespace
+		WHERE i.inhparent = 'infra.outbox'::regclass
+		  AND n.nspname = 'infra'
+		  AND c.relname ~ '^outbox_[0-9]{6}$'
+		ORDER BY c.relname
+	`).Rows()
+	if err != nil {
+		return nil, fmt.Errorf("list outbox partitions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan outbox partition: %w", err)
+		}
+		month, err := time.Parse("200601", strings.TrimPrefix(name, "outbox_"))
+		if err != nil || name != "outbox_"+month.Format("200601") {
+			continue
+		}
+		if !month.AddDate(0, 1, 0).After(currentMonth) {
+			names = append(names, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read outbox partitions: %w", err)
+	}
+	return names, nil
 }
 
 func ensureMonth(tx *gorm.DB, month time.Time) error {
