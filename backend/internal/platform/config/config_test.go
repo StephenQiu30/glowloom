@@ -2,8 +2,35 @@ package config
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+func TestLoadFromDotEnvFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "local.env.example")
+	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_LOG_LEVEL=warn\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LV_ENV_FILE", path)
+	t.Setenv("LV_ENV", "prod")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.LogLevel != "warn" {
+		t.Errorf("Load() = %+v, want environment override and file values", cfg)
+	}
+}
+
+func TestLoadRejectsMissingDotEnvFile(t *testing.T) {
+	t.Setenv("LV_ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
+	_, err := Load()
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Load() error = %v, want ErrInvalid", err)
+	}
+}
 
 func TestLoadDefaults(t *testing.T) {
 	cfg, err := Load()
