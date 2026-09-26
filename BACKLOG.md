@@ -56,11 +56,11 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| P0-01 | 全能参考评测 | 候选 Seedance（方舟）、海螺 H3、OpenRouter 海外版；5 种风格 × 单角色 / 双角色 / 动作 / 运镜 / 音频参考五类镜头；记录一致性、失败率、耗时、单镜成本 | `agent/evals/`、`docs/test/03-AI评测方案.md` | 进行中（公开接口与预算预检；真实评测待实施） | — |
+| P0-01 | 全能参考评测 | 候选 Seedance（方舟）、海螺 H3、OpenRouter 海外版；5 种风格 × 单角色 / 双角色 / 动作 / 运镜 / 音频参考五类镜头；记录一致性、失败率、耗时、单镜成本 | `agent/evals/`、`docs/test/03-AI评测方案.md` | 进行中（公开接口与预算预检；真实评测待实施） | `5832c77a` |
 | P0-02 | 其他能力评测 | 带参考生图（Seedream、GPT Image）、TTS（MiniMax、豆包）、剧本解析 LLM（原文位置准确率） | `agent/evals/` | 待办 | — |
 | P0-03 | 样片与成本模型 | 5 种风格各 1 条 30–60 秒样片；单镜成本、单分钟成本、平均重拍次数 | `docs/acceptance/P0-验收记录.md` | 待办 | — |
 | P0-04 | 注册表初始配置 | 选定模型的 ModelProfile（模式、输入上限、参数 schema、价格）写入种子文件 | `backend/db/seed/catalog.yaml` | 待办 | — |
-| P0-05 | 画布 PoC | React Flow + 移植 infinite-canvas；核实源码许可，并按 REQ-02 PERF-06 验证 500 节点 / 800 连线 ≥ 50 fps、打开 ≤ 3 秒、2,000 节点 ≥ 30 fps，记录 DES-08 §7 的内存目标（DES-38-Q1/Q2） | `frontend/`（PoC 分支内） | 进行中（固定版本许可已核验；移植与性能 PoC 待实施） | — |
+| P0-05 | 画布 PoC | React Flow + 移植 infinite-canvas；核实源码许可，并按 REQ-02 PERF-06 验证 500 节点 / 800 连线 ≥ 50 fps、打开 ≤ 3 秒、2,000 节点 ≥ 30 fps，记录 DES-08 §7 的内存目标（DES-38-Q1/Q2） | `frontend/`（PoC 分支内） | 进行中（固定版本许可已核验；移植与性能 PoC 待实施） | `5832c77a` |
 | P0-06 | P0 决策收口 | 确定主供应商、内容审核服务、Agent LLM；回填 DES-11-Q1、DES-31-Q1、DES-33-Q1、DES-39-Q2、DES-41-Q3 等 | `docs/design/`、`docs/prd/01-产品需求文档.md` | 待办 | — |
 
 **P0-05 许可核验（2026-09-27）**：固定上游提交 `dab19adc0847e32e39b7fc8ff90cb392561fb826` 的 LICENSE 为 MIT，证据见 DES-38 §10。当前仓库未移植上游源码，也未创建 PoC 分支或取得性能数据；本项不能计为完成。按 AGENTS.md，创建 PoC 分支须先取得产品负责人明确要求。
@@ -85,7 +85,7 @@
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID） | `backend/internal/infra/`、`backend/internal/app/` | 待办 | — |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/adapter/workflow/` | 待办 | — |
 | M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 待办 | — |
-| M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存与项目页异常恢复界面，其余待实施 | `frontend/src/` | 进行中 | `86601dc6` |
+| M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存与项目页异常恢复界面，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
