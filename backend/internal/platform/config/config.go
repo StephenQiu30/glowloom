@@ -19,6 +19,7 @@ type Config struct {
 	HTTPAddr string
 	LogLevel string
 	DBDSN    string
+	RedisURL string
 }
 
 var (
@@ -46,6 +47,7 @@ func Load() (Config, error) {
 		HTTPAddr: strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
 		LogLevel: strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
 		DBDSN:    strings.TrimSpace(v.GetString("LV_DB_DSN")),
+		RedisURL: strings.TrimSpace(v.GetString("LV_REDIS_URL")),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

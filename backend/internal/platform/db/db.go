@@ -63,3 +63,11 @@ func (c *Connection) Close() error {
 	}
 	return nil
 }
+
+// Ping checks the existing PostgreSQL connection pool for readiness.
+func (c *Connection) Ping(ctx context.Context) error {
+	if err := c.pool.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping PostgreSQL: %w", err)
+	}
+	return nil
+}

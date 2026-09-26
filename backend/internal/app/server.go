@@ -11,6 +11,7 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -26,10 +27,25 @@ func RunAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
 			logger.Error("close api database", zap.Error(err))
 		}
 	}()
+	redisConn, err := redisconn.Open(cfg.RedisURL)
+	if err != nil {
+		return fmt.Errorf("configure api Redis: %w", err)
+	}
+	defer func() {
+		if err := redisConn.Close(); err != nil {
+			logger.Error("close api Redis", zap.Error(err))
+		}
+	}()
+	ready := func(ctx context.Context) error {
+		if err := conn.Ping(ctx); err != nil {
+			return err
+		}
+		return redisConn.Ping(ctx)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           NewRouter(logger),
+		Handler:           NewRouter(logger, ready),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
