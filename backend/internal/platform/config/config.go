@@ -15,11 +15,12 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
-	Env      string
-	HTTPAddr string
-	LogLevel string
-	DBDSN    string
-	RedisURL string
+	Env          string
+	HTTPAddr     string
+	LogLevel     string
+	DBDSN        string
+	RedisURL     string
+	KafkaBrokers string
 }
 
 var (
@@ -43,11 +44,12 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Env:      strings.TrimSpace(v.GetString("LV_ENV")),
-		HTTPAddr: strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
-		LogLevel: strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
-		DBDSN:    strings.TrimSpace(v.GetString("LV_DB_DSN")),
-		RedisURL: strings.TrimSpace(v.GetString("LV_REDIS_URL")),
+		Env:          strings.TrimSpace(v.GetString("LV_ENV")),
+		HTTPAddr:     strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
+		LogLevel:     strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
+		DBDSN:        strings.TrimSpace(v.GetString("LV_DB_DSN")),
+		RedisURL:     strings.TrimSpace(v.GetString("LV_REDIS_URL")),
+		KafkaBrokers: strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
