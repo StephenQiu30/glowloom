@@ -208,7 +208,7 @@ QueryResult   = { state: pending|running|succeeded|failed|not_found, progress?, 
 | 媒体输入 | 使用 Go 生成的预签名 GET URL（有效期 ≥ 预计处理时长 + 1h）；供应商要求先上传的，由适配器上传并缓存供应商侧 ID |
 | 用量 | 解析供应商返回的计费用量（秒数、张数、token、字符）；无返回时按请求参数计算并标注 `estimated` |
 | 凭据 | Activity 输入带 `credential{id, key_id, ciphertext}`（Go 传入的密文）→ 私钥解封 → 按 `id` 进程内缓存 5 分钟；不落日志（DES-07 §5.2） |
-| 模拟供应商 | `providers/mock`：通过参数控制延迟、失败、超时、重复回调、结果过期，用于开发与故障注入（REQ-02 DEP-06） |
+| 模拟供应商 | `providers/mock`：通过参数控制延迟、失败、提交响应丢失、重复回调、结果过期，用于开发与故障注入（REQ-02 DEP-06）；以 `request_key` 派生稳定任务 ID，用 Redis `SET NX` 保存 24 小时，支持按请求键或任务 ID 查询，Agent 进程重启后仍可对账；`unknown` 表示任务已存但提交响应不提供任务 ID |
 
 ### 5.3 MVP 适配器
 
