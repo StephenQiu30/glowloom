@@ -114,7 +114,7 @@ user    = 由 input.schema 渲染的结构化输入；原文片段按行加偏�
 | --- | --- | --- |
 | `get_source_text(from, to)` | 读取冻结输入快照中的原文片段 | parse_episode、extract_bible |
 | `lookup_bible(name)` | 在冻结的设定摘要中查找条目 | storyboard |
-| `shot_language_glossary()` | 镜头语言词表 | storyboard、compose_prompt |
+| `shot_language_glossary()` | 镜头语言词表 | storyboard |
 | `estimate_duration(text)` | 按字数估算台词时长 | storyboard |
 | 对话式 Agent：`project_summary`、`episode_structure`、`list_shots`、`bible`、`models`、`quote_preview` | 经 Go 内部只读端点（DES-03 §7.3） | 对话式 Agent |
 
@@ -128,8 +128,8 @@ def run(skill, inputs, budget):
     msgs = context.build(skill, inputs)
     for round in range(skill.max_repair_rounds + 1):
         heartbeat()                                  # Temporal 心跳；检测取消
-        out, usage = router.complete(msgs, skill.output_schema, tools=skill.tools)
-        budget.charge(usage)                         # 超限抛 BudgetExceeded（不可重试）
+        out, usage = router.complete(msgs, skill.output_schema, tools=skill.tools, budget=budget)
+        # 记账只在 Router 内部进行（见下方说明）；usage 为本轮累计用量，仅用于 trace，不再次 charge
         errors = validators.run(skill, inputs, out)
         trace.step(round, msgs_digest, out_digest, usage, errors)
         if not errors:
@@ -138,7 +138,7 @@ def run(skill, inputs, budget):
     raise ValidationExhausted(errors, raw_output=out)   # 保留原始输出供排查（REQ-13 R7）
 ```
 
-- 工具调用在 `router.complete` 内部循环处理，工具调用轮次上限 8。
+- 工具调用在 `router.complete` 内部循环处理，工具调用轮次上限 8。**记账只在 Router 内部一处进行**：每一次模型调用（含工具结果返回后的续写）之前以 `budget.max_output_tokens` 按同一累计值限制本次最大可计费用，返回后立即 `budget.charge` 该次用量；预算放不下下一次调用时停止并抛出 `BudgetExceeded`（附已有结果）。外层循环不再记账。
 - 取消：心跳返回取消时立即中止并抛出 `Cancelled`。
 
 ### 3.7 Validators
@@ -176,9 +176,8 @@ def run(skill, inputs, budget):
 | `parse_episode` | 单集原文（带偏移）；项目已知角色名与别名（可选） | `scenes[{heading, location_text, time_of_day, span, items[{type: line/action, kind, speaker_text, content, emotion, span}]}]`；`unassigned_lines[]` | `schema`、`source_span`、`unique_lines` | 台词召回 ≥ 99%、说话人 ≥ 95%、场边界 ≥ 90%（AIQ-01） |
 | `extract_bible` | 各集结构摘要（说话人、场景标题、动作中的名词）；已有设定（增量时） | `characters[{name, aliases, description, episode_seqs, looks[{name, description, applies_to}]}]`、`locations[…]`、`props[…]`、`merge_suggestions[]` | `schema`、别名不重叠 | 主要角色召回 100%、别名合并 ≥ 90%（AIQ-02） |
 | `storyboard` | 场结构（台词带 `line_key`）；本场设定（造型 ID、描述、锁定状态）；画幅、风格；镜头语言词表；默认模型的时长范围 | `shots[{description, entity_refs, shot_size, camera_angle, camera_movement, duration_ms, line_keys, look_ids, location_id, prop_ids, generation_mode, references[{role, ref}]}]` | `schema`、`line_assignment`、`bible_refs`、`duration_range` | 台词分配完整率 100%（AIQ-03）；人工评分 ≥ 3.5 / 5 |
-| `compose_prompt` | 镜头版本、参考组合（带指代编号与描述）、目标模型的提示词习惯 | `prompt`、`negative_prompt` | 长度 ≤ 模型上限；每个参考指代都出现 | 人工评分；生成一致性对比（A/B） |
 
-`compose_prompt` 默认由 Go 的规则模板生成（免费，REQ-27）；上表的 Skill 仅在用户选择“AI 优化提示词”时使用。
+提示词（`compose_prompt`）在 MVP 由 Go 的规则模板生成（免费，REQ-27），不是 LLM Skill；AI 优化提示词见 REQ-34 VID-07。
 
 ## 5. 供应商适配器
 

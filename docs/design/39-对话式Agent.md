@@ -16,20 +16,23 @@
 
 | 类别 | 内容 |
 | --- | --- |
-| 数据表 | `agent.message`、`agent.proposal`、`agent.session` |
-| 接口 | `POST /api/projects/{pid}/agent/sessions`<br>`GET /api/projects/{pid}/agent/sessions`<br>`POST /api/projects/{pid}/agent/sessions/{sid}/runs`<br>`GET /api/projects/{pid}/agent/sessions/{sid}/messages`<br>`POST /api/agent/proposals/{id}:apply`<br>`POST /api/agent/proposals/{id}:reject`<br>`DELETE /api/projects/{pid}/agent/sessions/{sid}`<br>`GET /api/admin/agent/runs/{run_id}/debug` |
-| 工作流与任务 | `OperationWorkflow` |
+| 数据表 | `agent.message`、`agent.proposal`、`agent.session`、`agent.run`、`operation.operation`（额度）、`operation.provider_call` |
+| 接口 | `POST /api/projects/{pid}/agent/sessions`<br>`GET /api/projects/{pid}/agent/sessions`<br>`POST /api/projects/{pid}/agent/sessions/{sid}/runs`<br>`GET /api/projects/{pid}/agent/sessions/{sid}/messages`<br>`POST /api/agent/proposals/{id}:apply`<br>`POST /api/agent/proposals/{id}:reject`<br>`DELETE /api/projects/{pid}/agent/sessions/{sid}`<br>`GET /api/admin/agent/runs/{run_id}/debug`<br>`POST /api/projects/{pid}/agent/sessions/{sid}/budget-quotes`<br>`POST /api/projects/{pid}/agent/sessions/{sid}:close`<br>`POST /internal/agent/runs/{run_id}/calls`<br>`PUT /internal/agent/runs/{run_id}/calls/{call_seq}` |
+| 工作流与任务 | `OperationWorkflow`、`agent-session-settle` |
 | 领域事件 | 无 |
 | 测试用例 | TC-37-xx（[TST-02](../test/02-需求追踪矩阵.md)） |
 
 ## 2. 数据
 
-`agent.session`（`last_seq`、`budget_micros`、`spent_micros`，后两列新增）、`agent.message`（`seq`、`role`、`event_type`、`content`、`run_id`）、`agent.proposal`（`kind`、`commands`、`diff`、`operation_ids`、`status`）；见 DES-02 §5.13。
+`agent.session`（`last_seq`、`current_operation_id`、`status`）、`agent.run`（每次运行占用的额度与实际费用）、`agent.message`（`seq`、`role`、`event_type`、`content`、`run_id`）、`agent.proposal`（`kind`、`commands`、`diff`、`operation_ids`、`status`）；见 DES-02 §5.13。
 
 ## 3. 接口
 
 ```http
-POST /api/projects/{pid}/agent/sessions                  { "title": "", "budget_micros": 2000000 }   → 报价确认会话 LLM 上限
+POST /api/projects/{pid}/agent/sessions                  { "title": "", "budget_micros": 2000000 }
+    → 201 { "session_id": "…", "quote": { "operation_id": "…", "quote_micros": 2000000 } }；用户经 `POST /api/operations/{id}:confirm` 确认后会话才可运行（DES-04 §8.7）
+POST /api/projects/{pid}/agent/sessions/{sid}/budget-quotes { "budget_micros": 2000000 }   → 追加额度报价
+POST /api/projects/{pid}/agent/sessions/{sid}:close                                      → 结束会话并结算
 GET  /api/projects/{pid}/agent/sessions
 POST /api/projects/{pid}/agent/sessions/{sid}/runs       （SSE，AG-UI 事件流）{ "message": "把第 3 场的镜头都改成近景", "context": { "page": "storyboard", "episode_id": "…" } }
 GET  /api/projects/{pid}/agent/sessions/{sid}/messages?after_seq=120
@@ -45,7 +48,7 @@ AG-UI 事件映射见 DES-01 §7.4；自定义事件 `canvas_commands`、`propos
 
 ## 4. 异步与工作流
 
-对话运行不使用 Temporal（交互式、短时）；`agent-api` 直接流式执行。生成草稿确认后走 OperationWorkflow。
+对话运行不使用 Temporal（交互式、短时），`agent-api` 直接流式执行。每次运行前 Go 在当前额度内登记一条 `agent.run` 并占用 `run_cap`，作为 Harness Budget 传入；每一次模型调用在发起前登记一条 `provider_call`（带 `request_key`），返回后立即写入实际用量与费用；运行结束只汇总 `agent.run.cost_micros`；中断的运行由 `agent-session-settle` 判为 abandoned。额度的确认、追加、结算规则以 DES-04 §8.7 为准（本段为摘要）。生成草稿确认后走 OperationWorkflow。
 
 ## 5. 事件与实时
 
