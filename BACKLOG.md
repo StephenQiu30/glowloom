@@ -16,18 +16,18 @@
 | --- | --- | --- | --- | --- | --- |
 | 文档（需求 → 设计 → 计划 → 测试 → 运维） | 全生命周期文档与需求设计拆解 | — | — | — | 完成（`bbd42ca7`），待评审 |
 | P0 | 全能参考可用性与成本验证 | — | 6 | 0 | 未开始 |
-| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 1 | 进行中 |
+| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 2 | 进行中 |
 | M2 | 剧本导入、解析、设定集 | 4 | 23 | 0 | 未开始 |
 | M3 | 资产定稿、分镜、生成全链路 | 11 | 60 | 0 | 未开始 |
 | M4 | 视频、配音、生成增强 | 3 | 18 | 0 | 未开始 |
 | M5 | 画布、Agent、运营辅助 = MVP | 4 | 20 | 0 | 未开始 |
-| 合计 | | 33 | 193 | 1 | |
+| 合计 | | 33 | 193 | 2 | |
 
 ## 2. 当前焦点与下一步
 
 1. **评审文档**：PRD-01、REQ、DES 均为“草案（待评审）”；评审通过后把功能 Epic 的状态从 `待办` 改为 `就绪`。
 2. **启动 P0**（P0-01～P0-06）：评测结论决定主供应商、内容审核、Agent LLM 与画布方案，并回填设计中的待确认问题。
-3. **M1 准备**：M1-01 已完成（旧实现已删除，保留在标签 `legacy-2026-09`）；下一步按 M1-02～M1-11 搭建工程底座。
+3. **M1 准备**：M1-01、M1-02 已完成（旧实现保留在标签 `legacy-2026-09`，三端骨架与工具链已验证）；下一步从 M1-03 继续搭建本地环境。
 
 ## 3. 待确认事项
 
@@ -72,7 +72,7 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | M1-01 | 旧代码处置 | 标签 `legacy-2026-09` 已推送；旧实现与旧工程配置已删除（2026-09-26，PLN-01 §5 执行记录） | `backend/`、`agent/`、`frontend/` | 完成 | `chore(repo)` 删除旧实现（2026-09-26） |
-| M1-02 | 仓库骨架与工具链 | 三端目录、锁文件、Makefile、`docker-compose-env.example`；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc | `backend/`、`agent/`、`frontend/`、`Makefile` | 进行中 | — |
+| M1-02 | 仓库骨架与工具链 | 三端目录、锁文件、Makefile、`docker-compose-env.example`；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc | `backend/`、`agent/`、`frontend/`、`Makefile` | 完成 | `bdc167a5`、`c214607b` |
 | M1-03 | 本地环境 | 根目录单一 Docker Compose 一键启动 PostgreSQL、Redis、Kafka、MinIO、Temporal（含 UI）、可观测栈（profile 可选），含健康检查与备份恢复演练 | `docker-compose.yml`、`docker-compose-env.example`、`docs/operation/01-环境与部署.md` | 待办 | — |
 | M1-04 | CI 流水线 | lint、format、typecheck、test、race、govulncheck、契约一致性、镜像构建（OPS-02） | `.github/workflows/` | 待办 | — |
 | M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、minio、temporal、otel、Wire 组合根，`--role=api|worker|relay` | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/` | 待办 | — |
