@@ -84,7 +84,7 @@
 | M1-07 | 命令层 | 鉴权（Redis 会话）、幂等键、`expected_revision`、审计、Outbox 统一中间层 | `backend/internal/command/` | 待办 | — |
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID） | `backend/internal/infra/`、`backend/internal/app/` | 待办 | — |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/adapter/workflow/` | 待办 | — |
-| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 待办 | — |
+| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 进行中（模拟供应商核心适配器已实现；Worker、Harness 与联调待实施） | `c3886325`、`1aeb91f4`、`cdee0eb2` |
 | M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题、项目页异常恢复及模型参数表单组件，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7`、`a9467f55`、`55a94493`、`ab0d8a37` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
@@ -118,6 +118,8 @@
 **M1-11 明暗主题切片（2026-09-27）**：按已接受的 DES-08 §2 接入 `next-themes`，在应用 Provider 管理 `html.dark`，项目页导航提供带可访问名称的切换按钮；默认跟随系统，切换选择由浏览器保存。按 Vercel 界面规范将共享 Button 的 `transition-all` 改为实际变化属性，并保留触控与键盘焦点反馈。本机浏览器验证浅色 → 深色、刷新后仍为深色、再切回浅色；`vitest`、ESLint、Prettier、依赖 peer 检查、冻结锁文件安装与 Next 生产构建通过。登录、真实项目列表、SSE、参数表单、报价组件与局部编辑状态尚未完成，M1-11 仍进行中。
 
 **M1-11 模型参数表单切片（2026-09-27）**：按 DES-11 §3、REQ-08 R2/R3 的字段定义实现 `ModelParamsForm`，用 React Hook Form、Zod 与 shadcn Field 渲染输入、文本、下拉选项、滑块、开关、分段和音色选择；按模式过滤，模型版本或模式切换时清除旧值，整数范围和必填错误就地呈现。组件测试覆盖模式 / 模型切换、可选参数省略、无效输入阻止提交与首个错误聚焦。`pnpm install --frozen-lockfile --ignore-scripts`、`pnpm peers check`、全量 Vitest（6/6）、ESLint 零警告、Prettier、`next typegen`、TypeScript、`next build` 均通过。真实模型注册表与报价接口尚未接入，组件未在生产路由挂载，不能计作生成面板验收；SSE、局部编辑状态和报价确认仍待实施。
+
+**M1-10 模拟供应商切片（2026-09-27）**：Agent 增加 Redis 持久的 `MockProvider`，以稳定任务 ID 和 `SET NX` 保证并发重复提交幂等；模拟 `accepted`、`rejected`、`not_submitted`、`unknown`，支持按请求键对账、延迟、失败、取消和结果过期。新建适配器及 Redis 客户端后仍可查询既有任务。`uv sync --locked`、Ruff 检查与格式、mypy 通过；默认全量 pytest 为 11 通过、1 条真实 Redis 用例因未配置 `LV_TEST_REDIS_URL` 跳过，另以本机 Redis 数据库 15 显式运行该用例通过，键使用隔离前缀和 60 秒 TTL。Agent 镜像构建通过，未启动容器。尚未注册 Temporal Activity、提供可接管的模拟媒体结果或实现重复回调，不能计作 M1-10 或 M1 端到端验收。
 
 **功能 Epic**
 
