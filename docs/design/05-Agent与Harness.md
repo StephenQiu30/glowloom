@@ -41,19 +41,20 @@ agent/
     moderation/
     credentials/         凭据解封（私钥）与内存缓存
     conversation/        对话式 Agent：规划器、AG-UI 事件、提案构建
-  skills/<skill_key>/    Skill 包（见 §3.1）
+  skills/<skill_key>/<version>/  多版本 Skill 包（见 §3.1）
+  skills/index.json     已发布版本与包内容 hash
   evals/                 评测集与评测脚本（TST-03）
   tests/
 ```
 
-`agent-api` 与 `agent-worker` 共享代码。本地直接运行 `uvicorn app.main_api:create_app --factory` 与 `python -m app.main_worker`；`uv run --env-file ../.env` 为两种进程加载根目录配置。当前 `agent-worker` 只注册 `agent.mock` 队列的 `provider.submit/query/cancel`，`agent` 队列的 Harness Activity 与真实供应商队列后续接入。
+`agent-api` 与 `agent-worker` 共享代码。本地直接运行 `uvicorn app.main_api:create_app --factory` 与 `python -m app.main_worker`；`uv run --env-file ../.env` 为两种进程加载根目录配置。当前 Worker 同时注册 `agent.mock` 队列的 `provider.submit/query/cancel` 和 `agent` 队列的 `llm.run_skill`；后者目前只接受 `mock.echo@1.0.0` 与 `mock.structured`，真实模型、业务 Skill 和真实供应商队列后续接入。
 
 ## 3. Harness
 
 ### 3.1 Skill 包
 
 ```text
-skills/parse_episode/
+skills/parse_episode/1.3.0/
   SKILL.md               元数据（frontmatter）+ 任务说明（系统提示词主体）
   input.schema.json      输入 schema
   output.schema.json     输出 schema（同时作为 LLM 结构化输出约束）
@@ -80,13 +81,14 @@ validators: [schema, source_span, unique_lines]
 chunking: { strategy: by_scene_marker, max_chars: 30000 }
 ```
 
-发布：CI 计算 Skill 包内容 hash，生成 `skills/index.json`（key → version、hash）；任何内容变更必须提升版本号并通过该 Skill 的评测（REQ-02 AIQ-06）。任务 Trace 记录 `skill_key@version#hash`。
+发布：`skills/index.json` 按 `key → version → SHA-256` 登记可并存版本。包 hash 对包内全部文件按相对路径排序，依次写入路径、空字节、文件内容、空字节后计算；运行时校验，不匹配则拒绝启动。后续 CI 对版本与 hash 做相同检查，任何内容变更必须提升版本号并通过该 Skill 的评测（REQ-02 AIQ-06）。任务 Trace 记录 `skill_key@version#hash`。
 
 ### 3.2 Skill Registry
 
 - 启动时加载 `skills/index.json` 与全部包；校验 schema 合法、版本与 hash 一致，否则拒绝启动。
 - Activity 输入带 `skill_key` 与 `skill_version`（由 Go 在报价时冻结）；Registry 找不到该版本时返回不可重试错误 `skill_version_unavailable`。
 - 同一 Skill 允许并存多个版本（部署窗口内在途任务使用旧版本）。
+- 当前实现只提供 `mock.echo@1.0.0` 用于端到端验证；缺失版本返回不可重试错误。业务 Skill 发布与评测仍待实现。
 
 ### 3.3 Context Builder
 
@@ -100,6 +102,7 @@ user    = 由 input.schema 渲染的结构化输入；原文片段按行加偏�
 
 - token 计数使用模型对应的分词器（无公开分词器时按字符数 × 系数估算，系数在 Router 中配置）。
 - 超过 `max_input_tokens`：按 `chunking` 策略切分为多次调用并由 Skill 声明的 `merge` 函数合并；不支持切分的 Skill 明确失败（`context_too_large`），**不静默截断**。
+- 当前骨架仅为零费用模拟模型以字符数估算 token，并在超限时直接返回 `context_too_large`；该估算不能作为真实模型的预算保证，接入真实模型前须实现对应分词器或经验证的上界系数，以及业务 Skill 的切分与合并。
 
 ### 3.4 Model Router
 
@@ -107,6 +110,7 @@ user    = 由 input.schema 渲染的结构化输入；原文片段按行加偏�
 - 统一接口 `complete(messages, output_schema, params) -> (json, usage)`；按供应商选择结构化输出方式：原生 JSON Schema 约束 > JSON 模式 + 校验 > 文本提取。
 - 记录 `usage`（输入 / 输出 token）与按价格规则计算的 `cost_micros`。
 - MVP 不做自动降级到其他模型。
+- 当前 Router 只接入零费用的 `mock.structured`；其余 `model_key` 明确返回 `model_unavailable`，不伪装成真实模型调用。
 
 ### 3.5 Tool Registry
 
@@ -120,6 +124,7 @@ user    = 由 input.schema 渲染的结构化输入；原文片段按行加偏�
 
 - 所有工具只读；Activity 中的工具只读取冻结输入快照，不访问实时数据（保证可复现）。
 - 每个工具声明参数 schema 与输出大小上限；超限截断并标注“已截断”。
+- 当前骨架尚未注册工具与业务校验器；含工具或非 `schema` 校验器的 Skill 会明确失败，避免跳过约束。
 
 ### 3.6 Execution Loop
 
