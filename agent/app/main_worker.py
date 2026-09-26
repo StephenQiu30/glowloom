@@ -2,14 +2,19 @@
 
 import asyncio
 from contextlib import suppress
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis.asyncio import Redis
 from temporalio.client import Client
 
+from app.harness.mock_model import MockStructuredClient
+from app.harness.router import ModelRouter, Price
+from app.harness.skills import SkillRegistry
 from app.providers.mock import MockProvider
 from app.worker.provider_activities import create_mock_worker
+from app.worker.skill_activities import create_skill_worker
 
 
 class WorkerSettings(BaseSettings):
@@ -20,17 +25,21 @@ class WorkerSettings(BaseSettings):
     redis_url: str = Field(min_length=1)
 
 
-async def run(settings: WorkerSettings) -> None:
+async def run(settings: WorkerSettings, registry: SkillRegistry) -> None:
+    router = ModelRouter(MockStructuredClient(), {"mock.structured": Price(0, 0)})
     client = await Client.connect(settings.temporal_addr, namespace=settings.temporal_namespace)
     async with Redis.from_url(settings.redis_url, decode_responses=True) as store:
         await store.ping()
-        worker = create_mock_worker(client, MockProvider(store))
-        await worker.run()
+        async with asyncio.TaskGroup() as workers:
+            workers.create_task(create_mock_worker(client, MockProvider(store)).run())
+            workers.create_task(create_skill_worker(client, registry, router).run())
 
 
 def main() -> None:
+    settings = WorkerSettings()
+    registry = SkillRegistry.load(Path(__file__).resolve().parent.parent / "skills")
     with suppress(KeyboardInterrupt):
-        asyncio.run(run(WorkerSettings()))
+        asyncio.run(run(settings, registry))
 
 
 if __name__ == "__main__":

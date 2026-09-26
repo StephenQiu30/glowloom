@@ -6,6 +6,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY app ./app
+COPY skills ./skills
 
 FROM python:3.12.14-slim
 RUN useradd --system --uid 10001 lanverse

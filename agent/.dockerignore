@@ -3,4 +3,5 @@
 !uv.lock
 !.python-version
 !app/
+!skills/
 **/__pycache__
