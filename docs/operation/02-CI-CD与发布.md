@@ -19,9 +19,9 @@
 ```text
 PR / push 到分支
   ├─ changes：按路径判断受影响的端（backend / agent / frontend / contracts / docs）
-  ├─ backend ：gofmt/goimports 检查 → go vet → golangci-lint → go test -race（单元）→ 集成（testcontainers）→ 工作流回放 → govulncheck → wire 生成一致 → swag 生成一致
+  ├─ backend ：gofmt/goimports 检查 → go vet → golangci-lint → go test -race（单元）→ 集成（testcontainers）→ 工作流回放 → govulncheck → wire 生成一致 → swag 生成一致 → 启动同提交后端并核对在线 Swagger
   ├─ agent   ：ruff check + format --check → mypy → pytest → 契约模型生成一致 → pip-audit → Skill 版本 / hash 校验 →（Skill 变更时）评测门禁
-  ├─ frontend：pnpm install --frozen-lockfile → lint → format:check → typecheck → vitest → OpenAPI 客户端生成一致 → pnpm audit → build
+  ├─ frontend：pnpm install --frozen-lockfile → 从同提交后端在线 Swagger 用 @umijs/openapi 重生 API 并比较 → lint → format:check → typecheck → vitest → pnpm audit → build
   ├─ contracts：JSON Schema 校验 → Go / Python 生成物一致 → 事件 schema 兼容性检查
   ├─ docs    ：链接与锚点校验、需求 / 非功能 / 功能编号校验、TST-02 与功能文件一致
   ├─ security：gitleaks → 依赖许可检查
@@ -40,7 +40,7 @@ PR / push 到分支
 | 单元、集成、工作流回放、前端组件测试 | 是 | TST-01 §2 |
 | Race Detector | 是 | AGENTS.md |
 | 漏洞扫描（高危） | 是 | govulncheck、pnpm audit、pip-audit、Trivy |
-| 生成物一致（wire、swag、OpenAPI 客户端、契约模型） | 是 | REQ-02 MNT-03 |
+| 生成物一致（wire、swag、在线 Swagger、`@umijs/openapi` API）及公开路由覆盖 | 是 | REQ-02 MNT-03 |
 | 迁移可在空库与上一版本库执行 | 是 | DES-02 §10 |
 | Secret 扫描 | 是 | DES-07 §13 |
 | 文档编号与链接校验 | 是（docs 变更时） | PLN-02 §4.2 |

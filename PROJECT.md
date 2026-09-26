@@ -35,7 +35,7 @@ Lanverse/
   docs/             生命周期文档：产品需求、需求规格、设计、计划、测试、运维、验收
 ```
 
-不设 `contracts/`：REST 契约仍以后端 swag → OpenAPI 为唯一来源生成前端客户端（见 §7）；Activity 与事件的输入输出由 Go、Python 各自手写类型，用契约测试保证一致，不引入单独的 schema 文件与代码生成流水线，避免为两个语言维护一套额外的中间表示。
+不设 `contracts/`：公共 REST 契约由后端 Gin 注解与 DTO 经 swag 自动生成，在后端 Swagger 端点在线提供，再由 `@umijs/openapi` 生成前端 API（见 §7）；Activity 与事件的输入输出由 Go、Python 各自手写类型，用契约测试保证一致，不引入单独的 schema 文件与代码生成流水线，避免为两个语言维护一套额外的中间表示。
 
 | 单元 | 必须负责 | 不得负责 |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ Lanverse/
 | 范围 | 技术 |
 | --- | --- |
 | 前端 | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier |
-| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、openapi-typescript + openapi-fetch；CopilotKit（AG-UI） |
+| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、`@umijs/openapi` + Axios；CopilotKit（AG-UI） |
 | 后端 | Go、Gin、GORM（pgx 驱动）、golang-migrate、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator |
 | 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go |
 | Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；ag-ui-protocol |
@@ -89,7 +89,7 @@ backend/
         event/                   # 本上下文的 Kafka 消费者（按需）
     platform/                    # config(Viper) log(Zap) db(GORM) redis kafka minio temporal ffmpeg otel auth
   db/migrations/                 # golang-migrate 版本化 SQL（唯一 Schema 来源）
-  docs/                          # swag 生成的 OpenAPI，禁止手改
+  docs/                          # swag 从注解生成的 Swagger 规范，禁止手改；由 backend-api 在线提供
 ```
 
 1. 依赖方向 `adapter → application → domain`；`domain` 不依赖 Gin、GORM、Temporal、Kafka、Redis 或任何 SDK。
@@ -163,8 +163,9 @@ frontend/
       nodes/                     #   NodeShell 与三类节点
       panels/                    #   工具栏、创建菜单、设置弹层、编辑弹窗
     components/ui/               # shadcn/ui（Radix）基础组件
-    lib/                         # api 客户端封装、sse、auth
-    gen/api/                     # 由后端 OpenAPI 生成，禁止手改
+    lib/                         # 前端基础能力
+      request.ts                  # Axios 请求封装；普通 HTTP 与流式连接的统一入口
+    gen/api/                     # @umijs/openapi 从后端在线 Swagger 文档生成，禁止手改
   tests/                         # unit、e2e
   eslint.config.mjs              # ESLint flat config
   .prettierrc.json               # Prettier 配置（含 tailwind 插件）
@@ -181,18 +182,19 @@ frontend/
 8. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
 9. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。
 10. 付费操作先展示报价并由用户确认。
-11. 不设置项目脚本或 Makefile；前端开发和检查直接执行 `pnpm exec next`、`pnpm exec eslint`、`pnpm exec prettier`、`pnpm exec tsc`、`pnpm exec vitest`。
+11. 所有普通 HTTP 请求通过 `src/lib/request.ts` 中的 Axios 封装；生成函数调用它，业务代码调用生成函数。SSE 与 AG-UI 流式连接也从该文件导出连接入口；不得在业务模块中另建请求实例或直连后端。预签名 URL 上传沿用该入口，不携带后端会话与 CSRF 头到对象存储。
+12. 不设置项目脚本或 Makefile；前端开发和检查直接执行 `pnpm exec next`、`pnpm exec eslint`、`pnpm exec prettier`、`pnpm exec tsc`、`pnpm exec vitest`、`pnpm exec openapi2ts`。
 
 ## 7. 契约与生成
 
 | 契约 | 唯一来源 | 生成物 |
 | --- | --- | --- |
-| 公共 REST | Gin Handler 的 swag 注解 + DTO | `backend/docs`（OpenAPI）→ `frontend/src/gen/api` |
+| 公共 REST | Gin Handler 的 swag 注解 + DTO | `backend/docs`（生成的 Swagger 2.0）→ 后端在线 `/swagger/doc.json` → `@umijs/openapi` → `frontend/src/gen/api` |
 | Activity | Go、Python 各自手写的类型（Go struct / Pydantic 模型），DES-03 §7.1 表格为字段的唯一权威描述 | — |
 | 数据库 | `backend/db/migrations/` | — |
 | 事件 | Go 结构体，按主题版本号 `.v<N>` 手写，生产者与消费者各自维护 | — |
 
-1. REST：改 Handler / DTO → 生成 OpenAPI → 生成前端客户端 → 改前端实现。禁止手改生成物。
+1. REST：改 Handler / DTO 与注解 → 运行 swag 自动生成 → 启动后端并从在线 `/swagger/doc.json` 运行 `@umijs/openapi` → 改前端实现。生成器配置 `schemaPath` 为在线地址、`requestImportStatement` 为 `@/lib/request` 的导入语句；Swagger 文档与前端 API 文件均禁止手改。后端未启动或在线规范不可用时生成失败，不以旧文件代替。
 2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 改 Python 类型 → 契约测试（两端对同一组示例输入输出分别断言，发现字段不一致即失败）。不做代码生成，因为两端只是各自的普通类型定义，生成流水线只会增加一层无必要的间接。
 3. 不兼容变更升级版本号（Activity 名称或事件主题后缀 `.v<N>`）；旧版本在仍有在途工作流或未消费事件时保留。
 
@@ -211,7 +213,7 @@ Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，�
 | Go | `gofmt`、`goimports`、`go vet`、`golangci-lint`、`go test -race ./...`、`govulncheck`、swag 与 Wire 生成一致性 |
 | Python | ruff check、ruff format --check、mypy、pytest |
 | 前端 | `pnpm exec eslint .`、`pnpm exec prettier --check .`、`pnpm exec next typegen` + `pnpm exec tsc --noEmit`、`pnpm exec vitest run`、`pnpm exec next build`；交互变化补 Playwright |
-| 契约 | OpenAPI → 前端客户端生成一致；Activity 样例两端通过 |
+| 契约 | swag 生成物与后端在线 Swagger 一致；`@umijs/openapi` 从在线文档重生的 API 一致；公开路由文档覆盖；Activity 样例两端通过 |
 
 1. 核心业务逻辑（Operation 状态机、预算与对账、依赖传播、工作流）先写测试再实现。
 2. 每个里程碑的验收记录在 `docs/acceptance/`；静态检查通过不等于功能验收通过。
