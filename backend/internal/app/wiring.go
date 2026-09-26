@@ -6,17 +6,34 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/otelconn"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
 )
 
-func provideDB(ctx context.Context, cfg config.Config, logger *zap.Logger) (*db.Connection, func(), error) {
-	conn, err := db.Open(ctx, cfg.DBDSN)
+func provideTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {
+	provider, shutdown, err := otelconn.Open(ctx, cfg.OTelEndpoint, "lanverse-backend-api")
+	if err != nil {
+		return nil, nil, fmt.Errorf("configure api tracing: %w", err)
+	}
+	cleanup := func() {
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := shutdown(shutdownCtx); err != nil {
+			logger.Error("flush api tracing", zap.Error(err))
+		}
+	}
+	return provider, cleanup, nil
+}
+
+func provideDB(ctx context.Context, cfg config.Config, logger *zap.Logger, tracerProvider trace.TracerProvider) (*db.Connection, func(), error) {
+	conn, err := db.Open(ctx, cfg.DBDSN, tracerProvider)
 	if err != nil {
 		return nil, nil, fmt.Errorf("connect api database: %w", err)
 	}
@@ -73,10 +90,10 @@ func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, t
 	}
 }
 
-func provideAPIServer(cfg config.Config, logger *zap.Logger, ready ReadyCheck) *http.Server {
+func provideAPIServer(cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider) *http.Server {
 	return &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           NewRouter(logger, ready),
+		Handler:           NewRouter(logger, ready, tracerProvider),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 }

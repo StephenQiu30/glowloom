@@ -28,6 +28,7 @@ type Config struct {
 	ObjectStorageAccessKey string
 	ObjectStorageSecretKey string
 	ObjectStorageRegion    string
+	OTelEndpoint           string
 }
 
 var (
@@ -64,6 +65,7 @@ func Load() (Config, error) {
 		ObjectStorageAccessKey: v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
 		ObjectStorageSecretKey: v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
 		ObjectStorageRegion:    strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
+		OTelEndpoint:           strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

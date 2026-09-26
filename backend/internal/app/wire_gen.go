@@ -18,31 +18,40 @@ import (
 // Injectors from wire.go:
 
 func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (*http.Server, func(), error) {
-	connection, cleanup, err := provideDB(ctx, cfg, logger)
+	tracerProvider, cleanup, err := provideTrace(ctx, cfg, logger)
 	if err != nil {
 		return nil, nil, err
 	}
-	redisconnConnection, cleanup2, err := provideRedis(cfg, logger)
+	connection, cleanup2, err := provideDB(ctx, cfg, logger, tracerProvider)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	temporalconnConnection, cleanup3, err := provideTemporal(cfg, logger)
+	redisconnConnection, cleanup3, err := provideRedis(cfg, logger)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	client, err := provideObjectStorage(cfg)
+	temporalconnConnection, cleanup4, err := provideTemporal(cfg, logger)
 	if err != nil {
 		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
+	client, err := provideObjectStorage(cfg)
+	if err != nil {
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
 	readyCheck := provideReadyCheck(connection, redisconnConnection, temporalconnConnection, client)
-	server := provideAPIServer(cfg, logger, readyCheck)
+	server := provideAPIServer(cfg, logger, readyCheck, tracerProvider)
 	return server, func() {
+		cleanup4()
 		cleanup3()
 		cleanup2()
 		cleanup()

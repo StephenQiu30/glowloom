@@ -7,6 +7,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -14,10 +18,18 @@ import (
 type ReadyCheck func(context.Context) error
 
 // NewRouter builds the HTTP router for the api role.
-func NewRouter(logger *zap.Logger, ready ReadyCheck) *gin.Engine {
+func NewRouter(logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-	router.Use(gin.Recovery(), requestLogger(logger))
+	router.Use(
+		gin.Recovery(),
+		otelgin.Middleware("lanverse-backend-api",
+			otelgin.WithTracerProvider(tracerProvider),
+			otelgin.WithMeterProvider(metricnoop.NewMeterProvider()),
+			otelgin.WithPropagators(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})),
+		),
+		requestLogger(logger),
+	)
 
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -41,10 +53,14 @@ func NewRouter(logger *zap.Logger, ready ReadyCheck) *gin.Engine {
 func requestLogger(logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
-		logger.Debug("http request",
+		fields := []zap.Field{
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.FullPath()),
 			zap.Int("status", c.Writer.Status()),
-		)
+		}
+		if spanContext := trace.SpanFromContext(c.Request.Context()).SpanContext(); spanContext.IsValid() {
+			fields = append(fields, zap.String("trace_id", spanContext.TraceID().String()))
+		}
+		logger.Debug("http request", fields...)
 	}
 }

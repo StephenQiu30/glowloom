@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -24,7 +26,7 @@ type Connection struct {
 }
 
 // Open establishes a PostgreSQL connection and confirms it is usable.
-func Open(ctx context.Context, dsn string) (*Connection, error) {
+func Open(ctx context.Context, dsn string, tracerProvider trace.TracerProvider) (*Connection, error) {
 	if strings.TrimSpace(dsn) == "" {
 		return nil, ErrDSNRequired
 	}
@@ -41,6 +43,23 @@ func Open(ctx context.Context, dsn string) (*Connection, error) {
 	pool, err := orm.DB()
 	if err != nil {
 		return nil, fmt.Errorf("get PostgreSQL pool: %w", err)
+	}
+	if err := orm.Use(otelgorm.NewPlugin(
+		otelgorm.WithTracerProvider(tracerProvider),
+		otelgorm.WithoutMetrics(),
+		otelgorm.WithoutQueryVariables(),
+		otelgorm.WithQueryFormatter(func(query string) string {
+			fields := strings.Fields(query)
+			if len(fields) == 0 {
+				return ""
+			}
+			return strings.ToUpper(fields[0])
+		}),
+	)); err != nil {
+		if closeErr := pool.Close(); closeErr != nil {
+			return nil, errors.Join(fmt.Errorf("instrument PostgreSQL: %w", err), fmt.Errorf("close PostgreSQL pool: %w", closeErr))
+		}
+		return nil, fmt.Errorf("instrument PostgreSQL: %w", err)
 	}
 	pool.SetMaxOpenConns(10)
 	pool.SetMaxIdleConns(5)

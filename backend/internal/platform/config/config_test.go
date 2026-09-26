@@ -96,6 +96,17 @@ func TestLoadObjectStorageFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoadOTelEndpointFromEnv(t *testing.T) {
+	t.Setenv("LV_OTEL_ENDPOINT", "http://127.0.0.1:4318")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.OTelEndpoint != "http://127.0.0.1:4318" {
+		t.Errorf("OTelEndpoint = %q", cfg.OTelEndpoint)
+	}
+}
+
 func TestLoadRejectsInvalidValues(t *testing.T) {
 	tests := []struct {
 		name string
