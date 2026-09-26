@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"strings"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/contrib/opentelemetry"
+	"go.temporal.io/sdk/interceptor"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +20,8 @@ var (
 	ErrAddrRequired = errors.New("LV_TEMPORAL_ADDR is required")
 	// ErrNamespaceRequired means no Temporal namespace is configured.
 	ErrNamespaceRequired = errors.New("LV_TEMPORAL_NAMESPACE is required")
+	// ErrTracerProviderRequired means tracing was not explicitly configured.
+	ErrTracerProviderRequired = errors.New("temporal tracer provider is required")
 )
 
 // Connection owns a Temporal client and the configured namespace.
@@ -26,7 +31,7 @@ type Connection struct {
 }
 
 // Open creates a lazy client so a transient Temporal outage does not stop the API.
-func Open(addr, namespace string, logger *zap.Logger) (*Connection, error) {
+func Open(addr, namespace string, logger *zap.Logger, tracerProvider trace.TracerProvider) (*Connection, error) {
 	addr = strings.TrimSpace(addr)
 	namespace = strings.TrimSpace(namespace)
 	if addr == "" {
@@ -35,10 +40,20 @@ func Open(addr, namespace string, logger *zap.Logger) (*Connection, error) {
 	if namespace == "" {
 		return nil, ErrNamespaceRequired
 	}
+	if tracerProvider == nil {
+		return nil, ErrTracerProviderRequired
+	}
+	tracingInterceptor, err := opentelemetry.NewTracingInterceptor(opentelemetry.TracerOptions{
+		Tracer: tracerProvider.Tracer("temporal-sdk-go"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("configure Temporal tracing: %w", err)
+	}
 	workflowClient, err := client.NewLazyClient(client.Options{
-		HostPort:  addr,
-		Namespace: namespace,
-		Logger:    sdkLogger{logger: logger.Sugar()},
+		HostPort:     addr,
+		Namespace:    namespace,
+		Logger:       sdkLogger{logger: logger.Sugar()},
+		Interceptors: []interceptor.ClientInterceptor{tracingInterceptor},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create Temporal client: %w", err)

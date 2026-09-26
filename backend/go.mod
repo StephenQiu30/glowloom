@@ -21,6 +21,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.11.0
 	go.temporal.io/api v1.63.5
 	go.temporal.io/sdk v1.49.0
+	go.temporal.io/sdk/contrib/opentelemetry v0.8.1
 	go.uber.org/zap v1.28.0
 	google.golang.org/protobuf v1.36.12
 	gorm.io/driver/postgres v1.6.3

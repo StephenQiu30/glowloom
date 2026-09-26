@@ -59,8 +59,8 @@ func provideRedis(cfg config.Config, logger *zap.Logger) (*redisconn.Connection,
 	return conn, cleanup, nil
 }
 
-func provideTemporal(cfg config.Config, logger *zap.Logger) (*temporalconn.Connection, func(), error) {
-	conn, err := temporalconn.Open(cfg.TemporalAddr, cfg.TemporalNamespace, logger)
+func provideTemporal(cfg config.Config, logger *zap.Logger, tracerProvider trace.TracerProvider) (*temporalconn.Connection, func(), error) {
+	conn, err := temporalconn.Open(cfg.TemporalAddr, cfg.TemporalNamespace, logger, tracerProvider)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure api Temporal: %w", err)
 	}

@@ -33,7 +33,7 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 		cleanup()
 		return nil, nil, err
 	}
-	temporalconnConnection, cleanup4, err := provideTemporal(cfg, logger)
+	temporalconnConnection, cleanup4, err := provideTemporal(cfg, logger, tracerProvider)
 	if err != nil {
 		cleanup3()
 		cleanup2()

@@ -1,4 +1,4 @@
-package temporalconn
+package temporalconn_test
 
 import (
 	"context"
@@ -7,22 +7,29 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
 )
 
 func TestOpenRejectsMissingConfig(t *testing.T) {
-	_, err := Open("", "lanverse-local", zap.NewNop())
-	if !errors.Is(err, ErrAddrRequired) {
+	_, err := temporalconn.Open("", "lanverse-local", zap.NewNop(), noop.NewTracerProvider())
+	if !errors.Is(err, temporalconn.ErrAddrRequired) {
 		t.Fatalf("Open() error = %v, want ErrAddrRequired", err)
 	}
-	_, err = Open("127.0.0.1:7233", "", zap.NewNop())
-	if !errors.Is(err, ErrNamespaceRequired) {
+	_, err = temporalconn.Open("127.0.0.1:7233", "", zap.NewNop(), noop.NewTracerProvider())
+	if !errors.Is(err, temporalconn.ErrNamespaceRequired) {
 		t.Fatalf("Open() error = %v, want ErrNamespaceRequired", err)
+	}
+	_, err = temporalconn.Open("127.0.0.1:7233", "lanverse-local", zap.NewNop(), nil)
+	if !errors.Is(err, temporalconn.ErrTracerProviderRequired) {
+		t.Fatalf("Open() error = %v, want ErrTracerProviderRequired", err)
 	}
 }
 
 func TestOpenSurvivesUnavailableServer(t *testing.T) {
-	conn, err := Open("127.0.0.1:1", "lanverse-local", zap.NewNop())
+	conn, err := temporalconn.Open("127.0.0.1:1", "lanverse-local", zap.NewNop(), noop.NewTracerProvider())
 	if err != nil {
 		t.Fatalf("Open() error = %v, want a lazy client", err)
 	}
@@ -40,7 +47,7 @@ func TestPingWithTemporal(t *testing.T) {
 	if addr == "" || namespace == "" {
 		t.Skip("set LV_TEST_TEMPORAL_ADDR and LV_TEST_TEMPORAL_NAMESPACE for local Temporal")
 	}
-	conn, err := Open(addr, namespace, zap.NewNop())
+	conn, err := temporalconn.Open(addr, namespace, zap.NewNop(), noop.NewTracerProvider())
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
