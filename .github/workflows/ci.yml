@@ -63,7 +63,7 @@ jobs:
         working-directory: agent
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v9
+      - uses: astral-sh/setup-uv@v9.0.0
       - run: uv python install 3.12
       - run: uv sync --locked
       - run: uv run ruff check .
