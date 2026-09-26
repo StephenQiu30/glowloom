@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -18,7 +19,11 @@ var (
 	ErrInvalidEventID = errors.New("invalid event ID")
 	// ErrHandlerRequired means there is no effect to execute.
 	ErrHandlerRequired = errors.New("event handler is required")
+	// ErrInvalidPruneBatchSize means a cleanup batch cannot make progress.
+	ErrInvalidPruneBatchSize = errors.New("prune batch size must be positive")
 )
+
+const processedEventRetention = 30 * 24 * time.Hour
 
 // Store owns the PostgreSQL transaction for one consumer event.
 type Store struct {
@@ -87,4 +92,28 @@ func (s *Store) ProcessExternalOnce(ctx context.Context, consumer, eventID strin
 	return s.ProcessOnce(ctx, consumer, eventID, func(ctx context.Context, _ *gorm.DB) error {
 		return handle(ctx)
 	})
+}
+
+// PruneExpired deletes one batch of consumer markers older than 30 days.
+// Call repeatedly until it returns zero; rows still being processed are skipped.
+func (s *Store) PruneExpired(ctx context.Context, now time.Time, batchSize int) (int64, error) {
+	if batchSize <= 0 {
+		return 0, ErrInvalidPruneBatchSize
+	}
+	result := s.db.WithContext(ctx).Exec(`
+		WITH expired AS (
+			SELECT id FROM infra.processed_event
+			WHERE create_time < ?
+			ORDER BY create_time, id
+			LIMIT ?
+			FOR UPDATE SKIP LOCKED
+		)
+		DELETE FROM infra.processed_event AS marker
+		USING expired
+		WHERE marker.id = expired.id
+	`, now.UTC().Add(-processedEventRetention), batchSize)
+	if result.Error != nil {
+		return 0, fmt.Errorf("prune expired processed events: %w", result.Error)
+	}
+	return result.RowsAffected, nil
 }
