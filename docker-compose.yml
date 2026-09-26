@@ -1,5 +1,5 @@
-# Deployment topology. Compose-only environment and port mappings live in
-# docker-compose-env.yml; local development runs processes without Compose.
+# Application services for a later containerized deployment.
+# Local development starts processes directly against existing host services.
 # backend-worker, backend-relay and agent-worker are added with M1-08, M1-09 and M1-10.
 name: lanverse
 
@@ -7,85 +7,25 @@ services:
   frontend:
     build: ./frontend
     image: lanverse/frontend:local
+    ports:
+      - "${LV_FRONTEND_PORT:-3000}:3000"
 
   backend-api:
     build: ./backend
     image: lanverse/backend:local
     command: ["--role=api"]
+    environment:
+      LV_ENV: ${LV_ENV:-local}
+      LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
+      LV_HTTP_ADDR: ":8080"
+    ports:
+      - "${LV_BACKEND_PORT:-8080}:8080"
 
   agent-api:
     build: ./agent
     image: lanverse/agent:local
-
-  postgres:
-    image: postgres:18.4-alpine
-    volumes:
-      - postgres-data:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  redis:
-    image: redis:8.10.0-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  kafka:
-    image: apache/kafka:4.1.2
-    volumes:
-      - kafka-data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 10s
-      retries: 20
-
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: ["server", "/data", "--console-address", ":9001"]
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  # Temporal persists to the same PostgreSQL instance in its own databases
-  # (temporal, temporal_visibility), separate from the business database (DES-08 §9).
-  temporal:
-    image: temporalio/auto-setup:1.29.7
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "tctl --address temporal:7233 cluster health | grep -q SERVING"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-
-  temporal-ui:
-    image: temporalio/ui:2.54.1
-    depends_on:
-      temporal:
-        condition: service_healthy
-
-  kafka-ui:
-    image: kafbat/kafka-ui:v1.5.0
-    depends_on:
-      kafka:
-        condition: service_healthy
-
-volumes:
-  postgres-data:
-  redis-data:
-  kafka-data:
-  minio-data:
+    environment:
+      LV_ENV: ${LV_ENV:-local}
+      LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
+    ports:
+      - "${LV_AGENT_PORT:-8090}:8090"
