@@ -10,8 +10,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"go.uber.org/zap"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
 // Injectors from wire.go:
