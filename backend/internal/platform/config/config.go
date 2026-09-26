@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -24,19 +25,25 @@ var (
 	validLogLevels = map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 )
 
-// Load reads configuration from the environment, applies defaults and validates the result.
+// Load reads the optional environment file and process variables, then validates the result.
 func Load() (Config, error) {
 	v := viper.New()
-	v.SetEnvPrefix("LV")
 	v.AutomaticEnv()
-	v.SetDefault("env", "local")
-	v.SetDefault("http_addr", ":8080")
-	v.SetDefault("log_level", "info")
+	v.SetDefault("LV_ENV", "local")
+	v.SetDefault("LV_HTTP_ADDR", ":8080")
+	v.SetDefault("LV_LOG_LEVEL", "info")
+	if path := os.Getenv("LV_ENV_FILE"); path != "" {
+		v.SetConfigFile(path)
+		v.SetConfigType("env")
+		if err := v.ReadInConfig(); err != nil {
+			return Config{}, fmt.Errorf("%w: read LV_ENV_FILE: %w", ErrInvalid, err)
+		}
+	}
 
 	cfg := Config{
-		Env:      strings.TrimSpace(v.GetString("env")),
-		HTTPAddr: strings.TrimSpace(v.GetString("http_addr")),
-		LogLevel: strings.TrimSpace(v.GetString("log_level")),
+		Env:      strings.TrimSpace(v.GetString("LV_ENV")),
+		HTTPAddr: strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
+		LogLevel: strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
