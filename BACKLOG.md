@@ -84,7 +84,7 @@
 | M1-07 | 命令层 | 鉴权（Redis 会话）、幂等键、`expected_revision`、审计、Outbox 统一中间层 | `backend/internal/command/` | 待办 | — |
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID） | `backend/internal/infra/`、`backend/internal/app/` | 待办 | — |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/adapter/workflow/` | 待办 | — |
-| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 进行中（模拟供应商适配器及 `agent.mock` Activity Worker 已实现；Harness、`agent` 队列与完整联调待实施） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93` |
+| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 进行中（模拟供应商与 `agent.mock` 队列、模拟 Skill 与 `agent` 队列的可运行骨架已实现；真实模型、业务 Skill、内部路由错误契约与 Go 链路待实施） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93`、`bb4809e9`、`a398fc88`、`1839d0d0`、`ae1d01db` |
 | M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题、项目页异常恢复及模型参数表单组件，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7`、`a9467f55`、`55a94493`、`ab0d8a37` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
@@ -121,7 +121,9 @@
 
 **M1-10 模拟供应商切片（2026-09-27）**：Agent 增加 Redis 持久的 `MockProvider`，以稳定任务 ID 和 `SET NX` 保证并发重复提交幂等；模拟 `accepted`、`rejected`、`not_submitted`、`unknown`，支持按请求键对账、延迟、失败、取消和结果过期。新建适配器及 Redis 客户端后仍可查询既有任务。`uv sync --locked`、Ruff 检查与格式、mypy 通过；当时默认全量 pytest 为 11 通过、1 条真实 Redis 用例因未配置 `LV_TEST_REDIS_URL` 跳过，另以本机 Redis 数据库 15 显式运行该用例通过，键使用隔离前缀和 60 秒 TTL。Agent 镜像构建通过，未启动容器。该切片只验证适配器；Activity 接入见下文，可接管媒体结果与重复回调仍待实施。
 
-**M1-10 模拟 Activity Worker 切片（2026-09-27）**：`agent.mock` 队列注册 `provider.submit/query/cancel`，按 DES-03 §7.1 映射 `provider_request_key`，Redis 写入响应不确定时返回 `unknown`。本机根目录 `.env` 启动 Worker 后，Temporal 队列看到 Activity poller，Ctrl+C 正常退出；隔离测试工作流经本机 Temporal 调用 Agent Activity，Redis 数据库 15 中用 60 秒 TTL 的独立键完成提交丢失对账。`uv sync --locked`、Ruff、mypy、全量 pytest（14 通过、2 条本机依赖用例默认跳过）、显式本机 Temporal + Redis 用例（2 通过）、Compose 配置检查和 Agent 镜像构建通过，未启动容器。当前仅模拟供应商队列可执行；`agent` 队列的 Harness Activity、真实供应商、可接管媒体结果与 Go Operation 端到端链路待实施。
+**M1-10 模拟 Activity Worker 切片（2026-09-27）**：`agent.mock` 队列注册 `provider.submit/query/cancel`，按 DES-03 §7.1 映射 `provider_request_key`，Redis 写入响应不确定时返回 `unknown`。本机根目录 `.env` 启动 Worker 后，Temporal 队列看到 Activity poller，Ctrl+C 正常退出；隔离测试工作流经本机 Temporal 调用 Agent Activity，Redis 数据库 15 中用 60 秒 TTL 的独立键完成提交丢失对账。`uv sync --locked`、Ruff、mypy、当时全量 pytest（14 通过、2 条本机依赖用例默认跳过）、显式本机 Temporal + Redis 用例（2 通过）、Compose 配置检查和 Agent 镜像构建通过，未启动容器。该切片只接入模拟供应商队列；后续 Harness 接入见下文，真实供应商、可接管媒体结果与 Go Operation 端到端链路仍待实施。
+
+**M1-10 Harness 骨架切片（2026-09-27）**：Skill Registry 启动时校验多版本索引、包 SHA-256 与输入输出 JSON Schema，已发布的 `mock.echo@1.0.0` 可由 `agent` 队列的 `llm.run_skill` 执行。执行循环限制修复次数，模型 Router 在每次调用前检查预算、返回后按调用 ID 记账一次；Trace 只记录摘要、校验路径、token 和费用，不含原文。当前只接零费用 `mock.structured`；含工具或非 schema 校验器的 Skill 明确失败，真实模型 token 计数与工具尚未接入。`uv sync --locked`、Ruff、mypy、默认全量 pytest（23 通过、2 条本机依赖用例跳过）均通过；显式本机 Temporal + Redis 测试 2 通过，两个 Activity 队列均显示 poller，本机 Worker 正常退出；Compose 配置检查和 Agent 镜像构建通过，未启动容器。模拟 Skill 与测试工作流证据不代表真实模型、业务 Skill 或 Go Operation 验收。
 
 **功能 Epic**
 
