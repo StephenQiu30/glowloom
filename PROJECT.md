@@ -27,8 +27,8 @@
 ```text
 Lanverse/
   .env.example              本机进程配置样例；实际 .env 不入库
-  docker-compose.yml        部署服务拓扑
-  docker-compose-env.yml    Compose 专用环境与端口映射
+  docker-compose.yml        应用服务（frontend、backend-api、agent-api）
+  docker-compose-env.yml    部署用独立依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
   agent/            Python：FastAPI + Temporal Activity Worker + Agent Harness + 供应商适配器
   frontend/         Next.js：Web 应用（流水线视图、画布、审阅、时间线、任务中心）
