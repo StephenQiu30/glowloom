@@ -144,6 +144,6 @@ docs/
 - `AGENTS.md`：协作与 Git 规则，长期有效。
 - `BACKLOG.md`：项目进度与待执行任务清单（P0、M1～M5 的基础任务与功能 Epic），由本目录的需求与设计拆解而来，维护规则见 PLN-02 §3。
 - `PROJECT.md`：工程规范（目录、技术栈、质量门禁），与设计文档一同评审。
-- `README.md`、`agent/README.md`、`frontend/README.md`：按新设计重写；旧实现说明通过 `git show c99a5528:<路径>` 查看。
+- `README.md`：按新设计重写；旧实现（代码、`agent/README.md`、`frontend/README.md`、旧工程配置）已删除，保留在标签 `legacy-2026-09`。
 - `DESIGN.md`：视觉规范，保留沿用；界面与交互需求见 REQ-05。
 - 新设计与旧代码的主要差异见 [DES-08 第 11 节](design/08-技术选型决策.md#11-与旧实现的差异)。

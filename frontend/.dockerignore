@@ -1,9 +1,0 @@
-.next
-node_modules
-coverage
-playwright-report
-test-results
-tests
-*.tsbuildinfo
-.env*
-npm-debug.log*
