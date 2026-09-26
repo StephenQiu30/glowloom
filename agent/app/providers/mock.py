@@ -148,13 +148,16 @@ class MockProvider:
             created = await self._store.set(
                 key, record.model_dump_json(), ex=self._task_ttl_seconds, nx=True
             )
-            if not created:
-                existing = await self._store.get(key)
-                if existing is None:
-                    return SubmitResult(outcome="not_submitted", error_code="mock_task_expired")
-                return self._replay_result(existing, req, task_id)
         except RedisError:
-            return SubmitResult(outcome="not_submitted", error_code="mock_store_unavailable")
+            return SubmitResult(outcome="unknown", error_code="mock_store_result_unknown")
+        if not created:
+            try:
+                existing = await self._store.get(key)
+            except RedisError:
+                return SubmitResult(outcome="unknown", error_code="mock_store_result_unknown")
+            if existing is None:
+                return SubmitResult(outcome="unknown", error_code="mock_task_expired")
+            return self._replay_result(existing, req, task_id)
 
         if options.mock_outcome == "unknown":
             return SubmitResult(outcome="unknown")

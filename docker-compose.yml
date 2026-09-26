@@ -1,6 +1,6 @@
 # Application services for a later containerized deployment.
 # Local development starts processes directly against existing host services.
-# backend-worker, backend-relay and agent-worker are added with M1-08, M1-09 and M1-10.
+# backend-worker and backend-relay are added with M1-08 and M1-09.
 name: lanverse
 
 services:
@@ -39,3 +39,12 @@ services:
       LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
     ports:
       - "${LV_AGENT_PORT:-8090}:8090"
+
+  agent-worker:
+    build: ./agent
+    image: lanverse/agent:local
+    command: ["python", "-m", "app.main_worker"]
+    environment:
+      LV_REDIS_URL: ${LV_REDIS_URL:?Set LV_REDIS_URL for the agent worker}
+      LV_TEMPORAL_ADDR: ${LV_TEMPORAL_ADDR:?Set LV_TEMPORAL_ADDR for the agent worker}
+      LV_TEMPORAL_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:?Set LV_TEMPORAL_NAMESPACE for the agent worker}
