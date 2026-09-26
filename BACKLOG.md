@@ -206,14 +206,15 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-09-01 | 数据与领域模型 | 迁移建表 / 加列：`audit.audit_log`、`infra.processed_event`；实现领域对象、状态机与仓储（`audit.audit_log`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤；`infra.processed_event`：组织 / 平台级，按管理员权限访问）。详见 [DES-12 §3](docs/design/12-审计日志.md#3-数据) | `backend/db/migrations/`、`backend/internal/audit/domain/`、`backend/internal/audit/adapter/postgres/` | 进行中（审计月分区与只追加约束已建；独立应用数据库角色权限、领域与仓储待接） | `eb1f0289` |
-
+| E-09-01 | 数据与领域模型 | 迁移建表 / 加列：`audit.audit_log`、`infra.processed_event`；实现领域对象、状态机与仓储（`audit.audit_log`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤；`infra.processed_event`：组织 / 平台级，按管理员权限访问）。详见 [DES-12 §3](docs/design/12-审计日志.md#3-数据) | `backend/db/migrations/`、`backend/internal/audit/domain/`、`backend/internal/audit/adapter/postgres/` | 进行中（审计月分区、只追加约束及组织隔离查询仓储已建；独立应用数据库角色权限、写入消费者待接） | `eb1f0289`、`f639d9c8` |
 | E-09-02 | 用例与接口 | 实现查询接口：GET /api/admin/audit-logs、GET /api/admin/audit-logs:export；swag 注解生成 OpenAPI。详见 [DES-12 §4](docs/design/12-审计日志.md#4-接口) | `backend/internal/audit/application/`、`backend/internal/audit/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-09-03 | 异步、工作流与事件 | 事件 `audit.recorded.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：audit 消费者（`backend-relay`）只消费 `audit.recorded.v1`：命令层对 REQ-09 R1 列出的每个动作（登录与账号变更、凭据、注册表与价格、预算、报价确认、取消、人工核对处理、所… 详见 [DES-12 §5](docs/design/12-审计日志.md#5-异步与工作流) | `backend/internal/audit/adapter/workflow/`、`backend/internal/audit/adapter/event/` | 待办 | — |
 | E-09-04 | 前端 | 筛选栏（时间范围、操作人、项目、对象类型、动作）+ 虚拟滚动表格 + 详情抽屉（前后值差异）。 详见 [DES-12 §7](docs/design/12-审计日志.md#7-界面) | `frontend/src/features/admin/` | 待办 | — |
 | E-09-05 | 测试与验收 | 命令覆盖测试：遍历 R1 中每个命令，断言产生对应审计记录。 消费者幂等：重复投递同一事件只产生一条记录；验收用例 TC-09-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 **E-09-01 审计建表切片（2026-09-27）**：先以缺失表运行集成测试确认 Red；`eb1f0289` 建立 `audit.audit_log` 当前 UTC 月及未来三个月分区和默认分区，触发器拒绝 `UPDATE` / `DELETE`，约束拒绝以 `is_delete=true` 写入。隔离 PostgreSQL 临时库中，Race 测试验证分区路由、拒绝修改的 SQLSTATE `42501`、逻辑删除约束错误 `23514`，迁移 down 后 schema 消失；临时库已删除。全量 Go Race、vet、golangci-lint、格式检查通过；`govulncheck` 0 个可达漏洞，另有 1 个未调用模块告警。`infra.processed_event` 已在 M1-08 建立；尚未配置非表所有者的应用数据库账号与仅 `INSERT` / `SELECT` 的 ACL，领域仓储、消费者、查询接口、审计动作覆盖与 3 年归档清理均未实现，E-09-01 和 E-09 均不计完成。
+
+**E-09-01 组织隔离查询仓储切片（2026-09-27）**：`f639d9c8` 增加审计领域记录、组织必填的详情与列表仓储，以及 `(org_id, create_time DESC, id DESC)` 索引。先以缺失包编译失败确认 Red；在本机隔离 PostgreSQL 临时库中执行两次迁移，Race 集成用例验证跨组织不可见、项目/操作人/动作/时间筛选、游标分页和相同时间戳的分页无遗漏；数据在测试事务回滚，迁移按逆序回滚，临时库已删除。全量 Go Race、vet、golangci-lint、格式检查通过；`govulncheck` 为 0 个可达漏洞，另有 1 个未调用模块告警。管理员鉴权、应用数据库 ACL、事件写入与完整接口仍待实施；30 天范围 P95 指标尚未压测，E-09-01 不计完成。
 
 #### E-10 项目管理
 
