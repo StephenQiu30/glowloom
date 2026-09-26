@@ -1,4 +1,5 @@
 # Optional middleware services for a later containerized deployment.
+# Start separately with: docker compose -f docker-compose-env.yml up -d --build --wait
 # Supply LV_PG_PASSWORD and LV_MINIO_PASSWORD from the shell or a protected
 # deployment env file. Never put real credentials in this file.
 name: lanverse-env
@@ -59,7 +60,10 @@ services:
       retries: 20
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    build:
+      context: ./docker/minio
+    image: lanverse/minio:release-2025-10-15
+    pull_policy: build
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${LV_MINIO_USER:-lanverse}
