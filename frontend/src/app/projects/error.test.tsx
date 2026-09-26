@@ -6,13 +6,13 @@ import ProjectsError from "./error";
 afterEach(cleanup);
 
 it("offers recovery without revealing the internal error", () => {
-  const retry = vi.fn();
+  const reset = vi.fn();
   render(
-    <ProjectsError error={new Error("private backend detail")} retry={retry} />,
+    <ProjectsError error={new Error("private backend detail")} reset={reset} />,
   );
 
   expect(screen.getByRole("alert")).toBeTruthy();
   expect(screen.queryByText("private backend detail")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
-  expect(retry).toHaveBeenCalledOnce();
+  expect(reset).toHaveBeenCalledOnce();
 });

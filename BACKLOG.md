@@ -113,6 +113,8 @@
 
 **M1-11 共享查询与错误恢复切片（2026-09-27）**：根布局挂载单一 TanStack Query Provider；组件测试证明同一查询由两个子组件共享、失效后共同更新。项目路由增加 Next 错误边界，提供重试操作且不显示内部错误文本；组件测试验证重试回调。前端类型依赖与 CI 的 Node 24 对齐，`pnpm peers check`、锁文件冻结安装均通过。本机 Next 16 开发服务下浏览器确认 `/projects` 正常渲染，`vitest`、ESLint、Prettier、`next typegen`、TypeScript 与生产构建已通过；尚未在浏览器触发真实异常并验证恢复成功，M1-11 仍进行中。
 
+**M1-11 错误边界回调修复（2026-09-27）**：[Next.js `error.tsx` 约定](https://nextjs.org/docs/app/api-reference/file-conventions/error)向页面错误组件注入 `reset`。原组件与测试误用 `retry`，导致真实错误页的重试按钮无法调用框架回调；先按 `reset` 修改测试并确认失败，再修复组件，目标测试、ESLint、Prettier 与 Next 生产构建通过。尚未在浏览器注入真实路由异常，故实际恢复流程仍待联调验证。
+
 **功能 Epic**
 
 #### E-06 账号与会话

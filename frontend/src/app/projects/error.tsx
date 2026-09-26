@@ -3,10 +3,10 @@
 import { Button } from "@/components/ui/button";
 
 export default function ProjectsError({
-  retry,
+  reset,
 }: {
   error: Error & { digest?: string };
-  retry: () => void;
+  reset: () => void;
 }) {
   return (
     <section
@@ -29,7 +29,7 @@ export default function ProjectsError({
       <p className="mt-3 text-sm leading-7 text-muted-foreground">
         请重试。如果问题持续，稍后再回来。
       </p>
-      <Button className="mt-7" onClick={retry}>
+      <Button className="mt-7" onClick={reset}>
         重试加载
       </Button>
     </section>
