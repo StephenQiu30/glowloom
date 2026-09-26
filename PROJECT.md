@@ -196,6 +196,8 @@ frontend/
 2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 改 Python 类型 → 契约测试（两端对同一组示例输入输出分别断言，发现字段不一致即失败）。不做代码生成，因为两端只是各自的普通类型定义，生成流水线只会增加一层无必要的间接。
 3. 不兼容变更升级版本号（Activity 名称或事件主题后缀 `.v<N>`）；旧版本在仍有在途工作流或未消费事件时保留。
 
+Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，再执行 `goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go`；`wire_gen.go` 仅由工具生成和格式化，CI 重复这两条命令并比较文件，不设脚本或 Makefile。
+
 ## 8. 配置、数据与安全
 
 - 配置来自环境变量（Viper / pydantic-settings），启动时集中校验；`.env.example` 只记录占位值与说明，真实 `.env` 与凭据不入库。
