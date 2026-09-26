@@ -75,7 +75,7 @@
 | M1-02 | 仓库骨架与工具链 | 三端目录、锁文件；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc；初版 Makefile 与 Compose 环境样例已在 M1-03 按新要求移除 | `backend/`、`agent/`、`frontend/` | 完成 | `bdc167a5`、`c214607b` |
 | M1-03 | 本地环境 | 根目录 `.env` 配置三端本机进程，指向已启动的 PostgreSQL、Redis、Kafka、MinIO、Temporal；逐项健康检查与隔离的备份恢复演练；后续部署的 `docker-compose-env.yml` 独立定义依赖环境，本地不通过 Docker 启动；不使用项目脚本或 Makefile | `.env.example`、`docker-compose-env.yml`、`docs/operation/01-环境与部署.md` | 完成（环境底座；业务客户端在 M1-05 接入） | `e4038453`、`a2c11fa6`、`30769030` |
 | M1-04 | CI 流水线 | lint、format、typecheck、test、race、govulncheck、契约一致性、镜像构建（OPS-02）；首批三端静态检查、测试与镜像构建已写入工作流，契约门禁待 M1-06 | `.github/workflows/` | 进行中（远端运行未验证） | `2690c95d` |
-| M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、minio、temporal、otel、Wire 组合根，`--role=api|worker|relay`；数据库与 Redis 客户端、API 就绪探针已接入，其余客户端待实施 | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/` | 进行中 | `7f4d27ff`、`c09607ce`、`39aecd56`、`84fab235`、`4acd6529`、`ca9f78db`、`ee19a1fc`、`583ef6ed` |
+| M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、minio、temporal、otel、Wire 组合根，`--role=api|worker|relay`；数据库与 Redis 客户端、API 就绪探针已接入，Kafka 客户端只读连通性已验证，其余客户端待实施 | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/` | 进行中 | `7f4d27ff`、`c09607ce`、`39aecd56`、`84fab235`、`4acd6529`、`ca9f78db`、`ee19a1fc`、`583ef6ed`、`fb0b6715`、`87a8b157`、`a2307b2d` |
 | M1-06 | 契约链 | swag → OpenAPI → `frontend/src/gen/api`；Activity 输入输出类型由 Go 与 Python 各自手写，契约测试（同一组示例输入输出）校验一致 | `backend/docs/`、`frontend/src/gen/api/` | 待办 | — |
 | M1-07 | 命令层 | 鉴权（Redis 会话）、幂等键、`expected_revision`、审计、Outbox 统一中间层 | `backend/internal/command/` | 待办 | — |
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID） | `backend/internal/infra/`、`backend/internal/app/` | 待办 | — |
@@ -85,11 +85,13 @@
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
-**M1-04 当前证据（2026-09-27）**：`.github/workflows/ci.yml` 的 GitHub Actions 语法经 `actionlint v1.7.12` 检查通过；相同三端工具命令已在本机通过。`docker build` 分别构建 backend、agent、frontend 镜像通过，未启动容器。PostgreSQL 与 Redis 连接集成测试已在本机通过并加入 CI；GitHub Actions 远端运行、契约生成物、其余跨边界测试及端到端冒烟尚无通过证据，不能计为通过。
+**M1-04 当前证据（2026-09-27）**：`.github/workflows/ci.yml` 的 GitHub Actions 语法经 `actionlint v1.7.12` 检查通过；相同三端工具命令已在本机通过。`docker build` 分别构建 backend、agent、frontend 镜像通过，未启动容器。PostgreSQL、Redis 与 Kafka 连接集成测试已在本机通过并加入 CI；GitHub Actions 远端运行、契约生成物、其余跨边界测试及端到端冒烟尚无通过证据，不能计为通过。
 
 **M1-05 数据库切片（2026-09-27）**：`LV_DB_DSN` 缺失时 API 启动前失败；使用本机全新临时 PostgreSQL 库，GORM/pgx 执行 `SELECT 1`、API `/healthz` 返回成功，库中未生成业务表，随后清理临时库。Go 格式、静态检查、Race 测试及 `govulncheck` 通过；CI 已加入 PostgreSQL 服务，但远端运行未验证。
 
-**M1-05 Redis 切片（2026-09-27）**：`LV_REDIS_URL` 缺失或格式错误时 API 启动前失败；客户端对本机 Redis 执行 `PING` 通过。隔离临时 PostgreSQL 库下运行 API，PostgreSQL 与 Redis 可达时 `/healthz`、`/readyz` 均为 200；把 Redis 指向本机关闭端口后，`/healthz` 仍为 200、`/readyz` 为 503，临时库已清理。Go 格式、静态检查、Race 测试及 `govulncheck` 通过；CI 已加入 Redis 服务，但远端运行未验证。Kafka、MinIO、Temporal、OTel、Wire、worker/relay 角色仍未实现，M1-05 不计完成。
+**M1-05 Redis 切片（2026-09-27）**：`LV_REDIS_URL` 缺失或格式错误时 API 启动前失败；客户端对本机 Redis 执行 `PING` 通过。隔离临时 PostgreSQL 库下运行 API，PostgreSQL 与 Redis 可达时 `/healthz`、`/readyz` 均为 200；把 Redis 指向本机关闭端口后，`/healthz` 仍为 200、`/readyz` 为 503，临时库已清理。Go 格式、静态检查、Race 测试及 `govulncheck` 通过；CI 已加入 Redis 服务，但远端运行未验证。
+
+**M1-05 Kafka 客户端切片（2026-09-27）**：`LV_KAFKA_BROKERS` 从根目录环境配置读取，拒绝缺失或格式错误的 broker 地址；franz-go 客户端对本机 Kafka 执行只读元数据 `Ping` 通过，未创建主题或写入事件。Go 格式、静态检查、Race 测试及 `govulncheck` 通过；CI 已加入 Kafka 服务，但远端运行未验证。SASL/TLS、Outbox 投递和消费者尚未接入；MinIO、Temporal、OTel、Wire、worker/relay 角色仍未实现，M1-05 不计完成。
 
 **功能 Epic**
 
