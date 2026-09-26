@@ -11,6 +11,22 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    env:
+      LV_TEST_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_test?sslmode=disable
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_USER: lanverse_test
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: lanverse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U lanverse_test -d lanverse_test"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
     defaults:
       run:
         working-directory: backend
