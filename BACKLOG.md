@@ -81,7 +81,7 @@
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID） | `backend/internal/infra/`、`backend/internal/app/` | 待办 | — |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/adapter/workflow/` | 待办 | — |
 | M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器 | `agent/app/` | 待办 | — |
-| M1-11 | 前端骨架 | App Router 布局、shadcn/ui、TanStack Query、SSE 订阅、`param_schema` 表单组件、报价确认组件框架 | `frontend/src/` | 待办 | — |
+| M1-11 | 前端骨架 | App Router 布局、shadcn/ui、TanStack Query、SSE 订阅、`param_schema` 表单组件、报价确认组件框架；已建立 `/projects` 工作台外壳与明确的未接入状态，其余待实施 | `frontend/src/` | 进行中 | — |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
@@ -96,6 +96,8 @@
 **M1-05 Temporal 客户端切片（2026-09-27）**：本机 Temporal 集群健康检查通过，创建项目专用 `lanverse-local` 命名空间；Go SDK 对服务与命名空间检查通过。API 使用延迟连接，Temporal 可达时 `/healthz`、`/readyz` 为 200；指向关闭端口时 API 仍运行，`/healthz` 为 200、`/readyz` 为 503。使用隔离临时 PostgreSQL 库验证后已清理；Go 格式、静态检查、Race 测试及 `govulncheck` 通过。CI 尚未提供 Temporal 测试服务，远端集成未验证；Worker 与工作流仍待 M1-09，M1-05 不计完成。
 
 **M1-05 Wire 组合根切片（2026-09-27）**：API 的 PostgreSQL、Redis、Temporal 与 HTTP Server 由 Wire v0.7.0 生成代码装配；生成代码在后续构造失败时释放已建立的客户端。本机重生成、格式化后文件哈希一致；Go 全部门禁和三依赖可用时的 `/healthz`、`/readyz` 均通过，隔离临时库已清理。官方 Wire 仓库已归档，见 DES-08 维护风险；MinIO、OTel、worker/relay 角色及远端 CI 仍待实现，M1-05 不计完成。
+
+**M1-11 工作台外壳切片（2026-09-27）**：根路径跳转 `/projects`；项目页有语义化主导航、跳转主内容入口、项目功能未接入的真实空状态与创作流程概览，内容分组遵循无边框设计。本机直接启动 Next 开发服务，在浏览器检查根路径跳转、键盘跳转入口及 1024px / 390px 视口无横向溢出；`eslint`、`prettier`、`next typegen`、`tsc`、`vitest`、`next build` 通过。登录、真实项目列表、TanStack Query、SSE、参数表单和报价组件仍待接入；本切片不构成 M1-11 完成或产品验收。
 
 **功能 Epic**
 
