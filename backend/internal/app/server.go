@@ -10,12 +10,23 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 )
 
 const shutdownTimeout = 10 * time.Second
 
 // RunAPI serves the api role until ctx is cancelled, then shuts down gracefully.
 func RunAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
+	conn, err := db.Open(ctx, cfg.DBDSN)
+	if err != nil {
+		return fmt.Errorf("connect api database: %w", err)
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logger.Error("close api database", zap.Error(err))
+		}
+	}()
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           NewRouter(logger),

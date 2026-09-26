@@ -18,6 +18,7 @@ type Config struct {
 	Env      string
 	HTTPAddr string
 	LogLevel string
+	DBDSN    string
 }
 
 var (
@@ -44,6 +45,7 @@ func Load() (Config, error) {
 		Env:      strings.TrimSpace(v.GetString("LV_ENV")),
 		HTTPAddr: strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
 		LogLevel: strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
+		DBDSN:    strings.TrimSpace(v.GetString("LV_DB_DSN")),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
