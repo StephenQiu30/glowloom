@@ -1,0 +1,83 @@
+# Compose-only environment and host port mappings. Local processes use the
+# repository root .env instead. Supply deployment secrets through the shell
+# or a deployment-controlled env file; never put real credentials here.
+services:
+  frontend:
+    ports:
+      - "${LV_FRONTEND_PORT:-3000}:3000"
+
+  backend-api:
+    environment:
+      LV_ENV: ${LV_ENV:-local}
+      LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
+      LV_HTTP_ADDR: ":8080"
+    ports:
+      - "${LV_BACKEND_PORT:-8080}:8080"
+
+  agent-api:
+    environment:
+      LV_ENV: ${LV_ENV:-local}
+      LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
+    ports:
+      - "${LV_AGENT_PORT:-8090}:8090"
+
+  postgres:
+    environment:
+      POSTGRES_USER: ${LV_PG_USER:-lanverse}
+      POSTGRES_PASSWORD: ${LV_PG_PASSWORD:?Set LV_PG_PASSWORD for Compose}
+      POSTGRES_DB: ${LV_PG_DATABASE:-lanverse}
+    ports:
+      - "${LV_PG_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${LV_REDIS_PORT:-6379}:6379"
+
+  kafka:
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${LV_KAFKA_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "${LV_KAFKA_PORT:-9092}:9092"
+
+  minio:
+    environment:
+      MINIO_ROOT_USER: ${LV_MINIO_USER:-lanverse}
+      MINIO_ROOT_PASSWORD: ${LV_MINIO_PASSWORD:?Set LV_MINIO_PASSWORD for Compose}
+    ports:
+      - "${LV_MINIO_PORT:-9000}:9000"
+      - "${LV_MINIO_CONSOLE_PORT:-9001}:9001"
+
+  temporal:
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${LV_PG_USER:-lanverse}
+      POSTGRES_PWD: ${LV_PG_PASSWORD:?Set LV_PG_PASSWORD for Compose}
+      POSTGRES_SEEDS: postgres
+      DEFAULT_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:-lanverse-local}
+    ports:
+      - "${LV_TEMPORAL_PORT:-7233}:7233"
+
+  temporal-ui:
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "${LV_TEMPORAL_UI_PORT:-8233}:8080"
+
+  kafka-ui:
+    environment:
+      KAFKA_CLUSTERS_0_NAME: lanverse-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    ports:
+      - "${LV_KAFKA_UI_PORT:-8088}:8080"
