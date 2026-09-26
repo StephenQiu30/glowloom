@@ -9,7 +9,7 @@ import (
 
 func TestLoadFromDotEnvFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "local.env.example")
-	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=lanverse-staging\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("LV_ENV_FILE", path)
@@ -19,7 +19,7 @@ func TestLoadFromDotEnvFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" {
+	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "lanverse-staging" {
 		t.Errorf("Load() = %+v, want environment override and file values", cfg)
 	}
 }
@@ -55,6 +55,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.KafkaBrokers != "" {
 		t.Errorf("KafkaBrokers = %q, want empty", cfg.KafkaBrokers)
 	}
+	if cfg.TemporalAddr != "" || cfg.TemporalNamespace != "" {
+		t.Errorf("Temporal config = %q/%q, want empty", cfg.TemporalAddr, cfg.TemporalNamespace)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -64,12 +67,14 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("LV_DB_DSN", "postgres://localhost/lanverse")
 	t.Setenv("LV_REDIS_URL", "redis://localhost:6379/1")
 	t.Setenv("LV_KAFKA_BROKERS", "localhost:9092")
+	t.Setenv("LV_TEMPORAL_ADDR", "localhost:7233")
+	t.Setenv("LV_TEMPORAL_NAMESPACE", "lanverse-staging")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := Config{Env: "staging", HTTPAddr: ":9090", LogLevel: "debug", DBDSN: "postgres://localhost/lanverse", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092"}
+	want := Config{Env: "staging", HTTPAddr: ":9090", LogLevel: "debug", DBDSN: "postgres://localhost/lanverse", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "lanverse-staging"}
 	if cfg != want {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
