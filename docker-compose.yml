@@ -20,6 +20,8 @@ services:
       LV_HTTP_ADDR: ":8080"
       LV_DB_DSN: ${LV_DB_DSN:?Set LV_DB_DSN for the backend API}
       LV_REDIS_URL: ${LV_REDIS_URL:?Set LV_REDIS_URL for the backend API}
+      LV_TEMPORAL_ADDR: ${LV_TEMPORAL_ADDR:?Set LV_TEMPORAL_ADDR for the backend API}
+      LV_TEMPORAL_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:?Set LV_TEMPORAL_NAMESPACE for the backend API}
     ports:
       - "${LV_BACKEND_PORT:-8080}:8080"
 
