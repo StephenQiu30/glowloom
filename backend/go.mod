@@ -6,6 +6,7 @@ toolchain go1.26.8
 
 require (
 	github.com/gin-gonic/gin v1.12.0
+	github.com/google/wire v0.7.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/spf13/viper v1.21.0
 	github.com/twmb/franz-go v1.22.0
