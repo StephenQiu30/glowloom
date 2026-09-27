@@ -48,6 +48,31 @@ services:
     ports:
       - "${LV_WORKER_HEALTH_PORT:-8081}:8081"
 
+  backend-worker-media:
+    build: ./backend
+    image: lanverse/backend:local
+    command: ["--role=worker", "--queues=media"]
+    read_only: true
+    tmpfs:
+      - /work:rw,noexec,nosuid,size=8g
+    environment:
+      LV_ENV: ${LV_ENV:-local}
+      LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
+      LV_WORKER_HEALTH_ADDR: ":8081"
+      LV_DB_DSN: ${LV_DB_DSN:?Set LV_DB_DSN for the media worker}
+      LV_TEMPORAL_ADDR: ${LV_TEMPORAL_ADDR:?Set LV_TEMPORAL_ADDR for the media worker}
+      LV_TEMPORAL_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:?Set LV_TEMPORAL_NAMESPACE for the media worker}
+      LV_OBJECT_STORAGE_ENDPOINT: ${LV_OBJECT_STORAGE_ENDPOINT:?Set LV_OBJECT_STORAGE_ENDPOINT for the media worker}
+      LV_OBJECT_STORAGE_BUCKET: ${LV_OBJECT_STORAGE_BUCKET:?Set LV_OBJECT_STORAGE_BUCKET for the media worker}
+      LV_OBJECT_STORAGE_ACCESS_KEY: ${LV_OBJECT_STORAGE_ACCESS_KEY:?Set LV_OBJECT_STORAGE_ACCESS_KEY for the media worker}
+      LV_OBJECT_STORAGE_SECRET_KEY: ${LV_OBJECT_STORAGE_SECRET_KEY:?Set LV_OBJECT_STORAGE_SECRET_KEY for the media worker}
+      LV_OBJECT_STORAGE_REGION: ${LV_OBJECT_STORAGE_REGION:-}
+      LV_MEDIA_RESULT_ALLOWED_ORIGINS: ${LV_MEDIA_RESULT_ALLOWED_ORIGINS:-}
+      LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS: ${LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS:-false}
+      LV_OTEL_ENDPOINT: ${LV_OTEL_ENDPOINT:-}
+    ports:
+      - "${LV_MEDIA_WORKER_HEALTH_PORT:-8083}:8081"
+
   backend-relay:
     build: ./backend
     image: lanverse/backend:local

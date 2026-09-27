@@ -102,7 +102,7 @@ func renderOne(ctx context.Context, sourcePath string, spec renderSpec) (applica
 			_ = os.Remove(name)
 		}
 	}()
-	args := append([]string{"-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", sourcePath}, spec.args...)
+	args := append([]string{"-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe", "-y", "-i", sourcePath}, spec.args...)
 	args = append(args, name)
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	var stderr limitedWriter

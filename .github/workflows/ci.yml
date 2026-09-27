@@ -71,6 +71,9 @@ jobs:
       - run: test -z "$(goimports -local github.com/StephenQiu30/lanverse/backend -l .)"
       - run: go vet ./...
       - run: golangci-lint run ./...
+      - name: Install media probe tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: command -v ffmpeg && command -v ffprobe
       - run: go test -race ./...
       - name: Prepare isolated identity contract databases
         run: |

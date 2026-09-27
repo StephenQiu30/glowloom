@@ -21,7 +21,7 @@ func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (applic
 	if file == nil || file.File == nil {
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}
-	cmd := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-show_entries",
+	cmd := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe", "-show_entries",
 		"format=duration,format_name:stream=codec_type,codec_name,width,height,avg_frame_rate,channels,duration",
 		"-of", "json", file.File.Name())
 	output, err := cmd.Output()
