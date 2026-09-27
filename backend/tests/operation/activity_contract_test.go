@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 
+	catalogworkflow "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/workflow"
 	workflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 )
 
@@ -46,6 +47,15 @@ func TestProviderActivityJSONContracts(t *testing.T) {
 				checkActivityModel[workflow.ProviderCancelInput](t, example.Input)
 				checkActivityModel[workflow.ProviderCancelOutput](t, example.Output)
 				assertStringField(t, example.Output, "outcome", "cancelled")
+			},
+		},
+		{
+			name: "provider_test_credential",
+			checkModels: func(t *testing.T, example activityExample) {
+				checkActivityModel[catalogworkflow.AgentTestInput](t, example.Input)
+				checkActivityModel[catalogworkflow.AgentTestOutput](t, example.Output)
+				assertStringField(t, example.Input, "adapter_key", "openrouter")
+				assertStringField(t, example.Output, "result", "ok")
 			},
 		},
 	}

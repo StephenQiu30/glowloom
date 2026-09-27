@@ -11,6 +11,9 @@ import (
 
 	auditevent "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
+	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
+	catalogflow "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/workflow"
+	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 	kafkainbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/kafka"
 	pginbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
 	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
@@ -57,6 +60,7 @@ func provideMaintenanceWorker(ctx context.Context, dbConn *db.Connection, tempor
 	})
 	service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 	maintenanceflow.Register(flowWorker, maintenanceflow.NewActivities(service, 500))
+	catalogflow.Register(flowWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
 	return flowWorker, nil
 }
 

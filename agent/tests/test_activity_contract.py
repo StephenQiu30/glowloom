@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, ValidationError
 
+from app.worker.credential_activities import CredentialTestInput
 from app.worker.provider_activities import (
     ProviderCancelInput,
     ProviderCancelOutput,
@@ -68,3 +69,12 @@ def test_provider_activity_json_contract(
 def test_query_input_requires_exactly_one_task_reference(task_ref: dict[str, str]) -> None:
     with pytest.raises(ValidationError):
         ProviderQueryInput.model_validate(task_ref, strict=True)
+
+
+def test_credential_test_uses_shared_go_python_json_example() -> None:
+    example = json.loads((EXAMPLES / "provider_test_credential.json").read_text(encoding="utf-8"))
+    data = CredentialTestInput.model_validate(example["input"])
+    assert data.model_dump(mode="json") == example["input"]
+    assert example["output"] == {"result": "ok"}
+    with pytest.raises(ValidationError):
+        CredentialTestInput.model_validate({**example["input"], "secret": "never"})
