@@ -222,5 +222,26 @@
     "modes": ["text2video"],
     "limits": {"max_outputs": 1},
     "param_schema": [{"field": "seed", "field": "prompt", "label": "提示词", "type": "string", "component": "input"}]
+  },
+  {
+    "name": "fractional value masquerading as integer",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "default": 1.0000000000000001}]
+  },
+  {
+    "name": "unsafe numeric choice",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "segmented", "enum": [9007199254740992], "default": 9007199254740993}]
+  },
+  {
+    "name": "slider default misses step",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "guidance", "label": "引导强度", "type": "number", "component": "slider", "min": 0, "max": 1, "step": 0.2, "default": 0.3}]
   }
 ]
