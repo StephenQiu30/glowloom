@@ -64,6 +64,20 @@ func TestCreateModelCommandBuildsSafeAuditAndDisabledModel(t *testing.T) {
 		after["display_name"] != "Seedance 2 Pro" || after["status"] != "disabled" {
 		t.Fatalf("model audit summary %+v: %v", after, err)
 	}
+	var changed map[string]any
+	if err := json.Unmarshal(store.event.Payload, &changed); err != nil {
+		t.Fatal(err)
+	}
+	changed["data"].(map[string]any)["after"].(map[string]any)["secret"] = "forbidden"
+	unsafePayload, err := json.Marshal(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auditapp.NewRecordedActionParser().Parse(inbox.Record{
+		Topic: store.event.Topic, Key: []byte(store.event.PartitionKey), Value: unsafePayload,
+	}); !errors.Is(err, auditapp.ErrInvalidEvent) {
+		t.Fatalf("model audit accepted undeclared field: %v", err)
+	}
 }
 
 func TestCreateModelCommandRejectsInvalidCallerAndModel(t *testing.T) {
