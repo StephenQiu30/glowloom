@@ -15,6 +15,10 @@ var (
 	ErrLimitBelowCommitted = errors.New("budget limit below committed funds")
 	// ErrBudgetRevision means another transaction changed the observed budget.
 	ErrBudgetRevision = errors.New("budget revision conflict")
+	// ErrBudgetInsufficient means a new confirmation cannot reserve its quote.
+	ErrBudgetInsufficient = errors.New("budget insufficient")
+	// ErrBudgetReservationMismatch means a settlement exceeds the held amount.
+	ErrBudgetReservationMismatch = errors.New("budget reservation mismatch")
 )
 
 // Budget is the project's spending envelope. Money is always in integer
@@ -87,4 +91,52 @@ func (b *Budget) ChangeLimit(next int64) (int64, error) {
 	b.IsOverrun = false
 	b.Revision++
 	return delta, nil
+}
+
+// Reserve holds a confirmed quote. The caller must lock the budget row and
+// persist this change with its reservation and ledger entry in one transaction.
+// Even a zero-cost reservation advances the revision for that confirmation.
+func (b *Budget) Reserve(amountMicros int64) error {
+	if b == nil || b.Validate() != nil || amountMicros < 0 {
+		return ErrInvalidBudget
+	}
+	if b.IsOverrun {
+		return ErrBudgetInsufficient
+	}
+	if b.Revision == math.MaxInt32 {
+		return ErrInvalidBudget
+	}
+	available := b.LimitMicros - b.ReservedMicros - b.SettledMicros
+	if amountMicros > available {
+		return ErrBudgetInsufficient
+	}
+	b.ReservedMicros += amountMicros
+	b.Revision++
+	return nil
+}
+
+// Settle removes one held reservation and records the customer's actual
+// charge. A non-token charge may exceed the reservation and creates an
+// explicit overrun. The caller must commit the budget, reservation closure,
+// ledger entries, and terminal operation state in one transaction.
+func (b *Budget) Settle(reservedMicros, chargeMicros int64) error {
+	if b == nil || b.Validate() != nil || reservedMicros < 0 || chargeMicros < 0 {
+		return ErrInvalidBudget
+	}
+	if reservedMicros > b.ReservedMicros {
+		return ErrBudgetReservationMismatch
+	}
+	if b.Revision == math.MaxInt32 || chargeMicros > math.MaxInt64-b.SettledMicros {
+		return ErrInvalidBudget
+	}
+	nextReserved := b.ReservedMicros - reservedMicros
+	nextSettled := b.SettledMicros + chargeMicros
+	if nextReserved > math.MaxInt64-nextSettled {
+		return ErrInvalidBudget
+	}
+	b.ReservedMicros = nextReserved
+	b.SettledMicros = nextSettled
+	b.IsOverrun = nextReserved+nextSettled > b.LimitMicros
+	b.Revision++
+	return nil
 }
