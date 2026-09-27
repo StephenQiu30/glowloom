@@ -71,7 +71,7 @@ func (s *Store) CreateProjectWithEvents(ctx context.Context, actor identityapp.P
 	return saved, nil
 }
 
-type projectCreatedEvent struct {
+type projectEvent struct {
 	EventID    uuid.UUID `json:"event_id"`
 	EventType  string    `json:"event_type"`
 	OccurredAt time.Time `json:"occurred_at"`
@@ -122,7 +122,7 @@ func validProjectCreatedEvents(actor identityapp.Principal, project domain.Proje
 			return false
 		}
 		seen[event.Topic] = true
-		var envelope projectCreatedEvent
+		var envelope projectEvent
 		if !decodeProjectEvent(event.Payload, &envelope) || envelope.EventID != event.ID ||
 			envelope.EventType != event.Topic || envelope.OccurredAt.IsZero() ||
 			envelope.OrgID != actor.OrgID || envelope.ProjectID != project.ID ||

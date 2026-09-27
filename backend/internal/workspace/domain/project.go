@@ -17,6 +17,9 @@ var ErrInvalidProject = errors.New("invalid project")
 // ErrProjectStateConflict means a lifecycle transition or write is not allowed.
 var ErrProjectStateConflict = errors.New("project state conflict")
 
+// ErrProjectRevisionConflict means another command changed the project first.
+var ErrProjectRevisionConflict = errors.New("project revision conflict")
+
 // ErrProjectHasInflightOperations means an operation must settle before archival or deletion.
 var ErrProjectHasInflightOperations = errors.New("project has inflight operations")
 
