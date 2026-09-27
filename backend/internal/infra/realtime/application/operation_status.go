@@ -14,7 +14,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
 )
 
-const operationStatusTopic = "lanverse.operation.status_changed.v1"
+// OperationStatusTopic is the event topic accepted by the realtime projection.
+const OperationStatusTopic = "lanverse.operation.status_changed.v1"
 
 // ErrInvalidEvent means the record cannot be safely projected.
 var ErrInvalidEvent = errors.New("invalid operation status event")
@@ -88,7 +89,7 @@ func projectOperationStatus(record inbox.Record) (Event, error) {
 	if err := json.Unmarshal(record.Value, &body); err != nil {
 		return Event{}, fmt.Errorf("%w: decode: %w", ErrInvalidEvent, err)
 	}
-	if record.Topic != operationStatusTopic || body.EventType != record.Topic ||
+	if record.Topic != OperationStatusTopic || body.EventType != record.Topic ||
 		body.Aggregate.Type != "operation" || string(record.Key) != body.ProjectID ||
 		body.Data.TargetType == "" || body.Data.Status == "" {
 		return Event{}, fmt.Errorf("%w: routing or required field mismatch", ErrInvalidEvent)

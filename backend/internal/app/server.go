@@ -16,7 +16,7 @@ const shutdownTimeout = 10 * time.Second
 
 // RunAPI serves the api role until ctx is cancelled, then shuts down gracefully.
 func RunAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
-	srv, cleanup, err := initializeAPI(ctx, cfg, logger)
+	srv, cleanup, err := NewAPIServer(ctx, cfg, logger)
 	if err != nil {
 		return fmt.Errorf("initialize api: %w", err)
 	}
@@ -46,4 +46,10 @@ func RunAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return <-errCh
+}
+
+// NewAPIServer builds the API server and its dependencies without starting the listener.
+// The caller must invoke cleanup when the server is no longer needed.
+func NewAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger) (*http.Server, func(), error) {
+	return initializeAPI(ctx, cfg, logger)
 }

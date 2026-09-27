@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -17,9 +18,13 @@ var ErrInvalid = errors.New("invalid configuration")
 type Config struct {
 	Env                    string
 	HTTPAddr               string
+	WorkerHealthAddr       string
+	RelayHealthAddr        string
 	LogLevel               string
 	DBDSN                  string
 	RedisURL               string
+	SessionIdleTTL         time.Duration
+	SessionAbsoluteTTL     time.Duration
 	KafkaBrokers           string
 	TemporalAddr           string
 	TemporalNamespace      string
@@ -42,7 +47,11 @@ func Load() (Config, error) {
 	v.AutomaticEnv()
 	v.SetDefault("LV_ENV", "local")
 	v.SetDefault("LV_HTTP_ADDR", ":8080")
+	v.SetDefault("LV_WORKER_HEALTH_ADDR", ":8081")
+	v.SetDefault("LV_RELAY_HEALTH_ADDR", ":8082")
 	v.SetDefault("LV_LOG_LEVEL", "info")
+	v.SetDefault("LV_SESSION_IDLE_TTL", "12h")
+	v.SetDefault("LV_SESSION_ABSOLUTE_TTL", "168h")
 	if path := os.Getenv("LV_ENV_FILE"); path != "" {
 		v.SetConfigFile(path)
 		v.SetConfigType("env")
@@ -54,9 +63,13 @@ func Load() (Config, error) {
 	cfg := Config{
 		Env:                    strings.TrimSpace(v.GetString("LV_ENV")),
 		HTTPAddr:               strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
+		WorkerHealthAddr:       strings.TrimSpace(v.GetString("LV_WORKER_HEALTH_ADDR")),
+		RelayHealthAddr:        strings.TrimSpace(v.GetString("LV_RELAY_HEALTH_ADDR")),
 		LogLevel:               strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
 		DBDSN:                  strings.TrimSpace(v.GetString("LV_DB_DSN")),
 		RedisURL:               strings.TrimSpace(v.GetString("LV_REDIS_URL")),
+		SessionIdleTTL:         v.GetDuration("LV_SESSION_IDLE_TTL"),
+		SessionAbsoluteTTL:     v.GetDuration("LV_SESSION_ABSOLUTE_TTL"),
 		KafkaBrokers:           strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
 		TemporalAddr:           strings.TrimSpace(v.GetString("LV_TEMPORAL_ADDR")),
 		TemporalNamespace:      strings.TrimSpace(v.GetString("LV_TEMPORAL_NAMESPACE")),
@@ -82,6 +95,18 @@ func (c Config) validate() error {
 	}
 	if c.HTTPAddr == "" {
 		return fmt.Errorf("%w: LV_HTTP_ADDR is empty", ErrInvalid)
+	}
+	if c.WorkerHealthAddr == "" {
+		return fmt.Errorf("%w: LV_WORKER_HEALTH_ADDR is empty", ErrInvalid)
+	}
+	if c.RelayHealthAddr == "" {
+		return fmt.Errorf("%w: LV_RELAY_HEALTH_ADDR is empty", ErrInvalid)
+	}
+	if c.SessionIdleTTL < time.Millisecond {
+		return fmt.Errorf("%w: LV_SESSION_IDLE_TTL must be at least 1ms", ErrInvalid)
+	}
+	if c.SessionAbsoluteTTL < c.SessionIdleTTL {
+		return fmt.Errorf("%w: LV_SESSION_ABSOLUTE_TTL must be at least LV_SESSION_IDLE_TTL", ErrInvalid)
 	}
 	return nil
 }

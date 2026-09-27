@@ -10,8 +10,10 @@ import (
 	"context"
 	"net/http"
 
+	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
@@ -53,6 +55,98 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 	return server, func() {
 		cleanup4()
 		cleanup3()
+		cleanup2()
+		cleanup()
+	}, nil
+}
+
+func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue string) (worker.Worker, func(), error) {
+	tracerProvider, cleanup, err := provideWorkerTrace(ctx, cfg, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	connection, cleanup2, err := provideDB(ctx, cfg, logger, tracerProvider)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	temporalconnConnection, cleanup3, err := provideTemporal(cfg, logger, tracerProvider)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	workerWorker, err := provideMaintenanceWorker(ctx, connection, temporalconnConnection, queue)
+	if err != nil {
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	return workerWorker, func() {
+		cleanup3()
+		cleanup2()
+		cleanup()
+	}, nil
+}
+
+func initializeRelay(ctx context.Context, cfg config.Config, logger *zap.Logger) (*relayRuntime, func(), error) {
+	tracerProvider, cleanup, err := provideRelayTrace(ctx, cfg, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	connection, cleanup2, err := provideDB(ctx, cfg, logger, tracerProvider)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	kafkaconnConnection, cleanup3, err := provideKafka(ctx, cfg)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	redisconnConnection, cleanup4, err := provideRedis(cfg, logger)
+	if err != nil {
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	appRelayRuntime, cleanup5, err := provideRelayRuntime(ctx, cfg, connection, kafkaconnConnection, redisconnConnection)
+	if err != nil {
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	return appRelayRuntime, func() {
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+	}, nil
+}
+
+func initializeMaintenanceSetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*temporal.ScheduleInstaller, func(), error) {
+	tracerProvider, cleanup, err := provideSetupTrace(ctx, cfg, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	connection, cleanup2, err := provideTemporal(cfg, logger, tracerProvider)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	scheduleInstaller, err := provideCleanupScheduleInstaller(ctx, connection, prefix)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	return scheduleInstaller, func() {
 		cleanup2()
 		cleanup()
 	}, nil

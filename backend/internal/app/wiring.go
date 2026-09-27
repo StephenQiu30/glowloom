@@ -18,15 +18,19 @@ import (
 )
 
 func provideTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {
-	provider, shutdown, err := otelconn.Open(ctx, cfg.OTelEndpoint, "lanverse-backend-api")
+	return provideNamedTrace(ctx, cfg, logger, "api")
+}
+
+func provideNamedTrace(ctx context.Context, cfg config.Config, logger *zap.Logger, role string) (trace.TracerProvider, func(), error) {
+	provider, shutdown, err := otelconn.Open(ctx, cfg.OTelEndpoint, "lanverse-backend-"+role)
 	if err != nil {
-		return nil, nil, fmt.Errorf("configure api tracing: %w", err)
+		return nil, nil, fmt.Errorf("configure %s tracing: %w", role, err)
 	}
 	cleanup := func() {
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		if err := shutdown(shutdownCtx); err != nil {
-			logger.Error("flush api tracing", zap.Error(err))
+			logger.Error("flush tracing", zap.String("role", role), zap.Error(err))
 		}
 	}
 	return provider, cleanup, nil
@@ -35,25 +39,24 @@ func provideTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (t
 func provideDB(ctx context.Context, cfg config.Config, logger *zap.Logger, tracerProvider trace.TracerProvider) (*db.Connection, func(), error) {
 	conn, err := db.Open(ctx, cfg.DBDSN, tracerProvider)
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect api database: %w", err)
+		return nil, nil, fmt.Errorf("connect backend database: %w", err)
 	}
 	cleanup := func() {
 		if err := conn.Close(); err != nil {
-			logger.Error("close api database", zap.Error(err))
+			logger.Error("close backend database", zap.Error(err))
 		}
 	}
 	return conn, cleanup, nil
 }
 
 func provideRedis(cfg config.Config, logger *zap.Logger) (*redisconn.Connection, func(), error) {
-	redisconn.ConfigureLogging(logger)
 	conn, err := redisconn.Open(cfg.RedisURL)
 	if err != nil {
-		return nil, nil, fmt.Errorf("configure api Redis: %w", err)
+		return nil, nil, fmt.Errorf("configure backend Redis: %w", err)
 	}
 	cleanup := func() {
 		if err := conn.Close(); err != nil {
-			logger.Error("close api Redis", zap.Error(err))
+			logger.Error("close backend Redis", zap.Error(err))
 		}
 	}
 	return conn, cleanup, nil
@@ -62,7 +65,7 @@ func provideRedis(cfg config.Config, logger *zap.Logger) (*redisconn.Connection,
 func provideTemporal(cfg config.Config, logger *zap.Logger, tracerProvider trace.TracerProvider) (*temporalconn.Connection, func(), error) {
 	conn, err := temporalconn.Open(cfg.TemporalAddr, cfg.TemporalNamespace, logger, tracerProvider)
 	if err != nil {
-		return nil, nil, fmt.Errorf("configure api Temporal: %w", err)
+		return nil, nil, fmt.Errorf("configure backend Temporal: %w", err)
 	}
 	return conn, conn.Close, nil
 }

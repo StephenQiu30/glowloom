@@ -9,6 +9,6 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/lanverse ./cmd/lan
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/lanverse /usr/local/bin/lanverse
 USER nonroot:nonroot
-EXPOSE 8080
+EXPOSE 8080 8081 8082
 ENTRYPOINT ["/usr/local/bin/lanverse"]
 CMD ["--role=api"]

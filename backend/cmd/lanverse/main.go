@@ -1,9 +1,8 @@
-// Command lanverse runs one backend role: api, worker or relay (DES-01, OPS-01 §3).
+// Command lanverse runs backend roles and installs Temporal maintenance schedules.
 package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -15,33 +14,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	lvlog "github.com/StephenQiu30/lanverse/backend/internal/platform/log"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 )
-
-type role string
-
-const (
-	roleAPI    role = "api"
-	roleWorker role = "worker"
-	roleRelay  role = "relay"
-	roleAll    role = "all"
-)
-
-var (
-	errUnknownRole      = errors.New("unknown role")
-	errRoleNotAvailable = errors.New("role not available yet")
-)
-
-func parseRole(s string) (role, error) {
-	switch r := role(s); r {
-	case roleAPI:
-		return r, nil
-	case roleWorker, roleRelay, roleAll:
-		// worker lands with M1-09, relay with M1-08 (BACKLOG).
-		return "", fmt.Errorf("%w: %q", errRoleNotAvailable, s)
-	default:
-		return "", fmt.Errorf("%w: %q, want api|worker|relay|all", errUnknownRole, s)
-	}
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -51,12 +25,38 @@ func main() {
 }
 
 func run() error {
-	roleFlag := flag.String("role", string(roleAPI), "process role: api|worker|relay|all")
-	flag.Parse()
-
-	r, err := parseRole(*roleFlag)
-	if err != nil {
-		return err
+	var role app.Role
+	var queues, schedulePrefix string
+	setup := len(os.Args) > 1 && os.Args[1] == "temporal"
+	if setup {
+		if len(os.Args) < 3 || os.Args[2] != "setup" {
+			return fmt.Errorf("usage: lanverse temporal setup [--prefix=value]")
+		}
+		setupFlags := flag.NewFlagSet("temporal setup", flag.ContinueOnError)
+		prefixFlag := setupFlags.String("prefix", "", "optional prefix for isolated schedule verification")
+		if err := setupFlags.Parse(os.Args[3:]); err != nil {
+			return err
+		}
+		if setupFlags.NArg() != 0 {
+			return fmt.Errorf("unexpected temporal setup argument: %q", setupFlags.Arg(0))
+		}
+		schedulePrefix = *prefixFlag
+	} else {
+		roleFlag := flag.String("role", string(app.RoleAPI), "process role: api|worker|relay|all")
+		queuesFlag := flag.String("queues", "", "worker task queue: flow")
+		flag.Parse()
+		if flag.NArg() != 0 {
+			return fmt.Errorf("unexpected command: %q", flag.Arg(0))
+		}
+		var err error
+		role, err = app.ParseRole(*roleFlag)
+		if err != nil {
+			return err
+		}
+		if role != app.RoleWorker && *queuesFlag != "" {
+			return fmt.Errorf("--queues requires --role=worker")
+		}
+		queues = *queuesFlag
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -67,10 +67,26 @@ func run() error {
 		return err
 	}
 	defer func() { _ = logger.Sync() }()
+	redisconn.ConfigureLogging(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger.Info("starting", zap.String("role", string(r)))
-	return app.RunAPI(ctx, cfg, logger)
+	if setup {
+		logger.Info("starting Temporal setup")
+		return app.InstallCleanupSchedules(ctx, cfg, logger, schedulePrefix)
+	}
+	logger.Info("starting", zap.String("role", string(role)))
+	switch role {
+	case app.RoleAPI:
+		return app.RunAPI(ctx, cfg, logger)
+	case app.RoleWorker:
+		return app.RunWorker(ctx, cfg, logger, queues)
+	case app.RoleRelay:
+		return app.RunRelay(ctx, cfg, logger)
+	case app.RoleAll:
+		return app.RunAll(ctx, cfg, logger)
+	default:
+		return fmt.Errorf("%w: %q", app.ErrRoleNotAvailable, role)
+	}
 }
