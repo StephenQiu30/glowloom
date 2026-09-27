@@ -2,6 +2,7 @@ package billing_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -250,4 +251,111 @@ func TestChangeBudgetRejectsArchivedProject(t *testing.T) {
 	if ledgerCount != 0 || eventCount != 0 {
 		t.Fatalf("archived project wrote ledger/outbox: %d/%d", ledgerCount, eventCount)
 	}
+}
+
+func TestChangeBudgetPersistsLowEventOnThresholdCrossing(t *testing.T) {
+	_, database := billingDB(t)
+	actor, projectID := billingProject(t, database)
+	budgetID := uuid.New()
+	if err := database.Exec(`
+		INSERT INTO billing.budget (id, project_id, limit_micros, settled_micros)
+		VALUES (?::uuid, ?::uuid, 500, 400)
+	`, budgetID.String(), projectID.String()).Error; err != nil {
+		t.Fatalf("create budget at 20 percent: %v", err)
+	}
+	command := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now)
+	changed, err := command.Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
+		ProjectID: projectID, LimitMicros: 499, ExpectedRevision: 1, RequestID: uuid.NewString(),
+	})
+	if err != nil || changed.LimitMicros != 499 || changed.Revision != 2 {
+		t.Fatalf("cross threshold: %+v, %v", changed, err)
+	}
+	var events []struct {
+		ID      uuid.UUID
+		Topic   string
+		Payload []byte
+	}
+	if err := database.Raw(`
+		SELECT id, topic, payload FROM infra.outbox WHERE partition_key = ?
+	`, projectID.String()).Scan(&events).Error; err != nil {
+		t.Fatalf("read budget events: %v", err)
+	}
+	if len(events) != 3 {
+		t.Fatalf("threshold crossing events = %+v, want three", events)
+	}
+	var lowCount int
+	for _, event := range events {
+		if event.Topic == "lanverse.billing.budget_low.v1" {
+			lowCount++
+			if event.ID == uuid.Nil || !containsJSONEventID(event.Payload, event.ID) {
+				t.Fatalf("invalid low event = %+v", event)
+			}
+		}
+	}
+	if lowCount != 1 {
+		t.Fatalf("low event count = %d", lowCount)
+	}
+	var ledgerCount int64
+	if err := database.Raw(`
+		SELECT count(*) FROM billing.ledger_entry
+		WHERE project_id = ?::uuid AND entry_type = 'budget_change' AND amount_micros = -1
+	`, projectID.String()).Scan(&ledgerCount).Error; err != nil || ledgerCount != 1 {
+		t.Fatalf("signed low-threshold ledger = %d, %v", ledgerCount, err)
+	}
+}
+
+func TestChangeBudgetRollsBackWhenLowEventFails(t *testing.T) {
+	_, database := billingDB(t)
+	actor, projectID := billingProject(t, database)
+	budgetID := uuid.New()
+	if err := database.Exec(`
+		INSERT INTO billing.budget (id, project_id, limit_micros, settled_micros)
+		VALUES (?::uuid, ?::uuid, 500, 400)
+	`, budgetID.String(), projectID.String()).Error; err != nil {
+		t.Fatalf("create budget: %v", err)
+	}
+	constraint := fmt.Sprintf(`
+		ALTER TABLE infra.outbox ADD CONSTRAINT ck_billing_test_reject_low
+		CHECK (topic <> 'lanverse.billing.budget_low.v1' OR partition_key <> '%s')
+	`, projectID.String())
+	if err := database.Exec(constraint).Error; err != nil {
+		t.Fatalf("install low event failure constraint: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 5*time.Second)
+		defer cancel()
+		if err := database.WithContext(ctx).Exec(`ALTER TABLE infra.outbox DROP CONSTRAINT ck_billing_test_reject_low`).Error; err != nil {
+			t.Errorf("remove low event failure constraint: %v", err)
+		}
+	})
+	_, err := billingapp.NewChangeBudgetCommand(pgbilling.NewStore(database), time.Now).Execute(t.Context(), actor, billingapp.ChangeBudgetInput{
+		ProjectID: projectID, LimitMicros: 499, ExpectedRevision: 1, RequestID: uuid.NewString(),
+	})
+	if err == nil {
+		t.Fatal("low event failure accepted budget change")
+	}
+	var row struct {
+		LimitMicros int64
+		Revision    int64
+	}
+	if err := database.Raw(`SELECT limit_micros, revision FROM billing.budget WHERE id = ?::uuid`, budgetID.String()).Scan(&row).Error; err != nil {
+		t.Fatalf("read rolled back budget: %v", err)
+	}
+	var ledgerCount, eventCount int64
+	if err := database.Raw(`SELECT count(*) FROM billing.ledger_entry WHERE project_id = ?::uuid`, projectID.String()).Scan(&ledgerCount).Error; err != nil {
+		t.Fatalf("count rolled back ledger: %v", err)
+	}
+	if err := database.Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key = ?`, projectID.String()).Scan(&eventCount).Error; err != nil {
+		t.Fatalf("count rolled back events: %v", err)
+	}
+	if row.LimitMicros != 500 || row.Revision != 1 || ledgerCount != 0 || eventCount != 0 {
+		t.Fatalf("partial low-event transaction: row=%+v ledger=%d outbox=%d", row, ledgerCount, eventCount)
+	}
+}
+
+func containsJSONEventID(payload []byte, id uuid.UUID) bool {
+	var envelope struct {
+		EventID uuid.UUID `json:"event_id"`
+	}
+	return json.Unmarshal(payload, &envelope) == nil && envelope.EventID == id
 }

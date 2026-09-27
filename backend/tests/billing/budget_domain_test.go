@@ -72,3 +72,39 @@ func TestBudgetOverrunSameLimitIsNoOp(t *testing.T) {
 		t.Fatalf("same limit in overrun state = %+v delta=%d err=%v", budget, delta, err)
 	}
 }
+
+func TestBudgetLowBalanceUsesStrictOverflowSafeThreshold(t *testing.T) {
+	base := domain.Budget{ID: uuid.New(), ProjectID: uuid.New(), Revision: 1}
+	for _, tc := range []struct {
+		name      string
+		limit     int64
+		committed int64
+		overrun   bool
+		want      bool
+	}{
+		{"zero default", 0, 0, false, false},
+		{"at twenty percent", 100, 80, false, false},
+		{"below twenty percent", 100, 81, false, true},
+		{"fractional threshold", 101, 81, false, true},
+		{"above fractional threshold", 101, 80, false, false},
+		{"large at threshold", math.MaxInt64 - 2, (math.MaxInt64 - 2) / 5 * 4, false, false},
+		{"large below threshold", math.MaxInt64 - 2, (math.MaxInt64-2)/5*4 + 1, false, true},
+		{"settlement overrun", 100, 101, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			budget := base
+			budget.LimitMicros = tc.limit
+			budget.SettledMicros = tc.committed
+			budget.IsOverrun = tc.overrun
+			got, err := budget.LowBalance()
+			if err != nil || got != tc.want {
+				t.Fatalf("low balance = %t, %v; want %t", got, err, tc.want)
+			}
+		})
+	}
+	invalid := base
+	invalid.ID = uuid.Nil
+	if _, err := invalid.LowBalance(); !errors.Is(err, domain.ErrInvalidBudget) {
+		t.Fatalf("invalid budget low check = %v", err)
+	}
+}

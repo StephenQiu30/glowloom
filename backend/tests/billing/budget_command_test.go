@@ -281,3 +281,79 @@ func TestChangeBudgetCommandPreservesStoreErrorsAndRejectsWrongSavedRow(t *testi
 		t.Fatalf("wrong saved row accepted: %v", err)
 	}
 }
+
+func TestChangeBudgetEmitsLowEventOnlyWhenCrossingThreshold(t *testing.T) {
+	actor := budgetCommandActor(identitydomain.RoleProducer)
+	for _, tc := range []struct {
+		name      string
+		limit     int64
+		committed int64
+		next      int64
+		wantLow   bool
+	}{
+		{"cross from exact twenty percent", 500, 400, 499, true},
+		{"reach exact twenty percent", 600, 400, 500, false},
+		{"remain below threshold", 400, 350, 375, false},
+		{"recover above threshold", 400, 350, 500, false},
+		{"zero budget increase", 0, 0, 100, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			budget := domain.Budget{
+				ID: uuid.New(), ProjectID: uuid.New(), LimitMicros: tc.limit,
+				SettledMicros: tc.committed, Revision: 1,
+			}
+			store := &budgetCommandStore{budget: budget}
+			input := billingapp.ChangeBudgetInput{
+				ProjectID: budget.ProjectID, LimitMicros: tc.next,
+				ExpectedRevision: 1, RequestID: uuid.NewString(),
+			}
+			occurredAt := time.Date(2026, 9, 27, 12, 30, 0, 0, time.UTC)
+			_, err := billingapp.NewChangeBudgetCommand(store, func() time.Time { return occurredAt }).Execute(t.Context(), actor, input)
+			if err != nil {
+				t.Fatalf("change budget: %v", err)
+			}
+			wantCount := 2
+			if tc.wantLow {
+				wantCount = 3
+			}
+			if len(store.events) != wantCount {
+				t.Fatalf("budget events = %+v, want %d", store.events, wantCount)
+			}
+			var lowEvents int
+			for _, event := range store.events {
+				if event.Topic != "lanverse.billing.budget_low.v1" {
+					continue
+				}
+				lowEvents++
+				var payload struct {
+					EventID    uuid.UUID `json:"event_id"`
+					EventType  string    `json:"event_type"`
+					OccurredAt time.Time `json:"occurred_at"`
+					OrgID      uuid.UUID `json:"org_id"`
+					ProjectID  uuid.UUID `json:"project_id"`
+					Aggregate  struct {
+						Type     string    `json:"type"`
+						ID       uuid.UUID `json:"id"`
+						Revision int64     `json:"revision"`
+					} `json:"aggregate"`
+					Data struct {
+						LimitMicros     int64 `json:"limit_micros"`
+						AvailableMicros int64 `json:"available_micros"`
+					} `json:"data"`
+				}
+				if err := json.Unmarshal(event.Payload, &payload); err != nil ||
+					payload.EventID != event.ID || payload.EventType != event.Topic ||
+					!payload.OccurredAt.Equal(occurredAt) || payload.OrgID != actor.OrgID ||
+					payload.ProjectID != budget.ProjectID || event.PartitionKey != budget.ProjectID.String() ||
+					payload.Aggregate.Type != "budget" || payload.Aggregate.ID != budget.ID ||
+					payload.Aggregate.Revision != 2 || payload.Data.LimitMicros != tc.next ||
+					payload.Data.AvailableMicros != tc.next-tc.committed {
+					t.Fatalf("low event = %+v, error = %v", payload, err)
+				}
+			}
+			if tc.wantLow && lowEvents != 1 || !tc.wantLow && lowEvents != 0 {
+				t.Fatalf("low event count = %d, want low %t", lowEvents, tc.wantLow)
+			}
+		})
+	}
+}
