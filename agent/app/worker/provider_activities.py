@@ -73,6 +73,7 @@ class ProviderQueryInput(ProviderActivityModel):
 
 class ProviderQueryOutput(ProviderActivityModel):
     state: Literal["pending", "running", "succeeded", "failed", "not_found"]
+    provider_task_id: str | None = None
     result_urls: list[str] = Field(default_factory=list)
     usage: dict[str, object] | None = None
     error: ProviderError | None = None
@@ -149,6 +150,7 @@ class MockProviderActivities:
         result = await self._provider.query(ref)
         return ProviderQueryOutput(
             state=result.state,
+            provider_task_id=result.provider_task_id,
             result_urls=result.result_urls,
             usage=None,
             error=(

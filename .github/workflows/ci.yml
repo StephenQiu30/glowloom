@@ -104,7 +104,7 @@ jobs:
       - name: Apply migrations for PostgreSQL contract tests
         run: find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -f
       - name: Verify operation PostgreSQL contracts
-        run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -run '^Test(OperationSchema|OperationStores|CreateQuoteSnapshot)' -count=1
+        run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -count=1
       - name: Prepare isolated media migration database
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_media_migration_test'

@@ -39,6 +39,7 @@ func TestProviderActivityJSONContracts(t *testing.T) {
 				checkActivityModel[workflow.ProviderQueryOutput](t, example.Output)
 				assertStringField(t, example.Input, "provider_task_id", "mock-task-11111111")
 				assertStringField(t, example.Output, "state", "pending")
+				assertStringField(t, example.Output, "provider_task_id", "mock-task-11111111")
 			},
 		},
 		{

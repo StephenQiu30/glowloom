@@ -21,7 +21,7 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 }
 
 func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger, queue string) (worker.Worker, func(), error) {
-	wire.Build(provideWorkerTrace, provideDB, provideTemporal, provideMaintenanceWorker)
+	wire.Build(provideWorkerTrace, provideDB, provideTemporal, provideBackendWorker)
 	return nil, nil, nil
 }
 

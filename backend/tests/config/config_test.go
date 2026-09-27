@@ -107,6 +107,22 @@ func TestLoadObjectStorageFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoadMediaResultDownloadPolicy(t *testing.T) {
+	t.Setenv("LV_MEDIA_RESULT_ALLOWED_ORIGINS", "https://results.example.test")
+	t.Setenv("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS", "true")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MediaResultAllowedOrigins != "https://results.example.test" || !cfg.MediaAllowTestLoopbackTLS {
+		t.Fatal("Load() did not preserve media result policy")
+	}
+	t.Setenv("LV_ENV", "prod")
+	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
+		t.Fatalf("production loopback policy error = %v, want ErrInvalid", err)
+	}
+}
+
 func TestLoadOTelEndpointFromEnv(t *testing.T) {
 	t.Setenv("LV_OTEL_ENDPOINT", "http://127.0.0.1:4318")
 	cfg, err := config.Load()

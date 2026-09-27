@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -11,6 +12,7 @@ import (
 
 	auditevent "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
+	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
 	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
 	catalogflow "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/workflow"
 	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
@@ -23,9 +25,13 @@ import (
 	outboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/application"
 	redisrealtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
+	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
+	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/kafkaconn"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
 )
@@ -49,19 +55,56 @@ func provideCleanupScheduleInstaller(ctx context.Context, temporalConn *temporal
 	return maintenanceflow.NewScheduleInstaller(temporalConn.Client.ScheduleClient(), prefix), nil
 }
 
-func provideMaintenanceWorker(ctx context.Context, dbConn *db.Connection, temporalConn *temporalconn.Connection, queue string) (worker.Worker, error) {
+func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Connection, temporalConn *temporalconn.Connection, queue string) (worker.Worker, error) {
 	if err := temporalConn.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("connect worker Temporal: %w", err)
 	}
-	flowWorker := worker.New(temporalConn.Client, queue, worker.Options{
+	options := worker.Options{
 		MaxConcurrentWorkflowTaskExecutionSize: 200,
 		MaxConcurrentActivityExecutionSize:     100,
 		WorkerStopTimeout:                      5 * time.Minute,
-	})
-	service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
-	maintenanceflow.Register(flowWorker, maintenanceflow.NewActivities(service, 500))
-	catalogflow.Register(flowWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
-	return flowWorker, nil
+	}
+	if queue == "media" {
+		// This queue registers Activities only; zero lets the SDK use its
+		// default workflow-task setting instead of rejecting a value of one.
+		options.MaxConcurrentWorkflowTaskExecutionSize = 0
+		options.MaxConcurrentActivityExecutionSize = 4
+	}
+	queueWorker := worker.New(temporalConn.Client, queue, options)
+	switch queue {
+	case "flow":
+		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
+		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
+		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
+		operationStore := pgoperation.NewStore(dbConn.DB)
+		finalizer := NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
+		operationflow.Register(queueWorker, operationflow.NewActivities(operationStore, finalizer))
+	case "media":
+		storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
+			cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
+		if err != nil {
+			return nil, fmt.Errorf("configure media object storage: %w", err)
+		}
+		if err := storage.Ping(ctx); err != nil {
+			return nil, fmt.Errorf("connect media object storage: %w", err)
+		}
+		var origins []string
+		for _, raw := range strings.Split(cfg.MediaResultAllowedOrigins, ",") {
+			if origin := strings.TrimSpace(raw); origin != "" {
+				origins = append(origins, origin)
+			}
+		}
+		activities, err := mediaflow.NewActivities(dbConn.DB, storage, mediaflow.DownloadPolicy{
+			AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("configure media activities: %w", err)
+		}
+		mediaflow.Register(queueWorker, activities)
+	default:
+		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
+	}
+	return queueWorker, nil
 }
 
 func provideKafka(ctx context.Context, cfg config.Config) (*kafkaconn.Connection, func(), error) {

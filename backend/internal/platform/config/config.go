@@ -34,6 +34,8 @@ type Config struct {
 	ObjectStorageAccessKey    string
 	ObjectStorageSecretKey    string
 	ObjectStorageRegion       string
+	MediaResultAllowedOrigins string
+	MediaAllowTestLoopbackTLS bool
 	OTelEndpoint              string
 }
 
@@ -80,6 +82,8 @@ func Load() (Config, error) {
 		ObjectStorageAccessKey:    v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
 		ObjectStorageSecretKey:    v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
 		ObjectStorageRegion:       strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
+		MediaResultAllowedOrigins: strings.TrimSpace(v.GetString("LV_MEDIA_RESULT_ALLOWED_ORIGINS")),
+		MediaAllowTestLoopbackTLS: v.GetBool("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
 		OTelEndpoint:              strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
 	}
 	if err := cfg.validate(); err != nil {
@@ -89,6 +93,9 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if c.MediaAllowTestLoopbackTLS && c.Env != "local" {
+		return fmt.Errorf("%w: LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS is local-only", ErrInvalid)
+	}
 	if !validEnvs[c.Env] {
 		return fmt.Errorf("%w: LV_ENV=%q, want local|staging|prod", ErrInvalid, c.Env)
 	}

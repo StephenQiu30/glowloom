@@ -40,6 +40,7 @@ class SubmitResult(BaseModel):
 
 class QueryResult(BaseModel):
     state: Literal["pending", "running", "succeeded", "failed", "not_found"]
+    provider_task_id: str | None = None
     result_urls: list[str] = Field(default_factory=list)
     error_code: str | None = None
 
@@ -167,16 +168,19 @@ class MockProvider:
         record = await self._load(ref)
         if record is None:
             return QueryResult(state="not_found")
+        task_id = ref.provider_task_id or self._task_id(ref.request_key or "")
         now = self._now_ms()
         if record.expires_at_ms is not None and now >= record.expires_at_ms:
             return QueryResult(state="not_found")
         if record.cancelled:
-            return QueryResult(state="failed", error_code="cancelled")
+            return QueryResult(state="failed", provider_task_id=task_id, error_code="cancelled")
         if now < record.ready_at_ms:
-            return QueryResult(state="pending")
+            return QueryResult(state="pending", provider_task_id=task_id)
         if record.failed:
-            return QueryResult(state="failed", error_code="mock_failure")
-        return QueryResult(state="succeeded", result_urls=record.result_urls)
+            return QueryResult(state="failed", provider_task_id=task_id, error_code="mock_failure")
+        return QueryResult(
+            state="succeeded", provider_task_id=task_id, result_urls=record.result_urls
+        )
 
     async def cancel(self, ref: TaskRef) -> CancelResult:
         key = self._reference_key(ref)

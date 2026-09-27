@@ -37,6 +37,7 @@ def test_activity_submit_unknown_then_query_and_cancel() -> None:
             found = await env.run(activities.query, {"provider_request_key": "request-1"})
             assert found["state"] == "pending"
             assert found["result_urls"] == []
+            assert found["provider_task_id"].startswith("mock-")
 
             replay = await env.run(activities.submit, submit_input())
             assert replay["outcome"] == "accepted"

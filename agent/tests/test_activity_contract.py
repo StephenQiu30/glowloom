@@ -54,6 +54,7 @@ def test_provider_activity_json_contract(
             "provider_request_key" in example["input"]
         )
         assert example["output"]["state"] == "pending"
+        assert example["output"]["provider_task_id"] == example["input"]["provider_task_id"]
         assert example["output"]["result_urls"] == []
         assert "usage" in example["output"]
         assert "error" in example["output"]

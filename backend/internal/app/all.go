@@ -10,7 +10,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
-// RunAll serves the implemented API, flow worker, and relay roles together.
+// RunAll serves the implemented API, flow and media workers, and relay roles together.
 // A role failure cancels the others; the process waits for every role to exit.
 func RunAll(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
 	roles := []struct {
@@ -18,7 +18,7 @@ func RunAll(ctx context.Context, cfg config.Config, logger *zap.Logger) error {
 		run  func(context.Context) error
 	}{
 		{"api", func(ctx context.Context) error { return RunAPI(ctx, cfg, logger) }},
-		{"worker", func(ctx context.Context) error { return RunWorker(ctx, cfg, logger, "flow") }},
+		{"worker", func(ctx context.Context) error { return RunWorker(ctx, cfg, logger, "flow,media") }},
 		{"relay", func(ctx context.Context) error { return RunRelay(ctx, cfg, logger) }},
 	}
 	runCtx, cancel := context.WithCancel(ctx)

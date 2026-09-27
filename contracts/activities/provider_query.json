@@ -4,6 +4,7 @@
   },
   "output": {
     "state": "pending",
+    "provider_task_id": "mock-task-11111111",
     "result_urls": [],
     "usage": null,
     "error": null

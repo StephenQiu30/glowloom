@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -85,5 +86,26 @@ func TestPingFailsWhenBucketIsAbsent(t *testing.T) {
 	defer cancel()
 	if err := conn.Ping(ctx); !errors.Is(err, objectstorage.ErrBucketMissing) {
 		t.Fatalf("Ping() error = %v, want ErrBucketMissing", err)
+	}
+}
+
+func TestObjectWritesRejectUnsafeKeysAndInvalidMetadata(t *testing.T) {
+	conn, err := objectstorage.Open("https://storage.example.test", "lanverse-local", "access", "secret", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"", "/absolute", "a/../b", "a//b", "a\\b", "a/"} {
+		if err := conn.Put(t.Context(), key, strings.NewReader("data"), 4, "image/png"); !errors.Is(err, objectstorage.ErrInvalidObject) {
+			t.Fatalf("Put(%q) error = %v", key, err)
+		}
+		if _, err := conn.Stat(t.Context(), key); !errors.Is(err, objectstorage.ErrInvalidObject) {
+			t.Fatalf("Stat(%q) error = %v", key, err)
+		}
+	}
+	if err := conn.Put(t.Context(), "safe/key", nil, 4, "image/png"); !errors.Is(err, objectstorage.ErrInvalidObject) {
+		t.Fatalf("nil reader error = %v", err)
+	}
+	if err := conn.Put(t.Context(), "safe/key", strings.NewReader("data"), -1, "image/png"); !errors.Is(err, objectstorage.ErrInvalidObject) {
+		t.Fatalf("negative size error = %v", err)
 	}
 }

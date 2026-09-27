@@ -20,6 +20,7 @@ from app.harness.loop import (
 )
 from app.harness.router import ContextTooLarge, ModelRouter, ModelUnavailable
 from app.harness.skills import SkillRegistry, SkillVersionUnavailable
+from app.moderation.mock import MockModerationActivities
 
 if TYPE_CHECKING:
     from app.worker.credential_activities import CredentialTestActivities
@@ -127,7 +128,8 @@ def create_skill_worker(
     credential_tests: CredentialTestActivities | None = None,
 ) -> Worker:
     activities = SkillActivities(registry, router)
-    handlers = [activities.run]
+    moderation = MockModerationActivities()
+    handlers = [activities.run, moderation.check]
     if credential_tests is not None:
         handlers.append(credential_tests.test_credential)
     return Worker(client, task_queue=task_queue, workflows=[], activities=handlers)

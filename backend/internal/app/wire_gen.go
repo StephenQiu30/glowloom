@@ -77,7 +77,7 @@ func initializeWorker(ctx context.Context, cfg config.Config, logger *zap.Logger
 		cleanup()
 		return nil, nil, err
 	}
-	workerWorker, err := provideMaintenanceWorker(ctx, connection, temporalconnConnection, queue)
+	workerWorker, err := provideBackendWorker(ctx, cfg, connection, temporalconnConnection, queue)
 	if err != nil {
 		cleanup3()
 		cleanup2()

@@ -77,10 +77,11 @@ const (
 
 // ProviderQueryOutput is returned by provider.query.
 type ProviderQueryOutput struct {
-	State      ProviderQueryState `json:"state"`
-	ResultURLs []string           `json:"result_urls"`
-	Usage      map[string]any     `json:"usage"`
-	Error      *ProviderError     `json:"error"`
+	State          ProviderQueryState `json:"state"`
+	ProviderTaskID *string            `json:"provider_task_id"`
+	ResultURLs     []string           `json:"result_urls"`
+	Usage          map[string]any     `json:"usage"`
+	Error          *ProviderError     `json:"error"`
 }
 
 // ProviderCancelInput identifies the task passed to provider.cancel.

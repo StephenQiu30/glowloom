@@ -61,7 +61,21 @@ class MockActivityProbe:
             task_queue=skill_queue,
             start_to_close_timeout=timedelta(seconds=10),
         )
-        return {"submit": submitted, "query": queried, "skill": skill}
+        moderation = await workflow.execute_activity(
+            "moderation.check",
+            {
+                "operation_id": request_key,
+                "output_id": f"{request_key}-output",
+                "adapter_key": "mock",
+                "kind": "video",
+                "asset_id": f"{request_key}-asset",
+                "mock_status": "rejected",
+                "mock_labels": ["fixture.policy"],
+            },
+            task_queue=skill_queue,
+            start_to_close_timeout=timedelta(seconds=10),
+        )
+        return {"submit": submitted, "query": queried, "skill": skill, "moderation": moderation}
 
 
 def test_local_temporal_routes_to_mock_provider_activity() -> None:
@@ -111,5 +125,10 @@ def test_local_temporal_routes_to_mock_provider_activity() -> None:
         assert isinstance(queried, dict) and queried["state"] == "succeeded"
         assert isinstance(skill, dict)
         assert skill["result"] == {"value": f"lanverse-mock-activity-{token}"}
+        assert result["moderation"] == {
+            "status": "rejected",
+            "labels": ["fixture.policy"],
+            "provider": "mock",
+        }
 
     asyncio.run(run())

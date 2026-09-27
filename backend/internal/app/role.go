@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Role identifies a backend process role selected by the command-line entrypoint.
@@ -37,10 +38,33 @@ func ParseRole(value string) (Role, error) {
 	}
 }
 
-// WorkerQueue accepts the implemented flow queue and rejects work that cannot run yet.
+// WorkerQueue returns the canonical set of implemented backend queues.
 func WorkerQueue(value string) (string, error) {
-	if value == "" || value == "flow" {
+	if value == "" {
 		return "flow", nil
 	}
-	return "", fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, value)
+	var flow, media bool
+	for _, item := range strings.Split(value, ",") {
+		switch strings.TrimSpace(item) {
+		case "flow":
+			if flow {
+				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
+			}
+			flow = true
+		case "media":
+			if media {
+				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
+			}
+			media = true
+		default:
+			return "", fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, item)
+		}
+	}
+	if flow && media {
+		return "flow,media", nil
+	}
+	if media {
+		return "media", nil
+	}
+	return "flow", nil
 }
