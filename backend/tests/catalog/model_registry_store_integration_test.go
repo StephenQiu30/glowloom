@@ -10,7 +10,9 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/paramvalidation"
 	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
+	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
@@ -59,31 +61,40 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	if err := store.CreateModelForAdmin(ctx, actor.ID, actor.OrgID, model); err != nil {
 		t.Fatal(err)
 	}
-	version1 := validModelVersion(model.ID)
-	version1.CreateBy = actor.ID
-	if err := store.AppendModelVersionForAdmin(ctx, actor.ID, actor.OrgID, version1, 2); !errors.Is(err, domain.ErrModelRevisionConflict) {
+	validator, err := paramvalidation.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	publish := catalogapp.NewPublishModelVersionCommand(store, validator, time.Now)
+	version1 := validPublishModelVersionInput(model.ID)
+	version1.ExpectedRevision = 2
+	if _, err := publish.Execute(ctx, actor, version1); !errors.Is(err, domain.ErrModelRevisionConflict) {
 		t.Fatalf("stale model revision accepted: %v", err)
 	}
-	if err := store.AppendModelVersionForAdmin(ctx, actor.ID, actor.OrgID, version1, 1); err != nil {
+	version1.ExpectedRevision = 1
+	published1, err := publish.Execute(ctx, actor, version1)
+	if err != nil {
 		t.Fatalf("publish first model version: %v", err)
 	}
-	if err := store.AppendModelVersionForAdmin(ctx, actor.ID, actor.OrgID, version1, 2); !errors.Is(err, pgcatalog.ErrModelVersionConflict) {
+	version1.ExpectedRevision = 2
+	if _, err := publish.Execute(ctx, actor, version1); !errors.Is(err, pgcatalog.ErrModelVersionConflict) {
 		t.Fatalf("duplicate model version accepted: %v", err)
 	}
-	version2 := validModelVersion(model.ID)
-	version2.VersionNo, version2.ProviderModelID, version2.CreateBy = 2, "seedance-2-updated", actor.ID
+	version2 := validPublishModelVersionInput(model.ID)
+	version2.ExpectedRevision, version2.VersionNo, version2.ProviderModelID = 2, 2, "seedance-2-updated"
 	unsupported := version2
 	unsupported.Modes = []string{"audio2video"}
-	if err := store.AppendModelVersionForAdmin(ctx, actor.ID, actor.OrgID, unsupported, 2); !errors.Is(err, domain.ErrInvalidModelVersion) {
+	if _, err := publish.Execute(ctx, actor, unsupported); !errors.Is(err, domain.ErrInvalidModelVersion) {
 		t.Fatalf("unsupported capability mode accepted: %v", err)
 	}
-	if err := store.AppendModelVersionForAdmin(ctx, actor.ID, actor.OrgID, version2, 2); err != nil {
+	published2, err := publish.Execute(ctx, actor, version2)
+	if err != nil {
 		t.Fatalf("publish second model version: %v", err)
 	}
 	var firstProviderModelID string
 	if err := conn.DB.WithContext(ctx).Raw(`
 		SELECT provider_model_id FROM catalog.model_profile_version WHERE id = ?::uuid
-	`, version1.ID.String()).Scan(&firstProviderModelID).Error; err != nil || firstProviderModelID != version1.ProviderModelID {
+	`, published1.ID.String()).Scan(&firstProviderModelID).Error; err != nil || firstProviderModelID != version1.ProviderModelID {
 		t.Fatalf("historical model version changed to %q: %v", firstProviderModelID, err)
 	}
 	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 3); !errors.Is(err, domain.ErrModelNotPublishable) {
@@ -116,7 +127,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		t.Fatalf("activate model with version and price: %v", err)
 	}
 	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, model.ID)
-	if err != nil || loaded.Status != domain.ModelActive || loaded.CurrentVersionID != version2.ID || loaded.Revision != 6 {
+	if err != nil || loaded.Status != domain.ModelActive || loaded.CurrentVersionID != published2.ID || loaded.Revision != 6 {
 		t.Fatalf("loaded model %+v: %v", loaded, err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`

@@ -104,6 +104,23 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 	if publishedAuditCount != 1 {
 		t.Fatalf("first publication audits: %d", publishedAuditCount)
 	}
+	invalidInput := validPublishModelVersionInput(registered.ID)
+	invalidInput.ExpectedRevision, invalidInput.VersionNo = 2, 2
+	invalidInput.ParamSchema = json.RawMessage(`[{"field":"seed","type":"integer","component":"input"}]`)
+	if _, err := command.Execute(ctx, actor, invalidInput); !errors.Is(err, paramvalidation.ErrInvalidConfiguration) {
+		t.Fatalf("invalid parameter schema published: %v", err)
+	}
+	var rejectedVersionCount, rejectedEventCount int
+	if err := conn.DB.WithContext(ctx).Raw(`
+		SELECT count(*) FROM catalog.model_profile_version WHERE model_profile_id = ?::uuid
+	`, registered.ID.String()).Scan(&rejectedVersionCount).Error; err != nil || rejectedVersionCount != 1 {
+		t.Fatalf("invalid schema left %d versions: %v", rejectedVersionCount, err)
+	}
+	if err := conn.DB.WithContext(ctx).Raw(`
+		SELECT count(*) FROM infra.outbox WHERE partition_key = ?
+	`, actor.OrgID.String()).Scan(&rejectedEventCount).Error; err != nil || rejectedEventCount != 2 {
+		t.Fatalf("invalid schema left %d audits: %v", rejectedEventCount, err)
+	}
 
 	secondInput := validPublishModelVersionInput(registered.ID)
 	secondInput.VersionNo = 2
