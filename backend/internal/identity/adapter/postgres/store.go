@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	// ErrInvalidUser means a new account is missing a required identity or hash.
+	// ErrInvalidUser means an account mutation has invalid identity or state data.
 	ErrInvalidUser = errors.New("invalid new user")
 	// ErrLoginExists means the organization already has this case-insensitive login.
 	ErrLoginExists = errors.New("login name already exists")

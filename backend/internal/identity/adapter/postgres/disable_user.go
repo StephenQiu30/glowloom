@@ -24,23 +24,8 @@ func (s *Store) DisableWithEvents(ctx context.Context, actorID, orgID, targetID 
 		if err := lockAccountChangeOrg(tx, orgID); err != nil {
 			return err
 		}
-		var actor struct {
-			Role               string
-			Status             string
-			MustChangePassword bool
-		}
-		result := tx.Raw(`
-			SELECT role, status, must_change_password
-			FROM identity."user"
-			WHERE org_id = ?::uuid AND id = ?::uuid AND NOT is_delete
-			FOR SHARE
-		`, orgID.String(), actorID.String()).Scan(&actor)
-		if result.Error != nil {
-			return fmt.Errorf("read account administrator: %w", result.Error)
-		}
-		if result.RowsAffected != 1 || actor.Role != string(domain.RoleAdmin) ||
-			actor.Status != string(domain.StatusActive) || actor.MustChangePassword {
-			return application.ErrForbidden
+		if err := requireCurrentAdmin(tx, orgID, actorID); err != nil {
+			return err
 		}
 		var err error
 		disabled, err = disableUserInTx(tx, orgID, targetID, expectedRevision)

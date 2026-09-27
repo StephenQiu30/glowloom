@@ -4,6 +4,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -27,6 +28,10 @@ var (
 	ErrAccountLocked = errors.New("account is temporarily locked")
 	// ErrAccountDisabled means the account is unavailable for login or another disable.
 	ErrAccountDisabled = errors.New("account is disabled")
+	// ErrAccountActive means an account cannot be enabled again.
+	ErrAccountActive = errors.New("account is already active")
+	// ErrInvalidAccountState means a mutation would overflow a persisted counter.
+	ErrInvalidAccountState = errors.New("invalid account state")
 	// ErrLastActiveAdmin means disabling this account would leave no active administrator.
 	ErrLastActiveAdmin = errors.New("cannot disable the last active administrator")
 	// ErrUserNotFound means an account is unavailable in the requested organization.
@@ -165,6 +170,45 @@ func (u *User) Disable(activeAdmins int) error {
 		return ErrLastActiveAdmin
 	}
 	u.Status = StatusDisabled
+	u.SessionEpoch++
+	u.Revision++
+	return nil
+}
+
+// Enable restores an account and invalidates every session from before disable.
+func (u *User) Enable() error {
+	if u.Status == StatusActive {
+		return ErrAccountActive
+	}
+	if u.Status != StatusDisabled || u.SessionEpoch < 1 || u.SessionEpoch >= math.MaxInt32 ||
+		u.Revision < 1 || u.Revision >= math.MaxInt32 {
+		return ErrInvalidAccountState
+	}
+	u.Status = StatusActive
+	u.FailedLoginCount = 0
+	u.LockedUntil = time.Time{}
+	u.SessionEpoch++
+	u.Revision++
+	return nil
+}
+
+// ResetPassword replaces a credential, requires a first-login change, and
+// invalidates every existing session. Disabled accounts remain disabled.
+func (u *User) ResetPassword(password string) error {
+	if (u.Status != StatusActive && u.Status != StatusDisabled) ||
+		!ValidPasswordHash(u.PasswordHash) || u.SessionEpoch < 1 ||
+		u.SessionEpoch >= math.MaxInt32 || u.Revision < 1 || u.Revision >= math.MaxInt32 {
+		return ErrInvalidAccountState
+	}
+	hash, err := HashPassword(password, u.PasswordHash)
+	if err != nil {
+		return err
+	}
+	u.PasswordHash = hash
+	u.MustChangePassword = true
+	u.PasswordChangedAt = time.Time{}
+	u.FailedLoginCount = 0
+	u.LockedUntil = time.Time{}
 	u.SessionEpoch++
 	u.Revision++
 	return nil

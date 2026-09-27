@@ -20,23 +20,8 @@ func (s *Store) CreateWithEvents(ctx context.Context, actorID uuid.UUID, user do
 	}
 	var created domain.User
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var actor struct {
-			Role               string
-			Status             string
-			MustChangePassword bool
-		}
-		result := tx.Raw(`
-			SELECT role, status, must_change_password
-			FROM identity."user"
-			WHERE org_id = ?::uuid AND id = ?::uuid AND NOT is_delete
-			FOR SHARE
-		`, user.OrgID.String(), actorID.String()).Scan(&actor)
-		if result.Error != nil {
-			return fmt.Errorf("read account administrator: %w", result.Error)
-		}
-		if result.RowsAffected != 1 || actor.Role != string(domain.RoleAdmin) ||
-			actor.Status != string(domain.StatusActive) || actor.MustChangePassword {
-			return application.ErrForbidden
+		if err := requireCurrentAdmin(tx, user.OrgID, actorID); err != nil {
+			return err
 		}
 		transactionStore := NewStore(tx)
 		if err := transactionStore.Create(ctx, user); err != nil {
