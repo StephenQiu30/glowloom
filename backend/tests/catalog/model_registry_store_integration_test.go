@@ -86,7 +86,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	`, version1.ID.String()).Scan(&firstProviderModelID).Error; err != nil || firstProviderModelID != version1.ProviderModelID {
 		t.Fatalf("historical model version changed to %q: %v", firstProviderModelID, err)
 	}
-	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 3, time.Now()); !errors.Is(err, domain.ErrModelNotPublishable) {
+	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 3); !errors.Is(err, domain.ErrModelNotPublishable) {
 		t.Fatalf("model without price activated: %v", err)
 	}
 	price1 := validPriceVersion(model.ID)
@@ -103,15 +103,16 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		t.Fatalf("duplicate price version accepted: %v", err)
 	}
 	var originalPrice struct {
-		Currency string
-		Rule     string
+		Currency   string
+		BaseMicros string
 	}
 	if err := conn.DB.WithContext(ctx).Raw(`
-		SELECT currency, rule::text AS rule FROM catalog.price_rule_version WHERE id = ?::uuid
-	`, price1.ID.String()).Scan(&originalPrice).Error; err != nil || originalPrice.Currency != "CNY" || originalPrice.Rule != string(price1.Rule) {
+		SELECT currency, rule->>'base_micros' AS base_micros
+		FROM catalog.price_rule_version WHERE id = ?::uuid
+	`, price1.ID.String()).Scan(&originalPrice).Error; err != nil || originalPrice.Currency != "CNY" || originalPrice.BaseMicros != "1000" {
 		t.Fatalf("historical price changed: %+v, %v", originalPrice, err)
 	}
-	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 5, time.Now()); err != nil {
+	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 5); err != nil {
 		t.Fatalf("activate model with version and price: %v", err)
 	}
 	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, model.ID)
@@ -123,7 +124,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelDisabled, 6, time.Now()); !errors.Is(err, identityapp.ErrForbidden) {
+	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelDisabled, 6); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator changed model: %v", err)
 	}
 	if _, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, model.ID); !errors.Is(err, identityapp.ErrForbidden) {
