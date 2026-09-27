@@ -159,6 +159,178 @@ func TestAuditEnsurePartitionsMovesDefaultRowsWithoutChangingRecords(t *testing.
 	assertAuditRecordUnchanged(t, tx, rows[2].id, rows[2].created)
 }
 
+func TestAuditEnsurePartitionsSerializesConcurrentMaintainers(t *testing.T) {
+	dsn := os.Getenv("LV_TEST_AUDIT_PARTITION_DB_DSN")
+	if dsn == "" {
+		t.Skip("set LV_TEST_AUDIT_PARTITION_DB_DSN to a new disposable PostgreSQL database")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	conn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
+	if err != nil {
+		t.Fatalf("open isolated PostgreSQL database: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	var databaseName string
+	if err := conn.DB.WithContext(ctx).Raw("SELECT current_database()").Scan(&databaseName).Error; err != nil {
+		t.Fatalf("identify isolated database: %v", err)
+	}
+	if databaseName == "postgres" || databaseName == "template0" || databaseName == "template1" {
+		t.Fatal("LV_TEST_AUDIT_PARTITION_DB_DSN must not point to a PostgreSQL maintenance database")
+	}
+
+	// This test commits DDL so two other connections can maintain the same
+	// partitions. Refuse a database that already holds audit or other user data.
+	var existing struct {
+		AuditSchema bool
+		UserTables  bool
+	}
+	if err := conn.DB.WithContext(ctx).Raw(`
+		SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'audit') AS audit_schema,
+		       EXISTS (
+		         SELECT 1 FROM pg_class AS c
+		         JOIN pg_namespace AS n ON n.oid = c.relnamespace
+		         WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
+		           AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+		       ) AS user_tables
+	`).Scan(&existing).Error; err != nil {
+		t.Fatalf("check isolated database is empty: %v", err)
+	}
+	if existing.AuditSchema || existing.UserTables {
+		t.Fatal("LV_TEST_AUDIT_PARTITION_DB_DSN must point to a new disposable database without audit schema or user tables")
+	}
+	up, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202609270930_create_audit_log.up.sql"))
+	if err != nil {
+		t.Fatalf("read audit up migration: %v", err)
+	}
+	down, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202609270930_create_audit_log.down.sql"))
+	if err != nil {
+		t.Fatalf("read audit down migration: %v", err)
+	}
+	if err := conn.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Exec(string(up)).Error
+	}); err != nil {
+		t.Fatalf("apply committed audit migration: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanupCancel()
+		if err := conn.DB.WithContext(cleanupCtx).Exec(string(down)).Error; err != nil {
+			t.Errorf("remove audit objects created by concurrent partition test: %v", err)
+		}
+	})
+
+	firstConn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
+	if err != nil {
+		t.Fatalf("open first maintainer connection: %v", err)
+	}
+	t.Cleanup(func() { _ = firstConn.Close() })
+	secondConn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
+	if err != nil {
+		t.Fatalf("open second maintainer connection: %v", err)
+	}
+	t.Cleanup(func() { _ = secondConn.Close() })
+	firstStore := pgaudit.NewPartitionStore(firstConn.DB)
+	secondStore := pgaudit.NewPartitionStore(secondConn.DB)
+
+	now := time.Now().UTC()
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	maintenanceMonth := first.AddDate(0, 4, 0)
+	outsideMonth := first.AddDate(0, 8, 0)
+	maintenanceID, outsideID, orgID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	maintenanceTime := maintenanceMonth.Add(24 * time.Hour)
+	for _, row := range []struct {
+		id      string
+		created time.Time
+	}{
+		{maintenanceID, maintenanceTime},
+		{outsideID, outsideMonth.Add(24 * time.Hour)},
+	} {
+		if err := conn.DB.WithContext(ctx).Exec(`
+			INSERT INTO audit.audit_log (
+				id, org_id, actor_kind, action, object_type, object_id,
+				before, after, request_id, trace_id, ip, create_time
+			) VALUES (
+				?::uuid, ?::uuid, 'system', 'partition.checked', 'audit', ?,
+				'{"old":1}'::jsonb, '{"new":2}'::jsonb, 'req-partition', 'trace-partition',
+				'127.0.0.1'::inet, ?
+			)
+		`, row.id, orgID, row.id, row.created).Error; err != nil {
+			t.Fatalf("insert default record before concurrent maintenance: %v", err)
+		}
+		assertAuditPartition(t, conn.DB, row.id, "audit.audit_log_default")
+	}
+
+	blocker := conn.DB.WithContext(ctx).Begin()
+	if blocker.Error != nil {
+		t.Fatalf("begin blocking transaction: %v", blocker.Error)
+	}
+	defer func() { _ = blocker.Rollback().Error }()
+	if err := blocker.Exec("LOCK TABLE audit.audit_log IN ACCESS EXCLUSIVE MODE").Error; err != nil {
+		t.Fatalf("hold audit lock before both maintainers start: %v", err)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, store := range []*pgaudit.PartitionStore{firstStore, secondStore} {
+		go func(s *pgaudit.PartitionStore) {
+			<-start
+			results <- s.EnsurePartitions(ctx, maintenanceMonth)
+		}(store)
+	}
+	close(start)
+
+	// Two denied lock requests prove both independent connections reached the
+	// critical section before the blocker releases its table lock.
+	var waiters int64
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := conn.DB.WithContext(ctx).Raw(`
+			SELECT count(*) FROM pg_locks
+			WHERE relation = 'audit.audit_log'::regclass
+			  AND mode = 'AccessExclusiveLock' AND NOT granted
+		`).Scan(&waiters).Error; err != nil {
+			_ = blocker.Rollback().Error
+			t.Fatalf("observe audit lock waiters: %v", err)
+		}
+		if waiters == 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := blocker.Rollback().Error; err != nil {
+		t.Fatalf("release audit lock: %v", err)
+	}
+	for range 2 {
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Fatalf("concurrent audit partition maintenance: %v", err)
+			}
+		case <-ctx.Done():
+			t.Fatalf("concurrent audit partition maintenance timed out: %v", ctx.Err())
+		}
+	}
+	if waiters != 2 {
+		t.Fatalf("observed %d concurrent audit lock waiters, want 2", waiters)
+	}
+	assertAuditPartition(t, conn.DB, maintenanceID, "audit.audit_log_"+maintenanceMonth.Format("200601"))
+	assertAuditRecordUnchanged(t, conn.DB, maintenanceID, maintenanceTime)
+	assertAuditPartition(t, conn.DB, outsideID, "audit.audit_log_default")
+	if err := firstStore.EnsurePartitions(ctx, maintenanceMonth); err != nil {
+		t.Fatalf("repeat audit partition maintenance after concurrent calls: %v", err)
+	}
+
+	verify := conn.DB.WithContext(ctx).Begin()
+	if verify.Error != nil {
+		t.Fatalf("begin append-only verification: %v", verify.Error)
+	}
+	defer func() { _ = verify.Rollback().Error }()
+	assertAuditMutationRejected(t, verify, maintenanceID, "UPDATE")
+	assertAuditMutationRejected(t, verify, maintenanceID, "DELETE")
+	assertAuditMutationRejected(t, verify, outsideID, "UPDATE")
+	assertAuditMutationRejected(t, verify, outsideID, "DELETE")
+}
+
 func assertAuditPartition(t *testing.T, tx *gorm.DB, id, want string) {
 	t.Helper()
 	var partition string

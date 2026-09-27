@@ -12,7 +12,7 @@ import (
 
 func TestLoadFromDotEnvFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "local.env.example")
-	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_SESSION_IDLE_TTL=2h\nLV_SESSION_ABSOLUTE_TTL=48h\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=lanverse-staging\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_PARTITION_MAINTENANCE_DB_DSN=postgres://owner/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_SESSION_IDLE_TTL=2h\nLV_SESSION_ABSOLUTE_TTL=48h\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=lanverse-staging\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("LV_ENV_FILE", path)
@@ -22,8 +22,8 @@ func TestLoadFromDotEnvFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.WorkerHealthAddr != ":9012" || cfg.RelayHealthAddr != ":9013" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.SessionIdleTTL != 2*time.Hour || cfg.SessionAbsoluteTTL != 48*time.Hour || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "lanverse-staging" {
-		t.Errorf("Load() = %+v, want environment override and file values", cfg)
+	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.WorkerHealthAddr != ":9012" || cfg.RelayHealthAddr != ":9013" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.PartitionMaintenanceDBDSN != "postgres://owner/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.SessionIdleTTL != 2*time.Hour || cfg.SessionAbsoluteTTL != 48*time.Hour || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "lanverse-staging" {
+		t.Error("Load() did not apply the expected environment override and file values")
 	}
 }
 
