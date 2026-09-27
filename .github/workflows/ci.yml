@@ -92,6 +92,22 @@ jobs:
           LV_TEST_MEDIA_STORE_DB_DSN="$LV_TEST_DB_DSN" \
           LV_TEST_MEDIA_MIGRATION_DB_DSN='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_migration_test?sslmode=disable' \
           go test -race ./tests/media -count=1
+      - name: Prepare isolated restricted-login audit database
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE ROLE lanverse_runtime_test LOGIN INHERIT PASSWORD 'ci-only'"
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'GRANT lanverse_app TO lanverse_runtime_test'
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_audit_role_test'
+          for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
+            psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_audit_role_test?sslmode=disable' -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Verify audit contracts with a real restricted login
+        env:
+          LV_TEST_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_audit_role_test?sslmode=disable
+          LV_TEST_AUDIT_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_audit_role_test?sslmode=disable
+          LV_TEST_AUDIT_LOGIN_DB_DSN: postgres://lanverse_runtime_test:ci-only@127.0.0.1:5432/lanverse_audit_role_test?sslmode=disable
+          LV_TEST_KAFKA_BROKERS: 127.0.0.1:9092
+          LV_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+        run: go test -race ./tests/db ./tests/app -run '^TestAuditRestrictedLogin' -count=1 -v
       - run: govulncheck ./...
       - run: wire ./internal/app
       - run: goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go
