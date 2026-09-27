@@ -29,7 +29,7 @@ func workspaceMigrationDB(t *testing.T) (context.Context, *gorm.DB) {
 	return ctx, conn.DB.WithContext(ctx)
 }
 
-func insertWorkspaceOrganization(t *testing.T, ctx context.Context, database *gorm.DB) string {
+func insertWorkspaceOrganization(ctx context.Context, t *testing.T, database *gorm.DB) string {
 	t.Helper()
 	id := uuid.NewString()
 	if err := database.WithContext(ctx).Exec(`
@@ -40,7 +40,7 @@ func insertWorkspaceOrganization(t *testing.T, ctx context.Context, database *go
 	return id
 }
 
-func insertWorkspaceProject(t *testing.T, ctx context.Context, database *gorm.DB, orgID, aspectRatio, styleType string, styleSubtype any) string {
+func insertWorkspaceProject(ctx context.Context, t *testing.T, database *gorm.DB, orgID, aspectRatio, styleType string, styleSubtype any) string {
 	t.Helper()
 	id := uuid.NewString()
 	if err := database.WithContext(ctx).Exec(`
@@ -54,8 +54,8 @@ func insertWorkspaceProject(t *testing.T, ctx context.Context, database *gorm.DB
 
 func TestWorkspaceProjectMigrationEnforcesSpecification(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
-	orgID := insertWorkspaceOrganization(t, ctx, database)
-	projectID := insertWorkspaceProject(t, ctx, database, orgID, "9:16", "realistic", nil)
+	orgID := insertWorkspaceOrganization(ctx, t, database)
+	projectID := insertWorkspaceProject(ctx, t, database, orgID, "9:16", "realistic", nil)
 
 	var defaults struct {
 		Resolution          string
@@ -99,7 +99,7 @@ func TestWorkspaceProjectMigrationEnforcesSpecification(t *testing.T) {
 		})
 	}
 
-	insertWorkspaceProject(t, ctx, database, orgID, "16:9", "stylized", "guofeng_xianxia")
+	insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "guofeng_xianxia")
 	for name, statement := range map[string]string{
 		"aspect ratio": `UPDATE workspace.project SET aspect_ratio = '16:9' WHERE id = ?::uuid`,
 		"style type":   `UPDATE workspace.project SET style_type = 'stylized', style_subtype = 'anime_jp' WHERE id = ?::uuid`,
@@ -139,8 +139,8 @@ func TestWorkspaceProjectMigrationEnforcesSpecification(t *testing.T) {
 
 func TestWorkspaceBudgetMigrationEnforcesOneBalancedBudgetPerProject(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
-	orgID := insertWorkspaceOrganization(t, ctx, database)
-	projectID := insertWorkspaceProject(t, ctx, database, orgID, "9:16", "realistic", nil)
+	orgID := insertWorkspaceOrganization(ctx, t, database)
+	projectID := insertWorkspaceProject(ctx, t, database, orgID, "9:16", "realistic", nil)
 	budgetID := uuid.NewString()
 	if err := database.Exec(`
 		INSERT INTO billing.budget (id, project_id, limit_micros)
@@ -197,8 +197,8 @@ func TestWorkspaceBudgetMigrationEnforcesOneBalancedBudgetPerProject(t *testing.
 
 func TestWorkspaceStylePresetMigrationScopesOrganizationAndProject(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
-	orgID := insertWorkspaceOrganization(t, ctx, database)
-	projectID := insertWorkspaceProject(t, ctx, database, orgID, "16:9", "stylized", "anime_jp")
+	orgID := insertWorkspaceOrganization(ctx, t, database)
+	projectID := insertWorkspaceProject(ctx, t, database, orgID, "16:9", "stylized", "anime_jp")
 	var projectPresetID string
 	for name, input := range map[string]struct {
 		orgID        string
