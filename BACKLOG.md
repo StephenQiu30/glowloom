@@ -315,7 +315,7 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | E-10-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`workspace.project`、`workspace.style_preset`；实现领域对象、状态机与仓储（`billing.budget`：仓储查询强制带 `project_id`；`workspace.project`：按当前用户组织授权并以项目 ID 过滤，MVP 无项目成员；`workspace.style_preset`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤）。详见 [DES-13 §2](docs/design/13-项目管理.md#2-数据) | `backend/db/migrations/`、`backend/internal/workspace/domain/`、`backend/internal/workspace/adapter/postgres/` | 已完成（三表迁移、领域状态机、项目与零预算原子创建、组织授权仓储已验证；接口由 E-10-02 实现） | `2705c9f9`、`afb9b55c` |
-| E-10-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects、GET /api/projects/{pid}/overview、DELETE /api/projects/{pid}；swag 注解生成 OpenAPI。详见 [DES-13 §3](docs/design/13-项目管理.md#3-接口) | `backend/internal/workspace/application/`、`backend/internal/workspace/adapter/http/`、`backend/docs/` | 进行中（内部创建项目与零预算、审计及变更事件原子提交已验证；公共接口、持久幂等、概览和生命周期命令待实施） | — |
+| E-10-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects、GET /api/projects/{pid}/overview、DELETE /api/projects/{pid}；swag 注解生成 OpenAPI。详见 [DES-13 §3](docs/design/13-项目管理.md#3-接口) | `backend/internal/workspace/application/`、`backend/internal/workspace/adapter/http/`、`backend/docs/` | 进行中（内部创建项目的原子事务及组织授权列表查询已验证；公共接口、持久幂等、概览和生命周期命令待实施） | — |
 | E-10-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `project-purge`；事件 `workspace.project_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：- `project-purge`（每日）：对 `purge_after < now()` 的项目执行分批清理工作流（删除对象存储前缀、删除各 schema 数据），可断点续跑。 - 概览物化：`realtime` 之外… 详见 [DES-13 §4](docs/design/13-项目管理.md#4-异步与工作流) | `backend/internal/workspace/adapter/workflow/`、`backend/internal/workspace/adapter/event/` | 待办 | — |
 | E-10-04 | 前端 | 项目列表（卡片 / 表格切换、状态筛选、回收站视图）；新建项目对话框（风格类型切换后显示子风格与预设缩略图）；项目概览矩阵（单元格点击跳转）；设置页（画幅与风格只读并说明原因）。 详见 [DES-13 §6](docs/design/13-项目管理.md#6-界面) | `frontend/src/features/project/` | 待办 | — |
 | E-10-05 | 测试与验收 | 单元：概览阶段计算；生命周期状态机。 集成：清理工作流中断后续跑；触发器拒绝修改画幅；验收用例 TC-10-01～06（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
@@ -325,6 +325,8 @@
 **E-10-01 仓储与状态机验收（2026-09-27）**：项目与默认 0 预算在同一 PostgreSQL 事务提交，预算唯一键冲突时项目回滚；预设选择核对组织、项目范围与风格，读取预设时返回提示词、负面提示词与参考素材 ID。项目、预算和预设仓储在同一事务重查账号及组织可用状态；预算查询必须带项目 ID 并联查项目归属。领域状态机覆盖归档只读、进行中任务阻止归档/删除、软删除保留原状态及 30 天内恢复。先以缺失状态方法、仓储和预设内容字段取得 Red；隔离本机 PostgreSQL 工作区 Race 集成测试、全仓库 Go Race、`go vet`、`golangci-lint` 与格式检查通过，`govulncheck` 无可达漏洞。公开项目接口、审计与 Outbox、在途任务查询及状态机持久化由 E-10-02 实现；TC-10-01～06 尚未计完成。
 
 **E-10-02 内部创建项目命令切片（2026-09-27）**：命令校验制作者或管理员、项目规格及请求 ID，生成固定 1080p、默认关闭境外模型的新项目；仓储在单事务复核当前账号、组织和预设，提交项目、默认 0 预算、`project.created` 审计与 `workspace.project_changed.v1` Outbox。审计只含已声明的安全规格，两个事件按项目 ID 分区；旧的无审计创建入口已移除。隔离本机 PostgreSQL Race 测试覆盖成功、跨组织 / 撤权 / 无效预设拒绝、审计写入失败整体回滚和事件篡改拒绝。公共 `POST /api/projects`、持久幂等、概览、生命周期、实时消费者及 TC-10-01～06 尚未验收；DES-03 IF4～IF6 未确认前不注册公开路由。
+
+**E-10-02 内部项目列表查询切片（2026-09-27）**：查询按当前账号与组织授权，默认排除已删除项目；状态与回收站筛选、名称字面搜索及 `update_time DESC, id DESC` keyset 分页均由隔离本机 PostgreSQL Race 测试验证，包含跨组织不可见、撤权拒绝和同时间戳翻页。公开列表路由、游标编码及浏览器验收仍待 DES-03 IF4～IF6 / M1-06，生命周期命令的进行中任务持久化检查仍待任务数据层落地。
 
 #### E-11 项目预算
 
