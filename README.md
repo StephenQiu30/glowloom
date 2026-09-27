@@ -77,7 +77,15 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 Agent Activity Worker 在另一终端运行：`cd agent && uv run --frozen --env-file ../.env python -m app.main_worker`。它连接 `.env` 中本机已运行的 Redis 与 Temporal，监听模拟供应商 `agent.mock` 队列和模拟 Skill `agent` 队列；本地开发不启动 Compose。
 
-Go API 启动时必须通过根目录 `.env` 中的 `LV_DB_DSN` 连接可用的本机业务库，并配置 `LV_REDIS_URL` 与 `LV_TEMPORAL_ADDR`、`LV_TEMPORAL_NAMESPACE`；`.env.example` 的数据库密码只是占位值，不能直接用于连接。`/healthz` 检查进程存活，`/readyz` 检查 PostgreSQL、Redis、Temporal 与命名空间；Redis 或 Temporal 暂不可达时 API 仍运行，就绪探针返回 503。本机首次使用 `lanverse-local` 命名空间时需在已运行的 Temporal 中创建，步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。`LV_KAFKA_BROKERS` 已供 Kafka 客户端连通性测试使用，事件投递与消费在 M1-08 实现；其他中间件客户端仍在 M1-05 逐项接入。
+Go `flow` Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。Worker 当前注册基础设施维护 Workflow；Relay 投递 Outbox，消费 `operation.status_changed.v1` 生成 Redis 项目实时事件，并消费 `audit.recorded.v1` 写入审计表。审计消费者目前只允许已登记的账号动作；管理员创建和禁用账号、密码登录与登出的内部命令已生产相应审计 Outbox，其余业务命令待接入。项目 SSE 处理器已实现，但公开 API 路由仍需身份与项目成员鉴权后挂载；`media` 队列和其他消费者尚未接入。
+
+Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_RELAY_HEALTH_ADDR` 提供 `GET /healthz`（样例端口 8081、8082）；该接口只表示进程正在运行，任务处理状况仍需检查 Temporal Worker 与 Outbox 积压。
+
+本机需要合并运行现有 Go 角色时可执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=all`，它启动 API、`flow` Worker 和 Relay；任一角色失败时会停止并等待其余角色退出。`--role=all` 当前只包含已实现的 `flow` 队列。
+
+数据库迁移完成并部署 `flow` Worker 后，执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse temporal setup`，为现有命名空间安装两项清理 Schedule；不会安装尚未实现完整依赖的 `partition-maintain`。
+
+Go API 启动时必须通过根目录 `.env` 中的 `LV_DB_DSN` 连接可用的本机业务库，并配置 `LV_REDIS_URL` 与 `LV_TEMPORAL_ADDR`、`LV_TEMPORAL_NAMESPACE`；`.env.example` 的数据库密码只是占位值，不能直接用于连接。`/healthz` 检查进程存活，`/readyz` 检查 PostgreSQL、Redis、Temporal、命名空间与对象存储；依赖暂不可达时 API 仍运行，就绪探针返回 503。本机首次使用 `lanverse-local` 命名空间时需在已运行的 Temporal 中创建，步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。Relay 需要 `LV_KAFKA_BROKERS`、`LV_REDIS_URL` 和已应用的 Outbox、processed-event、audit-log 迁移；账号创建命令还需 identity-user 迁移。部署方须预先创建 `lanverse.operation.status_changed.v1`、`lanverse.audit.recorded.v1` 与 `lanverse.identity.user_changed.v1` 三个 Kafka 主题。
 
 ```bash
 pg_isready -h 127.0.0.1 -p 5432

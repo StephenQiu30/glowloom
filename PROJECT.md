@@ -88,6 +88,7 @@ backend/
         workflow/                # 本上下文的 Temporal 工作流与 Go Activity
         event/                   # 本上下文的 Kafka 消费者（按需）
     platform/                    # config(Viper) log(Zap) db(GORM) redis kafka minio temporal ffmpeg otel auth
+  tests/<模块>/                  # 按模块集中存放外部测试包与集成测试
   db/migrations/                 # golang-migrate 版本化 SQL（唯一 Schema 来源）
   docs/                          # swag 从注解生成的 Swagger 规范，禁止手改；由 backend-api 在线提供
 ```
@@ -108,7 +109,7 @@ backend/
 14. 依赖由 Wire 在组合根注入（`wire.go` 声明 Provider Set，`wire_gen.go` 为生成物，禁止手改，CI 校验生成一致）；接口由消费方按需定义；不使用 `Ixxx` / `Impl`，不建 `utils`、`common`。
 15. `context.Context` 沿调用链传递；错误用 `%w` 包装并保留可判定的错误链；goroutine 必须有所有者、取消与等待。
 16. 日志统一用 Zap（不混用标准库 `log` / `slog`）的结构化字段（`trace_id`、`project_id`、`operation_id`），不记录凭据与剧本全文。
-17. 文件名 `snake_case.go`；单元测试就近 `*_test.go`；集成测试放 `backend/tests/`，用 testcontainers 启动 PostgreSQL、Redis、Kafka、MinIO，工作流用 Temporal testsuite 与回放测试。
+17. 文件名 `snake_case.go`；Go 测试集中放在 `backend/tests/<模块>/`，按被测模块分目录并使用外部测试包（`<package>_test`）；生产源码目录不存放 `*_test.go`。集成测试放在对应模块目录中并使用 testcontainers 启动 PostgreSQL、Redis、Kafka、MinIO，工作流用 Temporal testsuite 与回放测试。
 
 ## 5. Agent 服务
 
