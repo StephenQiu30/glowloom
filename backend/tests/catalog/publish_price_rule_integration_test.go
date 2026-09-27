@@ -110,6 +110,13 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	if err != nil || published1.VersionNo != 1 || published1.Revision != 3 || published1.ID == uuid.Nil {
 		t.Fatalf("first price %+v: %v", published1, err)
 	}
+	var storedEffectiveFrom time.Time
+	if err := conn.DB.WithContext(ctx).Raw(`
+		SELECT effective_from FROM catalog.price_rule_version WHERE id = ?::uuid
+	`, published1.ID.String()).Scan(&storedEffectiveFrom).Error; err != nil ||
+		!storedEffectiveFrom.Equal(first.EffectiveFrom.Round(time.Microsecond)) {
+		t.Fatalf("stored effective time %s: %v", storedEffectiveFrom, err)
+	}
 	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, registered.ID, domain.ModelActive, 3); !errors.Is(err, domain.ErrModelNotPublishable) {
 		t.Fatalf("future-only price activated model: %v", err)
 	}
@@ -118,6 +125,16 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	effective.Currency, effective.FXRateToCNY = "USD", "7.123456"
 	effective.EffectiveFrom = time.Now().Add(-time.Minute)
 	effective.RequestID = uuid.NewString()
+	stale := effective
+	stale.ExpectedRevision = 2
+	if _, err := publishPrice.Execute(ctx, actor, stale); !errors.Is(err, domain.ErrModelRevisionConflict) {
+		t.Fatalf("stale price revision accepted: %v", err)
+	}
+	direct := validPriceVersion(registered.ID)
+	direct.VersionNo, direct.CreateBy = 2, actor.ID
+	if _, err := store.PublishPriceRuleWithAudit(ctx, actor.ID, actor.OrgID, direct, 3, identityapp.OutboxEvent{}); !errors.Is(err, catalogapp.ErrInvalidPublishPriceRule) {
+		t.Fatalf("price without audit accepted: %v", err)
+	}
 	if _, err := publishPrice.Execute(ctx, actor, effective); err != nil {
 		t.Fatalf("effective price publication: %v", err)
 	}
