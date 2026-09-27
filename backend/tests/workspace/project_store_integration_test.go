@@ -2,8 +2,11 @@ package workspace_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -37,6 +40,50 @@ func projectForActor(actor identityapp.Principal) domain.Project {
 		StyleType: "stylized", StyleSubtype: "guofeng_xianxia",
 		Resolution: "1080p", Status: "active", Revision: 1,
 	}
+}
+
+func createWorkspaceProjectInStore(ctx context.Context, store *pgworkspace.Store, actor identityapp.Principal, project domain.Project) error {
+	changedID, auditID := uuid.New(), uuid.New()
+	occurredAt := time.Now().UTC()
+	changed, err := json.Marshal(map[string]any{
+		"event_id": changedID, "event_type": "lanverse.workspace.project_changed.v1",
+		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": project.ID,
+		"actor":     map[string]any{"kind": "user", "id": actor.ID},
+		"aggregate": map[string]any{"type": "project", "id": project.ID, "revision": project.Revision},
+		"data":      map[string]any{"change": "created"},
+	})
+	if err != nil {
+		return fmt.Errorf("encode project change fixture: %w", err)
+	}
+	after := map[string]any{
+		"aspect_ratio": project.AspectRatio, "style_type": project.StyleType,
+		"status": project.Status, "revision": project.Revision,
+	}
+	if project.StyleSubtype != "" {
+		after["style_subtype"] = project.StyleSubtype
+	}
+	if project.StylePresetID != uuid.Nil {
+		after["style_preset_id"] = project.StylePresetID
+	}
+	audit, err := json.Marshal(map[string]any{
+		"event_id": auditID, "event_type": "lanverse.audit.recorded.v1",
+		"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": project.ID,
+		"actor":     map[string]any{"kind": "user", "id": actor.ID},
+		"aggregate": map[string]any{"type": "audit", "id": auditID},
+		"data": map[string]any{
+			"action": "project.created", "object": map[string]any{"type": "project", "id": project.ID},
+			"request_id": uuid.NewString(), "after": after,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("encode project audit fixture: %w", err)
+	}
+	key := project.ID.String()
+	_, err = store.CreateProjectWithEvents(ctx, actor, project, []identityapp.OutboxEvent{
+		{ID: changedID, Topic: "lanverse.workspace.project_changed.v1", PartitionKey: key, Payload: changed},
+		{ID: auditID, Topic: "lanverse.audit.recorded.v1", PartitionKey: key, Payload: audit},
+	})
+	return err
 }
 
 func insertStylePreset(ctx context.Context, t *testing.T, database *gorm.DB, orgID, projectID string, deleted bool) uuid.UUID {
@@ -89,7 +136,7 @@ func TestWorkspaceStoreCreateProjectAndZeroBudgetAtomically(t *testing.T) {
 
 	project := projectForActor(actor)
 	project.StylePresetID = insertStylePreset(ctx, t, database, orgID, "", false)
-	if err := store.CreateProject(ctx, actor, project); err != nil {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, project); err != nil {
 		t.Fatalf("create project with organization preset: %v", err)
 	}
 	projectCount, budgetCount := projectAndBudgetCount(ctx, t, database, project.ID)
@@ -135,7 +182,7 @@ func TestWorkspaceStoreCreateProjectAndZeroBudgetAtomically(t *testing.T) {
 	`, uuid.NewString(), rolledBack.ID.String()).Error; err != nil {
 		t.Fatalf("seed colliding budget: %v", err)
 	}
-	if err := store.CreateProject(ctx, actor, rolledBack); err == nil {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, rolledBack); err == nil {
 		t.Fatal("budget collision accepted during project creation")
 	}
 	projectCount, budgetCount = projectAndBudgetCount(ctx, t, database, rolledBack.ID)
@@ -165,7 +212,7 @@ func TestWorkspaceStoreRejectsUnusablePresetWithoutPartialProject(t *testing.T) 
 		t.Run(test.name, func(t *testing.T) {
 			project := projectForActor(actor)
 			project.StylePresetID = test.id
-			if err := store.CreateProject(ctx, actor, project); err == nil {
+			if err := createWorkspaceProjectInStore(ctx, store, actor, project); err == nil {
 				t.Fatal("unusable style preset accepted")
 			}
 			projectCount, budgetCount := projectAndBudgetCount(ctx, t, database, project.ID)
@@ -176,7 +223,7 @@ func TestWorkspaceStoreRejectsUnusablePresetWithoutPartialProject(t *testing.T) 
 	}
 	invalid := projectForActor(actor)
 	invalid.Name = " "
-	if err := store.CreateProject(ctx, actor, invalid); !errors.Is(err, domain.ErrInvalidProject) {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, invalid); !errors.Is(err, domain.ErrInvalidProject) {
 		t.Fatalf("invalid project result = %v, want ErrInvalidProject", err)
 	}
 	projectCount, budgetCount := projectAndBudgetCount(ctx, t, database, invalid.ID)
@@ -193,7 +240,7 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 	otherActor := insertWorkspaceActor(ctx, t, database, otherOrgID)
 	store := pgworkspace.NewStore(database)
 	project := projectForActor(actor)
-	if err := store.CreateProject(ctx, actor, project); err != nil {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, project); err != nil {
 		t.Fatalf("create actor project: %v", err)
 	}
 	loaded, err := store.FindProject(ctx, actor, project.ID)
@@ -225,7 +272,7 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 		t.Fatal("actor with forged organization read budget")
 	}
 	forgedProject := projectForActor(forged)
-	if err := store.CreateProject(ctx, forged, forgedProject); err == nil {
+	if err := createWorkspaceProjectInStore(ctx, store, forged, forgedProject); err == nil {
 		t.Fatal("actor with forged organization created project")
 	}
 	projectCount, budgetCount := projectAndBudgetCount(ctx, t, database, forgedProject.ID)
@@ -281,7 +328,7 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 		t.Fatal("disabled organization read budget")
 	}
 	newProject := projectForActor(actor)
-	if err := store.CreateProject(ctx, actor, newProject); err == nil {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, newProject); err == nil {
 		t.Fatal("disabled organization created project")
 	}
 	projectCount, budgetCount = projectAndBudgetCount(ctx, t, database, newProject.ID)
@@ -296,7 +343,7 @@ func TestWorkspaceStoreReadsOnlyCurrentActorsOrganization(t *testing.T) {
 	if _, err := store.FindProject(ctx, actor, project.ID); err == nil {
 		t.Fatal("deleted organization read project")
 	}
-	if err := store.CreateProject(ctx, actor, projectForActor(actor)); err == nil {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, projectForActor(actor)); err == nil {
 		t.Fatal("deleted organization created project")
 	}
 }
@@ -308,11 +355,11 @@ func TestWorkspaceStoreListsOnlyVisibleStylePresets(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, database, orgID)
 	store := pgworkspace.NewStore(database)
 	project := projectForActor(actor)
-	if err := store.CreateProject(ctx, actor, project); err != nil {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, project); err != nil {
 		t.Fatalf("create project: %v", err)
 	}
 	otherProject := projectForActor(actor)
-	if err := store.CreateProject(ctx, actor, otherProject); err != nil {
+	if err := createWorkspaceProjectInStore(ctx, store, actor, otherProject); err != nil {
 		t.Fatalf("create other project: %v", err)
 	}
 	orgPresetID := insertStylePreset(ctx, t, database, orgID, "", false)
