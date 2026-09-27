@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -31,6 +32,10 @@ func TestPriceRuleValidatorChecksBillableRuleShape(t *testing.T) {
 		{"missing base", domain.PricePerImage, `{}`, false},
 		{"negative base", domain.PricePerImage, `{"base_micros":-1}`, false},
 		{"fractional base", domain.PricePerImage, `{"base_micros":1.5}`, false},
+		{"decimal spelling of integer", domain.PricePerImage, `{"base_micros":1.0}`, false},
+		{"exponent spelling of integer", domain.PricePerImage, `{"base_micros":1e3}`, false},
+		{"huge zero exponent", domain.PricePerImage, `{"base_micros":0e` + strings.Repeat("9", 50) + `}`, false},
+		{"long fractional integer", domain.PricePerImage, `{"base_micros":1.` + strings.Repeat("0", 20000) + `}`, false},
 		{"unsafe integer", domain.PricePerImage, `{"base_micros":9007199254740992}`, false},
 		{"wrong base type", domain.PricePerImage, `{"base_micros":"1000"}`, false},
 		{"unknown field", domain.PricePerImage, `{"base_micros":1000,"discount":0.5}`, false},
