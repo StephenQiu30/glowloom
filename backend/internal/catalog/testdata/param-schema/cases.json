@@ -1,0 +1,99 @@
+[
+  {
+    "name": "video reference configuration",
+    "valid": true,
+    "modes": ["image2video", "omni_reference"],
+    "limits": {"roles": {"subject": {"max_count": 9, "types": ["image"]}, "_total_images": 9}, "max_outputs": 4},
+    "param_schema": [
+      {"field": "duration_ms", "label": "时长", "type": "integer", "component": "segmented", "enum": [5000, 10000], "default": 5000, "for_modes": ["image2video"]},
+      {"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "min": 0, "max": 2147483647, "required": false}
+    ]
+  },
+  {
+    "name": "empty parameter form",
+    "valid": true,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": []
+  },
+  {
+    "name": "duplicate field",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [
+      {"field": "seed", "label": "随机种子", "type": "integer", "component": "input"},
+      {"field": "seed", "label": "随机种子 2", "type": "integer", "component": "input"}
+    ]
+  },
+  {
+    "name": "default outside enum",
+    "valid": false,
+    "modes": ["image2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "resolution", "label": "分辨率", "type": "string", "component": "select", "enum": ["720p", "1080p"], "default": "4k"}]
+  },
+  {
+    "name": "default outside range",
+    "valid": false,
+    "modes": ["image2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "min": 0, "max": 10, "default": 11}]
+  },
+  {
+    "name": "unsupported mode",
+    "valid": false,
+    "modes": ["image2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "duration_ms", "label": "时长", "type": "integer", "component": "input", "for_modes": ["text2video"]}]
+  },
+  {
+    "name": "component type mismatch",
+    "valid": false,
+    "modes": ["image2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "camera_fixed", "label": "固定镜头", "type": "string", "component": "switch"}]
+  },
+  {
+    "name": "slider needs range",
+    "valid": false,
+    "modes": ["image2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "guidance", "label": "引导强度", "type": "number", "component": "slider"}]
+  },
+  {
+    "name": "negative role count",
+    "valid": false,
+    "modes": ["omni_reference"],
+    "limits": {"roles": {"subject": {"max_count": -1, "types": ["image"]}}, "max_outputs": 1},
+    "param_schema": []
+  },
+  {
+    "name": "invalid reference type",
+    "valid": false,
+    "modes": ["omni_reference"],
+    "limits": {"roles": {"subject": {"max_count": 1, "types": ["magic"]}}, "max_outputs": 1},
+    "param_schema": []
+  },
+  {
+    "name": "missing label",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "type": "integer", "component": "input"}]
+  },
+  {
+    "name": "zero maximum outputs",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 0},
+    "param_schema": []
+  },
+  {
+    "name": "unknown parameter property",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "unsupported": true}]
+  }
+]
