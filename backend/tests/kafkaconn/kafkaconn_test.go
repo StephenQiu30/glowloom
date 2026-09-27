@@ -1,4 +1,4 @@
-package kafkaconn
+package kafkaconn_test
 
 import (
 	"context"
@@ -6,19 +6,21 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/kafkaconn"
 )
 
 func TestOpenRejectsMissingBrokers(t *testing.T) {
-	_, err := Open(" ")
-	if !errors.Is(err, ErrBrokersRequired) {
+	_, err := kafkaconn.Open(" ")
+	if !errors.Is(err, kafkaconn.ErrBrokersRequired) {
 		t.Fatalf("Open() error = %v, want ErrBrokersRequired", err)
 	}
 }
 
 func TestOpenRejectsMalformedBrokers(t *testing.T) {
 	for _, brokers := range []string{"127.0.0.1:9092,", "127.0.0.1:not-a-port", "redis://127.0.0.1:9092"} {
-		_, err := Open(brokers)
-		if !errors.Is(err, ErrInvalidBrokers) {
+		_, err := kafkaconn.Open(brokers)
+		if !errors.Is(err, kafkaconn.ErrInvalidBrokers) {
 			t.Errorf("Open(%q) error = %v, want ErrInvalidBrokers", brokers, err)
 		}
 	}
@@ -29,7 +31,7 @@ func TestPingWithKafka(t *testing.T) {
 	if brokers == "" {
 		t.Skip("set LV_TEST_KAFKA_BROKERS to a disposable Kafka broker")
 	}
-	conn, err := Open(brokers)
+	conn, err := kafkaconn.Open(brokers)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

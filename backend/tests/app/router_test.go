@@ -1,4 +1,4 @@
-package app
+package app_test
 
 import (
 	"context"
@@ -11,10 +11,12 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/app"
 )
 
 func TestHealthz(t *testing.T) {
-	router := NewRouter(zap.NewNop(), nil, noop.NewTracerProvider())
+	router := app.NewRouter(zap.NewNop(), nil, noop.NewTracerProvider())
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/healthz", nil)
@@ -29,7 +31,7 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestUnknownRouteReturnsNotFound(t *testing.T) {
-	router := NewRouter(zap.NewNop(), nil, noop.NewTracerProvider())
+	router := app.NewRouter(zap.NewNop(), nil, noop.NewTracerProvider())
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/unknown", nil)
@@ -42,7 +44,7 @@ func TestUnknownRouteReturnsNotFound(t *testing.T) {
 
 func TestReadyzReportsDependencyFailureWithoutDetails(t *testing.T) {
 	check := func(context.Context) error { return errors.New("secret connection detail") }
-	router := NewRouter(zap.NewNop(), check, noop.NewTracerProvider())
+	router := app.NewRouter(zap.NewNop(), check, noop.NewTracerProvider())
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/readyz", nil)
 	router.ServeHTTP(rec, req)
@@ -56,7 +58,7 @@ func TestReadyzReportsDependencyFailureWithoutDetails(t *testing.T) {
 
 func TestReadyzReportsHealthyDependencies(t *testing.T) {
 	check := func(context.Context) error { return nil }
-	router := NewRouter(zap.NewNop(), check, noop.NewTracerProvider())
+	router := app.NewRouter(zap.NewNop(), check, noop.NewTracerProvider())
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/readyz", nil)
 	router.ServeHTTP(rec, req)
@@ -69,7 +71,7 @@ func TestRouterContinuesIncomingTrace(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	router := NewRouter(zap.NewNop(), nil, provider)
+	router := app.NewRouter(zap.NewNop(), nil, provider)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/healthz", nil)

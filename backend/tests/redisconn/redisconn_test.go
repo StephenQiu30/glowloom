@@ -1,4 +1,4 @@
-package redisconn
+package redisconn_test
 
 import (
 	"context"
@@ -7,18 +7,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 )
 
 func TestOpenRejectsMissingURL(t *testing.T) {
-	_, err := Open(" ")
-	if !errors.Is(err, ErrURLRequired) {
+	_, err := redisconn.Open(" ")
+	if !errors.Is(err, redisconn.ErrURLRequired) {
 		t.Fatalf("Open() error = %v, want ErrURLRequired", err)
 	}
 }
 
 func TestOpenRejectsMalformedURLWithoutExposingPassword(t *testing.T) {
-	_, err := Open("redis://probe:canary-secret@%invalid/0")
-	if !errors.Is(err, ErrInvalidURL) {
+	_, err := redisconn.Open("redis://probe:canary-secret@%invalid/0")
+	if !errors.Is(err, redisconn.ErrInvalidURL) {
 		t.Fatalf("Open() error = %v, want ErrInvalidURL", err)
 	}
 	if strings.Contains(err.Error(), "canary-secret") {
@@ -31,7 +33,7 @@ func TestPingWithRedis(t *testing.T) {
 	if url == "" {
 		t.Skip("set LV_TEST_REDIS_URL to a disposable Redis database")
 	}
-	conn, err := Open(url)
+	conn, err := redisconn.Open(url)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

@@ -1,4 +1,4 @@
-package app
+package app_test
 
 import (
 	"net/http"
@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/app"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
@@ -31,7 +32,7 @@ func TestInitializeAPIExportsTraceWithHostServices(t *testing.T) {
 		t.Fatalf("load local configuration: %v", err)
 	}
 	cfg.OTelEndpoint = receiver.URL
-	server, cleanup, err := initializeAPI(t.Context(), cfg, zap.NewNop())
+	server, cleanup, err := app.NewAPIServer(t.Context(), cfg, zap.NewNop())
 	if err != nil {
 		t.Fatalf("initialize API: %v", err)
 	}

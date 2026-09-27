@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -11,11 +11,13 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 )
 
 func TestOpenRejectsMissingDSN(t *testing.T) {
-	_, err := Open(context.Background(), " ", noop.NewTracerProvider())
-	if !errors.Is(err, ErrDSNRequired) {
+	_, err := db.Open(context.Background(), " ", noop.NewTracerProvider())
+	if !errors.Is(err, db.ErrDSNRequired) {
 		t.Fatalf("Open() error = %v, want ErrDSNRequired", err)
 	}
 }
@@ -23,7 +25,7 @@ func TestOpenRejectsMissingDSN(t *testing.T) {
 func TestOpenDoesNotExposePassword(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err := Open(ctx, "postgres://probe:canary-secret@127.0.0.1:1/probe?sslmode=disable", noop.NewTracerProvider())
+	_, err := db.Open(ctx, "postgres://probe:canary-secret@127.0.0.1:1/probe?sslmode=disable", noop.NewTracerProvider())
 	if err == nil {
 		t.Fatal("Open() succeeded against a closed port")
 	}
@@ -42,7 +44,7 @@ func TestOpenWithPostgres(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	conn, err := Open(ctx, dsn, provider)
+	conn, err := db.Open(ctx, dsn, provider)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

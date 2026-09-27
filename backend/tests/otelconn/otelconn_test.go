@@ -1,4 +1,4 @@
-package otelconn
+package otelconn_test
 
 import (
 	"context"
@@ -11,19 +11,21 @@ import (
 
 	collectorpb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/otelconn"
 )
 
 func TestOpenRejectsInvalidEndpoint(t *testing.T) {
 	for _, endpoint := range []string{"ftp://127.0.0.1:4318", "http://user:secret@127.0.0.1:4318", "http://127.0.0.1:4318/custom", "http://127.0.0.1:4318?token=secret"} {
-		_, _, err := Open(t.Context(), endpoint, "lanverse-backend-api")
-		if !errors.Is(err, ErrInvalidEndpoint) {
+		_, _, err := otelconn.Open(t.Context(), endpoint, "lanverse-backend-api")
+		if !errors.Is(err, otelconn.ErrInvalidEndpoint) {
 			t.Errorf("Open(%q) error = %v, want ErrInvalidEndpoint", endpoint, err)
 		}
 	}
 }
 
 func TestOpenWithoutEndpointDisablesExport(t *testing.T) {
-	provider, shutdown, err := Open(t.Context(), "", "lanverse-backend-api")
+	provider, shutdown, err := otelconn.Open(t.Context(), "", "lanverse-backend-api")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -59,7 +61,7 @@ func TestOpenExportsTraceOverHTTP(t *testing.T) {
 	}))
 	t.Cleanup(receiver.Close)
 
-	provider, shutdown, err := Open(t.Context(), receiver.URL, "lanverse-backend-api")
+	provider, shutdown, err := otelconn.Open(t.Context(), receiver.URL, "lanverse-backend-api")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

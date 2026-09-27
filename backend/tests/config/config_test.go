@@ -1,39 +1,42 @@
-package config
+package config_test
 
 import (
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
 func TestLoadFromDotEnvFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "local.env.example")
-	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=lanverse-staging\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("LV_ENV=staging\nLV_HTTP_ADDR=:9011\nLV_WORKER_HEALTH_ADDR=:9012\nLV_RELAY_HEALTH_ADDR=:9013\nLV_LOG_LEVEL=warn\nLV_DB_DSN=postgres://local/db\nLV_REDIS_URL=redis://127.0.0.1:6379/2\nLV_SESSION_IDLE_TTL=2h\nLV_SESSION_ABSOLUTE_TTL=48h\nLV_KAFKA_BROKERS=127.0.0.1:9092,127.0.0.1:9093\nLV_TEMPORAL_ADDR=127.0.0.1:7233\nLV_TEMPORAL_NAMESPACE=lanverse-staging\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("LV_ENV_FILE", path)
 	t.Setenv("LV_ENV", "prod")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "lanverse-staging" {
+	if cfg.Env != "prod" || cfg.HTTPAddr != ":9011" || cfg.WorkerHealthAddr != ":9012" || cfg.RelayHealthAddr != ":9013" || cfg.LogLevel != "warn" || cfg.DBDSN != "postgres://local/db" || cfg.RedisURL != "redis://127.0.0.1:6379/2" || cfg.SessionIdleTTL != 2*time.Hour || cfg.SessionAbsoluteTTL != 48*time.Hour || cfg.KafkaBrokers != "127.0.0.1:9092,127.0.0.1:9093" || cfg.TemporalAddr != "127.0.0.1:7233" || cfg.TemporalNamespace != "lanverse-staging" {
 		t.Errorf("Load() = %+v, want environment override and file values", cfg)
 	}
 }
 
 func TestLoadRejectsMissingDotEnvFile(t *testing.T) {
 	t.Setenv("LV_ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
-	_, err := Load()
-	if !errors.Is(err, ErrInvalid) {
+	_, err := config.Load()
+	if !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("Load() error = %v, want ErrInvalid", err)
 	}
 }
 
 func TestLoadDefaults(t *testing.T) {
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -43,6 +46,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTPAddr != ":8080" {
 		t.Errorf("HTTPAddr = %q, want %q", cfg.HTTPAddr, ":8080")
 	}
+	if cfg.WorkerHealthAddr != ":8081" || cfg.RelayHealthAddr != ":8082" {
+		t.Errorf("role health addresses = %q/%q, want :8081/:8082", cfg.WorkerHealthAddr, cfg.RelayHealthAddr)
+	}
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
 	}
@@ -51,6 +57,9 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.RedisURL != "" {
 		t.Errorf("RedisURL = %q, want empty", cfg.RedisURL)
+	}
+	if cfg.SessionIdleTTL != 12*time.Hour || cfg.SessionAbsoluteTTL != 7*24*time.Hour {
+		t.Errorf("session durations = %s/%s, want 12h/168h", cfg.SessionIdleTTL, cfg.SessionAbsoluteTTL)
 	}
 	if cfg.KafkaBrokers != "" {
 		t.Errorf("KafkaBrokers = %q, want empty", cfg.KafkaBrokers)
@@ -63,6 +72,8 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("LV_ENV", "staging")
 	t.Setenv("LV_HTTP_ADDR", ":9090")
+	t.Setenv("LV_WORKER_HEALTH_ADDR", ":9091")
+	t.Setenv("LV_RELAY_HEALTH_ADDR", ":9092")
 	t.Setenv("LV_LOG_LEVEL", "debug")
 	t.Setenv("LV_DB_DSN", "postgres://localhost/lanverse")
 	t.Setenv("LV_REDIS_URL", "redis://localhost:6379/1")
@@ -70,11 +81,11 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("LV_TEMPORAL_ADDR", "localhost:7233")
 	t.Setenv("LV_TEMPORAL_NAMESPACE", "lanverse-staging")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := Config{Env: "staging", HTTPAddr: ":9090", LogLevel: "debug", DBDSN: "postgres://localhost/lanverse", RedisURL: "redis://localhost:6379/1", KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "lanverse-staging"}
+	want := config.Config{Env: "staging", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/lanverse", RedisURL: "redis://localhost:6379/1", SessionIdleTTL: 12 * time.Hour, SessionAbsoluteTTL: 7 * 24 * time.Hour, KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "lanverse-staging"}
 	if cfg != want {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
@@ -87,7 +98,7 @@ func TestLoadObjectStorageFromEnv(t *testing.T) {
 	t.Setenv("LV_OBJECT_STORAGE_SECRET_KEY", "test-secret")
 	t.Setenv("LV_OBJECT_STORAGE_REGION", "us-east-1")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -98,7 +109,7 @@ func TestLoadObjectStorageFromEnv(t *testing.T) {
 
 func TestLoadOTelEndpointFromEnv(t *testing.T) {
 	t.Setenv("LV_OTEL_ENDPOINT", "http://127.0.0.1:4318")
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -116,13 +127,20 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{name: "unknown env", key: "LV_ENV", val: "dev"},
 		{name: "unknown log level", key: "LV_LOG_LEVEL", val: "verbose"},
 		{name: "empty http addr", key: "LV_HTTP_ADDR", val: " "},
+		{name: "empty worker health addr", key: "LV_WORKER_HEALTH_ADDR", val: " "},
+		{name: "empty relay health addr", key: "LV_RELAY_HEALTH_ADDR", val: " "},
+		{name: "invalid session idle", key: "LV_SESSION_IDLE_TTL", val: "never"},
+		{name: "zero session idle", key: "LV_SESSION_IDLE_TTL", val: "0s"},
+		{name: "submillisecond session idle", key: "LV_SESSION_IDLE_TTL", val: "1ns"},
+		{name: "negative absolute", key: "LV_SESSION_ABSOLUTE_TTL", val: "-1h"},
+		{name: "absolute shorter than idle", key: "LV_SESSION_ABSOLUTE_TTL", val: "1h"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(tt.key, tt.val)
 
-			_, err := Load()
-			if !errors.Is(err, ErrInvalid) {
+			_, err := config.Load()
+			if !errors.Is(err, config.ErrInvalid) {
 				t.Fatalf("Load() error = %v, want ErrInvalid", err)
 			}
 		})
