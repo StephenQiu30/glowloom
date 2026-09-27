@@ -21,6 +21,8 @@ var (
 	ErrModelKeyExists = errors.New("model key already exists")
 	// ErrModelNotFound means no non-deleted model has the requested ID.
 	ErrModelNotFound = errors.New("model not found")
+	// ErrModelSourceUnavailable means the provider or capability was deleted.
+	ErrModelSourceUnavailable = errors.New("model provider or capability unavailable")
 	// ErrModelVersionConflict means the next model version number was not supplied.
 	ErrModelVersionConflict = errors.New("model version conflict")
 	// ErrPriceVersionConflict means the next price version number was not supplied.
@@ -71,19 +73,32 @@ func (s *Store) CreateModelForAdmin(ctx context.Context, actorID, orgID uuid.UUI
 		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
 			return err
 		}
-		result := tx.Exec(`
+		return createModelInTx(tx, model)
+	})
+}
+
+func createModelInTx(tx *gorm.DB, model domain.ModelProfile) error {
+	result := tx.Exec(`
 			INSERT INTO catalog.model_profile
 			  (id, model_key, provider_id, capability, display_name)
-			VALUES (?::uuid, ?, ?::uuid, ?, ?)
-		`, model.ID.String(), model.Key, model.ProviderID.String(), model.Capability, model.DisplayName)
-		if isUniqueViolation(result.Error, "model_profile_model_key_key") {
-			return ErrModelKeyExists
-		}
-		if result.Error != nil {
-			return fmt.Errorf("insert model profile: %w", result.Error)
-		}
-		return requireOneRow(result, "insert model profile")
-	})
+			SELECT ?::uuid, ?, ?::uuid, ?, ?
+			WHERE EXISTS (
+			  SELECT 1 FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete
+			) AND EXISTS (
+			  SELECT 1 FROM catalog.capability WHERE key = ? AND NOT is_delete
+			)
+		`, model.ID.String(), model.Key, model.ProviderID.String(), model.Capability,
+		model.DisplayName, model.ProviderID.String(), model.Capability)
+	if isUniqueViolation(result.Error, "model_profile_model_key_key") {
+		return ErrModelKeyExists
+	}
+	if result.Error != nil {
+		return fmt.Errorf("insert model profile: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrModelSourceUnavailable
+	}
+	return nil
 }
 
 // FindModelForAdmin checks live rights before reading a model identity and status.
