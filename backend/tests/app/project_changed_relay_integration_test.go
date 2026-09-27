@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	redisrealtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/redis"
 	"github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/sse"
 	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
@@ -27,7 +29,7 @@ import (
 	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
 )
 
-func TestProjectCreateReachesSSEThroughRelay(t *testing.T) {
+func TestProjectCreateAndUpdateReachSSEThroughRelay(t *testing.T) {
 	dsn := os.Getenv("LV_TEST_RELAY_DB_DSN")
 	brokers := os.Getenv("LV_TEST_RELAY_KAFKA_BROKERS")
 	redisURL := os.Getenv("LV_TEST_RELAY_REDIS_URL")
@@ -108,12 +110,12 @@ func TestProjectCreateReachesSSEThroughRelay(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		if err := dbConn.DB.Exec(
-			"DELETE FROM infra.processed_event WHERE event_id IN (?::uuid, ?::uuid)",
-			changeID.String(), auditID.String(),
+			"DELETE FROM infra.processed_event WHERE event_id IN (SELECT id FROM infra.outbox WHERE partition_key = ?)",
+			projectID,
 		).Error; err != nil {
 			t.Errorf("delete project consumer markers: %v", err)
 		}
-		if err := dbConn.DB.Exec("DELETE FROM infra.outbox WHERE id IN (?::uuid, ?::uuid)", changeID.String(), auditID.String()).Error; err != nil {
+		if err := dbConn.DB.Exec("DELETE FROM infra.outbox WHERE partition_key = ?", projectID).Error; err != nil {
 			t.Errorf("delete project Outbox events: %v", err)
 		}
 		if err := dbConn.DB.Exec("DELETE FROM billing.budget WHERE project_id = ?::uuid", projectID).Error; err != nil {
@@ -229,7 +231,7 @@ func TestProjectCreateReachesSSEThroughRelay(t *testing.T) {
 	if !ok {
 		t.Fatalf("project Redis data = %T", entries[0].Values["data"])
 	}
-	assertRelayProjectData(t, []byte(streamData), projectID)
+	assertRelayProjectData(t, []byte(streamData), projectID, 1, "created")
 	frame := nextNamedSSEFrame(t, reader)
 	if !strings.Contains(frame, "id: "+changeID.String()+"\n") ||
 		!strings.Contains(frame, "event: project.updated\n") {
@@ -241,10 +243,117 @@ func TestProjectCreateReachesSSEThroughRelay(t *testing.T) {
 			sseData = strings.TrimPrefix(line, "data: ")
 		}
 	}
-	assertRelayProjectData(t, []byte(sseData), projectID)
+	assertRelayProjectData(t, []byte(sseData), projectID, 1, "created")
+
+	newName := "修改后的私密项目名称"
+	newDescription := "修改说明不得进入事件"
+	updated, err := workspaceapp.NewUpdateProjectCommand(pgworkspace.NewStore(dbConn.DB), time.Now).Execute(
+		ctx, actor, workspaceapp.UpdateProjectInput{
+			ProjectID: created.ID, ExpectedRevision: created.Revision,
+			Name: &newName, Description: &newDescription, RequestID: uuid.NewString(),
+		},
+	)
+	if err != nil || updated.ID != created.ID || updated.Revision != 2 ||
+		updated.Name != newName || updated.Description != newDescription {
+		t.Fatalf("update project command = %+v, error = %v", updated, err)
+	}
+	var updateEvents []struct {
+		ID      uuid.UUID
+		Topic   string
+		Payload []byte
+	}
+	if err := dbConn.DB.WithContext(ctx).Raw(`
+		SELECT id, topic, payload FROM infra.outbox
+		WHERE partition_key = ? AND id NOT IN (?::uuid, ?::uuid)
+	`, projectID, changeID.String(), auditID.String()).Scan(&updateEvents).Error; err != nil || len(updateEvents) != 2 {
+		t.Fatalf("project update Outbox events = %+v, error = %v", updateEvents, err)
+	}
+	var updateChangeID, updateAuditID uuid.UUID
+	for _, event := range updateEvents {
+		if bytes.Contains(event.Payload, []byte(newName)) || bytes.Contains(event.Payload, []byte(newDescription)) {
+			t.Fatal("project update Outbox leaked a free-form setting")
+		}
+		switch event.Topic {
+		case realtime.ProjectChangedTopic:
+			updateChangeID = event.ID
+		case "lanverse.audit.recorded.v1":
+			updateAuditID = event.ID
+		default:
+			t.Fatalf("unexpected project update Outbox topic %q", event.Topic)
+		}
+	}
+	if updateChangeID == uuid.Nil || updateAuditID == uuid.Nil {
+		t.Fatalf("project update Outbox missing change or audit event: %+v", updateEvents)
+	}
+	for {
+		var published, realtimeProcessed, auditProcessed, audited bool
+		if err := dbConn.DB.WithContext(ctx).Raw(`
+			SELECT count(*) = 2 FROM infra.outbox
+			WHERE id IN (?::uuid, ?::uuid) AND published_at IS NOT NULL
+		`, updateChangeID.String(), updateAuditID.String()).Scan(&published).Error; err != nil {
+			t.Fatalf("read update Outbox delivery: %v", err)
+		}
+		if err := dbConn.DB.WithContext(ctx).Raw(`
+			SELECT EXISTS (SELECT 1 FROM infra.processed_event
+			WHERE consumer = 'realtime' AND event_id = ?::uuid)
+		`, updateChangeID.String()).Scan(&realtimeProcessed).Error; err != nil {
+			t.Fatalf("read update realtime marker: %v", err)
+		}
+		if err := dbConn.DB.WithContext(ctx).Raw(`
+			SELECT EXISTS (SELECT 1 FROM infra.processed_event
+			WHERE consumer = 'audit' AND event_id = ?::uuid)
+		`, updateAuditID.String()).Scan(&auditProcessed).Error; err != nil {
+			t.Fatalf("read update audit marker: %v", err)
+		}
+		if err := dbConn.DB.WithContext(ctx).Raw(`
+			SELECT EXISTS (SELECT 1 FROM audit.audit_log
+			WHERE id = ?::uuid AND project_id = ?::uuid AND action = 'project.updated')
+		`, updateAuditID.String(), projectID).Scan(&audited).Error; err != nil {
+			t.Fatalf("read project update audit row: %v", err)
+		}
+		if published && realtimeProcessed && auditProcessed && audited {
+			break
+		}
+		select {
+		case err := <-relayDone:
+			t.Fatalf("relay exited before project update projection: %v", err)
+		case <-ctx.Done():
+			t.Fatalf("wait for project update relay: %v (published %t, realtime %t, audit %t, audited %t)",
+				ctx.Err(), published, realtimeProcessed, auditProcessed, audited)
+		case <-ticker.C:
+		}
+	}
+	entries, err = redisConn.Client.XRange(ctx, stream, "-", "+").Result()
+	if err != nil || len(entries) != 2 || entries[1].Values["id"] != updateChangeID.String() ||
+		entries[1].Values["event"] != "project.updated" {
+		t.Fatalf("updated project Redis projection = %+v, error = %v", entries, err)
+	}
+	streamData, ok = entries[1].Values["data"].(string)
+	if !ok {
+		t.Fatalf("updated project Redis data = %T", entries[1].Values["data"])
+	}
+	assertRelayProjectData(t, []byte(streamData), projectID, 2, "updated")
+	replayed, resync, err := redisrealtime.NewSink(redisConn.Client).Replay(ctx, projectID, changeID.String())
+	if err != nil || resync || len(replayed) != 1 || replayed[0].ID != updateChangeID.String() ||
+		replayed[0].Event != "project.updated" {
+		t.Fatalf("project update replay = %+v, resync = %t, error = %v", replayed, resync, err)
+	}
+	assertRelayProjectData(t, replayed[0].Data, projectID, 2, "updated")
+	frame = nextNamedSSEFrame(t, reader)
+	if !strings.Contains(frame, "id: "+updateChangeID.String()+"\n") ||
+		!strings.Contains(frame, "event: project.updated\n") {
+		t.Fatalf("project update SSE event = %q", frame)
+	}
+	sseData = ""
+	for _, line := range strings.Split(frame, "\n") {
+		if strings.HasPrefix(line, "data: ") {
+			sseData = strings.TrimPrefix(line, "data: ")
+		}
+	}
+	assertRelayProjectData(t, []byte(sseData), projectID, 2, "updated")
 }
 
-func assertRelayProjectData(t *testing.T, raw []byte, projectID string) {
+func assertRelayProjectData(t *testing.T, raw []byte, projectID string, revision int64, change string) {
 	t.Helper()
 	var data map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &data); err != nil || len(data) != 3 {
@@ -256,7 +365,7 @@ func assertRelayProjectData(t *testing.T, raw []byte, projectID string) {
 		Change    string `json:"change"`
 	}
 	if err := json.Unmarshal(raw, &got); err != nil || got.ProjectID != projectID ||
-		got.Revision != 1 || got.Change != "created" {
+		got.Revision != revision || got.Change != change {
 		t.Fatalf("project event data = %+v, error = %v", got, err)
 	}
 }
