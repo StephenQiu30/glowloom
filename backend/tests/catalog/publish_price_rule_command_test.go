@@ -182,3 +182,30 @@ func TestPublishPriceRuleCommandPreservesStoreFailure(t *testing.T) {
 		t.Fatalf("store conflict hidden: %v", err)
 	}
 }
+
+func TestPublishPriceRuleCommandNormalizesEffectiveTimeToDatabasePrecision(t *testing.T) {
+	store := &publishPriceStore{}
+	input := validPublishPriceRuleInput(uuid.New())
+	input.EffectiveFrom = time.Date(2026, 9, 28, 0, 0, 0, 123456789, time.UTC)
+	_, err := catalogapp.NewPublishPriceRuleCommand(store, &publishPriceValidator{}, time.Now).Execute(
+		t.Context(), adminPrincipal(), input,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := input.EffectiveFrom.Round(time.Microsecond)
+	if !store.price.EffectiveFrom.Equal(expected) {
+		t.Fatalf("stored effective time %s, want %s", store.price.EffectiveFrom, expected)
+	}
+	var envelope struct {
+		Data struct {
+			After struct {
+				EffectiveFrom time.Time `json:"effective_from"`
+			} `json:"after"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(store.event.Payload, &envelope); err != nil ||
+		!envelope.Data.After.EffectiveFrom.Equal(expected) {
+		t.Fatalf("audit effective time %s, want %s: %v", envelope.Data.After.EffectiveFrom, expected, err)
+	}
+}
