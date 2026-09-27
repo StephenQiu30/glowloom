@@ -1,7 +1,9 @@
 """Temporal Activity boundary for versioned Harness runs."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, ValidationError
 from temporalio import activity
@@ -18,6 +20,9 @@ from app.harness.loop import (
 )
 from app.harness.router import ContextTooLarge, ModelRouter, ModelUnavailable
 from app.harness.skills import SkillRegistry, SkillVersionUnavailable
+
+if TYPE_CHECKING:
+    from app.worker.credential_activities import CredentialTestActivities
 
 
 class BudgetInput(BaseModel):
@@ -115,7 +120,14 @@ class SkillActivities:
 
 
 def create_skill_worker(
-    client: Client, registry: SkillRegistry, router: ModelRouter, task_queue: str = "agent"
+    client: Client,
+    registry: SkillRegistry,
+    router: ModelRouter,
+    task_queue: str = "agent",
+    credential_tests: CredentialTestActivities | None = None,
 ) -> Worker:
     activities = SkillActivities(registry, router)
-    return Worker(client, task_queue=task_queue, workflows=[], activities=[activities.run])
+    handlers = [activities.run]
+    if credential_tests is not None:
+        handlers.append(credential_tests.test_credential)
+    return Worker(client, task_queue=task_queue, workflows=[], activities=handlers)
