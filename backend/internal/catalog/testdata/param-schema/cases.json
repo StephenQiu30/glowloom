@@ -95,5 +95,104 @@
     "modes": ["text2video"],
     "limits": {"max_outputs": 1},
     "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "unsupported": true}]
+  },
+  {
+    "name": "all supported components",
+    "valid": true,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [
+      {"field": "prompt", "label": "提示词", "type": "string", "component": "textarea"},
+      {"field": "seed", "label": "随机种子", "type": "integer", "component": "input"},
+      {"field": "resolution", "label": "分辨率", "type": "string", "component": "select", "enum": ["720p", "1080p"]},
+      {"field": "guidance", "label": "引导强度", "type": "number", "component": "slider", "min": 0, "max": 1, "step": 0.1},
+      {"field": "fixed", "label": "固定镜头", "type": "boolean", "component": "switch", "default": false},
+      {"field": "duration_ms", "label": "时长", "type": "integer", "component": "segmented", "enum": [5000, 10000]},
+      {"field": "voice_id", "label": "音色", "type": "string", "component": "voice", "enum": ["voice_a", "voice_b"]}
+    ]
+  },
+  {
+    "name": "extended input role limits",
+    "valid": true,
+    "modes": ["omni_reference"],
+    "limits": {"roles": {"motion": {"max_count": 1, "types": ["video"], "max_ms": 15000, "max_bytes": 10485760, "min_resolution": "720p"}, "_total_videos": 1}, "max_outputs": 1},
+    "param_schema": []
+  },
+  {
+    "name": "invalid maximum duration",
+    "valid": false,
+    "modes": ["omni_reference"],
+    "limits": {"roles": {"motion": {"max_count": 1, "types": ["video"], "max_ms": 0}}, "max_outputs": 1},
+    "param_schema": []
+  },
+  {
+    "name": "invalid maximum bytes",
+    "valid": false,
+    "modes": ["omni_reference"],
+    "limits": {"roles": {"motion": {"max_count": 1, "types": ["video"], "max_bytes": -1}}, "max_outputs": 1},
+    "param_schema": []
+  },
+  {
+    "name": "invalid minimum resolution shape",
+    "valid": false,
+    "modes": ["omni_reference"],
+    "limits": {"roles": {"motion": {"max_count": 1, "types": ["video"], "min_resolution": 720}}, "max_outputs": 1},
+    "param_schema": []
+  },
+  {
+    "name": "wrong default type",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "default": "1"}]
+  },
+  {
+    "name": "inverted numeric range",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "min": 10, "max": 1}]
+  },
+  {
+    "name": "empty select options",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "resolution", "label": "分辨率", "type": "string", "component": "select", "enum": []}]
+  },
+  {
+    "name": "missing voice options",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "voice_id", "label": "音色", "type": "string", "component": "voice"}]
+  },
+  {
+    "name": "fractional integer step",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "step": 0.5}]
+  },
+  {
+    "name": "empty mode selection",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "label": "随机种子", "type": "integer", "component": "input", "for_modes": []}]
+  },
+  {
+    "name": "nested form field path",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "camera.fixed", "label": "固定镜头", "type": "boolean", "component": "switch"}]
+  },
+  {
+    "name": "prototype form field",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "__proto__", "label": "保留字段", "type": "string", "component": "input"}]
   }
 ]
