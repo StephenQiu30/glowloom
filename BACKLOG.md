@@ -349,7 +349,7 @@
 | E-11-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`billing.ledger_entry`（其中 `billing.budget` 由 E-10 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-14 §2](docs/design/14-项目预算.md#2-数据) | `backend/db/migrations/`、`backend/internal/billing/domain/`、`backend/internal/billing/adapter/postgres/` | 完成（隔离 PostgreSQL 迁移、只追加权限、项目范围与原子仓储已验证） | `7e3ba601`、`26e129aa`、`825829f5`、`ec634a77`、`0ca81f16` |
 | E-11-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/budget、PUT /api/projects/{pid}/budget；swag 注解生成 OpenAPI。详见 [DES-14 §3](docs/design/14-项目预算.md#3-接口) | `backend/internal/billing/application/`、`backend/internal/billing/adapter/http/`、`backend/docs/` | 进行中（内部预算调整命令与原子事务已验证；公开路由、持久幂等和 OpenAPI 待 DES-03 IF4～IF6 / M1-06） | `ec634a77`、`0ca81f16` |
 | E-11-03 | 异步、工作流与事件 | 事件 `billing.budget_changed.v1`、`billing.budget_low.v1`、`billing.budget_overrun.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无；预留与结算在 `flow` 队列 Activity 的数据库事务中执行（DES-04）。 详见 [DES-14 §4](docs/design/14-项目预算.md#4-异步与工作流) | `backend/internal/billing/adapter/workflow/`、`backend/internal/billing/adapter/event/` | 进行中（预算调整跨 20% 的低余额事件已在同事务写 Outbox 并由真实 Kafka 验证；结算与超支事件、E-33 通知消费仍待实现） | `5213b3e3`、`52bcfb9e` |
-| E-11-04 | 前端 | 设置页预算卡片（上限、已结算、已预留、可用、使用率进度条）；报价对话框显示剩余预算与差额；顶部低余额横幅。 详见 [DES-14 §6](docs/design/14-项目预算.md#6-界面) | `frontend/src/features/project/` | 待办 | — |
+| E-11-04 | 前端 | 设置页预算卡片（上限、已结算、已预留、可用、使用率进度条）；报价对话框显示剩余预算与差额；顶部低余额横幅。 详见 [DES-14 §6](docs/design/14-项目预算.md#6-界面) | `frontend/src/features/project/` | 进行中（纯属性预算卡片与状态测试已完成；设置页挂载、真实预算 API 与全局横幅待 E-11-02 公开接口） | `35c485b7`、`dffe11cf` |
 | E-11-05 | 测试与验收 | 并发确认测试（race）；结算超支路径；阈值通知去重；验收用例 TC-11-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 **E-11-01 预算与账本数据底座切片（2026-09-27）**：复用 E-10 的项目默认 0 预算，新增 DES-02 §5.10 的 `billing.ledger_entry` 迁移、只追加触发器和应用角色列级权限；预算领域校验最低可设金额、整数溢出与超支恢复，账本和预算仓储读取强制核对当前账号、组织及项目范围。补明 `budget_change` 的正负号口径（新上限减旧上限）。先以缺失领域包确认 Red，再以隔离本机 PostgreSQL 迁移、应用角色权限、跨组织读取和 Go Race 测试确认数据底座；预算调整事务在下一切片补齐，TC-11 尚未计完成。
@@ -357,6 +357,8 @@
 **E-11-02 内部预算调整事务切片（2026-09-27）**：命令校验用户与组织、项目、规范请求 ID、预算修订号和最低可设额度；无变化不写，变更时在项目与预算锁下原子更新额度、写入正负分录及 `billing.budget_changed.v1` / `audit.recorded.v1` 双 Outbox。审计摘要只包含额度、修订号和超支标记。先以缺失应用包确认 Red；隔离本机 PostgreSQL Race 用例验证升降额、并发仅一方成功、归档项目拒绝及 Outbox 插入失败时三表一起回滚；全量 Go 测试、vet、lint 与漏洞扫描通过。公开 GET/PUT 路由、持久幂等响应、实时消费、低余额及结算超支事件仍待实施，TC-11 不计完成。
 
 **E-11-03 预算调整低余额事件切片（2026-09-27）**：严格比较可用额与上限 20%，对 0 上限不告警，使用整数计算避免大金额乘法溢出；仅由不低于阈值跨入低余额时发 `billing.budget_low.v1`。事件与额度修订、账本、变更事件和审计在同一 PostgreSQL 事务写入；低额 Outbox 插入失败则整体回滚。隔离本机 PostgreSQL Race 用例、真实 Outbox Relay → Kafka 消费验证通过。此处只生产事件事实，同日通知去重、结算触发低额与超支事件、实际通知投递仍待 E-21/E-33，TC-11 不计完成。
+
+**E-11-04 预算卡片组件切片（2026-09-27）**：新增无边框预算卡片，展示额度、已结算、已预留、可用额和占用率；默认 0 额度显示未设置，低于 20% 显示余额提示，超支优先展示并保留负可用额。复用报价金额格式化，组件只接收预算快照，不预设尚未确认的公开接口；组件测试及前端类型、Lint、格式和构建门禁通过。设置页尚未挂载，报价对话框已有的差额提示与未来预算快照仍需真实联调，全局低额横幅未完成；TC-11 不计完成。
 
 #### E-21 报价与二次确认
 
