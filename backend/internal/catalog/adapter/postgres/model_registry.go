@@ -229,66 +229,6 @@ func appendModelVersionInTx(tx *gorm.DB, version domain.ModelVersion, expectedRe
 	return nil
 }
 
-// AppendPriceRuleForAdmin inserts a new immutable price version and advances
-// the model revision without rewriting earlier prices.
-func (s *Store) AppendPriceRuleForAdmin(ctx context.Context, actorID, orgID uuid.UUID, price domain.PriceRuleVersion, expectedRevision int64) error {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
-		price.Validate() != nil || price.CreateBy != actorID || expectedRevision < 1 {
-		return domain.ErrInvalidPriceRule
-	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
-			return err
-		}
-		row, err := lockModelProfile(tx, price.ModelID)
-		if err != nil {
-			return err
-		}
-		if row.Revision != expectedRevision {
-			return domain.ErrModelRevisionConflict
-		}
-		var count int64
-		if err := tx.Raw(`
-			SELECT count(*) FROM catalog.price_rule_version
-			WHERE model_profile_id = ?::uuid
-		`, price.ModelID.String()).Scan(&count).Error; err != nil {
-			return fmt.Errorf("count price versions: %w", err)
-		}
-		if int64(price.VersionNo) != count+1 {
-			return ErrPriceVersionConflict
-		}
-		result := tx.Exec(`
-			INSERT INTO catalog.price_rule_version
-			  (id, model_profile_id, version_no, unit, rule, currency,
-			   fx_rate_to_cny, effective_from, create_by)
-			VALUES (?::uuid, ?::uuid, ?, ?, ?::jsonb, ?, NULLIF(?, '')::numeric, ?, ?::uuid)
-		`, price.ID.String(), price.ModelID.String(), price.VersionNo,
-			string(price.Unit), string(price.Rule), price.Currency,
-			price.FXRateToCNY, price.EffectiveFrom, actorID.String())
-		if isUniqueViolation(result.Error, "uq_price_rule_version") {
-			return ErrPriceVersionConflict
-		}
-		if result.Error != nil {
-			return fmt.Errorf("insert price version: %w", result.Error)
-		}
-		if err := requireOneRow(result, "insert price version"); err != nil {
-			return err
-		}
-		result = tx.Exec(`
-			UPDATE catalog.model_profile
-			SET revision = revision + 1, update_time = now()
-			WHERE id = ?::uuid AND revision = ? AND NOT is_delete
-		`, price.ModelID.String(), expectedRevision)
-		if result.Error != nil {
-			return fmt.Errorf("advance model price revision: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return domain.ErrModelRevisionConflict
-		}
-		return nil
-	})
-}
-
 // SetModelStatusForAdmin changes model availability after checking the current
 // model version and an effective price in the same transaction.
 func (s *Store) SetModelStatusForAdmin(ctx context.Context, actorID, orgID, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64) error {
