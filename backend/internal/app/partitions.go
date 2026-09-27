@@ -21,10 +21,12 @@ import (
 var ErrInvalidPartitionMaintenanceRole = errors.New("invalid partition maintenance database roles")
 
 type partitionDBIdentity struct {
-	Role      string
-	Database  string
-	StartedAt time.Time
-	Superuser bool
+	Role           string
+	SessionRole    string
+	Database       string
+	StartedAt      time.Time
+	Superuser      bool
+	SessionIsSuper bool
 }
 
 // EnsurePartitions prepares Outbox and audit months with an account separate
@@ -91,8 +93,9 @@ func checkPartitionRoles(ctx context.Context, appDB, maintenanceDB *gorm.DB) err
 	if appRole.Database != maintenanceRole.Database || !appRole.StartedAt.Equal(maintenanceRole.StartedAt) {
 		return fmt.Errorf("%w: application and maintenance connections must reach the same database", ErrInvalidPartitionMaintenanceRole)
 	}
-	if appRole.Role == maintenanceRole.Role || appRole.Superuser {
-		return fmt.Errorf("%w: application account must be a separate non-superuser", ErrInvalidPartitionMaintenanceRole)
+	if appRole.Role == maintenanceRole.Role || appRole.Role != appRole.SessionRole ||
+		appRole.Superuser || appRole.SessionIsSuper {
+		return fmt.Errorf("%w: application login must be a separate non-superuser without a switched role", ErrInvalidPartitionMaintenanceRole)
 	}
 	for _, table := range []string{"infra.outbox", "audit.audit_log"} {
 		var ownership struct {
@@ -116,13 +119,17 @@ func checkPartitionRoles(ctx context.Context, appDB, maintenanceDB *gorm.DB) err
 func readPartitionIdentity(ctx context.Context, handle *gorm.DB) (partitionDBIdentity, error) {
 	var identity partitionDBIdentity
 	if err := handle.WithContext(ctx).Raw(`
-		SELECT current_user AS role, current_database() AS database,
-		       pg_postmaster_start_time() AS started_at, r.rolsuper AS superuser
-		FROM pg_roles AS r WHERE r.rolname = current_user
+		SELECT current_user AS role, session_user AS session_role,
+		       current_database() AS database, pg_postmaster_start_time() AS started_at,
+		       active_account.rolsuper AS superuser,
+		       login_account.rolsuper AS session_is_super
+		FROM pg_roles AS active_account
+		JOIN pg_roles AS login_account ON login_account.rolname = session_user
+		WHERE active_account.rolname = current_user
 	`).Scan(&identity).Error; err != nil {
 		return partitionDBIdentity{}, err
 	}
-	if identity.Role == "" || identity.Database == "" || identity.StartedAt.IsZero() {
+	if identity.Role == "" || identity.SessionRole == "" || identity.Database == "" || identity.StartedAt.IsZero() {
 		return partitionDBIdentity{}, fmt.Errorf("database role identity is incomplete")
 	}
 	return identity, nil
