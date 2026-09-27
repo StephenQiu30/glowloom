@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["modes", "limits", "param_schema"],
+  "additionalProperties": false,
+  "properties": {
+    "modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "limits": {
+      "type": "object",
+      "required": ["max_outputs"],
+      "additionalProperties": false,
+      "properties": {
+        "max_outputs": {"type": "integer", "minimum": 1},
+        "aspect_ratios": {"$ref": "#/$defs/nonEmptyStrings"},
+        "resolutions": {"$ref": "#/$defs/nonEmptyStrings"},
+        "durations_ms": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "roles": {
+          "type": "object",
+          "properties": {
+            "_total_images": {"type": "integer", "minimum": 0},
+            "_total_videos": {"type": "integer", "minimum": 0},
+            "_total_audios": {"type": "integer", "minimum": 0}
+          },
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {
+              "type": "object",
+              "required": ["max_count", "types"],
+              "additionalProperties": false,
+              "properties": {
+                "max_count": {"type": "integer", "minimum": 0},
+                "types": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["image", "video", "audio"]}},
+                "max_ms": {"type": "integer", "minimum": 1},
+                "max_bytes": {"type": "integer", "minimum": 1},
+                "min_resolution": {"type": "string", "minLength": 1}
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "param_schema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "label", "type", "component"],
+        "additionalProperties": false,
+        "properties": {
+          "field": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "not": {"enum": ["__proto__", "prototype", "constructor"]}},
+          "label": {"type": "string", "minLength": 1},
+          "description": {"type": "string"},
+          "type": {"enum": ["string", "integer", "number", "boolean"]},
+          "component": {"enum": ["input", "textarea", "select", "slider", "switch", "segmented", "voice"]},
+          "required": {"type": "boolean"},
+          "default": {"type": ["string", "number", "boolean"]},
+          "enum": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": ["string", "number"]}},
+          "for_modes": {"$ref": "#/$defs/nonEmptyStrings"},
+          "min": {"type": "number"},
+          "max": {"type": "number"},
+          "step": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyStrings": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}
