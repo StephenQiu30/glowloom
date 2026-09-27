@@ -1,0 +1,8 @@
+{
+  "input": {
+    "provider_task_id": "mock-task-11111111"
+  },
+  "output": {
+    "outcome": "cancelled"
+  }
+}
