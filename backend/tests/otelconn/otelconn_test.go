@@ -24,16 +24,21 @@ func TestOpenRejectsInvalidEndpoint(t *testing.T) {
 	}
 }
 
-func TestOpenWithoutEndpointDisablesExport(t *testing.T) {
+func TestOpenWithoutEndpointPreservesTraceContext(t *testing.T) {
 	provider, shutdown, err := otelconn.Open(t.Context(), "", "lanverse-backend-api")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	_, span := provider.Tracer("test").Start(t.Context(), "probe")
-	if span.IsRecording() {
-		t.Fatal("disabled provider recorded a span")
+	ctx, parent := provider.Tracer("test").Start(t.Context(), "request")
+	if !parent.SpanContext().IsValid() {
+		t.Fatal("provider without exporter did not create a valid trace")
 	}
-	span.End()
+	_, child := provider.Tracer("test").Start(ctx, "workflow")
+	if child.SpanContext().TraceID() != parent.SpanContext().TraceID() {
+		t.Fatalf("child trace ID = %s, want %s", child.SpanContext().TraceID(), parent.SpanContext().TraceID())
+	}
+	child.End()
+	parent.End()
 	if err := shutdown(t.Context()); err != nil {
 		t.Fatalf("shutdown: %v", err)
 	}

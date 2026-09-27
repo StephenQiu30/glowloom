@@ -14,17 +14,19 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // ErrInvalidEndpoint means the OTLP/HTTP endpoint is not a plain HTTP(S) origin.
 var ErrInvalidEndpoint = errors.New("invalid LV_OTEL_ENDPOINT")
 
-// Open creates a per-process tracer provider. An empty endpoint disables export.
+// Open creates a per-process tracer provider. An empty endpoint disables export
+// while preserving trace context across process boundaries.
 func Open(ctx context.Context, endpoint, serviceName string) (trace.TracerProvider, func(context.Context) error, error) {
 	endpoint = strings.TrimSpace(endpoint)
+	serviceResource := resource.NewWithAttributes("", attribute.String("service.name", serviceName))
 	if endpoint == "" {
-		return noop.NewTracerProvider(), func(context.Context) error { return nil }, nil
+		provider := sdktrace.NewTracerProvider(sdktrace.WithResource(serviceResource))
+		return provider, provider.Shutdown, nil
 	}
 	u, err := url.Parse(endpoint)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.ForceQuery {
@@ -39,7 +41,7 @@ func Open(ctx context.Context, endpoint, serviceName string) (trace.TracerProvid
 	}
 	provider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(resource.NewWithAttributes("", attribute.String("service.name", serviceName))),
+		sdktrace.WithResource(serviceResource),
 	)
 	return provider, provider.Shutdown, nil
 }

@@ -16,18 +16,18 @@
 | --- | --- | --- | --- | --- | --- |
 | 文档（需求 → 设计 → 计划 → 测试 → 运维） | 全生命周期文档与需求设计拆解 | — | — | — | 完成（`bbd42ca7`），待评审 |
 | P0 | 全能参考可用性与成本验证 | — | 6 | 1 | 进行中 |
-| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 10 | 进行中 |
+| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 11 | 进行中 |
 | M2 | 剧本导入、解析、设定集 | 4 | 23 | 0 | 未开始 |
 | M3 | 资产定稿、分镜、生成全链路 | 11 | 60 | 0 | 未开始 |
 | M4 | 视频、配音、生成增强 | 3 | 18 | 0 | 未开始 |
 | M5 | 画布、Agent、运营辅助 = MVP | 4 | 20 | 0 | 未开始 |
-| 合计 | | 33 | 193 | 11 | |
+| 合计 | | 33 | 193 | 12 | |
 
 ## 2. 当前焦点与下一步
 
 1. **评审文档**：PRD-01、REQ、DES 均为“草案（待评审）”；评审通过后把功能 Epic 的状态从 `待办` 改为 `就绪`。
 2. **启动 P0**（P0-01～P0-06）：评测结论决定主供应商、内容审核、Agent LLM 与画布方案，并回填设计中的待确认问题。
-3. **M1 准备**：M1-01～M1-03 已完成（旧实现保留在标签 `legacy-2026-09`，三端骨架、工具链和本机环境已验证）；M1-04 和 M1-05 进行中，继续补齐契约、其余平台客户端和远端流水线验证。
+3. **M1 准备**：M1-01～M1-03、M1-05、M1-09、M1-10 已完成；M1-04 继续补齐公共契约门禁，M1-06 等任务按设计依赖推进。M1-05 的平台追踪已验证 Go → Agent Worker 的本机跨进程传递，完整用户生成链路仍由后续功能任务验收。
 
 ## 3. 待确认事项
 
@@ -79,12 +79,12 @@
 | M1-02 | 仓库骨架与工具链 | 三端目录、锁文件；gofmt/goimports/golangci-lint、ruff/mypy、ESLint/Prettier/tsc；初版 Makefile 与 Compose 环境样例已在 M1-03 按新要求移除 | `backend/`、`agent/`、`frontend/` | 完成 | `bdc167a5`、`c214607b` |
 | M1-03 | 本地环境 | 根目录 `.env` 配置三端本机进程，指向已启动的 PostgreSQL、Redis、Kafka、MinIO、Temporal；逐项健康检查与隔离的备份恢复演练；后续部署的 `docker-compose-env.yml` 独立定义依赖环境，本地不通过 Docker 启动；不使用项目脚本或 Makefile | `.env.example`、`docker-compose-env.yml`、`docs/operation/01-环境与部署.md` | 完成（环境底座；业务客户端在 M1-05 接入） | `e4038453`、`a2c11fa6`、`30769030` |
 | M1-04 | CI 流水线 | lint、format、typecheck、test、race、govulncheck、契约一致性、镜像构建（OPS-02）；首批三端静态检查、测试与镜像构建已写入工作流，`provider.*` Activity 共享示例随 Go/Python 测试运行，公共 API 生成物契约门禁待 M1-06 | `.github/workflows/` | 进行中（公共契约门禁与最终远端运行待验证） | `2690c95d` |
-| M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、objectstorage（S3 兼容协议）、temporal、otel、Wire 组合根，`--role=api|worker|relay|all`；数据库、Redis、Temporal 客户端与 API 就绪探针已接入，Kafka 客户端只读连通性与本机 MinIO 私有桶认证已验证；API 已接入 OTLP/HTTP、Gin 与 GORM 追踪；API、Worker、Relay 的依赖均由 Wire 生成装配；Temporal 客户端拦截器与真实 Collector 单次导出已在本机验证，worker 的 `flow` 维护任务和 relay 的 Outbox/realtime 进程角色已接入；`all` 已组合现有三角色并在失败时收敛；Worker/Relay 存活探针及应用 Compose 角色已接入；`media` 队列已接入，其他消费者仍待实施 | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/` | 进行中 | `7f4d27ff`、`c09607ce`、`39aecd56`、`84fab235`、`4acd6529`、`ca9f78db`、`ee19a1fc`、`583ef6ed`、`fb0b6715`、`87a8b157`、`a2307b2d`、`f911c33a`、`a9f42249`、`e2541616`、`d1c69906` |
+| M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、objectstorage（MinIO / S3 兼容协议）、temporal、otel、Wire 组合根与 `--role=api|worker|relay|all` 均已接入；API、`flow` / `media` Worker、Relay 的进程探针与本机服务集成已验证；无 Collector 时保留 Go → Temporal → Agent Worker 的 TraceID，配置 OTLP/HTTP 时可导出。其他业务事件消费者归 M1-08，完整用户生成链路按 OBS-01 由后续功能任务验收 | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/`、`agent/app/main_worker.py` | 完成（平台底座与跨进程追踪；不代表完整 OBS-01 产品验收） | `7f4d27ff`、`c09607ce`、`39aecd56`、`84fab235`、`4acd6529`、`ca9f78db`、`ee19a1fc`、`583ef6ed`、`fb0b6715`、`87a8b157`、`a2307b2d`、`f911c33a`、`a9f42249`、`e2541616`、`d1c69906`、本次提交 |
 | M1-06 | 契约链与统一错误响应 | Gin Handler 注解与 DTO → swag 自动生成并在线提供 `/swagger/doc.json`（禁止手改）→ `@umijs/openapi` 从在线文档生成 `frontend/src/gen/api`；公共 `/api` 的 Go 全局错误映射与 panic 恢复按 DES-03 返回 RFC 9457 错误，成功响应使用端点 DTO；Axios `frontend/src/lib/request.ts` 为请求唯一入口并统一解析错误；契约测试覆盖校验、鉴权、冲突、404、依赖和未预期错误及脱敏，CI 校验在线文档、公开路由覆盖和生成物一致。Activity 输入输出类型由 Go 与 Python 各自手写，以同一组示例校验一致；`provider.submit/query/cancel` 的内部预备见下文，公共契约链待 DES-03 评审 | `backend/internal/app/`、`backend/docs/`、`frontend/src/gen/api/`、`frontend/src/lib/request.ts` | 待办（内部 `provider.*` 预备已验证；公开部分待 IF4～IF6 决策） | — |
 | M1-07 | 命令层 | 鉴权（Redis 会话）、幂等键、`expected_revision`、审计、Outbox 统一中间层 | `backend/internal/command/` | 待办 | — |
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID）；已落 `infra.outbox`、`infra.processed_event` 迁移、常驻 Outbox 投递循环、月分区创建、默认分区搬迁及空历史分区删除方法、数据库副作用去重边界、30 天消费标记与已投递 7 天 Outbox 的分批清理方法、两项清理的 Temporal Workflow/Activity 与 Schedule 安装器、手动提交 Kafka offset 的消费者、`operation.status_changed.v1` 与 `workspace.project_changed.v1` 实时投影、Redis 补读和项目 SSE 处理器 | `backend/db/migrations/`、`backend/internal/infra/`、`backend/internal/app/` | 进行中（本机 PostgreSQL、Kafka、Redis、Temporal 与项目 SSE 处理器的测试授权链路已验证；进程角色中的 Outbox/realtime 链路及清理 Schedule 安装命令已接入；公开项目 SSE 路由待身份与项目授权后挂载，其余事件投影、个人通知 SSE 和部署环境 Schedule 周期触发待完成） | `cbfa526d`、`7632f630`、`abf70b5a`、`e9cd3b45`、`c2d83288`、`22e3b235`、`891a00f6`、`c8b63843`、`7939d661`、`a8aa6c20`、`6793c419`、`ba5e96da`、`c6877115`、`850e8ce7`、`74aab306` |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/` | 完成（骨架：已确认单项的 mock 图片生成、对账、接管、审核和结算；公开确认命令、批量、取消和真实供应商由对应 Epic 实现） | `9ec58b2e`、`a2e039db` |
-| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 完成（模拟供应商、双队列 Activity、Harness 与内部错误契约；真实模型和业务 Skill 由后续 Epic 接入） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93`、`bb4809e9`、`a398fc88`、`1839d0d0`、`ae1d01db`、`2d297630`、`754174bb`、本次提交 |
+| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 完成（模拟供应商、双队列 Activity、Harness 与内部错误契约；真实模型和业务 Skill 由后续 Epic 接入） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93`、`bb4809e9`、`a398fc88`、`1839d0d0`、`ae1d01db`、`2d297630`、`754174bb`、`ba7d4594` |
 | M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题、项目页异常恢复、模型参数表单和报价确认组件框架，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7`、`a9467f55`、`55a94493`、`ab0d8a37`、`46bf86fd` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
@@ -118,6 +118,8 @@
 **M1-05 Worker/Relay 存活探针（2026-09-27）**：两个进程在依赖初始化后分别监听 `LV_WORKER_HEALTH_ADDR`（默认 `:8081`）与 `LV_RELAY_HEALTH_ADDR`（默认 `:8082`），`GET /healthz` 返回进程存活状态；角色退出、监听失败或收到取消信号时关闭探针并等待循环结束。根目录 `.env` 与 `.env.example` 已补齐地址，应用 Compose 已加入两个角色，依赖 Compose 仍独立。无需外部服务的角色探针取消与错误传播 Race 测试通过；本机临时 PostgreSQL 库、Temporal、Kafka、Redis 的 `go test -race ./tests/app -run 'TestWorkerRoleRunsMaintenanceOnLocalTemporal|TestRelayRolePublishesAndProjectsOnLocalServices' -count=1 -v` 两例通过，包含探针 200 和停止后端口关闭断言；临时库、测试主题及消费组已删除。`go test -race ./...`、`go vet ./...`、`golangci-lint run ./...`、格式检查通过；`govulncheck ./...` 无可达漏洞，另有 1 个未调用依赖模块告警。两份 Compose 文件仅执行配置校验，未启动 Docker；真实部署的长期心跳、积压告警和远端 CI 尚未验证。M1-05 继续进行中。
 
 **M1-05 合并角色本机集成验证（2026-09-27）**：使用根目录未跟踪的 `.env`，在隔离 PostgreSQL 库和临时 Kafka 主题上执行 `go test -race ./tests/app -run TestAllRoleRunsAndStopsOnLocalServices -count=1 -v`；测试直接调用 `app.RunAll`，同时启动 API、Worker、Relay，三个健康接口通过，Outbox 事件经 Kafka 投影到 Redis Stream，取消后三个监听端口关闭。首轮 Race 测试发现 Redis 全局日志配置由并发角色重复写入，已移至 CLI 启动时只配置一次；修复后测试通过。临时库、主题和消费组已删除；此证据不包含 CLI 整进程启动、生产长期运行或远端 CI，M1-05 继续进行中。
+
+**M1-05 平台层收口（2026-09-28）**：Go `otelconn.Open` 在无 Collector 时原先使用 no-op provider，新增测试先复现无有效 TraceID，再改为只禁用导出、保留 SDK 追踪上下文；Agent Worker 接入 Temporal OpenTelemetry 拦截器与可选 OTLP/HTTP 导出，退出时刷新，应用 Compose 向 Agent Worker 传递 `LV_OTEL_ENDPOINT`。本机 Temporal 的 Go 工作流 / Activity 与 Python 工作流 / Activity 各自继承父 TraceID；隔离命名空间中的 `go test -race ./tests/temporalconn -run '^TestGoWorkflowToPythonActivityKeepsTraceID$' -count=1 -v` 由真实 Go 工作流调用真实 Python Agent Worker 的 `moderation.check`，本地 OTLP 接收端解码其跨度并核对与 Go 父 TraceID 相同；默认全量测试不设置本机服务变量时跳过此用例。`--role=worker --queues=media` 原生进程启动后，健康探针和 Temporal Activity poller 可用；隔离 PostgreSQL 库、Kafka、Redis、Temporal、MinIO 上的 `TestAllRoleRunsAndStopsOnLocalServices` Race 测试通过，退出后探针关闭。临时数据库和命名空间均已删除，本机未通过 Docker 启动服务。Go 全量 Race、vet、golangci-lint、goimports、govulncheck 与 Agent 全量 pytest、Ruff、mypy、锁文件检查通过；两份 Compose 只做配置解析。完整浏览器请求、公开生成命令、真实供应商调用与集中检索仍按 OBS-01 / 后续 Epic 验收，本项只认定平台底座完成；`--role=all` 的整进程 CLI 启动与生产长期运行未验证，现有证据是应用入口 `RunAll` 的真实服务集成。
 
 **M1-08 项目 SSE 链路复核（2026-09-27）**：在上述 `app.RunAll` 的本机隔离集成测试中，用测试专用项目授权检查先建立 SSE 订阅，再写入 Outbox；Kafka 消费者写入 Redis Stream 后，HTTP 流实际收到同一事件 ID 的 `operation.updated` 帧，`operation_id` 与状态正确。Race 测试通过，临时 PostgreSQL 库、Kafka 主题和消费组已删除。核对 `NewRouter` 发现公开 API 尚未挂载项目 SSE：项目成员鉴权未实现，不能把测试授权处理器当作公开端点验收；其他事件投影和 `/api/me/events` 也未实现，M1-08 继续进行中。
 

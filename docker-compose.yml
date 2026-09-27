@@ -105,3 +105,4 @@ services:
       LV_REDIS_URL: ${LV_REDIS_URL:?Set LV_REDIS_URL for the agent worker}
       LV_TEMPORAL_ADDR: ${LV_TEMPORAL_ADDR:?Set LV_TEMPORAL_ADDR for the agent worker}
       LV_TEMPORAL_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:?Set LV_TEMPORAL_NAMESPACE for the agent worker}
+      LV_OTEL_ENDPOINT: ${LV_OTEL_ENDPOINT:-}

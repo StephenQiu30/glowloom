@@ -40,3 +40,27 @@ def test_empty_optional_key_values_in_env_are_ignored(monkeypatch: pytest.Monkey
     configured = _settings()
     assert configured.credential_key_id is None
     assert configured.credential_private_key_ref is None
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "ftp://127.0.0.1:4318",
+        "http://user:private@127.0.0.1:4318",
+        "http://127.0.0.1:4318/v1/traces",
+        "http://127.0.0.1:4318?token=private",
+        "http://127.0.0.1:4318/#fragment",
+        "http://127.0.0.1:invalid",
+    ],
+)
+def test_otel_endpoint_requires_http_origin_without_credentials(endpoint: str) -> None:
+    with pytest.raises(ValidationError, match="invalid LV_OTEL_ENDPOINT"):
+        _settings(otel_endpoint=endpoint)
+
+
+def test_otel_endpoint_can_be_unset_or_http_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LV_OTEL_ENDPOINT", "")
+    assert _settings().otel_endpoint is None
+    assert _settings(otel_endpoint="http://127.0.0.1:4318").otel_endpoint == (
+        "http://127.0.0.1:4318"
+    )

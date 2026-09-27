@@ -73,7 +73,7 @@ func run() error {
 		}
 	default:
 		roleFlag := flag.String("role", string(app.RoleAPI), "process role: api|worker|relay|all")
-		queuesFlag := flag.String("queues", "", "worker task queue: flow")
+		queuesFlag := flag.String("queues", "", "worker task queues: flow|media|flow,media (default: flow)")
 		flag.Parse()
 		if flag.NArg() != 0 {
 			return fmt.Errorf("unexpected command: %q", flag.Arg(0))
