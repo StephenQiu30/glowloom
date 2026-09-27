@@ -61,3 +61,14 @@ func TestBudgetRejectsOverflowAndInvalidState(t *testing.T) {
 		t.Fatalf("revision overflow: %v", err)
 	}
 }
+
+func TestBudgetOverrunSameLimitIsNoOp(t *testing.T) {
+	budget := domain.Budget{
+		ID: uuid.New(), ProjectID: uuid.New(), LimitMicros: 100,
+		ReservedMicros: 20, SettledMicros: 100, IsOverrun: true, Revision: 2,
+	}
+	delta, err := budget.ChangeLimit(100)
+	if err != nil || delta != 0 || budget.IsOverrun != true || budget.Revision != 2 {
+		t.Fatalf("same limit in overrun state = %+v delta=%d err=%v", budget, delta, err)
+	}
+}

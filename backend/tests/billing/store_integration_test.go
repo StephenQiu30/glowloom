@@ -175,11 +175,11 @@ func TestLedgerMigrationEnforcesAppendOnlyAndApplicationPrivileges(t *testing.T)
 	`, appID.String(), uuid.NewString()); err != nil {
 		t.Fatalf("application insert ledger: %v", err)
 	}
-	assertLedgerPermissionDenied(t, ctx, tx, `UPDATE billing.ledger_entry SET amount_micros = 30 WHERE id = $1::uuid`, appID.String())
-	assertLedgerPermissionDenied(t, ctx, tx, `DELETE FROM billing.ledger_entry WHERE id = $1::uuid`, appID.String())
+	assertLedgerPermissionDenied(ctx, t, tx, `UPDATE billing.ledger_entry SET amount_micros = 30 WHERE id = $1::uuid`, appID.String())
+	assertLedgerPermissionDenied(ctx, t, tx, `DELETE FROM billing.ledger_entry WHERE id = $1::uuid`, appID.String())
 }
 
-func assertLedgerPermissionDenied(t *testing.T, ctx context.Context, tx *sql.Tx, statement string, id string) {
+func assertLedgerPermissionDenied(ctx context.Context, t *testing.T, tx *sql.Tx, statement string, id string) {
 	t.Helper()
 	if _, err := tx.ExecContext(ctx, "SAVEPOINT ledger_acl_probe"); err != nil {
 		t.Fatalf("create ACL savepoint: %v", err)

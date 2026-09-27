@@ -15,13 +15,16 @@ import (
 )
 
 var (
-	ErrNotFound    = errors.New("billing record not found")
+	// ErrNotFound hides records outside the current project or organization.
+	ErrNotFound = errors.New("billing record not found")
+	// ErrUnavailable means the store has no database handle.
 	ErrUnavailable = errors.New("billing store unavailable")
 )
 
 // Store keeps the database handle injected by the application composition root.
 type Store struct{ db *gorm.DB }
 
+// NewStore injects the caller's database handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 
 // FindBudget checks the current account and project owner in the database.

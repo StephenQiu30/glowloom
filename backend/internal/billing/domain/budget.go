@@ -1,3 +1,4 @@
+// Package domain defines the project budget and immutable ledger facts.
 package domain
 
 import (
@@ -8,8 +9,12 @@ import (
 )
 
 var (
-	ErrInvalidBudget       = errors.New("invalid budget")
+	// ErrInvalidBudget means the budget state cannot be represented safely.
+	ErrInvalidBudget = errors.New("invalid budget")
+	// ErrLimitBelowCommitted means a new limit would underfund existing charges.
 	ErrLimitBelowCommitted = errors.New("budget limit below committed funds")
+	// ErrBudgetRevision means another transaction changed the observed budget.
+	ErrBudgetRevision = errors.New("budget revision conflict")
 )
 
 // Budget is the project's spending envelope. Money is always in integer
@@ -54,11 +59,11 @@ func (b *Budget) ChangeLimit(next int64) (int64, error) {
 	if b == nil || b.Validate() != nil {
 		return 0, ErrInvalidBudget
 	}
-	if next < 0 || next < b.ReservedMicros+b.SettledMicros {
-		return 0, ErrLimitBelowCommitted
-	}
 	if next == b.LimitMicros {
 		return 0, nil
+	}
+	if next < 0 || next < b.ReservedMicros+b.SettledMicros {
+		return 0, ErrLimitBelowCommitted
 	}
 	if b.Revision == math.MaxInt32 {
 		return 0, ErrInvalidBudget
