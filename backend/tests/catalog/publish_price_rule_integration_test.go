@@ -102,17 +102,24 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	if err := conn.DB.WithContext(ctx).Raw(`SELECT count(*) FROM catalog.price_rule_version WHERE model_profile_id = ?::uuid`, registered.ID.String()).Scan(&count).Error; err != nil || count != 0 {
 		t.Fatalf("invalid prices left %d rows: %v", count, err)
 	}
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key = ?`, actor.OrgID.String()).Scan(&count).Error; err != nil || count != 2 {
+		t.Fatalf("invalid prices left %d audits: %v", count, err)
+	}
+	first.EffectiveFrom = time.Now().Add(24 * time.Hour)
 	published1, err := publishPrice.Execute(ctx, actor, first)
 	if err != nil || published1.VersionNo != 1 || published1.Revision != 3 || published1.ID == uuid.Nil {
 		t.Fatalf("first price %+v: %v", published1, err)
 	}
-	future := first
-	future.ExpectedRevision, future.VersionNo = 3, 2
-	future.Currency, future.FXRateToCNY = "USD", "7.123456"
-	future.EffectiveFrom = time.Now().Add(24 * time.Hour)
-	future.RequestID = uuid.NewString()
-	if _, err := publishPrice.Execute(ctx, actor, future); err != nil {
-		t.Fatalf("future price publication: %v", err)
+	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, registered.ID, domain.ModelActive, 3); !errors.Is(err, domain.ErrModelNotPublishable) {
+		t.Fatalf("future-only price activated model: %v", err)
+	}
+	effective := first
+	effective.ExpectedRevision, effective.VersionNo = 3, 2
+	effective.Currency, effective.FXRateToCNY = "USD", "7.123456"
+	effective.EffectiveFrom = time.Now().Add(-time.Minute)
+	effective.RequestID = uuid.NewString()
+	if _, err := publishPrice.Execute(ctx, actor, effective); err != nil {
+		t.Fatalf("effective price publication: %v", err)
 	}
 	var original struct {
 		Currency   string
@@ -172,6 +179,13 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	}
 	if err := conn.DB.WithContext(ctx).Raw(`SELECT count(*) FROM catalog.price_rule_version WHERE model_profile_id = ?::uuid`, registered.ID.String()).Scan(&count).Error; err != nil || count != 2 {
 		t.Fatalf("failed audit left %d prices: %v", count, err)
+	}
+	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, registered.ID)
+	if err != nil || loaded.Revision != 4 {
+		t.Fatalf("failed audit advanced model revision: %+v, %v", loaded, err)
+	}
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT count(*) FROM infra.outbox WHERE partition_key = ?`, actor.OrgID.String()).Scan(&count).Error; err != nil || count != 4 {
+		t.Fatalf("failed audit left %d events: %v", count, err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`DROP TRIGGER reject_price_audit_before_insert ON infra.outbox`).Error; err != nil {
 		t.Fatal(err)

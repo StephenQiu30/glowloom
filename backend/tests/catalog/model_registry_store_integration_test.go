@@ -12,6 +12,7 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/paramvalidation"
 	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
+	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/pricevalidation"
 	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
@@ -100,17 +101,30 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 3); !errors.Is(err, domain.ErrModelNotPublishable) {
 		t.Fatalf("model without price activated: %v", err)
 	}
+	priceValidator, err := pricevalidation.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishPrice := catalogapp.NewPublishPriceRuleCommand(store, priceValidator, time.Now)
 	price1 := validPriceVersion(model.ID)
-	price1.CreateBy = actor.ID
-	if err := store.AppendPriceRuleForAdmin(ctx, actor.ID, actor.OrgID, price1, 3); err != nil {
+	firstPriceInput := catalogapp.PublishPriceRuleInput{
+		ModelID: model.ID, ExpectedRevision: 3, VersionNo: 1,
+		Unit: price1.Unit, Rule: price1.Rule, Currency: price1.Currency,
+		EffectiveFrom: price1.EffectiveFrom, RequestID: uuid.NewString(),
+	}
+	publishedPrice1, err := publishPrice.Execute(ctx, actor, firstPriceInput)
+	if err != nil {
 		t.Fatalf("publish first price: %v", err)
 	}
-	price2 := validPriceVersion(model.ID)
-	price2.VersionNo, price2.Currency, price2.FXRateToCNY, price2.CreateBy = 2, "USD", "7.123456", actor.ID
-	if err := store.AppendPriceRuleForAdmin(ctx, actor.ID, actor.OrgID, price2, 4); err != nil {
+	secondPriceInput := firstPriceInput
+	secondPriceInput.ExpectedRevision, secondPriceInput.VersionNo = 4, 2
+	secondPriceInput.Currency, secondPriceInput.FXRateToCNY = "USD", "7.123456"
+	secondPriceInput.RequestID = uuid.NewString()
+	if _, err := publishPrice.Execute(ctx, actor, secondPriceInput); err != nil {
 		t.Fatalf("publish second price: %v", err)
 	}
-	if err := store.AppendPriceRuleForAdmin(ctx, actor.ID, actor.OrgID, price2, 5); !errors.Is(err, pgcatalog.ErrPriceVersionConflict) {
+	secondPriceInput.ExpectedRevision = 5
+	if _, err := publishPrice.Execute(ctx, actor, secondPriceInput); !errors.Is(err, pgcatalog.ErrPriceVersionConflict) {
 		t.Fatalf("duplicate price version accepted: %v", err)
 	}
 	var originalPrice struct {
@@ -120,7 +134,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	if err := conn.DB.WithContext(ctx).Raw(`
 		SELECT currency, rule->>'base_micros' AS base_micros
 		FROM catalog.price_rule_version WHERE id = ?::uuid
-	`, price1.ID.String()).Scan(&originalPrice).Error; err != nil || originalPrice.Currency != "CNY" || originalPrice.BaseMicros != "1000" {
+	`, publishedPrice1.ID.String()).Scan(&originalPrice).Error; err != nil || originalPrice.Currency != "CNY" || originalPrice.BaseMicros != "1000" {
 		t.Fatalf("historical price changed: %+v, %v", originalPrice, err)
 	}
 	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 5); err != nil {
