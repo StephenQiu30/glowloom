@@ -216,7 +216,7 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | E-07-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.provider`、`catalog.provider_credential`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-10 §2](docs/design/10-供应商凭据.md#2-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 进行中（迁移、领域校验与事务仓储已在隔离 PostgreSQL 验证；管理员授权及完整凭据命令待实施） | `40a9e1fc`、`43afa186` |
-| E-07-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/admin/providers/{id}/credentials、GET /api/admin/providers/{id}；swag 注解生成 OpenAPI。详见 [DES-10 §3](docs/design/10-供应商凭据.md#3-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 进行中（内部供应商登记、凭据保存与停用命令及事务已验证；公共鉴权/幂等接口、供应商修改和查询等待实施） | `ac110dac`、`26d1bfb6`、`5e45289d` |
+| E-07-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/admin/providers/{id}/credentials、GET /api/admin/providers/{id}；swag 注解生成 OpenAPI。详见 [DES-10 §3](docs/design/10-供应商凭据.md#3-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 进行中（内部供应商登记、修改、凭据保存与停用命令及事务已验证；公共鉴权/幂等接口、供应商查询等待实施） | `ac110dac`、`26d1bfb6`、`5e45289d` |
 | E-07-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `CredentialTestWorkflow`；事件 `catalog.credential_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：- 测试：`backend-api` 直接执行一个短工作流 `CredentialTestWorkflow` → Activity `provider.test_credential`（`agent` 队列，超时 15… 详见 [DES-10 §4](docs/design/10-供应商凭据.md#4-异步与工作流) | `backend/internal/catalog/adapter/workflow/`、`backend/internal/catalog/adapter/event/` | 进行中（Go 工作流、双阶段鉴权及测试结果与事件的事务写入已验证；公共启动接口、缓存消费者与真实供应商联调待实施） | `ac110dac`、`26d1bfb6`、`5e45289d` |
 | E-07-04 | Agent 服务 | 供应商凭据解封与连通性测试 Activity `provider.test_credential`；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/activities/`、`agent/app/providers/` | 进行中（私钥文件配置、Activity 与 OpenRouter 免费鉴权探测已在模拟 HTTP 和本机 Temporal 验证；Go/Python 共享示例契约已接入，其他适配器、真实凭据与评测待实施） | `29aee2e6`、`614231dc`、`b65ef335`、`f2a7c4bb`、`5a40fe73` |
 | E-07-05 | 前端 | 供应商列表：名称、区域、凭据状态（末 4 位、最后测试结果与时间）、模型数量；凭据对话框为密码输入框，保存后不可查看。 详见 [DES-10 §6](docs/design/10-供应商凭据.md#6-界面) | `frontend/src/features/admin/` | 待办 | — |
@@ -235,6 +235,8 @@
 **E-07-02 内部凭据停用切片（2026-09-27）**：停用命令要求规范 UUID 请求 ID 和精确的启用凭据 ID，前后两次复核管理员当前权限；即使供应商已停用，也允许管理员撤销其仍启用的凭据。PostgreSQL 对供应商、凭据按固定顺序加锁，将凭据状态、`catalog.credential_changed.v1` 与只含 `last4` 的 `credential.disabled` 审计 Outbox 在同一事务提交。先以缺失命令类型确认 Red；单元测试检查安全摘要、事件白名单与非法调用，隔离本机 PostgreSQL 的 Race 测试检查停用后无启用凭据、重复停用拒绝、审计写入失败整体回滚，以及读后撤权时写入阶段拒绝。公共接口、持久幂等回执、缓存失效消费者、停用后的报价与在途查询验收仍待实施。
 
 **E-07-02 内部供应商登记切片（2026-09-27）**：应用命令限制供应商 key、名称、初始状态、限额及已声明的适配器；PostgreSQL 在同一事务中重新核对管理员当前权限，插入供应商并写 `provider.created` 审计 Outbox。审计只含稳定 key、适配器、区域、状态与两个限额。先以缺少命令类型确认 Red；单元测试覆盖未知适配器、非法调用与审计字段白名单；隔离本机 PostgreSQL Race 测试验证唯一 key、审计写入失败回滚供应商、撤权后拒绝及事件解析。DES-03 的 IF4～IF6 就绪评审仍未完成，本切片仅为内部命令；公共路由、持久幂等、供应商修改及查询待实施。
+
+**E-07-02 内部供应商修改切片（2026-09-27）**：先按 DES-10 §3 在 DES-03 事件目录中补充 `catalog.provider_changed.v1`，避免把供应商配置变化误记为凭据变化。命令仅允许状态、并发与速率变更，要求规范 UUID 请求 ID、有效修订号和实际变化；读取与写入事务分别复核当前管理员，写入锁定供应商并复核修订号。状态和限额、只含供应商 ID 与新修订号的变更事件、只含前后状态和限额的 `provider.updated` 审计事件同事务提交。先以缺少命令类型确认 Red；单元测试检查安全事件与非法请求，隔离本机 PostgreSQL Race 测试覆盖审计写入失败回滚、读取后并发修订冲突、读取后撤权，以及停用供应商后启用凭据不可再读取。公共路由、持久幂等回执、缓存消费者、供应商安全查询与 TC-07 验收仍待实施。
 
 #### E-08 模型注册表与价格
 

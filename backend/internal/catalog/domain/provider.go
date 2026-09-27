@@ -13,6 +13,8 @@ import (
 var (
 	// ErrInvalidProvider means provider settings violate the persisted contract.
 	ErrInvalidProvider = errors.New("invalid provider")
+	// ErrProviderRevisionConflict means settings changed after an administrator read them.
+	ErrProviderRevisionConflict = errors.New("provider revision conflict")
 	// ErrProviderDisabled means a disabled provider cannot accept new work.
 	ErrProviderDisabled = errors.New("provider is disabled")
 	// ErrInvalidCredential means an encrypted credential has invalid metadata.

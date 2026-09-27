@@ -24,7 +24,7 @@ var (
 	// ErrCredentialNotFound means no current credential matches the provider.
 	ErrCredentialNotFound = errors.New("active credential not found")
 	// ErrRevisionConflict means provider settings changed after they were read.
-	ErrRevisionConflict = errors.New("provider revision conflict")
+	ErrRevisionConflict = domain.ErrProviderRevisionConflict
 )
 
 // Store keeps the provider tables behind an explicitly injected database handle.
