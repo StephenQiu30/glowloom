@@ -352,3 +352,33 @@ func TestWorkspaceStoreListsOnlyVisibleStylePresets(t *testing.T) {
 		t.Fatal("deleted project ID accepted for style preset list")
 	}
 }
+
+func TestWorkspaceStoreReturnsStylePresetGenerationContent(t *testing.T) {
+	ctx, database := workspaceMigrationDB(t)
+	orgID := insertWorkspaceOrganization(ctx, t, database)
+	actor := insertWorkspaceActor(ctx, t, database, orgID)
+	presetID := insertStylePreset(ctx, t, database, orgID, "", false)
+	referenceIDs := []uuid.UUID{uuid.New(), uuid.New()}
+	if err := database.WithContext(ctx).Exec(`
+		UPDATE workspace.style_preset
+		SET prompt_fragment = ?, negative_prompt = ?,
+		    reference_asset_ids = ARRAY[?::uuid, ?::uuid]
+		WHERE id = ?::uuid
+	`, "古风光影", "现代建筑", referenceIDs[0].String(), referenceIDs[1].String(), presetID.String()).Error; err != nil {
+		t.Fatalf("set style preset generation content: %v", err)
+	}
+	presets, err := pgworkspace.NewStore(database).ListStylePresets(ctx, actor, nil)
+	if err != nil {
+		t.Fatalf("list style presets: %v", err)
+	}
+	if len(presets) != 1 || presets[0].ID != presetID ||
+		presets[0].PromptFragment != "古风光影" || presets[0].NegativePrompt != "现代建筑" ||
+		len(presets[0].ReferenceAssetIDs) != len(referenceIDs) {
+		t.Fatalf("style preset generation content = %+v", presets)
+	}
+	for index, id := range referenceIDs {
+		if presets[0].ReferenceAssetIDs[index] != id {
+			t.Fatalf("style preset reference at %d = %s, want %s", index, presets[0].ReferenceAssetIDs[index], id)
+		}
+	}
+}
