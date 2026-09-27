@@ -126,7 +126,7 @@ func TestRedisReplayAfterLastEventAndResync(t *testing.T) {
 	if err != nil || resync || len(events) != 2 || events[0].ID != ids[1] || events[1].ID != ids[2] {
 		t.Fatalf("replay = %+v, resync = %t, error = %v", events, resync, err)
 	}
-	if events, resync, err := sink.Replay(ctx, projectID, ids[1]); err != nil || resync || len(events) != 0 {
+	if events, resync, err := sink.Replay(ctx, projectID, ids[1]); err != nil || resync || len(events) != 1 || events[0].ID != ids[2] {
 		t.Fatalf("duplicate cursor = %+v, resync = %t, error = %v", events, resync, err)
 	}
 	if events, resync, err := sink.Replay(ctx, projectID, uuid.NewString()); err != nil || !resync || len(events) != 0 {
