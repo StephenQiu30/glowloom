@@ -1,0 +1,359 @@
+package postgres
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/gorm"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+)
+
+var (
+	// ErrCapabilityKeyExists means the stable capability key is already used.
+	ErrCapabilityKeyExists = errors.New("capability key already exists")
+	// ErrModelKeyExists means the stable model key is already used.
+	ErrModelKeyExists = errors.New("model key already exists")
+	// ErrModelNotFound means no non-deleted model has the requested ID.
+	ErrModelNotFound = errors.New("model not found")
+	// ErrModelVersionConflict means the next model version number was not supplied.
+	ErrModelVersionConflict = errors.New("model version conflict")
+	// ErrPriceVersionConflict means the next price version number was not supplied.
+	ErrPriceVersionConflict = errors.New("price version conflict")
+)
+
+// CreateCapabilityForAdmin adds a platform capability after checking the live administrator.
+func (s *Store) CreateCapabilityForAdmin(ctx context.Context, actorID, orgID uuid.UUID, capability domain.Capability) error {
+	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || capability.Validate() != nil {
+		return domain.ErrInvalidCapability
+	}
+	modes, err := json.Marshal(capability.Modes)
+	if err != nil {
+		return fmt.Errorf("encode capability modes: %w", err)
+	}
+	roles, err := json.Marshal(append([]string{}, capability.InputRoles...))
+	if err != nil {
+		return fmt.Errorf("encode capability input roles: %w", err)
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+			return err
+		}
+		result := tx.Exec(`
+			INSERT INTO catalog.capability (id, key, output_type, modes, input_roles)
+			VALUES (?::uuid, ?, ?, ARRAY(SELECT jsonb_array_elements_text(?::jsonb)),
+			        ARRAY(SELECT jsonb_array_elements_text(?::jsonb)))
+		`, capability.ID.String(), capability.Key, string(capability.OutputType),
+			string(modes), string(roles))
+		if isUniqueViolation(result.Error, "capability_key_key") {
+			return ErrCapabilityKeyExists
+		}
+		if result.Error != nil {
+			return fmt.Errorf("insert capability: %w", result.Error)
+		}
+		return requireOneRow(result, "insert capability")
+	})
+}
+
+// CreateModelForAdmin registers a disabled model with an initial revision.
+func (s *Store) CreateModelForAdmin(ctx context.Context, actorID, orgID uuid.UUID, model domain.ModelProfile) error {
+	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+		model.Validate() != nil || model.Status != domain.ModelDisabled ||
+		model.CurrentVersionID != uuid.Nil || model.Revision != 1 {
+		return domain.ErrInvalidModel
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+			return err
+		}
+		result := tx.Exec(`
+			INSERT INTO catalog.model_profile
+			  (id, model_key, provider_id, capability, display_name)
+			VALUES (?::uuid, ?, ?::uuid, ?, ?)
+		`, model.ID.String(), model.Key, model.ProviderID.String(), model.Capability, model.DisplayName)
+		if isUniqueViolation(result.Error, "model_profile_model_key_key") {
+			return ErrModelKeyExists
+		}
+		if result.Error != nil {
+			return fmt.Errorf("insert model profile: %w", result.Error)
+		}
+		return requireOneRow(result, "insert model profile")
+	})
+}
+
+// FindModelForAdmin checks live rights before reading a model identity and status.
+func (s *Store) FindModelForAdmin(ctx context.Context, actorID, orgID, modelID uuid.UUID) (domain.ModelProfile, error) {
+	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || modelID == uuid.Nil {
+		return domain.ModelProfile{}, ErrModelNotFound
+	}
+	var model domain.ModelProfile
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+			return err
+		}
+		var row modelProfileRow
+		result := tx.Raw(`
+			SELECT id, model_key, provider_id, capability, display_name, status,
+			       current_version_id, revision, create_time, update_time
+			FROM catalog.model_profile WHERE id = ?::uuid AND NOT is_delete
+		`, modelID.String()).Scan(&row)
+		if result.Error != nil {
+			return fmt.Errorf("read model profile: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrModelNotFound
+		}
+		model = row.model()
+		return nil
+	})
+	if err != nil {
+		return domain.ModelProfile{}, fmt.Errorf("find model as administrator: %w", err)
+	}
+	return model, nil
+}
+
+// AppendModelVersionForAdmin inserts a new immutable version and advances the
+// model pointer under the same row lock and optimistic revision.
+func (s *Store) AppendModelVersionForAdmin(ctx context.Context, actorID, orgID uuid.UUID, version domain.ModelVersion, expectedRevision int64) error {
+	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+		version.Validate() != nil || version.CreateBy != actorID || expectedRevision < 1 {
+		return domain.ErrInvalidModelVersion
+	}
+	modes, err := json.Marshal(version.Modes)
+	if err != nil {
+		return fmt.Errorf("encode model modes: %w", err)
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+			return err
+		}
+		row, err := lockModelProfile(tx, version.ModelID)
+		if err != nil {
+			return err
+		}
+		model := row.model()
+		if err := model.AttachVersion(version, expectedRevision); err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Raw(`
+			SELECT count(*) FROM catalog.model_profile_version
+			WHERE model_profile_id = ?::uuid
+		`, version.ModelID.String()).Scan(&count).Error; err != nil {
+			return fmt.Errorf("count model versions: %w", err)
+		}
+		if int64(version.VersionNo) != count+1 {
+			return ErrModelVersionConflict
+		}
+		var supported bool
+		if err := tx.Raw(`
+			SELECT ARRAY(SELECT jsonb_array_elements_text(?::jsonb)) <@ c.modes AS supported
+			FROM catalog.capability AS c WHERE c.key = ? AND NOT c.is_delete
+		`, string(modes), row.Capability).Scan(&supported).Error; err != nil {
+			return fmt.Errorf("check model modes: %w", err)
+		}
+		if !supported {
+			return domain.ErrInvalidModelVersion
+		}
+		result := tx.Exec(`
+			INSERT INTO catalog.model_profile_version
+			  (id, model_profile_id, version_no, provider_model_id, modes, limits,
+			   param_schema, supports_query, supports_cancel, supports_callback,
+			   expected_max_ms, moderation, queue, create_by)
+			VALUES (?::uuid, ?::uuid, ?, ?, ARRAY(SELECT jsonb_array_elements_text(?::jsonb)), ?::jsonb, ?::jsonb,
+			        ?, ?, ?, ?, ?, ?, ?::uuid)
+		`, version.ID.String(), version.ModelID.String(), version.VersionNo,
+			version.ProviderModelID, string(modes), string(version.Limits),
+			string(version.ParamSchema), version.SupportsQuery, version.SupportsCancel,
+			version.SupportsCallback, version.ExpectedMaxMS, string(version.Moderation),
+			version.Queue, actorID.String())
+		if isUniqueViolation(result.Error, "uq_model_profile_version") {
+			return ErrModelVersionConflict
+		}
+		if result.Error != nil {
+			return fmt.Errorf("insert model version: %w", result.Error)
+		}
+		if err := requireOneRow(result, "insert model version"); err != nil {
+			return err
+		}
+		result = tx.Exec(`
+			UPDATE catalog.model_profile
+			SET current_version_id = ?::uuid, revision = revision + 1, update_time = now()
+			WHERE id = ?::uuid AND revision = ? AND NOT is_delete
+		`, version.ID.String(), version.ModelID.String(), expectedRevision)
+		if result.Error != nil {
+			return fmt.Errorf("advance model version: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return domain.ErrModelRevisionConflict
+		}
+		return nil
+	})
+}
+
+// AppendPriceRuleForAdmin inserts a new immutable price version and advances
+// the model revision without rewriting earlier prices.
+func (s *Store) AppendPriceRuleForAdmin(ctx context.Context, actorID, orgID uuid.UUID, price domain.PriceRuleVersion, expectedRevision int64) error {
+	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+		price.Validate() != nil || price.CreateBy != actorID || expectedRevision < 1 {
+		return domain.ErrInvalidPriceRule
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+			return err
+		}
+		row, err := lockModelProfile(tx, price.ModelID)
+		if err != nil {
+			return err
+		}
+		if row.Revision != expectedRevision {
+			return domain.ErrModelRevisionConflict
+		}
+		var count int64
+		if err := tx.Raw(`
+			SELECT count(*) FROM catalog.price_rule_version
+			WHERE model_profile_id = ?::uuid
+		`, price.ModelID.String()).Scan(&count).Error; err != nil {
+			return fmt.Errorf("count price versions: %w", err)
+		}
+		if int64(price.VersionNo) != count+1 {
+			return ErrPriceVersionConflict
+		}
+		result := tx.Exec(`
+			INSERT INTO catalog.price_rule_version
+			  (id, model_profile_id, version_no, unit, rule, currency,
+			   fx_rate_to_cny, effective_from, create_by)
+			VALUES (?::uuid, ?::uuid, ?, ?, ?::jsonb, ?, NULLIF(?, '')::numeric, ?, ?::uuid)
+		`, price.ID.String(), price.ModelID.String(), price.VersionNo,
+			string(price.Unit), string(price.Rule), price.Currency,
+			price.FXRateToCNY, price.EffectiveFrom, actorID.String())
+		if isUniqueViolation(result.Error, "uq_price_rule_version") {
+			return ErrPriceVersionConflict
+		}
+		if result.Error != nil {
+			return fmt.Errorf("insert price version: %w", result.Error)
+		}
+		if err := requireOneRow(result, "insert price version"); err != nil {
+			return err
+		}
+		result = tx.Exec(`
+			UPDATE catalog.model_profile
+			SET revision = revision + 1, update_time = now()
+			WHERE id = ?::uuid AND revision = ? AND NOT is_delete
+		`, price.ModelID.String(), expectedRevision)
+		if result.Error != nil {
+			return fmt.Errorf("advance model price revision: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return domain.ErrModelRevisionConflict
+		}
+		return nil
+	})
+}
+
+// SetModelStatusForAdmin changes model availability after checking the current
+// model version and an effective price in the same transaction.
+func (s *Store) SetModelStatusForAdmin(ctx context.Context, actorID, orgID, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64) error {
+	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+		modelID == uuid.Nil || expectedRevision < 1 {
+		return domain.ErrInvalidModel
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+			return err
+		}
+		row, err := lockModelProfile(tx, modelID)
+		if err != nil {
+			return err
+		}
+		model := row.model()
+		if model.Revision != expectedRevision {
+			return domain.ErrModelRevisionConflict
+		}
+		var hasPrice bool
+		if status == domain.ModelActive {
+			if err := tx.Raw(`
+				SELECT EXISTS (
+				  SELECT 1 FROM catalog.price_rule_version
+				  WHERE model_profile_id = ?::uuid AND effective_from <= now() AND NOT is_delete
+				) AS has_price
+			`, modelID.String()).Scan(&hasPrice).Error; err != nil {
+				return fmt.Errorf("check effective model price: %w", err)
+			}
+		}
+		if err := model.SetStatus(status, hasPrice); err != nil {
+			return err
+		}
+		result := tx.Exec(`
+			UPDATE catalog.model_profile
+			SET status = ?, revision = revision + 1, update_time = now()
+			WHERE id = ?::uuid AND revision = ? AND NOT is_delete
+		`, string(status), modelID.String(), expectedRevision)
+		if result.Error != nil {
+			return fmt.Errorf("set model status: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return domain.ErrModelRevisionConflict
+		}
+		return nil
+	})
+}
+
+type modelProfileRow struct {
+	ID               uuid.UUID
+	ModelKey         string
+	ProviderID       uuid.UUID
+	Capability       string
+	DisplayName      string
+	Status           string
+	CurrentVersionID *uuid.UUID
+	Revision         int64
+	CreateTime       time.Time
+	UpdateTime       time.Time
+}
+
+func (row modelProfileRow) model() domain.ModelProfile {
+	model := domain.ModelProfile{
+		ID: row.ID, Key: row.ModelKey, ProviderID: row.ProviderID,
+		Capability: row.Capability, DisplayName: row.DisplayName,
+		Status: domain.ModelStatus(row.Status), Revision: row.Revision,
+		CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
+	}
+	if row.CurrentVersionID != nil {
+		model.CurrentVersionID = *row.CurrentVersionID
+	}
+	return model
+}
+
+func lockModelProfile(tx *gorm.DB, modelID uuid.UUID) (modelProfileRow, error) {
+	var row modelProfileRow
+	result := tx.Raw(`
+		SELECT id, model_key, provider_id, capability, display_name, status,
+		       current_version_id, revision, create_time, update_time
+		FROM catalog.model_profile WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
+	`, modelID.String()).Scan(&row)
+	if result.Error != nil {
+		return modelProfileRow{}, fmt.Errorf("lock model profile: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return modelProfileRow{}, ErrModelNotFound
+	}
+	return row, nil
+}
+
+func isUniqueViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == constraint
+}
+
+func requireOneRow(result *gorm.DB, action string) error {
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("%s: affected %d rows", action, result.RowsAffected)
+	}
+	return nil
+}
