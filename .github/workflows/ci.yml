@@ -72,6 +72,23 @@ jobs:
       - run: go vet ./...
       - run: golangci-lint run ./...
       - run: go test -race ./...
+      - name: Prepare isolated identity contract databases
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_identity_gate_test'
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_identity_bootstrap_test'
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271010_create_identity_user.up.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609270435_create_outbox.up.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271010_create_identity_user.up.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271020_create_organization.up.sql
+      - name: Verify identity PostgreSQL and Redis contracts
+        env:
+          LV_TEST_IDENTITY_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_gate_test?sslmode=disable
+          LV_TEST_IDENTITY_REDIS_URL: redis://127.0.0.1:6379/14
+        run: go test -race ./tests/identity -run '^Test(Identity|SessionStore|LoginLimiter|AuthenticateRejectsDisabledAccountWithRealPostgresAndRedis)' -count=1 -v
+      - name: Verify first-admin bootstrap in its own database
+        env:
+          LV_TEST_BOOTSTRAP_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable
+        run: go test -race ./tests/identity -run '^TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres$' -count=1 -v
       - name: Prepare PostgreSQL contract databases
         run: psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE ROLE lanverse_app'
       - name: Apply migrations for PostgreSQL contract tests
