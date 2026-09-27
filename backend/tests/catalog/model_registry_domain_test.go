@@ -82,6 +82,7 @@ func TestModelRegistryDomainRejectsInvalidPayloads(t *testing.T) {
 		func(p *domain.PriceRuleVersion) { p.Currency = "USD" },
 		func(p *domain.PriceRuleVersion) { p.Currency = "USD"; p.FXRateToCNY = "0" },
 		func(p *domain.PriceRuleVersion) { p.Currency = "USD"; p.FXRateToCNY = "1.1234567" },
+		func(p *domain.PriceRuleVersion) { p.Currency = "USD"; p.FXRateToCNY = "1234567" },
 		func(p *domain.PriceRuleVersion) { p.EffectiveFrom = time.Time{} },
 	} {
 		candidate := price
