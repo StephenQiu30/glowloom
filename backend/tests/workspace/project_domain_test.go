@@ -1,8 +1,11 @@
 package workspace_test
 
 import (
+	"errors"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -19,6 +22,150 @@ func validProject() domain.Project {
 		Resolution:  "1080p",
 		Status:      "active",
 		Revision:    1,
+	}
+}
+
+func TestProjectLifecycleArchiveAndUnarchive(t *testing.T) {
+	project := validProject()
+	archivedAt := time.Date(2026, time.September, 27, 10, 0, 0, 0, time.UTC)
+	if err := project.Archive(archivedAt, false); err != nil {
+		t.Fatalf("archive project: %v", err)
+	}
+	if project.Status != "archived" || project.ArchivedAt == nil || !project.ArchivedAt.Equal(archivedAt) || project.Revision != 2 {
+		t.Fatalf("archive did not persist its lifecycle state: %+v", project)
+	}
+	if err := project.CanWrite(); !errors.Is(err, domain.ErrProjectStateConflict) {
+		t.Fatalf("archived project must be read only, got %v", err)
+	}
+	if err := project.Archive(archivedAt, false); !errors.Is(err, domain.ErrProjectStateConflict) {
+		t.Fatalf("repeated archive must conflict, got %v", err)
+	}
+	if err := project.Unarchive(); err != nil {
+		t.Fatalf("unarchive project: %v", err)
+	}
+	if project.Status != "active" || project.ArchivedAt != nil || project.Revision != 3 {
+		t.Fatalf("unarchive did not restore active state: %+v", project)
+	}
+	if err := project.CanWrite(); err != nil {
+		t.Fatalf("active project should allow writes: %v", err)
+	}
+	if err := project.Unarchive(); !errors.Is(err, domain.ErrProjectStateConflict) {
+		t.Fatalf("repeated unarchive must conflict, got %v", err)
+	}
+}
+
+func TestProjectLifecycleBlockingOperations(t *testing.T) {
+	now := time.Date(2026, time.September, 27, 10, 0, 0, 0, time.UTC)
+	project := validProject()
+	if err := project.Archive(now, true); !errors.Is(err, domain.ErrProjectHasInflightOperations) {
+		t.Fatalf("inflight operations must block archive, got %v", err)
+	}
+	if err := project.Delete(now, true); !errors.Is(err, domain.ErrProjectHasInflightOperations) {
+		t.Fatalf("inflight operations must block deletion, got %v", err)
+	}
+	if project.Status != "active" || project.IsDelete || project.Revision != 1 {
+		t.Fatalf("blocked operations changed the project: %+v", project)
+	}
+	if err := project.Archive(now, false); err != nil {
+		t.Fatalf("archive after operations settle: %v", err)
+	}
+	if err := project.Delete(now, true); !errors.Is(err, domain.ErrProjectHasInflightOperations) {
+		t.Fatalf("inflight operations must also block deletion of archived projects, got %v", err)
+	}
+}
+
+func TestProjectLifecycleDeleteAndRestoreOriginalState(t *testing.T) {
+	deletedAt := time.Date(2026, time.September, 27, 10, 0, 0, 0, time.UTC)
+	for _, initialStatus := range []string{"active", "archived"} {
+		t.Run(initialStatus, func(t *testing.T) {
+			project := validProject()
+			if initialStatus == "archived" {
+				if err := project.Archive(deletedAt.Add(-time.Hour), false); err != nil {
+					t.Fatalf("archive before delete: %v", err)
+				}
+			}
+			beforeDeleteRevision := project.Revision
+			archivedAt := project.ArchivedAt
+			if err := project.Delete(deletedAt, false); err != nil {
+				t.Fatalf("delete project: %v", err)
+			}
+			if !project.IsDelete || project.Status != initialStatus || project.DeleteTime == nil ||
+				!project.DeleteTime.Equal(deletedAt) || project.PurgeAfter == nil ||
+				!project.PurgeAfter.Equal(deletedAt.Add(30*24*time.Hour)) || project.Revision != beforeDeleteRevision+1 ||
+				project.ArchivedAt != archivedAt {
+				t.Fatalf("soft delete did not preserve original status and deadline: %+v", project)
+			}
+			if err := project.CanWrite(); !errors.Is(err, domain.ErrProjectStateConflict) {
+				t.Fatalf("deleted project must reject writes, got %v", err)
+			}
+			if err := project.Delete(deletedAt, false); !errors.Is(err, domain.ErrProjectStateConflict) {
+				t.Fatalf("repeated delete must conflict, got %v", err)
+			}
+			if err := project.Archive(deletedAt, false); !errors.Is(err, domain.ErrProjectStateConflict) {
+				t.Fatalf("deleted project cannot be archived, got %v", err)
+			}
+			if err := project.Unarchive(); !errors.Is(err, domain.ErrProjectStateConflict) {
+				t.Fatalf("deleted project cannot be unarchived, got %v", err)
+			}
+			if err := project.Restore(deletedAt.Add(10 * 24 * time.Hour)); err != nil {
+				t.Fatalf("restore during thirty-day window: %v", err)
+			}
+			if project.IsDelete || project.Status != initialStatus || project.DeleteTime != nil ||
+				project.PurgeAfter != nil || project.Revision != beforeDeleteRevision+2 || project.ArchivedAt != archivedAt {
+				t.Fatalf("restore did not recover original state: %+v", project)
+			}
+			if initialStatus == "archived" {
+				if err := project.CanWrite(); !errors.Is(err, domain.ErrProjectStateConflict) {
+					t.Fatalf("restored archived project must remain read only, got %v", err)
+				}
+			} else if err := project.CanWrite(); err != nil {
+				t.Fatalf("restored active project should allow writes: %v", err)
+			}
+		})
+	}
+}
+
+func TestProjectLifecycleRestoreWindow(t *testing.T) {
+	deletedAt := time.Date(2026, time.September, 27, 10, 0, 0, 0, time.UTC)
+	beforeDeadline := validProject()
+	if err := beforeDeadline.Delete(deletedAt, false); err != nil {
+		t.Fatalf("delete project: %v", err)
+	}
+	if err := beforeDeadline.Restore(deletedAt.Add(30*24*time.Hour - time.Nanosecond)); err != nil {
+		t.Fatalf("restore before deadline: %v", err)
+	}
+	for _, elapsed := range []time.Duration{30 * 24 * time.Hour, 31 * 24 * time.Hour} {
+		project := validProject()
+		if err := project.Delete(deletedAt, false); err != nil {
+			t.Fatalf("delete project: %v", err)
+		}
+		if err := project.Restore(deletedAt.Add(elapsed)); !errors.Is(err, domain.ErrProjectRestoreExpired) {
+			t.Fatalf("restore at or after deadline must expire, got %v", err)
+		}
+		if !project.IsDelete || project.Revision != 2 {
+			t.Fatalf("expired restoration changed the project: %+v", project)
+		}
+	}
+	project := validProject()
+	if err := project.Restore(deletedAt); !errors.Is(err, domain.ErrProjectStateConflict) {
+		t.Fatalf("restore without deletion must conflict, got %v", err)
+	}
+}
+
+func TestProjectLifecycleRejectsInvalidTimestampAndRevisionOverflow(t *testing.T) {
+	project := validProject()
+	if err := project.Archive(time.Time{}, false); !errors.Is(err, domain.ErrInvalidProject) {
+		t.Fatalf("archive with zero timestamp must fail, got %v", err)
+	}
+	if err := project.Delete(time.Time{}, false); !errors.Is(err, domain.ErrInvalidProject) {
+		t.Fatalf("delete with zero timestamp must fail, got %v", err)
+	}
+	project.Revision = math.MaxInt32
+	if err := project.Archive(time.Now(), false); !errors.Is(err, domain.ErrInvalidProject) {
+		t.Fatalf("revision beyond database range must fail, got %v", err)
+	}
+	if project.Status != "active" || project.Revision != math.MaxInt32 {
+		t.Fatalf("invalid transition changed project: %+v", project)
 	}
 }
 
