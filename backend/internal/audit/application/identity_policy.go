@@ -17,6 +17,8 @@ func NewRecordedActionParser() *Parser {
 	fields["provider.updated"] = []string{"status", "concurrency_limit", "rate_limit_per_min"}
 	fields["model.created"] = []string{"key", "provider_id", "capability", "display_name", "status"}
 	fields["model.version_published"] = []string{"version_id", "version_no", "provider_model_id", "revision"}
+	fields["model.enabled"] = []string{"status", "revision"}
+	fields["model.disabled"] = []string{"status", "revision"}
 	fields["price.published"] = []string{"version_id", "version_no", "unit", "currency", "effective_from", "revision"}
 	return NewParser(fields)
 }

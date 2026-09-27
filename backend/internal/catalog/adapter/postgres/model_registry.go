@@ -229,52 +229,54 @@ func appendModelVersionInTx(tx *gorm.DB, version domain.ModelVersion, expectedRe
 	return nil
 }
 
-// SetModelStatusForAdmin changes model availability after checking the current
-// model version and an effective price in the same transaction.
-func (s *Store) SetModelStatusForAdmin(ctx context.Context, actorID, orgID, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64) error {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
-		modelID == uuid.Nil || expectedRevision < 1 {
-		return domain.ErrInvalidModel
+// setModelStatusInTx only runs inside the audited status transaction.
+func setModelStatusInTx(tx *gorm.DB, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64) error {
+	row, err := lockModelProfile(tx, modelID)
+	if err != nil {
+		return err
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
-			return err
+	model := row.model()
+	if model.Revision != expectedRevision {
+		return domain.ErrModelRevisionConflict
+	}
+	var publishable bool
+	if status == domain.ModelActive {
+		if model.CurrentVersionID == uuid.Nil {
+			return domain.ErrModelNotPublishable
 		}
-		row, err := lockModelProfile(tx, modelID)
-		if err != nil {
-			return err
+		var readiness struct {
+			HasVersion bool
+			HasPrice   bool
 		}
-		model := row.model()
-		if model.Revision != expectedRevision {
-			return domain.ErrModelRevisionConflict
+		if err := tx.Raw(`
+			SELECT EXISTS (
+			  SELECT 1 FROM catalog.model_profile_version
+			  WHERE id = ?::uuid AND model_profile_id = ?::uuid AND NOT is_delete
+			) AS has_version,
+			EXISTS (
+			  SELECT 1 FROM catalog.price_rule_version
+			  WHERE model_profile_id = ?::uuid AND effective_from <= now() AND NOT is_delete
+			) AS has_price
+		`, model.CurrentVersionID.String(), modelID.String(), modelID.String()).Scan(&readiness).Error; err != nil {
+			return fmt.Errorf("check model publication readiness: %w", err)
 		}
-		var hasPrice bool
-		if status == domain.ModelActive {
-			if err := tx.Raw(`
-				SELECT EXISTS (
-				  SELECT 1 FROM catalog.price_rule_version
-				  WHERE model_profile_id = ?::uuid AND effective_from <= now() AND NOT is_delete
-				) AS has_price
-			`, modelID.String()).Scan(&hasPrice).Error; err != nil {
-				return fmt.Errorf("check effective model price: %w", err)
-			}
-		}
-		if err := model.SetStatus(status, hasPrice); err != nil {
-			return err
-		}
-		result := tx.Exec(`
-			UPDATE catalog.model_profile
-			SET status = ?, revision = revision + 1, update_time = now()
-			WHERE id = ?::uuid AND revision = ? AND NOT is_delete
-		`, string(status), modelID.String(), expectedRevision)
-		if result.Error != nil {
-			return fmt.Errorf("set model status: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return domain.ErrModelRevisionConflict
-		}
-		return nil
-	})
+		publishable = readiness.HasVersion && readiness.HasPrice
+	}
+	if err := model.SetStatus(status, publishable); err != nil {
+		return err
+	}
+	result := tx.Exec(`
+		UPDATE catalog.model_profile
+		SET status = ?, revision = revision + 1, update_time = now()
+		WHERE id = ?::uuid AND revision = ? AND NOT is_delete
+	`, string(status), modelID.String(), expectedRevision)
+	if result.Error != nil {
+		return fmt.Errorf("set model status: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return domain.ErrModelRevisionConflict
+	}
+	return nil
 }
 
 type modelProfileRow struct {
