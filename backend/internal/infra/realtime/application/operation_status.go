@@ -18,7 +18,7 @@ import (
 const OperationStatusTopic = "lanverse.operation.status_changed.v1"
 
 // ErrInvalidEvent means the record cannot be safely projected.
-var ErrInvalidEvent = errors.New("invalid operation status event")
+var ErrInvalidEvent = errors.New("invalid realtime event")
 
 // Event is a project-scoped SSE event. ID stays equal to the Kafka event ID.
 type Event struct {
@@ -31,6 +31,8 @@ type Event struct {
 	TargetID    string
 	Status      string
 	Progress    json.RawMessage
+	Revision    int64
+	Change      string
 }
 
 // ProcessedStore commits a consumer marker after its external effect succeeds.

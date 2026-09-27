@@ -29,14 +29,7 @@ func NewSink(client *redisclient.Client) *Sink {
 
 // Publish stores a replayable event before publishing the same payload.
 func (s *Sink) Publish(ctx context.Context, event application.Event) error {
-	data, err := json.Marshal(struct {
-		OperationID string          `json:"operation_id"`
-		BatchID     string          `json:"batch_id,omitempty"`
-		TargetType  string          `json:"target_type"`
-		TargetID    string          `json:"target_id,omitempty"`
-		Status      string          `json:"status"`
-		Progress    json.RawMessage `json:"progress,omitempty"`
-	}{event.OperationID, event.BatchID, event.TargetType, event.TargetID, event.Status, event.Progress})
+	data, err := encodeEventData(event)
 	if err != nil {
 		return fmt.Errorf("encode realtime event data: %w", err)
 	}
@@ -63,6 +56,31 @@ func (s *Sink) Publish(ctx context.Context, event application.Event) error {
 		return fmt.Errorf("store and publish realtime event %s: %w", event.ID, err)
 	}
 	return nil
+}
+
+func encodeEventData(event application.Event) ([]byte, error) {
+	switch event.Type {
+	case "operation.updated":
+		return json.Marshal(struct {
+			OperationID string          `json:"operation_id"`
+			BatchID     string          `json:"batch_id,omitempty"`
+			TargetType  string          `json:"target_type"`
+			TargetID    string          `json:"target_id,omitempty"`
+			Status      string          `json:"status"`
+			Progress    json.RawMessage `json:"progress,omitempty"`
+		}{event.OperationID, event.BatchID, event.TargetType, event.TargetID, event.Status, event.Progress})
+	case "project.updated":
+		if event.Revision < 1 || event.Change == "" {
+			return nil, fmt.Errorf("invalid project realtime data")
+		}
+		return json.Marshal(struct {
+			ProjectID string `json:"project_id"`
+			Revision  int64  `json:"revision"`
+			Change    string `json:"change"`
+		}{event.ProjectID, event.Revision, event.Change})
+	default:
+		return nil, fmt.Errorf("unsupported realtime event type %q", event.Type)
+	}
 }
 
 var _ application.Sink = (*Sink)(nil)

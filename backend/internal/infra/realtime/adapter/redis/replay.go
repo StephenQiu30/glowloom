@@ -21,7 +21,9 @@ func (s *Sink) Replay(ctx context.Context, projectID, lastEventID string) ([]app
 	}
 	start := -1
 	for i, item := range items {
-		if id, ok := item.Values["id"].(string); ok && id == lastEventID {
+		// External effects can repeat after a database commit failure. Resume
+		// from the first match so later unique events are never skipped.
+		if id, ok := item.Values["id"].(string); ok && id == lastEventID && start < 0 {
 			start = i
 		}
 	}

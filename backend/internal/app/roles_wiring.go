@@ -82,8 +82,8 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 	}
 	processed := pginbox.NewStore(dbConn.DB)
 	realtimeConsumer, err := kafkainbox.NewConsumer(cfg.KafkaBrokers, realtimeConsumerGroup,
-		[]string{realtime.OperationStatusTopic},
-		realtime.NewOperationStatusHandler(processed, redisrealtime.NewSink(redisConn.Client)))
+		[]string{realtime.OperationStatusTopic, realtime.ProjectChangedTopic},
+		realtime.NewHandler(processed, redisrealtime.NewSink(redisConn.Client)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure relay realtime consumer: %w", err)
 	}
