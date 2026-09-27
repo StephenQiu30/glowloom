@@ -250,13 +250,15 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-08-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.capability`、`catalog.model_profile`、`catalog.model_profile_version`、`catalog.price_rule_version`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-11 §3](docs/design/11-模型注册表与价格.md#3-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 进行中（四表迁移与版本归属、汇率约束已验证；领域对象和写入仓储待实施） | — |
+| E-08-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.capability`、`catalog.model_profile`、`catalog.model_profile_version`、`catalog.price_rule_version`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-11 §3](docs/design/11-模型注册表与价格.md#3-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 完成（迁移、领域校验与状态机、管理员复核和只追加写入仓储已验证；管理用例与审计属 E-08-02） | — |
 | E-08-02 | 用例与接口 | 实现查询接口：GET /api/models；swag 注解生成 OpenAPI。详见 [DES-11 §4](docs/design/11-模型注册表与价格.md#4-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-08-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `catalog.model_changed.v1`、`catalog.price_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无。模型版本中的 `queue` 与 `supports_*` 被 OperationWorkflow 读取（DES-04）。 详见 [DES-11 §5](docs/design/11-模型注册表与价格.md#5-异步与工作流) | `backend/internal/catalog/adapter/workflow/`、`backend/internal/catalog/adapter/event/` | 待办 | — |
 | E-08-04 | 前端 | - 管理 · 模型注册表：列表（模型、供应商、能力、区域、状态、当前版本、价格）；详情编辑器（JSON 编辑 + 表单预览）；版本差异对比。 - 生成面板：`ModelParamsForm` 组件按 `param_schema` 渲染；`ReferenceLimitBar` 显示各用途用量 / 上限… 详见 [DES-11 §7](docs/design/11-模型注册表与价格.md#7-界面) | `frontend/src/features/admin/` | 待办 | — |
 | E-08-05 | 测试与验收 | 单元：`param_schema` 与 `limits` 校验器（前后端共用同一套 JSON Schema 规则）；价格计算（按张、按秒、按 token、按字符、分辨率系数）。 集成：发布版本 → 缓存失效 → 报价使用新版本。 前端：各组件类型渲染与校验的快…；验收用例 TC-08-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
-**E-08-01 模型注册表迁移切片（2026-09-27）**：按 DES-02 §5.3 与 DES-11 §3 建立能力、模型、模型版本和价格版本四表。约束当前版本只能归属同一模型、版本号唯一且为正、价格单位与 JSON 形状有效、非人民币价格必须有正汇率；为供应商模型计数建立索引。先在缺表的隔离 PostgreSQL 中确认 Red，再验证模型版本归属、重复版本和缺汇率拒绝，迁移 up/down 往返成功。领域模型、只追加写入仓储、发布校验、审计与缓存消费者仍待实施。
+**E-08-01 模型注册表迁移切片（2026-09-27）**：按 DES-02 §5.3 与 DES-11 §3 建立能力、模型、模型版本和价格版本四表。约束当前版本只能归属同一模型、版本号唯一且为正、价格单位与 JSON 形状有效、非人民币价格必须有正汇率；为供应商模型计数建立索引。先在缺表的隔离 PostgreSQL 中确认 Red，再验证模型版本归属、重复版本和缺汇率拒绝，迁移 up/down 往返成功。
+
+**E-08-01 领域与写入仓储切片（2026-09-27）**：能力、模型头、模型版本与价格版本具备领域校验；模型头按修订号附加当前版本并启停，启用要求当前版本和已生效价格。PostgreSQL 仓储在每次平台级读写时复核当前管理员；追加版本在模型行锁内检查预期修订、连续版本号和能力模式，仅插入历史版本并原子推进模型头。隔离本机 PostgreSQL 验证了无价启用拒绝、跨能力模式拒绝、旧版本与旧价格保留、重复版本和撤权拒绝。发布前的完整参数 / 价格规则校验、原子审计与公共接口属于 E-08-02，尚未验收。
 
 #### E-09 审计日志
 
