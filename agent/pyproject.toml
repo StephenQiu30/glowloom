@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Lanverse Agent service: FastAPI + Temporal Activity Worker + Agent Harness"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=50.0.1",
     "fastapi>=0.141.1",
     "jsonschema>=4.26.0",
     "pydantic-settings>=2.15.0",
