@@ -77,7 +77,9 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 Agent Activity Worker 在另一终端运行：`cd agent && uv run --frozen --env-file ../.env python -m app.main_worker`。它连接 `.env` 中本机已运行的 Redis 与 Temporal，监听模拟供应商 `agent.mock` 队列和模拟 Skill `agent` 队列；本地开发不启动 Compose。
 
-Go `flow` Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。Worker 当前注册基础设施维护 Workflow；Relay 投递 Outbox，消费 `operation.status_changed.v1` 生成 Redis 项目实时事件，并消费 `audit.recorded.v1` 写入审计表。审计消费者目前只允许已登记的账号动作；管理员创建和禁用账号、密码登录与登出的内部命令已生产相应审计 Outbox，其余业务命令待接入。项目 SSE 处理器已实现，但公开 API 路由仍需身份与项目成员鉴权后挂载；`media` 队列和其他消费者尚未接入。
+Go `flow` Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。Worker 当前注册基础设施维护 Workflow；Relay 投递 Outbox，消费 `operation.status_changed.v1` 生成 Redis 项目实时事件，并消费 `audit.recorded.v1` 写入审计表。审计消费者目前只允许已登记的账号动作；首位管理员 bootstrap、管理员创建和禁用账号、密码登录、登出与本人改密已生产相应审计 Outbox，其余业务命令待接入。项目 SSE 处理器已实现，但公开 API 路由仍需身份与项目成员鉴权后挂载；`media` 队列和其他消费者尚未接入。
+
+在已完成 Outbox、账号及组织迁移的空账号库中，可执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse admin bootstrap --login-name <name>` 创建首位管理员；密码在终端交互输入并确认，不设置默认密码。命令若发现已有账号会拒绝重复初始化。详情见 [OPS-01](docs/operation/01-环境与部署.md#7-初始化与种子数据)。
 
 Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_RELAY_HEALTH_ADDR` 提供 `GET /healthz`（样例端口 8081、8082）；该接口只表示进程正在运行，任务处理状况仍需检查 Temporal Worker 与 Outbox 积压。
 
