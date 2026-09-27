@@ -406,18 +406,20 @@
 
 #### E-30 媒体库
 
-- **需求**：[REQ-30](docs/requirement/30-媒体库.md)（MED-01 上传素材；MED-02 浏览、检索与预览；MED-03 删除素材；MED-04 来源与合规信息）　**设计**：[DES-33](docs/design/33-媒体库.md)　**依赖**：—　**联调**：E-17（后实施，先按契约与模拟实现联调，对方完成后重跑本 Epic 验收）
+- **需求**：[REQ-30](docs/requirement/30-媒体库.md)（MED-01 上传素材；MED-02 浏览、检索与预览；MED-03 删除素材；MED-04 来源与合规信息）　**设计**：[DES-33](docs/design/33-媒体库.md)　**依赖**：E-30-01 建表前需 E-21-01 的 `operation.operation` 迁移（已完成）　**联调**：E-17（后实施，先按契约与模拟实现联调，对方完成后重跑本 Epic 验收）
 - **验收**：TC-30-01～05（5 条）
-- **待确认**：DES-33-Q1、DES-33-Q2、DES-33-Q3（默认方案见设计文档，确认前按默认实施）
+- **待确认**：DES-33-Q1、DES-33-Q2（默认方案见设计文档，确认前按默认实施）；DES-33-Q3 已由 PRD-27 §8 与 REQ-30 R6 明确
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-30-01 | 数据与领域模型 | 迁移建表 / 加列：`media.media_asset`、`media.rendition`；实现领域对象、状态机与仓储（`media.media_asset`：仓储查询强制带 `project_id`；`media.rendition`：无 `project_id`，经父对象外键继承项目范围校验）。详见 [DES-33 §3](docs/design/33-媒体库.md#3-数据) | `backend/db/migrations/`、`backend/internal/media/domain/`、`backend/internal/media/adapter/postgres/` | 待办 | — |
+| E-30-01 | 数据与领域模型 | 迁移建表 / 加列：`media.media_asset`、`media.rendition`；实现领域对象、状态机与仓储（`media.media_asset`：仓储查询强制带 `project_id`；`media.rendition`：无 `project_id`，经父对象外键继承项目范围校验）。详见 [DES-33 §3](docs/design/33-媒体库.md#3-数据) | `backend/db/migrations/`、`backend/internal/media/domain/`、`backend/internal/media/adapter/postgres/` | 完成（迁移、状态规则、对象键归属、项目隔离仓储及真实 PostgreSQL 验证；公开接口与导入工作流属后续任务） | — |
 | E-30-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/uploads、POST /api/uploads/{media_asset_id}:complete、GET /api/projects/{pid}/media、GET /api/media/{id}、DELETE /api/media/{id}；swag 注解生成 OpenAPI。详见 [DES-33 §4](docs/design/33-媒体库.md#4-接口) | `backend/internal/media/application/`、`backend/internal/media/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-30-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `MediaIngestWorkflow`、`media.DetectAndProbe`、`media.Hash`、`media.MakeRenditions`、`flow.MarkMediaReady`、`media-purge`；事件 `media.asset_status_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：`MediaIngestWorkflow`（`media-ingest/{id}`）：`media.DetectAndProbe` → `media.Hash` → `media.MakeRenditions`（并行）→… 详见 [DES-33 §5](docs/design/33-媒体库.md#5-异步与工作流) | `backend/internal/media/adapter/workflow/`、`backend/internal/media/adapter/event/` | 待办 | — |
 | E-30-04 | Agent 服务 | 内容审核适配器 `moderation.check`；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/moderation/` | 待办 | — |
 | E-30-05 | 前端 | 媒体库网格 / 列表切换（虚拟滚动）、筛选栏、搜索；拖拽上传区（多文件进度、失败原因）；预览（图片灯箱、视频播放器、音频波形）；详情抽屉（来源、合规、引用位置）。 详见 [DES-33 §7](docs/design/33-媒体库.md#7-界面) | `frontend/src/features/media/` | 待办 | — |
 | E-30-06 | 测试与验收 | 内容类型识别；分片上传续传；引用检查覆盖全部引用来源（表驱动）；清理任务；验收用例 TC-30-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
+
+**E-30-01 数据与领域模型（2026-09-28）**：新增素材与派生版本迁移，绑定项目及同项目生成操作；领域规则限制对象键身份、状态迁移、审核通过后引用和删除 30 天后清理。PostgreSQL 仓储对当前账号、组织、项目与父素材复核后创建或读取记录，派生版本对象键必须位于父素材前缀。隔离 PostgreSQL 验证迁移 up/down/up、跨项目外键、撤权后不可读、错误对象键不可写与生成来源完整保留；`go test -race ./... -count=1`、`go vet ./...`、`golangci-lint run ./...`、`gofmt` / `goimports` 和 `govulncheck ./...` 已通过（漏洞扫描另报告 1 个未调用模块告警）。CI 增加媒体真实 PostgreSQL 契约门禁，远端结果随本项提交核验。上传/浏览接口、真实对象存储处理、引用检查及 TC-30-01～05 尚未完成，不计为 Epic 验收。
 
 #### E-33 站内通知
 

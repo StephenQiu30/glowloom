@@ -72,12 +72,26 @@ jobs:
       - run: go vet ./...
       - run: golangci-lint run ./...
       - run: go test -race ./...
-      - name: Prepare operation test database
+      - name: Prepare PostgreSQL contract databases
         run: psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE ROLE lanverse_app'
-      - name: Apply migrations for operation contract tests
+      - name: Apply migrations for PostgreSQL contract tests
         run: find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -f
       - name: Verify operation PostgreSQL contracts
         run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -run '^Test(OperationSchema|OperationStores|CreateQuoteSnapshot)' -count=1
+      - name: Prepare isolated media migration database
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_media_migration_test'
+          for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
+            case "$migration" in
+              *202609271180_create_media_asset.up.sql) break ;;
+            esac
+            psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_migration_test?sslmode=disable' -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Verify media PostgreSQL contracts
+        run: |
+          LV_TEST_MEDIA_STORE_DB_DSN="$LV_TEST_DB_DSN" \
+          LV_TEST_MEDIA_MIGRATION_DB_DSN='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_migration_test?sslmode=disable' \
+          go test -race ./tests/media -count=1
       - run: govulncheck ./...
       - run: wire ./internal/app
       - run: goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go
