@@ -75,7 +75,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | `agent/` | Python 3.12 · uv · FastAPI · pydantic-settings | `cd agent && uv run --env-file ../.env uvicorn app.main_api:create_app --factory --port 8090` | `GET :8090/internal/health` |
 | `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && node --env-file=../.env "$(command -v corepack)" pnpm exec next dev` | `GET :3000/healthz` |
 
-Agent Activity Worker 在另一终端运行：`cd agent && uv run --frozen --env-file ../.env python -m app.main_worker`。它连接 `.env` 中本机已运行的 Redis 与 Temporal，监听模拟供应商 `agent.mock` 队列和模拟 Skill `agent` 队列；本地开发不启动 Compose。
+Agent Activity Worker 在另一终端运行：`cd agent && uv run --frozen --env-file ../.env python -m app.main_worker`。它连接 `.env` 中本机已运行的 Redis 与 Temporal，监听模拟供应商 `agent.mock` 队列，以及 Skill 和 `provider.test_credential` 所在的 `agent` 队列。根目录 `.env` 同时设置 `LV_CREDENTIAL_KEY_ID` 与 `LV_CREDENTIAL_PRIVATE_KEY_REF`（绝对 PEM 私钥文件路径）后，可用 Agent 私钥执行 OpenRouter 免费鉴权测试；未配置时返回测试服务不可用，不发起供应商请求。本地开发不启动 Compose。
 
 Go `flow` Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。Worker 当前注册基础设施维护 Workflow；Relay 投递 Outbox，消费 `operation.status_changed.v1` 生成 Redis 项目实时事件，并消费 `audit.recorded.v1` 写入审计表。审计消费者目前只允许已登记的账号动作；首位管理员 bootstrap、管理员创建和禁用账号、密码登录、登出与本人改密已生产相应审计 Outbox，其余业务命令待接入。项目 SSE 处理器已实现，但公开 API 路由仍需身份与项目成员鉴权后挂载；`media` 队列和其他消费者尚未接入。
 
