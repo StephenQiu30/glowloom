@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -32,12 +33,16 @@ var (
 	ErrAccountActive = errors.New("account is already active")
 	// ErrInvalidAccountState means a mutation would overflow a persisted counter.
 	ErrInvalidAccountState = errors.New("invalid account state")
-	// ErrLastActiveAdmin means disabling this account would leave no active administrator.
-	ErrLastActiveAdmin = errors.New("cannot disable the last active administrator")
+	// ErrLastActiveAdmin means a change would leave no active administrator.
+	ErrLastActiveAdmin = errors.New("cannot remove the last active administrator")
 	// ErrUserNotFound means an account is unavailable in the requested organization.
 	ErrUserNotFound = errors.New("user not found")
 	// ErrRevisionConflict means an account changed after the caller read it.
 	ErrRevisionConflict = errors.New("user revision conflict")
+	// ErrInvalidProfile means the requested display name, role, or stored state is invalid.
+	ErrInvalidProfile = errors.New("invalid account profile")
+	// ErrAccountUnchanged means the requested profile equals the current profile.
+	ErrAccountUnchanged = errors.New("account profile is unchanged")
 )
 
 // Role is the account's organization-level permission tier.
@@ -188,6 +193,43 @@ func (u *User) Enable() error {
 	u.FailedLoginCount = 0
 	u.LockedUntil = time.Time{}
 	u.SessionEpoch++
+	u.Revision++
+	return nil
+}
+
+// UpdateProfile changes only the display name or role. The caller must count
+// active administrators under the organization change lock before invoking it.
+func (u *User) UpdateProfile(displayName *string, role *Role, activeAdmins int) error {
+	if (displayName == nil && role == nil) || u.Revision < 1 || u.Revision >= math.MaxInt32 ||
+		(u.Status != StatusActive && u.Status != StatusDisabled) {
+		return ErrInvalidProfile
+	}
+	nextName, nextRole := u.DisplayName, u.Role
+	if displayName != nil {
+		nextName = strings.TrimSpace(*displayName)
+		if !utf8.ValidString(nextName) || utf8.RuneCountInString(nextName) < 1 ||
+			utf8.RuneCountInString(nextName) > 50 {
+			return ErrInvalidProfile
+		}
+		for _, r := range nextName {
+			if unicode.IsControl(r) {
+				return ErrInvalidProfile
+			}
+		}
+	}
+	if role != nil {
+		nextRole = *role
+		if nextRole != RoleAdmin && nextRole != RoleProducer {
+			return ErrInvalidProfile
+		}
+	}
+	if nextName == u.DisplayName && nextRole == u.Role {
+		return ErrAccountUnchanged
+	}
+	if u.Role == RoleAdmin && nextRole != RoleAdmin && u.Status == StatusActive && activeAdmins <= 1 {
+		return ErrLastActiveAdmin
+	}
+	u.DisplayName, u.Role = nextName, nextRole
 	u.Revision++
 	return nil
 }
