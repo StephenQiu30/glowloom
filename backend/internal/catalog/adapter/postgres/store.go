@@ -117,31 +117,35 @@ func (s *Store) ReplaceCredential(ctx context.Context, credential domain.Credent
 		return domain.ErrInvalidCredential
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireActiveProvider(tx, credential.ProviderID); err != nil {
-			return err
-		}
-		result := tx.Exec(`
+		return replaceCredentialInTx(tx, credential)
+	})
+}
+
+func replaceCredentialInTx(tx *gorm.DB, credential domain.Credential) error {
+	if err := requireActiveProvider(tx, credential.ProviderID); err != nil {
+		return err
+	}
+	result := tx.Exec(`
 			UPDATE catalog.provider_credential
 			SET status = 'disabled', update_time = now()
 			WHERE provider_id = ?::uuid AND status = 'active' AND NOT is_delete
 		`, credential.ProviderID.String())
-		if result.Error != nil {
-			return fmt.Errorf("disable previous credential: %w", result.Error)
-		}
-		result = tx.Exec(`
+	if result.Error != nil {
+		return fmt.Errorf("disable previous credential: %w", result.Error)
+	}
+	result = tx.Exec(`
 			INSERT INTO catalog.provider_credential
 			  (id, provider_id, label, ciphertext, key_id, last4, status)
 			VALUES (?::uuid, ?::uuid, ?, ?::bytea, ?, ?, 'active')
 		`, credential.ID.String(), credential.ProviderID.String(), credential.Label,
-			credential.Ciphertext, credential.KeyID, credential.Last4)
-		if result.Error != nil {
-			return fmt.Errorf("insert encrypted credential: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return fmt.Errorf("insert encrypted credential: inserted %d rows", result.RowsAffected)
-		}
-		return nil
-	})
+		credential.Ciphertext, credential.KeyID, credential.Last4)
+	if result.Error != nil {
+		return fmt.Errorf("insert encrypted credential: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("insert encrypted credential: inserted %d rows", result.RowsAffected)
+	}
+	return nil
 }
 
 // FindActiveCredential returns only the current credential of an active provider.

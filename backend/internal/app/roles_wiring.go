@@ -85,7 +85,7 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 	}
 	auditConsumer, err := kafkainbox.NewConsumer(cfg.KafkaBrokers, auditConsumerGroup,
 		[]string{"lanverse.audit.recorded.v1"},
-		auditevent.NewHandler(processed, auditapp.NewIdentityActionParser()))
+		auditevent.NewHandler(processed, auditapp.NewRecordedActionParser()))
 	if err != nil {
 		realtimeConsumer.Close()
 		return nil, nil, fmt.Errorf("configure relay audit consumer: %w", err)

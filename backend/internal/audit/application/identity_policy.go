@@ -4,7 +4,18 @@ package application
 // declared by DES-12. Other action families must register a reviewed policy
 // before their producers are enabled.
 func NewIdentityActionParser() *Parser {
-	return NewParser(map[string][]string{
+	return NewParser(identityActionFields())
+}
+
+// NewRecordedActionParser includes every action currently produced by the app.
+func NewRecordedActionParser() *Parser {
+	fields := identityActionFields()
+	fields["credential.set"] = []string{"last4"}
+	return NewParser(fields)
+}
+
+func identityActionFields() map[string][]string {
+	return map[string][]string{
 		"auth.login_succeeded":  nil,
 		"auth.login_failed":     {"reason"},
 		"auth.locked":           {"retry_after_s"},
@@ -15,5 +26,5 @@ func NewIdentityActionParser() *Parser {
 		"user.enabled":          {"status"},
 		"user.password_reset":   {"must_change_password"},
 		"user.password_changed": {"must_change_password"},
-	})
+	}
 }
