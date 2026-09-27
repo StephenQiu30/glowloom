@@ -17,15 +17,17 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 )
 
-// The three DSNs must point to the same disposable, migrated database. The
-// application account must be restricted, the maintenance account must own
-// both partitioned tables, and the third account must own neither table.
+// The four DSNs must point to the same disposable, migrated database. The
+// application account must be a restricted login, the maintenance account
+// must own both partitioned tables, the third account must own neither table,
+// and the fourth must switch a privileged login into the application role.
 func TestEnsurePartitionsUsesSeparateOwnerAndRollsBackBothTables(t *testing.T) {
 	appDSN := os.Getenv("LV_TEST_PARTITIONS_DB_DSN")
 	ownerDSN := os.Getenv("LV_TEST_PARTITIONS_MAINTENANCE_DB_DSN")
 	nonOwnerDSN := os.Getenv("LV_TEST_PARTITIONS_NONOWNER_DB_DSN")
-	if appDSN == "" || ownerDSN == "" || nonOwnerDSN == "" {
-		t.Skip("set LV_TEST_PARTITIONS_DB_DSN, LV_TEST_PARTITIONS_MAINTENANCE_DB_DSN, and LV_TEST_PARTITIONS_NONOWNER_DB_DSN for one disposable migrated PostgreSQL database")
+	roleSwitchDSN := os.Getenv("LV_TEST_PARTITIONS_ROLE_SWITCH_DB_DSN")
+	if appDSN == "" || ownerDSN == "" || nonOwnerDSN == "" || roleSwitchDSN == "" {
+		t.Skip("set all four LV_TEST_PARTITIONS_*_DB_DSN variables for one disposable migrated PostgreSQL database")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
@@ -33,6 +35,25 @@ func TestEnsurePartitionsUsesSeparateOwnerAndRollsBackBothTables(t *testing.T) {
 	ownerConn := openPartitionTestDB(ctx, t, ownerDSN)
 	nonOwnerConn := openPartitionTestDB(ctx, t, nonOwnerDSN)
 	assertPartitionTestRoles(ctx, t, appConn.DB, ownerConn.DB, nonOwnerConn.DB)
+	roleSwitchConn := openPartitionTestDB(ctx, t, roleSwitchDSN)
+	var switched struct {
+		Current string
+		Session string
+	}
+	if err := roleSwitchConn.DB.WithContext(ctx).Raw("SELECT current_user AS current, session_user AS session").Scan(&switched).Error; err != nil {
+		t.Fatalf("inspect switched application test connection: %v", err)
+	}
+	if switched.Current != "" && switched.Current != switched.Session {
+		var appRole string
+		if err := appConn.DB.WithContext(ctx).Raw("SELECT current_user").Scan(&appRole).Error; err != nil {
+			t.Fatalf("inspect application test login: %v", err)
+		}
+		if switched.Current != appRole {
+			t.Fatalf("switched test role = %q, want application role %q", switched.Current, appRole)
+		}
+	} else {
+		t.Fatal("role-switch DSN must have the application current_user and a distinct session_user")
+	}
 
 	current := time.Now().UTC()
 	first := time.Date(current.Year(), current.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 4, 0)
@@ -113,6 +134,19 @@ func TestEnsurePartitionsUsesSeparateOwnerAndRollsBackBothTables(t *testing.T) {
 			assertPartitionAttached(ctx, t, appConn.DB, "audit.audit_log", first, false)
 		})
 	}
+	if !t.Run("privileged login switched to application role", func(t *testing.T) {
+		err := app.EnsurePartitions(ctx, config.Config{
+			DBDSN:                     roleSwitchDSN,
+			PartitionMaintenanceDBDSN: ownerDSN,
+		}, logger, first)
+		if err == nil {
+			t.Fatal("partition maintenance accepted a privileged application login with a switched role")
+		}
+		assertPartitionRow(ctx, t, appConn.DB, "infra.outbox", outboxID, "infra.outbox_default")
+		assertPartitionRow(ctx, t, appConn.DB, "audit.audit_log", auditID, "audit.audit_log_default")
+	}) {
+		t.FailNow()
+	}
 
 	// A conflict in audit's second month must undo the Outbox move and attach
 	// performed earlier in the same command, as well as audit's first month.
@@ -182,13 +216,15 @@ func openPartitionTestDB(ctx context.Context, t *testing.T, dsn string) *db.Conn
 func assertPartitionTestRoles(ctx context.Context, t *testing.T, appDB, ownerDB, nonOwnerDB *gorm.DB) {
 	t.Helper()
 	identities := make([]struct {
-		Database string
-		Role     string
-		Super    bool
+		Database    string
+		Role        string
+		SessionRole string
+		Super       bool
 	}, 3)
 	for index, handle := range []*gorm.DB{appDB, ownerDB, nonOwnerDB} {
 		if err := handle.WithContext(ctx).Raw(`
-			SELECT current_database() AS database, current_user AS role, r.rolsuper AS super
+			SELECT current_database() AS database, current_user AS role,
+			       session_user AS session_role, r.rolsuper AS super
 			FROM pg_roles AS r WHERE r.rolname = current_user
 		`).Scan(&identities[index]).Error; err != nil {
 			t.Fatalf("read partition test role %d: %v", index, err)
@@ -202,6 +238,9 @@ func assertPartitionTestRoles(ctx context.Context, t *testing.T, appDB, ownerDB,
 	}
 	if identities[0].Super || identities[2].Super {
 		t.Fatal("application and non-owner partition test roles must not be superusers")
+	}
+	if identities[0].Role != identities[0].SessionRole || identities[2].Role != identities[2].SessionRole {
+		t.Fatal("application and non-owner test accounts must use their own login roles")
 	}
 	for _, table := range []string{"infra.outbox", "audit.audit_log"} {
 		var owner string
