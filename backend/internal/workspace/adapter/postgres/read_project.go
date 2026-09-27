@@ -25,53 +25,63 @@ func (s *Store) FindProject(ctx context.Context, actor identityapp.Principal, pr
 		if err := requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		var row struct {
-			ID                  uuid.UUID
-			OrgID               uuid.UUID
-			Name                string
-			Description         string
-			AspectRatio         string
-			StyleType           string
-			StyleSubtype        *string
-			StylePresetID       *uuid.UUID
-			Resolution          string
-			AllowOverseasModels bool
-			Status              string
-			ArchivedAt          *time.Time
-			DeleteTime          *time.Time
-			PurgeAfter          *time.Time
-			Revision            int64
-		}
-		result := tx.Raw(`
-			SELECT id, org_id, name, description, aspect_ratio, style_type,
-			       style_subtype, style_preset_id, resolution, allow_overseas_models,
-			       status, archived_at, delete_time, purge_after, revision
-			FROM workspace.project
-			WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete
-		`, projectID.String(), actor.OrgID.String()).Scan(&row)
-		if result.Error != nil {
-			return fmt.Errorf("read project: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return ErrProjectNotFound
-		}
-		project = domain.Project{
-			ID: row.ID, OrgID: row.OrgID, Name: row.Name, Description: row.Description,
-			AspectRatio: row.AspectRatio, StyleType: row.StyleType, Resolution: row.Resolution,
-			AllowOverseasModels: row.AllowOverseasModels, Status: row.Status,
-			ArchivedAt: row.ArchivedAt, DeleteTime: row.DeleteTime,
-			PurgeAfter: row.PurgeAfter, Revision: row.Revision,
-		}
-		if row.StyleSubtype != nil {
-			project.StyleSubtype = *row.StyleSubtype
-		}
-		if row.StylePresetID != nil {
-			project.StylePresetID = *row.StylePresetID
-		}
-		return nil
+		var err error
+		project, err = readProjectInTx(tx, actor.OrgID, projectID)
+		return err
 	})
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("find project: %w", err)
+	}
+	return project, nil
+}
+
+func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, error) {
+	var row struct {
+		ID                  uuid.UUID
+		OrgID               uuid.UUID
+		Name                string
+		Description         string
+		AspectRatio         string
+		StyleType           string
+		StyleSubtype        *string
+		StylePresetID       *uuid.UUID
+		Resolution          string
+		AllowOverseasModels bool
+		Status              string
+		ArchivedAt          *time.Time
+		DeleteTime          *time.Time
+		PurgeAfter          *time.Time
+		Revision            int64
+		CreateTime          time.Time
+		UpdateTime          time.Time
+	}
+	result := tx.Raw(`
+		SELECT id, org_id, name, description, aspect_ratio, style_type,
+		       style_subtype, style_preset_id, resolution, allow_overseas_models,
+		       status, archived_at, delete_time, purge_after, revision,
+		       create_time, update_time
+		FROM workspace.project
+		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete
+	`, projectID.String(), orgID.String()).Scan(&row)
+	if result.Error != nil {
+		return domain.Project{}, fmt.Errorf("read project: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return domain.Project{}, ErrProjectNotFound
+	}
+	project := domain.Project{
+		ID: row.ID, OrgID: row.OrgID, Name: row.Name, Description: row.Description,
+		AspectRatio: row.AspectRatio, StyleType: row.StyleType, Resolution: row.Resolution,
+		AllowOverseasModels: row.AllowOverseasModels, Status: row.Status,
+		ArchivedAt: row.ArchivedAt, DeleteTime: row.DeleteTime,
+		PurgeAfter: row.PurgeAfter, Revision: row.Revision,
+		CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
+	}
+	if row.StyleSubtype != nil {
+		project.StyleSubtype = *row.StyleSubtype
+	}
+	if row.StylePresetID != nil {
+		project.StylePresetID = *row.StylePresetID
 	}
 	return project, nil
 }

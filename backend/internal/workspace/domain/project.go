@@ -43,6 +43,8 @@ type Project struct {
 	DeleteTime          *time.Time
 	PurgeAfter          *time.Time
 	Revision            int64
+	CreateTime          time.Time
+	UpdateTime          time.Time
 }
 
 // Validate checks the core project specifications before persistence.

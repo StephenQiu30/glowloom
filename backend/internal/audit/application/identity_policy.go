@@ -20,6 +20,7 @@ func NewRecordedActionParser() *Parser {
 	fields["model.enabled"] = []string{"status", "revision"}
 	fields["model.disabled"] = []string{"status", "revision"}
 	fields["price.published"] = []string{"version_id", "version_no", "unit", "currency", "effective_from", "revision"}
+	fields["project.created"] = []string{"aspect_ratio", "style_type", "style_subtype", "style_preset_id", "status", "revision"}
 	return NewParser(fields)
 }
 
