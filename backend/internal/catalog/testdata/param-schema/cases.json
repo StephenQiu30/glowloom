@@ -208,5 +208,19 @@
     "modes": ["text2video"],
     "limits": {"max_outputs": 1},
     "param_schema": [{"field": "prompt", "label": "提示词", "type": "string", "component": "textarea", "required": true, "default": ""}]
+  },
+  {
+    "name": "empty choice value",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "resolution", "label": "分辨率", "type": "string", "component": "select", "enum": [""]}]
+  },
+  {
+    "name": "duplicate property in field",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "seed", "field": "prompt", "label": "提示词", "type": "string", "component": "input"}]
   }
 ]
