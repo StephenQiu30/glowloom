@@ -91,6 +91,13 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy app tests
       - run: uv run pytest
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Verify Go credential envelopes in Agent
+        run: LV_TEST_CREDENTIAL_INTEROP=1 go test -race ./tests/catalog -run TestGoCredentialEnvelopeOpensInAgent -count=1
+        working-directory: backend
 
   frontend:
     runs-on: ubuntu-24.04
