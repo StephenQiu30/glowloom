@@ -152,6 +152,11 @@ type credentialAuditEvent struct {
 }
 
 func validCredentialEvents(actorID, orgID uuid.UUID, credential domain.Credential, events []identityapp.OutboxEvent) bool {
+	return validCredentialLifecycleEvents(actorID, orgID, credential.ID, credential.ProviderID,
+		credential.Last4, "set", "credential.set", events)
+}
+
+func validCredentialLifecycleEvents(actorID, orgID, credentialID, providerID uuid.UUID, last4, change, action string, events []identityapp.OutboxEvent) bool {
 	if len(events) != 2 || events[0].ID == uuid.Nil || events[1].ID == uuid.Nil || events[0].ID == events[1].ID ||
 		events[0].Topic != "lanverse.catalog.credential_changed.v1" || events[1].Topic != "lanverse.audit.recorded.v1" {
 		return false
@@ -165,8 +170,8 @@ func validCredentialEvents(actorID, orgID uuid.UUID, credential domain.Credentia
 	if !decodeCredentialEvent(events[0].Payload, &changed) || changed.EventID != events[0].ID ||
 		changed.EventType != events[0].Topic || changed.OccurredAt.IsZero() || changed.OrgID != orgID ||
 		changed.Actor.Kind != "user" || changed.Actor.ID != actorID ||
-		changed.Aggregate.Type != "provider_credential" || changed.Aggregate.ID != credential.ID ||
-		changed.Data.Change != "set" || changed.Data.ProviderID != credential.ProviderID {
+		changed.Aggregate.Type != "provider_credential" || changed.Aggregate.ID != credentialID ||
+		changed.Data.Change != change || changed.Data.ProviderID != providerID {
 		return false
 	}
 	var audit credentialAuditEvent
@@ -175,11 +180,11 @@ func validCredentialEvents(actorID, orgID uuid.UUID, credential domain.Credentia
 	}
 	requestID, err := uuid.Parse(audit.Data.RequestID)
 	return err == nil && requestID.String() == audit.Data.RequestID && audit.EventID == events[1].ID &&
-		audit.EventType == events[1].Topic && !audit.OccurredAt.IsZero() && audit.OrgID == orgID &&
+		audit.EventType == events[1].Topic && audit.OccurredAt.Equal(changed.OccurredAt) && audit.OrgID == orgID &&
 		audit.Actor.Kind == "user" && audit.Actor.ID == actorID &&
 		audit.Aggregate.Type == "audit" && audit.Aggregate.ID == audit.EventID &&
-		audit.Data.Action == "credential.set" && audit.Data.Object.Type == "provider_credential" &&
-		audit.Data.Object.ID == credential.ID && audit.Data.After.Last4 == credential.Last4
+		audit.Data.Action == action && audit.Data.Object.Type == "provider_credential" &&
+		audit.Data.Object.ID == credentialID && audit.Data.After.Last4 == last4
 }
 
 func decodeCredentialEvent[T any](payload json.RawMessage, target *T) bool {

@@ -12,6 +12,7 @@ func NewRecordedActionParser() *Parser {
 	fields := identityActionFields()
 	fields["credential.set"] = []string{"last4"}
 	fields["credential.tested"] = []string{"last4"}
+	fields["credential.disabled"] = []string{"last4"}
 	return NewParser(fields)
 }
 
