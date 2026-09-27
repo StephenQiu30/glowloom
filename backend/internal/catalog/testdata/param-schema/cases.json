@@ -194,5 +194,19 @@
     "modes": ["text2video"],
     "limits": {"max_outputs": 1},
     "param_schema": [{"field": "__proto__", "label": "保留字段", "type": "string", "component": "input"}]
+  },
+  {
+    "name": "choice outside numeric range",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "duration_ms", "label": "时长", "type": "integer", "component": "segmented", "enum": [5, 100], "min": 10, "max": 20}]
+  },
+  {
+    "name": "blank required default",
+    "valid": false,
+    "modes": ["text2video"],
+    "limits": {"max_outputs": 1},
+    "param_schema": [{"field": "prompt", "label": "提示词", "type": "string", "component": "textarea", "required": true, "default": ""}]
   }
 ]
