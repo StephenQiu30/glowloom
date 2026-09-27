@@ -346,11 +346,13 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-11-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`billing.ledger_entry`（其中 `billing.budget` 由 E-10 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-14 §2](docs/design/14-项目预算.md#2-数据) | `backend/db/migrations/`、`backend/internal/billing/domain/`、`backend/internal/billing/adapter/postgres/` | 待办 | — |
+| E-11-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`billing.ledger_entry`（其中 `billing.budget` 由 E-10 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-14 §2](docs/design/14-项目预算.md#2-数据) | `backend/db/migrations/`、`backend/internal/billing/domain/`、`backend/internal/billing/adapter/postgres/` | 进行中（预算领域校验、账本迁移及只读仓储已验证；预算调整的原子写入随 E-11-02 实现） | `7e3ba601`、`26e129aa` |
 | E-11-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/budget、PUT /api/projects/{pid}/budget；swag 注解生成 OpenAPI。详见 [DES-14 §3](docs/design/14-项目预算.md#3-接口) | `backend/internal/billing/application/`、`backend/internal/billing/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-11-03 | 异步、工作流与事件 | 事件 `billing.budget_changed.v1`、`billing.budget_low.v1`、`billing.budget_overrun.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无；预留与结算在 `flow` 队列 Activity 的数据库事务中执行（DES-04）。 详见 [DES-14 §4](docs/design/14-项目预算.md#4-异步与工作流) | `backend/internal/billing/adapter/workflow/`、`backend/internal/billing/adapter/event/` | 待办 | — |
 | E-11-04 | 前端 | 设置页预算卡片（上限、已结算、已预留、可用、使用率进度条）；报价对话框显示剩余预算与差额；顶部低余额横幅。 详见 [DES-14 §6](docs/design/14-项目预算.md#6-界面) | `frontend/src/features/project/` | 待办 | — |
 | E-11-05 | 测试与验收 | 并发确认测试（race）；结算超支路径；阈值通知去重；验收用例 TC-11-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
+
+**E-11-01 预算与账本数据底座切片（2026-09-27）**：复用 E-10 的项目默认 0 预算，新增 DES-02 §5.10 的 `billing.ledger_entry` 迁移、只追加触发器和应用角色列级权限；预算领域校验最低可设金额、整数溢出与超支恢复，账本和预算仓储读取强制核对当前账号、组织及项目范围。补明 `budget_change` 的正负号口径（新上限减旧上限）。先以缺失领域包确认 Red，再以隔离本机 PostgreSQL 迁移、应用角色权限、跨组织读取和 Go Race 测试确认数据底座；预算调整事务与公开接口未实现，TC-11 尚未计完成。
 
 #### E-21 报价与二次确认
 
