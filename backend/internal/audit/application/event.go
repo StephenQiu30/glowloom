@@ -120,11 +120,11 @@ func (p *Parser) Parse(record inbox.Record) (domain.Record, error) {
 		len(body.Data.Object.Type) > 128 || len(body.Data.Object.ID) > 128 || len(body.Data.RequestID) > 128 {
 		return domain.Record{}, fmt.Errorf("%w: action, object, or request ID", ErrInvalidEvent)
 	}
-	before, err := validateSummary(body.Data.Before, allowed)
+	before, err := validateSummary(body.Data.Before, allowed, body.Data.Action)
 	if err != nil {
 		return domain.Record{}, err
 	}
-	after, err := validateSummary(body.Data.After, allowed)
+	after, err := validateSummary(body.Data.After, allowed, body.Data.Action)
 	if err != nil {
 		return domain.Record{}, err
 	}
@@ -147,7 +147,7 @@ func (p *Parser) Parse(record inbox.Record) (domain.Record, error) {
 	return result, nil
 }
 
-func validateSummary(raw json.RawMessage, allowed map[string]struct{}) (json.RawMessage, error) {
+func validateSummary(raw json.RawMessage, allowed map[string]struct{}, action string) (json.RawMessage, error) {
 	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
 		return nil, nil
 	}
@@ -161,6 +161,23 @@ func validateSummary(raw json.RawMessage, allowed map[string]struct{}) (json.Raw
 	for name, value := range fields {
 		if _, ok := allowed[name]; !ok || unsafeSummaryField(name) {
 			return nil, fmt.Errorf("%w: undeclared audit summary field %q", ErrInvalidEvent, name)
+		}
+		if action == "auth.login_failed" && name == "reason" {
+			var code string
+			if err := json.Unmarshal(value, &code); err != nil || !validLoginFailureReason(code) {
+				return nil, fmt.Errorf("%w: unsupported login failure reason", ErrInvalidEvent)
+			}
+			continue
+		}
+		if name == "must_change_password" {
+			var flag *bool
+			if err := json.Unmarshal(value, &flag); err != nil {
+				return nil, fmt.Errorf("%w: must_change_password must be boolean: %w", ErrInvalidEvent, err)
+			}
+			if flag == nil {
+				return nil, fmt.Errorf("%w: must_change_password must be boolean", ErrInvalidEvent)
+			}
+			continue
 		}
 		var scalar any
 		if err := json.Unmarshal(value, &scalar); err != nil {
@@ -181,7 +198,19 @@ func validateSummary(raw json.RawMessage, allowed map[string]struct{}) (json.Raw
 	return raw, nil
 }
 
+func validLoginFailureReason(code string) bool {
+	switch code {
+	case "login_not_found", "password_mismatch", "account_disabled", "ip_rate_limited":
+		return true
+	default:
+		return false
+	}
+}
+
 func unsafeSummaryField(name string) bool {
+	if name == "must_change_password" {
+		return false
+	}
 	canonical := strings.ToLower(strings.Map(func(r rune) rune {
 		if r == '_' || r == '-' {
 			return -1
