@@ -135,12 +135,15 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 	var firstRow struct {
 		ProviderModelID string
 		VersionNo       int
-		Limits          []byte
+		MaxOutputs      string
+		Description     string
 	}
 	if err := conn.DB.WithContext(ctx).Raw(`
-		SELECT provider_model_id, version_no, limits FROM catalog.model_profile_version WHERE id = ?::uuid
+		SELECT provider_model_id, version_no, limits->>'max_outputs' AS max_outputs,
+		       param_schema->0->>'description' AS description
+		FROM catalog.model_profile_version WHERE id = ?::uuid
 	`, first.ID.String()).Scan(&firstRow).Error; err != nil || firstRow.ProviderModelID != firstInput.ProviderModelID || firstRow.VersionNo != 1 ||
-		!json.Valid(firstRow.Limits) {
+		firstRow.MaxOutputs != "1" || firstRow.Description != "private-parameter-description" {
 		t.Fatalf("historical version changed: %+v, %v", firstRow, err)
 	}
 	loaded, err = store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, registered.ID)
@@ -183,6 +186,12 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 	if err != nil || loaded.CurrentVersionID != second.ID || loaded.Revision != 3 {
 		t.Fatalf("failed audit changed model head %+v: %v", loaded, err)
 	}
+	var eventCount int
+	if err := conn.DB.WithContext(ctx).Raw(`
+		SELECT count(*) FROM infra.outbox WHERE partition_key = ?
+	`, actor.OrgID.String()).Scan(&eventCount).Error; err != nil || eventCount != 3 {
+		t.Fatalf("failed publication left %d audit events: %v", eventCount, err)
+	}
 	if err := conn.DB.WithContext(ctx).Exec(`DROP TRIGGER reject_version_audit_before_insert ON infra.outbox`).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -201,5 +210,10 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 		SELECT count(*) FROM catalog.model_profile_version WHERE model_profile_id = ?::uuid
 	`, registered.ID.String()).Scan(&versionCount).Error; err != nil || versionCount != 2 {
 		t.Fatalf("revoked administrator left %d versions: %v", versionCount, err)
+	}
+	if err := conn.DB.WithContext(ctx).Raw(`
+		SELECT count(*) FROM infra.outbox WHERE partition_key = ?
+	`, actor.OrgID.String()).Scan(&eventCount).Error; err != nil || eventCount != 3 {
+		t.Fatalf("revoked administrator left %d audit events: %v", eventCount, err)
 	}
 }
