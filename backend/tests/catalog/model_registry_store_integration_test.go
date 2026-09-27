@@ -48,6 +48,11 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, capability); err != nil {
 		t.Fatal(err)
 	}
+	withoutRoles := capability
+	withoutRoles.ID, withoutRoles.Key, withoutRoles.InputRoles = uuid.New(), "video.no-input."+uuid.NewString(), nil
+	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, withoutRoles); err != nil {
+		t.Fatalf("create capability without input roles: %v", err)
+	}
 	model := validModelProfile()
 	model.ProviderID, model.Capability = provider.ID, capability.Key
 	model.Key = "registry-" + model.ID.String()
@@ -67,6 +72,11 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	}
 	version2 := validModelVersion(model.ID)
 	version2.VersionNo, version2.ProviderModelID, version2.CreateBy = 2, "seedance-2-updated", actor.ID
+	unsupported := version2
+	unsupported.Modes = []string{"audio2video"}
+	if err := store.AppendModelVersionForAdmin(ctx, actor.ID, actor.OrgID, unsupported, 2); !errors.Is(err, domain.ErrInvalidModelVersion) {
+		t.Fatalf("unsupported capability mode accepted: %v", err)
+	}
 	if err := store.AppendModelVersionForAdmin(ctx, actor.ID, actor.OrgID, version2, 2); err != nil {
 		t.Fatalf("publish second model version: %v", err)
 	}
@@ -75,6 +85,9 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		SELECT provider_model_id FROM catalog.model_profile_version WHERE id = ?::uuid
 	`, version1.ID.String()).Scan(&firstProviderModelID).Error; err != nil || firstProviderModelID != version1.ProviderModelID {
 		t.Fatalf("historical model version changed to %q: %v", firstProviderModelID, err)
+	}
+	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 3, time.Now()); !errors.Is(err, domain.ErrModelNotPublishable) {
+		t.Fatalf("model without price activated: %v", err)
 	}
 	price1 := validPriceVersion(model.ID)
 	price1.CreateBy = actor.ID
@@ -88,6 +101,15 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	}
 	if err := store.AppendPriceRuleForAdmin(ctx, actor.ID, actor.OrgID, price2, 5); !errors.Is(err, pgcatalog.ErrPriceVersionConflict) {
 		t.Fatalf("duplicate price version accepted: %v", err)
+	}
+	var originalPrice struct {
+		Currency string
+		Rule     string
+	}
+	if err := conn.DB.WithContext(ctx).Raw(`
+		SELECT currency, rule::text AS rule FROM catalog.price_rule_version WHERE id = ?::uuid
+	`, price1.ID.String()).Scan(&originalPrice).Error; err != nil || originalPrice.Currency != "CNY" || originalPrice.Rule != string(price1.Rule) {
+		t.Fatalf("historical price changed: %+v, %v", originalPrice, err)
 	}
 	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 5, time.Now()); err != nil {
 		t.Fatalf("activate model with version and price: %v", err)
