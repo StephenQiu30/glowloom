@@ -7,20 +7,20 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	billingdomain "github.com/StephenQiu30/lanverse/backend/internal/billing/domain"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
 // FindBudget requires a project ID and checks ownership through the project.
 // The budget table has no cross-schema project foreign key.
-func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (domain.Budget, error) {
+func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (billingdomain.Budget, error) {
 	if s == nil || s.db == nil {
-		return domain.Budget{}, ErrUnavailable
+		return billingdomain.Budget{}, ErrUnavailable
 	}
 	if projectID == uuid.Nil {
-		return domain.Budget{}, ErrBudgetNotFound
+		return billingdomain.Budget{}, ErrBudgetNotFound
 	}
-	var budget domain.Budget
+	var budget billingdomain.Budget
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := requireCurrentActor(tx, actor); err != nil {
 			return err
@@ -42,7 +42,7 @@ func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, pro
 		return nil
 	})
 	if err != nil {
-		return domain.Budget{}, fmt.Errorf("find project budget: %w", err)
+		return billingdomain.Budget{}, fmt.Errorf("find project budget: %w", err)
 	}
 	return budget, nil
 }
