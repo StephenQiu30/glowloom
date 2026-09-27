@@ -13,6 +13,7 @@ func NewRecordedActionParser() *Parser {
 	fields["credential.set"] = []string{"last4"}
 	fields["credential.tested"] = []string{"last4"}
 	fields["credential.disabled"] = []string{"last4"}
+	fields["provider.created"] = []string{"key", "adapter_key", "region", "status", "concurrency_limit", "rate_limit_per_min"}
 	return NewParser(fields)
 }
 

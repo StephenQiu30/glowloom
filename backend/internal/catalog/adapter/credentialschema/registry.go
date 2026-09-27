@@ -17,19 +17,25 @@ type Registry struct{}
 // NewRegistry constructs the set of provider credential contracts.
 func NewRegistry() *Registry { return &Registry{} }
 
+// Supports reports whether the current Agent has a declared credential adapter.
+func (r *Registry) Supports(adapterKey string) bool {
+	if r == nil {
+		return false
+	}
+	switch adapterKey {
+	case "volcengine_ark", "minimax", "openrouter":
+		return true
+	default:
+		return false
+	}
+}
+
 // Validate returns the last four API-key characters without retaining secret data.
 func (r *Registry) Validate(adapterKey string, secret json.RawMessage) (string, error) {
-	if r == nil || len(secret) == 0 || len(secret) > 16*1024 {
+	if !r.Supports(adapterKey) || len(secret) == 0 || len(secret) > 16*1024 {
 		return "", ErrInvalidSecret
 	}
-	requireGroup := false
-	switch adapterKey {
-	case "volcengine_ark", "openrouter":
-	case "minimax":
-		requireGroup = true
-	default:
-		return "", ErrInvalidSecret
-	}
+	requireGroup := adapterKey == "minimax"
 	decoder := json.NewDecoder(bytes.NewReader(secret))
 	opening, err := decoder.Token()
 	if err != nil || opening != json.Delim('{') {
