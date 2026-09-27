@@ -89,6 +89,16 @@ jobs:
         env:
           LV_TEST_BOOTSTRAP_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable
         run: go test -race ./tests/identity -run '^TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres$' -count=1 -v
+      - name: Prepare isolated provider contract database
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_catalog_provider_gate_test'
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609270435_create_outbox.up.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271010_create_identity_user.up.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271100_create_provider_credentials.up.sql
+      - name: Verify provider PostgreSQL and administrator contracts
+        env:
+          LV_TEST_CATALOG_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable
+        run: go test -race ./tests/catalog -run '^Test(ProviderRejectsInvalidSettingsAndDisablesOnce|CredentialKeepsCiphertextOutOfJSONAndValidatesTestOutcome|ProviderCredentialsWithRealPostgres|ConcurrentCredentialReplacementKeepsOneActive|CreateProviderCommitsAuditAndRejectsStaleAdminOnLocalPostgres|UpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres|SetCredentialCommitsSealedDataAndEventsOnLocalPostgres|DisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure|ProviderDetailReadsSafeMetadataWithCurrentAdminOnLocalPostgres)$' -count=1 -v
       - name: Prepare PostgreSQL contract databases
         run: psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE ROLE lanverse_app'
       - name: Apply migrations for PostgreSQL contract tests
