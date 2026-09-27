@@ -15,13 +15,13 @@
 | 阶段 | 目标 | 功能 Epic | 任务 | 完成 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | 文档（需求 → 设计 → 计划 → 测试 → 运维） | 全生命周期文档与需求设计拆解 | — | — | — | 完成（`bbd42ca7`），待评审 |
-| P0 | 全能参考可用性与成本验证 | — | 6 | 0 | 未开始 |
-| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 3 | 进行中 |
+| P0 | 全能参考可用性与成本验证 | — | 6 | 1 | 进行中 |
+| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 10 | 进行中 |
 | M2 | 剧本导入、解析、设定集 | 4 | 23 | 0 | 未开始 |
 | M3 | 资产定稿、分镜、生成全链路 | 11 | 60 | 0 | 未开始 |
 | M4 | 视频、配音、生成增强 | 3 | 18 | 0 | 未开始 |
 | M5 | 画布、Agent、运营辅助 = MVP | 4 | 20 | 0 | 未开始 |
-| 合计 | | 33 | 193 | 3 | |
+| 合计 | | 33 | 193 | 11 | |
 
 ## 2. 当前焦点与下一步
 
@@ -84,7 +84,7 @@
 | M1-07 | 命令层 | 鉴权（Redis 会话）、幂等键、`expected_revision`、审计、Outbox 统一中间层 | `backend/internal/command/` | 待办 | — |
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID）；已落 `infra.outbox`、`infra.processed_event` 迁移、常驻 Outbox 投递循环、月分区创建、默认分区搬迁及空历史分区删除方法、数据库副作用去重边界、30 天消费标记与已投递 7 天 Outbox 的分批清理方法、两项清理的 Temporal Workflow/Activity 与 Schedule 安装器、手动提交 Kafka offset 的消费者、`operation.status_changed.v1` 与 `workspace.project_changed.v1` 实时投影、Redis 补读和项目 SSE 处理器 | `backend/db/migrations/`、`backend/internal/infra/`、`backend/internal/app/` | 进行中（本机 PostgreSQL、Kafka、Redis、Temporal 与项目 SSE 处理器的测试授权链路已验证；进程角色中的 Outbox/realtime 链路及清理 Schedule 安装命令已接入；公开项目 SSE 路由待身份与项目授权后挂载，其余事件投影、个人通知 SSE 和部署环境 Schedule 周期触发待完成） | `cbfa526d`、`7632f630`、`abf70b5a`、`e9cd3b45`、`c2d83288`、`22e3b235`、`891a00f6`、`c8b63843`、`7939d661`、`a8aa6c20`、`6793c419`、`ba5e96da`、`c6877115`、`850e8ce7`、`74aab306` |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/` | 完成（骨架：已确认单项的 mock 图片生成、对账、接管、审核和结算；公开确认命令、批量、取消和真实供应商由对应 Epic 实现） | `9ec58b2e`、`a2e039db` |
-| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 进行中（模拟供应商与 `agent.mock` 队列、模拟 Skill 与 `agent` 队列的可运行骨架已实现；`provider.*` Activity 双端类型与共享示例已验证；真实模型、业务 Skill、内部路由错误契约与 Go 链路待实施） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93`、`bb4809e9`、`a398fc88`、`1839d0d0`、`ae1d01db`、`2d297630`、`754174bb` |
+| M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/` | 完成（模拟供应商、双队列 Activity、Harness 与内部错误契约；真实模型和业务 Skill 由后续 Epic 接入） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93`、`bb4809e9`、`a398fc88`、`1839d0d0`、`ae1d01db`、`2d297630`、`754174bb`、本次提交 |
 | M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题、项目页异常恢复、模型参数表单和报价确认组件框架，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7`、`a9467f55`、`55a94493`、`ab0d8a37`、`46bf86fd` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
@@ -172,6 +172,8 @@
 **M1-10 内部 Activity 契约预备切片（2026-09-27）**：按 DES-03 §7.1 手写 Go Operation 工作流与 Python Worker 的 `provider.submit/query/cancel` 输入输出类型，双方读取同三份 JSON 示例，校验字段往返与未知字段拒绝；Python 模型限制查询引用恰有一种，并在模拟 Activity 的输入和输出边界实际使用。先以 Go 缺少工作流包、Python 缺少输出模型确认 Red，补实现后全量 Go Race、vet、golangci-lint（0 项）、gofmt/goimports 通过；`govulncheck` 无可达漏洞，另有 1 个未调用模块告警。Python 全量 pytest 为 28 通过、2 条本机依赖用例默认跳过，Ruff 与 mypy 通过；显式接入本机 Temporal 和 Redis 的模拟 Activity 用例通过。CI 工作流的 Go/Python 测试命令会运行这些示例测试，远端运行结果待本次推送确认。此处仅覆盖三种内部供应商 Activity；`llm.run_skill` 等其他 Activity、Go OperationWorkflow 与公共 API 契约仍待实施，M1-06 保持待办。
 
 **M1-10 Harness 骨架切片（2026-09-27）**：Skill Registry 启动时校验多版本索引、包 SHA-256 与输入输出 JSON Schema，已发布的 `mock.echo@1.0.0` 可由 `agent` 队列的 `llm.run_skill` 执行。执行循环限制修复次数，模型 Router 在每次调用前检查预算、返回后按调用 ID 记账一次；Trace 只记录摘要、校验路径、token 和费用，不含原文。当前只接零费用 `mock.structured`；含工具或非 schema 校验器的 Skill 明确失败，真实模型 token 计数与工具尚未接入。`uv sync --locked`、Ruff、mypy、默认全量 pytest（23 通过、2 条本机依赖用例跳过）均通过；显式本机 Temporal + Redis 测试 2 通过，两个 Activity 队列均显示 poller，本机 Worker 正常退出；Compose 配置检查和 Agent 镜像构建通过，未启动容器。模拟 Skill 与测试工作流证据不代表真实模型、业务 Skill 或 Go Operation 验收。
+
+**M1-10 骨架完成（2026-09-28）**：`agent-api` 对现有健康路由及后续内部路由统一返回带稳定 `code`、`request_id` 的 `application/problem+json` 错误，404、405、参数错误及未预期异常均有脱敏测试；不可信请求 ID 会重新生成。先以默认 404/500 响应确认 Red，再补映射通过 Green。Agent 全量 pytest 通过（4 条需额外配置的用例默认跳过），Ruff 检查与格式、mypy 通过；显式本机 Temporal + Redis 两条集成用例通过，覆盖模拟供应商与 Skill 队列。M1-09 已记录真实本机 Go → Agent 模拟链路；本项只关闭 Agent 骨架，不代表真实模型、业务 Skill 或 M1 总体验收。
 
 **功能 Epic**
 
