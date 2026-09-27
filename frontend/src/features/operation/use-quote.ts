@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 
+import { formatCurrencyMicros } from "@/lib/money";
+
 export type QuoteIssue = { code: string; message: string };
 
 export type QuoteItem = {
@@ -31,16 +33,9 @@ export type QuoteResponse = {
   confirmable: boolean;
 };
 
-const currency = new Intl.NumberFormat("zh-CN", {
-  style: "currency",
-  currency: "CNY",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 export function formatQuote(micros: number) {
   if (!Number.isSafeInteger(micros) || micros < 0) return "报价异常";
-  return currency.format(micros / 1_000_000);
+  return formatCurrencyMicros(micros);
 }
 
 function validMicros(value: number | undefined): value is number {
