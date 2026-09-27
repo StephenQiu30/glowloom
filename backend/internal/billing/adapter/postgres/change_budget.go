@@ -19,8 +19,8 @@ import (
 // ErrProjectNotWritable means the project is archived or being purged.
 var ErrProjectNotWritable = errors.New("project is not writable")
 
-// ChangeBudgetWithEvents commits one limit change, its ledger fact and both
-// durable events under the same project and budget locks.
+// ChangeBudgetWithEvents commits one limit change, its ledger fact and durable
+// change, audit, and optional low-balance events under the same locks.
 func (s *Store) ChangeBudgetWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Budget, entry domain.LedgerEntry, events []identityapp.OutboxEvent) (domain.Budget, error) {
 	if s == nil || s.db == nil {
 		return domain.Budget{}, ErrUnavailable
@@ -186,10 +186,27 @@ type budgetAuditData struct {
 }
 
 func validBudgetChangedEvents(actor identityapp.Principal, before, after domain.Budget, entry domain.LedgerEntry, events []identityapp.OutboxEvent) bool {
-	if len(events) != 2 || events[0].ID == uuid.Nil || events[1].ID == uuid.Nil ||
+	wasLow, err := before.LowBalance()
+	if err != nil {
+		return false
+	}
+	isLow, err := after.LowBalance()
+	if err != nil {
+		return false
+	}
+	wantLow := !wasLow && isLow
+	wantCount := 2
+	if wantLow {
+		wantCount++
+	}
+	if len(events) != wantCount || events[0].ID == uuid.Nil || events[1].ID == uuid.Nil ||
 		events[0].ID == events[1].ID ||
 		events[0].Topic != "lanverse.billing.budget_changed.v1" ||
 		events[1].Topic != "lanverse.audit.recorded.v1" {
+		return false
+	}
+	if wantLow && (events[2].ID == uuid.Nil || events[2].ID == events[0].ID ||
+		events[2].ID == events[1].ID || events[2].Topic != "lanverse.billing.budget_low.v1") {
 		return false
 	}
 	for _, event := range events {
@@ -233,8 +250,27 @@ func validBudgetChangedEvents(actor identityapp.Principal, before, after domain.
 	if err != nil || requestID == uuid.Nil || requestID.String() != auditData.RequestID {
 		return false
 	}
-	return matchesBudgetAuditSummary(auditData.Before, before) &&
-		matchesBudgetAuditSummary(auditData.After, after)
+	if !matchesBudgetAuditSummary(auditData.Before, before) ||
+		!matchesBudgetAuditSummary(auditData.After, after) {
+		return false
+	}
+	if !wantLow {
+		return true
+	}
+	var low budgetEvent
+	var lowData budgetChangedData
+	if !decodeBudgetJSON(events[2].Payload, &low) || !decodeBudgetJSON(low.Data, &lowData) ||
+		low.EventID != events[2].ID || low.EventType != events[2].Topic ||
+		!low.OccurredAt.Equal(entry.CreateTime) || low.OrgID != actor.OrgID ||
+		low.ProjectID != after.ProjectID || low.Actor.Kind != "user" || low.Actor.ID != actor.ID ||
+		low.Aggregate.Type != "budget" || low.Aggregate.ID != after.ID ||
+		low.Aggregate.Revision == nil || *low.Aggregate.Revision != after.Revision ||
+		lowData.LimitMicros == nil || *lowData.LimitMicros != after.LimitMicros ||
+		lowData.AvailableMicros == nil || *lowData.AvailableMicros != available ||
+		lowData.IsOverrun == nil || *lowData.IsOverrun != after.IsOverrun {
+		return false
+	}
+	return true
 }
 
 func matchesBudgetAuditSummary(summary budgetAuditSummary, budget domain.Budget) bool {

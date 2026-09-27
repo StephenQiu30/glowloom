@@ -18,6 +18,7 @@ import (
 
 const (
 	budgetChangedTopic = "lanverse.billing.budget_changed.v1"
+	budgetLowTopic     = "lanverse.billing.budget_low.v1"
 	budgetAuditTopic   = "lanverse.audit.recorded.v1"
 )
 
@@ -110,6 +111,14 @@ func budgetChangedEvents(actor identityapp.Principal, before, after domain.Budge
 	if err != nil {
 		return nil, err
 	}
+	wasLow, err := before.LowBalance()
+	if err != nil {
+		return nil, err
+	}
+	isLow, err := after.LowBalance()
+	if err != nil {
+		return nil, err
+	}
 	changeID, auditID := uuid.New(), uuid.New()
 	change, err := json.Marshal(map[string]any{
 		"event_id": changeID, "event_type": budgetChangedTopic,
@@ -146,8 +155,26 @@ func budgetChangedEvents(actor identityapp.Principal, before, after domain.Budge
 		return nil, fmt.Errorf("encode budget changed audit: %w", err)
 	}
 	key := after.ProjectID.String()
-	return []identityapp.OutboxEvent{
+	events := []identityapp.OutboxEvent{
 		{ID: changeID, Topic: budgetChangedTopic, PartitionKey: key, Payload: change},
 		{ID: auditID, Topic: budgetAuditTopic, PartitionKey: key, Payload: audit},
-	}, nil
+	}
+	if !wasLow && isLow {
+		lowID := uuid.New()
+		low, err := json.Marshal(map[string]any{
+			"event_id": lowID, "event_type": budgetLowTopic,
+			"occurred_at": occurredAt, "org_id": actor.OrgID, "project_id": after.ProjectID,
+			"actor":     map[string]any{"kind": "user", "id": actor.ID},
+			"aggregate": map[string]any{"type": "budget", "id": after.ID, "revision": after.Revision},
+			"data": map[string]any{
+				"limit_micros": after.LimitMicros, "available_micros": available,
+				"is_overrun": after.IsOverrun,
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("encode budget low event: %w", err)
+		}
+		events = append(events, identityapp.OutboxEvent{ID: lowID, Topic: budgetLowTopic, PartitionKey: key, Payload: low})
+	}
+	return events, nil
 }

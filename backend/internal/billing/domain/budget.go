@@ -53,6 +53,20 @@ func (b Budget) AvailableMicros() (int64, error) {
 	return b.LimitMicros - b.ReservedMicros - b.SettledMicros, nil
 }
 
+// LowBalance reports whether the remaining amount is strictly below 20% of
+// a positive limit. Comparing against the largest integer below the threshold
+// avoids multiplying money values that may approach MaxInt64.
+func (b Budget) LowBalance() (bool, error) {
+	available, err := b.AvailableMicros()
+	if err != nil {
+		return false, err
+	}
+	if b.LimitMicros == 0 {
+		return false, nil
+	}
+	return available <= (b.LimitMicros-1)/5, nil
+}
+
 // ChangeLimit changes only the configured limit and returns the signed amount
 // for one budget_change ledger entry. A no-op returns zero without a revision.
 func (b *Budget) ChangeLimit(next int64) (int64, error) {
