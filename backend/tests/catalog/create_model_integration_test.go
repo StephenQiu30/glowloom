@@ -99,6 +99,19 @@ func TestCreateModelCommitsAuditAndRechecksAdminOnLocalPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`
+		UPDATE catalog.capability SET is_delete = true WHERE id = ?::uuid
+	`, capability.ID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := command.Execute(ctx, actor, input); !errors.Is(err, pgcatalog.ErrModelSourceUnavailable) {
+		t.Fatalf("deleted capability registered a model: %v", err)
+	}
+	if err := conn.DB.WithContext(ctx).Exec(`
+		UPDATE catalog.capability SET is_delete = false WHERE id = ?::uuid
+	`, capability.ID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_model_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
 		  IF NEW.topic = 'lanverse.audit.recorded.v1' THEN RAISE EXCEPTION 'reject model audit'; END IF;
