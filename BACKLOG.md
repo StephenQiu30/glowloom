@@ -251,7 +251,7 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | E-08-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.capability`、`catalog.model_profile`、`catalog.model_profile_version`、`catalog.price_rule_version`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-11 §3](docs/design/11-模型注册表与价格.md#3-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 完成（迁移、领域校验与状态机、管理员复核和只追加写入仓储已验证；管理用例与审计属 E-08-02） | — |
-| E-08-02 | 用例与接口 | 实现查询接口：GET /api/models；swag 注解生成 OpenAPI。详见 [DES-11 §4](docs/design/11-模型注册表与价格.md#4-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 进行中（管理员登记、模型版本与价格版本发布及启停内部命令已验证；公共查询与 HTTP 接口待实施） | — |
+| E-08-02 | 用例与接口 | 实现查询接口：GET /api/models；swag 注解生成 OpenAPI。详见 [DES-11 §4](docs/design/11-模型注册表与价格.md#4-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 进行中（管理员登记、版本 / 价格发布、启停命令及项目模型查询读侧已验证；公共 HTTP 契约、接口与 OpenAPI 待实施） | — |
 | E-08-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `catalog.model_changed.v1`、`catalog.price_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无。模型版本中的 `queue` 与 `supports_*` 被 OperationWorkflow 读取（DES-04）。 详见 [DES-11 §5](docs/design/11-模型注册表与价格.md#5-异步与工作流) | `backend/internal/catalog/adapter/workflow/`、`backend/internal/catalog/adapter/event/` | 待办 | — |
 | E-08-04 | 前端 | - 管理 · 模型注册表：列表（模型、供应商、能力、区域、状态、当前版本、价格）；详情编辑器（JSON 编辑 + 表单预览）；版本差异对比。 - 生成面板：`ModelParamsForm` 组件按 `param_schema` 渲染；`ReferenceLimitBar` 显示各用途用量 / 上限… 详见 [DES-11 §7](docs/design/11-模型注册表与价格.md#7-界面) | `frontend/src/features/admin/` | 待办 | — |
 | E-08-05 | 测试与验收 | 单元：`param_schema` 与 `limits` 校验器（前后端共用同一套 JSON Schema 规则）；价格计算（按张、按秒、按 token、按字符、分辨率系数）。 集成：发布版本 → 缓存失效 → 报价使用新版本。 前端：各组件类型渲染与校验的快…；验收用例 TC-08-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
@@ -269,6 +269,8 @@
 **E-08-02 价格规则发布切片（2026-09-27）**：先明确 DES-11 中各计价单位的完整规则、系数精度、版本化汇率、生效时刻与未来价格缓存边界；价格校验器拒绝缺字段、未知或重复 JSON 属性、无效系数与不安全金额。发布命令与 PostgreSQL 单事务复核当前管理员、模型当前版本、修订、连续价格版本号及系数对应的模式 / 分辨率，只追加价格并写入安全摘要的 `price.published` 审计 Outbox；移除无审计的导出追加方法。隔离本机 PostgreSQL Race 测试覆盖未来价不能提前启用、两版历史、非法规则零写入、审计失败回滚及撤权。公共查询与参数系数仍待实施；DES-03 IF4–IF6 未确认前不注册公共路由，TC-08-01～05 未计完成。
 
 **E-08-02 模型启停审计切片（2026-09-27）**：管理员命令按预期修订号执行 `disabled ⇄ active`；PostgreSQL 同一事务复核当前管理员、锁定模型头，启用时要求当前未删除版本与已生效价格，状态及修订更新与安全摘要的 `model.enabled` / `model.disabled` 审计 Outbox 原子提交。移除无审计的导出启停方法。隔离本机 PostgreSQL Race 测试覆盖无版本、无价格、仅未来价格、修订冲突、重复启用、审计失败回滚及撤权。公共查询、HTTP 接口、报价读侧校验、在途任务与缓存失效仍待各自切片验证；DES-03 IF4–IF6 未确认前不注册公共路由，TC-08-01～05 未计完成。
+
+**E-08-02 项目模型查询读侧切片（2026-09-27）**：应用层限制登录角色、项目 ID、游标和页长；PostgreSQL 在同一事务复核当前用户、组织与未归档项目，从项目读取境外开关，按能力、当前版本模式和区域过滤。停用模型、停用供应商、无凭据及尚无已生效价格的模型保留可见；只投影当前版本、已生效最新价格和凭据安全状态，按模型键与 ID 稳定分页。隔离本机 PostgreSQL Race 测试验证跨组织与撤权拒绝、区域 / 模式过滤、同生效时刻价格版本优先、未来价排除、分页和凭据脱敏。公开 `available` / `unavailable_reason`、HTTP / OpenAPI 及 TC-08-01～05 仍待 DES-03 IF4～IF6 就绪评审和 M1-06 接口底座，不计完成。
 
 #### E-09 审计日志
 
