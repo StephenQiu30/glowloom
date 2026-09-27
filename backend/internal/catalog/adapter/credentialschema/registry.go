@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 )
 
 // ErrInvalidSecret means an adapter or its credential fields are unsupported.
@@ -28,6 +30,18 @@ func (r *Registry) Supports(adapterKey string) bool {
 	default:
 		return false
 	}
+}
+
+// Fields returns fresh, value-free input descriptors for a known adapter.
+func (r *Registry) Fields(adapterKey string) ([]application.CredentialField, bool) {
+	if !r.Supports(adapterKey) {
+		return nil, false
+	}
+	fields := []application.CredentialField{{Name: "api_key", Type: "password", Required: true}}
+	if adapterKey == "minimax" {
+		fields = append(fields, application.CredentialField{Name: "group_id", Type: "text", Required: true})
+	}
+	return fields, true
 }
 
 // Validate returns the last four API-key characters without retaining secret data.
