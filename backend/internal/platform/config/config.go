@@ -16,24 +16,25 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
-	Env                    string
-	HTTPAddr               string
-	WorkerHealthAddr       string
-	RelayHealthAddr        string
-	LogLevel               string
-	DBDSN                  string
-	RedisURL               string
-	SessionIdleTTL         time.Duration
-	SessionAbsoluteTTL     time.Duration
-	KafkaBrokers           string
-	TemporalAddr           string
-	TemporalNamespace      string
-	ObjectStorageEndpoint  string
-	ObjectStorageBucket    string
-	ObjectStorageAccessKey string
-	ObjectStorageSecretKey string
-	ObjectStorageRegion    string
-	OTelEndpoint           string
+	Env                       string
+	HTTPAddr                  string
+	WorkerHealthAddr          string
+	RelayHealthAddr           string
+	LogLevel                  string
+	DBDSN                     string
+	PartitionMaintenanceDBDSN string
+	RedisURL                  string
+	SessionIdleTTL            time.Duration
+	SessionAbsoluteTTL        time.Duration
+	KafkaBrokers              string
+	TemporalAddr              string
+	TemporalNamespace         string
+	ObjectStorageEndpoint     string
+	ObjectStorageBucket       string
+	ObjectStorageAccessKey    string
+	ObjectStorageSecretKey    string
+	ObjectStorageRegion       string
+	OTelEndpoint              string
 }
 
 var (
@@ -61,24 +62,25 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Env:                    strings.TrimSpace(v.GetString("LV_ENV")),
-		HTTPAddr:               strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
-		WorkerHealthAddr:       strings.TrimSpace(v.GetString("LV_WORKER_HEALTH_ADDR")),
-		RelayHealthAddr:        strings.TrimSpace(v.GetString("LV_RELAY_HEALTH_ADDR")),
-		LogLevel:               strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
-		DBDSN:                  strings.TrimSpace(v.GetString("LV_DB_DSN")),
-		RedisURL:               strings.TrimSpace(v.GetString("LV_REDIS_URL")),
-		SessionIdleTTL:         v.GetDuration("LV_SESSION_IDLE_TTL"),
-		SessionAbsoluteTTL:     v.GetDuration("LV_SESSION_ABSOLUTE_TTL"),
-		KafkaBrokers:           strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
-		TemporalAddr:           strings.TrimSpace(v.GetString("LV_TEMPORAL_ADDR")),
-		TemporalNamespace:      strings.TrimSpace(v.GetString("LV_TEMPORAL_NAMESPACE")),
-		ObjectStorageEndpoint:  strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_ENDPOINT")),
-		ObjectStorageBucket:    strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_BUCKET")),
-		ObjectStorageAccessKey: v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
-		ObjectStorageSecretKey: v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
-		ObjectStorageRegion:    strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
-		OTelEndpoint:           strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
+		Env:                       strings.TrimSpace(v.GetString("LV_ENV")),
+		HTTPAddr:                  strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
+		WorkerHealthAddr:          strings.TrimSpace(v.GetString("LV_WORKER_HEALTH_ADDR")),
+		RelayHealthAddr:           strings.TrimSpace(v.GetString("LV_RELAY_HEALTH_ADDR")),
+		LogLevel:                  strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
+		DBDSN:                     strings.TrimSpace(v.GetString("LV_DB_DSN")),
+		PartitionMaintenanceDBDSN: strings.TrimSpace(v.GetString("LV_PARTITION_MAINTENANCE_DB_DSN")),
+		RedisURL:                  strings.TrimSpace(v.GetString("LV_REDIS_URL")),
+		SessionIdleTTL:            v.GetDuration("LV_SESSION_IDLE_TTL"),
+		SessionAbsoluteTTL:        v.GetDuration("LV_SESSION_ABSOLUTE_TTL"),
+		KafkaBrokers:              strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
+		TemporalAddr:              strings.TrimSpace(v.GetString("LV_TEMPORAL_ADDR")),
+		TemporalNamespace:         strings.TrimSpace(v.GetString("LV_TEMPORAL_NAMESPACE")),
+		ObjectStorageEndpoint:     strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_ENDPOINT")),
+		ObjectStorageBucket:       strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_BUCKET")),
+		ObjectStorageAccessKey:    v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
+		ObjectStorageSecretKey:    v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
+		ObjectStorageRegion:       strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
+		OTelEndpoint:              strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

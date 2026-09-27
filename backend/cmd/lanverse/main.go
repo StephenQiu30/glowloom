@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/term"
@@ -33,6 +34,7 @@ func run() error {
 	var queues, schedulePrefix string
 	setup := len(os.Args) > 1 && os.Args[1] == "temporal"
 	bootstrap := len(os.Args) > 1 && os.Args[1] == "admin"
+	partitions := len(os.Args) > 1 && os.Args[1] == "partitions"
 	var bootstrapInput identityapp.BootstrapAdminInput
 	switch {
 	case bootstrap:
@@ -65,6 +67,10 @@ func run() error {
 			return fmt.Errorf("unexpected temporal setup argument: %q", setupFlags.Arg(0))
 		}
 		schedulePrefix = *prefixFlag
+	case partitions:
+		if len(os.Args) != 3 || os.Args[2] != "ensure" {
+			return fmt.Errorf("usage: lanverse partitions ensure")
+		}
 	default:
 		roleFlag := flag.String("role", string(app.RoleAPI), "process role: api|worker|relay|all")
 		queuesFlag := flag.String("queues", "", "worker task queue: flow")
@@ -99,6 +105,9 @@ func run() error {
 	if setup {
 		logger.Info("starting Temporal setup")
 		return app.InstallCleanupSchedules(ctx, cfg, logger, schedulePrefix)
+	}
+	if partitions {
+		return app.EnsurePartitions(ctx, cfg, logger, time.Now().UTC())
 	}
 	if bootstrap {
 		password, err := readBootstrapPassword()
