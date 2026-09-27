@@ -132,83 +132,101 @@ func (s *Store) FindModelForAdmin(ctx context.Context, actorID, orgID, modelID u
 	return model, nil
 }
 
-// AppendModelVersionForAdmin inserts a new immutable version and advances the
-// model pointer under the same row lock and optimistic revision.
-func (s *Store) AppendModelVersionForAdmin(ctx context.Context, actorID, orgID uuid.UUID, version domain.ModelVersion, expectedRevision int64) error {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
-		version.Validate() != nil || version.CreateBy != actorID || expectedRevision < 1 {
-		return domain.ErrInvalidModelVersion
-	}
+// appendModelVersionInTx is only called by the audited publication transaction.
+func appendModelVersionInTx(tx *gorm.DB, version domain.ModelVersion, expectedRevision int64) error {
 	modes, err := json.Marshal(version.Modes)
 	if err != nil {
 		return fmt.Errorf("encode model modes: %w", err)
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
-			return err
+	var limits struct {
+		Roles map[string]json.RawMessage `json:"roles"`
+	}
+	if err := json.Unmarshal(version.Limits, &limits); err != nil {
+		return domain.ErrInvalidModelVersion
+	}
+	roleNames := make([]string, 0, len(limits.Roles))
+	for name := range limits.Roles {
+		switch name {
+		case "_total_images", "_total_videos", "_total_audios":
+		default:
+			roleNames = append(roleNames, name)
 		}
-		row, err := lockModelProfile(tx, version.ModelID)
-		if err != nil {
-			return err
-		}
-		model := row.model()
-		if err := model.AttachVersion(version, expectedRevision); err != nil {
-			return err
-		}
-		var count int64
-		if err := tx.Raw(`
+	}
+	roles, err := json.Marshal(roleNames)
+	if err != nil {
+		return fmt.Errorf("encode model input roles: %w", err)
+	}
+	row, err := lockModelProfile(tx, version.ModelID)
+	if err != nil {
+		return err
+	}
+	model := row.model()
+	if err := model.AttachVersion(version, expectedRevision); err != nil {
+		return err
+	}
+	var count int64
+	if err := tx.Raw(`
 			SELECT count(*) FROM catalog.model_profile_version
 			WHERE model_profile_id = ?::uuid
 		`, version.ModelID.String()).Scan(&count).Error; err != nil {
-			return fmt.Errorf("count model versions: %w", err)
-		}
-		if int64(version.VersionNo) != count+1 {
-			return ErrModelVersionConflict
-		}
-		var supported bool
-		if err := tx.Raw(`
-			SELECT ARRAY(SELECT jsonb_array_elements_text(?::jsonb)) <@ c.modes AS supported
-			FROM catalog.capability AS c WHERE c.key = ? AND NOT c.is_delete
-		`, string(modes), row.Capability).Scan(&supported).Error; err != nil {
-			return fmt.Errorf("check model modes: %w", err)
-		}
-		if !supported {
-			return domain.ErrInvalidModelVersion
-		}
-		result := tx.Exec(`
+		return fmt.Errorf("count model versions: %w", err)
+	}
+	if int64(version.VersionNo) != count+1 {
+		return ErrModelVersionConflict
+	}
+	var supported struct {
+		ModesSupported bool
+		RolesSupported bool
+	}
+	check := tx.Raw(`
+		SELECT ARRAY(SELECT jsonb_array_elements_text(?::jsonb)) <@ c.modes AS modes_supported,
+		       ARRAY(SELECT jsonb_array_elements_text(?::jsonb)) <@ c.input_roles AS roles_supported
+		FROM catalog.capability AS c
+		JOIN catalog.provider AS p ON p.id = ?::uuid AND NOT p.is_delete
+		WHERE c.key = ? AND NOT c.is_delete
+	`, string(modes), string(roles), row.ProviderID.String(), row.Capability).Scan(&supported)
+	if check.Error != nil {
+		return fmt.Errorf("check model capabilities: %w", check.Error)
+	}
+	if check.RowsAffected != 1 {
+		return ErrModelSourceUnavailable
+	}
+	if !supported.ModesSupported || !supported.RolesSupported {
+		return domain.ErrInvalidModelVersion
+	}
+	result := tx.Exec(`
 			INSERT INTO catalog.model_profile_version
 			  (id, model_profile_id, version_no, provider_model_id, modes, limits,
 			   param_schema, supports_query, supports_cancel, supports_callback,
 			   expected_max_ms, moderation, queue, create_by)
 			VALUES (?::uuid, ?::uuid, ?, ?, ARRAY(SELECT jsonb_array_elements_text(?::jsonb)), ?::jsonb, ?::jsonb,
 			        ?, ?, ?, ?, ?, ?, ?::uuid)
-		`, version.ID.String(), version.ModelID.String(), version.VersionNo,
-			version.ProviderModelID, string(modes), string(version.Limits),
-			string(version.ParamSchema), version.SupportsQuery, version.SupportsCancel,
-			version.SupportsCallback, version.ExpectedMaxMS, string(version.Moderation),
-			version.Queue, actorID.String())
-		if isUniqueViolation(result.Error, "uq_model_profile_version") {
-			return ErrModelVersionConflict
-		}
-		if result.Error != nil {
-			return fmt.Errorf("insert model version: %w", result.Error)
-		}
-		if err := requireOneRow(result, "insert model version"); err != nil {
-			return err
-		}
-		result = tx.Exec(`
+	`, version.ID.String(), version.ModelID.String(), version.VersionNo,
+		version.ProviderModelID, string(modes), string(version.Limits),
+		string(version.ParamSchema), version.SupportsQuery, version.SupportsCancel,
+		version.SupportsCallback, version.ExpectedMaxMS, string(version.Moderation),
+		version.Queue, version.CreateBy.String())
+	if isUniqueViolation(result.Error, "uq_model_profile_version") {
+		return ErrModelVersionConflict
+	}
+	if result.Error != nil {
+		return fmt.Errorf("insert model version: %w", result.Error)
+	}
+	if err := requireOneRow(result, "insert model version"); err != nil {
+		return err
+	}
+	result = tx.Exec(`
 			UPDATE catalog.model_profile
 			SET current_version_id = ?::uuid, revision = revision + 1, update_time = now()
 			WHERE id = ?::uuid AND revision = ? AND NOT is_delete
-		`, version.ID.String(), version.ModelID.String(), expectedRevision)
-		if result.Error != nil {
-			return fmt.Errorf("advance model version: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return domain.ErrModelRevisionConflict
-		}
-		return nil
-	})
+	`, version.ID.String(), version.ModelID.String(), expectedRevision)
+	if result.Error != nil {
+		return fmt.Errorf("advance model version: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return domain.ErrModelRevisionConflict
+	}
+	return nil
 }
 
 // AppendPriceRuleForAdmin inserts a new immutable price version and advances
