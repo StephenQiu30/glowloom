@@ -215,12 +215,14 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-07-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.provider`、`catalog.provider_credential`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-10 §2](docs/design/10-供应商凭据.md#2-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 待办 | — |
+| E-07-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.provider`、`catalog.provider_credential`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-10 §2](docs/design/10-供应商凭据.md#2-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 进行中（迁移、领域校验与事务仓储已在隔离 PostgreSQL 验证；管理员授权及完整凭据命令待实施） | `40a9e1fc`、`43afa186` |
 | E-07-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/admin/providers/{id}/credentials、GET /api/admin/providers/{id}；swag 注解生成 OpenAPI。详见 [DES-10 §3](docs/design/10-供应商凭据.md#3-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-07-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `CredentialTestWorkflow`；事件 `catalog.credential_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：- 测试：`backend-api` 直接执行一个短工作流 `CredentialTestWorkflow` → Activity `provider.test_credential`（`agent` 队列，超时 15… 详见 [DES-10 §4](docs/design/10-供应商凭据.md#4-异步与工作流) | `backend/internal/catalog/adapter/workflow/`、`backend/internal/catalog/adapter/event/` | 待办 | — |
 | E-07-04 | Agent 服务 | 供应商凭据解封与连通性测试 Activity `provider.test_credential`；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/activities/`、`agent/app/providers/` | 待办 | — |
 | E-07-05 | 前端 | 供应商列表：名称、区域、凭据状态（末 4 位、最后测试结果与时间）、模型数量；凭据对话框为密码输入框，保存后不可查看。 详见 [DES-10 §6](docs/design/10-供应商凭据.md#6-界面) | `frontend/src/features/admin/` | 待办 | — |
 | E-07-06 | 测试与验收 | 单元：封装 / 解封；`secret` 按适配器 schema 校验。 集成：停用后新报价失败、进行中任务继续查询；日志与响应敏感词扫描；验收用例 TC-07-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
+
+**E-07-01 数据底座切片（2026-09-27）**：按 DES-02 §5.3 创建 `catalog.provider` 与 `catalog.provider_credential`，数据库部分唯一索引限制每供应商最多一个启用凭据；领域校验供应商状态、限额和凭据元数据，密文字段不参与 JSON 序列化。仓储用供应商行锁串行化替换，在同一事务中停用旧凭据并插入新凭据，支持修订号条件更新、启用凭据查询与停用。先以缺少 `catalog` 包确认 Red；隔离本机 PostgreSQL 中验证重复启用被拒绝、替换失败回滚、两次并发替换后仍只有一个启用凭据、停用供应商不再提供新提交凭据；迁移 up/down 均通过并删除测试库。全量 `go test -race ./... -count=1`、`go vet ./...`、`golangci-lint run ./...`、gofmt/goimports 通过；`govulncheck ./...` 无可达漏洞，另有一个未调用模块告警。此切片尚未实现公钥封装、管理员实时鉴权、审计与 Outbox；仓储仅接收已封装密文，不能将其视为完整凭据保存命令或 TC-07 验收。
 
 #### E-08 模型注册表与价格
 
