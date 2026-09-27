@@ -10,6 +10,7 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
+	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
@@ -31,5 +32,10 @@ func initializeRelay(ctx context.Context, cfg config.Config, logger *zap.Logger)
 
 func initializeMaintenanceSetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*maintenanceflow.ScheduleInstaller, func(), error) {
 	wire.Build(provideSetupTrace, provideTemporal, provideCleanupScheduleInstaller)
+	return nil, nil, nil
+}
+
+func initializeAdminBootstrap(ctx context.Context, cfg config.Config, logger *zap.Logger) (*identityapp.BootstrapAdminCommand, func(), error) {
+	wire.Build(provideBootstrapTrace, provideDB, provideIdentityStore, provideBootstrapAdminCommand)
 	return nil, nil, nil
 }

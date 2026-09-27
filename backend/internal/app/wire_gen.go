@@ -13,6 +13,7 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
@@ -147,6 +148,24 @@ func initializeMaintenanceSetup(ctx context.Context, cfg config.Config, logger *
 		return nil, nil, err
 	}
 	return scheduleInstaller, func() {
+		cleanup2()
+		cleanup()
+	}, nil
+}
+
+func initializeAdminBootstrap(ctx context.Context, cfg config.Config, logger *zap.Logger) (*application.BootstrapAdminCommand, func(), error) {
+	tracerProvider, cleanup, err := provideBootstrapTrace(ctx, cfg, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	connection, cleanup2, err := provideDB(ctx, cfg, logger, tracerProvider)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	store := provideIdentityStore(connection)
+	bootstrapAdminCommand := provideBootstrapAdminCommand(store)
+	return bootstrapAdminCommand, func() {
 		cleanup2()
 		cleanup()
 	}, nil

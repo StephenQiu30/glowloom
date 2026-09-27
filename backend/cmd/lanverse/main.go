@@ -2,16 +2,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"go.uber.org/zap"
+	"golang.org/x/term"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
+	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	lvlog "github.com/StephenQiu30/lanverse/backend/internal/platform/log"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
@@ -28,7 +32,27 @@ func run() error {
 	var role app.Role
 	var queues, schedulePrefix string
 	setup := len(os.Args) > 1 && os.Args[1] == "temporal"
-	if setup {
+	bootstrap := len(os.Args) > 1 && os.Args[1] == "admin"
+	var bootstrapInput identityapp.BootstrapAdminInput
+	switch {
+	case bootstrap:
+		if len(os.Args) < 3 || os.Args[2] != "bootstrap" {
+			return fmt.Errorf("usage: lanverse admin bootstrap --login-name <name> [--display-name=value] [--org-name=value]")
+		}
+		bootstrapFlags := flag.NewFlagSet("admin bootstrap", flag.ContinueOnError)
+		loginName := bootstrapFlags.String("login-name", "", "first administrator login name")
+		displayName := bootstrapFlags.String("display-name", "", "administrator display name")
+		orgName := bootstrapFlags.String("org-name", "", "MVP organization name")
+		if err := bootstrapFlags.Parse(os.Args[3:]); err != nil {
+			return err
+		}
+		if bootstrapFlags.NArg() != 0 || strings.TrimSpace(*loginName) == "" {
+			return fmt.Errorf("usage: lanverse admin bootstrap --login-name <name> [--display-name=value] [--org-name=value]")
+		}
+		bootstrapInput = identityapp.BootstrapAdminInput{
+			LoginName: *loginName, DisplayName: *displayName, OrganizationName: *orgName,
+		}
+	case setup:
 		if len(os.Args) < 3 || os.Args[2] != "setup" {
 			return fmt.Errorf("usage: lanverse temporal setup [--prefix=value]")
 		}
@@ -41,7 +65,7 @@ func run() error {
 			return fmt.Errorf("unexpected temporal setup argument: %q", setupFlags.Arg(0))
 		}
 		schedulePrefix = *prefixFlag
-	} else {
+	default:
 		roleFlag := flag.String("role", string(app.RoleAPI), "process role: api|worker|relay|all")
 		queuesFlag := flag.String("queues", "", "worker task queue: flow")
 		flag.Parse()
@@ -76,6 +100,21 @@ func run() error {
 		logger.Info("starting Temporal setup")
 		return app.InstallCleanupSchedules(ctx, cfg, logger, schedulePrefix)
 	}
+	if bootstrap {
+		password, err := readBootstrapPassword()
+		if err != nil {
+			return err
+		}
+		bootstrapInput.InitialPassword = password
+		created, err := app.BootstrapAdmin(ctx, cfg, logger, bootstrapInput)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(os.Stdout, "First administrator %s created in organization %s; password change required at first login.\n", created.LoginName, created.OrgID); err != nil {
+			return fmt.Errorf("report administrator bootstrap: %w", err)
+		}
+		return nil
+	}
 	logger.Info("starting", zap.String("role", string(role)))
 	switch role {
 	case app.RoleAPI:
@@ -89,4 +128,29 @@ func run() error {
 	default:
 		return fmt.Errorf("%w: %q", app.ErrRoleNotAvailable, role)
 	}
+}
+
+func readBootstrapPassword() (string, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return "", fmt.Errorf("administrator bootstrap requires an interactive terminal for the password")
+	}
+	fmt.Fprint(os.Stderr, "Initial administrator password: ")
+	first, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("read administrator password: %w", err)
+	}
+	defer clear(first)
+	fmt.Fprint(os.Stderr, "Confirm administrator password: ")
+	confirmation, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("confirm administrator password: %w", err)
+	}
+	defer clear(confirmation)
+	if len(first) == 0 || !bytes.Equal(first, confirmation) {
+		return "", fmt.Errorf("administrator passwords are empty or do not match")
+	}
+	return string(first), nil
 }
