@@ -67,6 +67,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		t.Fatal(err)
 	}
 	publish := catalogapp.NewPublishModelVersionCommand(store, validator, time.Now)
+	setStatus := catalogapp.NewSetModelStatusCommand(store, time.Now)
 	version1 := validPublishModelVersionInput(model.ID)
 	version1.ExpectedRevision = 2
 	if _, err := publish.Execute(ctx, actor, version1); !errors.Is(err, domain.ErrModelRevisionConflict) {
@@ -98,7 +99,10 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	`, published1.ID.String()).Scan(&firstProviderModelID).Error; err != nil || firstProviderModelID != version1.ProviderModelID {
 		t.Fatalf("historical model version changed to %q: %v", firstProviderModelID, err)
 	}
-	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 3); !errors.Is(err, domain.ErrModelNotPublishable) {
+	if _, err := setStatus.Execute(ctx, actor, catalogapp.SetModelStatusInput{
+		ModelID: model.ID, Status: domain.ModelActive,
+		ExpectedRevision: 3, RequestID: uuid.NewString(),
+	}); !errors.Is(err, domain.ErrModelNotPublishable) {
 		t.Fatalf("model without price activated: %v", err)
 	}
 	priceValidator, err := pricevalidation.NewValidator()
@@ -137,7 +141,10 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	`, publishedPrice1.ID.String()).Scan(&originalPrice).Error; err != nil || originalPrice.Currency != "CNY" || originalPrice.BaseMicros != "1000" {
 		t.Fatalf("historical price changed: %+v, %v", originalPrice, err)
 	}
-	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelActive, 5); err != nil {
+	if _, err := setStatus.Execute(ctx, actor, catalogapp.SetModelStatusInput{
+		ModelID: model.ID, Status: domain.ModelActive,
+		ExpectedRevision: 5, RequestID: uuid.NewString(),
+	}); err != nil {
 		t.Fatalf("activate model with version and price: %v", err)
 	}
 	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, model.ID)
@@ -149,7 +156,10 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, model.ID, domain.ModelDisabled, 6); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := setStatus.Execute(ctx, actor, catalogapp.SetModelStatusInput{
+		ModelID: model.ID, Status: domain.ModelDisabled,
+		ExpectedRevision: 6, RequestID: uuid.NewString(),
+	}); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator changed model: %v", err)
 	}
 	if _, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, model.ID); !errors.Is(err, identityapp.ErrForbidden) {

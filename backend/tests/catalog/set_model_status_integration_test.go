@@ -106,6 +106,10 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	if _, err := publishPrice.Execute(ctx, actor, effectivePrice); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.SetModelStatusWithAudit(ctx, actor.ID, actor.OrgID, created.ID,
+		domain.ModelActive, 4, identityapp.OutboxEvent{}); !errors.Is(err, catalogapp.ErrInvalidSetModelStatus) {
+		t.Fatalf("model enabled without audit: %v", err)
+	}
 	if _, err := command.Execute(ctx, actor, enable); !errors.Is(err, domain.ErrModelRevisionConflict) {
 		t.Fatalf("stale status revision accepted: %v", err)
 	}

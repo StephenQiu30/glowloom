@@ -117,7 +117,10 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 		!storedEffectiveFrom.Equal(first.EffectiveFrom.Round(time.Microsecond)) {
 		t.Fatalf("stored effective time %s: %v", storedEffectiveFrom, err)
 	}
-	if err := store.SetModelStatusForAdmin(ctx, actor.ID, actor.OrgID, registered.ID, domain.ModelActive, 3); !errors.Is(err, domain.ErrModelNotPublishable) {
+	if _, err := catalogapp.NewSetModelStatusCommand(store, time.Now).Execute(ctx, actor, catalogapp.SetModelStatusInput{
+		ModelID: registered.ID, Status: domain.ModelActive,
+		ExpectedRevision: 3, RequestID: uuid.NewString(),
+	}); !errors.Is(err, domain.ErrModelNotPublishable) {
 		t.Fatalf("future-only price activated model: %v", err)
 	}
 	effective := first
