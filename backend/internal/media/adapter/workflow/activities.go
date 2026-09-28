@@ -100,8 +100,8 @@ func (a *Activities) Ingest(ctx context.Context, input IngestInput) (IngestOutpu
 }
 
 func classifyIngestError(err error) error {
-	if errors.Is(err, ErrUnsafeResultURL) {
-		return temporal.NewNonRetryableApplicationError("provider result URL rejected", "provider_result_invalid", err)
+	if errors.Is(err, ErrUnsafeResultURL) || errors.Is(err, ErrResultTooLarge) || errors.Is(err, application.ErrInvalidIngest) {
+		return temporal.NewNonRetryableApplicationError("provider result rejected", "provider_result_invalid", err)
 	}
 	if errors.Is(err, ErrResultExpired) {
 		return temporal.NewNonRetryableApplicationError("provider result URL unavailable", "result_expired", err)

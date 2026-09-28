@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os/exec"
@@ -26,7 +27,7 @@ func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (applic
 		"-of", "json", file.File.Name())
 	output, err := cmd.Output()
 	if err != nil {
-		return application.ProbeResult{}, fmt.Errorf("probe media content: %w", ErrUnsupportedMedia)
+		return application.ProbeResult{}, fmt.Errorf("probe media content: %w", mediaProcessError(ctx, err))
 	}
 	if len(output) > 1_000_000 {
 		return application.ProbeResult{}, ErrUnsupportedMedia
@@ -104,6 +105,19 @@ func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (applic
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}
 	return probe, nil
+}
+
+// mediaProcessError keeps worker cancellation and process startup failures retryable.
+// Only a decoder's ordinary nonzero exit indicates an unsupported media input.
+func mediaProcessError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) && exitError.ExitCode() >= 0 {
+		return ErrUnsupportedMedia
+	}
+	return err
 }
 
 func milliseconds(raw string) (int32, bool) {

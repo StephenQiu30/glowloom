@@ -185,6 +185,7 @@ func BatchWorkflow(ctx workflow.Context, input BatchInput) error {
 		cancelSignalled[id] = true
 	}
 	startedCount, completedCount, inFlight := 0, 0, 0
+	historyVersion := workflow.GetVersion(ctx, "batch-history-rollover", workflow.DefaultVersion, 1)
 	childErrors := make(map[uuid.UUID]error)
 	for {
 		loaded, err = loadBatch(flowCtx, batchID)
@@ -326,7 +327,10 @@ func BatchWorkflow(ctx workflow.Context, input BatchInput) error {
 		if remaining == 0 && inFlight == 0 {
 			return workflow.ExecuteActivity(flowCtx, "flow.FinishBatch", input.BatchID).Get(flowCtx, nil)
 		}
-		if startedCount >= 100 && remaining > 0 {
+		info := workflow.GetInfo(ctx)
+		rollHistory := historyVersion >= 1 && (info.GetContinueAsNewSuggested() ||
+			info.GetCurrentHistoryLength() >= 10_000 || info.GetCurrentHistorySize() >= 8*1024*1024)
+		if (startedCount >= 100 || rollHistory) && remaining > 0 {
 			return workflow.NewContinueAsNewError(ctx, BatchWorkflow, input)
 		}
 		if launched > 0 {

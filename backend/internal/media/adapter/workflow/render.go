@@ -108,7 +108,7 @@ func renderOne(ctx context.Context, sourcePath string, spec renderSpec) (applica
 	var stderr limitedWriter
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return application.RenditionFile{}, fmt.Errorf("render %s media preview: %w", spec.kind, ErrUnsupportedMedia)
+		return application.RenditionFile{}, fmt.Errorf("render %s media preview: %w", spec.kind, mediaProcessError(ctx, err))
 	}
 	file, err := os.Open(name)
 	if err != nil {
@@ -145,7 +145,10 @@ func renderOne(ctx context.Context, sourcePath string, spec renderSpec) (applica
 		File: file, Size: info.Size(), MIMEType: spec.mimeType, SHA256: hex.EncodeToString(hash.Sum(nil)),
 	}
 	verified, err := (FFProber{}).Probe(ctx, prepared)
-	if err != nil || verified.Width == nil || verified.Height == nil {
+	if err != nil {
+		return application.RenditionFile{}, err
+	}
+	if verified.Width == nil || verified.Height == nil {
 		return application.RenditionFile{}, ErrUnsupportedMedia
 	}
 	keep = true
