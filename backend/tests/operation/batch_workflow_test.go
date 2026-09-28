@@ -3,6 +3,7 @@ package operation_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 
@@ -119,6 +121,66 @@ func TestBatchWorkflowContinuesAfterOneHundredStarts(t *testing.T) {
 		t.Fatalf("100 child starts did not continue as new: %v", env.GetWorkflowError())
 	}
 	env.AssertExpectations(t)
+}
+
+func TestBatchWorkflowRollsHistoryWhileWaiting(t *testing.T) {
+	for _, reason := range []string{"paused", "capacity", "manual"} {
+		for _, limit := range []string{"suggested", "events", "bytes", "old_history"} {
+			t.Run(reason+"/"+limit, func(t *testing.T) {
+				batchID := uuid.New()
+				snapshot := operationapp.WorkflowBatch{
+					Batch: domain.Batch{ID: batchID, ProjectID: uuid.New(), Kind: "mixed",
+						Scope: json.RawMessage(`{}`), Status: domain.BatchStatusRunning, TotalCount: 1},
+					Items: []operationapp.WorkflowBatchItem{{OperationID: uuid.New(), Status: domain.StatusConfirmed}},
+				}
+				if reason == "paused" {
+					snapshot.PausedReason = "provider:rate_limited"
+				}
+				if reason == "manual" {
+					snapshot.Items[0].Status = domain.StatusManual
+				}
+				suite := &testsuite.WorkflowTestSuite{}
+				env := suite.NewTestWorkflowEnvironment()
+				registerBatchMockActivities(env)
+				switch limit {
+				case "events":
+					env.SetCurrentHistoryLength(10_000)
+				case "bytes":
+					env.SetCurrentHistorySize(8 * 1024 * 1024)
+				default:
+					env.SetContinueAsNewSuggested(true)
+				}
+				if limit == "old_history" {
+					env.OnGetVersion("batch-history-rollover", workflow.DefaultVersion, workflow.Version(1)).Return(workflow.DefaultVersion)
+				}
+				env.OnActivity("flow.LoadBatch", mock.Anything, batchID.String()).Return(snapshot, nil).Maybe()
+				env.OnActivity("flow.AcquireBatchLaunch", mock.Anything, mock.Anything).Return(false, nil).Maybe()
+				env.RegisterDelayedCallback(env.CancelWorkflow, 10*time.Second)
+				input := operationflow.BatchInput{BatchID: batchID.String(),
+					AcknowledgedTerminalIDs: []string{uuid.NewString()}, CancelSignalledIDs: []string{uuid.NewString()}}
+				env.ExecuteWorkflow(operationflow.BatchWorkflow, input)
+				if limit == "old_history" {
+					if env.GetWorkflowError() == nil || workflow.IsContinueAsNewError(env.GetWorkflowError()) {
+						t.Fatalf("old history changed commands: %v", env.GetWorkflowError())
+					}
+					return
+				}
+				var continued *workflow.ContinueAsNewError
+				if !errors.As(env.GetWorkflowError(), &continued) {
+					t.Fatalf("waiting batch did not roll its history: %v", env.GetWorkflowError())
+				}
+				var next operationflow.BatchInput
+				if err := converter.GetDefaultDataConverter().FromPayloads(continued.Input, &next); err != nil {
+					t.Fatal(err)
+				}
+				if next.BatchID != input.BatchID || len(next.AcknowledgedTerminalIDs) != 1 ||
+					next.AcknowledgedTerminalIDs[0] != input.AcknowledgedTerminalIDs[0] || len(next.CancelSignalledIDs) != 1 ||
+					next.CancelSignalledIDs[0] != input.CancelSignalledIDs[0] {
+					t.Fatalf("rollover lost recovery state: %+v", next)
+				}
+			})
+		}
+	}
 }
 
 func TestBatchWorkflowReloadsAlreadyStartedChild(t *testing.T) {
