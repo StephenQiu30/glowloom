@@ -50,7 +50,26 @@ PR / push 到分支
 
 CI 运行时长目标：PR 全部检查 ≤ 20 分钟（依赖缓存：Go module、pnpm store、uv cache、Docker layer）。
 
-**当前落地边界（2026-09-27）**：工作流直接运行三端格式、静态检查、测试和镜像构建命令，不使用项目脚本或 Makefile；后端增加 PostgreSQL、Redis、Kafka 服务与 Wire 组合根生成一致性检查。本机已验证三种客户端连接及 Wire 重生成，Temporal 客户端仅在本机服务上验证，CI 尚无 Temporal 测试服务。swag/OpenAPI 契约生成、其余集成、文档校验、安全扫描、端到端冒烟与发布流程仍按 BACKLOG 后续任务实现；尚无远端流水线通过记录，不能将当前工作流视为本节全部门禁通过。
+**当前落地边界（2026-09-28）**：工作流直接运行三端格式、静态检查、测试和镜像构建命令，不使用项目脚本或 Makefile；后端提供 PostgreSQL、Redis、Kafka 服务、FFmpeg/ffprobe 和 Wire 生成一致性检查。账号写入按用例隔离数据库，catalog、billing、workspace 按包隔离完整迁移数据库，operation、media 和受限审计角色有专用门禁。通用 Go Race 测试禁用测试结果缓存，在 job summary 中显示顶层通过、失败与跳过数量；跳过不能视为对应集成验收通过。
+
+本次提交前最近 50 次远程 CI 为 46 次成功、4 次失败；基线 `417334c8` 的 [CI 已通过](https://github.com/StephenQiu30/lanverse/actions/runs/36374055005)。CI 尚无 Temporal 与对象存储测试服务；swag/OpenAPI 契约生成、其余集成、文档校验、安全扫描、端到端冒烟与发布流程仍按 BACKLOG 后续任务实现，不能将现有 job 成功视为本节全部目标门禁通过。
+
+### 2.2 失败定位与提交闭环
+
+2026-09-28 对最近 50 次 CI 的失败日志逐条核验：
+
+| 失败运行 | 直接原因 | 当前处理 |
+| --- | --- | --- |
+| [36373867984](https://github.com/StephenQiu30/lanverse/actions/runs/36373867984)、[36341359089](https://github.com/StephenQiu30/lanverse/actions/runs/36341359089) | `_test.go` 放在 `backend/internal/`，触发测试目录门禁 | 已迁入 `backend/tests/` 或移除重复测试；提交前必须同时检查已跟踪与新增文件位置 |
+| [36341447454](https://github.com/StephenQiu30/lanverse/actions/runs/36341447454) | CI 未安装 ffprobe，媒体探测测试失败；旧实现把程序缺失误报为媒体不支持 | 已在 CI 和后端镜像安装 FFmpeg/ffprobe，并在测试前检查命令存在；媒体进程错误分类另有回归测试 |
+| [36325764158](https://github.com/StephenQiu30/lanverse/actions/runs/36325764158) | 新增 billing 代码缺少导出/包注释，测试函数的 context 参数位置不符合 lint 规则 | 后续提交已修复；本地必须运行与 CI 相同的 golangci-lint，不能只运行 go test |
+
+共同的流程缺口是提交前检查与 CI 门禁、依赖环境没有完全对齐。处理要求：
+
+1. 提交前核对本次文件白名单、测试目录、格式、静态检查和受影响测试；按 `.github/workflows/ci.yml` 的固定版本使用工具，并核验 ffmpeg/ffprobe 等系统依赖。
+2. 数据库测试使用专用临时库，应用所需迁移；需要故障注入或空库的账号用例单独建库。提供实际 `LV_TEST_*` 条件并记录跳过项，禁止把无环境变量时的绿色结果当作集成验收。
+3. 推送后按本次 SHA 查找 run，等待 backend、agent、frontend、images 全部结束。失败时先执行 `gh run view <run-id> --log-failed`，修复首个可操作错误、运行针对性回归，再推送修复；只在确认外部临时故障且源码无须变更时重跑。
+4. 交付必须给出远端 SHA、最终 CI 链接与结论、工作区状态和未执行门禁；CI 运行中、仅本地通过或镜像 job 被跳过时，不能报告 CI 全绿。直接推送 main 仅在用户明确授权时执行。
 
 ## 3. 制品与版本
 

@@ -16,12 +16,12 @@
 | --- | --- | --- | --- | --- | --- |
 | 文档（需求 → 设计 → 计划 → 测试 → 运维） | 全生命周期文档与需求设计拆解 | — | — | — | 完成（`bbd42ca7`），待评审 |
 | P0 | 全能参考可用性与成本验证 | — | 6 | 1 | 进行中 |
-| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 11 | 进行中 |
+| M1 | 工程底座、命令层、Operation 骨架 | 11 | 66 | 14 | 进行中 |
 | M2 | 剧本导入、解析、设定集 | 4 | 23 | 0 | 未开始 |
 | M3 | 资产定稿、分镜、生成全链路 | 11 | 60 | 0 | 未开始 |
 | M4 | 视频、配音、生成增强 | 3 | 18 | 0 | 未开始 |
 | M5 | 画布、Agent、运营辅助 = MVP | 4 | 20 | 0 | 未开始 |
-| 合计 | | 33 | 193 | 12 | |
+| 合计 | | 33 | 193 | 15 | |
 
 ## 2. 当前焦点与下一步
 
@@ -193,7 +193,7 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-06-01 | 数据与领域模型 | 迁移建表 / 加列：`identity.user`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问），Redis 会话和登录 IP 限流。详见 [DES-09 §2](docs/design/09-账号与会话.md#2-数据) | `backend/db/migrations/`、`backend/internal/identity/domain/`、`backend/internal/identity/adapter/postgres/`、`backend/internal/identity/adapter/redis/`、`backend/internal/platform/config/` | 已完成（迁移、领域与仓储、Redis 会话和 IP 限流、首位管理员 bootstrap；隔离 PostgreSQL/Redis 集成测试已纳入 CI） | 本次提交 |
+| E-06-01 | 数据与领域模型 | 迁移建表 / 加列：`identity.user`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问），Redis 会话和登录 IP 限流。详见 [DES-09 §2](docs/design/09-账号与会话.md#2-数据) | `backend/db/migrations/`、`backend/internal/identity/domain/`、`backend/internal/identity/adapter/postgres/`、`backend/internal/identity/adapter/redis/`、`backend/internal/platform/config/` | 完成（迁移、领域与仓储、Redis 会话和 IP 限流、首位管理员 bootstrap；隔离 PostgreSQL/Redis 集成测试已纳入 CI） | 本次提交 |
 | E-06-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/auth/login、POST /api/admin/users；swag 注解生成 OpenAPI。详见 [DES-09 §3](docs/design/09-账号与会话.md#3-接口) | `backend/internal/identity/application/`、`backend/internal/identity/adapter/http/`、`backend/docs/` | 进行中（会话鉴权、管理员账号创建/修改/列表/禁用/启用/重置、密码登录、登出和本人改密的内部用例已验证；公开接口和幂等待实施，公共契约依赖 DES-03 评审） | — |
 | E-06-03 | 异步、工作流与事件 | 事件 `identity.user_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无工作流。账号变更事务内写 Outbox 事件 `identity.user_changed.v1` 与 `audit.recorded.v1`（审计只经后者写入，DES-12）。 详见 [DES-09 §4](docs/design/09-账号与会话.md#4-异步与工作流) | `backend/internal/identity/adapter/workflow/`、`backend/internal/identity/adapter/event/` | 进行中（创建、修改、禁用、启用、重置及本人改密的双 Outbox 事务已验证，创建审计已由正式 Relay 消费；identity 事件消费者待实施） | — |
 | E-06-04 | 前端 | - 登录页：登录名、密码、错误与锁定提示（剩余时间）。 - 强制改密页：当前密码、新密码、确认新密码，实时显示强度规则。 - 管理 · 账号：列表（登录名、显示名、角色、状态、最后登录）、创建对话框、操作菜单（修改、禁用 / 启用、重置密码）。 - 应用外壳用户菜单：修改密码、登出。 详见 [DES-09 §6](docs/design/09-账号与会话.md#6-界面) | `frontend/src/features/auth/` | 待办 | — |
@@ -231,7 +231,7 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-07-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.provider`、`catalog.provider_credential`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-10 §2](docs/design/10-供应商凭据.md#2-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 已完成（迁移、领域与单活仓储；管理业务入口的当前管理员复核及真实 PostgreSQL 测试已纳入 CI） | `40a9e1fc`、`43afa186`、本次提交 |
+| E-07-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.provider`、`catalog.provider_credential`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-10 §2](docs/design/10-供应商凭据.md#2-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 完成（迁移、领域与单活仓储；管理业务入口的当前管理员复核及真实 PostgreSQL 测试已纳入 CI） | `40a9e1fc`、`43afa186`、本次提交 |
 | E-07-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/admin/providers/{id}/credentials、GET /api/admin/providers/{id}；swag 注解生成 OpenAPI。详见 [DES-10 §3](docs/design/10-供应商凭据.md#3-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 进行中（内部供应商登记、修改、凭据保存、停用及安全详情和列表查询已验证；公共鉴权、持久幂等与 HTTP 契约待实施） | `ac110dac`、`26d1bfb6`、`5e45289d` |
 | E-07-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `CredentialTestWorkflow`；事件 `catalog.credential_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：- 测试：`backend-api` 直接执行一个短工作流 `CredentialTestWorkflow` → Activity `provider.test_credential`（`agent` 队列，超时 15… 详见 [DES-10 §4](docs/design/10-供应商凭据.md#4-异步与工作流) | `backend/internal/catalog/adapter/workflow/`、`backend/internal/catalog/adapter/event/` | 进行中（Go 工作流、双阶段鉴权及测试结果与事件的事务写入已验证；公共启动接口、缓存消费者与真实供应商联调待实施） | `ac110dac`、`26d1bfb6`、`5e45289d` |
 | E-07-04 | Agent 服务 | 供应商凭据解封与连通性测试 Activity `provider.test_credential`；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/activities/`、`agent/app/providers/` | 进行中（私钥文件配置、Activity 与 OpenRouter 免费鉴权探测已在模拟 HTTP 和本机 Temporal 验证；Go/Python 共享示例契约已接入，其他适配器、真实凭据与评测待实施） | `29aee2e6`、`614231dc`、`b65ef335`、`f2a7c4bb`、`5a40fe73` |
@@ -334,7 +334,7 @@
 
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
-| E-10-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`workspace.project`、`workspace.style_preset`；实现领域对象、状态机与仓储（`billing.budget`：仓储查询强制带 `project_id`；`workspace.project`：按当前用户组织授权并以项目 ID 过滤，MVP 无项目成员；`workspace.style_preset`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤）。详见 [DES-13 §2](docs/design/13-项目管理.md#2-数据) | `backend/db/migrations/`、`backend/internal/workspace/domain/`、`backend/internal/workspace/adapter/postgres/` | 已完成（三表迁移、领域状态机、项目与零预算原子创建、组织授权仓储已验证；接口由 E-10-02 实现） | `2705c9f9`、`afb9b55c` |
+| E-10-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`workspace.project`、`workspace.style_preset`；实现领域对象、状态机与仓储（`billing.budget`：仓储查询强制带 `project_id`；`workspace.project`：按当前用户组织授权并以项目 ID 过滤，MVP 无项目成员；`workspace.style_preset`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤）。详见 [DES-13 §2](docs/design/13-项目管理.md#2-数据) | `backend/db/migrations/`、`backend/internal/workspace/domain/`、`backend/internal/workspace/adapter/postgres/` | 完成（三表迁移、领域状态机、项目与零预算原子创建、组织授权仓储已验证；接口由 E-10-02 实现） | `2705c9f9`、`afb9b55c` |
 | E-10-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects、GET /api/projects/{pid}/overview、DELETE /api/projects/{pid}；swag 注解生成 OpenAPI。详见 [DES-13 §3](docs/design/13-项目管理.md#3-接口) | `backend/internal/workspace/application/`、`backend/internal/workspace/adapter/http/`、`backend/docs/` | 进行中（内部创建、组织授权列表查询及四项设置修改命令已验证；公共接口、持久幂等、概览、其余设置和生命周期命令待实施） | `80e54fbf`、`620c66e8` |
 | E-10-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `project-purge`；事件 `workspace.project_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：- `project-purge`（每日）：对 `purge_after < now()` 的项目执行分批清理工作流（删除对象存储前缀、删除各 schema 数据），可断点续跑。 - 概览物化：`realtime` 之外… 详见 [DES-13 §4](docs/design/13-项目管理.md#4-异步与工作流) | `backend/internal/workspace/adapter/workflow/`、`backend/internal/workspace/adapter/event/` | 进行中（创建和修改事件的 Relay → Redis → 项目 SSE 投影已验证；清理工作流、概览消费者和生命周期事件生产方待实施） | `850e8ce7`、`74aab306`、`133f1941` |
 | E-10-04 | 前端 | 项目列表（卡片 / 表格切换、状态筛选、回收站视图）；新建项目对话框（风格类型切换后显示子风格与预设缩略图）；项目概览矩阵（单元格点击跳转）；设置页（画幅与风格只读并说明原因）。 详见 [DES-13 §6](docs/design/13-项目管理.md#6-界面) | `frontend/src/features/project/` | 进行中（已验证仅接收外部项目数据的卡片 / 表格展示组件；状态筛选、回收站查询、页面与接口接入、创建和设置交互待实现） | `59e56649`、`758d0985` |
