@@ -83,6 +83,7 @@ func (h *Handler) ServeProject(w http.ResponseWriter, r *http.Request, projectID
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.maxAge)
 	defer cancel()
+	streamRequest := r.WithContext(ctx)
 	channel := "project:" + projectID
 	subscription := h.client.Subscribe(ctx, channel)
 	var readerDone <-chan struct{}
@@ -104,6 +105,10 @@ func (h *Handler) ServeProject(w http.ResponseWriter, r *http.Request, projectID
 	if err != nil {
 		h.logger.Error("read project events", zap.String("project_id", projectID), zap.Error(err))
 		http.Error(w, "event stream unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if !h.authorize(streamRequest, projectID) {
+		http.Error(w, "project access denied", http.StatusForbidden)
 		return
 	}
 
@@ -161,11 +166,17 @@ func (h *Handler) ServeProject(w http.ResponseWriter, r *http.Request, projectID
 			}
 			return
 		case <-heartbeat.C:
+			if !h.authorize(streamRequest, projectID) {
+				return
+			}
 			if _, err := io.WriteString(w, ": heartbeat\n\n"); err != nil {
 				return
 			}
 			flusher.Flush()
 		case raw := <-messages:
+			if !h.authorize(streamRequest, projectID) {
+				return
+			}
 			var message application.Message
 			if err := json.Unmarshal([]byte(raw.Payload), &message); err != nil || !validMessage(message) {
 				h.logger.Warn("invalid project event", zap.String("project_id", projectID), zap.Error(err))

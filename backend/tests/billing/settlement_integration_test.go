@@ -1,6 +1,7 @@
 package billing_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -12,6 +13,8 @@ import (
 
 	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/lanverse/backend/internal/billing/application"
+	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
 )
 
 func settlementFixture(t *testing.T, database *gorm.DB, limit, reserved int64) billingapp.SettleInput {
@@ -95,11 +98,17 @@ func TestSettleInTransactionRecordsFactsAndReplaysOnce(t *testing.T) {
 		limit, reserved, actual          int64
 		cap, overrun                     bool
 		charge, release, providerOverage int64
+		available                        int64
+		lowEvent                         bool
 	}{
-		{"unused reservation", "settled", 100, 80, 50, false, false, 50, 30, 0},
-		{"token cost capped", "settled", 100, 80, 120, true, false, 80, 0, 40},
-		{"non token overrun", "settled", 100, 80, 130, false, true, 130, 0, 0},
-		{"zero charge", "released", 100, 80, 0, false, false, 0, 80, 0},
+		{"unused reservation", "settled", 100, 80, 50, false, false, 50, 30, 0, 50, false},
+		{"token cost capped", "settled", 100, 80, 120, true, false, 80, 0, 40, 20, false},
+		{"cross low threshold", "settled", 100, 80, 90, false, false, 90, 0, 0, 10, true},
+		{"non token overrun", "settled", 100, 80, 130, false, true, 130, 0, 0, -30, true},
+		{"already low", "settled", 100, 90, 90, false, false, 90, 0, 0, 10, false},
+		{"recover above low threshold", "settled", 100, 90, 70, false, false, 70, 20, 0, 30, false},
+		{"zero charge", "released", 100, 80, 0, false, false, 0, 80, 0, 100, false},
+		{"zero limit", "released", 0, 0, 0, false, false, 0, 0, 0, 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, database := billingDB(t)
@@ -137,6 +146,96 @@ func TestSettleInTransactionRecordsFactsAndReplaysOnce(t *testing.T) {
 			if tc.overrun && events["lanverse.billing.budget_overrun.v1"] != 1 {
 				t.Fatalf("missing overrun event: %v", events)
 			}
+			var event struct {
+				EventID uuid.UUID `json:"event_id"`
+				OrgID   uuid.UUID `json:"org_id"`
+				Data    struct {
+					AvailableMicros *int64 `json:"available_micros"`
+					BudgetOverrun   *bool  `json:"budget_overrun"`
+				} `json:"data"`
+			}
+			var row struct{ Payload []byte }
+			query := database.Raw(`
+				SELECT payload FROM infra.outbox
+				WHERE topic = 'lanverse.billing.settled.v1'
+				  AND partition_key = ? AND payload -> 'aggregate' ->> 'id' = ?
+			`, input.ProjectID.String(), input.OperationID.String()).Scan(&row)
+			if query.Error != nil || query.RowsAffected != 1 {
+				t.Fatalf("read settlement event: rows=%d err=%v", query.RowsAffected, query.Error)
+			}
+			if err := json.Unmarshal(row.Payload, &event); err != nil {
+				t.Fatalf("decode settlement event: %v", err)
+			}
+			if event.Data.AvailableMicros == nil || *event.Data.AvailableMicros != tc.available ||
+				event.Data.BudgetOverrun == nil || *event.Data.BudgetOverrun != tc.overrun {
+				t.Fatalf("settlement balance data=%+v, want available=%d overrun=%t", event.Data, tc.available, tc.overrun)
+			}
+			projection := &settlementProjectionRecorder{}
+			if err := realtime.NewBillingSettledHandler(projection, projection).Handle(t.Context(), inbox.Record{
+				Topic: realtime.BillingSettledTopic, Key: []byte(input.ProjectID.String()), Value: row.Payload,
+			}); err != nil {
+				t.Fatalf("project real settlement event: %v", err)
+			}
+			if projection.published != 1 || projection.event.ID != event.EventID.String() ||
+				projection.event.ProjectID != input.ProjectID.String() ||
+				projection.event.Type != "budget.updated" || projection.event.AvailableMicros != tc.available {
+				t.Fatalf("settlement projection = %+v, published=%d", projection.event, projection.published)
+			}
+			var lowRows []struct{ Payload []byte }
+			if err := database.Raw(`
+				SELECT payload FROM infra.outbox
+				WHERE topic = 'lanverse.billing.budget_low.v1' AND partition_key = ?
+			`, input.ProjectID.String()).Scan(&lowRows).Error; err != nil {
+				t.Fatalf("read low-balance events: %v", err)
+			}
+			wantLowCount := 0
+			if tc.lowEvent {
+				wantLowCount = 1
+			}
+			if len(lowRows) != wantLowCount {
+				t.Fatalf("low-balance event count=%d, want %d", len(lowRows), wantLowCount)
+			}
+			if tc.lowEvent {
+				var low struct {
+					EventID    uuid.UUID `json:"event_id"`
+					EventType  string    `json:"event_type"`
+					OccurredAt time.Time `json:"occurred_at"`
+					OrgID      uuid.UUID `json:"org_id"`
+					ProjectID  uuid.UUID `json:"project_id"`
+					Actor      struct {
+						Kind string     `json:"kind"`
+						ID   *uuid.UUID `json:"id"`
+					} `json:"actor"`
+					Aggregate struct {
+						Type     string    `json:"type"`
+						ID       uuid.UUID `json:"id"`
+						Revision *int64    `json:"revision"`
+					} `json:"aggregate"`
+					Data struct {
+						LimitMicros     *int64 `json:"limit_micros"`
+						AvailableMicros *int64 `json:"available_micros"`
+						IsOverrun       *bool  `json:"is_overrun"`
+					} `json:"data"`
+				}
+				if err := json.Unmarshal(lowRows[0].Payload, &low); err != nil {
+					t.Fatalf("decode low-balance event: %v", err)
+				}
+				var budgetRow struct{ ID uuid.UUID }
+				if err := database.Raw(`SELECT id FROM billing.budget WHERE project_id = ?::uuid`, input.ProjectID.String()).Scan(&budgetRow).Error; err != nil {
+					t.Fatalf("read budget ID: %v", err)
+				}
+				if low.EventID == uuid.Nil || low.EventID == event.EventID ||
+					low.EventType != "lanverse.billing.budget_low.v1" ||
+					!low.OccurredAt.Equal(input.OccurredAt) || low.OrgID != event.OrgID ||
+					low.ProjectID != input.ProjectID || low.Actor.Kind != "system" || low.Actor.ID != nil ||
+					low.Aggregate.Type != "budget" || low.Aggregate.ID != budgetRow.ID ||
+					low.Aggregate.Revision == nil || *low.Aggregate.Revision != 2 ||
+					low.Data.LimitMicros == nil || *low.Data.LimitMicros != tc.limit ||
+					low.Data.AvailableMicros == nil || *low.Data.AvailableMicros != tc.available ||
+					low.Data.IsOverrun == nil || *low.Data.IsOverrun != tc.overrun {
+					t.Fatalf("low-balance event = %+v", low)
+				}
+			}
 			input.ActualCostMicros++
 			if err := database.Transaction(func(tx *gorm.DB) error {
 				_, err := store.SettleInTransaction(t.Context(), tx, input)
@@ -168,7 +267,7 @@ func TestSettleInTransactionRecordsFactsAndReplaysOnce(t *testing.T) {
 func TestSettleInTransactionRollsBackWithCaller(t *testing.T) {
 	_, database := billingDB(t)
 	input := settlementFixture(t, database, 100, 80)
-	input.ActualCostMicros = 50
+	input.ActualCostMicros = 90
 	stop := errors.New("caller rolled back")
 	err := database.Transaction(func(tx *gorm.DB) error {
 		if _, err := pgbilling.NewStore(database).SettleInTransaction(t.Context(), tx, input); err != nil {
@@ -182,6 +281,16 @@ func TestSettleInTransactionRollsBackWithCaller(t *testing.T) {
 	reserved, settled, overrun, revision, entries, events := settlementRows(t, database, input)
 	if reserved != 80 || settled != 0 || overrun || revision != 1 || len(entries) != 0 || len(events) != 0 {
 		t.Fatalf("partial settlement: budget=%d/%d overrun=%t revision=%d entries=%v events=%v", reserved, settled, overrun, revision, entries, events)
+	}
+	var lowCount struct{ Count int64 }
+	if err := database.Raw(`
+		SELECT count(*) AS count FROM infra.outbox
+		WHERE topic = 'lanverse.billing.budget_low.v1' AND partition_key = ?
+	`, input.ProjectID.String()).Scan(&lowCount).Error; err != nil {
+		t.Fatalf("count low-balance events after rollback: %v", err)
+	}
+	if lowCount.Count != 0 {
+		t.Fatalf("rollback left %d low-balance events", lowCount.Count)
 	}
 }
 
@@ -239,7 +348,7 @@ func TestSettleInTransactionReplaysAfterOutboxPruning(t *testing.T) {
 func TestSettleInTransactionUsesApplicationRole(t *testing.T) {
 	_, database := billingDB(t)
 	input := settlementFixture(t, database, 100, 80)
-	input.ActualCostMicros = 50
+	input.ActualCostMicros = 90
 	err := database.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
@@ -299,4 +408,22 @@ func TestSettleInTransactionConcurrentReplayWritesOnce(t *testing.T) {
 type applicationResult struct {
 	replay bool
 	err    error
+}
+
+type settlementProjectionRecorder struct {
+	event     realtime.Event
+	published int
+}
+
+func (r *settlementProjectionRecorder) ProcessExternalOnce(ctx context.Context, _ string, _ string, publish func(context.Context) error) (bool, error) {
+	if err := publish(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *settlementProjectionRecorder) Publish(_ context.Context, event realtime.Event) error {
+	r.event = event
+	r.published++
+	return nil
 }

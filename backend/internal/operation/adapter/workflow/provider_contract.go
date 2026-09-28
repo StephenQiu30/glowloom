@@ -96,9 +96,11 @@ type ProviderCancelOutcome string
 const (
 	ProviderCancelConfirmed  ProviderCancelOutcome = "cancelled"
 	ProviderCancelNotApplied ProviderCancelOutcome = "not_cancelled"
+	ProviderCancelUnknown    ProviderCancelOutcome = "unknown"
 )
 
 // ProviderCancelOutput is returned by provider.cancel.
 type ProviderCancelOutput struct {
 	Outcome ProviderCancelOutcome `json:"outcome"`
+	Usage   map[string]any        `json:"usage,omitempty"`
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -52,9 +53,11 @@ func checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.U
 	var inputs []struct {
 		MediaAssetID *uuid.UUID
 		MaskAssetID  *uuid.UUID
+		RefType      string
+		RefVersion   *string
 	}
 	result := tx.Raw(`
-		SELECT media_asset_id, mask_asset_id
+		SELECT media_asset_id, mask_asset_id, ref_type, ref_version
 		FROM operation.operation_input
 		WHERE operation_id = ?::uuid AND NOT is_delete
 		ORDER BY seq_no
@@ -63,7 +66,14 @@ func checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.U
 		return fmt.Errorf("read frozen submission media: %w", result.Error)
 	}
 	assetIDs := make(map[uuid.UUID]struct{})
+	contentHashes := make(map[uuid.UUID]string)
 	for _, input := range inputs {
+		if input.RefType == "media_asset" && input.MediaAssetID != nil && input.RefVersion != nil {
+			if previous, exists := contentHashes[*input.MediaAssetID]; exists && previous != *input.RefVersion {
+				return ErrWorkflowInputNotReady
+			}
+			contentHashes[*input.MediaAssetID] = *input.RefVersion
+		}
 		for _, id := range []*uuid.UUID{input.MediaAssetID, input.MaskAssetID} {
 			if id != nil {
 				assetIDs[*id] = struct{}{}
@@ -81,9 +91,10 @@ func checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.U
 			ModerationStatus   string
 			ContainsRealPerson bool
 			ConsentRecordID    *uuid.UUID
+			SHA256             *string
 		}
 		result = tx.Raw(`
-			SELECT status, moderation_status, contains_real_person, consent_record_id
+			SELECT status, moderation_status, contains_real_person, consent_record_id, sha256
 			FROM media.media_asset
 			WHERE id = ?::uuid AND project_id = ?::uuid AND NOT is_delete
 			FOR SHARE
@@ -98,6 +109,9 @@ func checkWorkflowInputsForSubmission(tx *gorm.DB, operationID, projectID uuid.U
 		// recorded consent must never be assumed valid from the asset alone.
 		if asset.ContainsRealPerson || asset.ConsentRecordID != nil {
 			return ErrWorkflowConsentUnavailable
+		}
+		if expected, exists := contentHashes[id]; exists && (asset.SHA256 == nil || !strings.EqualFold(*asset.SHA256, expected)) {
+			return ErrWorkflowInputNotReady
 		}
 	}
 	return nil

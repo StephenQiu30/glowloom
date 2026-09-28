@@ -49,6 +49,91 @@ func TestCalculateQuoteByPublishedUnit(t *testing.T) {
 	}
 }
 
+func TestCalculateQuoteDetailedKeepsExactQuantityCurrencyAndTokenRates(t *testing.T) {
+	amount, detail, err := application.CalculateQuoteDetailed(
+		pricingRule(catalogdomain.PricePerSecond, `{"base_micros":100,"by_mode":{"image2video":1.25}}`, "USD", "1.234567"),
+		application.PricingInput{OutputCount: 2, TargetDurationMS: 1_250,
+			AllowedDurationsMS: []int64{1_500}, Mode: "image2video"},
+	)
+	if err != nil || amount != 463 || detail.Quantity != "1.5" || detail.UnitPriceMicros == nil ||
+		*detail.UnitPriceMicros != 100 || detail.Outputs != 2 ||
+		detail.Multipliers["mode_image2video"] != "1.25" ||
+		detail.Currency != "USD" || detail.FXRateToCNY != "1.234567" {
+		t.Fatalf("detailed video quote = %d, %+v, %v", amount, detail, err)
+	}
+	amount, detail, err = application.CalculateQuoteDetailed(
+		pricingRule(catalogdomain.PricePer1KTokens, `{"input_micros_per_1k":11,"output_micros_per_1k":23}`, "CNY", ""),
+		application.PricingInput{EstimatedInputTokens: 1_200, MaxOutputTokens: 800},
+	)
+	if err != nil || amount != 32 || detail.Quantity != "" || detail.UnitPriceMicros != nil ||
+		detail.EstimatedInputTokens == nil || *detail.EstimatedInputTokens != 1_200 ||
+		detail.MaxOutputTokens == nil || *detail.MaxOutputTokens != 800 ||
+		detail.InputUnitPriceMicros == nil || *detail.InputUnitPriceMicros != 11 ||
+		detail.OutputUnitPriceMicros == nil || *detail.OutputUnitPriceMicros != 23 {
+		t.Fatalf("detailed token quote = %d, %+v, %v", amount, detail, err)
+	}
+}
+
+func TestCalculateActualCostFromBillableUsage(t *testing.T) {
+	amount := func(value int64) *int64 { return &value }
+	for _, tc := range []struct {
+		name  string
+		price catalogdomain.PriceRuleVersion
+		usage application.BillableUsage
+		mode  string
+		res   string
+		want  int64
+	}{
+		{"images", pricingRule(catalogdomain.PricePerImage, `{"base_micros":1000000}`, "CNY", ""),
+			application.BillableUsage{OutputCount: amount(2)}, "", "", 2_000_000},
+		{"billed seconds with frozen factors and FX", pricingRule(catalogdomain.PricePerSecond,
+			`{"base_micros":100,"by_mode":{"image2video":1.25},"by_resolution":{"1080p":2}}`, "USD", "1.234567"),
+			application.BillableUsage{BilledDurationMS: amount(1500)}, "image2video", "1080p", 463},
+		{"one charged request", pricingRule(catalogdomain.PricePerRequest, `{"base_micros":250000}`, "CNY", ""),
+			application.BillableUsage{BillableRequests: amount(1)}, "", "", 250_000},
+		{"explicit zero charge", pricingRule(catalogdomain.PricePerRequest, `{"base_micros":250000}`, "CNY", ""),
+			application.BillableUsage{BillableRequests: amount(0)}, "", "", 0},
+		{"character blocks", pricingRule(catalogdomain.PricePer1KChars, `{"base_micros":200000}`, "CNY", ""),
+			application.BillableUsage{CharacterCount: amount(1001)}, "", "", 400_000},
+		{"actual tokens", pricingRule(catalogdomain.PricePer1KTokens,
+			`{"input_micros_per_1k":11,"output_micros_per_1k":23}`, "CNY", ""),
+			application.BillableUsage{InputTokens: amount(1200), OutputTokens: amount(800)}, "", "", 32},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := application.CalculateActualCost(tc.price, tc.usage, tc.mode, tc.res)
+			if err != nil || got != tc.want {
+				t.Fatalf("CalculateActualCost() = %d, %v; want %d", got, err, tc.want)
+			}
+		})
+	}
+	for _, usage := range []application.BillableUsage{
+		{},
+		{OutputCount: amount(-1)},
+		{OutputCount: amount(1), BillableRequests: amount(1)},
+	} {
+		if _, err := application.CalculateActualCost(
+			pricingRule(catalogdomain.PricePerImage, `{"base_micros":1}`, "CNY", ""), usage, "", "",
+		); !errors.Is(err, application.ErrInvalidPricingInput) {
+			t.Fatalf("invalid billable usage %+v: %v", usage, err)
+		}
+	}
+}
+
+func TestParseBillableUsageRejectsAmbiguousEvidence(t *testing.T) {
+	usage, err := application.ParseBillableUsage(json.RawMessage(`{"output_count":0}`))
+	if err != nil || usage.OutputCount == nil || *usage.OutputCount != 0 {
+		t.Fatalf("explicit zero billable usage = %+v, %v", usage, err)
+	}
+	for _, raw := range []string{
+		`{}`, `{"output_count":null}`, `{"output_count":1.0}`,
+		`{"output_count":1,"output_count":2}`, `{"estimated_cost_micros":1}`,
+	} {
+		if _, err := application.ParseBillableUsage(json.RawMessage(raw)); !errors.Is(err, application.ErrInvalidPricingInput) {
+			t.Fatalf("ambiguous usage %s: %v", raw, err)
+		}
+	}
+}
+
 func TestCalculateQuoteRejectsInvalidPricingFacts(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

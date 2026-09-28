@@ -23,3 +23,17 @@ func InstallCleanupSchedules(ctx context.Context, cfg config.Config, logger *zap
 	logger.Info("cleanup schedules installed", zap.String("namespace", cfg.TemporalNamespace))
 	return nil
 }
+
+// InstallQuoteExpirySchedule installs the operation quote-expiry sweep.
+func InstallQuoteExpirySchedule(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) error {
+	installer, cleanup, err := initializeQuoteExpirySetup(ctx, cfg, logger, prefix)
+	if err != nil {
+		return fmt.Errorf("initialize quote expiry setup: %w", err)
+	}
+	defer cleanup()
+	if err := installer.Install(ctx); err != nil {
+		return fmt.Errorf("install quote expiry schedule: %w", err)
+	}
+	logger.Info("quote expiry schedule installed", zap.String("namespace", cfg.TemporalNamespace))
+	return nil
+}

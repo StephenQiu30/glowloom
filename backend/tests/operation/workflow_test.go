@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,74 @@ func workflowFixture() application.WorkflowOperation {
 		},
 		ProviderRequestKey: "operation/" + operationID.String(),
 	}
+}
+
+func TestBatchOperationRejectsStandaloneWorkflowStart(t *testing.T) {
+	loaded := workflowFixture()
+	batchID := uuid.New()
+	loaded.Operation.BatchID = &batchID
+	id := loaded.Operation.ID.String()
+	for _, input := range []workflow.OperationInput{
+		{OperationID: id},
+		{OperationID: id, BatchID: batchID.String()},
+	} {
+		suite := &testsuite.WorkflowTestSuite{}
+		env := suite.NewTestWorkflowEnvironment()
+		registerOperationMockActivities(env)
+		env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).Once()
+		env.ExecuteWorkflow(workflow.OperationWorkflow, input)
+		if err := env.GetWorkflowError(); err == nil || !strings.Contains(err.Error(), workflow.ErrInvalidOperationInput.Error()) {
+			t.Fatalf("standalone batch operation must fail: input=%+v error=%v", input, err)
+		}
+		env.AssertExpectations(t)
+	}
+}
+
+func TestOperationWorkflowCompletesReuseWithoutProviderCall(t *testing.T) {
+	loaded := workflowFixture()
+	sourceID := uuid.New()
+	zero := int64(0)
+	loaded.Operation.ReusedFromID = &sourceID
+	loaded.Operation.QuoteMicros = &zero
+	loaded.Provider = application.WorkflowProvider{}
+	id := loaded.Operation.ID.String()
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).Once()
+	env.OnActivity("flow.CheckConsent", mock.Anything, id).Return(nil).Once()
+	env.OnActivity("flow.CompleteFromReuse", mock.Anything, id).Return(nil).Once()
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("reuse workflow: %v", err)
+	}
+	env.AssertExpectations(t)
+}
+
+func TestOperationWorkflowFailsAndSettlesWhenReuseSourceDisappears(t *testing.T) {
+	loaded := workflowFixture()
+	sourceID := uuid.New()
+	zero := int64(0)
+	loaded.Operation.ReusedFromID = &sourceID
+	loaded.Operation.QuoteMicros = &zero
+	id := loaded.Operation.ID.String()
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).Once()
+	env.OnActivity("flow.CheckConsent", mock.Anything, id).Return(nil).Once()
+	env.OnActivity("flow.CompleteFromReuse", mock.Anything, id).Return(
+		temporal.NewNonRetryableApplicationError("source unavailable", "reuse_source_unavailable", nil),
+	).Once()
+	env.OnActivity("flow.SettleOperation", mock.Anything, mock.MatchedBy(func(input workflow.SettlementInput) bool {
+		return input.From == domain.StatusConfirmed && input.To == domain.StatusFailed &&
+			input.FailureCode == "reuse_source_unavailable" && input.ActualCostMicros == 0
+	})).Return(nil).Once()
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("unavailable reuse workflow: %v", err)
+	}
+	env.AssertExpectations(t)
 }
 
 func TestOperationWorkflowUnknownReconcilesWithoutResubmitting(t *testing.T) {
@@ -109,6 +178,93 @@ func TestOperationWorkflowUnknownReconcilesWithoutResubmitting(t *testing.T) {
 			t.Fatalf("transitions = %v, want %v", transitions, want)
 		}
 	}
+}
+
+func TestOperationWorkflowCancelsSubmittedProviderWithEvidence(t *testing.T) {
+	loaded := workflowFixture()
+	loaded.Operation.Status = domain.StatusSubmitted
+	loaded.Provider.SupportsCancel = true
+	taskID := "mock-task-cancel"
+	loaded.ProviderTaskID = &taskID
+	id := loaded.Operation.ID.String()
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).
+		Run(func(mock.Arguments) { env.SignalWorkflow("cancel", nil) }).Once()
+	env.OnActivity("flow.Transition", mock.Anything, mock.MatchedBy(func(input application.TransitionInput) bool {
+		return input.OperationID == loaded.Operation.ID && input.From[0] == domain.StatusSubmitted &&
+			input.To == domain.StatusCancelling
+	})).Return(domain.StatusCancelling, nil).Once()
+	env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.MatchedBy(func(input application.BeginProviderCallInput) bool {
+		return input.OperationID == loaded.Operation.ID && input.Action == "cancel" &&
+			input.Attempt == 1 && input.ProviderTaskID != nil && *input.ProviderTaskID == taskID
+	})).Return(nil).Once()
+	env.OnActivity("provider.cancel", mock.Anything, mock.MatchedBy(func(input workflow.ProviderCancelInput) bool {
+		return input.ProviderTaskID == taskID
+	})).Return(workflow.ProviderCancelOutput{Outcome: workflow.ProviderCancelConfirmed}, nil).Once()
+	env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.MatchedBy(func(input application.CompleteProviderCallInput) bool {
+		return input.OperationID == loaded.Operation.ID && input.Action == "cancel" &&
+			input.Outcome == "ok" && input.State == "cancelled" &&
+			input.ProviderTaskID != nil && *input.ProviderTaskID == taskID
+	})).Return(nil).Once()
+	env.OnActivity("flow.SettleOperation", mock.Anything, mock.MatchedBy(func(input workflow.SettlementInput) bool {
+		return input.OperationID == id && input.From == domain.StatusCancelling &&
+			input.To == domain.StatusCancelled && input.ActualCostMicros == 0
+	})).Return(nil).Once()
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("cancel submitted provider: %v", err)
+	}
+	env.AssertExpectations(t)
+}
+
+func TestOperationWorkflowContinuesAfterProviderRejectsCancellation(t *testing.T) {
+	loaded := workflowFixture()
+	loaded.Operation.Status = domain.StatusSubmitted
+	loaded.Provider.SupportsCancel = true
+	taskID := "mock-task-still-running"
+	loaded.ProviderTaskID = &taskID
+	id := loaded.Operation.ID.String()
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).
+		Run(func(mock.Arguments) { env.SignalWorkflow("cancel", nil) }).Once()
+	var transitions []domain.Status
+	env.OnActivity("flow.Transition", mock.Anything, mock.Anything).Return(
+		func(_ context.Context, input application.TransitionInput) (domain.Status, error) {
+			transitions = append(transitions, input.To)
+			return input.To, nil
+		},
+	).Times(2)
+	env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.MatchedBy(func(input application.BeginProviderCallInput) bool {
+		return input.Action == "cancel" && input.ProviderTaskID != nil && *input.ProviderTaskID == taskID
+	})).Return(nil).Once()
+	env.OnActivity("provider.cancel", mock.Anything, mock.Anything).
+		Return(workflow.ProviderCancelOutput{Outcome: workflow.ProviderCancelNotApplied}, nil).Once()
+	env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.MatchedBy(func(input application.CompleteProviderCallInput) bool {
+		return input.Action == "cancel" && input.Outcome == "error" && input.State == "not_cancelled"
+	})).Return(nil).Once()
+	env.OnActivity("flow.BeginProviderCall", mock.Anything, mock.MatchedBy(func(input application.BeginProviderCallInput) bool {
+		return input.Action == "query" && input.ProviderTaskID != nil && *input.ProviderTaskID == taskID
+	})).Return(nil).Once()
+	env.OnActivity("provider.query", mock.Anything, mock.Anything).
+		Return(workflow.ProviderQueryOutput{State: workflow.ProviderQueryFailed}, nil).Once()
+	env.OnActivity("flow.CompleteProviderCall", mock.Anything, mock.MatchedBy(func(input application.CompleteProviderCallInput) bool {
+		return input.Action == "query" && input.Outcome == "ok" && input.State == "failed"
+	})).Return(nil).Once()
+	env.OnActivity("flow.SettleOperation", mock.Anything, mock.MatchedBy(func(input workflow.SettlementInput) bool {
+		return input.OperationID == id && input.From == domain.StatusSubmitted && input.To == domain.StatusFailed
+	})).Return(nil).Once()
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("cancel not applied: %v", err)
+	}
+	if !reflect.DeepEqual(transitions, []domain.Status{domain.StatusCancelling, domain.StatusSubmitted}) {
+		t.Fatalf("cancel not applied transitions = %v", transitions)
+	}
+	env.AssertExpectations(t)
 }
 
 func TestOperationWorkflowRecordsProviderAttemptBeforeDispatchAndSettlement(t *testing.T) {
@@ -195,6 +351,36 @@ func TestOperationWorkflowUnknownWaitsForManualNotExecutedResolution(t *testing.
 		transitions[3] != domain.StatusManual {
 		t.Fatalf("transitions = %v, want submitting, unknown, reconciling, manual", transitions)
 	}
+}
+
+func TestOperationWorkflowManualSettlementConflictWaitsForAnotherResolution(t *testing.T) {
+	loaded := workflowFixture()
+	loaded.Operation.Status = domain.StatusManual
+	id := loaded.Operation.ID.String()
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+	registerOperationMockActivities(env)
+	env.OnActivity("flow.LoadOperation", mock.Anything, id).Return(loaded, nil).Once()
+	env.OnActivity("flow.CheckManualNotExecuted", mock.Anything, id).Return(nil).Twice()
+	settlement := mock.MatchedBy(func(input workflow.SettlementInput) bool {
+		return input.OperationID == id && input.From == domain.StatusManual &&
+			input.To == domain.StatusFailed && input.FailureCode == "provider_not_executed"
+	})
+	env.OnActivity("flow.SettleOperation", mock.Anything, settlement).Return(
+		temporal.NewNonRetryableApplicationError("provider evidence changed", "manual_resolution_unverified", nil),
+	).Once()
+	env.OnActivity("flow.SettleOperation", mock.Anything, settlement).Return(nil).Once()
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow("resolve_manual", workflow.ManualResolution{Outcome: "not_executed"})
+	}, time.Second)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow("resolve_manual", workflow.ManualResolution{Outcome: "not_executed"})
+	}, 2*time.Second)
+	env.ExecuteWorkflow(workflow.OperationWorkflow, workflow.OperationInput{OperationID: id})
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("manual workflow did not await renewed decision: %v", err)
+	}
+	env.AssertExpectations(t)
 }
 
 func TestOperationWorkflowPollNotFoundReconcilesWithoutResubmitting(t *testing.T) {
@@ -566,6 +752,7 @@ func registerOperationMockActivities(env *testsuite.TestWorkflowEnvironment) {
 		return "", nil
 	})
 	register("flow.SettleOperation", func(context.Context, workflow.SettlementInput) error { return nil })
+	register("flow.CompleteFromReuse", func(context.Context, string) error { return nil })
 	register("flow.BeginProviderCall", func(context.Context, application.BeginProviderCallInput) error { return nil })
 	register("flow.CompleteProviderCall", func(context.Context, application.CompleteProviderCallInput) error { return nil })
 	register("provider.submit", func(context.Context, workflow.ProviderSubmitInput) (workflow.ProviderSubmitOutput, error) {
@@ -573,6 +760,9 @@ func registerOperationMockActivities(env *testsuite.TestWorkflowEnvironment) {
 	})
 	register("provider.query", func(context.Context, workflow.ProviderQueryInput) (workflow.ProviderQueryOutput, error) {
 		return workflow.ProviderQueryOutput{}, nil
+	})
+	register("provider.cancel", func(context.Context, workflow.ProviderCancelInput) (workflow.ProviderCancelOutput, error) {
+		return workflow.ProviderCancelOutput{}, nil
 	})
 	register("media.Ingest", func(context.Context, map[string]any) (map[string]any, error) {
 		return nil, nil

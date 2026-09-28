@@ -48,8 +48,8 @@ type BeginProviderCallInput struct {
 }
 
 // CompleteProviderCallInput records a redacted result for a begun attempt.
-// Usage is an opaque provider fact; only an installed pricing adapter may turn
-// it into a charge. The mock adapter is explicitly free.
+// Usage contains normalized, non-sensitive billable quantities from a trusted
+// provider adapter. The mock adapter is explicitly free.
 type CompleteProviderCallInput struct {
 	OperationID    uuid.UUID       `json:"operation_id"`
 	Action         string          `json:"action"`
@@ -70,7 +70,7 @@ type ProviderCost struct {
 // Validate checks the stable call identity before writing an unknown record.
 func (i BeginProviderCallInput) Validate() error {
 	if i.OperationID == uuid.Nil || i.Attempt < 1 || !providerCallAction(i.Action) ||
-		!validProviderTaskID(i.ProviderTaskID) {
+		!validProviderTaskID(i.ProviderTaskID) || (i.Action == "cancel" && i.ProviderTaskID == nil) {
 		return ErrInvalidProviderCall
 	}
 	return nil

@@ -25,7 +25,7 @@ func TestScheduledMaintenanceRunsOnLocalTemporal(t *testing.T) {
 	if dsn == "" || addr == "" || namespace == "" {
 		t.Skip("set LV_TEST_MAINTENANCE_DB_DSN, LV_TEST_TEMPORAL_ADDR, and LV_TEST_TEMPORAL_NAMESPACE")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
 	conn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
 	if err != nil {
@@ -71,8 +71,8 @@ func TestScheduledMaintenanceRunsOnLocalTemporal(t *testing.T) {
 	}
 	t.Cleanup(flowWorker.Stop)
 
-	triggerScheduledWorkflow(ctx, t, workflowClient, queue, maintenanceflow.ProcessedEventCleanupWorkflow)
-	triggerScheduledWorkflow(ctx, t, workflowClient, queue, maintenanceflow.OutboxCleanupWorkflow)
+	awaitPeriodicScheduledWorkflow(ctx, t, workflowClient, queue, maintenanceflow.ProcessedEventCleanupWorkflow)
+	awaitPeriodicScheduledWorkflow(ctx, t, workflowClient, queue, maintenanceflow.OutboxCleanupWorkflow)
 
 	var count int64
 	if err := conn.DB.WithContext(ctx).Raw(
@@ -92,20 +92,19 @@ func TestScheduledMaintenanceRunsOnLocalTemporal(t *testing.T) {
 	}
 }
 
-func triggerScheduledWorkflow(ctx context.Context, t *testing.T, workflowClient client.Client, queue string, workflow any) {
+func awaitPeriodicScheduledWorkflow(ctx context.Context, t *testing.T, workflowClient client.Client, queue string, workflow any) {
 	t.Helper()
 	scheduleID := "maintenance-test-" + uuid.NewString()
 	handle, err := workflowClient.ScheduleClient().Create(ctx, client.ScheduleOptions{
 		ID: scheduleID,
 		Spec: client.ScheduleSpec{Intervals: []client.ScheduleIntervalSpec{
-			{Every: 24 * time.Hour},
+			{Every: 3 * time.Second},
 		}},
 		Action: &client.ScheduleWorkflowAction{
 			ID:        scheduleID,
 			Workflow:  workflow,
 			TaskQueue: queue,
 		},
-		Paused: true,
 	})
 	if err != nil {
 		t.Fatalf("create test schedule: %v", err)
@@ -117,10 +116,6 @@ func triggerScheduledWorkflow(ctx context.Context, t *testing.T, workflowClient 
 			t.Errorf("delete test schedule: %v", err)
 		}
 	})
-	if err := handle.Trigger(ctx, client.ScheduleTriggerOptions{}); err != nil {
-		t.Fatalf("trigger test schedule: %v", err)
-	}
-
 	var workflowID, runID string
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -140,7 +135,7 @@ func triggerScheduledWorkflow(ctx context.Context, t *testing.T, workflowClient 
 		}
 		select {
 		case <-ctx.Done():
-			t.Fatalf("wait for scheduled run: %v", ctx.Err())
+			t.Fatalf("wait for automatic scheduled run: %v", ctx.Err())
 		case <-ticker.C:
 		}
 	}

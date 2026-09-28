@@ -3,6 +3,7 @@ package application
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -22,6 +23,10 @@ var (
 	ErrWorkflowInputNotReady = errors.New("workflow input media not ready")
 	// ErrWorkflowConsentUnavailable rejects a consent that cannot be verified.
 	ErrWorkflowConsentUnavailable = errors.New("workflow media consent cannot be verified")
+	// ErrInvalidWorkflowBatch means the committed selection cannot be executed safely.
+	ErrInvalidWorkflowBatch = errors.New("invalid workflow batch selection")
+	// ErrWorkflowBatchNotReady means one selected child is still unsettled.
+	ErrWorkflowBatchNotReady = errors.New("workflow batch has unfinished children")
 )
 
 // WorkflowProvider is the nonsecret, frozen provider configuration required by
@@ -59,6 +64,24 @@ type WorkflowOperation struct {
 	PriceUnit          string
 	ProviderRequestKey string
 	ProviderTaskID     *string
+}
+
+// WorkflowBatchItem is one selected member of a confirmed batch. Excluded or
+// stale quoted items remain in the database but are absent from this snapshot.
+type WorkflowBatchItem struct {
+	OperationID uuid.UUID
+	Status      domain.Status
+	FailureCode string
+	FinishedAt  time.Time
+}
+
+// WorkflowBatch is the durable input reloaded by each BatchWorkflow run.
+// It contains no provider credentials or mutable quote parameters.
+type WorkflowBatch struct {
+	Batch           domain.Batch
+	PausedReason    string
+	CancelRequested bool
+	Items           []WorkflowBatchItem
 }
 
 // TransitionInput identifies one conditional, nonterminal workflow state change.

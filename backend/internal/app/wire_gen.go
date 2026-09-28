@@ -15,6 +15,7 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
+	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
@@ -114,7 +115,7 @@ func initializeRelay(ctx context.Context, cfg config.Config, logger *zap.Logger)
 		cleanup()
 		return nil, nil, err
 	}
-	appRelayRuntime, cleanup5, err := provideRelayRuntime(ctx, cfg, connection, kafkaconnConnection, redisconnConnection)
+	appRelayRuntime, cleanup5, err := provideRelayRuntime(ctx, cfg, connection, kafkaconnConnection, redisconnConnection, logger, tracerProvider)
 	if err != nil {
 		cleanup4()
 		cleanup3()
@@ -148,6 +149,28 @@ func initializeMaintenanceSetup(ctx context.Context, cfg config.Config, logger *
 		return nil, nil, err
 	}
 	return scheduleInstaller, func() {
+		cleanup2()
+		cleanup()
+	}, nil
+}
+
+func initializeQuoteExpirySetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*workflow.QuoteExpiryScheduleInstaller, func(), error) {
+	tracerProvider, cleanup, err := provideSetupTrace(ctx, cfg, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	connection, cleanup2, err := provideTemporal(cfg, logger, tracerProvider)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	quoteExpiryScheduleInstaller, err := provideQuoteExpiryScheduleInstaller(ctx, connection, prefix)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	return quoteExpiryScheduleInstaller, func() {
 		cleanup2()
 		cleanup()
 	}, nil

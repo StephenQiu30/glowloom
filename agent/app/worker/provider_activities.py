@@ -85,6 +85,7 @@ class ProviderCancelInput(ProviderActivityModel):
 
 class ProviderCancelOutput(ProviderActivityModel):
     outcome: Literal["cancelled", "not_cancelled"]
+    usage: dict[str, object] | None = None
 
 
 def _validate_input[InputModel: BaseModel](
@@ -166,7 +167,7 @@ class MockProviderActivities:
         result = await self._provider.cancel(TaskRef(provider_task_id=data.provider_task_id))
         return ProviderCancelOutput(
             outcome="cancelled" if result.cancelled else "not_cancelled"
-        ).model_dump(mode="json")
+        ).model_dump(mode="json", exclude_none=True)
 
 
 def create_mock_worker(

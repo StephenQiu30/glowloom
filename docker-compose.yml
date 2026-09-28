@@ -48,6 +48,19 @@ services:
     ports:
       - "${LV_WORKER_HEALTH_PORT:-8081}:8081"
 
+  backend-temporal-setup:
+    build: ./backend
+    image: lanverse/backend:local
+    command: ["temporal", "setup"]
+    profiles: ["maintenance-setup"]
+    environment:
+      LV_ENV: ${LV_ENV:-local}
+      LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
+      LV_TEMPORAL_ADDR: ${LV_TEMPORAL_ADDR:?Set LV_TEMPORAL_ADDR for Temporal setup}
+      LV_TEMPORAL_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:?Set LV_TEMPORAL_NAMESPACE for Temporal setup}
+      LV_OTEL_ENDPOINT: ${LV_OTEL_ENDPOINT:-}
+    restart: "no"
+
   backend-worker-media:
     build: ./backend
     image: lanverse/backend:local

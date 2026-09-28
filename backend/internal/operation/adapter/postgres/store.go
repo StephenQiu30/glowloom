@@ -191,16 +191,18 @@ func requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
 }
 
 type batchRow struct {
-	ID               uuid.UUID
-	ProjectID        uuid.UUID
-	Kind             string
-	Scope            []byte
-	Status           string
-	TotalCount       int32
-	SucceededCount   int32
-	FailedCount      int32
-	UnknownCount     int32
-	QuoteTotalMicros int64
+	ID                uuid.UUID
+	ProjectID         uuid.UUID
+	Kind              string
+	Scope             []byte
+	Status            string
+	TotalCount        int32
+	SucceededCount    int32
+	FailedCount       int32
+	UnknownCount      int32
+	QuoteTotalMicros  int64
+	PausedReason      *string
+	CancelRequestedAt *time.Time
 }
 
 func (r batchRow) domain() domain.Batch {
@@ -233,6 +235,7 @@ type operationRow struct {
 	QuoteMicros           *int64
 	QuoteDetail           []byte
 	QuoteExpiresAt        *time.Time
+	FailureCode           *string
 	ReusedFromID          *uuid.UUID
 	ForceRegenerate       bool
 	ReservationID         *uuid.UUID

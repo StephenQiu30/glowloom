@@ -7,10 +7,12 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	catalogdomain "github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 )
 
@@ -89,6 +91,22 @@ func (s *Store) RecordManualNotExecuted(ctx context.Context, input application.M
 		if result.RowsAffected != 1 {
 			return application.ErrManualResolutionUnverified
 		}
+		var contradictsNotExecuted bool
+		if err := tx.Raw(`
+			SELECT EXISTS (
+			  SELECT 1 FROM operation.provider_call
+			  WHERE project_id = ?::uuid AND operation_id = ?::uuid AND NOT is_delete
+			    AND (cost_micros > 0
+			      OR action = 'query' AND response_summary ->> 'state'
+			         IN ('succeeded', 'failed', 'confirmed_not_exist')
+			      OR action = 'cancel' AND response_summary ->> 'state' = 'cancelled')
+			)
+		`, op.ProjectID.String(), input.OperationID.String()).Scan(&contradictsNotExecuted).Error; err != nil {
+			return fmt.Errorf("check manual provider execution evidence: %w", err)
+		}
+		if contradictsNotExecuted {
+			return application.ErrProviderCallConflict
+		}
 		detail, err := json.Marshal(map[string]string{
 			"admin_id": input.AdminID.String(), "evidence": input.Evidence,
 		})
@@ -126,6 +144,14 @@ func (s *Store) CheckManualNotExecuted(ctx context.Context, operationID uuid.UUI
 		WHERE e.operation_id = ?::uuid AND o.status = 'manual'
 		  AND e.to_status = 'manual' AND e.reason = ?
 		  AND NOT e.is_delete AND NOT o.is_delete
+		  AND NOT EXISTS (
+		    SELECT 1 FROM operation.provider_call AS c
+		    WHERE c.project_id = o.project_id AND c.operation_id = o.id AND NOT c.is_delete
+		      AND (c.cost_micros > 0
+		        OR c.action = 'query' AND c.response_summary ->> 'state'
+		           IN ('succeeded', 'failed', 'confirmed_not_exist')
+		        OR c.action = 'cancel' AND c.response_summary ->> 'state' = 'cancelled')
+		  )
 		LIMIT 1
 	`, operationID.String(), manualNotExecutedReason).Scan(&present)
 	if result.Error != nil {
@@ -185,16 +211,35 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 			return nil
 		}
 		if op.Status == "completed" || op.Status == "failed" || op.Status == "cancelled" ||
+			(op.Status == "cancelling" && input.Action != "cancel") ||
 			op.Status == "expired" || op.ModelProfileVersionID == nil || op.Region == nil ||
 			op.PriceRuleVersionID == nil || op.ProviderRequestKey == nil || strings.TrimSpace(*op.ProviderRequestKey) == "" {
 			return application.ErrInvalidProviderCall
 		}
+		if input.Action == "cancel" {
+			if op.Status != "cancelling" {
+				return application.ErrInvalidProviderCall
+			}
+			var task struct{ ProviderTaskID *string }
+			if err := tx.Raw(`
+				SELECT detail ->> 'provider_task_id' AS provider_task_id
+				FROM operation.operation_event
+				WHERE operation_id = ?::uuid AND detail ? 'provider_task_id' AND NOT is_delete
+				ORDER BY create_time DESC, id DESC LIMIT 1
+			`, input.OperationID.String()).Scan(&task).Error; err != nil {
+				return fmt.Errorf("read cancel provider task: %w", err)
+			}
+			if !sameOptionalString(task.ProviderTaskID, input.ProviderTaskID) {
+				return application.ErrInvalidProviderCall
+			}
+		}
 		var provider struct {
-			ProviderKey string
-			AdapterKey  string
+			ProviderKey    string
+			AdapterKey     string
+			SupportsCancel bool
 		}
 		result = tx.Raw(`
-			SELECT p.key AS provider_key, p.adapter_key
+			SELECT p.key AS provider_key, p.adapter_key, v.supports_cancel
 			FROM catalog.model_profile_version AS v
 			JOIN catalog.model_profile AS m ON m.id = v.model_profile_id
 			JOIN catalog.provider AS p ON p.id = m.provider_id
@@ -204,6 +249,9 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 			return fmt.Errorf("read provider call model: %w", result.Error)
 		}
 		if result.RowsAffected != 1 || provider.ProviderKey == "" || provider.AdapterKey == "" {
+			return application.ErrInvalidProviderCall
+		}
+		if input.Action == "cancel" && !provider.SupportsCancel {
 			return application.ErrInvalidProviderCall
 		}
 		summary, err := json.Marshal(map[string]any{
@@ -232,9 +280,8 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 	})
 }
 
-// CompleteProviderCall stores only redacted state, usage and cost. Mock calls
-// are explicitly zero cost; real adapter usage remains unpriced and cannot be
-// settled until a trusted pricing implementation is installed.
+// CompleteProviderCall prices conclusive normalized usage against the frozen
+// price version. The operation lock serializes retries and duplicate queries.
 func (s *Store) CompleteProviderCall(ctx context.Context, input application.CompleteProviderCallInput) error {
 	if s == nil || s.db == nil {
 		return ErrUnavailable
@@ -246,15 +293,19 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		var op struct {
 			ProjectID             uuid.UUID
 			ModelProfileVersionID *uuid.UUID
+			PriceRuleVersionID    *uuid.UUID
+			Mode                  string
+			Params                []byte
 		}
 		result := tx.Raw(`
-			SELECT project_id, model_profile_version_id FROM operation.operation
+			SELECT project_id, model_profile_version_id, price_rule_version_id,
+			       mode, params::text AS params FROM operation.operation
 			WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
 		`, input.OperationID.String()).Scan(&op)
 		if result.Error != nil {
 			return fmt.Errorf("lock operation for provider result: %w", result.Error)
 		}
-		if result.RowsAffected != 1 || op.ModelProfileVersionID == nil {
+		if result.RowsAffected != 1 || op.ModelProfileVersionID == nil || op.PriceRuleVersionID == nil {
 			return ErrNotFound
 		}
 		var calls []providerCallRow
@@ -307,7 +358,38 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			return application.ErrInvalidProviderCall
 		}
 		var cost *int64
-		if adapter.AdapterKey == "mock" {
+		switch {
+		case adapter.AdapterKey == "mock":
+			zero := int64(0)
+			cost = &zero
+		case input.Action == "query" && (input.State == "succeeded" || input.State == "failed") ||
+			input.Action == "cancel" && input.State == "cancelled":
+			priced, err := priceProviderUsage(tx, op.ModelProfileVersionID, op.PriceRuleVersionID,
+				op.Mode, op.Params, input.Usage)
+			if err != nil {
+				return err
+			}
+			var previous []providerCallRow
+			if err := tx.Raw(`
+				SELECT id, provider_task_id, usage, cost_micros FROM operation.provider_call
+				WHERE project_id = ?::uuid AND operation_id = ?::uuid AND id <> ?::uuid
+				  AND action IN ('query', 'cancel')
+				  AND response_summary ->> 'state' IN ('succeeded', 'failed', 'cancelled')
+				  AND cost_micros IS NOT NULL AND NOT is_delete
+			`, op.ProjectID.String(), input.OperationID.String(), call.ID.String()).Scan(&previous).Error; err != nil {
+				return fmt.Errorf("read prior provider charge: %w", err)
+			}
+			if len(previous) != 0 {
+				for _, charged := range previous {
+					if !sameOptionalString(charged.ProviderTaskID, input.ProviderTaskID) ||
+						!jsonEqual(charged.Usage, input.Usage) {
+						return application.ErrProviderCallConflict
+					}
+				}
+				priced = 0
+			}
+			cost = &priced
+		default:
 			zero := int64(0)
 			cost = &zero
 		}
@@ -327,6 +409,62 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		}
 		return nil
 	})
+}
+
+func priceProviderUsage(tx *gorm.DB, modelVersionID, priceID *uuid.UUID,
+	mode string, params, rawUsage []byte,
+) (int64, error) {
+	if len(rawUsage) == 0 {
+		return 0, application.ErrProviderCostUnknown
+	}
+	usage, err := application.ParseBillableUsage(rawUsage)
+	if err != nil {
+		return 0, fmt.Errorf("parse provider usage: %w", err)
+	}
+	var row struct {
+		ID            uuid.UUID
+		ModelID       uuid.UUID
+		VersionNo     int
+		Unit          string
+		Rule          []byte
+		Currency      string
+		FXRateToCNY   *string
+		EffectiveFrom time.Time
+	}
+	result := tx.Raw(`
+		SELECT p.id, p.model_profile_id AS model_id, p.version_no, p.unit,
+		       p.rule::text AS rule, p.currency::text AS currency,
+		       p.fx_rate_to_cny::text AS fx_rate_to_cny,
+		       p.effective_from
+		FROM catalog.price_rule_version AS p
+		JOIN catalog.model_profile_version AS v ON v.model_profile_id = p.model_profile_id
+		WHERE p.id = ?::uuid AND v.id = ?::uuid
+	`, priceID.String(), modelVersionID.String()).Scan(&row)
+	if result.Error != nil {
+		return 0, fmt.Errorf("read frozen provider price: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return 0, application.ErrProviderCostUnknown
+	}
+	var frozenParams struct {
+		Resolution string `json:"resolution"`
+	}
+	if err := json.Unmarshal(params, &frozenParams); err != nil {
+		return 0, fmt.Errorf("decode frozen provider params: %w", err)
+	}
+	price := catalogdomain.PriceRuleVersion{
+		ID: row.ID, ModelID: row.ModelID, VersionNo: row.VersionNo,
+		Unit: catalogdomain.PriceUnit(row.Unit), Rule: row.Rule,
+		Currency: row.Currency, EffectiveFrom: row.EffectiveFrom,
+	}
+	if row.FXRateToCNY != nil {
+		price.FXRateToCNY = *row.FXRateToCNY
+	}
+	amount, err := application.CalculateActualCost(price, usage, mode, frozenParams.Resolution)
+	if err != nil {
+		return 0, fmt.Errorf("price provider usage: %w", err)
+	}
+	return amount, nil
 }
 
 // LoadProviderCost returns the trusted charge after all relevant calls have a
@@ -350,13 +488,12 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 		return application.ProviderCost{}, application.ErrInvalidProviderCall
 	}
 	var op struct {
-		ProjectID             uuid.UUID
-		Status                string
-		ReusedFromID          *uuid.UUID
-		ModelProfileVersionID *uuid.UUID
+		ProjectID    uuid.UUID
+		Status       string
+		ReusedFromID *uuid.UUID
 	}
 	result := tx.WithContext(ctx).Raw(`
-		SELECT project_id, status, reused_from_id, model_profile_version_id FROM operation.operation
+		SELECT project_id, status, reused_from_id FROM operation.operation
 		WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
 	`, operationID.String()).Scan(&op)
 	if result.Error != nil {
@@ -404,39 +541,28 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 		cost.ActualCostMicros += *call.CostMicros
 	}
 	if !cost.HasSubmission {
-		if len(calls) == 0 && (op.Status == "confirmed" || op.Status == "submitting" || op.ReusedFromID != nil) {
+		if len(calls) == 0 && (op.Status == "confirmed" || op.Status == "submitting" ||
+			op.Status == "cancelling" || op.ReusedFromID != nil) {
 			return cost, nil
 		}
 		return application.ProviderCost{}, application.ErrProviderCostUnknown
 	}
 	if unknownCost || (unknownSubmission || acceptedSubmission) && !conclusiveResolution {
-		if op.Status == "manual" && op.ModelProfileVersionID != nil {
-			var adapter struct{ AdapterKey string }
+		if op.Status == "manual" {
+			var present int
 			result = tx.WithContext(ctx).Raw(`
-				SELECT p.adapter_key FROM catalog.model_profile_version AS v
-				JOIN catalog.model_profile AS m ON m.id = v.model_profile_id
-				JOIN catalog.provider AS p ON p.id = m.provider_id
-				WHERE v.id = ?::uuid
-			`, op.ModelProfileVersionID.String()).Scan(&adapter)
+				SELECT 1 FROM operation.operation_event
+				WHERE operation_id = ?::uuid AND to_status = 'manual'
+				  AND reason = ? AND NOT is_delete LIMIT 1
+			`, operationID.String(), manualNotExecutedReason).Scan(&present)
 			if result.Error != nil {
-				return application.ProviderCost{}, fmt.Errorf("read manual provider adapter: %w", result.Error)
+				return application.ProviderCost{}, fmt.Errorf("read manual charge evidence: %w", result.Error)
 			}
-			if result.RowsAffected == 1 && adapter.AdapterKey == "mock" {
-				var present int
-				result = tx.WithContext(ctx).Raw(`
-					SELECT 1 FROM operation.operation_event
-					WHERE operation_id = ?::uuid AND to_status = 'manual'
-					  AND reason = ? AND NOT is_delete LIMIT 1
-				`, operationID.String(), manualNotExecutedReason).Scan(&present)
-				if result.Error != nil {
-					return application.ProviderCost{}, fmt.Errorf("read manual charge evidence: %w", result.Error)
-				}
-				if result.RowsAffected == 1 && cost.ActualCostMicros == 0 {
-					cost.ManualNotExecuted = true
-					return cost, nil
-				}
-				return application.ProviderCost{}, application.ErrManualResolutionUnverified
+			if result.RowsAffected == 1 && cost.ActualCostMicros == 0 && !conclusiveResolution {
+				cost.ManualNotExecuted = true
+				return cost, nil
 			}
+			return application.ProviderCost{}, application.ErrManualResolutionUnverified
 		}
 		return application.ProviderCost{}, application.ErrProviderCostUnknown
 	}

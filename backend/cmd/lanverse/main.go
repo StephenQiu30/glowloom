@@ -104,7 +104,10 @@ func run() error {
 
 	if setup {
 		logger.Info("starting Temporal setup")
-		return app.InstallCleanupSchedules(ctx, cfg, logger, schedulePrefix)
+		if err := app.InstallCleanupSchedules(ctx, cfg, logger, schedulePrefix); err != nil {
+			return err
+		}
+		return app.InstallQuoteExpirySchedule(ctx, cfg, logger, schedulePrefix)
 	}
 	if partitions {
 		return app.EnsurePartitions(ctx, cfg, logger, time.Now().UTC())

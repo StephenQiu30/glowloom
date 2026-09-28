@@ -205,3 +205,75 @@ it("blocks confirmation when the server total differs from the visible item cost
   ).toBe(true);
   expect(onConfirm).not.toHaveBeenCalled();
 });
+
+it("shows original currency, exchange rate and per-request outputs without double counting", () => {
+  render(
+    <QuoteConfirmDialog
+      open
+      onOpenChange={vi.fn()}
+      quote={quote({
+        items: [
+          {
+            operation_id: "foreign-1",
+            target_label: "改图",
+            quote_micros: 7_100_000,
+            errors: [],
+            quote_detail: {
+              unit: "per_request",
+              quantity: 1,
+              unit_price_micros: 1_000_000,
+              outputs: 3,
+              currency: "USD",
+              fx_rate_to_cny: "7.1",
+            },
+          },
+        ],
+        total_micros: 7_100_000,
+      })}
+      onConfirm={vi.fn()}
+      onRequote={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByText("费用明细"));
+  expect(screen.getByText(/1 × USD 1\.00/)).toBeTruthy();
+  expect(screen.getByText(/输出数：3（按次计费）/)).toBeTruthy();
+  expect(screen.getByText(/汇率 × 7\.1/)).toBeTruthy();
+  expect(screen.queryByText(/1 × USD 1\.00 × 3/)).toBeNull();
+});
+
+it("shows both token rates with micro-unit precision", () => {
+  render(
+    <QuoteConfirmDialog
+      open
+      onOpenChange={vi.fn()}
+      quote={quote({
+        items: [
+          {
+            operation_id: "token-1",
+            target_label: "解析",
+            quote_micros: 32,
+            errors: [],
+            quote_detail: {
+              unit: "per_1k_tokens",
+              estimated_input_tokens: 1200,
+              max_output_tokens: 800,
+              input_unit_price_micros: 11,
+              output_unit_price_micros: 23,
+              currency: "CNY",
+            },
+          },
+        ],
+        total_micros: 32,
+      })}
+      onConfirm={vi.fn()}
+      onRequote={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByText("费用明细"));
+  expect(
+    screen.getByText(/输入 1200 token × ¥0\.000011\/千 token/),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(/输出上限 800 token × ¥0\.000023\/千 token/),
+  ).toBeTruthy();
+});

@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
+	"go.temporal.io/sdk/workflow"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
@@ -125,6 +126,7 @@ func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testin
 	if err := run.Get(ctx, nil); err != nil {
 		t.Fatalf("resumed mock operation workflow: %v", err)
 	}
+	assertOperationHistoryReplays(ctx, t, temporalClient, namespace, run)
 	assertLiveOperationResult(ctx, t, database, objects, operationID, projectID)
 	store := pgoperation.NewStore(database)
 	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
@@ -145,6 +147,7 @@ func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testin
 	if err := unknownRun.Get(ctx, nil); err != nil {
 		t.Fatalf("reconcile uncertain mock operation: %v", err)
 	}
+	assertOperationHistoryReplays(ctx, t, temporalClient, namespace, unknownRun)
 	assertLiveOperationResult(ctx, t, database, objects, unknownID, unknownProjectID)
 	var uncertainStates []string
 	if err := database.WithContext(ctx).Raw(`
@@ -155,6 +158,19 @@ func TestOperationWorkflowResumesAfterFlowWorkerRestartOnLocalServices(t *testin
 	}
 	if !containsWorkflowStates(uncertainStates, "unknown", "reconciling", "submitted") {
 		t.Fatalf("uncertain operation did not reconcile: %v", uncertainStates)
+	}
+}
+
+func assertOperationHistoryReplays(ctx context.Context, t *testing.T, temporalClient client.Client,
+	namespace string, run client.WorkflowRun,
+) {
+	t.Helper()
+	replayer := worker.NewWorkflowReplayer()
+	replayer.RegisterWorkflowWithOptions(operationflow.OperationWorkflow,
+		workflow.RegisterOptions{Name: "OperationWorkflow"})
+	if err := replayer.ReplayWorkflowExecution(ctx, temporalClient.WorkflowService(), nil, namespace,
+		workflow.Execution{ID: run.GetID(), RunID: run.GetRunID()}); err != nil {
+		t.Fatalf("replay completed operation history %s: %v", run.GetID(), err)
 	}
 }
 

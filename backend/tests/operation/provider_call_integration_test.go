@@ -173,7 +173,7 @@ func TestMockProviderCallEvidenceSettlesOnce(t *testing.T) {
 	}
 }
 
-func TestRealProviderUnknownChargeRemainsHeld(t *testing.T) {
+func TestRealProviderRejectedSubmissionSettlesZero(t *testing.T) {
 	database := operationStoreDB(t)
 	opID, store := seedProviderCallOperation(t, database)
 	if err := database.Exec(`
@@ -203,15 +203,216 @@ func TestRealProviderUnknownChargeRemainsHeld(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.LoadProviderCost(t.Context(), opID); !errors.Is(err, application.ErrProviderCostUnknown) {
-		t.Fatalf("real provider without a pricing adapter was treated as free: %v", err)
+	if cost, err := store.LoadProviderCost(t.Context(), opID); err != nil || cost.ActualCostMicros != 0 || !cost.HasSubmission {
+		t.Fatalf("rejected provider charge = %+v, %v; want proven zero", cost, err)
 	}
 	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
 	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{
 		OperationID: opID.String(), From: domain.StatusSubmitting, To: domain.StatusFailed,
 		ActualCostMicros: 0, FailureCode: "provider_rejected",
+	}); err != nil {
+		t.Fatalf("real provider rejection did not settle at zero: %v", err)
+	}
+}
+
+func TestRealProviderUsagePricesFrozenRuleOnce(t *testing.T) {
+	database := operationStoreDB(t)
+	opID, store := seedProviderCallOperation(t, database)
+	if err := database.Exec(`
+		UPDATE catalog.provider AS p SET adapter_key = 'real'
+		FROM catalog.model_profile AS m
+		JOIN catalog.model_profile_version AS v ON v.model_profile_id = m.id
+		JOIN operation.operation AS o ON o.model_profile_version_id = v.id
+		WHERE p.id = m.provider_id AND o.id = ?::uuid
+	`, opID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	requestKey, taskID := "operation/"+opID.String(), "real-task-1"
+	if _, err := store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
+		OperationID: opID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting,
+		ProviderRequestKey: &requestKey,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1, Outcome: "ok", State: "accepted",
+		ProviderTaskID: &taskID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadProviderCost(t.Context(), opID); !errors.Is(err, application.ErrProviderCostUnknown) {
+		t.Fatalf("accepted request settled before usage: %v", err)
+	}
+	if _, err := store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
+		OperationID: opID, From: []domain.Status{domain.StatusSubmitting}, To: domain.StatusSubmitted,
+		ProviderTaskID: &taskID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec(`
+		INSERT INTO catalog.price_rule_version
+		  (id, model_profile_id, version_no, unit, rule, effective_from)
+		SELECT ?::uuid, p.model_profile_id, p.version_no + 1, p.unit,
+		       '{"base_micros":900}'::jsonb, now()
+		FROM catalog.price_rule_version AS p
+		JOIN operation.operation AS o ON o.price_rule_version_id = p.id
+		WHERE o.id = ?::uuid
+	`, uuid.NewString(), opID.String()).Error; err != nil {
+		t.Fatalf("publish newer price after quote: %v", err)
+	}
+	for attempt, state := range []string{"pending", "succeeded", "succeeded"} {
+		sequence := int32(attempt + 1)
+		if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+			OperationID: opID, Action: "query", Attempt: sequence, ProviderTaskID: &taskID,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		var usage []byte
+		if state == "succeeded" {
+			usage = []byte(`{"output_count":2}`)
+		}
+		result := application.CompleteProviderCallInput{
+			OperationID: opID, Action: "query", Attempt: sequence,
+			Outcome: "ok", State: state, ProviderTaskID: &taskID, Usage: usage,
+		}
+		if state == "succeeded" && sequence == 2 {
+			withoutUsage := result
+			withoutUsage.Usage = nil
+			if err := store.CompleteProviderCall(t.Context(), withoutUsage); !errors.Is(err, application.ErrProviderCostUnknown) {
+				t.Fatalf("missing real provider usage accepted: %v", err)
+			}
+			malformed := result
+			malformed.Usage = []byte(`{"output_count":2,"output_count":3}`)
+			if err := store.CompleteProviderCall(t.Context(), malformed); !errors.Is(err, application.ErrInvalidPricingInput) {
+				t.Fatalf("ambiguous real provider usage accepted: %v", err)
+			}
+		}
+		if sequence == 2 {
+			if err := database.Transaction(func(tx *gorm.DB) error {
+				if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
+					return err
+				}
+				return pgoperation.NewStore(tx).CompleteProviderCall(t.Context(), result)
+			}); err != nil {
+				t.Fatalf("complete priced query under runtime role: %v", err)
+			}
+		} else if err := store.CompleteProviderCall(t.Context(), result); err != nil {
+			t.Fatalf("complete query %d: %v", sequence, err)
+		}
+		if err := store.CompleteProviderCall(t.Context(), result); err != nil {
+			t.Fatalf("replay query %d: %v", sequence, err)
+		}
+	}
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "query", Attempt: 4, ProviderTaskID: &taskID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "query", Attempt: 4, Outcome: "ok", State: "succeeded",
+		ProviderTaskID: &taskID, Usage: []byte(`{"output_count":3}`),
+	}); !errors.Is(err, application.ErrProviderCallConflict) {
+		t.Fatalf("conflicting repeat charge accepted: %v", err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "query", Attempt: 4, Outcome: "ok", State: "succeeded",
+		ProviderTaskID: &taskID, Usage: []byte(`{"output_count":2}`),
+	}); err != nil {
+		t.Fatalf("consistent repeat after conflict: %v", err)
+	}
+	cost, err := store.LoadProviderCost(t.Context(), opID)
+	if err != nil || !cost.HasSubmission || cost.ActualCostMicros != 200 {
+		t.Fatalf("frozen provider cost = %+v, %v; want 200 once", cost, err)
+	}
+	var chargedRows int64
+	if err := database.Raw(`
+		SELECT count(*) FROM operation.provider_call
+		WHERE operation_id = ?::uuid AND cost_micros > 0
+	`, opID.String()).Scan(&chargedRows).Error; err != nil || chargedRows != 1 {
+		t.Fatalf("charged provider calls = %d, %v", chargedRows, err)
+	}
+	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
+	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{
+		OperationID: opID.String(), From: domain.StatusSubmitted, To: domain.StatusFailed,
+		ActualCostMicros: 200, FailureCode: "provider_task_failed",
+	}); err != nil {
+		t.Fatalf("settle actual provider charge: %v", err)
+	}
+}
+
+func TestRealProviderCancellationSettlesReportedUsage(t *testing.T) {
+	database := operationStoreDB(t)
+	opID, store := seedProviderCallOperation(t, database)
+	if err := database.Exec(`
+		UPDATE catalog.provider AS p SET adapter_key = 'real'
+		FROM catalog.model_profile AS m
+		JOIN catalog.model_profile_version AS v ON v.model_profile_id = m.id
+		JOIN operation.operation AS o ON o.model_profile_version_id = v.id
+		WHERE p.id = m.provider_id AND o.id = ?::uuid
+	`, opID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	requestKey, taskID := "operation/"+opID.String(), "real-cancel-1"
+	if _, err := store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
+		OperationID: opID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting,
+		ProviderRequestKey: &requestKey,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1, Outcome: "ok", State: "accepted",
+		ProviderTaskID: &taskID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
+		OperationID: opID, From: []domain.Status{domain.StatusSubmitting}, To: domain.StatusSubmitted,
+		ProviderTaskID: &taskID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.TransitionWorkflowOperation(t.Context(), application.TransitionInput{
+		OperationID: opID, From: []domain.Status{domain.StatusSubmitted}, To: domain.StatusCancelling,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "cancel", Attempt: 1, ProviderTaskID: &taskID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "cancel", Attempt: 1, Outcome: "ok", State: "cancelled",
+		ProviderTaskID: &taskID,
 	}); !errors.Is(err, application.ErrProviderCostUnknown) {
-		t.Fatalf("real provider settled without pricing evidence: %v", err)
+		t.Fatalf("cancel without usage accepted: %v", err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "cancel", Attempt: 1, Outcome: "ok", State: "cancelled",
+		ProviderTaskID: &taskID, Usage: []byte(`{"output_count":2}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cost, err := store.LoadProviderCost(t.Context(), opID)
+	if err != nil || cost.ActualCostMicros != 200 {
+		t.Fatalf("cancel cost = %+v, %v; want 200", cost, err)
+	}
+	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
+	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{
+		OperationID: opID.String(), From: domain.StatusCancelling, To: domain.StatusCancelled,
+		ActualCostMicros: 200,
+	}); err != nil {
+		t.Fatalf("settle cancelled provider usage: %v", err)
 	}
 }
 
@@ -342,6 +543,171 @@ func TestManualNotExecutedRequiresAdministratorEvidence(t *testing.T) {
 		FailureCode: "provider_not_executed", ActualCostMicros: 0,
 	}); err != nil {
 		t.Fatalf("settle administrator decision: %v", err)
+	}
+}
+
+func TestRealProviderManualNotExecutedRequiresAdministratorEvidence(t *testing.T) {
+	database := operationStoreDB(t)
+	opID, store := seedProviderCallOperation(t, database)
+	if err := database.Exec(`
+		UPDATE catalog.provider AS p SET adapter_key = 'real'
+		FROM catalog.model_profile AS m
+		JOIN catalog.model_profile_version AS v ON v.model_profile_id = m.id
+		JOIN operation.operation AS o ON o.model_profile_version_id = v.id
+		WHERE p.id = m.provider_id AND o.id = ?::uuid
+	`, opID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	requestKey := "operation/" + opID.String()
+	for _, transition := range []application.TransitionInput{
+		{OperationID: opID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting, ProviderRequestKey: &requestKey},
+		{OperationID: opID, From: []domain.Status{domain.StatusSubmitting}, To: domain.StatusUnknown},
+		{OperationID: opID, From: []domain.Status{domain.StatusUnknown}, To: domain.StatusReconciling},
+		{OperationID: opID, From: []domain.Status{domain.StatusReconciling}, To: domain.StatusManual},
+	} {
+		if _, err := store.TransitionWorkflowOperation(t.Context(), transition); err != nil {
+			t.Fatalf("manual transition %s: %v", transition.To, err)
+		}
+	}
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1, Outcome: "unknown", State: "unknown",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadProviderCost(t.Context(), opID); !errors.Is(err, application.ErrManualResolutionUnverified) {
+		t.Fatalf("real provider without administrator evidence: %v", err)
+	}
+	var organization struct{ OrgID uuid.UUID }
+	if err := database.Raw(`
+		SELECT p.org_id FROM operation.operation AS o
+		JOIN workspace.project AS p ON p.id = o.project_id
+		WHERE o.id = ?::uuid
+	`, opID.String()).Scan(&organization).Error; err != nil {
+		t.Fatal(err)
+	}
+	adminID := uuid.New()
+	if err := database.Exec(`
+		INSERT INTO identity."user"
+		  (id, org_id, login_name, display_name, role, password_hash, must_change_password)
+		VALUES (?::uuid, ?::uuid, ?, 'Reviewer', 'admin', 'hash', false)
+	`, adminID.String(), organization.OrgID.String(), "real-manual-"+adminID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordManualNotExecuted(t.Context(), application.ManualNotExecutedInput{
+		OperationID: opID, AdminID: adminID, Evidence: "provider audit confirms request not accepted",
+	}); err != nil {
+		t.Fatalf("record administrator evidence: %v", err)
+	}
+	cost, err := store.LoadProviderCost(t.Context(), opID)
+	if err != nil || cost.ActualCostMicros != 0 || !cost.ManualNotExecuted {
+		t.Fatalf("verified real provider no-charge decision = %+v, %v", cost, err)
+	}
+	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
+	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{
+		OperationID: opID.String(), From: domain.StatusManual, To: domain.StatusFailed,
+		FailureCode: "provider_not_executed", ActualCostMicros: 0,
+	}); err != nil {
+		t.Fatalf("settle administrator decision: %v", err)
+	}
+}
+
+func TestRealProviderManualNotExecutedCannotOverrideKnownExecution(t *testing.T) {
+	database := operationStoreDB(t)
+	opID, store := seedProviderCallOperation(t, database)
+	if err := database.Exec(`
+		UPDATE catalog.provider AS p SET adapter_key = 'real'
+		FROM catalog.model_profile AS m
+		JOIN catalog.model_profile_version AS v ON v.model_profile_id = m.id
+		JOIN operation.operation AS o ON o.model_profile_version_id = v.id
+		WHERE p.id = m.provider_id AND o.id = ?::uuid
+	`, opID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	requestKey := "operation/" + opID.String()
+	for _, transition := range []application.TransitionInput{
+		{OperationID: opID, From: []domain.Status{domain.StatusConfirmed}, To: domain.StatusSubmitting, ProviderRequestKey: &requestKey},
+		{OperationID: opID, From: []domain.Status{domain.StatusSubmitting}, To: domain.StatusUnknown},
+		{OperationID: opID, From: []domain.Status{domain.StatusUnknown}, To: domain.StatusReconciling},
+		{OperationID: opID, From: []domain.Status{domain.StatusReconciling}, To: domain.StatusManual},
+	} {
+		if _, err := store.TransitionWorkflowOperation(t.Context(), transition); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "submit", Attempt: 1, Outcome: "unknown", State: "unknown",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "query", Attempt: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	taskID := "confirmed-execution"
+	if err := store.BeginProviderCall(t.Context(), application.BeginProviderCallInput{
+		OperationID: opID, Action: "query", Attempt: 2, ProviderTaskID: &taskID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
+		OperationID: opID, Action: "query", Attempt: 2, Outcome: "ok", State: "succeeded",
+		ProviderTaskID: &taskID, Usage: []byte(`{"output_count":0}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var organization struct{ OrgID uuid.UUID }
+	if err := database.Raw(`
+		SELECT p.org_id FROM operation.operation AS o
+		JOIN workspace.project AS p ON p.id = o.project_id
+		WHERE o.id = ?::uuid
+	`, opID.String()).Scan(&organization).Error; err != nil {
+		t.Fatal(err)
+	}
+	adminID := uuid.New()
+	if err := database.Exec(`
+		INSERT INTO identity."user"
+		  (id, org_id, login_name, display_name, role, password_hash, must_change_password)
+		VALUES (?::uuid, ?::uuid, ?, 'Reviewer', 'admin', 'hash', false)
+	`, adminID.String(), organization.OrgID.String(), "known-execution-"+adminID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordManualNotExecuted(t.Context(), application.ManualNotExecutedInput{
+		OperationID: opID, AdminID: adminID, Evidence: "request not executed",
+	}); !errors.Is(err, application.ErrProviderCallConflict) {
+		t.Fatalf("administrator no-execution claim accepted after confirmed execution: %v", err)
+	}
+	// Model a decision committed before the conclusive query arrived. Its
+	// historical event remains, but the workflow must not trust it now.
+	if err := database.Exec(`
+		INSERT INTO operation.operation_event
+		  (id, operation_id, from_status, to_status, reason, detail)
+		VALUES (?::uuid, ?::uuid, 'manual', 'manual', 'manual_not_executed', '{}'::jsonb)
+	`, uuid.NewString(), opID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CheckManualNotExecuted(t.Context(), opID); !errors.Is(err, application.ErrManualResolutionUnverified) {
+		t.Fatalf("stale no-execution decision passed workflow gate: %v", err)
+	}
+	if _, err := store.LoadProviderCost(t.Context(), opID); !errors.Is(err, application.ErrManualResolutionUnverified) {
+		t.Fatalf("known execution overwritten by manual no-charge claim: %v", err)
+	}
+	finalizer := app.NewOperationFinalizer(database, store, pgbilling.NewStore(database))
+	if err := finalizer.FinalizeOperation(t.Context(), operationflow.SettlementInput{
+		OperationID: opID.String(), From: domain.StatusManual, To: domain.StatusFailed,
+		FailureCode: "provider_not_executed", ActualCostMicros: 0,
+	}); !errors.Is(err, application.ErrManualResolutionUnverified) {
+		t.Fatalf("known execution settled as not executed: %v", err)
 	}
 }
 

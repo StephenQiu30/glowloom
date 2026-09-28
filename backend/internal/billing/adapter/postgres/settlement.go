@@ -19,6 +19,7 @@ import (
 
 const (
 	settledTopic               = "lanverse.billing.settled.v1"
+	lowBalanceTopic            = "lanverse.billing.budget_low.v1"
 	overrunTopic               = "lanverse.billing.budget_overrun.v1"
 	settlementLedgerNotePrefix = "lanverse.billing.settlement.v1:"
 )
@@ -78,10 +79,22 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 	if row.RowsAffected != 1 {
 		return application.SettleResult{}, ErrNotFound
 	}
+	wasLow, err := budget.LowBalance()
+	if err != nil {
+		return application.SettleResult{}, fmt.Errorf("read settlement starting balance: %w", err)
+	}
 	wasOverrun := budget.IsOverrun
 	previousRevision := budget.Revision
 	if err := budget.Settle(before.AmountMicros, settlement.ChargeMicros); err != nil {
 		return application.SettleResult{}, fmt.Errorf("apply budget settlement: %w", err)
+	}
+	availableMicros, err := budget.AvailableMicros()
+	if err != nil {
+		return application.SettleResult{}, fmt.Errorf("calculate settlement available balance: %w", err)
+	}
+	isLow, err := budget.LowBalance()
+	if err != nil {
+		return application.SettleResult{}, fmt.Errorf("calculate settlement low balance: %w", err)
 	}
 	row = tx.Exec(`
 		UPDATE billing.budget
@@ -141,7 +154,7 @@ func (s *Store) SettleInTransaction(ctx context.Context, tx *gorm.DB, input appl
 			}
 		}
 	}
-	if err := insertSettlementEvent(tx, input, result, budget.ID, wasOverrun); err != nil {
+	if err := insertSettlementEvent(tx, input, result, budget, availableMicros, !wasLow && isLow, wasOverrun); err != nil {
 		return application.SettleResult{}, err
 	}
 	return result, nil
@@ -188,6 +201,7 @@ type settlementEventData struct {
 	ChargeMicros     int64      `json:"charge_micros"`
 	ReleasedMicros   int64      `json:"released_micros"`
 	OverageMicros    int64      `json:"overage_micros"`
+	AvailableMicros  int64      `json:"available_micros"`
 	BudgetOverrun    bool       `json:"budget_overrun"`
 	Capability       string     `json:"capability"`
 	EpisodeID        *uuid.UUID `json:"episode_id,omitempty"`
@@ -196,7 +210,7 @@ type settlementEventData struct {
 	Region           *string    `json:"region,omitempty"`
 }
 
-func insertSettlementEvent(tx *gorm.DB, input application.SettleInput, result application.SettleResult, budgetID uuid.UUID, wasOverrun bool) error {
+func insertSettlementEvent(tx *gorm.DB, input application.SettleInput, result application.SettleResult, budget domain.Budget, availableMicros int64, becameLow, wasOverrun bool) error {
 	var project struct{ OrgID uuid.UUID }
 	row := tx.Raw(`SELECT org_id FROM workspace.project WHERE id = ?::uuid`, input.ProjectID.String()).Scan(&project)
 	if row.Error != nil {
@@ -209,29 +223,42 @@ func insertSettlementEvent(tx *gorm.DB, input application.SettleInput, result ap
 		OperationID: input.OperationID, ActualCostMicros: input.ActualCostMicros,
 		CapAtReservation: input.CapAtReservation, ChargeMicros: result.ChargeMicros,
 		ReleasedMicros: result.ReleasedMicros, OverageMicros: result.ProviderOverageMicros,
-		BudgetOverrun: result.BudgetOverrun, Capability: input.Capability,
+		AvailableMicros: availableMicros,
+		BudgetOverrun:   result.BudgetOverrun, Capability: input.Capability,
 		EpisodeID: input.EpisodeID, ShotID: input.ShotID,
 		ModelKey: input.ModelKey, Region: input.Region,
 	}
-	if err := writeBillingEvent(tx, settledTopic, project.OrgID, input.ProjectID, "operation", input.OperationID, input.OccurredAt, data); err != nil {
+	if err := writeBillingEvent(tx, settledTopic, project.OrgID, input.ProjectID, "operation", input.OperationID, input.OccurredAt, data, nil); err != nil {
 		return err
 	}
+	if becameLow {
+		if err := writeBillingEvent(tx, lowBalanceTopic, project.OrgID, input.ProjectID, "budget", budget.ID, input.OccurredAt, map[string]any{
+			"limit_micros": budget.LimitMicros, "available_micros": availableMicros,
+			"is_overrun": budget.IsOverrun,
+		}, &budget.Revision); err != nil {
+			return err
+		}
+	}
 	if result.BudgetOverrun && !wasOverrun {
-		return writeBillingEvent(tx, overrunTopic, project.OrgID, input.ProjectID, "budget", budgetID, input.OccurredAt, map[string]any{
-			"operation_id": input.OperationID, "budget_id": budgetID,
+		return writeBillingEvent(tx, overrunTopic, project.OrgID, input.ProjectID, "budget", budget.ID, input.OccurredAt, map[string]any{
+			"operation_id": input.OperationID, "budget_id": budget.ID,
 			"is_overrun": true,
-		})
+		}, nil)
 	}
 	return nil
 }
 
-func writeBillingEvent(tx *gorm.DB, topic string, orgID, projectID uuid.UUID, aggregateType string, aggregateID uuid.UUID, occurredAt time.Time, data any) error {
+func writeBillingEvent(tx *gorm.DB, topic string, orgID, projectID uuid.UUID, aggregateType string, aggregateID uuid.UUID, occurredAt time.Time, data any, revision *int64) error {
 	eventID := uuid.New()
+	aggregate := map[string]any{"type": aggregateType, "id": aggregateID}
+	if revision != nil {
+		aggregate["revision"] = *revision
+	}
 	payload, err := json.Marshal(map[string]any{
 		"event_id": eventID, "event_type": topic, "occurred_at": occurredAt,
 		"org_id": orgID, "project_id": projectID,
 		"actor":     map[string]any{"kind": "system", "id": nil},
-		"aggregate": map[string]any{"type": aggregateType, "id": aggregateID},
+		"aggregate": aggregate,
 		"data":      data,
 	})
 	if err != nil {

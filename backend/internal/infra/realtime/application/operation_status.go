@@ -22,17 +22,18 @@ var ErrInvalidEvent = errors.New("invalid realtime event")
 
 // Event is a project-scoped SSE event. ID stays equal to the Kafka event ID.
 type Event struct {
-	ID          string
-	ProjectID   string
-	Type        string
-	OperationID string
-	BatchID     string
-	TargetType  string
-	TargetID    string
-	Status      string
-	Progress    json.RawMessage
-	Revision    int64
-	Change      string
+	ID              string
+	ProjectID       string
+	Type            string
+	OperationID     string
+	BatchID         string
+	TargetType      string
+	TargetID        string
+	Status          string
+	Progress        json.RawMessage
+	Revision        int64
+	Change          string
+	AvailableMicros int64
 }
 
 // ProcessedStore commits a consumer marker after its external effect succeeds.

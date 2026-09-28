@@ -85,7 +85,7 @@ Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_REL
 
 本机需要合并运行现有 Go 角色时可执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=all`，它启动 API、`flow` Worker 和 Relay；任一角色失败时会停止并等待其余角色退出。`--role=all` 当前只包含已实现的 `flow` 队列。
 
-数据库迁移完成并部署 `flow` Worker 后，执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse temporal setup`，为现有命名空间安装两项清理 Schedule；不会安装尚未实现完整依赖的 `partition-maintain`。
+数据库迁移完成并部署 `flow` Worker 后，执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse temporal setup`，为现有命名空间安装两项清理 Schedule 与五分钟一次的 `quote-expiry`；不会安装尚未实现完整依赖的 `partition-maintain`。
 
 Go API 启动时必须通过根目录 `.env` 中的 `LV_DB_DSN` 连接可用的本机业务库，并配置 `LV_REDIS_URL` 与 `LV_TEMPORAL_ADDR`、`LV_TEMPORAL_NAMESPACE`；`.env.example` 的数据库密码只是占位值，不能直接用于连接。`/healthz` 检查进程存活，`/readyz` 检查 PostgreSQL、Redis、Temporal、命名空间与对象存储；依赖暂不可达时 API 仍运行，就绪探针返回 503。本机首次使用 `lanverse-local` 命名空间时需在已运行的 Temporal 中创建，步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。Relay 需要 `LV_KAFKA_BROKERS`、`LV_REDIS_URL` 和已应用的 Outbox、processed-event、audit-log 迁移；账号创建命令还需 identity-user 迁移。部署方须预先创建 `lanverse.operation.status_changed.v1`、`lanverse.audit.recorded.v1` 与 `lanverse.identity.user_changed.v1` 三个 Kafka 主题。
 

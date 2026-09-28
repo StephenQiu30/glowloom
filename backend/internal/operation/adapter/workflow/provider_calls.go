@@ -64,6 +64,43 @@ func (c *providerCalls) submit(providerCtx workflow.Context, input ProviderSubmi
 	return result, nil
 }
 
+func (c *providerCalls) cancel(ctx workflow.Context, queue, taskID string) (ProviderCancelOutput, error) {
+	const attempt int32 = 1
+	if err := c.begin("cancel", attempt, &taskID); err != nil {
+		return ProviderCancelOutput{}, err
+	}
+	providerCtx := providerActivityContext(ctx, queue, 30*time.Second, 1)
+	var result ProviderCancelOutput
+	if err := workflow.ExecuteActivity(providerCtx, "provider.cancel", ProviderCancelInput{
+		ProviderTaskID: taskID,
+	}).Get(providerCtx, &result); err != nil {
+		result.Outcome = ProviderCancelUnknown
+	}
+	outcome := "ok"
+	switch result.Outcome {
+	case ProviderCancelConfirmed:
+	case ProviderCancelNotApplied:
+		outcome = "error"
+	default:
+		result.Outcome, outcome = ProviderCancelUnknown, "unknown"
+	}
+	var usage json.RawMessage
+	if result.Usage != nil {
+		var err error
+		usage, err = json.Marshal(result.Usage)
+		if err != nil {
+			return ProviderCancelOutput{}, ErrInvalidProviderResult
+		}
+	}
+	if err := c.complete(application.CompleteProviderCallInput{
+		OperationID: c.operationID, Action: "cancel", Attempt: attempt,
+		Outcome: outcome, State: string(result.Outcome), ProviderTaskID: &taskID, Usage: usage,
+	}); err != nil {
+		return ProviderCancelOutput{}, err
+	}
+	return result, nil
+}
+
 // query records each dispatched read separately. A transient query failure is
 // safe to retry; it never authorizes a second paid submit.
 func (c *providerCalls) query(ctx workflow.Context, queue string,

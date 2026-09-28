@@ -78,6 +78,12 @@ func encodeEventData(event application.Event) ([]byte, error) {
 			Revision  int64  `json:"revision"`
 			Change    string `json:"change"`
 		}{event.ProjectID, event.Revision, event.Change})
+	case "budget.updated":
+		return json.Marshal(struct {
+			AvailableMicros int64 `json:"available_micros"`
+		}{event.AvailableMicros})
+	case "resync":
+		return []byte("{}"), nil
 	default:
 		return nil, fmt.Errorf("unsupported realtime event type %q", event.Type)
 	}

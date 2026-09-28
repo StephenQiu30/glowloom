@@ -57,8 +57,10 @@ func (s *Store) LoadWorkflowOperation(ctx context.Context, operationID uuid.UUID
 		if metadata.ProviderRequestKey != nil {
 			loaded.ProviderRequestKey = *metadata.ProviderRequestKey
 		}
-		if err := loadWorkflowModel(tx, &loaded); err != nil {
-			return err
+		if loaded.Operation.ReusedFromID == nil {
+			if err := loadWorkflowModel(tx, &loaded); err != nil {
+				return err
+			}
 		}
 		var inputs []operationInputRow
 		result = tx.Raw(`

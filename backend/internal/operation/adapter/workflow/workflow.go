@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,9 +24,11 @@ var (
 	ErrInvalidProviderResult = errors.New("invalid provider activity result")
 )
 
-// OperationInput starts a single confirmed, non-batch generation.
+// OperationInput addresses a confirmed generation. BatchID is supplied only
+// when the matching parent BatchWorkflow starts this operation as a child.
 type OperationInput struct {
 	OperationID string `json:"operation_id"`
+	BatchID     string `json:"batch_id,omitempty"`
 }
 
 // ManualResolution is sent after an administrator records evidence for an
@@ -85,18 +88,19 @@ func OperationWorkflow(ctx workflow.Context, input OperationInput) error {
 		}
 		return ErrInvalidOperationInput
 	}
-	if loaded.Operation.BatchID != nil || loaded.Operation.TargetType == "agent_session" ||
-		loaded.Operation.ReusedFromID != nil || loaded.Provider.AdapterKey != "mock" ||
-		loaded.Provider.Queue != "agent.mock" || !loaded.Provider.SupportsQuery {
+	if loaded.Operation.TargetType == "agent_session" {
 		return ErrUnsupportedOperation
 	}
-	mockStatus, err := mockModerationStatus(loaded.Operation.Params)
-	if err != nil {
-		if loaded.Operation.Status == domain.StatusConfirmed {
-			return settleOperation(flowCtx, input.OperationID, domain.StatusConfirmed,
-				domain.StatusFailed, 0, "invalid_mock_parameters", false)
+	if loaded.Operation.BatchID == nil {
+		if input.BatchID != "" {
+			return ErrInvalidOperationInput
 		}
-		return err
+	} else {
+		parent := workflow.GetInfo(ctx).ParentWorkflowExecution
+		if input.BatchID != loaded.Operation.BatchID.String() || parent == nil ||
+			parent.ID != "batch/"+input.BatchID {
+			return ErrInvalidOperationInput
+		}
 	}
 	if loaded.Operation.Status == domain.StatusConfirmed {
 		if err := workflow.ExecuteActivity(flowCtx, "flow.CheckConsent", input.OperationID).Get(flowCtx, nil); err != nil {
@@ -106,6 +110,30 @@ func OperationWorkflow(ctx workflow.Context, input OperationInput) error {
 			}
 			return err
 		}
+	}
+	if loaded.Operation.ReusedFromID != nil {
+		if loaded.Operation.Status != domain.StatusConfirmed {
+			return ErrUnsupportedOperation
+		}
+		if err := workflow.ExecuteActivity(flowCtx, "flow.CompleteFromReuse", input.OperationID).Get(flowCtx, nil); err != nil {
+			if isApplicationErrorType(err, "reuse_source_unavailable") {
+				return settleOperation(flowCtx, input.OperationID, domain.StatusConfirmed,
+					domain.StatusFailed, 0, "reuse_source_unavailable", false)
+			}
+			return err
+		}
+		return nil
+	}
+	if loaded.Provider.AdapterKey != "mock" || loaded.Provider.Queue != "agent.mock" || !loaded.Provider.SupportsQuery {
+		return ErrUnsupportedOperation
+	}
+	mockStatus, err := mockModerationStatus(loaded.Operation.Params)
+	if err != nil {
+		if loaded.Operation.Status == domain.StatusConfirmed {
+			return settleOperation(flowCtx, input.OperationID, domain.StatusConfirmed,
+				domain.StatusFailed, 0, "invalid_mock_parameters", false)
+		}
+		return err
 	}
 	return runMockProvider(ctx, flowCtx, loaded, mockStatus)
 }
@@ -118,6 +146,8 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 	}
 	status := loaded.Operation.Status
 	calls := &providerCalls{flowCtx: flowCtx, operationID: id}
+	cancelChannel := workflow.GetSignalChannel(ctx, "cancel")
+	cancelHandled := false
 	taskID := ""
 	if loaded.ProviderTaskID != nil {
 		taskID = *loaded.ProviderTaskID
@@ -229,8 +259,14 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 					}
 					return err
 				}
-				return settleOperation(flowCtx, id.String(), status, domain.StatusFailed,
-					0, "provider_not_executed", true)
+				if err := settleOperation(flowCtx, id.String(), status, domain.StatusFailed,
+					0, "provider_not_executed", true); err != nil {
+					if isApplicationErrorType(err, "manual_resolution_unverified") {
+						continue // Provider evidence changed after the read-only signal gate.
+					}
+					return err
+				}
+				return nil
 			case "succeeded":
 				if resolution.ProviderTaskID == "" {
 					continue
@@ -251,7 +287,7 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 					continue
 				}
 				taskID = resolution.ProviderTaskID
-				result, err = pollMockProvider(ctx, calls, loaded.Provider.Queue, taskID, pollLimit)
+				result, err = pollMockProvider(ctx, calls, loaded.Provider.Queue, taskID, pollLimit, nil)
 				if errors.Is(err, errNeedsReconciliation) {
 					continue // Keep the reserved amount until another documented decision.
 				}
@@ -282,9 +318,38 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 				status = domain.StatusReconciling
 				continue
 			}
+			if !cancelHandled {
+				var signal struct{}
+				if cancelChannel.ReceiveAsync(&signal) {
+					cancelHandled = true
+					if loaded.Provider.SupportsCancel {
+						nextStatus, finished, cancelErr := cancelSubmitted(ctx, flowCtx, calls, id, loaded.Provider.Queue, taskID)
+						if cancelErr != nil || finished {
+							return cancelErr
+						}
+						status = nextStatus
+						if status != domain.StatusSubmitted {
+							continue
+						}
+					}
+				}
+			}
 			if result.State != ProviderQuerySucceeded && result.State != ProviderQueryFailed {
 				var err error
-				result, err = pollMockProvider(ctx, calls, loaded.Provider.Queue, taskID, pollLimit)
+				var interrupt workflow.ReceiveChannel
+				if loaded.Provider.SupportsCancel && !cancelHandled {
+					interrupt = cancelChannel
+				}
+				result, err = pollMockProvider(ctx, calls, loaded.Provider.Queue, taskID, pollLimit, interrupt)
+				if errors.Is(err, errCancelRequested) {
+					cancelHandled = true
+					var finished bool
+					status, finished, err = cancelSubmitted(ctx, flowCtx, calls, id, loaded.Provider.Queue, taskID)
+					if err != nil || finished {
+						return err
+					}
+					continue
+				}
 				if errors.Is(err, errNeedsReconciliation) {
 					if err := transition(flowCtx, id, []domain.Status{status}, domain.StatusReconciling,
 						"poll_result_unknown", nil, nil); err != nil {
@@ -343,7 +408,7 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 		}
 		for len(result.ResultURLs) == 0 {
 			var err error
-			result, err = pollMockProvider(ctx, calls, loaded.Provider.Queue, taskID, pollLimit)
+			result, err = pollMockProvider(ctx, calls, loaded.Provider.Queue, taskID, pollLimit, nil)
 			if err != nil && !errors.Is(err, errNeedsReconciliation) {
 				return err
 			}
@@ -364,6 +429,36 @@ func runMockProvider(ctx, flowCtx workflow.Context, loaded application.WorkflowO
 		}
 	}
 	return ingestAndFinish(ctx, flowCtx, loaded, result.ResultURLs, mockStatus)
+}
+
+func cancelSubmitted(ctx, flowCtx workflow.Context, calls *providerCalls, operationID uuid.UUID,
+	queue, taskID string,
+) (domain.Status, bool, error) {
+	if err := transition(flowCtx, operationID, []domain.Status{domain.StatusSubmitted},
+		domain.StatusCancelling, "cancel_requested", nil, nil); err != nil {
+		return domain.StatusSubmitted, false, err
+	}
+	result, err := calls.cancel(ctx, queue, taskID)
+	if err != nil {
+		return domain.StatusCancelling, false, err
+	}
+	if result.Outcome == ProviderCancelConfirmed {
+		err := settleOperation(flowCtx, operationID.String(), domain.StatusCancelling,
+			domain.StatusCancelled, 0, "", false)
+		return domain.StatusCancelled, err == nil, err
+	}
+	if err := transition(flowCtx, operationID, []domain.Status{domain.StatusCancelling},
+		domain.StatusSubmitted, "cancel_not_confirmed", nil, &taskID); err != nil {
+		return domain.StatusCancelling, false, err
+	}
+	if result.Outcome == ProviderCancelUnknown {
+		if err := transition(flowCtx, operationID, []domain.Status{domain.StatusSubmitted},
+			domain.StatusReconciling, "cancel_result_unknown", nil, nil); err != nil {
+			return domain.StatusSubmitted, false, err
+		}
+		return domain.StatusReconciling, false, nil
+	}
+	return domain.StatusSubmitted, false, nil
 }
 
 func transition(ctx workflow.Context, id uuid.UUID, from []domain.Status, to domain.Status,
@@ -441,8 +536,11 @@ func reconcileMockProvider(ctx workflow.Context, calls *providerCalls, queue, re
 }
 
 var errNeedsReconciliation = errors.New("provider result needs reconciliation")
+var errCancelRequested = errors.New("provider cancellation requested")
 
-func pollMockProvider(ctx workflow.Context, calls *providerCalls, queue, taskID string, limit time.Duration) (ProviderQueryOutput, error) {
+func pollMockProvider(ctx workflow.Context, calls *providerCalls, queue, taskID string, limit time.Duration,
+	cancelChannel workflow.ReceiveChannel,
+) (ProviderQueryOutput, error) {
 	start := workflow.Now(ctx)
 	backoff := []time.Duration{5 * time.Second, 5 * time.Second, 10 * time.Second,
 		15 * time.Second, 30 * time.Second}
@@ -451,8 +549,24 @@ func pollMockProvider(ctx workflow.Context, calls *providerCalls, queue, taskID 
 		if attempt < len(backoff) {
 			delay = backoff[attempt]
 		}
-		if err := workflow.Sleep(ctx, delay); err != nil {
-			return ProviderQueryOutput{}, err
+		if cancelChannel == nil {
+			if err := workflow.Sleep(ctx, delay); err != nil {
+				return ProviderQueryOutput{}, err
+			}
+		} else {
+			var signal struct{}
+			cancelled, err := workflow.AwaitWithTimeout(ctx, delay, func() bool {
+				return cancelChannel.ReceiveAsync(&signal)
+			})
+			if err != nil {
+				return ProviderQueryOutput{}, err
+			}
+			if cancelled {
+				return ProviderQueryOutput{}, errCancelRequested
+			}
+			if cancelChannel.ReceiveAsync(&signal) {
+				return ProviderQueryOutput{}, errCancelRequested
+			}
 		}
 		result, err := calls.query(ctx, queue, ProviderQueryInput{
 			ProviderTaskID: &taskID,
@@ -639,8 +753,20 @@ func mockModerationStatus(raw json.RawMessage) (string, error) {
 }
 
 func providerFailureCode(providerErr *ProviderError) string {
-	if providerErr != nil && providerErr.Code != "" {
-		return providerErr.Code
+	code := "failed"
+	if providerErr != nil && strings.TrimSpace(providerErr.Code) != "" {
+		code = strings.ToLower(strings.TrimSpace(providerErr.Code))
 	}
-	return "provider_failed"
+	var normalized strings.Builder
+	for _, char := range code {
+		if normalized.Len() >= 64 {
+			break
+		}
+		if char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' || char == '-' {
+			normalized.WriteRune(char)
+		} else {
+			normalized.WriteByte('_')
+		}
+	}
+	return "provider:" + normalized.String()
 }

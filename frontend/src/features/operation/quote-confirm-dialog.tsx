@@ -30,6 +30,22 @@ const rejectionMessages: Record<string, string> = {
   forbidden: "当前账号不能确认此报价。",
 };
 
+const unitPriceNumber = new Intl.NumberFormat("zh-CN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 6,
+});
+
+function formatUnitPrice(micros: number, currency: string) {
+  if (
+    !Number.isSafeInteger(micros) ||
+    micros < 0 ||
+    !/^[A-Z]{3}$/.test(currency)
+  )
+    return "价格异常";
+  const amount = unitPriceNumber.format(micros / 1_000_000);
+  return currency === "CNY" ? `¥${amount}` : `${currency} ${amount}`;
+}
+
 function failureMessage(error: unknown) {
   const code =
     typeof error === "object" && error !== null && "code" in error
@@ -43,21 +59,57 @@ function failureMessage(error: unknown) {
 function detailText(item: QuoteItem) {
   const detail = item.quote_detail;
   if (!detail) return "服务端未提供费用拆分。";
-  const parts: string[] = [];
-  if (detail.quantity !== undefined) parts.push(String(detail.quantity));
-  if (detail.unit_price_micros !== undefined)
-    parts.push(formatQuote(detail.unit_price_micros));
-  if (detail.outputs !== undefined) parts.push(String(detail.outputs));
-  const breakdown = parts.join(" × ");
+  const currency = detail.currency ?? "CNY";
+  let breakdown: string;
+  if (detail.unit === "per_1k_tokens") {
+    const tokenParts: string[] = [];
+    if (
+      detail.estimated_input_tokens !== undefined &&
+      detail.input_unit_price_micros !== undefined
+    ) {
+      tokenParts.push(
+        `输入 ${detail.estimated_input_tokens} token × ${formatUnitPrice(detail.input_unit_price_micros, currency)}/千 token`,
+      );
+    }
+    if (
+      detail.max_output_tokens !== undefined &&
+      detail.output_unit_price_micros !== undefined
+    ) {
+      tokenParts.push(
+        `输出上限 ${detail.max_output_tokens} token × ${formatUnitPrice(detail.output_unit_price_micros, currency)}/千 token`,
+      );
+    }
+    breakdown = tokenParts.join("；");
+  } else {
+    const parts: string[] = [];
+    if (detail.quantity !== undefined) parts.push(String(detail.quantity));
+    if (detail.unit_price_micros !== undefined)
+      parts.push(formatUnitPrice(detail.unit_price_micros, currency));
+    if (
+      (detail.unit === "per_image" || detail.unit === "per_second") &&
+      detail.outputs !== undefined
+    )
+      parts.push(String(detail.outputs));
+    breakdown = parts.join(" × ");
+  }
   const unit = detail.unit ? `计费单位：${detail.unit}` : "";
+  const outputs =
+    detail.unit === "per_request" && detail.outputs !== undefined
+      ? `输出数：${detail.outputs}（按次计费）`
+      : "";
   const multipliers = detail.multipliers
     ? Object.entries(detail.multipliers)
         .map(([name, value]) => `${name} × ${value}`)
         .join("，")
     : "";
+  const exchange =
+    currency !== "CNY" && detail.fx_rate_to_cny
+      ? `汇率 × ${detail.fx_rate_to_cny}（折合人民币 ${formatQuote(item.quote_micros ?? Number.NaN)}）`
+      : "";
   return (
-    [breakdown, unit, multipliers].filter(Boolean).join("；") ||
-    "服务端未提供费用拆分。"
+    [breakdown, unit, outputs, multipliers, exchange]
+      .filter(Boolean)
+      .join("；") || "服务端未提供费用拆分。"
   );
 }
 

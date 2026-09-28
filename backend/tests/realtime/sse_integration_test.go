@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -164,6 +165,151 @@ func TestProjectSSERequiresAuthorizationAndResyncsMissingCursor(t *testing.T) {
 	}
 	if _, err := io.Copy(io.Discard, reader); err != nil {
 		t.Fatalf("read until maximum connection age: %v", err)
+	}
+}
+
+func TestProjectSSERechecksAuthorizationBeforeReplay(t *testing.T) {
+	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	if url == "" {
+		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+	}
+	conn, err := redisconn.Open(url)
+	if err != nil {
+		t.Fatalf("open Redis: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	projectID := uuid.NewString()
+	t.Cleanup(func() {
+		if err := conn.Client.Del(context.Background(), "project:"+projectID+":events").Err(); err != nil {
+			t.Errorf("delete replay stream: %v", err)
+		}
+	})
+	sink := redisrealtime.NewSink(conn.Client)
+	cursorID, eventID := uuid.NewString(), uuid.NewString()
+	for _, id := range []string{cursorID, eventID} {
+		if err := sink.Publish(t.Context(), realtime.Event{
+			ID: id, ProjectID: projectID, Type: "resync",
+		}); err != nil {
+			t.Fatalf("seed replay event: %v", err)
+		}
+	}
+	var calls atomic.Int32
+	handler, err := sse.NewHandler(conn.Client, func(_ *http.Request, id string) bool {
+		return id == projectID && calls.Add(1) == 1
+	}, zap.NewNop(), sse.Options{HeartbeatInterval: 20 * time.Millisecond, MaxConnectionAge: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("new SSE handler: %v", err)
+	}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/events", nil)
+	req.Header.Set("Last-Event-ID", cursorID)
+	handler.ServeProject(w, req, projectID)
+	if calls.Load() < 2 || w.Code != http.StatusForbidden || strings.Contains(w.Body.String(), eventID) {
+		t.Fatalf("replay after revocation: auth calls %d, status %d, body %q", calls.Load(), w.Code, w.Body.String())
+	}
+}
+
+func TestProjectSSEStopsAfterAuthorizationIsRevoked(t *testing.T) {
+	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	if url == "" {
+		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+	}
+	conn, err := redisconn.Open(url)
+	if err != nil {
+		t.Fatalf("open Redis: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	projectID := uuid.NewString()
+	t.Cleanup(func() {
+		if err := conn.Client.Del(context.Background(), "project:"+projectID+":events").Err(); err != nil {
+			t.Errorf("delete replay stream: %v", err)
+		}
+	})
+	var authorized atomic.Bool
+	authorized.Store(true)
+	handler, err := sse.NewHandler(conn.Client, func(_ *http.Request, id string) bool {
+		return id == projectID && authorized.Load()
+	}, zap.NewNop(), sse.Options{HeartbeatInterval: 5 * time.Second, MaxConnectionAge: 2 * time.Second})
+	if err != nil {
+		t.Fatalf("new SSE handler: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeProject(w, r, projectID)
+	}))
+	t.Cleanup(server.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/events", nil)
+	if err != nil {
+		t.Fatalf("new SSE request: %v", err)
+	}
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("open SSE: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("SSE status = %d, want 200", resp.StatusCode)
+	}
+	reader := bufio.NewReader(resp.Body)
+	if line, err := reader.ReadString('\n'); err != nil || line != ": connected\n" {
+		t.Fatalf("first SSE line = %q, error %v", line, err)
+	}
+	authorized.Store(false)
+	eventID := uuid.NewString()
+	if err := redisrealtime.NewSink(conn.Client).Publish(ctx, realtime.Event{
+		ID: eventID, ProjectID: projectID, Type: "resync",
+	}); err != nil {
+		t.Fatalf("publish event after revocation: %v", err)
+	}
+	remaining, err := io.ReadAll(reader)
+	if err != nil || strings.Contains(string(remaining), eventID) || strings.Contains(string(remaining), "event: resync") {
+		t.Fatalf("SSE after revocation = %q, error %v", remaining, err)
+	}
+}
+
+func TestProjectSSEClosesOnHeartbeatAfterAuthorizationIsRevoked(t *testing.T) {
+	url := os.Getenv("LV_TEST_REALTIME_REDIS_URL")
+	if url == "" {
+		t.Skip("set LV_TEST_REALTIME_REDIS_URL for disposable integration data")
+	}
+	conn, err := redisconn.Open(url)
+	if err != nil {
+		t.Fatalf("open Redis: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	projectID := uuid.NewString()
+	var authorized atomic.Bool
+	authorized.Store(true)
+	handler, err := sse.NewHandler(conn.Client, func(_ *http.Request, id string) bool {
+		return id == projectID && authorized.Load()
+	}, zap.NewNop(), sse.Options{HeartbeatInterval: 20 * time.Millisecond, MaxConnectionAge: 2 * time.Second})
+	if err != nil {
+		t.Fatalf("new SSE handler: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeProject(w, r, projectID)
+	}))
+	t.Cleanup(server.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/events", nil)
+	if err != nil {
+		t.Fatalf("new SSE request: %v", err)
+	}
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("open SSE: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	reader := bufio.NewReader(resp.Body)
+	if line, err := reader.ReadString('\n'); err != nil || line != ": connected\n" {
+		t.Fatalf("first SSE line = %q, error %v", line, err)
+	}
+	authorized.Store(false)
+	remaining, err := io.ReadAll(reader)
+	if err != nil || strings.Contains(string(remaining), ": heartbeat") {
+		t.Fatalf("SSE after idle revocation = %q, error %v", remaining, err)
 	}
 }
 

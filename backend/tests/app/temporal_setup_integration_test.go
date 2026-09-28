@@ -12,10 +12,11 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
 	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
+	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
-func TestTemporalSetupInstallsCleanupSchedules(t *testing.T) {
+func TestTemporalSetupInstallsImplementedSchedules(t *testing.T) {
 	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
 	namespace := os.Getenv("LV_TEST_TEMPORAL_NAMESPACE")
 	if addr == "" || namespace == "" {
@@ -29,7 +30,7 @@ func TestTemporalSetupInstallsCleanupSchedules(t *testing.T) {
 	}
 	t.Cleanup(workflowClient.Close)
 	prefix := "setup-test-" + uuid.NewString() + "-"
-	for _, id := range []string{maintenanceflow.OutboxCleanupScheduleID, maintenanceflow.ProcessedEventCleanupScheduleID} {
+	for _, id := range []string{maintenanceflow.OutboxCleanupScheduleID, maintenanceflow.ProcessedEventCleanupScheduleID, operationflow.QuoteExpiryScheduleID} {
 		handle := workflowClient.ScheduleClient().GetHandle(ctx, prefix+id)
 		t.Cleanup(func() {
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -46,7 +47,13 @@ func TestTemporalSetupInstallsCleanupSchedules(t *testing.T) {
 	if err := app.InstallCleanupSchedules(ctx, cfg, zap.NewNop(), prefix); err != nil {
 		t.Fatalf("repeat installation: %v", err)
 	}
-	for _, id := range []string{maintenanceflow.OutboxCleanupScheduleID, maintenanceflow.ProcessedEventCleanupScheduleID} {
+	if err := app.InstallQuoteExpirySchedule(ctx, cfg, zap.NewNop(), prefix); err != nil {
+		t.Fatalf("install quote expiry schedule: %v", err)
+	}
+	if err := app.InstallQuoteExpirySchedule(ctx, cfg, zap.NewNop(), prefix); err != nil {
+		t.Fatalf("repeat quote expiry installation: %v", err)
+	}
+	for _, id := range []string{maintenanceflow.OutboxCleanupScheduleID, maintenanceflow.ProcessedEventCleanupScheduleID, operationflow.QuoteExpiryScheduleID} {
 		description, err := workflowClient.ScheduleClient().GetHandle(ctx, prefix+id).Describe(ctx)
 		if err != nil || description == nil {
 			t.Fatalf("describe schedule %s: %v", id, err)

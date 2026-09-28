@@ -12,6 +12,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
+	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
@@ -32,6 +33,11 @@ func initializeRelay(ctx context.Context, cfg config.Config, logger *zap.Logger)
 
 func initializeMaintenanceSetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*maintenanceflow.ScheduleInstaller, func(), error) {
 	wire.Build(provideSetupTrace, provideTemporal, provideCleanupScheduleInstaller)
+	return nil, nil, nil
+}
+
+func initializeQuoteExpirySetup(ctx context.Context, cfg config.Config, logger *zap.Logger, prefix string) (*operationflow.QuoteExpiryScheduleInstaller, func(), error) {
+	wire.Build(provideSetupTrace, provideTemporal, provideQuoteExpiryScheduleInstaller)
 	return nil, nil, nil
 }
 

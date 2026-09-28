@@ -28,6 +28,7 @@ type Store interface {
 // Finalizer enters a terminal state and closes billing in one transaction.
 type Finalizer interface {
 	FinalizeOperation(context.Context, SettlementInput) error
+	CompleteFromReuse(context.Context, string) error
 }
 
 // Activities is the flow queue's database Activity adapter.
@@ -71,6 +72,11 @@ func (a *Activities) SettleOperation(ctx context.Context, input SettlementInput)
 	return permanentActivityError(a.finalizer.FinalizeOperation(ctx, input))
 }
 
+// CompleteFromReuse links frozen source outputs and settles zero cost atomically.
+func (a *Activities) CompleteFromReuse(ctx context.Context, operationID string) error {
+	return permanentActivityError(a.finalizer.CompleteFromReuse(ctx, operationID))
+}
+
 // BeginProviderCall records an unknown attempt before an external call.
 func (a *Activities) BeginProviderCall(ctx context.Context, input application.BeginProviderCallInput) error {
 	return permanentActivityError(a.store.BeginProviderCall(ctx, input))
@@ -111,6 +117,9 @@ func permanentActivityError(err error) error {
 	if errors.Is(err, application.ErrWorkflowConsentUnavailable) {
 		return temporal.NewNonRetryableApplicationError("frozen media consent cannot be verified", "consent_unavailable", err)
 	}
+	if errors.Is(err, application.ErrReuseSourceUnavailable) {
+		return temporal.NewNonRetryableApplicationError("reuse source is no longer available", "reuse_source_unavailable", err)
+	}
 	if errors.Is(err, application.ErrManualResolutionUnverified) {
 		return temporal.NewNonRetryableApplicationError("administrator resolution has not been recorded", "manual_resolution_unverified", err)
 	}
@@ -119,6 +128,7 @@ func permanentActivityError(err error) error {
 		errors.Is(err, application.ErrInvalidTransitionInput) ||
 		errors.Is(err, application.ErrTransitionConflict) ||
 		errors.Is(err, application.ErrInvalidFinalizationInput) ||
+		errors.Is(err, application.ErrInvalidWorkflowBatch) ||
 		errors.Is(err, application.ErrWorkflowModelUnavailable) ||
 		errors.Is(err, application.ErrInvalidProviderCall) ||
 		errors.Is(err, application.ErrProviderCallConflict) ||
@@ -135,6 +145,7 @@ func Register(w worker.Worker, activities *Activities) {
 	w.RegisterActivityWithOptions(activities.CheckConsent, activity.RegisterOptions{Name: "flow.CheckConsent"})
 	w.RegisterActivityWithOptions(activities.Transition, activity.RegisterOptions{Name: "flow.Transition"})
 	w.RegisterActivityWithOptions(activities.SettleOperation, activity.RegisterOptions{Name: "flow.SettleOperation"})
+	w.RegisterActivityWithOptions(activities.CompleteFromReuse, activity.RegisterOptions{Name: "flow.CompleteFromReuse"})
 	w.RegisterActivityWithOptions(activities.BeginProviderCall, activity.RegisterOptions{Name: "flow.BeginProviderCall"})
 	w.RegisterActivityWithOptions(activities.CompleteProviderCall, activity.RegisterOptions{Name: "flow.CompleteProviderCall"})
 	w.RegisterActivityWithOptions(activities.LoadProviderCost, activity.RegisterOptions{Name: "flow.LoadProviderCost"})

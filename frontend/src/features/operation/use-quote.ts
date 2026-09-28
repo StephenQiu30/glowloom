@@ -21,6 +21,12 @@ export type QuoteItem = {
     unit_price_micros?: number;
     outputs?: number;
     multipliers?: Record<string, number>;
+    currency?: string;
+    fx_rate_to_cny?: string;
+    estimated_input_tokens?: number;
+    max_output_tokens?: number;
+    input_unit_price_micros?: number;
+    output_unit_price_micros?: number;
   };
 };
 

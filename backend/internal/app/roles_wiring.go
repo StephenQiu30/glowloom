@@ -26,8 +26,10 @@ import (
 	redisrealtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
 	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
+	operationevent "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/event"
 	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
 	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
+	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/kafkaconn"
@@ -55,6 +57,13 @@ func provideCleanupScheduleInstaller(ctx context.Context, temporalConn *temporal
 	return maintenanceflow.NewScheduleInstaller(temporalConn.Client.ScheduleClient(), prefix), nil
 }
 
+func provideQuoteExpiryScheduleInstaller(ctx context.Context, temporalConn *temporalconn.Connection, prefix string) (*operationflow.QuoteExpiryScheduleInstaller, error) {
+	if err := temporalConn.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("connect setup Temporal: %w", err)
+	}
+	return operationflow.NewQuoteExpiryScheduleInstaller(temporalConn.Client.ScheduleClient(), prefix), nil
+}
+
 func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Connection, temporalConn *temporalconn.Connection, queue string) (worker.Worker, error) {
 	if err := temporalConn.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("connect worker Temporal: %w", err)
@@ -79,6 +88,9 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		operationStore := pgoperation.NewStore(dbConn.DB)
 		finalizer := NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
 		operationflow.Register(queueWorker, operationflow.NewActivities(operationStore, finalizer))
+		operationflow.RegisterBatch(queueWorker, operationflow.NewBatchActivities(operationStore, finalizer))
+		operationflow.RegisterQuoteExpiry(queueWorker,
+			operationflow.NewQuoteExpiryActivities(operationapp.NewQuoteExpiryService(operationStore, 500)))
 	case "media":
 		storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
 			cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
@@ -119,13 +131,13 @@ func provideKafka(ctx context.Context, cfg config.Config) (*kafkaconn.Connection
 	return conn, conn.Close, nil
 }
 
-func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Connection, kafkaConn *kafkaconn.Connection, redisConn *redisconn.Connection) (*relayRuntime, func(), error) {
+func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Connection, kafkaConn *kafkaconn.Connection, redisConn *redisconn.Connection, logger *zap.Logger, tracerProvider trace.TracerProvider) (*relayRuntime, func(), error) {
 	if err := redisConn.Ping(ctx); err != nil {
 		return nil, nil, fmt.Errorf("connect relay Redis: %w", err)
 	}
 	processed := pginbox.NewStore(dbConn.DB)
 	realtimeConsumer, err := kafkainbox.NewConsumer(cfg.KafkaBrokers, realtimeConsumerGroup,
-		[]string{realtime.OperationStatusTopic, realtime.ProjectChangedTopic},
+		[]string{realtime.OperationStatusTopic, realtime.ProjectChangedTopic, realtime.BudgetChangedTopic, realtime.BillingSettledTopic},
 		realtime.NewHandler(processed, redisrealtime.NewSink(redisConn.Client)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("configure relay realtime consumer: %w", err)
@@ -138,7 +150,39 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		return nil, nil, fmt.Errorf("configure relay audit consumer: %w", err)
 	}
 	relay := outboxapp.NewRelay(pgoutbox.NewStore(dbConn.DB), kafkaoutbox.NewPublisher(kafkaConn.Client))
-	return &relayRuntime{outbox: relay, realtime: realtimeConsumer, audit: auditConsumer}, func() {
+	runtime := &relayRuntime{outbox: relay, realtime: realtimeConsumer, audit: auditConsumer}
+	var temporalConn *temporalconn.Connection
+	if cfg.TemporalAddr != "" || cfg.TemporalNamespace != "" {
+		temporalConn, err = temporalconn.Open(cfg.TemporalAddr, cfg.TemporalNamespace, logger, tracerProvider)
+		if err != nil {
+			auditConsumer.Close()
+			realtimeConsumer.Close()
+			return nil, nil, fmt.Errorf("configure relay Temporal: %w", err)
+		}
+		starterHandler := operationevent.NewWorkflowStarterHandler(processed,
+			pgoperation.NewStore(dbConn.DB), operationflow.NewStarter(temporalConn.Client))
+		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic}, starterHandler)
+		if err != nil {
+			temporalConn.Close()
+			auditConsumer.Close()
+			realtimeConsumer.Close()
+			return nil, nil, fmt.Errorf("configure workflow starter consumer: %w", err)
+		}
+		runtime.sweep = func(ctx context.Context) error {
+			return runStarterSweep(ctx, func(ctx context.Context, now time.Time) error {
+				if err := starterHandler.SweepOnce(ctx, now); err != nil {
+					return err
+				}
+				return starterHandler.SweepBatchesOnce(ctx, now)
+			})
+		}
+	}
+	return runtime, func() {
+		if runtime.starter != nil {
+			runtime.starter.Close()
+			temporalConn.Close()
+		}
 		auditConsumer.Close()
 		realtimeConsumer.Close()
 	}, nil

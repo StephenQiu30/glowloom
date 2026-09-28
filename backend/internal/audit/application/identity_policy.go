@@ -23,6 +23,8 @@ func NewRecordedActionParser() *Parser {
 	fields["project.created"] = []string{"aspect_ratio", "style_type", "style_subtype", "style_preset_id", "status", "revision"}
 	fields["project.updated"] = []string{"revision", "style_preset_id", "allow_overseas_models", "name_changed", "description_changed"}
 	fields["budget.changed"] = []string{"limit_micros", "revision", "is_overrun"}
+	fields["operation.confirmed"] = []string{"quote_micros", "model_key", "region", "origin", "reused_from"}
+	fields["batch.confirmed"] = []string{"quote_total_micros", "total_count", "expired_count"}
 	return NewParser(fields)
 }
 
