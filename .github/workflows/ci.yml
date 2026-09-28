@@ -74,7 +74,41 @@ jobs:
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: command -v ffmpeg && command -v ffprobe
-      - run: go test -race ./...
+      - name: Run backend Race tests
+        shell: bash
+        run: go test -race -count=1 -json ./... | tee "$RUNNER_TEMP/backend-tests.jsonl"
+      - name: Report backend test execution and skips
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          results = Path(os.environ["RUNNER_TEMP"]) / "backend-tests.jsonl"
+          lines = ["## Backend Race tests", ""]
+          if not results.exists():
+              lines.append("Tests did not run; inspect the earlier failed step.")
+          else:
+              counts = collections.Counter()
+              skipped = collections.Counter()
+              for line in results.read_text().splitlines():
+                  event = json.loads(line)
+                  test = event.get("Test", "")
+                  action = event["Action"]
+                  if test and "/" not in test and action in ("pass", "fail", "skip"):
+                      counts[action] += 1
+                      if action == "skip":
+                          skipped[event["Package"].rsplit("/", 1)[-1]] += 1
+              lines.append(f"Top-level tests: {counts['pass']} passed, {counts['fail']} failed, {counts['skip']} skipped.")
+              lines.extend(["", "Skipped tests are not acceptance evidence. Dedicated integration steps below have separate results."])
+              if skipped:
+                  lines.extend(["", "| Package | Skipped |", "| --- | ---: |"])
+                  lines.extend(f"| {package} | {count} |" for package, count in sorted(skipped.items()))
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write("\n".join(lines) + "\n")
+          PY
       - name: Prepare isolated identity contract databases
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_identity_gate_test'
@@ -106,6 +140,45 @@ jobs:
         run: psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE ROLE lanverse_app'
       - name: Apply migrations for PostgreSQL contract tests
         run: find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -f
+      - name: Verify identity commands in isolated databases
+        env:
+          LV_TEST_IDENTITY_REDIS_URL: redis://127.0.0.1:6379/14
+        run: |
+          test_cases=(
+            TestCreateUserCommitsAccountAndTwoOutboxEventsAtomically
+            TestLoginUsesRealPostgresRedisAndAtomicAudit
+            TestChangePasswordInvalidatesOtherSessionsWithRealPostgresRedis
+            TestDisableUserCommitsStateAndEventsWithRealPostgresRedis
+            TestAdminLifecycleRevokesSessionsAndRollsBackAuditFailureWithRealStores
+            TestAdminDirectoryWithRealPostgres
+          )
+          for index in "${!test_cases[@]}"; do
+            database="lanverse_identity_command_${index}"
+            psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+            contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
+            for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
+              psql "$contract_dsn" -v ON_ERROR_STOP=1 -f "$migration"
+            done
+            LV_TEST_IDENTITY_DB_DSN="$contract_dsn" \
+            LV_TEST_ACCOUNT_LIFECYCLE_DB_DSN="$contract_dsn" \
+            LV_TEST_ACCOUNT_DIRECTORY_DB_DSN="$contract_dsn" \
+            go test -race ./tests/identity -run "^${test_cases[$index]}$" -count=1 -v
+          done
+      - name: Verify catalog, billing, and workspace PostgreSQL contracts
+        run: |
+          for package in catalog billing workspace; do
+            database="lanverse_${package}_contract"
+            psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+            contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
+            for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
+              psql "$contract_dsn" -v ON_ERROR_STOP=1 -f "$migration"
+            done
+            LV_TEST_CATALOG_DB_DSN="$contract_dsn" \
+            LV_TEST_MODEL_CATALOG_DB_DSN="$contract_dsn" \
+            LV_TEST_BILLING_DB_DSN="$contract_dsn" \
+            LV_TEST_WORKSPACE_DB_DSN="$contract_dsn" \
+            go test -race "./tests/$package" -count=1 -v
+          done
       - name: Verify operation PostgreSQL contracts
         run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -count=1
       - name: Prepare isolated media migration database
