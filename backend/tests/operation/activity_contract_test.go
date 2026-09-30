@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -19,12 +17,33 @@ type activityExample struct {
 }
 
 func TestProviderActivityJSONContracts(t *testing.T) {
+	// Synthetic wire examples protect historical Temporal payload compatibility.
+	// Public HTTP contracts are generated from handler annotations and DTOs.
 	tests := []struct {
 		name        string
+		example     string
 		checkModels func(*testing.T, activityExample)
 	}{
 		{
 			name: "provider_submit",
+			example: `{
+				"input": {
+					"operation_id": "11111111-1111-4111-8111-111111111111",
+					"provider_request_key": "operation/11111111-1111-4111-8111-111111111111/submit",
+					"adapter_key": "mock",
+					"provider_model_id": "mock-image-v1",
+					"capability": "image.generate",
+					"mode": "text_to_image",
+					"params": {"seed": 42},
+					"inputs": [{"role": "prompt", "text": "A blue lantern on a wooden table"}],
+					"output_count": 1
+				},
+				"output": {
+					"outcome": "accepted",
+					"provider_task_id": "mock-task-11111111",
+					"error": null
+				}
+			}`,
 			checkModels: func(t *testing.T, example activityExample) {
 				checkActivityModel[workflow.ProviderSubmitInput](t, example.Input)
 				checkActivityModel[workflow.ProviderSubmitOutput](t, example.Output)
@@ -34,6 +53,16 @@ func TestProviderActivityJSONContracts(t *testing.T) {
 		},
 		{
 			name: "provider_query",
+			example: `{
+				"input": {"provider_task_id": "mock-task-11111111"},
+				"output": {
+					"state": "pending",
+					"provider_task_id": "mock-task-11111111",
+					"result_urls": [],
+					"usage": null,
+					"error": null
+				}
+			}`,
 			checkModels: func(t *testing.T, example activityExample) {
 				checkActivityModel[workflow.ProviderQueryInput](t, example.Input)
 				checkActivityModel[workflow.ProviderQueryOutput](t, example.Output)
@@ -44,6 +73,10 @@ func TestProviderActivityJSONContracts(t *testing.T) {
 		},
 		{
 			name: "provider_cancel",
+			example: `{
+				"input": {"provider_task_id": "mock-task-11111111"},
+				"output": {"outcome": "cancelled"}
+			}`,
 			checkModels: func(t *testing.T, example activityExample) {
 				checkActivityModel[workflow.ProviderCancelInput](t, example.Input)
 				checkActivityModel[workflow.ProviderCancelOutput](t, example.Output)
@@ -52,6 +85,19 @@ func TestProviderActivityJSONContracts(t *testing.T) {
 		},
 		{
 			name: "provider_test_credential",
+			example: `{
+				"input": {
+					"provider_id": "49f48d62-ff66-44c5-a25d-ea131d4a607d",
+					"provider_key": "configured-openrouter",
+					"adapter_key": "openrouter",
+					"credential": {
+						"id": "8ff0a79a-0e57-4754-a0e9-93fab15409fa",
+						"key_id": "agent-test",
+						"ciphertext": "YQ=="
+					}
+				},
+				"output": {"result": "ok"}
+			}`,
 			checkModels: func(t *testing.T, example activityExample) {
 				checkActivityModel[catalogworkflow.AgentTestInput](t, example.Input)
 				checkActivityModel[catalogworkflow.AgentTestOutput](t, example.Output)
@@ -63,13 +109,8 @@ func TestProviderActivityJSONContracts(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			path := filepath.Join("..", "..", "..", "contracts", "activities", test.name+".json")
-			data, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
 			var example activityExample
-			decodeActivityJSON(t, data, &example)
+			decodeActivityJSON(t, []byte(test.example), &example)
 			if len(example.Input) == 0 || len(example.Output) == 0 {
 				t.Fatal("activity example requires input and output")
 			}
