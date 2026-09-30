@@ -76,6 +76,8 @@ Lanverse/
 
 ## 4. Go 后端
 
+编码标准以 [Google Go Style Guide](https://google.github.io/styleguide/go/guide)、[Style Decisions](https://google.github.io/styleguide/go/decisions) 为准，按场景落实 [Best Practices](https://google.github.io/styleguide/go/best-practices)；Go 官方文档与 Uber 规范的职责及优先级见 [AGENTS.md 的 Go 工程规范](AGENTS.md#go-工程规范)。实现与审查均须核对适用的命名、注释、错误、接口、并发和测试规则，格式化与 lint 不能替代人工审查。
+
 ```text
 backend/
   cmd/lanverse/main.go           # 入口：--role=api|worker|relay|all，只做配置与启动
@@ -121,6 +123,8 @@ backend/
 冻结输入、预算上限、只读工具白名单、长任务 heartbeat/取消，以及结果未知不自动重提付费请求的业务约束继续有效；迁移须补齐测试、历史兼容与真实供应商证据，不恢复独立 Python 服务作为默认前提。范围与失败路径见 [清理设计](docs/design/Agent服务目录清理设计.md)。
 
 ## 6. 前端
+
+编码与审查遵循 [Vercel React Best Practices](https://vercel.com/blog/introducing-react-best-practices) 和 [Next.js 官方文档](https://nextjs.org/docs/app)，通过 Vercel 插件的 `vercel:react-best-practices`、`vercel:nextjs` 技能读取相关规则。执行顺序与检查项见 [AGENTS.md 的前端工程规范](AGENTS.md#前端工程规范)，具体 API 同时核对安装版本的 `node_modules/next/dist/docs/`。外部示例中的数据请求或缓存库须映射到本项目既有 TanStack Query、统一请求封装和 Go 业务合同；工具链变更仍遵循设计评审规则。
 
 ```text
 frontend/
@@ -191,6 +195,7 @@ Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，�
 1. 核心业务逻辑（Operation 状态机、预算与对账、依赖传播、工作流）先写测试再实现。
 2. 每个里程碑的验收记录在 `docs/acceptance/`；静态检查通过不等于功能验收通过。
 3. 提交与分支规则见 `AGENTS.md`。
+4. Go 与前端代码审查分别核对 Google Go 规范和 Vercel 最佳实践；性能修改说明所采用规则、测量结果与适用边界。规范审查与自动化门禁分别记录，跳过项明确说明。
 
 ## 10. 规范维护
 

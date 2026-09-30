@@ -21,7 +21,7 @@
 
 ## Go 工程规范
 
-1. 所有 Go 代码必须遵循 Go 官方惯用法以及 Google Go Style Guide、Uber Go Style Guide；新增或修改代码优先保持简单、清晰、可测试，并遵守现有目录边界和项目约定。
+1. 所有 Go 代码的编写、修改和审查必须以 [Google Go Style Guide](https://google.github.io/styleguide/go/guide) 和 [Style Decisions](https://google.github.io/styleguide/go/decisions) 为首要编码标准，按场景落实 [Best Practices](https://google.github.io/styleguide/go/best-practices)。Go 官方文档作为语言与 API 的依据，Uber Go Style Guide 作为补充；补充建议冲突时以 Google 规范为准。保持清晰、简单、简洁、可维护和一致，并遵守已接受的项目目录与架构边界。
 2. 代码按业务模块组织，采用模块化整洁架构，严格保持 `adapter → application → domain` 的单向依赖，不得由内层反向依赖外层。
 3. 依赖必须通过显式构造函数注入；接口由消费方按实际需要定义并保持小而专一；跨层数据使用边界明确的数据模型和显式转换。
 4. 禁止照搬 Java 式全局 Controller/Service/DAO 分层，禁止使用 `Ixxx`/`Impl` 命名，禁止创建职责不明的 `utils`、`common` 等通用包。
@@ -29,6 +29,17 @@
 6. goroutine 必须具有明确的所有权、取消机制、退出条件和等待策略，避免失控并发、泄漏和无法收敛的后台任务。
 7. 日志必须采用结构化记录，包含排障所需上下文，同时不得泄露凭据、隐私数据或其他敏感信息。
 8. 核心业务逻辑须有单元测试，跨边界行为须按风险补充集成测试；新增或修改 Go 代码应通过项目适用的 `gofmt`、`goimports`、`go vet`、`golangci-lint`、Race Detector 和 `govulncheck` 质量门禁，未执行、被跳过或受环境限制的检查必须如实说明。
+
+## 前端工程规范
+
+1. 前端代码的编写、修改和审查必须遵循 [Vercel React Best Practices](https://vercel.com/blog/introducing-react-best-practices) 与 [Next.js 官方文档](https://nextjs.org/docs/app)。使用 Vercel 插件的 `vercel:react-best-practices`、`vercel:nextjs` 技能并阅读适用规则；具体 API 以项目安装版本的文档为准。
+2. 优先消除请求瀑布与过大的客户端包，再优化服务端、客户端取数和重复渲染。无依赖的异步操作并行执行；按实际依赖等待，使用合适的 Suspense 边界，避免整页被无关请求阻塞。
+3. 明确 Server Component 与 Client Component 边界，只把需要交互或浏览器 API 的部分放到客户端；跨边界数据必须可序列化且最小化。浏览器 API 的访问须符合渲染生命周期，避免 hydration 不一致，服务端秘密不得进入客户端。
+4. 数据请求、缓存、状态和写入遵循 PROJECT.md 已接受的工具链与业务合同；复用请求去重和失效机制，缓存明确组织/项目范围、有效期与失效条件，避免跨用户或跨项目共享私有结果。
+5. 派生值直接从现有 props/state 计算，交互逻辑放在事件处理器；Effect 只用于同步外部系统并完整清理订阅、监听和异步任务。缩小状态订阅范围，高频瞬时数据按需用 ref；memo、useMemo、useCallback 须有实际收益依据。
+6. 大型或低频模块按需加载，控制依赖导入与客户端序列化体积；图片、字体和脚本按适用的 Next.js 优化机制处理。性能优化须结合测量，避免仅为套用规则增加抽象或依赖。
+7. 保持 TypeScript 严格类型和组件单一职责，外部数据在边界校验；复用项目组件体系及其官方语义，保证键盘操作、焦点、可访问名称与响应式布局。
+8. 修改后运行 PROJECT.md 中适用的前端质量门禁，交互变化补充对应浏览器验证；代码审查须覆盖本节规则。lint、类型检查或构建通过不等于完成最佳实践审查或产品验收。
 
 ## 验证与 Git
 
