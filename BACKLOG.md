@@ -207,6 +207,8 @@
 
 **M1-10 骨架完成（2026-09-28）**：`agent-api` 对现有健康路由及后续内部路由统一返回带稳定 `code`、`request_id` 的 `application/problem+json` 错误，404、405、参数错误及未预期异常均有脱敏测试；不可信请求 ID 会重新生成。先以默认 404/500 响应确认 Red，再补映射通过 Green。Agent 全量 pytest 通过（4 条需额外配置的用例默认跳过），Ruff 检查与格式、mypy 通过；显式本机 Temporal + Redis 两条集成用例通过，覆盖模拟供应商与 Skill 队列。M1-09 已记录真实本机 Go → Agent 模拟链路；本项只关闭 Agent 骨架，不代表真实模型、业务 Skill 或 M1 总体验收。
 
+**M1-10 Activity 样例清理（2026-09-30）**：独立 Python 服务已移除，根目录 `contracts/activities` 的四份历史 JSON 样例一并删除；相同合成载荷内联到 `backend/tests/operation/activity_contract_test.go`，保留字段往返与未知字段拒绝检查。HTTP 接口规范继续由 Handler 注解与 DTO 生成 Swagger，再从在线文档生成前端 API。先删除外部样例确认原测试失败，迁入测试后四组样例 Race 测试通过；公共路由与 Swagger 契约检查、vet、lint、格式检查通过，`govulncheck` 无可达漏洞（另有 1 个未调用模块告警）。仅清理测试文件组织，不新增 HTTP 端点；供应商执行能力仍待 M1-12 承接。
+
 **功能 Epic**
 
 #### E-06 账号与会话

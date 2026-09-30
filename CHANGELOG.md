@@ -9,7 +9,7 @@
 - 搭建创作工作台并接通项目创建与画布入口；清理登录功能，改为本机单一工作区。
 - 迁移 BeefTV 无限画布核心，接入正式资源保存并记录性能验证进展。
 - 画布控件接入 Radix，修复键盘、焦点交互，补充移动端交互测试与浏览器验证记录。
-- 移除独立 Python Agent 服务及 Compose、CI 入口；相关执行能力仍待 Go 承接。
+- 移除独立 Python Agent 服务及 Compose、CI 入口，清理遗留 `contracts/activities` JSON 样例；HTTP 接口规范统一由 Swagger 生成，执行能力仍待 Go 承接。
 - 业务模块迁入 `components/` 并同步生成契约，修复镜像契约包缺失；新增按日更新日志与 Google Go／Vercel 前端编码规范。
 
 ## 2026-09-28

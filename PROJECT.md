@@ -173,7 +173,7 @@ frontend/
 | 事件 | Go 结构体，按主题版本号 `.v<N>` 手写，生产者与消费者各自维护 | — |
 
 1. REST：改 Handler / DTO 与注解 → 运行 swag 自动生成 → 启动后端并从在线 `/swagger/doc.json` 运行 `@umijs/openapi` → 改前端实现。生成器配置 `schemaPath` 为在线地址、`requestImportStatement` 为 `@/lib/request` 的导入语句；Swagger 文档与前端 API 文件均禁止手改。后端未启动或在线规范不可用时生成失败，不以旧文件代替。
-2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 契约测试。同一组示例固定字段语义；M1-12 承接旧执行端时还须验证历史输入输出与队列兼容性。不做代码生成。
+2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 契约测试。Temporal 载荷由现有 Go 类型实现，兼容性样例内联在 `backend/tests/<模块>/` 的测试中，不再维护根目录 `contracts/` 或独立 JSON 规范文件；公共 HTTP 接口统一走上面的 Swagger 链路。M1-12 承接旧执行端时还须验证历史输入输出与队列兼容性，不把未注册的内部 Activity 伪装成公共 HTTP 端点。
 3. 不兼容变更升级版本号（Activity 名称或事件主题后缀 `.v<N>`）；旧版本在仍有在途工作流或未消费事件时保留。
 
 Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，再执行 `goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go`；`wire_gen.go` 仅由工具生成和格式化，CI 重复这两条命令并比较文件，不设脚本或 Makefile。
