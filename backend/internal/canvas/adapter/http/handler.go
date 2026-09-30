@@ -28,7 +28,7 @@ type ListResponse struct {
 	NextCursor *string           `json:"next_cursor"`
 }
 
-// Register installs the scoped endpoints in an authenticated route group.
+// Register installs the scoped endpoints in an workspace route group.
 func (h *Handler) Register(group *gin.RouterGroup) {
 	group.GET("/projects/:pid/canvases", h.List)
 	group.POST("/projects/:pid/canvases", h.Create)
@@ -45,7 +45,6 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Produce json
 // @Param pid path string true "项目UUID"
 // @Success 200 {object} ListResponse
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -72,10 +71,8 @@ func (h *Handler) List(c *gin.Context) {
 // @Produce json
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID"
-// @Param X-CSRF-Token header string true "CSRF令牌"
 // @Param body body application.CreateInput true "画布名称与空scope"
 // @Success 201 {object} domain.Document
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -105,7 +102,6 @@ func (h *Handler) Create(c *gin.Context) {
 // @Produce json
 // @Param id path string true "画布UUID"
 // @Success 200 {object} domain.Document
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -132,10 +128,8 @@ func (h *Handler) Get(c *gin.Context) {
 // @Produce json
 // @Param id path string true "画布UUID"
 // @Param Idempotency-Key header string true "UUID"
-// @Param X-CSRF-Token header string true "CSRF令牌"
 // @Param body body application.CommandsInput true "乐观版本与命令"
 // @Success 200 {object} application.Result
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -200,10 +194,8 @@ func writeError(c *gin.Context, err error) {
 // @Produce json
 // @Param id path string true "画布UUID"
 // @Param Idempotency-Key header string true "UUID"
-// @Param X-CSRF-Token header string true "CSRF令牌"
 // @Param body body application.RenameInput true "当前修订与名称"
 // @Success 200 {object} domain.Document
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem
@@ -235,10 +227,8 @@ func (h *Handler) Rename(c *gin.Context) {
 // @Produce json
 // @Param id path string true "画布UUID"
 // @Param Idempotency-Key header string true "UUID"
-// @Param X-CSRF-Token header string true "CSRF令牌"
 // @Param body body application.DeleteInput true "当前修订"
 // @Success 200 {object} application.DeleteResult
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 409 {object} httpapi.Problem

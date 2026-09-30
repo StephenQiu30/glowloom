@@ -6,8 +6,8 @@ import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FieldGroup } from "@/components/ui/field";
-import { BudgetCard } from "@/features/project/budget-card";
-import { ProjectsWorkspace } from "@/features/project/projects-workspace";
+import { BudgetCard } from "@/components/project/budget-card";
+import { ProjectsWorkspace } from "@/components/project/projects-workspace";
 import { projects, episodes, tasks, budget } from "./data";
 import {
   PageHeading,

@@ -20,7 +20,7 @@ type Handler struct{ query *application.AssetQuery }
 // NewHandler injects the authorized media query.
 func NewHandler(query *application.AssetQuery) *Handler { return &Handler{query: query} }
 
-// Register installs authenticated project-scoped reads.
+// Register installs workspace project-scoped reads.
 func (h *Handler) Register(group *gin.RouterGroup) {
 	group.GET("/projects/:pid/media", h.List)
 	group.GET("/projects/:pid/media/:asset_id/preview", h.Preview)
@@ -36,7 +36,6 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Param cursor query string false "不透明游标"
 // @Param limit query integer false "1..200，默认50"
 // @Success 200 {object} application.AssetPage
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -72,7 +71,6 @@ func (h *Handler) List(c *gin.Context) {
 // @Param pid path string true "项目UUID"
 // @Param asset_id path string true "媒体UUID"
 // @Success 200 {object} application.Preview
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem

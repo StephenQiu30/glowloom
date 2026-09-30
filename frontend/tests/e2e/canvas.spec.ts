@@ -1,11 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-// 必须指向本轮隔离 HTTP fixture；不创建默认生产账号，不使用 mock 路由。
+// 必须提供真实项目 ID；无登录、cookie 或 mock 路由。
 const projectId = process.env.LV_E2E_PROJECT_ID;
-const loginName = process.env.LV_E2E_LOGIN_NAME ?? "canvas-browser";
-const initialPassword = process.env.LV_E2E_PASSWORD ?? "CanvasTest123!";
-const readyPassword = "CanvasReady123!";
-const baseURL = process.env.LV_E2E_BASE_URL ?? "http://127.0.0.1:3140";
 type Document = {
   id: string;
   revision: number;
@@ -27,35 +23,6 @@ type Document = {
 test.skip(!projectId, "需要 LV_E2E_PROJECT_ID 指向隔离真实 API 项目");
 test.setTimeout(90_000);
 
-async function login(page: Page, password: string) {
-  await page.goto(
-    `${baseURL}/login?returnTo=${encodeURIComponent(`/projects/${projectId}/canvas`)}`,
-  );
-  await page.getByLabel("账号", { exact: true }).fill(loginName);
-  await page.getByLabel("密码", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await page
-          .getByRole("heading", { name: "修改初始密码" })
-          .isVisible()) || new URL(page.url()).pathname.endsWith("/canvas"),
-    )
-    .toBe(true);
-  if (await page.getByRole("heading", { name: "修改初始密码" }).isVisible()) {
-    await expect(page).toHaveURL(/\/login\?/);
-    await page.getByLabel("当前密码", { exact: true }).fill(password);
-    await page.getByLabel("新密码", { exact: true }).fill(readyPassword);
-    await page
-      .getByLabel("再次输入新密码", { exact: true })
-      .fill(readyPassword);
-    await page.getByRole("button", { name: "更新密码", exact: true }).click();
-  }
-  await expect(
-    page.getByRole("heading", { name: "无限画布", exact: true }),
-  ).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/canvas`));
-}
 async function create(page: Page) {
   await page
     .getByLabel("新画布名称", { exact: true })
@@ -97,16 +64,8 @@ async function drag(page: Page, target: Locator, dx: number, dy: number) {
   );
   await page.mouse.up();
 }
-test.beforeAll(async ({ browser }) => {
-  const page = await browser.newPage();
-  try {
-    await login(page, initialPassword);
-  } finally {
-    await page.close();
-  }
-});
 test.beforeEach(async ({ page }) => {
-  await login(page, readyPassword);
+  await page.goto(`/canvas?project=${projectId}`);
 });
 
 test("文字、连线、分组、复制、撤销及刷新走同一正式保存链", async ({ page }) => {

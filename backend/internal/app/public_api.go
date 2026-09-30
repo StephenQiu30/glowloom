@@ -2,10 +2,11 @@ package app
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	redisclient "github.com/redis/go-redis/v9"
 	"github.com/swaggo/swag"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -18,8 +19,6 @@ import (
 	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
 	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
 	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
-	redisidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/redis"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/http"
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
@@ -31,15 +30,18 @@ import (
 	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
 )
 
-// NewBusinessRouter assembles the public identity, project query and canvas slice.
+// NewBusinessRouter assembles the workspace project query and canvas slice.
 // Its stores are the same injected dependencies used by the API role.
 // @title Lanverse API
 // @version 0.1
-// @description Public identity, project query, resource canvas commands and authorized media previews.
+// @description Single workspace project query, resource canvas commands and authorized media previews.
 // @BasePath /
-func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, redisConn *redisclient.Client, storage *objectstorage.Client) (*gin.Engine, error) {
-	if database == nil || redisConn == nil {
-		return nil, fmt.Errorf("public API requires database and Redis")
+func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client) (*gin.Engine, error) {
+	if database == nil {
+		return nil, fmt.Errorf("public API requires database")
+	}
+	if cfg.Env != "local" {
+		return nil, fmt.Errorf("current workspace API requires local environment")
 	}
 	if cfg.PublicOrigin == "" && cfg.Env == "local" {
 		cfg.PublicOrigin = "http://localhost:3000"
@@ -47,23 +49,14 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err := config.ValidatePublicOrigin(cfg.PublicOrigin, cfg.Env); err != nil {
 		return nil, err
 	}
-	if cfg.SessionIdleTTL == 0 {
-		cfg.SessionIdleTTL = 12 * time.Hour
+	host, _, err := net.SplitHostPort(cfg.HTTPAddr)
+	address := net.ParseIP(host)
+	origin, originErr := url.Parse(cfg.PublicOrigin)
+	browser := net.ParseIP(origin.Hostname())
+	if err != nil || address == nil || !address.IsLoopback() || originErr != nil ||
+		(origin.Hostname() != "localhost" && (browser == nil || !browser.IsLoopback())) {
+		return nil, fmt.Errorf("%w: current workspace API requires loopback listener and browser origin", config.ErrInvalid)
 	}
-	if cfg.SessionAbsoluteTTL == 0 {
-		cfg.SessionAbsoluteTTL = 7 * 24 * time.Hour
-	}
-	sessions, err := redisidentity.NewSessionStore(redisConn, cfg.SessionIdleTTL, cfg.SessionAbsoluteTTL, time.Now)
-	if err != nil {
-		return nil, err
-	}
-	limiter, err := redisidentity.NewLoginLimiter(redisConn)
-	if err != nil {
-		return nil, err
-	}
-	accounts := pgidentity.NewStore(database)
-	auth := identityapp.NewAuthenticator(accounts, sessions)
-	identity := identityhttp.NewHandler(identityapp.NewLoginCommand(accounts, sessions, limiter, time.Now), identityapp.NewLogoutCommand(auth, sessions, accounts, time.Now), identityapp.NewChangePasswordCommand(auth, accounts, sessions, accounts, time.Now), auth, accounts, cfg.Env != "local", cfg.SessionAbsoluteTTL)
 	router := NewRouter(logger, ready, tp)
 	if err := router.SetTrustedProxies(nil); err != nil {
 		return nil, err
@@ -73,9 +66,8 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	router.NoRoute(func(c *gin.Context) { httpapi.WriteProblem(c, 404, "not_found", nil) })
 	router.NoMethod(func(c *gin.Context) { httpapi.WriteProblem(c, 405, "method_not_allowed", nil) })
 	api := router.Group("/api")
-	identity.Register(api)
 	protected := api.Group("")
-	protected.Use(identity.RequireSession())
+	protected.Use(identityhttp.Workspace(pgidentity.NewStore(database)))
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database)), workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(database), time.Now), workspaceapp.NewListStylePresetsQuery(pgworkspace.NewStore(database))).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) }
 	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)

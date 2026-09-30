@@ -2,15 +2,11 @@
 package httpapi
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"mime"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -34,7 +30,7 @@ func WriteProblem(c *gin.Context, status int, code string, meta map[string]any) 
 	c.AbortWithStatusJSON(status, problem)
 }
 
-// Middleware owns request IDs, public panic recovery and write Origin/CSRF/key checks.
+// Middleware owns request IDs, public panic recovery and write Origin/key checks.
 func Middleware(origin string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader("X-Request-Id")
@@ -48,37 +44,23 @@ func Middleware(origin string) gin.HandlerFunc {
 				WriteProblem(c, http.StatusInternalServerError, "internal_error", nil)
 			}
 		}()
+		if c.FullPath() == "" {
+			c.Next()
+			return
+		}
 		if c.Request.Method == http.MethodPost || c.Request.Method == http.MethodPut || c.Request.Method == http.MethodPatch || c.Request.Method == http.MethodDelete {
 			if c.GetHeader("Origin") != origin || origin == "" {
 				WriteProblem(c, 403, "origin_forbidden", nil)
 				return
 			}
-			if c.Request.URL.Path != "/api/auth/login" {
-				session, _ := c.Cookie("lv_session")
-				token, _ := c.Cookie("lv_csrf")
-				if session == "" {
-					WriteProblem(c, 401, "unauthenticated", nil)
-					return
-				}
-				if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(c.GetHeader("X-CSRF-Token"))) != 1 || subtle.ConstantTimeCompare([]byte(token), []byte(CSRFToken(session))) != 1 {
-					WriteProblem(c, 403, "csrf_invalid", nil)
-					return
-				}
-				key, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
-				if err != nil || key == uuid.Nil {
-					WriteProblem(c, 422, "invalid_idempotency_key", nil)
-					return
-				}
+			key, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
+			if err != nil || key == uuid.Nil {
+				WriteProblem(c, 422, "invalid_idempotency_key", nil)
+				return
 			}
 		}
 		c.Next()
 	}
-}
-
-// CSRFToken binds the readable double-submit cookie to its opaque session.
-func CSRFToken(session string) string {
-	hash := sha256.Sum256([]byte("lanverse/csrf/" + session))
-	return hex.EncodeToString(hash[:])
 }
 
 // Decode accepts exactly one JSON object, unknown fields are rejected and bodies are bounded.
@@ -105,10 +87,4 @@ func Decode(c *gin.Context, out any) bool {
 		return false
 	}
 	return true
-}
-
-// Token returns only the session cookie; Authorization headers are not accepted.
-func Token(c *gin.Context) string {
-	token, _ := c.Cookie("lv_session")
-	return strings.TrimSpace(token)
 }

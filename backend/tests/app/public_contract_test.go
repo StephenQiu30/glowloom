@@ -26,8 +26,8 @@ func TestPublicRouterSwaggerContract(t *testing.T) {
 	redisConn := redisclient.NewClient(&redisclient.Options{Addr: "127.0.0.1:1"})
 	t.Cleanup(func() { _ = redisConn.Close() })
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", PublicOrigin: "http://localhost:3000",
-	}, &gorm.DB{}, redisConn, nil)
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+	}, &gorm.DB{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,9 +53,37 @@ func TestPublicRouterSwaggerContract(t *testing.T) {
 	routes := make(map[string]struct{})
 	for _, route := range router.Routes() {
 		routes[route.Method+" "+route.Path] = struct{}{}
+		if strings.HasPrefix(route.Path, "/api/auth/") {
+			t.Fatalf("removed authentication route remains registered: %s", route.Path)
+		}
+	}
+	for _, path := range []string{"/api/auth/login", "/api/auth/me", "/api/auth/logout", "/api/auth/password"} {
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), method, path, nil))
+			if response.Code != 404 {
+				t.Fatalf("removed %s %s status %d, want 404", method, path, response.Code)
+			}
+		}
 	}
 	if err := validatePublicSwagger(static, routes); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost(t *testing.T) {
+	for _, tc := range []struct{ name, env, address, origin string }{
+		{"staging", "staging", "127.0.0.1:8080", "https://localhost:3000"},
+		{"production", "prod", "127.0.0.1:8080", "https://localhost:3000"},
+		{"wildcard", "local", ":8080", "http://localhost:3000"},
+		{"external browser", "local", "127.0.0.1:8080", "https://lanverse.example"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{Env: tc.env, HTTPAddr: tc.address, PublicOrigin: tc.origin}, &gorm.DB{}, nil)
+			if err == nil {
+				t.Fatal("nonlocal workspace configuration was accepted")
+			}
+		})
 	}
 }
 

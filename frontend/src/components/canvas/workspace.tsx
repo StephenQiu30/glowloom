@@ -15,11 +15,6 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import {
-  CURRENT_SESSION_KEY,
-  getCurrentSession,
-  logout,
-} from "@/features/auth/queries";
 import { ApiError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,27 +107,14 @@ export function CanvasWorkspace({
     [name, setName] = useState(""),
     [renameName, setRenameName] = useState(""),
     [deleting, setDeleting] = useState(false),
-    [epoch, setEpoch] = useState(0);
+    [epoch, setEpoch] = useState(0),
+    [recoveryError, setRecoveryError] = useState<Error>();
   const leaving = useRef(false),
     href = useRef(""),
     dirtyRef = useRef(false),
     keys = useRef<Record<string, { body: string; key: string }>>({});
-  const session = useQuery({
-    queryKey: CURRENT_SESSION_KEY,
-    queryFn: ({ signal }) => getCurrentSession(signal),
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-  const allowed = Boolean(
-    session.isSuccess &&
-    !session.isFetching &&
-    !session.error &&
-    session.data &&
-    !session.data.user.must_change_password,
-  );
   const projects = useInfiniteQuery({
-    queryKey: ["canvas", "projects", session.data?.user.id],
-    enabled: allowed,
+    queryKey: ["canvas", "projects"],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) => listProjects(pageParam, signal),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
@@ -143,14 +125,14 @@ export function CanvasWorkspace({
     project = items.find((item) => item.id === projectId);
   const canvases = useQuery({
     queryKey: ["canvas", "documents", projectId],
-    enabled: Boolean(project && allowed),
+    enabled: Boolean(project),
     queryFn: ({ signal }) => listCanvases(projectId, signal),
     retry: false,
     refetchOnWindowFocus: false,
   });
   const document = useQuery({
     queryKey: ["canvas", "document", canvasId],
-    enabled: Boolean(project && allowed && uuid.test(canvasId)),
+    enabled: Boolean(project && uuid.test(canvasId)),
     queryFn: ({ signal }) => getCanvas(canvasId, signal),
     retry: false,
     refetchOnWindowFocus: false,
@@ -175,18 +157,6 @@ export function CanvasWorkspace({
   }, [document.data?.id, document.data?.name]);
   useEffect(() => {
     if (
-      (session.error instanceof ApiError && session.error.status === 401) ||
-      session.data?.user.must_change_password
-    ) {
-      cache.removeQueries({ queryKey: ["canvas"] });
-      router.replace(
-        `/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`,
-      );
-    }
-  }, [session.error, session.data, cache, router]);
-  useEffect(() => {
-    if (
-      allowed &&
       projectId &&
       !project &&
       projects.hasNextPage &&
@@ -194,7 +164,7 @@ export function CanvasWorkspace({
       !projects.error
     )
       void projects.fetchNextPage();
-  }, [allowed, projectId, project, projects]);
+  }, [projectId, project, projects]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (dirtyRef.current && !leaving.current) {
@@ -252,12 +222,6 @@ export function CanvasWorkspace({
       window.removeEventListener("popstate", back, true);
     };
   }, [requestLeave]);
-  function authFailure(error: ApiError) {
-    if (error.status === 401) {
-      cache.removeQueries({ queryKey: ["canvas"] });
-      void cache.invalidateQueries({ queryKey: CURRENT_SESSION_KEY });
-    }
-  }
   function navigate(pid: string, cid = "") {
     const query = new URLSearchParams();
     if (pid) query.set("project", pid);
@@ -296,9 +260,6 @@ export function CanvasWorkspace({
       cache.setQueryData(["canvas", "document", created.id], created);
       navigate(projectId, created.id);
     },
-    onError: (error) => {
-      if (error instanceof ApiError) authFailure(error);
-    },
   });
   const rename = useMutation({
     mutationFn: () =>
@@ -319,9 +280,6 @@ export function CanvasWorkspace({
       setRenameName(saved.name);
       setEpoch((value) => value + 1);
     },
-    onError: (error) => {
-      if (error instanceof ApiError) authFailure(error);
-    },
   });
   const remove = useMutation({
     mutationFn: () =>
@@ -341,36 +299,23 @@ export function CanvasWorkspace({
         scroll: false,
       });
     },
-    onError: (error) => {
-      if (error instanceof ApiError) authFailure(error);
-    },
   });
-  const signout = useMutation({
-    mutationFn: () => logout(key("logout", {})),
-    onSuccess: () => {
-      cache.removeQueries({ queryKey: ["canvas"] });
-      cache.resetQueries({ queryKey: CURRENT_SESSION_KEY });
-      router.replace("/login?returnTo=/canvas");
-    },
-  });
-  const pending =
-      create.isPending ||
-      rename.isPending ||
-      remove.isPending ||
-      signout.isPending,
+  const pending = create.isPending || rename.isPending || remove.isPending,
     readonly = project?.status === "archived",
-    failure = projects.error ?? canvases.error ?? document.error;
+    failure =
+      recoveryError ?? projects.error ?? canvases.error ?? document.error;
   const hasUnsavedChanges =
     dirty ||
     busy ||
     nameDirty ||
     pending ||
-    Boolean(create.error || rename.error || remove.error || signout.error);
+    Boolean(create.error || rename.error || remove.error);
   useLayoutEffect(() => {
     dirtyRef.current = hasUnsavedChanges;
   }, [hasUnsavedChanges]);
   async function recoverDocument() {
     if (pending || busy) return;
+    setRecoveryError(undefined);
     const keepRename = nameDirty ? renameName : undefined;
     try {
       const latest = await cache.fetchQuery({
@@ -387,7 +332,9 @@ export function CanvasWorkspace({
       delete keys.current.delete;
       refreshList();
     } catch (error) {
-      if (error instanceof ApiError) authFailure(error);
+      setRecoveryError(
+        error instanceof Error ? error : new Error("读取失败。"),
+      );
     }
   }
   return (
@@ -404,15 +351,6 @@ export function CanvasWorkspace({
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          {allowed && (
-            <Button
-              variant="ghost"
-              disabled={pending || busy}
-              onClick={() => requestLeave(() => signout.mutate())}
-            >
-              退出登录
-            </Button>
-          )}
         </div>
       </header>
       <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
@@ -422,274 +360,234 @@ export function CanvasWorkspace({
             把文字、媒体和关系放在同一张画布中。保存由项目服务确认。
           </p>
         </div>
-        {(session.isPending || session.isFetching) && (
-          <div
-            role="status"
-            aria-label="正在检查会话"
-            className="flex flex-col gap-3"
-          >
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-48 w-full" />
-            <span className="sr-only">正在检查会话…</span>
-          </div>
-        )}
-        {session.error &&
-          !(
-            session.error instanceof ApiError && session.error.status === 401
-          ) && (
+        <>
+          <FieldGroup className="grid items-end gap-4 md:grid-cols-3">
+            <Field>
+              <FieldLabel htmlFor="canvas-project">项目</FieldLabel>
+              <Select
+                value={projectId || undefined}
+                disabled={projects.isPending || pending || busy}
+                onValueChange={(value) => choose(value)}
+              >
+                <SelectTrigger id="canvas-project" className="w-full">
+                  <SelectValue placeholder="选择有权项目" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {items.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                        {item.status === "archived" ? "（已归档）" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {projects.hasNextPage && (
+                <Button
+                  variant="ghost"
+                  disabled={projects.isFetchingNextPage}
+                  onClick={() => void projects.fetchNextPage()}
+                >
+                  加载更多项目
+                </Button>
+              )}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="canvas-document">画布</FieldLabel>
+              <Select
+                value={canvasId || undefined}
+                disabled={!project || canvases.isPending || pending || busy}
+                onValueChange={(value) => choose(projectId, value)}
+              >
+                <SelectTrigger id="canvas-document" className="w-full">
+                  <SelectValue placeholder="选择已有画布" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {canvases.data?.items.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                requestLeave(() => {
+                  setDirty(false);
+                  create.mutate();
+                });
+              }}
+            >
+              <FieldGroup className="flex-row items-end gap-2">
+                <Field className="flex-1">
+                  <FieldLabel htmlFor="new-canvas-name">新画布名称</FieldLabel>
+                  <Input
+                    id="new-canvas-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    required
+                    maxLength={128}
+                    disabled={!project || readonly || pending || busy}
+                  />
+                </Field>
+                <Button
+                  type="submit"
+                  disabled={
+                    !project || readonly || !name.trim() || pending || busy
+                  }
+                >
+                  创建画布
+                </Button>
+              </FieldGroup>
+            </form>
+          </FieldGroup>
+          {failure && (
             <Failure
-              error={session.error}
-              retry={() => void session.refetch()}
+              error={failure}
+              retry={() => {
+                void projects.refetch();
+                if (project) void canvases.refetch();
+                if (canvasId && project) void document.refetch();
+              }}
             />
           )}
-        {allowed && (
-          <>
-            <FieldGroup className="grid items-end gap-4 md:grid-cols-3">
-              <Field>
-                <FieldLabel htmlFor="canvas-project">项目</FieldLabel>
-                <Select
-                  value={projectId || undefined}
-                  disabled={projects.isPending || pending || busy}
-                  onValueChange={(value) => choose(value)}
-                >
-                  <SelectTrigger id="canvas-project" className="w-full">
-                    <SelectValue placeholder="选择有权项目" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {items.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                          {item.status === "archived" ? "（已归档）" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                {projects.hasNextPage && (
+          {create.error && <Failure error={create.error} />}{" "}
+          {rename.error && (
+            <Failure
+              error={rename.error}
+              retry={
+                rename.error instanceof ApiError && rename.error.status === 409
+                  ? () => void recoverDocument()
+                  : undefined
+              }
+              retryLabel="读取最新画布（保留名称草稿）"
+            />
+          )}{" "}
+          {!projects.isPending && !projects.error && !items.length && (
+            <Empty role="status">
+              <EmptyHeader>
+                <EmptyTitle>工作区还没有项目</EmptyTitle>
+                <EmptyDescription>请联系管理员创建或授权。</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+          {projectId && !uuid.test(projectId) && (
+            <p role="alert">请选择正式项目。样例标识不能用于保存服务端画布。</p>
+          )}
+          {projectId &&
+            !project &&
+            !projects.isPending &&
+            !projects.hasNextPage &&
+            !projects.error && <p role="alert">工作区中没有此项目。</p>}
+          {project && !canvasId && !canvases.isPending && !canvases.error && (
+            <Empty role="status">
+              <EmptyHeader>
+                <EmptyTitle>
+                  {canvases.data?.items.length
+                    ? "选择一个画布继续创作"
+                    : "此项目暂无画布"}
+                </EmptyTitle>
+                <EmptyDescription>
+                  {canvases.data?.items.length
+                    ? "从上方选择已有画布。"
+                    : "输入名称并创建，随后即可开始。"}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+          {canvasId && !uuid.test(canvasId) && (
+            <p role="alert">画布标识无效，请选择已有画布。</p>
+          )}
+          {project && uuid.test(canvasId) && document.isPending && (
+            <div role="status" aria-label="正在读取画布">
+              <Skeleton className="h-96 w-full" />
+              <span className="sr-only">正在读取画布…</span>
+            </div>
+          )}
+          {document.data &&
+            project &&
+            document.data.projectId === projectId &&
+            !document.error && (
+              <>
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <form
+                    className="flex items-end gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      rename.mutate();
+                    }}
+                  >
+                    <Field>
+                      <FieldLabel htmlFor="rename-canvas">画布名称</FieldLabel>
+                      <Input
+                        id="rename-canvas"
+                        value={renameName}
+                        onChange={(event) => setRenameName(event.target.value)}
+                        required
+                        maxLength={128}
+                        disabled={readonly || pending || busy || dirty}
+                      />
+                    </Field>
+                    <Button
+                      variant="secondary"
+                      type="submit"
+                      disabled={
+                        !nameDirty ||
+                        !renameName.trim() ||
+                        readonly ||
+                        pending ||
+                        busy ||
+                        dirty
+                      }
+                    >
+                      重命名画布
+                    </Button>
+                  </form>
                   <Button
                     variant="ghost"
-                    disabled={projects.isFetchingNextPage}
-                    onClick={() => void projects.fetchNextPage()}
+                    disabled={readonly || pending || busy}
+                    onClick={() => requestLeave(() => setDeleting(true))}
                   >
-                    加载更多项目
+                    删除整个画布
                   </Button>
-                )}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="canvas-document">画布</FieldLabel>
-                <Select
-                  value={canvasId || undefined}
-                  disabled={!project || canvases.isPending || pending || busy}
-                  onValueChange={(value) => choose(projectId, value)}
-                >
-                  <SelectTrigger id="canvas-document" className="w-full">
-                    <SelectValue placeholder="选择已有画布" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {canvases.data?.items.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  requestLeave(() => {
-                    setDirty(false);
-                    create.mutate();
-                  });
-                }}
-              >
-                <FieldGroup className="flex-row items-end gap-2">
-                  <Field className="flex-1">
-                    <FieldLabel htmlFor="new-canvas-name">
-                      新画布名称
-                    </FieldLabel>
-                    <Input
-                      id="new-canvas-name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      required
-                      maxLength={128}
-                      disabled={!project || readonly || pending || busy}
-                    />
-                  </Field>
-                  <Button
-                    type="submit"
-                    disabled={
-                      !project || readonly || !name.trim() || pending || busy
-                    }
-                  >
-                    创建画布
-                  </Button>
-                </FieldGroup>
-              </form>
-            </FieldGroup>
-            {failure && (
-              <Failure
-                error={failure}
-                retry={() => {
-                  if (failure instanceof ApiError && failure.status === 401)
-                    authFailure(failure);
-                  else {
-                    void projects.refetch();
-                    if (project) void canvases.refetch();
-                    if (canvasId && project) void document.refetch();
+                </div>
+                <Editor
+                  key={`${document.data.id}:${epoch}`}
+                  document={document.data}
+                  readOnly={readonly}
+                  onDirtyChange={setDirty}
+                  onBusyChange={setBusy}
+                  reload={() =>
+                    cache.fetchQuery({
+                      queryKey: ["canvas", "document", canvasId],
+                      queryFn: () => getCanvas(canvasId),
+                      staleTime: 0,
+                    })
                   }
-                }}
-              />
+                  save={async (revision, commands, token) => {
+                    const saved = await saveCanvasCommands(
+                      canvasId,
+                      revision,
+                      commands,
+                      token,
+                    );
+                    cache.setQueryData(["canvas", "document", canvasId], saved);
+                    return saved;
+                  }}
+                />
+              </>
             )}
-            {create.error && <Failure error={create.error} />}{" "}
-            {rename.error && (
-              <Failure
-                error={rename.error}
-                retry={
-                  rename.error instanceof ApiError &&
-                  rename.error.status === 409
-                    ? () => void recoverDocument()
-                    : undefined
-                }
-                retryLabel="读取最新画布（保留名称草稿）"
-              />
-            )}{" "}
-            {signout.error && <Failure error={signout.error} />}
-            {!projects.isPending && !projects.error && !items.length && (
-              <Empty role="status">
-                <EmptyHeader>
-                  <EmptyTitle>当前账号没有可访问项目</EmptyTitle>
-                  <EmptyDescription>请联系管理员创建或授权。</EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+          {document.data &&
+            project &&
+            document.data.projectId !== projectId && (
+              <p role="alert">画布不属于所选项目，请重新选择。</p>
             )}
-            {projectId && !uuid.test(projectId) && (
-              <p role="alert">
-                请选择正式项目。样例标识不能用于保存服务端画布。
-              </p>
-            )}
-            {projectId &&
-              !project &&
-              !projects.isPending &&
-              !projects.hasNextPage &&
-              !projects.error && <p role="alert">当前账号无法访问此项目。</p>}
-            {project && !canvasId && !canvases.isPending && !canvases.error && (
-              <Empty role="status">
-                <EmptyHeader>
-                  <EmptyTitle>
-                    {canvases.data?.items.length
-                      ? "选择一个画布继续创作"
-                      : "此项目暂无画布"}
-                  </EmptyTitle>
-                  <EmptyDescription>
-                    {canvases.data?.items.length
-                      ? "从上方选择已有画布。"
-                      : "输入名称并创建，随后即可开始。"}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-            {canvasId && !uuid.test(canvasId) && (
-              <p role="alert">画布标识无效，请选择已有画布。</p>
-            )}
-            {project && uuid.test(canvasId) && document.isPending && (
-              <div role="status" aria-label="正在读取画布">
-                <Skeleton className="h-96 w-full" />
-                <span className="sr-only">正在读取画布…</span>
-              </div>
-            )}
-            {document.data &&
-              project &&
-              document.data.projectId === projectId &&
-              !document.error && (
-                <>
-                  <div className="flex flex-wrap items-end justify-between gap-4">
-                    <form
-                      className="flex items-end gap-2"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        rename.mutate();
-                      }}
-                    >
-                      <Field>
-                        <FieldLabel htmlFor="rename-canvas">
-                          画布名称
-                        </FieldLabel>
-                        <Input
-                          id="rename-canvas"
-                          value={renameName}
-                          onChange={(event) =>
-                            setRenameName(event.target.value)
-                          }
-                          required
-                          maxLength={128}
-                          disabled={readonly || pending || busy || dirty}
-                        />
-                      </Field>
-                      <Button
-                        variant="secondary"
-                        type="submit"
-                        disabled={
-                          !nameDirty ||
-                          !renameName.trim() ||
-                          readonly ||
-                          pending ||
-                          busy ||
-                          dirty
-                        }
-                      >
-                        重命名画布
-                      </Button>
-                    </form>
-                    <Button
-                      variant="ghost"
-                      disabled={readonly || pending || busy}
-                      onClick={() => requestLeave(() => setDeleting(true))}
-                    >
-                      删除整个画布
-                    </Button>
-                  </div>
-                  <Editor
-                    key={`${document.data.id}:${epoch}`}
-                    document={document.data}
-                    readOnly={readonly}
-                    onAuthFailure={authFailure}
-                    onDirtyChange={setDirty}
-                    onBusyChange={setBusy}
-                    reload={() =>
-                      cache.fetchQuery({
-                        queryKey: ["canvas", "document", canvasId],
-                        queryFn: () => getCanvas(canvasId),
-                        staleTime: 0,
-                      })
-                    }
-                    save={async (revision, commands, token) => {
-                      const saved = await saveCanvasCommands(
-                        canvasId,
-                        revision,
-                        commands,
-                        token,
-                      );
-                      cache.setQueryData(
-                        ["canvas", "document", canvasId],
-                        saved,
-                      );
-                      return saved;
-                    }}
-                  />
-                </>
-              )}
-            {document.data &&
-              project &&
-              document.data.projectId !== projectId && (
-                <p role="alert">画布不属于所选项目，请重新选择。</p>
-              )}
-          </>
-        )}
+        </>
       </div>
       <Dialog
         open={Boolean(leave)}

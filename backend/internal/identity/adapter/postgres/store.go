@@ -70,36 +70,6 @@ func (s *Store) FindByID(ctx context.Context, orgID, userID uuid.UUID) (domain.U
 	return s.find(ctx, orgID, true, userID.String())
 }
 
-// SaveLoginState persists a verified login attempt with optimistic concurrency.
-// A stale attempt must be retried from a fresh account read.
-func (s *Store) SaveLoginState(ctx context.Context, user domain.User, expectedRevision int64) error {
-	if user.ID == uuid.Nil || user.OrgID == uuid.Nil || expectedRevision < 1 ||
-		user.Revision != expectedRevision+1 || user.FailedLoginCount < 0 {
-		return ErrInvalidUser
-	}
-	var lockedUntil, lastLoginAt any
-	if !user.LockedUntil.IsZero() {
-		lockedUntil = user.LockedUntil.UTC()
-	}
-	if !user.LastLoginAt.IsZero() {
-		lastLoginAt = user.LastLoginAt.UTC()
-	}
-	result := s.db.WithContext(ctx).Exec(`
-		UPDATE identity."user"
-		SET failed_login_count = ?, locked_until = ?, last_login_at = ?,
-		    revision = revision + 1, update_time = now()
-		WHERE org_id = ?::uuid AND id = ?::uuid AND revision = ?
-		  AND status = 'active' AND NOT is_delete
-	`, user.FailedLoginCount, lockedUntil, lastLoginAt, user.OrgID.String(), user.ID.String(), expectedRevision)
-	if result.Error != nil {
-		return fmt.Errorf("save login state: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return ErrRevisionConflict
-	}
-	return nil
-}
-
 // Disable deactivates an account and invalidates its sessions. An organization
 // lock serializes concurrent admin removals so one active admin always remains.
 func (s *Store) Disable(ctx context.Context, orgID, userID uuid.UUID, expectedRevision int64) error {

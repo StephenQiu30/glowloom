@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { LoaderCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,7 +56,6 @@ export function projectError(error: unknown) {
 }
 
 type Props = {
-  authenticationRequired?: boolean;
   onSubmit: (body: CreationBody, key: string) => Promise<{ id: string }>;
   onCreated: (id: string) => void;
   onOpenChange?: (open: boolean) => void;
@@ -70,7 +68,6 @@ type Props = {
   onRetryPresets?: () => void;
 };
 export function CreateProjectDialog({
-  authenticationRequired = false,
   onSubmit,
   onCreated,
   onOpenChange,
@@ -98,7 +95,7 @@ export function CreateProjectDialog({
     (JSON.stringify(draft) !== JSON.stringify(initialProjectDraft) ||
       Boolean(error) ||
       pending);
-  const editingDisabled = pending || authenticationRequired;
+  const editingDisabled = pending;
   const availablePresets = presets.filter((preset) =>
     matchesPreset(draft, preset),
   );
@@ -124,7 +121,7 @@ export function CreateProjectDialog({
     attempt.current = null;
   };
   const update = (patch: Partial<ProjectDraft>) => {
-    if (inFlight.current || authenticationRequired) return;
+    if (inFlight.current) return;
     if (
       Object.entries(patch).every(
         ([key, value]) => draft[key as keyof ProjectDraft] === value,
@@ -197,7 +194,7 @@ export function CreateProjectDialog({
   }, [dirty, open, requestLeave]);
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (inFlight.current || authenticationRequired) return;
+    if (inFlight.current) return;
     const result = creationBody(draft, presets);
     setErrors(result.errors);
     if (!result.body) return;
@@ -234,7 +231,7 @@ export function CreateProjectDialog({
         }}
       >
         <DialogTrigger asChild>
-          <Button disabled={authenticationRequired}>
+          <Button>
             <Plus data-icon="inline-start" />
             新建项目
           </Button>
@@ -378,15 +375,13 @@ export function CreateProjectDialog({
                   </SelectContent>
                 </Select>
                 <FieldDescription>
-                  {authenticationRequired
-                    ? "请重新登录以读取组织预设。"
-                    : presetsPending
-                      ? "正在读取组织预设…"
-                      : presetsError
-                        ? "预设暂时不可用，仍可不使用预设创建。"
-                        : availablePresets.length
-                          ? "来自当前组织的可用预设。"
-                          : "当前已读取的预设中没有匹配项，可不使用预设。"}
+                  {presetsPending
+                    ? "正在读取组织预设…"
+                    : presetsError
+                      ? "预设暂时不可用，仍可不使用预设创建。"
+                      : availablePresets.length
+                        ? "来自当前组织的可用预设。"
+                        : "当前已读取的预设中没有匹配项，可不使用预设。"}
                 </FieldDescription>
                 {presetsError && (
                   <Button
@@ -415,15 +410,6 @@ export function CreateProjectDialog({
               输出为 1080p，境外模型默认关闭。新项目预算为
               ¥0，设置预算后才能开始生成。
             </p>
-            {authenticationRequired && (
-              <Alert variant="destructive" className="border-0 bg-muted/40">
-                <AlertTitle>会话需要重新确认</AlertTitle>
-                <AlertDescription>
-                  配置已保留，创建已暂停。
-                  <Link href="/login?returnTo=%2Fprojects">重新登录</Link>
-                </AlertDescription>
-              </Alert>
-            )}
             {Boolean(error) && (
               <Alert variant="destructive" className="border-0 bg-muted/40">
                 <AlertTitle>项目尚未确认创建</AlertTitle>
@@ -432,12 +418,6 @@ export function CreateProjectDialog({
                   {error instanceof ApiError && error.requestId && (
                     <p>请求编号：{error.requestId}</p>
                   )}
-                  {!authenticationRequired &&
-                    error instanceof ApiError &&
-                    (error.status === 401 ||
-                      error.code === "must_change_password") && (
-                      <Link href="/login?returnTo=%2Fprojects">重新登录</Link>
-                    )}
                 </AlertDescription>
               </Alert>
             )}

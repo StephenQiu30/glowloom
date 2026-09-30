@@ -23,7 +23,6 @@ const payload = () => ({
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  document.cookie = "lv_csrf=; Max-Age=0; Path=/";
 });
 it("历史省略尺寸有显式默认值，父group与媒体仅映射正式身份", () => {
   const decoded = decodeDocument({
@@ -73,8 +72,7 @@ it("历史省略尺寸有显式默认值，父group与媒体仅映射正式身�
     decodeDocument({ ...payload(), id: "sample-project" }),
   ).toThrow();
 });
-it("生成客户端保存链正确映射viewport/edge/null父关系并携带CSRF和稳定幂等键", async () => {
-  document.cookie = "lv_csrf=synthetic-csrf; Path=/";
+it("生成客户端保存链正确映射viewport/edge/null父关系并携带稳定幂等键", async () => {
   const send = vi
     .spyOn(axios, "request")
     .mockResolvedValue({ data: payload() });
@@ -105,10 +103,9 @@ it("生成客户端保存链正确映射viewport/edge/null父关系并携带CSRF
   expect(request).toMatchObject({
     url: `/api/canvases/${id(1)}/commands`,
     method: "POST",
-    withCredentials: true,
+    withCredentials: false,
     headers: {
       "Idempotency-Key": "same-key",
-      "X-CSRF-Token": "synthetic-csrf",
     },
     data: {
       expected_revision: 1,

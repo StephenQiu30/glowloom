@@ -70,7 +70,6 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Param status query string false "active或archived"
 // @Param deleted query boolean false "只查询回收中的项目"
 // @Success 200 {object} ListResponse
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem

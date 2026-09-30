@@ -19,12 +19,8 @@ export class ApiError extends Error {
 function errorMessage(status: number, code: string) {
   if (code === "revision_conflict")
     return "内容已被其他页面修改，请载入最新版本后重新操作。";
-  if (code === "must_change_password")
-    return "请先修改初始密码，再打开工作区。";
   if (code === "project_archived") return "项目已归档，当前内容只可查看。";
-  if (code === "invalid_credentials" || code === "login_failed")
-    return "账号或密码不正确。";
-  if (status === 401) return "会话已失效，请重新登录。";
+  if (status === 401) return "服务拒绝了此请求，请重新读取后重试。";
   if (status === 403) return "当前账号没有此操作的权限。";
   if (status === 404) return "请求的内容不存在，或当前账号不可访问。";
   if (status === 409) return "操作与当前服务端状态冲突，请重新读取后操作。";
@@ -36,19 +32,6 @@ function errorMessage(status: number, code: string) {
   return "请求未完成，请稍后重试。";
 }
 
-function csrfCookie() {
-  if (typeof document === "undefined") return undefined;
-  const value = document.cookie
-    .split(";")
-    .map((item) => item.trim())
-    .find((item) => item.startsWith("lv_csrf="));
-  if (!value) return undefined;
-  try {
-    return decodeURIComponent(value.slice("lv_csrf=".length));
-  } catch {
-    return undefined;
-  }
-}
 export type RequestOptions = Omit<AxiosRequestConfig, "headers"> & {
   headers?: RawAxiosHeaders | AxiosHeaders;
   requestType?: string;
@@ -83,17 +66,10 @@ export async function request<T>(
     )
       headers.set("Idempotency-Key", params["Idempotency-Key"]);
     delete params["Idempotency-Key"];
-    delete params["X-CSRF-Token"];
   }
   if (backend && !["GET", "HEAD", "OPTIONS"].includes(method)) {
     headers.set("Content-Type", "application/json");
-    if (target.pathname !== "/api/auth/login") {
-      const csrf = csrfCookie();
-      if (csrf) headers.set("X-CSRF-Token", csrf);
-    }
   }
-  if (!backend || target.pathname === "/api/auth/login")
-    headers.delete("X-CSRF-Token");
   if (!backend) {
     headers.delete("Authorization");
     headers.delete("Cookie");
@@ -109,7 +85,7 @@ export async function request<T>(
       method,
       headers: headers.toJSON(),
       params,
-      withCredentials: backend,
+      withCredentials: false,
       withXSRFToken: false,
     });
     return response.data;

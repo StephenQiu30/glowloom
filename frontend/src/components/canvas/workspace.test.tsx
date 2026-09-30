@@ -10,8 +10,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
-  getCurrentSession: vi.fn(),
-  logout: vi.fn(),
   listProjects: vi.fn(),
   listCanvases: vi.fn(),
   getCanvas: vi.fn(),
@@ -41,11 +39,6 @@ vi.mock("next/dynamic", () => ({
     },
 }));
 vi.mock("@/components/theme-toggle", () => ({ ThemeToggle: () => null }));
-vi.mock("@/features/auth/queries", () => ({
-  CURRENT_SESSION_KEY: ["identity", "current-user"],
-  getCurrentSession: mocks.getCurrentSession,
-  logout: mocks.logout,
-}));
 vi.mock("./queries", () => ({
   listProjects: mocks.listProjects,
   listCanvases: mocks.listCanvases,
@@ -57,9 +50,6 @@ vi.mock("./queries", () => ({
 }));
 import { ApiError } from "@/lib/request";
 import { CanvasWorkspace } from "./workspace";
-const session = {
-  user: { id: "synthetic-user", role: "producer", must_change_password: false },
-};
 const doc = (revision = 1) => ({
   id: canvasId,
   projectId,
@@ -74,7 +64,6 @@ let client: QueryClient;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.initialDirty = false;
-  mocks.getCurrentSession.mockResolvedValue(session);
   mocks.listProjects.mockResolvedValue({
     items: [{ id: projectId, name: "合成项目", status: "active", revision: 1 }],
     next_cursor: null,
@@ -93,22 +82,30 @@ afterEach(() => {
   cleanup();
   client?.clear();
 });
-function open(cached = false) {
+function open() {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  if (cached) client.setQueryData(["identity", "current-user"], session);
   render(
     <QueryClientProvider client={client}>
       <CanvasWorkspace />
     </QueryClientProvider>,
   );
 }
-it("身份重新确认失败不消费缓存身份读取项目或画布", async () => {
-  mocks.getCurrentSession.mockRejectedValue(new ApiError(403, "forbidden"));
-  open(true);
+it("画布直接加载项目，没有登录或退出入口", async () => {
+  open();
+  await screen.findByTestId("controlled-editor");
+  expect(screen.queryByRole("button", { name: "退出登录" })).toBeNull();
+  expect(mocks.listProjects).toHaveBeenCalled();
+  expect(mocks.replace).not.toHaveBeenCalled();
+});
+it("项目服务失败不显示旧画布，仍提供重试路径", async () => {
+  mocks.listProjects.mockRejectedValue(
+    new ApiError(503, "dependency_unavailable"),
+  );
+  open();
   await screen.findByRole("alert");
   expect(screen.queryByTestId("controlled-editor")).toBeNull();
-  expect(mocks.listProjects).not.toHaveBeenCalled();
   expect(mocks.getCanvas).not.toHaveBeenCalled();
+  expect(mocks.replace).not.toHaveBeenCalled();
 });
 it("空名称仍是未保存草稿，继续编辑不丢失空值", async () => {
   open();

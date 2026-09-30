@@ -36,7 +36,7 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import { QuoteConfirmDialog } from "@/features/operation/quote-confirm-dialog";
+import { QuoteConfirmDialog } from "@/components/operation/quote-confirm-dialog";
 import { updatePreviewQuery } from "./routes";
 
 export function usePreviewQuery() {

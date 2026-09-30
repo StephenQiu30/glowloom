@@ -151,19 +151,8 @@ func TestIdentityStoreRejectsStaleAccountRevision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load account: %v", err)
 	}
-	stale := first
-	now := time.Now().UTC()
-	first.RegisterLoginFailure(now)
-	if err := store.SaveLoginState(ctx, first, 1); err != nil {
-		t.Fatalf("save login failure: %v", err)
-	}
-	stale.RegisterLoginFailure(now)
-	if err := store.SaveLoginState(ctx, stale, 1); !errors.Is(err, pgidentity.ErrRevisionConflict) {
-		t.Fatalf("stale account save = %v, want ErrRevisionConflict", err)
-	}
-	current, err := store.FindByID(ctx, orgID, userID)
-	if err != nil || current.FailedLoginCount != 1 || current.Revision != 2 {
-		t.Fatalf("saved login state = count %d, revision %d, error %v", current.FailedLoginCount, current.Revision, err)
+	if first.Revision != 1 {
+		t.Fatal("new identity must retain its initial revision")
 	}
 }
 

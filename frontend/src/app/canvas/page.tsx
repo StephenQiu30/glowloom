@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CanvasWorkspace } from "@/features/canvas/workspace";
+import { CanvasWorkspace } from "@/components/canvas/workspace";
 
 export const metadata = { title: "无限画布 · Lanverse" };
 export default function CanvasPage() {

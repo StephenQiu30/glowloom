@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { ProjectBrowser } from "@/features/workbench/project-pages";
+import { ProjectBrowser } from "@/components/workbench/project-pages";
 export default function ProjectsPage() {
   return (
     <Suspense

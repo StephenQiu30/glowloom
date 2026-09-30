@@ -229,35 +229,6 @@ declare namespace API {
     next_cursor?: string;
   };
 
-  type internalIdentityAdapterHttpLoginRequest = {
-    login_name?: string;
-    password?: string;
-  };
-
-  type internalIdentityAdapterHttpPasswordRequest = {
-    current_password?: string;
-    new_password?: string;
-  };
-
-  type internalIdentityAdapterHttpPasswordResponse = {
-    must_change_password?: boolean;
-    revision?: number;
-  };
-
-  type internalIdentityAdapterHttpSessionResponse = {
-    must_change_password?: boolean;
-    user?: internalIdentityAdapterHttpUserResponse;
-  };
-
-  type internalIdentityAdapterHttpUserResponse = {
-    display_name?: string;
-    id?: string;
-    login_name?: string;
-    must_change_password?: boolean;
-    org_id?: string;
-    role?: string;
-  };
-
   type internalWorkspaceAdapterHttpCreateProjectRequest = {
     aspect_ratio: "9:16" | "16:9";
     description?: string;

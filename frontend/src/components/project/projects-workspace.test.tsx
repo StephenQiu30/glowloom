@@ -11,7 +11,6 @@ import { ApiError } from "@/lib/request";
 import { ProjectsWorkspace } from "./projects-workspace";
 
 const ports = vi.hoisted(() => ({
-  session: vi.fn(),
   list: vi.fn(),
   presets: vi.fn(),
   create: vi.fn(),
@@ -22,10 +21,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: ports.replace, push: ports.push }),
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("@/features/auth/queries", () => ({
-  CURRENT_SESSION_KEY: ["identity", "current-user"],
-  getCurrentSession: ports.session,
-}));
 vi.mock("./queries", () => ({
   PROJECTS_KEY: ["projects"],
   listProjects: ports.list,
@@ -33,13 +28,6 @@ vi.mock("./queries", () => ({
   createProject: ports.create,
 }));
 vi.mock("@/components/theme-toggle", () => ({ ThemeToggle: () => null }));
-const session = {
-  user: {
-    id: "584ad191-2932-4d7c-bccb-0b9d481c5a76",
-    must_change_password: false,
-    display_name: "制作者",
-  },
-};
 const project = {
   id: "d77d3c2a-7092-4e30-bf41-a3c5d4d26418",
   name: "逆光",
@@ -51,17 +39,15 @@ const project = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
-  ports.session.mockResolvedValue(session);
   ports.list.mockResolvedValue({ items: [project], next_cursor: null });
   ports.presets.mockResolvedValue({ items: [], next_cursor: null });
   ports.create.mockResolvedValue({ ...project, name: "新项目" });
 });
 afterEach(cleanup);
-function setup(cached = false) {
+function setup() {
   const cache = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  if (cached) cache.setQueryData(["identity", "current-user"], session);
   render(
     <QueryClientProvider client={cache}>
       <ProjectsWorkspace />
@@ -69,29 +55,19 @@ function setup(cached = false) {
   );
   return cache;
 }
-it("身份尚未确认或旧缓存被403拒绝时不读取项目，不显示旧服务端内容", async () => {
-  let fail!: (error: Error) => void;
-  ports.session.mockImplementation(
-    () =>
-      new Promise((_resolve, reject) => {
-        fail = reject;
-      }),
-  );
-  setup(true);
-  expect(screen.getByRole("status").textContent).toContain("确认身份");
-  expect(ports.list).not.toHaveBeenCalled();
-  fail(new ApiError(403, "forbidden"));
-  await screen.findByText("当前账号没有此操作的权限。");
-  expect(ports.list).not.toHaveBeenCalled();
-  expect(screen.queryByText("逆光")).toBeNull();
-});
-it("列表401引导重新登录，403或依赖错误保留明确重试路径", async () => {
-  ports.list.mockRejectedValue(new ApiError(401, "session_expired"));
+it("工作台直接读取项目且不请求登录会话", async () => {
   setup();
-  await waitFor(() =>
-    expect(ports.replace).toHaveBeenCalledWith("/login?returnTo=%2Fprojects"),
-  );
-  expect(screen.queryByText("逆光")).toBeNull();
+  await screen.findByText("逆光");
+  expect(ports.list).toHaveBeenCalled();
+  expect(ports.replace).not.toHaveBeenCalled();
+});
+it("服务错误明确展示且可重试，不跳转登录页", async () => {
+  ports.list.mockRejectedValueOnce(new ApiError(503, "dependency_unavailable"));
+  setup();
+  await screen.findByText("项目列表未能加载");
+  expect(ports.replace).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "重试读取项目" }));
+  await screen.findByText("逆光");
 });
 it("按服务端游标翻页，搜索新条件从第一页读取", async () => {
   ports.list
@@ -137,17 +113,10 @@ it("创建成功失效真实项目查询并跳转正式 UUID 画布，表单不�
   expect(screen.queryByText(/样例进度|创建预览/)).toBeNull();
 });
 
-it("顶层首次改密标记阻止读取，即使嵌套用户旧标记为false", async () => {
-  ports.session.mockResolvedValue({ ...session, must_change_password: true });
-  setup();
-  await waitFor(() =>
-    expect(ports.replace).toHaveBeenCalledWith("/login?returnTo=%2Fprojects"),
+it("创建失败保留草稿并能重试，不出现登录入口", async () => {
+  ports.create.mockRejectedValueOnce(
+    new ApiError(503, "dependency_unavailable"),
   );
-  expect(ports.list).not.toHaveBeenCalled();
-});
-
-it("创建中收到401保留草稿并停用写入，关闭确认后才回登录", async () => {
-  ports.create.mockRejectedValue(new ApiError(401, "session_expired"));
   setup();
   await screen.findByText("逆光");
   fireEvent.click(screen.getByRole("button", { name: "新建项目" }));
@@ -155,34 +124,15 @@ it("创建中收到401保留草稿并停用写入，关闭确认后才回登录"
     target: { value: "保留配置" },
   });
   fireEvent.click(screen.getByRole("button", { name: "创建并进入画布" }));
-  await screen.findByText("会话需要重新确认");
+  await screen.findByText("项目尚未确认创建");
   expect((screen.getByLabelText("项目名称") as HTMLInputElement).value).toBe(
     "保留配置",
   );
-  expect(
-    screen.getByRole("button", { name: "重试创建" }).hasAttribute("disabled"),
-  ).toBe(true);
+  expect(screen.queryByRole("link", { name: "重新登录" })).toBeNull();
   expect(ports.replace).not.toHaveBeenCalled();
-  expect(screen.queryByText("逆光")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "取消" }));
-  fireEvent.click(screen.getByRole("button", { name: "放弃并离开" }));
+  fireEvent.click(screen.getByRole("button", { name: "重试创建" }));
   await waitFor(() =>
-    expect(ports.replace).toHaveBeenCalledWith("/login?returnTo=%2Fprojects"),
+    expect(ports.push).toHaveBeenCalledWith(`/projects/${project.id}/canvas`),
   );
-  expect(ports.create).toHaveBeenCalledTimes(1);
-});
-
-it("预设401不会伪称无预设并继续创建", async () => {
-  ports.presets.mockRejectedValue(new ApiError(401, "session_expired"));
-  setup();
-  await screen.findByText("逆光");
-  fireEvent.click(screen.getByRole("button", { name: "新建项目" }));
-  await screen.findByText("会话需要重新确认");
-  expect(
-    screen
-      .getByRole("button", { name: "创建并进入画布" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
-  expect(ports.create).not.toHaveBeenCalled();
-  expect(ports.replace).not.toHaveBeenCalled();
+  expect(ports.create.mock.calls[0][1]).toBe(ports.create.mock.calls[1][1]);
 });

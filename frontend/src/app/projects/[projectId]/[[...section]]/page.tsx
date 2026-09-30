@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { ProjectScreen } from "@/features/workbench/project-screen";
-import { resolveProjectRoute } from "@/features/workbench/routes";
+import { ProjectScreen } from "@/components/workbench/project-screen";
+import { resolveProjectRoute } from "@/components/workbench/routes";
 export default async function ProjectPage({
   params,
 }: {

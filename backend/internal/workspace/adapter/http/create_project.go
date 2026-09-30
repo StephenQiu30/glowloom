@@ -34,10 +34,8 @@ type CreateProjectRequest struct {
 // @Accept json
 // @Produce json
 // @Param Idempotency-Key header string true "24小时内创建请求的 UUID 幂等键"
-// @Param X-CSRF-Token header string true "会话 CSRF token"
 // @Param body body CreateProjectRequest true "项目规格"
 // @Success 201 {object} application.CreatedProject
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -94,7 +92,6 @@ const maxPresetCursorBytes = 32 << 10
 // @Param limit query integer false "每页数量（1～200，未传或0默认50）"
 // @Param cursor query string false "与账号、组织及筛选绑定的游标"
 // @Success 200 {object} StylePresetListResponse
-// @Failure 401 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem

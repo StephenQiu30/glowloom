@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -20,10 +20,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ThemeToggle } from "@/components/theme-toggle";
-import {
-  CURRENT_SESSION_KEY,
-  getCurrentSession,
-} from "@/features/auth/queries";
 import { ApiError } from "@/lib/request";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectList, type ProjectListView } from "./project-list";
@@ -36,12 +32,6 @@ import {
 import type { CreationBody } from "./creation";
 
 type Filter = "all" | "active" | "archived" | "deleted";
-function isAuthenticationError(error: unknown) {
-  return (
-    error instanceof ApiError &&
-    (error.status === 401 || error.code === "must_change_password")
-  );
-}
 export function ProjectsWorkspace() {
   const router = useRouter();
   const params = useSearchParams();
@@ -63,28 +53,8 @@ export function ProjectsWorkspace() {
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
-  const session = useQuery({
-    queryKey: CURRENT_SESSION_KEY,
-    queryFn: ({ signal }) => getCurrentSession(signal),
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-  const identityAllowed = Boolean(
-    session.isSuccess &&
-    !session.isFetching &&
-    !session.error &&
-    session.data &&
-    !session.data.user.must_change_password &&
-    !session.data.must_change_password,
-  );
   const list = useQuery<Awaited<ReturnType<typeof listProjects>>>({
-    queryKey: [
-      ...PROJECTS_KEY,
-      session.data?.user.id,
-      { q: search, filter, cursor: cursors[page] },
-    ],
-    enabled: (query) =>
-      identityAllowed && !isAuthenticationError(query.state.error),
+    queryKey: [...PROJECTS_KEY, { q: search, filter, cursor: cursors[page] }],
     queryFn: ({ signal }) =>
       listProjects(
         {
@@ -100,10 +70,9 @@ export function ProjectsWorkspace() {
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const canReadPresets = identityAllowed && !isAuthenticationError(list.error);
   const presets = useInfiniteQuery({
-    queryKey: [...PROJECTS_KEY, "style-presets", session.data?.user.id],
-    enabled: canReadPresets && creating,
+    queryKey: [...PROJECTS_KEY, "style-presets"],
+    enabled: creating,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) => listStylePresets(pageParam, signal),
     getNextPageParam: (result) => result.next_cursor ?? undefined,
@@ -115,31 +84,6 @@ export function ProjectsWorkspace() {
       createProject(body, key),
     retry: false,
   });
-  const authError = [
-    session.error,
-    list.error,
-    presets.error,
-    creation.error,
-  ].find(
-    (error) =>
-      error instanceof ApiError &&
-      (error.status === 401 || error.code === "must_change_password"),
-  );
-  const mustChangePassword = Boolean(
-    session.data?.must_change_password ||
-    session.data?.user.must_change_password,
-  );
-  const allowed = identityAllowed && !authError;
-  useEffect(() => {
-    if (authError || mustChangePassword) {
-      void cache.cancelQueries({ queryKey: PROJECTS_KEY });
-      if (creating) return;
-      const suffix = params.toString();
-      router.replace(
-        `/login?returnTo=${encodeURIComponent(`/projects${suffix ? `?${suffix}` : ""}`)}`,
-      );
-    }
-  }, [authError, mustChangePassword, creating, params, router, cache]);
   function syncUrl(
     nextSearch: string,
     nextFilter: Filter,
@@ -155,23 +99,6 @@ export function ProjectsWorkspace() {
       scroll: false,
     });
   }
-  const sessionFailure = session.error;
-  if (!allowed && !creating)
-    return (
-      <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-5 p-6">
-        {sessionFailure && !authError ? (
-          <Alert variant="destructive" className="border-0 bg-muted/40">
-            <AlertTitle>无法打开项目工作区</AlertTitle>
-            <AlertDescription>{sessionFailure.message}</AlertDescription>
-            <Button variant="ghost" onClick={() => void session.refetch()}>
-              重试确认身份
-            </Button>
-          </Alert>
-        ) : (
-          <p role="status">正在确认身份…</p>
-        )}
-      </main>
-    );
   return (
     <div className="min-h-screen bg-background text-foreground">
       <a
@@ -201,11 +128,6 @@ export function ProjectsWorkspace() {
           >
             画布工作区
           </Link>
-          {allowed && (
-            <span className="hidden text-sm text-muted-foreground sm:block">
-              {session.data?.user.display_name}
-            </span>
-          )}
           <ThemeToggle />
         </div>
       </header>
@@ -226,7 +148,6 @@ export function ProjectsWorkspace() {
             </p>
           </div>
           <CreateProjectDialog
-            authenticationRequired={!allowed}
             onSubmit={(body, key) => creation.mutateAsync({ body, key })}
             onCreated={(id) => {
               void Promise.all([
@@ -299,14 +220,7 @@ export function ProjectsWorkspace() {
             回收中的项目保留 30 天。
           </p>
         )}
-        {!allowed ? (
-          <Alert variant="destructive" className="border-0 bg-muted/40">
-            <AlertTitle>请重新确认身份</AlertTitle>
-            <AlertDescription>
-              项目读取和创建已暂停，请重新登录后继续。
-            </AlertDescription>
-          </Alert>
-        ) : list.isPending ? (
+        {list.isPending ? (
           <div
             role="status"
             aria-label="正在加载项目"

@@ -133,7 +133,6 @@ export type CanvasEditorProps = {
     key: string,
   ) => Promise<CanvasDocument>;
   reload: () => Promise<CanvasDocument>;
-  onAuthFailure: (error: ApiError) => void;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
 };
@@ -142,7 +141,6 @@ export function CanvasEditor({
   readOnly = false,
   save,
   reload,
-  onAuthFailure,
   onDirtyChange,
   onBusyChange,
 }: CanvasEditorProps) {
@@ -283,8 +281,6 @@ export function CanvasEditor({
         error instanceof Error ? error : new Error("保存未完成。");
       setFailed({ attempt, error: failure });
       setNotice("修改尚未确认保存。");
-      if (failure instanceof ApiError && failure.status === 401)
-        onAuthFailure(failure);
     } finally {
       busy.current = false;
       setSaving(false);
@@ -325,8 +321,6 @@ export function CanvasEditor({
     } catch (error) {
       const failure = error instanceof Error ? error : new Error("读取失败。");
       setNotice(failure.message);
-      if (failure instanceof ApiError && failure.status === 401)
-        onAuthFailure(failure);
     } finally {
       busy.current = false;
       setSaving(false);

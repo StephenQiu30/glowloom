@@ -41,21 +41,7 @@ async function openCanvas(page: Page, archived = false) {
       });
       return;
     }
-    if (path === "/api/auth/me") {
-      await route.fulfill({
-        json: {
-          user: {
-            id: "10000000-0000-4000-8000-000000000010",
-            org_id: "10000000-0000-4000-8000-000000000011",
-            login_name: "synthetic-canvas-user",
-            display_name: "界面验证",
-            role: "producer",
-            must_change_password: false,
-          },
-          must_change_password: false,
-        },
-      });
-    } else if (path === "/api/projects") {
+    if (path === "/api/projects") {
       await route.fulfill({
         json: {
           items: [

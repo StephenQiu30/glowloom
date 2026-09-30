@@ -12,17 +12,15 @@ import (
 	"gorm.io/gorm"
 
 	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
-	redisidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/redis"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 )
 
-func TestAdminLifecycleRevokesSessionsAndRollsBackAuditFailureWithRealStores(t *testing.T) {
-	dsn, redisURL := os.Getenv("LV_TEST_ACCOUNT_LIFECYCLE_DB_DSN"), os.Getenv("LV_TEST_IDENTITY_REDIS_URL")
-	if dsn == "" || redisURL == "" {
-		t.Skip("set LV_TEST_ACCOUNT_LIFECYCLE_DB_DSN and LV_TEST_IDENTITY_REDIS_URL to disposable local services")
+func TestAdminLifecyclePersistsStateAndRollsBackAuditFailureWithPostgres(t *testing.T) {
+	dsn := os.Getenv("LV_TEST_ACCOUNT_LIFECYCLE_DB_DSN")
+	if dsn == "" {
+		t.Skip("set LV_TEST_ACCOUNT_LIFECYCLE_DB_DSN to disposable local services")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -31,15 +29,6 @@ func TestAdminLifecycleRevokesSessionsAndRollsBackAuditFailureWithRealStores(t *
 		t.Fatalf("open disposable database: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	redisConn, err := redisconn.Open(redisURL)
-	if err != nil {
-		t.Fatalf("open local Redis: %v", err)
-	}
-	t.Cleanup(func() { _ = redisConn.Close() })
-	sessions, err := redisidentity.NewSessionStore(redisConn.Client, time.Hour, 24*time.Hour, time.Now)
-	if err != nil {
-		t.Fatal(err)
-	}
 	store := pgidentity.NewStore(conn.DB)
 	orgID, adminID, memberID := uuid.New(), uuid.New(), uuid.New()
 	oldHash, err := domain.HashPassword("initialPassword123", "")
@@ -57,21 +46,12 @@ func TestAdminLifecycleRevokesSessionsAndRollsBackAuditFailureWithRealStores(t *
 	if err := conn.DB.WithContext(ctx).Exec(`UPDATE identity."user" SET must_change_password = false WHERE org_id = ?::uuid`, orgID.String()).Error; err != nil {
 		t.Fatalf("prepare accounts: %v", err)
 	}
-	oldToken, _, err := sessions.Create(ctx, orgID, memberID, 1)
-	if err != nil {
-		t.Fatalf("create original session: %v", err)
-	}
-	t.Cleanup(func() { _ = sessions.Destroy(context.Background(), oldToken) })
-	auth := identityapp.NewAuthenticator(store, sessions)
 	actor := identityapp.Principal{ID: adminID, OrgID: orgID, Role: domain.RoleAdmin}
 	disable := identityapp.NewDisableUserCommand(store, time.Now)
 	if _, err := disable.Execute(ctx, actor, identityapp.DisableUserInput{
 		TargetID: memberID, ExpectedRevision: 1, RequestID: "disable-member",
 	}); err != nil {
 		t.Fatalf("disable member: %v", err)
-	}
-	if _, err := auth.Authenticate(ctx, oldToken); !errors.Is(err, identityapp.ErrUnauthenticated) {
-		t.Fatalf("original session after disable: %v", err)
 	}
 	enable := identityapp.NewEnableUserCommand(store, time.Now)
 	installAccountAuditRejection(ctx, t, conn.DB)
@@ -88,17 +68,6 @@ func TestAdminLifecycleRevokesSessionsAndRollsBackAuditFailureWithRealStores(t *
 		t.Fatalf("enable member: %v", err)
 	}
 	assertAccountState(ctx, t, store, orgID, memberID, domain.StatusActive, 3, 3, oldHash, false)
-	if _, err := auth.Authenticate(ctx, oldToken); !errors.Is(err, identityapp.ErrUnauthenticated) {
-		t.Fatalf("disabled-era session revived after enable: %v", err)
-	}
-	currentToken, _, err := sessions.Create(ctx, orgID, memberID, 3)
-	if err != nil {
-		t.Fatalf("create current session: %v", err)
-	}
-	t.Cleanup(func() { _ = sessions.Destroy(context.Background(), currentToken) })
-	if _, err := auth.Authenticate(ctx, currentToken); err != nil {
-		t.Fatalf("authenticate enabled member: %v", err)
-	}
 	reset := identityapp.NewResetPasswordCommand(store, time.Now)
 	installAccountAuditRejection(ctx, t, conn.DB)
 	if _, err := reset.Execute(ctx, actor, identityapp.ResetPasswordInput{
@@ -121,9 +90,6 @@ func TestAdminLifecycleRevokesSessionsAndRollsBackAuditFailureWithRealStores(t *
 		domain.VerifyPassword(member.PasswordHash, "initialPassword123") {
 		t.Fatalf("reset member state: epoch %d, revision %d, flag %t, error %v",
 			member.SessionEpoch, member.Revision, member.MustChangePassword, err)
-	}
-	if _, err := auth.Authenticate(ctx, currentToken); !errors.Is(err, identityapp.ErrUnauthenticated) {
-		t.Fatalf("pre-reset session after reset: %v", err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`
 		UPDATE identity."user" SET status = 'disabled' WHERE org_id = ?::uuid AND id = ?::uuid

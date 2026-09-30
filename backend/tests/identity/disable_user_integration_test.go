@@ -12,18 +12,16 @@ import (
 
 	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
 	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
-	redisidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/redis"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
 	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 )
 
-func TestDisableUserCommitsStateAndEventsWithRealPostgresRedis(t *testing.T) {
-	dsn, redisURL := os.Getenv("LV_TEST_IDENTITY_DB_DSN"), os.Getenv("LV_TEST_IDENTITY_REDIS_URL")
-	if dsn == "" || redisURL == "" {
-		t.Skip("set LV_TEST_IDENTITY_DB_DSN and LV_TEST_IDENTITY_REDIS_URL to disposable local services")
+func TestDisableUserCommitsStateAndEventsWithRealPostgres(t *testing.T) {
+	dsn := os.Getenv("LV_TEST_IDENTITY_DB_DSN")
+	if dsn == "" {
+		t.Skip("set LV_TEST_IDENTITY_DB_DSN to disposable local services")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -32,15 +30,6 @@ func TestDisableUserCommitsStateAndEventsWithRealPostgresRedis(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	redisConn, err := redisconn.Open(redisURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = redisConn.Close() })
-	sessions, err := redisidentity.NewSessionStore(redisConn.Client, time.Hour, 24*time.Hour, time.Now)
-	if err != nil {
-		t.Fatal(err)
-	}
 	store := pgidentity.NewStore(conn.DB)
 	orgID, adminAID, adminBID, producerID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	hash, err := domain.HashPassword("initialPassword123", "")
@@ -69,15 +58,6 @@ func TestDisableUserCommitsStateAndEventsWithRealPostgresRedis(t *testing.T) {
 	`, orgID.String()).Error; err != nil {
 		t.Fatalf("prepare administrators: %v", err)
 	}
-	token, _, err := sessions.Create(ctx, orgID, producerID, 1)
-	if err != nil {
-		t.Fatalf("create producer session: %v", err)
-	}
-	t.Cleanup(func() { _ = sessions.Destroy(context.Background(), token) })
-	authenticator := identityapp.NewAuthenticator(store, sessions)
-	if _, err := authenticator.Authenticate(ctx, token); err != nil {
-		t.Fatalf("authenticate active producer: %v", err)
-	}
 	actor := identityapp.Principal{ID: adminAID, OrgID: orgID, Role: domain.RoleAdmin}
 	command := identityapp.NewDisableUserCommand(store, time.Now)
 	result, err := command.Execute(ctx, actor, identityapp.DisableUserInput{
@@ -89,12 +69,6 @@ func TestDisableUserCommitsStateAndEventsWithRealPostgresRedis(t *testing.T) {
 	current, err := store.FindByID(ctx, orgID, producerID)
 	if err != nil || current.SessionEpoch != 2 || current.Revision != 2 || current.Status != domain.StatusDisabled {
 		t.Fatalf("disabled producer state = %+v, error %v", current, err)
-	}
-	if _, err := sessions.Load(ctx, token); err != nil {
-		t.Fatalf("old Redis session should remain until TTL: %v", err)
-	}
-	if _, err := authenticator.Authenticate(ctx, token); !errors.Is(err, identityapp.ErrUnauthenticated) {
-		t.Fatalf("old session after disable = %v, want unauthenticated", err)
 	}
 	var events []struct {
 		Topic        string

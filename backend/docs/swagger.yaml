@@ -347,49 +347,6 @@ definitions:
       next_cursor:
         type: string
     type: object
-  internal_identity_adapter_http.LoginRequest:
-    properties:
-      login_name:
-        type: string
-      password:
-        type: string
-    type: object
-  internal_identity_adapter_http.PasswordRequest:
-    properties:
-      current_password:
-        type: string
-      new_password:
-        type: string
-    type: object
-  internal_identity_adapter_http.PasswordResponse:
-    properties:
-      must_change_password:
-        type: boolean
-      revision:
-        type: integer
-    type: object
-  internal_identity_adapter_http.SessionResponse:
-    properties:
-      must_change_password:
-        type: boolean
-      user:
-        $ref: '#/definitions/internal_identity_adapter_http.UserResponse'
-    type: object
-  internal_identity_adapter_http.UserResponse:
-    properties:
-      display_name:
-        type: string
-      id:
-        type: string
-      login_name:
-        type: string
-      must_change_password:
-        type: boolean
-      org_id:
-        type: string
-      role:
-        type: string
-    type: object
   internal_workspace_adapter_http.CreateProjectRequest:
     properties:
       aspect_ratio:
@@ -461,158 +418,11 @@ definitions:
     type: object
 info:
   contact: {}
-  description: Public identity, project query, resource canvas commands and authorized
+  description: Single workspace project query, resource canvas commands and authorized
     media previews.
   title: Lanverse API
   version: "0.1"
 paths:
-  /api/auth/login:
-    post:
-      consumes:
-      - application/json
-      operationId: login
-      parameters:
-      - description: 登录请求
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/internal_identity_adapter_http.LoginRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_identity_adapter_http.SessionResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "429":
-          description: Too Many Requests
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-      summary: 密码登录
-      tags:
-      - auth
-  /api/auth/logout:
-    post:
-      operationId: logout
-      parameters:
-      - description: UUID
-        in: header
-        name: Idempotency-Key
-        required: true
-        type: string
-      - description: 会话CSRF令牌
-        in: header
-        name: X-CSRF-Token
-        required: true
-        type: string
-      responses:
-        "204":
-          description: No Content
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-      summary: 登出
-      tags:
-      - auth
-  /api/auth/me:
-    get:
-      operationId: currentUser
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_identity_adapter_http.SessionResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-      summary: 当前账号
-      tags:
-      - auth
-  /api/auth/password:
-    post:
-      consumes:
-      - application/json
-      operationId: changePassword
-      parameters:
-      - description: UUID
-        in: header
-        name: Idempotency-Key
-        required: true
-        type: string
-      - description: 会话CSRF令牌
-        in: header
-        name: X-CSRF-Token
-        required: true
-        type: string
-      - description: 当前与新密码
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/internal_identity_adapter_http.PasswordRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_identity_adapter_http.PasswordResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
-      summary: 修改本人密码
-      tags:
-      - auth
   /api/canvases/{id}:
     delete:
       consumes:
@@ -629,11 +439,6 @@ paths:
         name: Idempotency-Key
         required: true
         type: string
-      - description: CSRF令牌
-        in: header
-        name: X-CSRF-Token
-        required: true
-        type: string
       - description: 当前修订
         in: body
         name: body
@@ -647,10 +452,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteResult'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -689,10 +490,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -727,11 +524,6 @@ paths:
         name: Idempotency-Key
         required: true
         type: string
-      - description: CSRF令牌
-        in: header
-        name: X-CSRF-Token
-        required: true
-        type: string
       - description: 当前修订与名称
         in: body
         name: body
@@ -745,10 +537,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -788,11 +576,6 @@ paths:
         name: Idempotency-Key
         required: true
         type: string
-      - description: CSRF令牌
-        in: header
-        name: X-CSRF-Token
-        required: true
-        type: string
       - description: 乐观版本与命令
         in: body
         name: body
@@ -806,10 +589,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.Result'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -868,10 +647,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/internal_workspace_adapter_http.ListResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -897,11 +672,6 @@ paths:
         name: Idempotency-Key
         required: true
         type: string
-      - description: 会话 CSRF token
-        in: header
-        name: X-CSRF-Token
-        required: true
-        type: string
       - description: 项目规格
         in: body
         name: body
@@ -915,10 +685,6 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_application.CreatedProject'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -954,10 +720,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/internal_canvas_adapter_http.ListResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -992,11 +754,6 @@ paths:
         name: Idempotency-Key
         required: true
         type: string
-      - description: CSRF令牌
-        in: header
-        name: X-CSRF-Token
-        required: true
-        type: string
       - description: 画布名称与空scope
         in: body
         name: body
@@ -1010,10 +767,6 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -1061,10 +814,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetPage'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -1105,10 +854,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.Preview'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
@@ -1163,10 +908,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/internal_workspace_adapter_http.StylePresetListResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:

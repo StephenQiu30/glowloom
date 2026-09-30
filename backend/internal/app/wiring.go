@@ -93,8 +93,8 @@ func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, t
 	}
 }
 
-func provideAPIServer(cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, redisConn *redisconn.Connection, storage *objectstorage.Client) (*http.Server, error) {
-	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, redisConn.Client, storage)
+func provideAPIServer(cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Client) (*http.Server, error) {
+	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, storage)
 	if err != nil {
 		return nil, err
 	}

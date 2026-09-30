@@ -1,42 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// 仅在本轮隔离数据库和合成账号已准备后显式启用；所有请求走正式 API。
+// 写入真实本机工作区，仅在显式启用验证时创建验收项目。
 const enabled = process.env.LV_E2E_PROJECT_CREATE === "1";
-const loginName = process.env.LV_E2E_LOGIN_NAME;
-const initialPassword = process.env.LV_E2E_PASSWORD;
-const readyPassword = process.env.LV_E2E_READY_PASSWORD;
-test.skip(
-  !enabled || !loginName || !initialPassword || !readyPassword,
-  "需要显式启用项目创建验证并配置隔离合成账号",
-);
+test.skip(!enabled, "需要显式启用项目创建验证");
 test.setTimeout(90_000);
-
-async function login(page: Page, password: string) {
-  await page.goto("/login?returnTo=%2Fprojects");
-  await page.getByLabel("账号", { exact: true }).fill(loginName!);
-  await page.getByLabel("密码", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await page
-          .getByRole("heading", { name: "修改初始密码" })
-          .isVisible()) || new URL(page.url()).pathname === "/projects",
-    )
-    .toBe(true);
-  if (await page.getByRole("heading", { name: "修改初始密码" }).isVisible()) {
-    await page.getByLabel("当前密码", { exact: true }).fill(password);
-    await page.getByLabel("新密码", { exact: true }).fill(readyPassword!);
-    await page
-      .getByLabel("再次输入新密码", { exact: true })
-      .fill(readyPassword!);
-    await page.getByRole("button", { name: "更新密码", exact: true }).click();
-  }
-  await expect(page).toHaveURL(/\/projects$/);
-  await expect(
-    page.getByRole("button", { name: "新建项目", exact: true }),
-  ).toBeVisible();
-}
+let authRequests: string[] = [];
 
 async function noPageOverflow(page: Page) {
   expect(
@@ -46,22 +14,20 @@ async function noPageOverflow(page: Page) {
   ).toBe(true);
 }
 
-test.beforeAll(async ({ browser }) => {
-  const page = await browser.newPage();
-  try {
-    await login(page, initialPassword!);
-  } finally {
-    await page.close();
-  }
-});
 test.beforeEach(async ({ page }) => {
-  await login(page, readyPassword!);
-});
-
-test("空项目列表创建正式项目，再保存画布并刷新", async ({ page }) => {
+  authRequests = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/auth/"))
+      authRequests.push(request.url());
+  });
+  await page.goto("/projects");
   await expect(
-    page.getByText("当前列表没有项目。", { exact: true }),
+    page.getByRole("button", { name: "新建项目", exact: true }),
   ).toBeVisible();
+});
+test.afterEach(() => expect(authRequests).toEqual([]));
+
+test("直接创建正式项目，再保存画布并刷新", async ({ page }) => {
   await page.getByRole("button", { name: "新建项目", exact: true }).click();
   const name = `正式项目验证-${crypto.randomUUID().slice(0, 8)}`;
   await page.getByLabel("项目名称", { exact: true }).fill(name);

@@ -48,9 +48,6 @@ func projectHTTPRequest(ctx context.Context, router http.Handler, method, path, 
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", workspaceTestOrigin)
 		req.Header.Set("Idempotency-Key", key)
-		req.Header.Set("X-CSRF-Token", httpapi.CSRFToken("controlled-test-session"))
-		req.AddCookie(&http.Cookie{Name: "lv_session", Value: "controlled-test-session"})
-		req.AddCookie(&http.Cookie{Name: "lv_csrf", Value: httpapi.CSRFToken("controlled-test-session")})
 	}
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, req)
@@ -358,22 +355,19 @@ func TestProjectHTTPWriteSecurityAndBoundedRequest(t *testing.T) {
 		})
 	}
 	for _, test := range []struct {
-		name, origin, csrf, key, session string
-		status                           int
+		name, origin, key string
+		status            int
 	}{
-		{"Origin", "http://external.example", httpapi.CSRFToken("controlled-test-session"), uuid.NewString(), "controlled-test-session", 403},
-		{"CSRF", workspaceTestOrigin, "invalid", uuid.NewString(), "controlled-test-session", 403},
-		{"key", workspaceTestOrigin, httpapi.CSRFToken("controlled-test-session"), "invalid", "controlled-test-session", 422},
-		{"session", workspaceTestOrigin, "", uuid.NewString(), "", 401},
+		{"Origin", "http://external.example", uuid.NewString(), 403},
+		{"missing Origin", "", uuid.NewString(), 403},
+		{"key", workspaceTestOrigin, "invalid", 422},
+		{"missing key", workspaceTestOrigin, "", 422},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/projects", strings.NewReader(`{"name":"安全入口","aspect_ratio":"9:16","style_type":"realistic"}`))
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("Origin", test.origin)
-			request.Header.Set("X-CSRF-Token", test.csrf)
 			request.Header.Set("Idempotency-Key", test.key)
-			request.AddCookie(&http.Cookie{Name: "lv_session", Value: test.session})
-			request.AddCookie(&http.Cookie{Name: "lv_csrf", Value: httpapi.CSRFToken("controlled-test-session")})
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
 			if response.Code != test.status || !strings.HasPrefix(response.Header().Get("Content-Type"), "application/problem+json") {
