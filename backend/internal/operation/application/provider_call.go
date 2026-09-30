@@ -41,23 +41,25 @@ func (i ManualNotExecutedInput) Validate() error {
 // BeginProviderCallInput identifies one attempt before any provider request is sent.
 // Attempt numbers are scoped to operation and action and must be stable on replay.
 type BeginProviderCallInput struct {
-	OperationID    uuid.UUID `json:"operation_id"`
-	Action         string    `json:"action"`
-	Attempt        int32     `json:"attempt"`
-	ProviderTaskID *string   `json:"provider_task_id,omitempty"`
+	OperationID      uuid.UUID `json:"operation_id"`
+	Action           string    `json:"action"`
+	Attempt          int32     `json:"attempt"`
+	ProviderTaskID   *string   `json:"provider_task_id,omitempty"`
+	DispatchRequired bool      `json:"dispatch_required,omitempty"`
 }
 
 // CompleteProviderCallInput records a redacted result for a begun attempt.
 // Usage contains normalized, non-sensitive billable quantities from a trusted
 // provider adapter. The mock adapter is explicitly free.
 type CompleteProviderCallInput struct {
-	OperationID    uuid.UUID       `json:"operation_id"`
-	Action         string          `json:"action"`
-	Attempt        int32           `json:"attempt"`
-	Outcome        string          `json:"outcome"`
-	State          string          `json:"state"`
-	ProviderTaskID *string         `json:"provider_task_id,omitempty"`
-	Usage          json.RawMessage `json:"usage,omitempty"`
+	OperationID    uuid.UUID        `json:"operation_id"`
+	Action         string           `json:"action"`
+	Attempt        int32            `json:"attempt"`
+	Outcome        string           `json:"outcome"`
+	State          string           `json:"state"`
+	ProviderTaskID *string          `json:"provider_task_id,omitempty"`
+	Usage          json.RawMessage  `json:"usage,omitempty"`
+	Receipt        *ProviderReceipt `json:"receipt,omitempty"`
 }
 
 // ProviderCost is the amount established by durable, redacted provider calls.
@@ -70,7 +72,8 @@ type ProviderCost struct {
 // Validate checks the stable call identity before writing an unknown record.
 func (i BeginProviderCallInput) Validate() error {
 	if i.OperationID == uuid.Nil || i.Attempt < 1 || !providerCallAction(i.Action) ||
-		!validProviderTaskID(i.ProviderTaskID) || (i.Action == "cancel" && i.ProviderTaskID == nil) {
+		!validProviderTaskID(i.ProviderTaskID) || (i.Action == "cancel" && i.ProviderTaskID == nil) ||
+		(i.DispatchRequired && (i.Action != "submit" || i.ProviderTaskID != nil)) {
 		return ErrInvalidProviderCall
 	}
 	return nil
@@ -89,7 +92,7 @@ func (i CompleteProviderCallInput) Validate() error {
 		return ErrInvalidProviderCall
 	}
 	switch i.State {
-	case "accepted", "rejected", "not_submitted", "pending", "running",
+	case "accepted", "completed", "rejected", "not_submitted", "pending", "running",
 		"succeeded", "failed", "not_found", "confirmed_not_exist",
 		"cancelled", "not_cancelled", "unknown":
 	default:
@@ -98,9 +101,24 @@ func (i CompleteProviderCallInput) Validate() error {
 	if (i.Outcome == "unknown" || i.Outcome == "timeout") != (i.State == "unknown") {
 		return ErrInvalidProviderCall
 	}
+	if i.State == "completed" {
+		if i.Action != "submit" || i.Outcome != "ok" || i.ProviderTaskID != nil ||
+			i.Receipt == nil || i.Receipt.Validate() != nil ||
+			i.Receipt.Identity.OperationID != i.OperationID ||
+			i.Receipt.Identity.Action != i.Action || i.Receipt.Identity.Attempt != i.Attempt {
+			return ErrInvalidProviderCall
+		}
+		if i.Usage != nil {
+			if _, err := ParseBillableUsage(i.Usage); err != nil {
+				return ErrInvalidProviderCall
+			}
+		}
+	} else if i.Receipt != nil {
+		return ErrInvalidProviderCall
+	}
 	switch i.Action {
 	case "submit":
-		if i.State != "accepted" && i.State != "rejected" &&
+		if i.State != "accepted" && i.State != "completed" && i.State != "rejected" &&
 			i.State != "not_submitted" && i.State != "unknown" {
 			return ErrInvalidProviderCall
 		}

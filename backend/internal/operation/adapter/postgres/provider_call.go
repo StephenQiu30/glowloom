@@ -17,13 +17,20 @@ import (
 )
 
 type providerCallRow struct {
-	ID              uuid.UUID
-	CreateTime      string
-	Outcome         string
-	ProviderTaskID  *string
-	ResponseSummary []byte
-	Usage           []byte
-	CostMicros      *int64
+	ID                    uuid.UUID
+	Attempt               int32
+	CreateTime            string
+	Outcome               string
+	ProviderTaskID        *string
+	RequestSummary        []byte
+	RequestKey            *string
+	ModelProfileVersionID *uuid.UUID
+	PriceRuleVersionID    *uuid.UUID
+	ResponseSummary       []byte
+	Usage                 []byte
+	CostMicros            *int64
+	DispatchStartedAt     *time.Time
+	Receipt               []byte
 }
 
 const manualNotExecutedReason = "manual_not_executed"
@@ -52,6 +59,9 @@ func (s *Store) RecordManualNotExecuted(ctx context.Context, input application.M
 		}
 		if result.RowsAffected != 1 {
 			return ErrNotFound
+		}
+		if err := rejectManualExecutedCall(tx, op.ProjectID, input.OperationID); err != nil {
+			return err
 		}
 		var previous []struct{ Detail []byte }
 		if err := tx.Raw(`
@@ -90,22 +100,6 @@ func (s *Store) RecordManualNotExecuted(ctx context.Context, input application.M
 		}
 		if result.RowsAffected != 1 {
 			return application.ErrManualResolutionUnverified
-		}
-		var contradictsNotExecuted bool
-		if err := tx.Raw(`
-			SELECT EXISTS (
-			  SELECT 1 FROM operation.provider_call
-			  WHERE project_id = ?::uuid AND operation_id = ?::uuid AND NOT is_delete
-			    AND (cost_micros > 0
-			      OR action = 'query' AND response_summary ->> 'state'
-			         IN ('succeeded', 'failed', 'confirmed_not_exist')
-			      OR action = 'cancel' AND response_summary ->> 'state' = 'cancelled')
-			)
-		`, op.ProjectID.String(), input.OperationID.String()).Scan(&contradictsNotExecuted).Error; err != nil {
-			return fmt.Errorf("check manual provider execution evidence: %w", err)
-		}
-		if contradictsNotExecuted {
-			return application.ErrProviderCallConflict
 		}
 		detail, err := json.Marshal(map[string]string{
 			"admin_id": input.AdminID.String(), "evidence": input.Evidence,
@@ -148,6 +142,7 @@ func (s *Store) CheckManualNotExecuted(ctx context.Context, operationID uuid.UUI
 		    SELECT 1 FROM operation.provider_call AS c
 		    WHERE c.project_id = o.project_id AND c.operation_id = o.id AND NOT c.is_delete
 		      AND (c.cost_micros > 0
+		        OR c.action = 'submit' AND c.response_summary ->> 'state' = 'completed'
 		        OR c.action = 'query' AND c.response_summary ->> 'state'
 		           IN ('succeeded', 'failed', 'confirmed_not_exist')
 		        OR c.action = 'cancel' AND c.response_summary ->> 'state' = 'cancelled')
@@ -196,7 +191,8 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 		var previous []providerCallRow
 		if err := tx.Raw(`
 			SELECT id, create_time::text AS create_time, outcome, provider_task_id,
-			       response_summary, usage, cost_micros
+			       request_summary, request_key, model_profile_version_id,
+			       price_rule_version_id, response_summary, usage, cost_micros
 			FROM operation.provider_call
 			WHERE project_id = ?::uuid AND operation_id = ?::uuid
 			  AND action = ? AND attempt = ? AND NOT is_delete
@@ -205,7 +201,16 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 		}
 		if len(previous) != 0 {
 			if len(previous) != 1 || (input.ProviderTaskID != nil &&
-				!sameOptionalString(previous[0].ProviderTaskID, input.ProviderTaskID)) {
+				!sameOptionalString(previous[0].ProviderTaskID, input.ProviderTaskID)) ||
+				callRequiresDispatch(previous[0].RequestSummary) != input.DispatchRequired {
+				return application.ErrProviderCallConflict
+			}
+			if input.DispatchRequired && (op.ModelProfileVersionID == nil || op.PriceRuleVersionID == nil ||
+				op.ProviderRequestKey == nil || !callHasDispatchIdentity(previous[0], application.ProviderDispatchIdentity{
+				ProjectID: op.ProjectID, OperationID: input.OperationID, Action: input.Action, Attempt: input.Attempt,
+				RequestKey: *op.ProviderRequestKey, ModelProfileVersionID: *op.ModelProfileVersionID,
+				PriceRuleVersionID: *op.PriceRuleVersionID,
+			})) {
 				return application.ErrProviderCallConflict
 			}
 			return nil
@@ -215,6 +220,18 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 			op.Status == "expired" || op.ModelProfileVersionID == nil || op.Region == nil ||
 			op.PriceRuleVersionID == nil || op.ProviderRequestKey == nil || strings.TrimSpace(*op.ProviderRequestKey) == "" {
 			return application.ErrInvalidProviderCall
+		}
+		if input.DispatchRequired {
+			if op.Status != "submitting" {
+				return application.ErrInvalidProviderCall
+			}
+			if err := validateNewDispatchAttempt(tx, application.ProviderDispatchIdentity{
+				ProjectID: op.ProjectID, OperationID: input.OperationID, Action: input.Action, Attempt: input.Attempt,
+				RequestKey: *op.ProviderRequestKey, ModelProfileVersionID: *op.ModelProfileVersionID,
+				PriceRuleVersionID: *op.PriceRuleVersionID,
+			}); err != nil {
+				return err
+			}
 		}
 		if input.Action == "cancel" {
 			if op.Status != "cancelling" {
@@ -254,9 +271,13 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 		if input.Action == "cancel" && !provider.SupportsCancel {
 			return application.ErrInvalidProviderCall
 		}
-		summary, err := json.Marshal(map[string]any{
+		fields := map[string]any{
 			"operation_id": input.OperationID.String(), "action": input.Action,
-		})
+		}
+		if input.DispatchRequired {
+			fields["dispatch_contract"] = "v1"
+		}
+		summary, err := json.Marshal(fields)
 		if err != nil {
 			return fmt.Errorf("encode provider call summary: %w", err)
 		}
@@ -292,13 +313,15 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var op struct {
 			ProjectID             uuid.UUID
+			ProviderRequestKey    *string
+			Status                string
 			ModelProfileVersionID *uuid.UUID
 			PriceRuleVersionID    *uuid.UUID
 			Mode                  string
 			Params                []byte
 		}
 		result := tx.Raw(`
-			SELECT project_id, model_profile_version_id, price_rule_version_id,
+			SELECT project_id, provider_request_key, status, model_profile_version_id, price_rule_version_id,
 			       mode, params::text AS params FROM operation.operation
 			WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
 		`, input.OperationID.String()).Scan(&op)
@@ -311,6 +334,8 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		var calls []providerCallRow
 		if err := tx.Raw(`
 			SELECT id, create_time::text AS create_time, outcome, provider_task_id,
+			       request_summary, request_key, model_profile_version_id,
+			       price_rule_version_id, dispatch_started_at, receipt,
 			       response_summary, usage, cost_micros
 			FROM operation.provider_call
 			WHERE project_id = ?::uuid AND operation_id = ?::uuid
@@ -323,6 +348,15 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			return application.ErrProviderCallConflict
 		}
 		call := calls[0]
+		if input.State == "completed" {
+			identity := input.Receipt.Identity
+			if identity.ProjectID != op.ProjectID || op.ProviderRequestKey == nil ||
+				identity.RequestKey != *op.ProviderRequestKey || identity.ModelProfileVersionID != *op.ModelProfileVersionID ||
+				identity.PriceRuleVersionID != *op.PriceRuleVersionID || !callHasDispatchIdentity(call, identity) ||
+				call.DispatchStartedAt == nil || call.ProviderTaskID != nil {
+				return application.ErrProviderCallConflict
+			}
+		}
 		if call.ProviderTaskID != nil && input.ProviderTaskID != nil && *call.ProviderTaskID != *input.ProviderTaskID {
 			return application.ErrProviderCallConflict
 		}
@@ -333,15 +367,26 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		if err != nil {
 			return fmt.Errorf("encode provider result state: %w", err)
 		}
+		var receipt []byte
+		if input.Receipt != nil {
+			receipt, err = json.Marshal(input.Receipt)
+			if err != nil {
+				return fmt.Errorf("encode provider receipt: %w", err)
+			}
+		}
 		if len(call.ResponseSummary) != 0 {
 			if call.Outcome == input.Outcome && jsonEqual(call.ResponseSummary, state) &&
 				sameOptionalString(call.ProviderTaskID, input.ProviderTaskID) &&
-				jsonEqual(call.Usage, input.Usage) {
+				jsonEqual(call.Usage, input.Usage) && jsonEqual(call.Receipt, receipt) {
 				return nil
 			}
 			if call.Outcome != "unknown" || input.Outcome == "unknown" {
 				return application.ErrProviderCallConflict
 			}
+		}
+		if callRequiresDispatch(call.RequestSummary) &&
+			(op.Status == "completed" || op.Status == "failed" || op.Status == "cancelled" || op.Status == "expired") {
+			return application.ErrProviderCallConflict
 		}
 		var adapter struct{ AdapterKey string }
 		result = tx.Raw(`
@@ -359,6 +404,9 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		}
 		var cost *int64
 		switch {
+		case input.Action == "submit" && input.State == "completed":
+			// Artifact completion proves execution, but synchronous pricing is a
+			// later contract. Persist usage without inventing a zero charge.
 		case adapter.AdapterKey == "mock":
 			zero := int64(0)
 			cost = &zero
@@ -396,11 +444,11 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 		result = tx.Exec(`
 			UPDATE operation.provider_call
 			SET outcome = ?, provider_task_id = ?, response_summary = ?::jsonb,
-			    usage = ?::jsonb, cost_micros = ?, update_time = now()
+			    usage = ?::jsonb, cost_micros = ?, receipt = ?::jsonb, update_time = now()
 			WHERE project_id = ?::uuid AND id = ?::uuid
 			  AND create_time = ?::timestamptz AND NOT is_delete
 		`, input.Outcome, input.ProviderTaskID, string(state), nullableProviderUsage(input.Usage),
-			cost, op.ProjectID.String(), call.ID.String(), call.CreateTime)
+			cost, nullableProviderUsage(receipt), op.ProjectID.String(), call.ID.String(), call.CreateTime)
 		if result.Error != nil {
 			return fmt.Errorf("complete provider call: %w", result.Error)
 		}
@@ -520,12 +568,13 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 	}
 	cost := application.ProviderCost{}
 	var unknownCost bool
-	var unknownSubmission, acceptedSubmission, conclusiveResolution bool
+	var unknownSubmission, acceptedSubmission, conclusiveResolution, completedSubmission bool
 	for _, call := range calls {
 		if call.Action == "submit" {
 			cost.HasSubmission = true
 			unknownSubmission = unknownSubmission || call.Outcome == "unknown" || call.Outcome == "timeout"
 			acceptedSubmission = acceptedSubmission || call.State == "accepted"
+			completedSubmission = completedSubmission || call.State == "completed"
 		}
 		if (call.Action == "query" || call.Action == "cancel") &&
 			providerCallEstablishesCharge(call.Action, call.State) {
@@ -539,6 +588,12 @@ func (s *Store) ProviderCostInTransaction(ctx context.Context, tx *gorm.DB, oper
 			return application.ProviderCost{}, application.ErrProviderCallConflict
 		}
 		cost.ActualCostMicros += *call.CostMicros
+	}
+	if completedSubmission {
+		if op.Status == "manual" {
+			return application.ProviderCost{}, application.ErrManualResolutionUnverified
+		}
+		return application.ProviderCost{}, application.ErrProviderCostUnknown
 	}
 	if !cost.HasSubmission {
 		if len(calls) == 0 && (op.Status == "confirmed" || op.Status == "submitting" ||

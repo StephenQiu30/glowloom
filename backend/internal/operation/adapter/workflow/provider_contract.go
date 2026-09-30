@@ -1,18 +1,28 @@
 // Package workflow defines the JSON boundary between Go operation workflows and agent activities.
 package workflow
 
+import (
+	"encoding/json"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+)
+
 // ProviderSubmitInput is sent to provider.submit on the provider's agent queue.
 type ProviderSubmitInput struct {
-	OperationID        string              `json:"operation_id"`
-	ProviderRequestKey string              `json:"provider_request_key"`
-	AdapterKey         string              `json:"adapter_key"`
-	ProviderModelID    string              `json:"provider_model_id"`
-	Capability         string              `json:"capability"`
-	Mode               string              `json:"mode"`
-	Params             map[string]any      `json:"params"`
-	Inputs             []ProviderInput     `json:"inputs"`
-	OutputCount        int                 `json:"output_count"`
-	Credential         *ProviderCredential `json:"credential,omitempty"`
+	OperationID           string              `json:"operation_id"`
+	ProviderRequestKey    string              `json:"provider_request_key"`
+	AdapterKey            string              `json:"adapter_key"`
+	ProviderModelID       string              `json:"provider_model_id"`
+	Capability            string              `json:"capability"`
+	Mode                  string              `json:"mode"`
+	Params                map[string]any      `json:"params"`
+	Inputs                []ProviderInput     `json:"inputs"`
+	OutputCount           int                 `json:"output_count"`
+	Credential            *ProviderCredential `json:"credential,omitempty"`
+	ProjectID             string              `json:"project_id,omitempty"`
+	ModelProfileVersionID string              `json:"model_profile_version_id,omitempty"`
+	PriceRuleVersionID    string              `json:"price_rule_version_id,omitempty"`
+	Attempt               int32               `json:"attempt,omitempty"`
 }
 
 // ProviderInput is one role-bound input sent to a provider.
@@ -45,6 +55,7 @@ type ProviderSubmitOutcome string
 // Provider submission outcomes distinguish a definite result from unknown delivery.
 const (
 	ProviderSubmitAccepted     ProviderSubmitOutcome = "accepted"
+	ProviderSubmitCompleted    ProviderSubmitOutcome = "completed"
 	ProviderSubmitRejected     ProviderSubmitOutcome = "rejected"
 	ProviderSubmitNotSubmitted ProviderSubmitOutcome = "not_submitted"
 	ProviderSubmitUnknown      ProviderSubmitOutcome = "unknown"
@@ -52,9 +63,11 @@ const (
 
 // ProviderSubmitOutput is returned by provider.submit.
 type ProviderSubmitOutput struct {
-	Outcome        ProviderSubmitOutcome `json:"outcome"`
-	ProviderTaskID *string               `json:"provider_task_id"`
-	Error          *ProviderError        `json:"error"`
+	Outcome        ProviderSubmitOutcome        `json:"outcome"`
+	ProviderTaskID *string                      `json:"provider_task_id"`
+	Error          *ProviderError               `json:"error"`
+	Receipt        *application.ProviderReceipt `json:"receipt,omitempty"`
+	Usage          json.RawMessage              `json:"usage,omitempty"`
 }
 
 // ProviderQueryInput identifies a provider task by exactly one of its two keys.
