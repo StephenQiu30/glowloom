@@ -42,6 +42,10 @@ Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目�
 
 本轮资源类型闭集为 text/image/video/audio/group，node_action=resource；配置闭集 text={text:string}、group={collapsed:boolean}、media={}；媒体只引用授权同项目 ready/passed 已接管对象，经独立媒体 preview 端口取得临时 URL，不放 Document.Node。标题使用正式字段，禁止将上游任意 metadata 当可写配置。原布局命令 AddNodes/MoveNodes/UpdateNodeConfig/DeleteNodes/Connect(annotation)/Disconnect/SetViewport 保留，扩 ResizeNodes/RenameNodes/SetNodeParents/SetNodeZIndex；Connect/Disconnect 使用 edges/ids 数组，精确形状及画布名称/软删除、媒体列表/preview 合同见 DES-38 §3.2。
 
+分组采用源 world 绝对坐标：移动组由客户端批量包含 children，统一 delta；parent 仅指同文档 group 且无环；删除 group 解组，保留 children 及绝对位置。删除普通节点移除关联边，不删除业务对象。zoom=0.05～4。正式命令更新标题、尺寸、层级；DTO/白名单/大小/批次限制同步 DES-02/03/06/38 与 swag 类型，不手改生成物。
+
+沿用 canvas.document/node/edge/command_log 和已发布迁移；字段/约束追加 forward SQL。快照端点/恢复合同不在本轮自行扩展；未来恢复产生新 revision，不能回退历史。镜头/生成/reference/promote 等按既有业务合同接入，未就绪能力明确不可用，不造样例任务/费用。
+
 ### 3.1 Next.js 与 shadcn/Radix 接入调整（2026-09-30）
 
 用户本轮重申复用画布并使用 Next.js + shadcn + Radix。仓库已经是 Next.js 16 App Router，`components.json` 为 radix-nova；现有 `InfiniteCanvas`、空间索引、连线与正式 Go 保存链直接沿用。复核上游固定 SHA 的 `web/package.json` 与 InfiniteCanvas：上游 Vite/Bun、AntD 与本地工作区不是 Lanverse 的运行依赖，不复制这些工程配置。
@@ -50,11 +54,7 @@ Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目�
 
 Next 页面保留 Server Component 与 Suspense；浏览器引擎在 Client Component 中动态加载，`ssr: false` 只放客户端边界。不增加第二份画布状态或新的 API。验证包括方向键冲突回归、现有组件与保存测试、生产构建及桌面/手机浏览器控件验证；合成 API 的浏览器验证单列，不能代替真实 Go/PostgreSQL 或供应商验收。
 
-官方组件用法依据 [Radix ToggleGroup](https://ui.shadcn.com/docs/components/radix/toggle-group)、[Tooltip](https://ui.shadcn.com/docs/components/radix/tooltip)、[Select](https://ui.shadcn.com/docs/components/radix/select)；同时核对 Context7 的 shadcn 4.21.0 文档和本机 Next.js 16.3.6 附带指南。
-
-分组采用源 world 绝对坐标：移动组由客户端批量包含 children，统一 delta；parent 仅指同文档 group 且无环；删除 group 解组，保留 children 及绝对位置。删除普通节点移除关联边，不删除业务对象。zoom=0.05～4。正式命令更新标题、尺寸、层级；DTO/白名单/大小/批次限制同步 DES-02/03/06/38 与 swag 类型，不手改生成物。
-
-沿用 canvas.document/node/edge/command_log 和已发布迁移；字段/约束追加 forward SQL。快照端点/恢复合同不在本轮自行扩展；未来恢复产生新 revision，不能回退历史。镜头/生成/reference/promote 等按既有业务合同接入，未就绪能力明确不可用，不造样例任务/费用。
+官方组件用法依据 [Radix ToggleGroup](https://ui.shadcn.com/docs/components/radix/toggle-group)、[Tooltip](https://ui.shadcn.com/docs/components/radix/tooltip)、[Select](https://ui.shadcn.com/docs/components/radix/select)；同时核对 Context7 的 shadcn 4.21.0 文档和本机 Next.js 16.3.6 附带指南。浏览器发现程序打开的搜索弹窗关闭后丢失焦点，搜索和媒体弹窗通过 [Dialog 的 onCloseAutoFocus](https://www.radix-ui.com/primitives/docs/components/dialog#content) 恢复实际打开位置，不另写焦点陷阱或滚动锁。
 
 ## 4. 入口、删除与数据保留
 
