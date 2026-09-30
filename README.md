@@ -70,7 +70,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 ## 开发
 
-工程底座（M1）搭建中：三端已初始化最小骨架（健康检查 + 质量门禁）。本机直接启动三端进程，并为后续平台层接入配置已运行的本机中间件；配置写在根目录 `.env`（键名样例见 `.env.example`）。
+工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机直接启动三端进程，连接已运行的本机中间件；配置写在根目录 `.env`（键名样例见 `.env.example`）。
 
 | 目录 | 技术栈 | 本地启动 | 健康检查 |
 | --- | --- | --- | --- |
@@ -80,13 +80,15 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 Agent Activity Worker 在另一终端运行：`cd agent && uv run --frozen --env-file ../.env python -m app.main_worker`。它连接 `.env` 中本机已运行的 Redis 与 Temporal，监听模拟供应商 `agent.mock` 队列，以及 Skill 和 `provider.test_credential` 所在的 `agent` 队列。根目录 `.env` 同时设置 `LV_CREDENTIAL_KEY_ID` 与 `LV_CREDENTIAL_PRIVATE_KEY_REF`（绝对 PEM 私钥文件路径）后，可用 Agent 私钥执行 OpenRouter 免费鉴权测试；未配置时返回测试服务不可用，不发起供应商请求。本地开发不启动 Compose。
 
-Go `flow` Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。Worker 当前注册基础设施维护 Workflow；Relay 投递 Outbox，消费 `operation.status_changed.v1` 生成 Redis 项目实时事件，并消费 `audit.recorded.v1` 写入审计表。审计消费者目前只允许已登记的账号动作；首位管理员 bootstrap、管理员创建和禁用账号、密码登录、登出与本人改密已生产相应审计 Outbox，其余业务命令待接入。项目 SSE 处理器已实现，但公开 API 路由仍需身份与项目成员鉴权后挂载；`media` 队列和其他消费者尚未接入。
+Go Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow,media`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。`flow` 注册基础设施维护、凭据测试、单项/批量 Operation 与报价过期 Workflow，`media` 注册媒体接管 Activity。Relay 投递 Outbox，投影已登记的项目/预算/Operation 事件，并按允许字段消费账号、注册表、项目和业务命令审计。公开 SSE、真实供应商及完整生成验收仍以对应 BACKLOG 任务为准。
 
 在已完成 Outbox、账号及组织迁移的空账号库中，可执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse admin bootstrap --login-name <name>` 创建首位管理员；密码在终端交互输入并确认，不设置默认密码。命令若发现已有账号会拒绝重复初始化。详情见 [OPS-01](docs/operation/01-环境与部署.md#7-初始化与种子数据)。
 
+应用全部数据库迁移后，浏览器打开 `/projects`，登录并按要求修改初始密码。正式列表读取当前组织项目；“新建项目”保存项目规格、零预算及事件，成功后进入 `/projects/{UUID}/canvas`，可创建画布、编辑并保存。预设列表来自组织已有数据，可为空。项目创建与画布入口的证据和剩余范围见 [E-10 验证记录](docs/acceptance/E10-项目创建与画布入口验证.md)。
+
 Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_RELAY_HEALTH_ADDR` 提供 `GET /healthz`（样例端口 8081、8082）；该接口只表示进程正在运行，任务处理状况仍需检查 Temporal Worker 与 Outbox 积压。
 
-本机需要合并运行现有 Go 角色时可执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=all`，它启动 API、`flow` Worker 和 Relay；任一角色失败时会停止并等待其余角色退出。`--role=all` 当前只包含已实现的 `flow` 队列。
+本机需要合并运行现有 Go 角色时可执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=all`，它启动 API、`flow,media` Worker 和 Relay；任一角色失败时会停止并等待其余角色退出。
 
 数据库迁移完成并部署 `flow` Worker 后，执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse temporal setup`，为现有命名空间安装两项清理 Schedule 与五分钟一次的 `quote-expiry`；不会安装尚未实现完整依赖的 `partition-maintain`。
 

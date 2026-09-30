@@ -43,8 +43,9 @@ const adminSections = [
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  // 正式画布提供自己的全屏工作区与真实项目导航。
-  if (/^\/projects\/[^/]+\/canvas$/.test(pathname)) return <>{children}</>;
+  // 正式项目和画布提供真实会话、导航与各自的工作区。
+  if (pathname === "/projects" || /^\/projects\/[^/]+\/canvas$/.test(pathname))
+    return <>{children}</>;
   const episodeId = episodes.some((e) => e.id === pathname.split("/")[4])
     ? pathname.split("/")[4]
     : "ep-01";

@@ -76,7 +76,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	identity.Register(api)
 	protected := api.Group("")
 	protected.Use(identity.RequireSession())
-	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database))).Register(protected)
+	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database)), workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(database), time.Now), workspaceapp.NewListStylePresetsQuery(pgworkspace.NewStore(database))).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) }
 	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)
 	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewStore(database), storage)).Register(protected)

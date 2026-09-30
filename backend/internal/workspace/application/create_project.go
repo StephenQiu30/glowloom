@@ -3,6 +3,8 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,10 +27,20 @@ const (
 // ErrInvalidCreateProject means the create command or committed result is invalid.
 var ErrInvalidCreateProject = errors.New("invalid create-project command")
 
+// ErrIdempotencyConflict means an active key was used for another request.
+var ErrIdempotencyConflict = errors.New("project idempotency key reused")
+
 // CreateProjectStore rechecks current rights and commits the project, its zero
 // budget, and both durable events in one transaction.
 type CreateProjectStore interface {
 	CreateProjectWithEvents(context.Context, identityapp.Principal, domain.Project, []identityapp.OutboxEvent) (domain.Project, error)
+	CreateProjectIdempotently(context.Context, identityapp.Principal, domain.Project, []identityapp.OutboxEvent, ProjectCreationRequest) (domain.Project, error)
+}
+
+// ProjectCreationRequest identifies one public creation and its bounded receipt.
+type ProjectCreationRequest struct {
+	Key  uuid.UUID
+	Hash string
 }
 
 // CreateProjectInput contains the specifications chosen for a new project.
@@ -73,6 +85,32 @@ func NewCreateProjectCommand(store CreateProjectStore, now func() time.Time) *Cr
 
 // Execute validates the actor and immutable specifications before writing.
 func (c *CreateProjectCommand) Execute(ctx context.Context, actor identityapp.Principal, input CreateProjectInput) (CreatedProject, error) {
+	return c.execute(ctx, actor, input, nil)
+}
+
+// ExecuteIdempotent is the public creation entry point. The request identifier
+// belongs to the audit; it does not change the logical request fingerprint.
+func (c *CreateProjectCommand) ExecuteIdempotent(ctx context.Context, actor identityapp.Principal, key uuid.UUID, input CreateProjectInput) (CreatedProject, error) {
+	if key == uuid.Nil {
+		return CreatedProject{}, ErrInvalidCreateProject
+	}
+	body, err := json.Marshal(struct {
+		OrgID         uuid.UUID
+		Name          string
+		Description   string
+		AspectRatio   string
+		StyleType     string
+		StyleSubtype  string
+		StylePresetID uuid.UUID
+	}{actor.OrgID, input.Name, input.Description, input.AspectRatio, input.StyleType, input.StyleSubtype, input.StylePresetID})
+	if err != nil {
+		return CreatedProject{}, fmt.Errorf("encode project creation request: %w", err)
+	}
+	hash := sha256.Sum256(append([]byte("POST /api/projects\x00"), body...))
+	return c.execute(ctx, actor, input, &ProjectCreationRequest{Key: key, Hash: hex.EncodeToString(hash[:])})
+}
+
+func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Principal, input CreateProjectInput, request *ProjectCreationRequest) (CreatedProject, error) {
 	if c == nil || c.store == nil || c.now == nil {
 		return CreatedProject{}, ErrInvalidCreateProject
 	}
@@ -103,11 +141,16 @@ func (c *CreateProjectCommand) Execute(ctx context.Context, actor identityapp.Pr
 	if err != nil {
 		return CreatedProject{}, fmt.Errorf("build project events: %w", err)
 	}
-	saved, err := c.store.CreateProjectWithEvents(ctx, actor, project, events)
+	var saved domain.Project
+	if request == nil {
+		saved, err = c.store.CreateProjectWithEvents(ctx, actor, project, events)
+	} else {
+		saved, err = c.store.CreateProjectIdempotently(ctx, actor, project, events, *request)
+	}
 	if err != nil {
 		return CreatedProject{}, fmt.Errorf("create project with events: %w", err)
 	}
-	if saved.ID != project.ID || saved.OrgID != project.OrgID || saved.Name != project.Name ||
+	if saved.ID == uuid.Nil || (request == nil && saved.ID != project.ID) || saved.OrgID != project.OrgID || saved.Name != project.Name ||
 		saved.Description != project.Description || saved.AspectRatio != project.AspectRatio ||
 		saved.StyleType != project.StyleType || saved.StyleSubtype != project.StyleSubtype ||
 		saved.StylePresetID != project.StylePresetID || saved.Resolution != "1080p" ||
@@ -127,7 +170,7 @@ func (c *CreateProjectCommand) Execute(ctx context.Context, actor identityapp.Pr
 		StyleSubtype: saved.StyleSubtype, StylePresetID: stylePresetID,
 		Resolution: saved.Resolution, AllowOverseasModels: saved.AllowOverseasModels,
 		Status: saved.Status, Revision: saved.Revision,
-		CreateTime: saved.CreateTime, UpdateTime: saved.UpdateTime,
+		CreateTime: saved.CreateTime.UTC(), UpdateTime: saved.UpdateTime.UTC(),
 	}, nil
 }
 

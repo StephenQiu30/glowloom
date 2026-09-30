@@ -296,6 +296,48 @@ definitions:
       type:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_workspace_application.CreatedProject:
+    properties:
+      allow_overseas_models:
+        type: boolean
+      aspect_ratio:
+        type: string
+      create_time:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: string
+      resolution:
+        type: string
+      revision:
+        type: integer
+      status:
+        type: string
+      style_preset_id:
+        type: string
+      style_subtype:
+        type: string
+      style_type:
+        type: string
+      update_time:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_workspace_application.StylePresetSummary:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      style_subtype:
+        type: string
+      style_type:
+        type: string
+    type: object
   internal_canvas_adapter_http.ListResponse:
     properties:
       items:
@@ -348,6 +390,38 @@ definitions:
       role:
         type: string
     type: object
+  internal_workspace_adapter_http.CreateProjectRequest:
+    properties:
+      aspect_ratio:
+        enum:
+        - "9:16"
+        - "16:9"
+        type: string
+      description:
+        type: string
+      name:
+        maxLength: 50
+        minLength: 1
+        type: string
+      style_preset_id:
+        type: string
+      style_subtype:
+        enum:
+        - anime_jp
+        - guofeng_xianxia
+        - cartoon_3d
+        - manhwa
+        type: string
+      style_type:
+        enum:
+        - realistic
+        - stylized
+        type: string
+    required:
+    - aspect_ratio
+    - name
+    - style_type
+    type: object
   internal_workspace_adapter_http.ListResponse:
     properties:
       items:
@@ -356,6 +430,7 @@ definitions:
         type: array
       next_cursor:
         type: string
+        x-nullable: true
     type: object
   internal_workspace_adapter_http.ProjectResponse:
     properties:
@@ -363,6 +438,8 @@ definitions:
         type: string
       id:
         type: string
+      is_delete:
+        type: boolean
       name:
         type: string
       revision:
@@ -371,6 +448,16 @@ definitions:
         type: string
       style_type:
         type: string
+    type: object
+  internal_workspace_adapter_http.StylePresetListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_application.StylePresetSummary'
+        type: array
+      next_cursor:
+        type: string
+        x-nullable: true
     type: object
 info:
   contact: {}
@@ -770,6 +857,10 @@ paths:
         in: query
         name: status
         type: string
+      - description: 只查询回收中的项目
+        in: query
+        name: deleted
+        type: boolean
       produces:
       - application/json
       responses:
@@ -794,6 +885,57 @@ paths:
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 有权项目列表
+      tags:
+      - projects
+    post:
+      consumes:
+      - application/json
+      operationId: createProject
+      parameters:
+      - description: 24小时内创建请求的 UUID 幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 会话 CSRF token
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: 项目规格
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.CreateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_application.CreatedProject'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 创建项目
       tags:
       - projects
   /api/projects/{pid}/canvases:
@@ -986,4 +1128,58 @@ paths:
       summary: 获取媒体预览
       tags:
       - media
+  /api/style-presets:
+    get:
+      operationId: listStylePresets
+      parameters:
+      - description: 风格类型
+        enum:
+        - realistic
+        - stylized
+        in: query
+        name: style_type
+        type: string
+      - description: 子风格
+        enum:
+        - anime_jp
+        - guofeng_xianxia
+        - cartoon_3d
+        - manhwa
+        in: query
+        name: style_subtype
+        type: string
+      - description: 每页数量（1～200，未传或0默认50）
+        in: query
+        name: limit
+        type: integer
+      - description: 与账号、组织及筛选绑定的游标
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.StylePresetListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 查询可用于创建项目的风格预设
+      tags:
+      - projects
 swagger: "2.0"

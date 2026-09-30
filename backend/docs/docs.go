@@ -605,6 +605,12 @@ const docTemplate = `{
                         "description": "active或archived",
                         "name": "status",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "只查询回收中的项目",
+                        "name": "deleted",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -622,6 +628,82 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "创建项目",
+                "operationId": "createProject",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "24小时内创建请求的 UUID 幂等键",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "会话 CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "项目规格",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.CreateProjectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_application.CreatedProject"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
@@ -907,6 +989,86 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/style-presets": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "查询可用于创建项目的风格预设",
+                "operationId": "listStylePresets",
+                "parameters": [
+                    {
+                        "enum": [
+                            "realistic",
+                            "stylized"
+                        ],
+                        "type": "string",
+                        "description": "风格类型",
+                        "name": "style_type",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "anime_jp",
+                            "guofeng_xianxia",
+                            "cartoon_3d",
+                            "manhwa"
+                        ],
+                        "type": "string",
+                        "description": "子风格",
+                        "name": "style_subtype",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（1～200，未传或0默认50）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "与账号、组织及筛选绑定的游标",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.StylePresetListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
@@ -1382,6 +1544,70 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_StephenQiu30_lanverse_backend_internal_workspace_application.CreatedProject": {
+            "type": "object",
+            "properties": {
+                "allow_overseas_models": {
+                    "type": "boolean"
+                },
+                "aspect_ratio": {
+                    "type": "string"
+                },
+                "create_time": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "org_id": {
+                    "type": "string"
+                },
+                "resolution": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "style_preset_id": {
+                    "type": "string"
+                },
+                "style_subtype": {
+                    "type": "string"
+                },
+                "style_type": {
+                    "type": "string"
+                },
+                "update_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_workspace_application.StylePresetSummary": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "style_subtype": {
+                    "type": "string"
+                },
+                "style_type": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_canvas_adapter_http.ListResponse": {
             "type": "object",
             "properties": {
@@ -1463,6 +1689,50 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_workspace_adapter_http.CreateProjectRequest": {
+            "type": "object",
+            "required": [
+                "aspect_ratio",
+                "name",
+                "style_type"
+            ],
+            "properties": {
+                "aspect_ratio": {
+                    "type": "string",
+                    "enum": [
+                        "9:16",
+                        "16:9"
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
+                },
+                "style_preset_id": {
+                    "type": "string"
+                },
+                "style_subtype": {
+                    "type": "string",
+                    "enum": [
+                        "anime_jp",
+                        "guofeng_xianxia",
+                        "cartoon_3d",
+                        "manhwa"
+                    ]
+                },
+                "style_type": {
+                    "type": "string",
+                    "enum": [
+                        "realistic",
+                        "stylized"
+                    ]
+                }
+            }
+        },
         "internal_workspace_adapter_http.ListResponse": {
             "type": "object",
             "properties": {
@@ -1473,7 +1743,8 @@ const docTemplate = `{
                     }
                 },
                 "next_cursor": {
-                    "type": "string"
+                    "type": "string",
+                    "x-nullable": true
                 }
             }
         },
@@ -1486,6 +1757,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "is_delete": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -1497,6 +1771,21 @@ const docTemplate = `{
                 },
                 "style_type": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_workspace_adapter_http.StylePresetListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_application.StylePresetSummary"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string",
+                    "x-nullable": true
                 }
             }
         }

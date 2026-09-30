@@ -61,12 +61,12 @@ it("renders supplied cards and switches to a semantic table when the controlled 
   expect(screen.getByRole("heading", { name: "逆光" })).toBeTruthy();
   expect(
     screen
-      .getByRole("button", { name: "卡片视图" })
-      .getAttribute("aria-pressed"),
+      .getByRole("radio", { name: "卡片视图" })
+      .getAttribute("aria-checked"),
   ).toBe("true");
   expect(screen.queryByRole("table")).toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: "表格视图" }));
+  fireEvent.click(screen.getByRole("radio", { name: "表格视图" }));
   expect(onViewChange).toHaveBeenCalledExactlyOnceWith("table");
   view.rerender(
     <ProjectList
@@ -86,8 +86,8 @@ it("renders supplied cards and switches to a semantic table when the controlled 
   expect(screen.queryByRole("list")).toBeNull();
   expect(
     screen
-      .getByRole("button", { name: "表格视图" })
-      .getAttribute("aria-pressed"),
+      .getByRole("radio", { name: "表格视图" })
+      .getAttribute("aria-checked"),
   ).toBe("true");
 });
 
@@ -125,7 +125,7 @@ it("keeps long names intact and exposes native, focusable view buttons", () => {
   expect(heading.textContent).toBe(longName);
   expect(heading.className).toContain("break-words");
 
-  const tableButton = screen.getByRole("button", { name: "表格视图" });
+  const tableButton = screen.getByRole("radio", { name: "表格视图" });
   expect(tableButton.tagName).toBe("BUTTON");
   expect(tableButton.getAttribute("type")).toBe("button");
   tableButton.focus();

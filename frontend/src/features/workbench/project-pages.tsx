@@ -2,36 +2,17 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowUpRight, Plus, Search } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { FieldGroup } from "@/components/ui/field";
 import { BudgetCard } from "@/features/project/budget-card";
+import { ProjectsWorkspace } from "@/features/project/projects-workspace";
 import { projects, episodes, tasks, budget } from "./data";
 import {
   PageHeading,
   Panel,
   DataTable,
-  PreviewBoundary,
-  EmptyMessage,
   TextField,
   ChoiceField,
   DraftNotice,
@@ -39,201 +20,7 @@ import {
 } from "./workbench-components";
 
 export function ProjectBrowser() {
-  const { params, set, readOnly } = usePreviewQuery();
-  const q = params.get("q") ?? "";
-  const view = params.get("view") === "table" ? "table" : "cards";
-  const list = projects.filter(
-    (p) => p.name.includes(q) || p.style.includes(q),
-  );
-  const [name, setName] = useState("");
-  const [aspect, setAspect] = useState("16:9");
-  const [style, setStyle] = useState("电影写实");
-  const [preview, setPreview] = useState(false);
-  return (
-    <PreviewBoundary>
-      <div className="space-y-9">
-        <PageHeading
-          eyebrow="LANVERSE / WORKSPACE"
-          title="把故事，变成画面。"
-          description="每个故事都有自己的世界。从剧本、设定到镜头和声音，在一个工作台中完成。"
-          action={
-            <Dialog onOpenChange={() => setPreview(false)}>
-              <DialogTrigger asChild>
-                <Button disabled={readOnly}>
-                  <Plus data-icon="inline-start" />
-                  新建项目预览
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>开始一个新故事</DialogTitle>
-                  <DialogDescription>
-                    仅预览项目配置，项目创建服务尚未接入。
-                  </DialogDescription>
-                </DialogHeader>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (name.trim()) setPreview(true);
-                  }}
-                  className="space-y-5"
-                >
-                  <FieldGroup>
-                    <TextField
-                      id="project-name"
-                      label="项目名称"
-                      value={name}
-                      onChange={setName}
-                    />
-                    <ChoiceField
-                      id="project-aspect"
-                      label="画幅"
-                      value={aspect}
-                      options={["16:9", "9:16", "1:1"]}
-                      onChange={setAspect}
-                    />
-                    <ChoiceField
-                      id="project-style"
-                      label="视觉风格"
-                      value={style}
-                      options={["电影写实", "清新动画", "科幻写实"]}
-                      onChange={setStyle}
-                    />
-                  </FieldGroup>
-                  <Button type="submit" disabled={!name.trim()}>
-                    预览配置
-                  </Button>
-                  {preview && (
-                    <p role="status" className="rounded-lg bg-muted p-4">
-                      {name} · {aspect} · {style}。配置已预览，尚未创建项目。
-                    </p>
-                  )}
-                </form>
-              </DialogContent>
-            </Dialog>
-          }
-        />
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="relative w-full sm:max-w-sm">
-            <Search
-              aria-hidden="true"
-              className="absolute top-2.5 left-3 size-4 text-muted-foreground"
-            />
-            <Input
-              aria-label="搜索项目"
-              placeholder="搜索项目或风格…"
-              value={q}
-              onChange={(e) => set("q", e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <ToggleGroup
-            type="single"
-            value={view}
-            onValueChange={(v) => {
-              if (v) set("view", v);
-            }}
-            aria-label="项目列表视图"
-          >
-            <ToggleGroupItem value="cards">卡片</ToggleGroupItem>
-            <ToggleGroupItem value="table">表格</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        {list.length === 0 ? (
-          <EmptyMessage
-            title="没有匹配的项目"
-            action={
-              <Button variant="secondary" onClick={() => set("q", "")}>
-                清除搜索
-              </Button>
-            }
-          />
-        ) : view === "table" ? (
-          <DataTable
-            caption="项目列表"
-            columns={["项目", "状态", "画幅 / 风格", "单集", "进度"]}
-            rows={list.map((p) => [
-              <Link
-                key={p.id}
-                className="font-medium hover:underline"
-                href={`/projects/${p.id}`}
-              >
-                {p.name}
-              </Link>,
-              <Badge key="status" variant="secondary">
-                {p.status}
-              </Badge>,
-              `${p.aspect} · ${p.style}`,
-              `${p.episodes} 集`,
-              `${p.progress}%`,
-            ])}
-          />
-        ) : (
-          <div className="grid gap-7 md:grid-cols-2 xl:grid-cols-3">
-            {list.map((p) => (
-              <Card
-                key={p.id}
-                className="gap-5 border-0 bg-transparent p-0 shadow-none ring-0"
-              >
-                <Link
-                  href={`/projects/${p.id}`}
-                  aria-label={`打开项目 ${p.name}`}
-                  className="group relative flex aspect-[16/10] items-end overflow-hidden rounded-2xl bg-muted p-7 focus-visible:ring-2 focus-visible:ring-blue-500"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="absolute top-5 right-6 font-mono text-6xl font-light text-muted-foreground"
-                  >
-                    {p.cover}
-                  </span>
-                  <div>
-                    <p className="text-xs tracking-widest text-muted-foreground">
-                      LANVERSE ORIGINAL
-                    </p>
-                    <p className="mt-3 text-3xl font-semibold tracking-tight transition-transform group-hover:translate-x-1">
-                      {p.name}
-                    </p>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {p.aspect} / {p.style}
-                    </p>
-                  </div>
-                  <ArrowUpRight
-                    aria-hidden="true"
-                    className="absolute right-6 bottom-7 size-5 text-muted-foreground"
-                  />
-                </Link>
-                <CardHeader className="px-0">
-                  <CardTitle>
-                    <h2>
-                      <Link href={`/projects/${p.id}`}>{p.name}</Link>
-                    </h2>
-                  </CardTitle>
-                  <CardDescription>{p.subtitle}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between px-0">
-                  <Badge variant="secondary">{p.status}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {p.episodes} 集 · 样例进度 {p.progress}%
-                  </span>
-                </CardContent>
-                <CardFooter className="bg-transparent px-0 py-0">
-                  <div className="h-1 w-full rounded-full bg-muted">
-                    <div
-                      className="h-1 rounded-full bg-foreground/60"
-                      style={{ width: `${p.progress}%` }}
-                    />
-                  </div>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        )}
-        <p className="text-xs text-muted-foreground">
-          这些项目共同使用同一套创作链路样例。配置、素材和费用仅用于前端验证。
-        </p>
-      </div>
-    </PreviewBoundary>
-  );
+  return <ProjectsWorkspace />;
 }
 export function OverviewPage({ projectId }: { projectId: string }) {
   const project = projects.find((p) => p.id === projectId)!;

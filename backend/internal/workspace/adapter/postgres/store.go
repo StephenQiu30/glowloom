@@ -9,15 +9,16 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
 )
 
 var (
 	// ErrProjectNotFound hides projects outside the current organization.
-	ErrProjectNotFound = errors.New("project not found")
+	ErrProjectNotFound = application.ErrProjectNotFound
 	// ErrStylePresetNotFound hides unavailable presets outside the current scope.
-	ErrStylePresetNotFound = errors.New("style preset not found")
+	ErrStylePresetNotFound = application.ErrStylePresetNotFound
 	// ErrStylePresetMismatch means a visible preset does not match the project style.
-	ErrStylePresetMismatch = errors.New("style preset does not match project style")
+	ErrStylePresetMismatch = application.ErrStylePresetMismatch
 	// ErrBudgetNotFound hides budgets outside the current project scope.
 	ErrBudgetNotFound = errors.New("budget not found")
 	// ErrUnavailable means the store was constructed without a database handle.

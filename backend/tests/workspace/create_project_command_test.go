@@ -39,6 +39,10 @@ func (s *createProjectCommandStore) CreateProjectWithEvents(_ context.Context, a
 	return project, nil
 }
 
+func (s *createProjectCommandStore) CreateProjectIdempotently(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, _ workspaceapp.ProjectCreationRequest) (domain.Project, error) {
+	return s.CreateProjectWithEvents(ctx, actor, project, events)
+}
+
 func createProjectCommandInput() workspaceapp.CreateProjectInput {
 	return workspaceapp.CreateProjectInput{
 		Name: " 逆光 ", Description: "短剧项目", AspectRatio: "16:9",

@@ -198,6 +198,32 @@ declare namespace API {
     type?: string;
   };
 
+  type githubComStephenQiu30LanverseBackendInternalWorkspaceApplicationCreatedProject =
+    {
+      allow_overseas_models?: boolean;
+      aspect_ratio?: string;
+      create_time?: string;
+      description?: string;
+      id?: string;
+      name?: string;
+      org_id?: string;
+      resolution?: string;
+      revision?: number;
+      status?: string;
+      style_preset_id?: string;
+      style_subtype?: string;
+      style_type?: string;
+      update_time?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalWorkspaceApplicationStylePresetSummary =
+    {
+      id?: string;
+      name?: string;
+      style_subtype?: string;
+      style_type?: string;
+    };
+
   type internalCanvasAdapterHttpListResponse = {
     items?: githubComStephenQiu30LanverseBackendInternalCanvasDomainDocument[];
     next_cursor?: string;
@@ -232,18 +258,33 @@ declare namespace API {
     role?: string;
   };
 
+  type internalWorkspaceAdapterHttpCreateProjectRequest = {
+    aspect_ratio: "9:16" | "16:9";
+    description?: string;
+    name: string;
+    style_preset_id?: string;
+    style_subtype?: "anime_jp" | "guofeng_xianxia" | "cartoon_3d" | "manhwa";
+    style_type: "realistic" | "stylized";
+  };
+
   type internalWorkspaceAdapterHttpListResponse = {
     items?: internalWorkspaceAdapterHttpProjectResponse[];
-    next_cursor?: string;
+    next_cursor?: string | null;
   };
 
   type internalWorkspaceAdapterHttpProjectResponse = {
     aspect_ratio?: string;
     id?: string;
+    is_delete?: boolean;
     name?: string;
     revision?: number;
     status?: string;
     style_type?: string;
+  };
+
+  type internalWorkspaceAdapterHttpStylePresetListResponse = {
+    items?: githubComStephenQiu30LanverseBackendInternalWorkspaceApplicationStylePresetSummary[];
+    next_cursor?: string | null;
   };
 
   type listCanvasesParams = {
@@ -271,6 +312,19 @@ declare namespace API {
     q?: string;
     /** active或archived */
     status?: string;
+    /** 只查询回收中的项目 */
+    deleted?: boolean;
+  };
+
+  type listStylePresetsParams = {
+    /** 风格类型 */
+    style_type?: "realistic" | "stylized";
+    /** 子风格 */
+    style_subtype?: "anime_jp" | "guofeng_xianxia" | "cartoon_3d" | "manhwa";
+    /** 每页数量（1～200，未传或0默认50） */
+    limit?: number;
+    /** 与账号、组织及筛选绑定的游标 */
+    cursor?: string;
   };
 
   type renameCanvasParams = {

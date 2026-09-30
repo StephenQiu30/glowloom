@@ -22,6 +22,19 @@ import (
 // CreateProjectWithEvents commits a new project, its zero budget, the audit,
 // and its change event after rechecking the actor and preset in one transaction.
 func (s *Store) CreateProjectWithEvents(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent) (domain.Project, error) {
+	return s.createProject(ctx, actor, project, events, nil)
+}
+
+// CreateProjectIdempotently atomically commits or replays the original project
+// snapshot under the shared actor/key lock used by public canvas commands.
+func (s *Store) CreateProjectIdempotently(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, request application.ProjectCreationRequest) (domain.Project, error) {
+	if request.Key == uuid.Nil || len(request.Hash) != 64 {
+		return domain.Project{}, application.ErrInvalidCreateProject
+	}
+	return s.createProject(ctx, actor, project, events, &request)
+}
+
+func (s *Store) createProject(ctx context.Context, actor identityapp.Principal, project domain.Project, events []identityapp.OutboxEvent, request *application.ProjectCreationRequest) (domain.Project, error) {
 	if s == nil || s.db == nil {
 		return domain.Project{}, ErrUnavailable
 	}
@@ -43,6 +56,12 @@ func (s *Store) CreateProjectWithEvents(ctx context.Context, actor identityapp.P
 		if err := requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
+		if request != nil {
+			replayed, err := replayProjectCreation(tx, actor, *request, &saved)
+			if err != nil || replayed {
+				return err
+			}
+		}
 		if err := requireUsablePreset(tx, project); err != nil {
 			return err
 		}
@@ -63,7 +82,13 @@ func (s *Store) CreateProjectWithEvents(ctx context.Context, actor identityapp.P
 		}
 		var err error
 		saved, err = readProjectInTx(tx, actor.OrgID, project.ID)
-		return err
+		if err != nil {
+			return err
+		}
+		if request != nil {
+			return recordProjectCreation(tx, actor, *request, saved)
+		}
+		return nil
 	})
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("create project transaction: %w", err)

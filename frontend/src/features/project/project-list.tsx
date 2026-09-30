@@ -1,8 +1,33 @@
 "use client";
 
 import { useId } from "react";
-
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableCaption,
+} from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export type ProjectListDisplayItem = Readonly<{
   id: string;
@@ -12,150 +37,134 @@ export type ProjectListDisplayItem = Readonly<{
   status: "active" | "archived";
   isDeleted: boolean;
 }>;
-
 export type ProjectListView = "cards" | "table";
-
 type ProjectListProps = {
   projects: readonly ProjectListDisplayItem[];
   view: ProjectListView;
   onViewChange: (view: ProjectListView) => void;
 };
-
 function projectStatus(project: ProjectListDisplayItem) {
   if (project.isDeleted) return "回收中";
   return project.status === "archived" ? "已归档" : "进行中";
 }
-
-function projectStyle(styleType: ProjectListDisplayItem["styleType"]) {
-  return styleType === "realistic" ? "写实" : "风格化";
+function projectStyle(project: ProjectListDisplayItem) {
+  if (project.styleType === "realistic") return "写实";
+  return "风格化";
 }
-
 function StatusLabel({ project }: { project: ProjectListDisplayItem }) {
-  return (
-    <span className="inline-flex rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground">
-      {projectStatus(project)}
-    </span>
+  return <Badge variant="secondary">{projectStatus(project)}</Badge>;
+}
+function ProjectName({ project }: { project: ProjectListDisplayItem }) {
+  return project.isDeleted ? (
+    <span>{project.name}</span>
+  ) : (
+    <Link
+      className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      href={`/projects/${project.id}/canvas`}
+    >
+      {project.name}
+    </Link>
   );
 }
-
 export function ProjectList({
   projects,
   view,
   onViewChange,
 }: ProjectListProps) {
   const headingId = useId();
-
   return (
-    <section aria-labelledby={headingId} className="space-y-6">
+    <section aria-labelledby={headingId} className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 id={headingId} className="text-2xl font-semibold tracking-tight">
+        <h2 id={headingId} className="text-lg font-semibold tracking-tight">
           项目
         </h2>
-        <div
-          role="group"
+        <ToggleGroup
+          type="single"
+          value={view}
+          onValueChange={(value) => {
+            if (value === "cards" || value === "table") onViewChange(value);
+          }}
           aria-label="项目列表视图"
-          className="flex gap-1 rounded-xl bg-muted/65 p-1"
         >
-          <Button
-            type="button"
-            variant={view === "cards" ? "secondary" : "ghost"}
-            aria-label="卡片视图"
-            aria-pressed={view === "cards"}
-            onClick={() => onViewChange("cards")}
-            className="focus-visible:ring-blue-500/60"
-          >
+          <ToggleGroupItem value="cards" aria-label="卡片视图">
             卡片
-          </Button>
-          <Button
-            type="button"
-            variant={view === "table" ? "secondary" : "ghost"}
-            aria-label="表格视图"
-            aria-pressed={view === "table"}
-            onClick={() => onViewChange("table")}
-            className="focus-visible:ring-blue-500/60"
-          >
+          </ToggleGroupItem>
+          <ToggleGroupItem value="table" aria-label="表格视图">
             表格
-          </Button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
-
       {projects.length === 0 ? (
-        <p
-          role="status"
-          className="rounded-2xl bg-muted/65 px-6 py-12 text-sm text-muted-foreground"
-        >
-          当前列表没有项目。
-        </p>
+        <Empty role="status" className="bg-muted/40 py-16">
+          <EmptyHeader>
+            <EmptyTitle>当前列表没有项目。</EmptyTitle>
+            <EmptyDescription>
+              新建项目，或调整搜索和状态筛选。
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : view === "cards" ? (
-        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
-            <li
-              key={project.id}
-              className="min-w-0 rounded-2xl bg-muted/65 p-6"
-            >
-              <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-                <h3 className="min-w-0 flex-1 text-lg font-semibold tracking-tight break-words">
-                  {project.name}
-                </h3>
-                <StatusLabel project={project} />
-              </div>
-              <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">画幅</dt>
-                  <dd className="mt-1 font-medium tabular-nums">
-                    {project.aspectRatio}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">风格</dt>
-                  <dd className="mt-1 font-medium">
-                    {projectStyle(project.styleType)}
-                  </dd>
-                </div>
-              </dl>
+            <li key={project.id} className="min-w-0">
+              <Card className="h-full gap-5 border-0 bg-muted/40 p-6 shadow-none ring-0">
+                <CardHeader className="px-0">
+                  <CardTitle>
+                    <h3 className="text-xl break-words">
+                      <ProjectName project={project} />
+                    </h3>
+                  </CardTitle>
+                  <CardDescription>
+                    {project.aspectRatio} · {projectStyle(project)}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap items-center gap-3 px-0">
+                  <StatusLabel project={project} />
+                </CardContent>
+                <CardFooter className="mt-auto justify-between gap-3 border-0 bg-transparent px-0 py-0">
+                  {!project.isDeleted && (
+                    <Link
+                      href={`/projects/${project.id}/canvas`}
+                      className="inline-flex items-center gap-1 rounded-sm text-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`打开 ${project.name} 的画布`}
+                    >
+                      进入画布
+                      <ArrowUpRight aria-hidden="true" className="size-4" />
+                    </Link>
+                  )}
+                </CardFooter>
+              </Card>
             </li>
           ))}
         </ul>
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-muted/40">
-          <table className="w-full min-w-[34rem] table-fixed text-left text-sm">
-            <caption className="sr-only">项目列表</caption>
-            <thead className="text-muted-foreground">
-              <tr>
-                <th scope="col" className="w-2/5 px-5 py-4 font-medium">
-                  名称
-                </th>
-                <th scope="col" className="w-1/5 px-5 py-4 font-medium">
-                  状态
-                </th>
-                <th scope="col" className="w-1/5 px-5 py-4 font-medium">
-                  画幅
-                </th>
-                <th scope="col" className="w-1/5 px-5 py-4 font-medium">
-                  风格
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.map((project) => (
-                <tr key={project.id}>
-                  <td className="px-5 py-4 font-medium break-words">
-                    {project.name}
-                  </td>
-                  <td className="px-5 py-4">
-                    <StatusLabel project={project} />
-                  </td>
-                  <td className="px-5 py-4 tabular-nums">
-                    {project.aspectRatio}
-                  </td>
-                  <td className="px-5 py-4">
-                    {projectStyle(project.styleType)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table className="min-w-[34rem] table-fixed">
+          <TableCaption className="sr-only">项目列表</TableCaption>
+          <TableHeader className="[&_tr]:border-0">
+            <TableRow className="border-0">
+              <TableHead className="w-2/5">名称</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>画幅</TableHead>
+              <TableHead>风格</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {projects.map((project) => (
+              <TableRow key={project.id} className="border-0">
+                <TableCell className="py-4 font-medium break-words whitespace-normal">
+                  <ProjectName project={project} />
+                </TableCell>
+                <TableCell>
+                  <StatusLabel project={project} />
+                </TableCell>
+                <TableCell className="tabular-nums">
+                  {project.aspectRatio}
+                </TableCell>
+                <TableCell>{projectStyle(project)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </section>
   );

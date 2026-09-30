@@ -18,19 +18,19 @@ export class ApiError extends Error {
 
 function errorMessage(status: number, code: string) {
   if (code === "revision_conflict")
-    return "画布已被其他页面修改，请载入最新版本后重新操作。";
+    return "内容已被其他页面修改，请载入最新版本后重新操作。";
   if (code === "must_change_password")
     return "请先修改初始密码，再打开工作区。";
-  if (code === "project_archived") return "项目已归档，当前画布只可查看。";
+  if (code === "project_archived") return "项目已归档，当前内容只可查看。";
   if (code === "invalid_credentials" || code === "login_failed")
     return "账号或密码不正确。";
   if (status === 401) return "会话已失效，请重新登录。";
   if (status === 403) return "当前账号没有此操作的权限。";
-  if (status === 404) return "项目或画布不存在，或当前账号不可访问。";
+  if (status === 404) return "请求的内容不存在，或当前账号不可访问。";
   if (status === 409) return "操作与当前服务端状态冲突，请重新读取后操作。";
   if (status === 429) return "操作过于频繁，请稍后重试。";
   if (status === 400 || status === 422)
-    return "输入未通过服务端校验，请检查节点内容和布局。";
+    return "输入未通过服务端校验，请检查填写内容。";
   if (status === 0 || status >= 500)
     return "服务或依赖暂时不可用。修改尚未确认保存，请稍后重试。";
   return "请求未完成，请稍后重试。";
