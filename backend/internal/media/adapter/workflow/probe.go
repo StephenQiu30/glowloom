@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,22 +20,28 @@ type FFProber struct{}
 
 // Probe validates the downloaded bytes with ffprobe before storage.
 func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (application.ProbeResult, error) {
+	return probeFile(ctx, file, false)
+}
+
+func probeFile(ctx context.Context, file *application.Downloaded, upload bool) (application.ProbeResult, error) {
 	if file == nil || file.File == nil {
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}
 	cmd := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-protocol_whitelist", "file,pipe", "-show_entries",
 		"format=duration,format_name:stream=codec_type,codec_name,width,height,avg_frame_rate,channels,duration",
 		"-of", "json", file.File.Name())
-	output, err := cmd.Output()
-	if err != nil {
+	var output probeOutput
+	cmd.Stdout = &output
+	if err := cmd.Run(); err != nil {
 		return application.ProbeResult{}, fmt.Errorf("probe media content: %w", mediaProcessError(ctx, err))
 	}
-	if len(output) > 1_000_000 {
+	if output.overflow {
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}
 	var parsed struct {
 		Format struct {
 			Duration string `json:"duration"`
+			Name     string `json:"format_name"`
 		} `json:"format"`
 		Streams []struct {
 			CodecType    string `json:"codec_type"`
@@ -46,7 +53,7 @@ func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (applic
 			Duration     string `json:"duration"`
 		} `json:"streams"`
 	}
-	if err := json.Unmarshal(output, &parsed); err != nil {
+	if err := json.Unmarshal(output.Bytes(), &parsed); err != nil {
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}
 	probe := application.ProbeResult{}
@@ -62,6 +69,10 @@ func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (applic
 		probe.Kind, probe.Extension = domain.KindImage, "webp"
 	case "video/mp4":
 		probe.Kind, probe.Extension = domain.KindVideo, "mp4"
+	case "video/quicktime":
+		probe.Kind, probe.Extension = domain.KindVideo, "mov"
+	case "audio/mp4":
+		probe.Kind, probe.Extension, streamType = domain.KindAudio, "m4a", "audio"
 	case "audio/mpeg":
 		probe.Kind, probe.Extension, streamType = domain.KindAudio, "mp3", "audio"
 	case "audio/wave", "audio/x-wav":
@@ -69,6 +80,10 @@ func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (applic
 	case "audio/ogg":
 		probe.Kind, probe.Extension, streamType = domain.KindAudio, "ogg", "audio"
 	default:
+		return application.ProbeResult{}, ErrUnsupportedMedia
+	}
+	if (file.MIMEType == "video/mp4" || file.MIMEType == "video/quicktime" || file.MIMEType == "audio/mp4") &&
+		!strings.Contains(","+parsed.Format.Name+",", ",mov,") {
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}
 	matched := false
@@ -104,7 +119,60 @@ func (FFProber) Probe(ctx context.Context, file *application.Downloaded) (applic
 	if !matched || (probe.Kind != domain.KindAudio && (probe.Width == nil || probe.Height == nil)) {
 		return application.ProbeResult{}, ErrUnsupportedMedia
 	}
+	if upload && probe.Kind != domain.KindImage {
+		if excessiveUploadDuration(parsed.Format.Duration) {
+			return application.ProbeResult{}, ErrUnsupportedMedia
+		}
+		longest, _ := uploadMilliseconds(parsed.Format.Duration)
+		for _, stream := range parsed.Streams {
+			if stream.CodecType != "video" && stream.CodecType != "audio" {
+				continue
+			}
+			if excessiveUploadDuration(stream.Duration) {
+				return application.ProbeResult{}, ErrUnsupportedMedia
+			}
+			if duration, valid := uploadMilliseconds(stream.Duration); valid && duration > longest {
+				longest = duration
+			}
+		}
+		if longest <= 0 {
+			return application.ProbeResult{}, ErrUnsupportedMedia
+		}
+		probe.DurationMS = &longest
+	}
 	return probe, nil
+}
+
+func excessiveUploadDuration(raw string) bool {
+	seconds, err := strconv.ParseFloat(raw, 64)
+	return err == nil && (math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds < 0 || seconds >= float64(math.MaxInt32)/1000)
+}
+
+// probeOutput bounds diagnostic JSON while letting the child finish without a
+// blocked stdout pipe. Oversized output is rejected before JSON decoding.
+type probeOutput struct {
+	bytes.Buffer
+	overflow bool
+}
+
+func (p *probeOutput) Write(value []byte) (int, error) {
+	const limit = 1_000_000
+	available := limit - p.Len()
+	if len(value) > available {
+		p.overflow = true
+	}
+	if available > 0 {
+		_, _ = p.Buffer.Write(value[:min(len(value), available)])
+	}
+	return len(value), nil
+}
+
+func uploadMilliseconds(raw string) (int32, bool) {
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 || value >= float64(math.MaxInt32)/1000 {
+		return 0, false
+	}
+	return int32(math.Ceil(value * 1000)), true
 }
 
 // mediaProcessError keeps worker cancellation and process startup failures retryable.

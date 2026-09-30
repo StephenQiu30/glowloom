@@ -540,6 +540,8 @@ export function InfiniteCanvas({
   return (
     <div
       ref={containerRef}
+      tabIndex={0}
+      aria-label="无限画布操作区"
       data-canvas-viewport
       data-canvas-pan-state={
         isPanning
@@ -561,7 +563,12 @@ export function InfiniteCanvas({
           "--canvas-live-scale-ratio": 1,
         } as React.CSSProperties
       }
-      onPointerDown={handlePointerDown}
+      onPointerDown={(event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target?.closest(CANVAS_POINTER_IGNORE_SELECTOR))
+          event.currentTarget.focus({ preventScroll: true });
+        handlePointerDown(event);
+      }}
       onDoubleClick={(event) => {
         const target = event.target instanceof Element ? event.target : null;
         if (

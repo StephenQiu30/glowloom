@@ -268,3 +268,35 @@ export async function getMediaPreview(
     await media.getMediaPreview({ pid, asset_id }, { signal }),
   );
 }
+
+export async function uploadCanvasMedia(
+  projectId: string,
+  file: File,
+  key: string,
+  {
+    signal,
+    onProgress,
+  }: {
+    signal: AbortSignal;
+    onProgress: (progress: { loaded: number; total?: number }) => void;
+  },
+): Promise<MediaAsset> {
+  const response = parse(
+    z.object({ asset: mediaSchema, duplicate_of: uuid.nullable() }),
+    await media.uploadMediaAsset(
+      { pid: projectId },
+      { local_review_confirmed: true },
+      file,
+      {
+        signal,
+        headers: { "Idempotency-Key": key },
+        timeout: 300_000,
+        onUploadProgress: (event) =>
+          onProgress({ loaded: event.loaded, total: event.total }),
+      },
+    ),
+  );
+  if (response.asset.project_id !== projectId)
+    throw new ApiError(502, "invalid_response");
+  return response.asset;
+}

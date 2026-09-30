@@ -18,18 +18,29 @@ type Commands = {
   search: () => void;
   move: (x: number, y: number) => void;
   tool: (value: "select" | "move") => void;
+  zoomReset?: () => void;
+  toggleFocus?: () => void;
+  showShortcuts?: () => void;
 };
+export function hasCanvasTextSelection(selection: Selection | null) {
+  return Boolean(
+    selection &&
+    !selection.isCollapsed &&
+    selection.rangeCount > 0 &&
+    selection.toString(),
+  );
+}
 export function useCanvasKeyboard(commands: Commands, enabled: boolean) {
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (!enabled || event.defaultPrevented) return;
+      if (!enabled || event.defaultPrevented || event.isComposing) return;
       const target = event.target instanceof Element ? event.target : null;
       if (
         target?.closest("[role=dialog],[role=menu],[data-slot=select-content]")
       )
         return;
       const editing = target?.closest(
-        "input,textarea,select,[contenteditable=true]",
+        "input,textarea,select,[contenteditable]:not([contenteditable=false]),[role=textbox]",
       );
       const modifier = event.metaKey || event.ctrlKey,
         key = event.key.toLowerCase();
@@ -45,6 +56,35 @@ export function useCanvasKeyboard(commands: Commands, enabled: boolean) {
         return;
       }
       if (editing) return;
+      if (event.altKey && modifier) return;
+      if (modifier && key === "1" && commands.zoomReset) {
+        event.preventDefault();
+        commands.zoomReset();
+        return;
+      }
+      if (modifier && (key === "2" || key === "3")) {
+        event.preventDefault();
+        if (key === "2") commands.fit();
+        else commands.fitSelection();
+        return;
+      }
+      if (!modifier && !event.altKey && key === "?" && commands.showShortcuts) {
+        event.preventDefault();
+        if (!event.repeat) commands.showShortcuts();
+        return;
+      }
+      if (
+        !modifier &&
+        !event.altKey &&
+        !event.shiftKey &&
+        key === "tab" &&
+        target?.matches("[data-canvas-viewport]") &&
+        commands.toggleFocus
+      ) {
+        event.preventDefault();
+        if (!event.repeat) commands.toggleFocus();
+        return;
+      }
       if (
         !modifier &&
         !event.altKey &&
@@ -61,6 +101,7 @@ export function useCanvasKeyboard(commands: Commands, enabled: boolean) {
         event.preventDefault();
         commands.redo();
       } else if (modifier && key === "c") {
+        if (hasCanvasTextSelection(window.getSelection())) return;
         event.preventDefault();
         commands.copy();
       } else if (modifier && key === "v") {
@@ -75,7 +116,8 @@ export function useCanvasKeyboard(commands: Commands, enabled: boolean) {
         else commands.group();
       } else if (modifier && key === "f") {
         event.preventDefault();
-        commands.search();
+        if (event.shiftKey && commands.toggleFocus) commands.toggleFocus();
+        else commands.search();
       } else if (modifier && ["+", "=", "-"].includes(key)) {
         event.preventDefault();
         commands.zoom(key === "-" ? -1 : 1);

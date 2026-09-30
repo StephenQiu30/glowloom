@@ -278,6 +278,13 @@ definitions:
       url:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.UploadResult:
+    properties:
+      asset:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary'
+      duplicate_of:
+        type: string
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem:
     properties:
       code:
@@ -871,6 +878,74 @@ paths:
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 获取媒体预览
+      tags:
+      - media
+  /api/projects/{pid}/media/uploads:
+    post:
+      consumes:
+      - multipart/form-data
+      operationId: uploadMediaAsset
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 图片20MiB，视频500MiB且60秒，音频100MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: 已确认本地内容、素材使用权限且不含需要授权的真人素材
+        in: formData
+        name: local_review_confirmed
+        required: true
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.UploadResult'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 上传本地已人工确认的媒体
       tags:
       - media
   /api/style-presets:

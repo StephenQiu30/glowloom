@@ -188,6 +188,12 @@ declare namespace API {
     url?: string;
   };
 
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationUploadResult =
+    {
+      asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationAssetSummary;
+      duplicate_of?: string;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalPlatformHttpapiProblem = {
     code?: string;
     detail?: string;
@@ -301,5 +307,10 @@ declare namespace API {
   type renameCanvasParams = {
     /** 画布UUID */
     id: string;
+  };
+
+  type uploadMediaAssetParams = {
+    /** 项目UUID */
+    pid: string;
   };
 }

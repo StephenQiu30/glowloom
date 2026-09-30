@@ -14,6 +14,7 @@ type Props = {
   active: boolean;
   playable?: boolean;
   inMotion?: boolean;
+  onPreview?: () => void;
 };
 export function NodeContent(props: Props) {
   const { node } = props;
@@ -43,6 +44,7 @@ function MediaNodeContent({
   active,
   playable = false,
   inMotion = false,
+  onPreview,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const eligible = useMediaLifecycle(root, active, inMotion);
@@ -157,7 +159,18 @@ function MediaNodeContent({
         ? "悬停预览视频，单选后播放"
         : "单选后播放音频";
   return (
-    <div ref={root} className="relative h-full w-full overflow-hidden">
+    <div
+      ref={root}
+      className="relative h-full w-full overflow-hidden"
+      onDoubleClick={
+        node.type === "image" && onPreview
+          ? (event) => {
+              event.stopPropagation();
+              onPreview();
+            }
+          : undefined
+      }
+    >
       {!eligible ? (
         <Placeholder label={label} />
       ) : failed || preview.error ? (

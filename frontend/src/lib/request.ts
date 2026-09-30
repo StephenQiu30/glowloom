@@ -67,7 +67,12 @@ export async function request<T>(
       headers.set("Idempotency-Key", params["Idempotency-Key"]);
     delete params["Idempotency-Key"];
   }
-  if (backend && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+  const formData =
+    typeof FormData !== "undefined" && options.data instanceof FormData;
+  if (formData) {
+    // 浏览器/适配器负责与实际 body 一致的 boundary；生成器的无 boundary 头不能沿用。
+    headers.delete("Content-Type");
+  } else if (backend && !["GET", "HEAD", "OPTIONS"].includes(method)) {
     headers.set("Content-Type", "application/json");
   }
   if (!backend) {

@@ -21,6 +21,7 @@ import (
 	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
 	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/http"
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
@@ -72,6 +73,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) }
 	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)
 	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewStore(database), storage)).Register(protected)
+	mediahttp.NewUploadHandler(mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)).Register(protected)
 	router.GET("/swagger/doc.json", func(c *gin.Context) {
 		body, err := swag.ReadDoc()
 		if err != nil {
