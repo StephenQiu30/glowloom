@@ -22,7 +22,7 @@ type Commands = {
 export function useCanvasKeyboard(commands: Commands, enabled: boolean) {
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (!enabled) return;
+      if (!enabled || event.defaultPrevented) return;
       const target = event.target instanceof Element ? event.target : null;
       if (
         target?.closest("[role=dialog],[role=menu],[data-slot=select-content]")
@@ -33,6 +33,12 @@ export function useCanvasKeyboard(commands: Commands, enabled: boolean) {
       );
       const modifier = event.metaKey || event.ctrlKey,
         key = event.key.toLowerCase();
+      if (
+        !modifier &&
+        ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key) &&
+        target?.closest("button,[role=toolbar],[data-slot=toggle-group]")
+      )
+        return;
       if (modifier && key === "s") {
         event.preventDefault();
         if (!event.repeat) commands.save();

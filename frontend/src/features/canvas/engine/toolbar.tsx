@@ -9,6 +9,17 @@ import {
   type RefObject,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Hand, MousePointer2 } from "lucide-react";
+import { cn } from "cn";
 import {
   subscribeCanvasNodeDragPreview,
   subscribeCanvasViewportPreview,
@@ -20,47 +31,76 @@ export type DockCommand = {
   icon: ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  active?: boolean;
   danger?: boolean;
 };
 export function CanvasDock({
   commands,
+  controls,
   label = "画布工具",
 }: {
   commands: DockCommand[];
+  controls?: ReactNode;
   label?: string;
 }) {
   return (
-    <div
-      role="toolbar"
-      aria-label={label}
-      data-canvas-no-zoom
-      className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-background/95 p-2 shadow-lg backdrop-blur-xl"
-      onPointerDown={(event) => event.stopPropagation()}
-      onWheel={(event) => event.stopPropagation()}
+    <TooltipProvider>
+      <div
+        role="toolbar"
+        aria-label={label}
+        data-canvas-no-zoom
+        className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-background/95 p-2 shadow-lg backdrop-blur-xl"
+        onPointerDown={(event) => event.stopPropagation()}
+        onWheel={(event) => event.stopPropagation()}
+      >
+        {controls}
+        {controls && <Separator orientation="vertical" className="h-6" />}
+        {commands.map((command) => (
+          <Tooltip key={command.id}>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon-lg"
+                variant={command.danger ? "destructive" : "ghost"}
+                aria-label={command.label}
+                disabled={command.disabled}
+                onClick={command.onClick}
+              >
+                {command.icon}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{command.label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </TooltipProvider>
+  );
+}
+export function CanvasToolMode({
+  value,
+  onValueChange,
+  disabled,
+}: {
+  value: "select" | "move";
+  onValueChange: (value: "select" | "move") => void;
+  disabled?: boolean;
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next) => {
+        if (next === "select" || next === "move") onValueChange(next);
+      }}
+      disabled={disabled}
+      aria-label="画布交互模式"
+      size="lg"
     >
-      {commands.map((command) => (
-        <Button
-          key={command.id}
-          size="icon-lg"
-          variant={
-            command.danger
-              ? "destructive"
-              : command.active
-                ? "secondary"
-                : "ghost"
-          }
-          aria-label={command.label}
-          aria-pressed={command.active}
-          title={command.label}
-          disabled={command.disabled}
-          onClick={command.onClick}
-          className={command.danger ? "ml-2 border-l border-border" : ""}
-        >
-          {command.icon}
-        </Button>
-      ))}
-    </div>
+      <ToggleGroupItem value="select" aria-label="框选" title="框选（V）">
+        <MousePointer2 />
+      </ToggleGroupItem>
+      <ToggleGroupItem value="move" aria-label="移动" title="移动（H）">
+        <Hand />
+      </ToggleGroupItem>
+    </ToggleGroup>
   );
 }
 export function CanvasSelectionToolbar({
@@ -162,14 +202,17 @@ export function CanvasSelectionToolbar({
     <div
       ref={toolbarRef}
       data-canvas-no-zoom
-      className={`absolute z-30 max-w-[calc(100%_-_24px)] -translate-x-1/2 ${anchor.placement === "above" ? "-translate-y-full" : ""}`}
+      className={cn(
+        "absolute z-30 max-w-[calc(100%_-_24px)] -translate-x-1/2",
+        anchor.placement === "above" && "-translate-y-full",
+      )}
       style={{ left: anchor.left, top: anchor.top }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="flex items-center gap-2">
-        <span className="shrink-0 rounded-full border bg-background/95 px-3 py-2 text-xs font-semibold tabular-nums shadow-sm backdrop-blur-xl">
+        <Badge variant="secondary" className="shrink-0 tabular-nums">
           已选 {count}
-        </span>
+        </Badge>
         {children}
       </div>
     </div>

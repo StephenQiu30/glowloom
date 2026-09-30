@@ -17,8 +17,6 @@ import {
   Maximize2,
   Undo2,
   Redo2,
-  Hand,
-  MousePointer2,
   Group,
   Ungroup,
   Copy,
@@ -33,9 +31,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -102,7 +109,11 @@ import {
   bindCanvasConnectionPreview,
 } from "./engine/connections";
 import { Minimap } from "./engine/minimap";
-import { CanvasDock, CanvasSelectionToolbar } from "./engine/toolbar";
+import {
+  CanvasDock,
+  CanvasSelectionToolbar,
+  CanvasToolMode,
+} from "./engine/toolbar";
 import { NodeShell } from "./nodes/node-shell";
 import { NodeContent } from "./nodes/node-content";
 import "./canvas.css";
@@ -168,6 +179,18 @@ export function CanvasEditor({
   }>();
   const connecting = useRef<ConnectionHandle | undefined>(undefined);
   const connectionFrame = useRef<number | null>(null);
+  const searchOpener = useRef<HTMLElement | null>(null);
+  const mediaOpener = useRef<HTMLElement | null>(null);
+  const openSearch = () => {
+    const target = window.document.activeElement;
+    searchOpener.current = target instanceof HTMLElement ? target : null;
+    setSearchOpen(true);
+  };
+  const openMedia = () => {
+    const target = window.document.activeElement;
+    mediaOpener.current = target instanceof HTMLElement ? target : null;
+    setMediaOpen(true);
+  };
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
   useLayoutEffect(() => {
     nodesRef.current = document.nodes;
@@ -633,7 +656,7 @@ export function CanvasEditor({
         setConnection(undefined);
         cancelSelectionBox();
       },
-      search: () => setSearchOpen(true),
+      search: openSearch,
       move: moveSelected,
     },
     !readOnly && !saving && !failed,
@@ -715,9 +738,16 @@ export function CanvasEditor({
   const selectedBounds = getCanvasNodesBounds(
     document.nodes.filter((node) => selected.has(node.id)),
   );
+  const searchMatches = document.nodes
+    .filter((node) =>
+      `${node.title} ${node.metadata?.content ?? ""}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
+    )
+    .slice(0, 100);
   return (
     <section
-      className="canvas-editor relative space-y-4"
+      className="canvas-editor relative flex flex-col gap-4"
       aria-label="无限画布编辑器"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -740,43 +770,42 @@ export function CanvasEditor({
         </div>
       </div>
       {readOnly && (
-        <p role="status" className="rounded-xl bg-muted p-4 text-sm">
-          此项目已归档，画布只可查看。
-        </p>
+        <Alert role="status">
+          <AlertTitle>只读画布</AlertTitle>
+          <AlertDescription>此项目已归档，画布只可查看。</AlertDescription>
+        </Alert>
       )}
       {failed && (
-        <div
-          role="alert"
-          className="space-y-3 rounded-xl bg-destructive/10 p-4 text-sm"
-        >
-          <p>{failed.error.message}</p>
-          {failed.error instanceof ApiError && failed.error.requestId && (
-            <p className="text-xs">请求编号：{failed.error.requestId}</p>
-          )}
-          <p>
-            操作尚未确认保存。重试复用同一幂等键；读取最新会放弃失败修改并清空撤销历史。
-          </p>
-          <div className="flex gap-2">
-            {!(
-              failed.error instanceof ApiError &&
-              [401, 403, 409].includes(failed.error.status)
-            ) && (
-              <Button
-                disabled={saving}
-                onClick={() => void persist(failed.attempt)}
-              >
-                重试保存
-              </Button>
+        <Alert variant="destructive">
+          <AlertTitle>操作尚未确认保存</AlertTitle>
+          <AlertDescription>
+            <p>{failed.error.message}</p>
+            {failed.error instanceof ApiError && failed.error.requestId && (
+              <p className="text-xs">请求编号：{failed.error.requestId}</p>
             )}
-            <Button
-              variant="secondary"
-              disabled={saving}
-              onClick={() => void readLatest()}
-            >
-              放弃并读取最新
-            </Button>
-          </div>
-        </div>
+            <p>重试复用同一幂等键；读取最新会放弃失败修改并清空撤销历史。</p>
+            <div className="flex gap-2">
+              {!(
+                failed.error instanceof ApiError &&
+                [401, 403, 409].includes(failed.error.status)
+              ) && (
+                <Button
+                  disabled={saving}
+                  onClick={() => void persist(failed.attempt)}
+                >
+                  重试保存
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                disabled={saving}
+                onClick={() => void readLatest()}
+              >
+                放弃并读取最新
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
       )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
         <div
@@ -946,21 +975,14 @@ export function CanvasEditor({
             data-canvas-no-zoom
           >
             <CanvasDock
+              controls={
+                <CanvasToolMode
+                  value={tool}
+                  onValueChange={setTool}
+                  disabled={locked}
+                />
+              }
               commands={[
-                {
-                  id: "select",
-                  label: "框选",
-                  icon: <MousePointer2 />,
-                  active: tool === "select",
-                  onClick: () => setTool("select"),
-                },
-                {
-                  id: "move",
-                  label: "移动",
-                  icon: <Hand />,
-                  active: tool === "move",
-                  onClick: () => setTool("move"),
-                },
                 {
                   id: "text",
                   label: "文字",
@@ -985,7 +1007,7 @@ export function CanvasEditor({
                   label: "媒体库",
                   icon: <ImageIcon />,
                   disabled: locked,
-                  onClick: () => setMediaOpen(true),
+                  onClick: openMedia,
                 },
                 {
                   id: "undo",
@@ -1012,7 +1034,7 @@ export function CanvasEditor({
                   id: "search",
                   label: "搜索",
                   icon: <Search />,
-                  onClick: () => setSearchOpen(true),
+                  onClick: openSearch,
                 },
               ]}
             />
@@ -1233,20 +1255,22 @@ export function CanvasEditor({
                 <SelectValue placeholder="对齐与均分" />
               </SelectTrigger>
               <SelectContent>
-                {[
-                  ["left", "左对齐"],
-                  ["centerX", "水平居中"],
-                  ["right", "右对齐"],
-                  ["top", "顶对齐"],
-                  ["centerY", "垂直居中"],
-                  ["bottom", "底对齐"],
-                  ["distributeX", "水平均分"],
-                  ["distributeY", "垂直均分"],
-                ].map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {[
+                    ["left", "左对齐"],
+                    ["centerX", "水平居中"],
+                    ["right", "右对齐"],
+                    ["top", "顶对齐"],
+                    ["centerY", "垂直居中"],
+                    ["bottom", "底对齐"],
+                    ["distributeX", "水平均分"],
+                    ["distributeY", "垂直均分"],
+                  ].map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
             <Button
@@ -1281,71 +1305,106 @@ export function CanvasEditor({
         </aside>
       </div>
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            if (searchOpener.current?.isConnected) {
+              event.preventDefault();
+              searchOpener.current.focus();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>搜索节点</DialogTitle>
             <DialogDescription>按节点名称或文字内容定位。</DialogDescription>
           </DialogHeader>
-          <Input
-            aria-label="搜索节点名称或文字"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <div className="max-h-80 space-y-1 overflow-auto">
-            {document.nodes
-              .filter((node) =>
-                `${node.title} ${node.metadata?.content ?? ""}`
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
-              )
-              .slice(0, 100)
-              .map((node) => (
-                <Button
-                  className="w-full justify-start"
-                  variant="ghost"
-                  key={node.id}
-                  onClick={() => {
-                    if (textDirty) return;
-                    setSelected(new Set([node.id]));
-                    setSearchOpen(false);
-                    transition.transitionTo(
-                      viewportForBounds(
-                        {
-                          left: node.position.x,
-                          top: node.position.y,
-                          right: node.position.x + node.width,
-                          bottom: node.position.y + node.height,
-                        },
-                        size,
-                        { maxScale: 1 },
-                      ),
-                    );
-                  }}
-                >
-                  {node.title}
-                </Button>
-              ))}
+          <Field>
+            <FieldLabel htmlFor="canvas-node-search">节点名称或文字</FieldLabel>
+            <Input
+              id="canvas-node-search"
+              aria-label="搜索节点名称或文字"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </Field>
+          {!searchMatches.length && (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>没有匹配的节点</EmptyTitle>
+                <EmptyDescription>尝试其他名称或文字内容。</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+          <div className="flex max-h-80 flex-col gap-1 overflow-auto">
+            {searchMatches.map((node) => (
+              <Button
+                className="w-full justify-start"
+                variant="ghost"
+                key={node.id}
+                onClick={() => {
+                  if (textDirty) return;
+                  setSelected(new Set([node.id]));
+                  setSearchOpen(false);
+                  transition.transitionTo(
+                    viewportForBounds(
+                      {
+                        left: node.position.x,
+                        top: node.position.y,
+                        right: node.position.x + node.width,
+                        bottom: node.position.y + node.height,
+                      },
+                      size,
+                      { maxScale: 1 },
+                    ),
+                  );
+                }}
+              >
+                {node.title}
+              </Button>
+            ))}
           </div>
         </DialogContent>
       </Dialog>
       <Dialog open={mediaOpen} onOpenChange={setMediaOpen}>
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            if (mediaOpener.current?.isConnected) {
+              event.preventDefault();
+              mediaOpener.current.focus();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>项目媒体库</DialogTitle>
             <DialogDescription>
               选择当前项目已就绪的资产，作为画布引用。
             </DialogDescription>
           </DialogHeader>
-          {media.isPending && <p role="status">正在读取媒体库…</p>}
-          {media.error && (
-            <div role="alert">
-              <p>{media.error.message}</p>
-              <Button variant="secondary" onClick={() => void media.refetch()}>
-                重新读取
-              </Button>
+          {media.isPending && (
+            <div
+              role="status"
+              aria-label="正在读取媒体库"
+              className="flex flex-col gap-2"
+            >
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <span className="sr-only">正在读取媒体库…</span>
             </div>
           )}
-          <div className="max-h-96 space-y-2 overflow-auto">
+          {media.error && (
+            <Alert variant="destructive">
+              <AlertTitle>媒体库读取失败</AlertTitle>
+              <AlertDescription>
+                <p>{media.error.message}</p>
+                <Button
+                  variant="secondary"
+                  onClick={() => void media.refetch()}
+                >
+                  重新读取
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          <div className="flex max-h-96 flex-col gap-2 overflow-auto">
             {media.data?.pages
               .flatMap((page) => page.items)
               .map((asset) => (
@@ -1384,9 +1443,17 @@ export function CanvasEditor({
                 </Button>
               ))}
           </div>
-          {media.data &&
+          {!media.error &&
+            media.data &&
             !media.data.pages.some((page) => page.items.length) && (
-              <p>此项目暂无可用媒体。请先在媒体资产模块上传并完成审核。</p>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>此项目暂无可用媒体</EmptyTitle>
+                  <EmptyDescription>
+                    请先在媒体资产模块上传并完成审核。
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
           {media.hasNextPage && (
             <Button

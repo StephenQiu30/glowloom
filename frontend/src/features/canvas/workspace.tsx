@@ -23,10 +23,19 @@ import {
 import { ApiError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -51,7 +60,15 @@ import {
 } from "./queries";
 const Editor = dynamic(
   () => import("./editor").then((module) => module.CanvasEditor),
-  { ssr: false, loading: () => <p role="status">正在加载无限画布…</p> },
+  {
+    ssr: false,
+    loading: () => (
+      <div role="status" aria-label="正在加载无限画布">
+        <Skeleton className="h-96 w-full" />
+        <span className="sr-only">正在加载无限画布…</span>
+      </div>
+    ),
+  },
 );
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -65,20 +82,20 @@ function Failure({
   retryLabel?: string;
 }) {
   return (
-    <div
-      role="alert"
-      className="space-y-3 rounded-xl bg-destructive/10 p-4 text-sm"
-    >
-      <p>{error instanceof Error ? error.message : "请求未完成。"}</p>
-      {error instanceof ApiError && error.requestId && (
-        <p className="text-xs">请求编号：{error.requestId}</p>
-      )}
-      {retry && (
-        <Button variant="secondary" onClick={retry}>
-          {retryLabel}
-        </Button>
-      )}
-    </div>
+    <Alert variant="destructive">
+      <AlertTitle>请求未完成</AlertTitle>
+      <AlertDescription className="flex flex-col gap-3">
+        <p>{error instanceof Error ? error.message : "请求未完成。"}</p>
+        {error instanceof ApiError && error.requestId && (
+          <p className="text-xs">请求编号：{error.requestId}</p>
+        )}
+        {retry && (
+          <Button variant="secondary" onClick={retry}>
+            {retryLabel}
+          </Button>
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }
 export function CanvasWorkspace({
@@ -398,7 +415,7 @@ export function CanvasWorkspace({
           )}
         </div>
       </header>
-      <div className="mx-auto max-w-[1800px] space-y-6">
+      <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">无限画布</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -406,7 +423,15 @@ export function CanvasWorkspace({
           </p>
         </div>
         {(session.isPending || session.isFetching) && (
-          <p role="status">正在检查会话…</p>
+          <div
+            role="status"
+            aria-label="正在检查会话"
+            className="flex flex-col gap-3"
+          >
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-48 w-full" />
+            <span className="sr-only">正在检查会话…</span>
+          </div>
         )}
         {session.error &&
           !(
@@ -419,7 +444,7 @@ export function CanvasWorkspace({
           )}
         {allowed && (
           <>
-            <div className="grid items-end gap-4 md:grid-cols-3">
+            <FieldGroup className="grid items-end gap-4 md:grid-cols-3">
               <Field>
                 <FieldLabel htmlFor="canvas-project">项目</FieldLabel>
                 <Select
@@ -431,12 +456,14 @@ export function CanvasWorkspace({
                     <SelectValue placeholder="选择有权项目" />
                   </SelectTrigger>
                   <SelectContent>
-                    {items.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                        {item.status === "archived" ? "（已归档）" : ""}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      {items.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                          {item.status === "archived" ? "（已归档）" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
                 {projects.hasNextPage && (
@@ -460,16 +487,17 @@ export function CanvasWorkspace({
                     <SelectValue placeholder="选择已有画布" />
                   </SelectTrigger>
                   <SelectContent>
-                    {canvases.data?.items.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      {canvases.data?.items.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </Field>
               <form
-                className="flex items-end gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   requestLeave(() => {
@@ -478,27 +506,31 @@ export function CanvasWorkspace({
                   });
                 }}
               >
-                <Field className="flex-1">
-                  <FieldLabel htmlFor="new-canvas-name">新画布名称</FieldLabel>
-                  <Input
-                    id="new-canvas-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    required
-                    maxLength={128}
-                    disabled={!project || readonly || pending || busy}
-                  />
-                </Field>
-                <Button
-                  type="submit"
-                  disabled={
-                    !project || readonly || !name.trim() || pending || busy
-                  }
-                >
-                  创建画布
-                </Button>
+                <FieldGroup className="flex-row items-end gap-2">
+                  <Field className="flex-1">
+                    <FieldLabel htmlFor="new-canvas-name">
+                      新画布名称
+                    </FieldLabel>
+                    <Input
+                      id="new-canvas-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      required
+                      maxLength={128}
+                      disabled={!project || readonly || pending || busy}
+                    />
+                  </Field>
+                  <Button
+                    type="submit"
+                    disabled={
+                      !project || readonly || !name.trim() || pending || busy
+                    }
+                  >
+                    创建画布
+                  </Button>
+                </FieldGroup>
               </form>
-            </div>
+            </FieldGroup>
             {failure && (
               <Failure
                 error={failure}
@@ -528,9 +560,12 @@ export function CanvasWorkspace({
             )}{" "}
             {signout.error && <Failure error={signout.error} />}
             {!projects.isPending && !projects.error && !items.length && (
-              <p role="status">
-                当前账号没有可访问项目，请联系管理员创建或授权。
-              </p>
+              <Empty role="status">
+                <EmptyHeader>
+                  <EmptyTitle>当前账号没有可访问项目</EmptyTitle>
+                  <EmptyDescription>请联系管理员创建或授权。</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
             {projectId && !uuid.test(projectId) && (
               <p role="alert">
@@ -543,17 +578,29 @@ export function CanvasWorkspace({
               !projects.hasNextPage &&
               !projects.error && <p role="alert">当前账号无法访问此项目。</p>}
             {project && !canvasId && !canvases.isPending && !canvases.error && (
-              <p role="status">
-                {canvases.data?.items.length
-                  ? "选择一个画布继续创作。"
-                  : "此项目暂无画布，创建后即可开始。"}
-              </p>
+              <Empty role="status">
+                <EmptyHeader>
+                  <EmptyTitle>
+                    {canvases.data?.items.length
+                      ? "选择一个画布继续创作"
+                      : "此项目暂无画布"}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {canvases.data?.items.length
+                      ? "从上方选择已有画布。"
+                      : "输入名称并创建，随后即可开始。"}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
             {canvasId && !uuid.test(canvasId) && (
               <p role="alert">画布标识无效，请选择已有画布。</p>
             )}
             {project && uuid.test(canvasId) && document.isPending && (
-              <p role="status">正在读取画布…</p>
+              <div role="status" aria-label="正在读取画布">
+                <Skeleton className="h-96 w-full" />
+                <span className="sr-only">正在读取画布…</span>
+              </div>
             )}
             {document.data &&
               project &&
