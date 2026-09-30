@@ -26,7 +26,9 @@
 
 2026-09-30 用户明确当前先保证 PoC 页面和服务可用，不需要登录认证。用户随后指定直接清理登录功能，不保留兼容分支或免登录开关；单一工作区复用正式项目/画布持久化，消费者认证后置。配置、身份、写入和失败边界见 BeefTV 引入设计 §4.1。
 
-2026-09-30 用户最新调整执行顺序：先迁移 BeefTV 的能力，再继续后续页面。2026-10-01 用户要求将当前改动提交到本地 `main` 并详细规划；工作台测试与实现已提交，生成执行、结果接管、恢复与费用见 [迁移设计](docs/design/BeefTV生成能力迁移设计.md) 与 [实施计划](docs/plan/BeefTV能力迁移实施计划.md)。首批按图片生成建议编排，真实供应商、模型、计价、操作者授权与审核合同在启用前固定；本轮规划不代表 Go 执行已实现，也不改变已接受的画布核心来源。
+2026-09-30 用户最新调整执行顺序：先迁移 BeefTV 的能力，再继续后续页面。2026-10-01 用户要求将当前改动提交到本地 `main` 并详细规划；工作台测试与实现已提交，生成执行、结果接管、恢复与费用见 [迁移设计](docs/design/BeefTV生成能力迁移设计.md) 与 [实施计划](docs/plan/BeefTV能力迁移实施计划.md)。最新接入顺序为本机 Codex app-server 内置 imagegen 优先，随后火山 Seedream 图片/Seedance 视频，再经 OpenRouter 扩其他模型；不改变已接受的画布核心来源。
+
+2026-10-01 当前进度：M1-12.01 首片内部合同已固定，.02/.03 的数据、DTO、持久发送权与已执行保护已技术通过；Operation 同步转换、成本和 Workflow 仍待 .08/.10，G1 只部分通过。新增 23 个顶层专项测试（10 个合同、12 个真实 PostgreSQL、1 个独立迁移）通过；全后端 343 个顶层测试通过、157 个因外部条件跳过，适用 vet/lint/race/govulncheck 通过（1 个未调用模块告警），见 [首片验收](docs/acceptance/M1-12-同步调用证据与发送权验收.md)。Codex CLI 0.159.2 的公共 schema 已核对能力探测及 thread/turn/imageGeneration 完成事件，但运行、账号、产物和费用尚未真实验证；不默认免费、不复制 OAuth secret、不无声回退付费 HTTP。实际模型、费用、操作者授权与审核合同仍须在启用前固定，真实生成和产品链未通过。
 
 当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。当前复用合同以 [BeefTV 迁移设计](docs/design/BeefTV能力引入设计.md) 和 [第三方代码声明](THIRD_PARTY_NOTICES.md) 为准；LibTV 与旧 infinite-canvas 的历史调研、业务规则来源与许可证据继续保留，不作为当前主要参考或画布引擎建议。
 

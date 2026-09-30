@@ -30,11 +30,13 @@
 1. **当前用户确认（2026-09-30）**：Lanverse 按上线标准实现完整产品；当前优先跑通整项目验证和 Demo。主要参考项目更新为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，固定源码 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。画布直接复用其无限画布核心及对应设计，替换旧引擎；范围以 [迁移设计](docs/design/BeefTV能力引入设计.md) 为准，历史 LibTV/旧引擎研究与验收不作为当前参考建议。
 2. **当前任务**：E-36-09/10 核心与正式资源接线已完成并推送；E-10-06 正式项目创建与画布入口已通过真实生产 API、数据库和浏览器验证（[证据](docs/acceptance/E10-项目创建与画布入口验证.md)）。E-36-11 整项目验证/Demo 继续推进，下一步补媒体上传和生成链的正式接线。旧 E-36-07/08 为 07dfd2d 未完检查点，已被新方案替代，保留历史、不追认完成。P0-07 文档修复继续同步最新方向。
 
-2026-09-30 前端后续：在现有 Next.js App Router 上复用 BeefTV 核心，画布控件接入 shadcn/Radix，修复方向键与弹窗焦点；25 文件/109 项单元组件测试及 4 项合成浏览器控件验证通过，见 [E-36 §6](docs/acceptance/E36-无限画布迁移与接入验证.md#6-nextjs-与-shadcnradix-控件适配复验)。用户最新调整为先迁移参考项目能力，再继续后续页面；现有页面改动保留，生成迁移合同见 [待确认设计](docs/design/BeefTV生成能力迁移设计.md)。本轮控件和页面证据不关闭真实生成或完整产品验收，不追认 M1-12 完成。
+2026-09-30 前端后续：在现有 Next.js App Router 上复用 BeefTV 核心，画布控件接入 shadcn/Radix，修复方向键与弹窗焦点；25 文件/109 项单元组件测试及 4 项合成浏览器控件验证通过，见 [E-36 §6](docs/acceptance/E36-无限画布迁移与接入验证.md#6-nextjs-与-shadcnradix-控件适配复验)。用户最新调整为先迁移参考项目能力，再继续后续页面；现有页面改动保留，生成迁移合同见 [迁移设计](docs/design/BeefTV生成能力迁移设计.md)。本轮控件和页面证据不关闭真实生成或完整产品验收，不追认 M1-12 完成。
 
-2026-10-01 提交与规划：服务工作台测试 `7d024416`、实现 `3d526fb2`、设计/QA `88c45aa0` 已提交本地 `main`，未推送。前端 26 文件/137 测试、ESLint、TypeScript、生产构建及本轮适用格式检查通过，边界见 [QA](design-qa.md)。下一轮按 [能力迁移实施计划](docs/plan/BeefTV能力迁移实施计划.md) 的 18 个子任务与阶段门禁执行：先合同与发送权/收据，再首条图片、接管/审核/费用与现有入口；其后能力各自验收，全面页面重构后置。子任务是现有 M1-12/Epic 的执行索引，不新增 18 个顶层任务，不改变总任务/完成计数。当前 Go 生成和真实供应商链未实现；首个可实施切片为 M1-12.02/.03，但须先完成 M1-12.01 中其所需的数据与载荷合同冻结。
+2026-10-01 提交与规划：服务工作台测试 `7d024416`、实现 `3d526fb2`、设计/QA `88c45aa0` 已提交本地 `main`，未推送。前端 26 文件/137 测试、ESLint、TypeScript、生产构建及本轮适用格式检查通过，边界见 [QA](design-qa.md)。按 [能力迁移实施计划](docs/plan/BeefTV能力迁移实施计划.md) 的 18 个子任务与阶段门禁执行：先合同与发送权/收据，再首条图片、接管/审核/费用与现有入口；其后能力各自验收，全面页面重构后置。子任务是现有 M1-12/Epic 的执行索引，不新增 18 个顶层任务，不改变总任务/完成计数。
 
-3. **后续接线**：补 M1-04/06/07 的公共 CI/契约/持久幂等缺口，再按 E-10 项目生命周期、E-30 媒体、E-07/08 注册表、E-11 预算、E-21/24 报价/任务、E-22 选定合同接业务；P0 真实能力/价格与完整九场景继续验收。用户另行要求先移除 Python `agent/`，目录及直接运行/CI 依赖已清理，M1-12 的 Go 承接尚未实现，见 [清理范围](docs/design/Agent服务目录清理设计.md)。
+2026-10-01 首片技术进度：M1-12.01 所需内部合同已固定；.02/.03 的数据、DTO、持久发送权、封闭收据和已执行保护通过技术核验，Operation 同步转换/计价/Workflow 仍待 .08/.10，G1 尚未全过。新增 23 个顶层专项测试（10 个合同、12 个真实 PostgreSQL、1 个独立迁移）通过；全后端 343 个顶层测试通过、157 个因外部条件跳过，vet/lint/race/govulncheck 通过（1 个未调用模块告警），见 [首片验收](docs/acceptance/M1-12-同步调用证据与发送权验收.md)。用户已定本机 Codex app-server 内置 imagegen 优先，火山 Seedream 图片/Seedance 视频随后，OpenRouter 扩其他模型；CLI 0.159.2 公共 schema 只证明 `capabilities/read` 和 thread/turn 的 imageGeneration 事件合同，不证明运行、账号、产物或费用。后续先接本机桥；不默认免费、不复制 OAuth secret、不自动回退付费 HTTP；真实图片、审核、计价和产品链仍未通过，M1-12 保持进行中。
+
+3. **后续接线**：补 M1-04/06/07 的公共 CI/契约/持久幂等缺口，再按 E-10 项目生命周期、E-30 媒体、E-07/08 注册表、E-11 预算、E-21/24 报价/任务、E-22 选定合同接业务；P0 真实能力/价格与完整九场景继续验收。用户另行要求先移除 Python `agent/`，目录及直接运行/CI 依赖已清理；M1-12 已交付同步证据/发送门禁技术底座，真实执行、费用与恢复仍待接线，见 [清理范围](docs/design/Agent服务目录清理设计.md)。
 
 ### 2.1 完整生产目标与当前执行合同
 
@@ -48,7 +50,7 @@
 | 整项目验证和 Demo | E-36-11；M1-04/06/07 未完门禁 | 现有 Go/前端完整适用检查、本机真实依赖、正式身份/项目/画布/资源演示；缺失业务合同单列并接后续任务 |
 | 持续业务服务接线 | E-30、E-07/08、E-11、E-21/24/25、E-22，后续 script/bible/storyboard/audio/Agent | 每条具体合同就绪后接相应页面；业务 reference/promote/run 依旧有报价确认和权限门禁 |
 | 完整产品与消费者阶段 | PRD-01 九场景与 M1～M5；REQ-34 后续消费者设计 | Demo/核心通过不代表完整 MVP；注册/支付等另行接受，不自动纳入本轮 |
-| Go Provider Activity | M1-12 | Python 服务目录已按用户指令移除；Go 工作流保留，执行端待补。核对原职责/队列/回放/真实供应商后接受并实施 Go 承接设计 |
+| Go Provider Activity | M1-12 | .01 首片内部合同、.02/.03 证据/发送门禁技术已通过，G1 未全过；优先本机 Codex 桥，再火山 Seedream/Seedance 和 OpenRouter。实际执行、费用、审核、回放与产品仍待验收 |
 
 **前置不形成完成循环：**E-09 审计写入/消费先供业务命令，全部动作后补验；E-31 在 M2 交付剧本→设定核心，M3/M4 补真实镜头/音频；E-18 M3 不等待 M5 模板；E-36 核心/资源/命令不等待 AI 助手，E-36-04 在 E-37 提案合同后联调，E-37 不等待整个 E-36 完成。模拟只用于开发/技术验证，不计真实产品通过。
 
@@ -112,7 +114,7 @@
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/` | 完成（骨架：已确认单项的 mock 图片生成、对账、接管、审核和结算；公开确认命令、批量、取消和真实供应商由对应 Epic 实现） | `9ec58b2e`、`a2e039db` |
 | M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/`（历史路径，已删除） | 历史完成（2026-09-30 服务目录已移除；供应商、审核与 Harness 的 Go 承接归 M1-12，当前不能运行） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93`、`bb4809e9`、`a398fc88`、`1839d0d0`、`ae1d01db`、`2d297630`、`754174bb`、`ba7d4594` |
 | M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题、项目页异常恢复、模型参数表单和报价确认组件框架，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7`、`a9467f55`、`55a94493`、`ab0d8a37`、`46bf86fd` |
-| M1-12 | Go 供应商 Activity 承接评估与迁移 | Python 目录及直接运行入口已清理；按生成迁移设计与专项计划拆为 M1-12.01～.18，首条同步图片复用现有 Operation、请求键、媒体与账本；新增持久发送权/收据、短期解封、真实审核/费用、历史回放与阶段验收；后续能力和完整 Skill/Harness 各按原范围继续，不因首图通过标整体完成 | `docs/design/BeefTV生成能力迁移设计.md`、`docs/plan/BeefTV能力迁移实施计划.md`、`backend/internal/operation/`、`backend/internal/catalog/`、`backend/internal/media/`、`backend/internal/app/` | 进行中（详细规划已形成；Go 执行和真实链路尚未实现） | — |
+| M1-12 | Go 供应商 Activity 承接评估与迁移 | Python 目录及直接运行入口已清理；按生成迁移设计与专项计划拆为 M1-12.01～.18，首条图片优先本机 Codex app-server，随后火山 Seedream/Seedance 与 OpenRouter；复用现有 Operation、请求键、媒体与账本；API 路线另接短期解封，真实审核/费用/回放逐项验收；后续能力和完整 Skill/Harness 保持原范围，不因首图通过标整体完成 | `docs/design/BeefTV生成能力迁移设计.md`、`docs/plan/BeefTV能力迁移实施计划.md`、`backend/internal/operation/`、`backend/internal/catalog/`、`backend/internal/media/`、`backend/internal/app/` | 进行中（.01 首片内部合同已固定，.02/.03 数据/DTO/发送权/执行保护技术通过；G1、真实执行与产品链未通过） | `9c9fffe7`、`38a2a016` |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
