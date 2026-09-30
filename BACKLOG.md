@@ -32,6 +32,8 @@
 
 2026-09-30 前端后续：在现有 Next.js App Router 上复用 BeefTV 核心，画布控件接入 shadcn/Radix，修复方向键与弹窗焦点；25 文件/109 项单元组件测试及 4 项合成浏览器控件验证通过，见 [E-36 §6](docs/acceptance/E36-无限画布迁移与接入验证.md#6-nextjs-与-shadcnradix-控件适配复验)。用户最新调整为先迁移参考项目能力，再继续后续页面；现有页面改动保留，生成迁移合同见 [待确认设计](docs/design/BeefTV生成能力迁移设计.md)。本轮控件和页面证据不关闭真实生成或完整产品验收，不追认 M1-12 完成。
 
+2026-10-01 提交与规划：服务工作台测试 `7d024416`、实现 `3d526fb2`、设计/QA `88c45aa0` 已提交本地 `main`，未推送。前端 26 文件/137 测试、ESLint、TypeScript、生产构建及本轮适用格式检查通过，边界见 [QA](design-qa.md)。下一轮按 [能力迁移实施计划](docs/plan/BeefTV能力迁移实施计划.md) 的 18 个子任务与阶段门禁执行：先合同与发送权/收据，再首条图片、接管/审核/费用与现有入口；其后能力各自验收，全面页面重构后置。子任务是现有 M1-12/Epic 的执行索引，不新增 18 个顶层任务，不改变总任务/完成计数。当前 Go 生成和真实供应商链未实现；首个可实施切片为 M1-12.02/.03，但须先完成 M1-12.01 中其所需的数据与载荷合同冻结。
+
 3. **后续接线**：补 M1-04/06/07 的公共 CI/契约/持久幂等缺口，再按 E-10 项目生命周期、E-30 媒体、E-07/08 注册表、E-11 预算、E-21/24 报价/任务、E-22 选定合同接业务；P0 真实能力/价格与完整九场景继续验收。用户另行要求先移除 Python `agent/`，目录及直接运行/CI 依赖已清理，M1-12 的 Go 承接尚未实现，见 [清理范围](docs/design/Agent服务目录清理设计.md)。
 
 ### 2.1 完整生产目标与当前执行合同
@@ -110,7 +112,7 @@
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/` | 完成（骨架：已确认单项的 mock 图片生成、对账、接管、审核和结算；公开确认命令、批量、取消和真实供应商由对应 Epic 实现） | `9ec58b2e`、`a2e039db` |
 | M1-10 | Agent 服务骨架 | FastAPI + Temporal Activity Worker（agent 队列）；Harness 骨架（Skill Registry、执行循环、校验、预算、Trace）与假供应商适配器；增加内部路由时统一映射异常并测试内部错误契约 | `agent/app/`（历史路径，已删除） | 历史完成（2026-09-30 服务目录已移除；供应商、审核与 Harness 的 Go 承接归 M1-12，当前不能运行） | `c3886325`、`1aeb91f4`、`cdee0eb2`、`a8763d61`、`ca7d7bd6`、`64b6a9b7`、`106fec93`、`bb4809e9`、`a398fc88`、`1839d0d0`、`ae1d01db`、`2d297630`、`754174bb`、`ba7d4594` |
 | M1-11 | 前端骨架与共享状态 | App Router 布局、shadcn/ui、应用级 TanStack Query Provider 与查询失效、next-themes 明暗主题、按功能划分的 Zustand + Immer 编辑状态、SSE 订阅、页面错误恢复、`param_schema` 表单组件、报价确认组件框架；验证请求错误解析、共享查询与局部状态；已建立 `/projects` 工作台外壳、共享查询缓存、明暗主题、项目页异常恢复、模型参数表单和报价确认组件框架，其余待实施 | `frontend/src/` | 进行中 | `86601dc6`、`58a7ae66`、`15e1a9a7`、`a9467f55`、`55a94493`、`ab0d8a37`、`46bf86fd` |
-| M1-12 | Go 供应商 Activity 承接评估 | 独立 Python 目录及 Compose/CI 入口已清理；继续清点原凭据解封/限流/取消/审核/Skill 职责，保持 Go Workflow、Operation ID、请求键和账本去重；验证 Activity 名称/队列、历史回放与真实供应商后另行接受并实施 Go 承接设计 | `docs/design/Agent服务目录清理设计.md`、`PROJECT.md`、`backend/internal/operation/` | 待办（目录清理已实现；Go 承接与真实链路未完成） | — |
+| M1-12 | Go 供应商 Activity 承接评估与迁移 | Python 目录及直接运行入口已清理；按生成迁移设计与专项计划拆为 M1-12.01～.18，首条同步图片复用现有 Operation、请求键、媒体与账本；新增持久发送权/收据、短期解封、真实审核/费用、历史回放与阶段验收；后续能力和完整 Skill/Harness 各按原范围继续，不因首图通过标整体完成 | `docs/design/BeefTV生成能力迁移设计.md`、`docs/plan/BeefTV能力迁移实施计划.md`、`backend/internal/operation/`、`backend/internal/catalog/`、`backend/internal/media/`、`backend/internal/app/` | 进行中（详细规划已形成；Go 执行和真实链路尚未实现） | — |
 
 **M1-03 技术验证（2026-09-27）**：本机 `pg_isready`、`redis-cli ping`、Kafka `kafka-broker-api-versions`、MinIO live 探针和 Temporal cluster health 均通过。使用 `.env.example`（不读取现有 `.env`）直接启动三端，三个健康接口均返回 `{"status":"ok"}`。在全新临时 PostgreSQL 库写入一行，`pg_dump -Fc` → `pg_restore` 后查得原值，随后清理两个临时库及转储文件。两份 Compose YAML 分别通过配置校验，未启动容器。此证据证明本机环境和进程启动，不代表 M1-05 的业务客户端连接或 M1 总体验收。
 
