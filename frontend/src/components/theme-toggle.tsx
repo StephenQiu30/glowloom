@@ -15,7 +15,6 @@ export function ThemeToggle() {
       size="icon"
       aria-label="切换明暗主题"
       title="切换明暗主题"
-      className="focus-visible:ring-blue-500"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
       <Moon aria-hidden="true" className="size-4 dark:hidden" />

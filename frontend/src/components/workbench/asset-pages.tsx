@@ -3,9 +3,20 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { Upload, Play, ImageIcon } from "lucide-react";
+import {
+  Upload,
+  Play,
+  ImageIcon,
+  Search,
+  ArrowUpRight,
+  AudioLines,
+  UserRound,
+  Mountain,
+  Package,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -33,6 +44,12 @@ const categories = {
   props: "道具",
   voices: "声音",
 };
+const categoryIcons = {
+  characters: UserRound,
+  scenes: Mountain,
+  props: Package,
+  voices: AudioLines,
+};
 export function BiblePage({ projectId }: { projectId: string }) {
   const { params, set } = usePreviewQuery();
   const requestedCategory = params.get("category") ?? "";
@@ -40,13 +57,13 @@ export function BiblePage({ projectId }: { projectId: string }) {
     ? requestedCategory
     : "characters";
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeading
-        title="让世界保持一致。"
-        description="角色、场景、道具与声音共同定义故事的世界。锁定资产版本后，再用于单集与镜头。"
+        title="故事资产"
+        description="管理角色、场景、道具与声音，核对版本后用于单集与镜头。"
       />
       <Tabs value={category} onValueChange={(v) => set("category", v)}>
-        <TabsList variant="line">
+        <TabsList variant="line" className="w-full justify-start gap-4">
           {Object.entries(categories).map(([key, label]) => (
             <TabsTrigger key={key} value={key}>
               {label}
@@ -54,61 +71,83 @@ export function BiblePage({ projectId }: { projectId: string }) {
           ))}
         </TabsList>
         {Object.entries(entities).map(([key, list]) => (
-          <TabsContent key={key} value={key} className="mt-6">
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {list.map((e) => (
-                <Panel key={e.id} title={e.name} description={e.detail}>
-                  <div className="mb-5 flex aspect-[4/3] items-center justify-center rounded-lg bg-muted">
-                    <span className="text-4xl font-semibold text-muted-foreground">
-                      {e.name.slice(0, 2)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Badge variant="secondary">{e.status}</Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {e.version}
-                    </span>
-                  </div>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" className="mt-4">
-                        查看资产详情
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-lg">
-                      <DialogHeader>
-                        <DialogTitle>{e.name}</DialogTitle>
-                        <DialogDescription>
-                          {e.detail} · 样例资产
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DataTable
-                        caption="资产详情"
-                        columns={["字段", "内容"]}
-                        rows={[
-                          ["版本", e.version],
-                          ["选定状态", e.status],
-                          [
-                            "授权",
-                            key === "voices"
-                              ? "需要声线授权证据，当前未提供"
-                              : "样例素材，仅用于界面",
-                          ],
-                          ["引用范围", "第一集 / 镜头 01"],
-                        ]}
-                      />
-                      <Button variant="secondary" asChild>
-                        <Link
-                          href={`/projects/${projectId}/episodes/ep-01/assets`}
+          <TabsContent key={key} value={key} className="mt-5">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {list.map((e) => {
+                const Icon = categoryIcons[key as keyof typeof categoryIcons];
+                return (
+                  <Card
+                    key={e.id}
+                    className="gap-0 border-0 bg-card py-0 shadow-none ring-0"
+                  >
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          className="h-auto w-full rounded-b-none p-0"
+                          aria-label={`查看 ${e.name} 资产详情`}
                         >
-                          查看单集资产
-                        </Link>
-                      </Button>
-                      <Button disabled>锁定与版本服务待接入</Button>
-                    </DialogContent>
-                  </Dialog>
-                </Panel>
-              ))}
+                          <span className="flex aspect-[16/10] w-full flex-col items-center justify-center gap-3 rounded-t-xl bg-muted/50">
+                            <Icon
+                              aria-hidden="true"
+                              className="size-9 text-primary/70"
+                            />
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {categories[key as keyof typeof categories]} ·
+                              样例资产
+                            </span>
+                          </span>
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                          <DialogTitle>{e.name}</DialogTitle>
+                          <DialogDescription>
+                            {e.detail} · 样例资产
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DataTable
+                          caption="资产详情"
+                          columns={["字段", "内容"]}
+                          rows={[
+                            ["版本", e.version],
+                            ["选定状态", e.status],
+                            [
+                              "授权",
+                              key === "voices"
+                                ? "需要声线授权证据，当前未提供"
+                                : "样例素材，仅用于界面",
+                            ],
+                            ["引用范围", "第一集 / 镜头 01"],
+                          ]}
+                        />
+                        <Button variant="secondary" asChild>
+                          <Link
+                            href={`/projects/${projectId}/episodes/ep-01/assets`}
+                          >
+                            查看单集资产
+                          </Link>
+                        </Button>
+                        <Button disabled>锁定与版本服务待接入</Button>
+                      </DialogContent>
+                    </Dialog>
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h2 className="truncate text-sm font-medium">
+                          {e.name}
+                        </h2>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {e.version}
+                        </span>
+                      </div>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {e.detail}
+                      </p>
+                      <Badge variant="secondary">{e.status}</Badge>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </TabsContent>
         ))}
@@ -124,14 +163,15 @@ export function AssetsPage({
   episodeId: string;
 }) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeading
-        title="准备这一集的资产。"
+        title="单集资产"
         description="核对引用与锁定版本。素材缺失时先补齐，再进入分镜与生成。"
         action={
           <Button asChild>
             <Link href={`/projects/${projectId}/episodes/${episodeId}/shots`}>
               进入分镜
+              <ArrowUpRight data-icon="inline-end" />
             </Link>
           </Button>
         }
@@ -165,10 +205,7 @@ export function AssetsPage({
           ]}
         />
       </Panel>
-      <Panel
-        title="待处理事项"
-        description="场景未选定 / 声线授权缺失不会在界面上自动解除。"
-      >
+      <Panel title="待处理事项" description="场景待选定，声音授权待核对。">
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" asChild>
             <Link href={`/projects/${projectId}/bible?category=scenes`}>
@@ -191,15 +228,18 @@ export function MediaPage() {
   const type = ["image", "video", "audio"].includes(params.get("type") ?? "")
     ? params.get("type")!
     : "all";
+  const search = q.trim().toLocaleLowerCase();
   const list = media.filter(
-    (m) => (type === "all" || type === m.type) && m.name.includes(q),
+    (m) =>
+      (type === "all" || type === m.type) &&
+      `${m.name} ${m.origin} ${m.id}`.toLocaleLowerCase().includes(search),
   );
   const [fileName, setFileName] = useState("");
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeading
-        title="所有素材，各得其所。"
-        description="按素材身份追溯来源、审核和引用。当前使用内置样例预览，不发送文件。"
+        title="素材库"
+        description="查看图像、视频与音频，追溯来源、审核状态和引用。当前为内置样例。"
         action={
           <Dialog>
             <DialogTrigger asChild>
@@ -221,6 +261,7 @@ export function MediaPage() {
                   id="upload-media"
                   type="file"
                   accept="image/*,video/*,audio/*"
+                  disabled={readOnly}
                   onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")}
                 />
               </Field>
@@ -232,64 +273,98 @@ export function MediaPage() {
           </Dialog>
         }
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ToggleGroup
           type="single"
           aria-label="素材类型"
           value={type}
+          className="max-w-full flex-wrap gap-1"
           onValueChange={(v) => {
             if (v) set("type", v);
           }}
         >
-          <ToggleGroupItem value="all">全部</ToggleGroupItem>
-          <ToggleGroupItem value="image">图像</ToggleGroupItem>
-          <ToggleGroupItem value="video">视频</ToggleGroupItem>
-          <ToggleGroupItem value="audio">音频</ToggleGroupItem>
+          <ToggleGroupItem
+            value="all"
+            className="data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+          >
+            全部
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="image"
+            className="data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+          >
+            图像
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="video"
+            className="data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+          >
+            视频
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="audio"
+            className="data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+          >
+            音频
+          </ToggleGroupItem>
         </ToggleGroup>
-        <Input
-          aria-label="搜索素材"
-          className="sm:max-w-xs"
-          placeholder="搜索素材…"
-          value={q}
-          onChange={(e) => set("q", e.target.value)}
-        />
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground"
+          />
+          <Input
+            aria-label="搜索素材"
+            className="h-9 rounded-full border-0 bg-muted/50 pl-9"
+            placeholder="搜索素材名称或来源"
+            value={q}
+            onChange={(e) => set("q", e.target.value)}
+          />
+        </div>
       </div>
+      <p className="text-xs text-muted-foreground">{list.length} 项素材</p>
       {list.length === 0 ? (
-        <EmptyMessage title="没有匹配的素材" />
+        <EmptyMessage
+          title="没有匹配的素材"
+          description="尝试其他类型或搜索词。"
+        />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {list.map((m) => (
-            <Panel key={m.id} title={m.name}>
-              <div className="relative mb-5 aspect-video overflow-hidden rounded-lg bg-muted">
-                <Image
-                  src="/examples/media/scene.svg"
-                  alt="内置素材样例：山景插画，非真实生成产物"
-                  fill
-                  sizes="(max-width: 768px) 90vw, 30vw"
-                  className="object-cover"
-                />
-                {m.type === "video" ? (
-                  <Play
-                    aria-hidden="true"
-                    className="absolute top-3 right-3 size-5 text-background"
-                  />
-                ) : (
-                  <ImageIcon
-                    aria-hidden="true"
-                    className="absolute top-3 right-3 size-5 text-background"
-                  />
-                )}
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Badge variant="secondary">{m.status}</Badge>
-                <span className="text-xs text-muted-foreground">
-                  {m.refs} 个引用
-                </span>
-              </div>
+            <Card
+              key={m.id}
+              className="gap-0 border-0 bg-card py-0 shadow-none ring-0"
+            >
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" className="mt-3">
-                    预览与来源
+                  <Button
+                    variant="ghost"
+                    className="relative h-auto w-full overflow-hidden rounded-t-xl rounded-b-none p-0"
+                    aria-label={`预览与来源：${m.name}`}
+                  >
+                    <span className="relative block aspect-video w-full overflow-hidden bg-muted">
+                      <Image
+                        src="/examples/media/scene.svg"
+                        alt="内置素材样例：山景插画，非真实生成产物"
+                        fill
+                        sizes="(max-width: 640px) 90vw, (max-width: 1280px) 45vw, 25vw"
+                        className="object-cover"
+                      />
+                      {m.type === "video" ? (
+                        <Play
+                          aria-hidden="true"
+                          className="absolute top-3 right-3 size-5 text-white"
+                        />
+                      ) : (
+                        <ImageIcon
+                          aria-hidden="true"
+                          className="absolute top-3 right-3 size-5 text-white"
+                        />
+                      )}
+                      <span className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-1 text-[10px] font-normal text-white">
+                        {m.type === "video" ? "视频" : "图像"} · 样例
+                      </span>
+                    </span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-2xl">
@@ -326,7 +401,17 @@ export function MediaPage() {
                   />
                 </DialogContent>
               </Dialog>
-            </Panel>
+              <CardContent className="space-y-3 p-4">
+                <h2 className="truncate text-sm font-medium">{m.name}</h2>
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant="secondary">{m.status}</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {m.refs} 个引用
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">{m.origin}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

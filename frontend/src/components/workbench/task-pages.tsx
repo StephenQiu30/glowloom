@@ -1,6 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  ListVideo,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -21,70 +29,130 @@ const filters = {
   unknown: "结果未知",
   partial: "部分失败",
 };
+const taskIcons = {
+  succeeded: CheckCircle2,
+  failed: CircleAlert,
+  unknown: Clock3,
+  partial: ListVideo,
+};
 export function TaskListPage() {
   const { params, set } = usePreviewQuery();
-  const status = params.get("status") ?? "all";
+  const requestedStatus = params.get("status") ?? "all";
+  const status = Object.keys(filters).includes(requestedStatus)
+    ? requestedStatus
+    : "all";
   const q = params.get("q") ?? "";
+  const search = q.trim().toLocaleLowerCase();
   const list = tasks.filter(
     (t) =>
       (status === "all" || t.state === status) &&
-      `${t.title}${t.project}`.includes(q),
+      `${t.title} ${t.project} ${t.id}`.toLocaleLowerCase().includes(search),
   );
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeading
-        title="让每次生成都有去向。"
-        description="查看任务状态、费用与产物。失败读取不改变执行状态，未知提交先核对，不直接重提。"
+        title="任务中心"
+        description="查看生成进度、结果与费用。提交结果未知时先核对，再决定后续操作。"
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <ToggleGroup
           type="single"
           aria-label="任务状态"
-          value={status in filters ? status : "all"}
+          value={status}
           onValueChange={(v) => {
             if (v) set("status", v);
           }}
-          className="flex-wrap"
+          className="max-w-full flex-wrap gap-1"
         >
           {Object.entries(filters).map(([key, label]) => (
-            <ToggleGroupItem key={key} value={key}>
+            <ToggleGroupItem
+              key={key}
+              value={key}
+              className="data-[state=on]:bg-primary/10 data-[state=on]:text-primary"
+            >
               {label}
+              <span className="ml-1 text-xs text-muted-foreground">
+                {key === "all"
+                  ? tasks.length
+                  : tasks.filter((task) => task.state === key).length}
+              </span>
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <Input
-          className="sm:max-w-xs"
-          aria-label="搜索任务"
-          placeholder="搜索任务或项目…"
-          value={q}
-          onChange={(e) => set("q", e.target.value)}
-        />
+        <div className="relative w-full lg:max-w-xs">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground"
+          />
+          <Input
+            className="h-9 rounded-full border-0 bg-muted/50 pl-9"
+            aria-label="搜索任务"
+            placeholder="搜索任务或项目…"
+            value={q}
+            onChange={(e) => set("q", e.target.value)}
+          />
+        </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        {list.length} 个任务 · 样例记录
+      </p>
       {list.length === 0 ? (
-        <EmptyMessage title="没有匹配的任务" />
-      ) : (
-        <DataTable
-          caption="任务列表"
-          columns={["任务", "项目", "状态", "费用", "时间"]}
-          rows={list.map((t) => [
-            <Link
-              key={t.id}
-              className="font-medium hover:underline"
-              href={`/tasks/${t.id}`}
-            >
-              {t.title}
-            </Link>,
-            t.project,
-            <Badge
-              key="state"
-              variant={t.state === "failed" ? "destructive" : "secondary"}
-            >
-              {t.label}
-            </Badge>,
-            t.cost,
-            t.time,
-          ])}
+        <EmptyMessage
+          title="没有匹配的任务"
+          description="尝试其他状态或搜索词。"
         />
+      ) : (
+        <ul aria-label="任务列表" className="space-y-2">
+          {list.map((task) => {
+            const Icon = taskIcons[task.state as keyof typeof taskIcons];
+            return (
+              <li key={task.id}>
+                <Link
+                  href={`/tasks/${task.id}`}
+                  className="group @container flex items-start gap-4 rounded-xl bg-card p-4 transition-colors outline-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring sm:items-center sm:p-5"
+                >
+                  <span
+                    className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${task.state === "failed" ? "bg-destructive/10 text-destructive" : "bg-muted text-primary"}`}
+                  >
+                    <Icon aria-hidden="true" className="size-5" />
+                  </span>
+                  <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-3 @2xl:grid-cols-[minmax(160px,1fr)_140px_115px_90px] @2xl:items-center">
+                    <div className="col-span-2 min-w-0 @2xl:col-span-1">
+                      <h2 className="truncate text-sm font-medium">
+                        {task.title}
+                      </h2>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {task.project} · {task.id}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        task.state === "failed" ? "destructive" : "secondary"
+                      }
+                      className={
+                        task.state === "succeeded"
+                          ? "bg-primary/10 text-primary"
+                          : ""
+                      }
+                    >
+                      {task.label}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {task.cost}
+                    </span>
+                    <time className="col-span-2 text-xs text-muted-foreground @2xl:col-span-1">
+                      {task.time}
+                    </time>
+                  </div>
+                  <ArrowUpRight
+                    aria-hidden="true"
+                    className="mt-1 size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary sm:mt-0"
+                  />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
@@ -96,10 +164,11 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
       ? "/projects/harbor/episodes/ep-01/audio"
       : `/projects/harbor/episodes/ep-01/shots/${task.state === "failed" ? "shot-02" : "shot-01"}`;
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeading
+        eyebrow="任务详情"
         title={task.title}
-        description={`${task.project} / ${task.id} · 样例任务，不进行后台轮询或真实取消。`}
+        description={`${task.project} · ${task.id} · 样例任务`}
         action={
           <Badge
             variant={task.state === "failed" ? "destructive" : "secondary"}
@@ -108,7 +177,7 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
           </Badge>
         }
       />
-      <div className="grid gap-7 xl:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
         <Panel
           title={
             task.state === "unknown"
@@ -120,7 +189,7 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
         >
           <p className="text-sm leading-8">{task.detail}</p>
           {task.state === "unknown" ? (
-            <div className="mt-6 rounded-lg bg-muted p-4 text-sm leading-7">
+            <div className="mt-5 rounded-xl bg-muted/60 p-4 text-sm leading-7">
               <h3 className="font-medium">核对步骤</h3>
               <ol className="mt-3 list-inside list-decimal space-y-2">
                 <li>检查供应商是否已有任务与产物。</li>
@@ -132,7 +201,7 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
               </p>
             </div>
           ) : (
-            <Button className="mt-6" variant="secondary" asChild>
+            <Button className="mt-5" variant="secondary" asChild>
               <Link href={href}>{task.action}</Link>
             </Button>
           )}
@@ -168,14 +237,11 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
           </Button>
         </Panel>
       </div>
-      <Panel
-        title="状态记录"
-        description="此时间线只演示已有状态机的表现，不声明真实任务已执行。"
-      >
+      <Panel title="状态记录" description="样例操作记录，不代表实际任务执行。">
         <ol className="grid gap-5 sm:grid-cols-4">
           {["报价确认", "预留预算", "供应商处理", task.label].map((s, i) => (
             <li key={i}>
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">
                 0{i + 1}
               </span>
               <p className="mt-2 text-sm font-medium">{s}</p>

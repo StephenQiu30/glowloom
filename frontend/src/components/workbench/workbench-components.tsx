@@ -55,7 +55,7 @@ export function usePreviewQuery() {
   };
 }
 export function PageHeading({
-  eyebrow = "CREATIVE WORKSPACE",
+  eyebrow,
   title,
   description,
   action,
@@ -66,20 +66,20 @@ export function PageHeading({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-5">
-      <div>
-        <p className="font-mono text-xs tracking-[0.18em] text-muted-foreground">
-          {eyebrow}
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-          {title}
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
+    <header className="flex flex-wrap items-center justify-between gap-4">
+      <div className="min-w-0">
+        {eyebrow ? (
+          <p className="mb-2 text-xs tracking-wider text-muted-foreground">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
           {description}
         </p>
       </div>
       {action}
-    </div>
+    </header>
   );
 }
 export function Panel({
@@ -94,9 +94,11 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <Card className={`border-0 bg-muted/40 shadow-none ring-0 ${className}`}>
+    <Card
+      className={`min-w-0 border-0 bg-card shadow-none ring-0 ${className}`}
+    >
       <CardHeader>
-        <CardTitle>
+        <CardTitle className="font-semibold">
           <h2>{title}</h2>
         </CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
@@ -120,7 +122,11 @@ export function DataTable({
       <TableHeader>
         <TableRow>
           {columns.map((c) => (
-            <TableHead key={c} scope="col">
+            <TableHead
+              key={c}
+              scope="col"
+              className="text-xs text-muted-foreground"
+            >
               {c}
             </TableHead>
           ))}
@@ -130,7 +136,9 @@ export function DataTable({
         {rows.map((row, i) => (
           <TableRow key={i}>
             {row.map((cell, j) => (
-              <TableCell key={j}>{cell}</TableCell>
+              <TableCell key={j} className="py-4">
+                {cell}
+              </TableCell>
             ))}
           </TableRow>
         ))}
@@ -237,16 +245,23 @@ export function PreviewBoundary({ children }: { children: ReactNode }) {
     ? requestedState
     : "ready";
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/60 px-4 py-2">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2">
         <p className="text-xs text-muted-foreground">
+          <span
+            className="mr-2 inline-block size-1.5 rounded-full bg-primary"
+            aria-hidden="true"
+          />
           演示模式 · 样例数据 · 服务尚未接入
         </p>
         <Select
           value={state in states ? state : "ready"}
           onValueChange={(v) => set("state", v === "ready" ? "" : v)}
         >
-          <SelectTrigger aria-label="页面状态演示" className="h-8 w-36">
+          <SelectTrigger
+            aria-label="页面状态演示"
+            className="h-7 w-32 border-0 bg-transparent text-xs shadow-none"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

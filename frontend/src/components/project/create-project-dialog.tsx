@@ -56,6 +56,7 @@ export function projectError(error: unknown) {
 }
 
 type Props = {
+  open?: boolean;
   onSubmit: (body: CreationBody, key: string) => Promise<{ id: string }>;
   onCreated: (id: string) => void;
   onOpenChange?: (open: boolean) => void;
@@ -68,6 +69,7 @@ type Props = {
   onRetryPresets?: () => void;
 };
 export function CreateProjectDialog({
+  open: controlledOpen,
   onSubmit,
   onCreated,
   onOpenChange,
@@ -79,7 +81,8 @@ export function CreateProjectDialog({
   onLoadMorePresets,
   onRetryPresets,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
   const [draft, setDraft] = useState<ProjectDraft>({ ...initialProjectDraft });
   const [errors, setErrors] = useState<
     Partial<Record<keyof ProjectDraft, string>>
@@ -101,10 +104,10 @@ export function CreateProjectDialog({
   );
   const changeOpen = useCallback(
     (value: boolean) => {
-      setOpen(value);
+      if (controlledOpen === undefined) setUncontrolledOpen(value);
       onOpenChange?.(value);
     },
-    [onOpenChange],
+    [controlledOpen, onOpenChange],
   );
   const requestLeave = useCallback(
     (run: () => void) => {
@@ -135,6 +138,7 @@ export function CreateProjectDialog({
   };
   useEffect(() => {
     if (!open) return;
+    leaving.current = false;
     const savedHref = window.location.href;
     const warn = (event: BeforeUnloadEvent) => {
       if (dirty && !leaving.current) {

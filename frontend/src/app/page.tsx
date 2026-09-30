@@ -1,5 +1,10 @@
-import { redirect } from "next/navigation";
+import { HomePage } from "@/components/workbench/home-page";
+import { WorkspaceShell } from "@/components/workbench/workspace-shell";
 
 export default function Home() {
-  redirect("/projects");
+  return (
+    <WorkspaceShell>
+      <HomePage />
+    </WorkspaceShell>
+  );
 }

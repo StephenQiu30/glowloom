@@ -1,13 +1,23 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Bell,
+  ArrowUpRight,
+  BookOpen,
   ChevronRight,
-  Folder,
+  Clapperboard,
+  FolderOpen,
+  House,
+  Images,
   ListChecks,
+  Menu,
+  PanelsTopLeft,
+  Plus,
   Settings2,
+  CircleHelp,
   UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +26,7 @@ import {
   Dialog,
   DialogTrigger,
   DialogContent,
+  DialogClose,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -29,10 +40,16 @@ import {
   SelectGroup,
   SelectItem,
 } from "@/components/ui/select";
-import { projects, tasks, episodes } from "./data";
+import { projects, episodes } from "./data";
 import { projectSections } from "./routes";
 import { cn } from "@/lib/utils";
 
+const mainLinks = [
+  { href: "/", label: "首页", icon: House },
+  { href: "/projects", label: "项目", icon: FolderOpen },
+  { href: "/assets", label: "资产", icon: Images },
+  { href: "/tasks", label: "任务中心", icon: ListChecks },
+] as const;
 const adminSections = [
   ["users", "用户与权限"],
   ["providers", "供应商"],
@@ -40,21 +57,23 @@ const adminSections = [
   ["audit", "审计记录"],
   ["health", "依赖状态"],
 ] as const;
-export function WorkspaceShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+
+function WorkspaceNavigation({
+  pathname,
+  onNavigate,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+}) {
   const router = useRouter();
-  // 正式项目和画布提供真实会话、导航与各自的工作区。
-  if (pathname === "/projects" || /^\/projects\/[^/]+\/canvas$/.test(pathname))
-    return <>{children}</>;
-  const episodeId = episodes.some((e) => e.id === pathname.split("/")[4])
+  const project = pathname.startsWith("/projects/")
+    ? projects.find((item) => item.id === pathname.split("/")[2])
+    : undefined;
+  const episodeId = episodes.some((item) => item.id === pathname.split("/")[4])
     ? pathname.split("/")[4]
     : "ep-01";
-  const projectId = pathname.split("/")[2];
-  const project = pathname.startsWith("/projects/")
-    ? projects.find((p) => p.id === projectId)
-    : undefined;
   const admin = pathname.startsWith("/admin");
-  const nav = project
+  const secondaryLinks = project
     ? projectSections.map(([path, label]) => ({
         href:
           path === "canvas"
@@ -69,123 +88,78 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
         }))
       : [];
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <a
-        href="#main-content"
-        className="sr-only rounded bg-background p-3 focus:not-sr-only focus:absolute focus:z-50"
+    <div className="flex h-full flex-col gap-6 px-4 pt-7 pb-4">
+      <Link
+        href="/"
+        onClick={onNavigate}
+        aria-label="Lanverse，返回首页"
+        className="flex w-fit items-center gap-2.5 rounded-lg px-2 text-xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        跳转到主要内容
-      </a>
-      <header className="flex flex-wrap items-center justify-between gap-4 px-6 py-5 lg:px-9">
-        <div className="flex items-center gap-8">
-          <Link
-            href="/projects"
-            aria-label="Lanverse，返回项目列表"
-            className="flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            <span
-              aria-hidden="true"
-              className="flex size-8 items-center justify-center rounded-xl bg-foreground font-semibold text-background"
-            >
-              L
-            </span>
-            <span className="font-semibold tracking-tight">Lanverse</span>
+        <Clapperboard aria-hidden="true" className="size-7" />
+        Lanverse
+      </Link>
+      <div className="flex flex-col gap-2">
+        <Button asChild size="lg" className="h-10 w-full justify-start px-3">
+          <Link href="/projects?create=true" onClick={onNavigate}>
+            <Plus data-icon="inline-start" />
+            新建项目
           </Link>
-          <nav aria-label="主要导航" className="flex gap-1">
-            {[
-              ["/projects", "项目", Folder],
-              ["/canvas", "画布", Folder],
-              ["/tasks", "任务", ListChecks],
-              ["/admin/users", "管理", Settings2],
-            ].map(([href, label, Icon]) => {
-              const active = pathname.startsWith(
-                String(href).split("/").slice(0, 2).join("/"),
-              );
-              const NavIcon = Icon as typeof Folder;
-              return (
-                <Link
-                  key={String(href)}
-                  href={String(href)}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-blue-500",
-                    active && "bg-muted font-medium text-foreground",
-                  )}
-                >
-                  <NavIcon aria-hidden="true" className="size-4" />
-                  {String(label)}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="hidden sm:inline-flex">
-            演示模式
-          </Badge>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="通知">
-                <Bell />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>工作台通知</DialogTitle>
-                <DialogDescription>
-                  样例通知，尚未接入消息服务。
-                </DialogDescription>
-              </DialogHeader>
-              <ul className="space-y-4">
-                {tasks.slice(0, 3).map((t) => (
-                  <li key={t.id}>
-                    <Link
-                      className="block rounded-lg p-3 hover:bg-muted"
-                      href={`/tasks/${t.id}`}
-                    >
-                      <p className="font-medium">
-                        {t.title} · {t.label}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t.time}
-                      </p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </DialogContent>
-          </Dialog>
-          <ThemeToggle />
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/account" aria-label="账号设置">
-              <UserRound />
-            </Link>
-          </Button>
-        </div>
-      </header>
-      <div
-        className={cn(
-          "mx-auto max-w-[1600px] px-6 pb-16 lg:px-9",
-          nav.length > 0 &&
-            "grid gap-8 lg:grid-cols-[180px_minmax(0,1fr)] lg:gap-10",
-        )}
-      >
-        {nav.length > 0 && (
-          <aside className="pt-5">
+        </Button>
+        <Button variant="ghost" asChild className="h-10 justify-start px-3">
+          <Link href="/canvas" onClick={onNavigate}>
+            <PanelsTopLeft data-icon="inline-start" />
+            创作画布
+            <ArrowUpRight
+              aria-hidden="true"
+              className="ml-auto size-3.5 text-muted-foreground"
+            />
+          </Link>
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <nav aria-label="主要导航" className="flex flex-col gap-1">
+          {mainLinks.map(({ href, label, icon: Icon }) => {
+            const active =
+              href === "/" ? pathname === "/" : pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground transition-colors outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                  active && "bg-sidebar-accent font-medium text-foreground",
+                )}
+              >
+                <Icon aria-hidden="true" className="size-4.5" />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        {secondaryLinks.length > 0 ? (
+          <div className="mt-7 flex flex-col gap-3">
+            <p className="px-3 text-xs text-muted-foreground">
+              {project ? "项目流程 · 样例预览" : "内部管理 · 样例预览"}
+            </p>
             {project ? (
-              <div className="mb-5 space-y-3">
+              <div className="flex flex-col gap-2 px-2">
                 <Select
                   value={project.id}
-                  onValueChange={(id) => router.push(`/projects/${id}`)}
+                  onValueChange={(id) => {
+                    onNavigate?.();
+                    router.push(`/projects/${id}`);
+                  }}
                 >
-                  <SelectTrigger aria-label="切换项目" className="w-full">
+                  <SelectTrigger aria-label="切换样例项目" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {projects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
+                      {projects.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -193,76 +167,211 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
                 </Select>
                 <Select
                   value={episodeId}
-                  onValueChange={(id) =>
-                    router.push(`/projects/${project.id}/episodes/${id}/shots`)
-                  }
+                  onValueChange={(id) => {
+                    onNavigate?.();
+                    router.push(`/projects/${project.id}/episodes/${id}/shots`);
+                  }}
                 >
                   <SelectTrigger aria-label="切换单集" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {episodes.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.name}
+                      {episodes.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
                         </SelectItem>
                       ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>
-            ) : (
-              <p className="mb-5 px-3 text-sm font-semibold">内部管理</p>
-            )}
+            ) : null}
             <nav
               aria-label={project ? "项目导航" : "管理导航"}
-              className="flex flex-wrap gap-1 lg:flex-col"
+              className="flex flex-col gap-1"
             >
-              {nav.map((item) => (
+              {secondaryLinks.map(({ href, label }) => (
                 <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={
-                    pathname === item.href ||
-                    (item.label === "分镜" &&
-                      pathname.startsWith(`${item.href}/`))
-                      ? "page"
-                      : undefined
-                  }
+                  key={href}
+                  href={href}
+                  onClick={onNavigate}
+                  aria-current={pathname === href ? "page" : undefined}
                   className={cn(
-                    "rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-blue-500",
-                    (pathname === item.href ||
-                      (item.label === "分镜" &&
-                        pathname.startsWith(`${item.href}/`))) &&
-                      "bg-muted font-medium text-foreground",
+                    "rounded-lg px-3 py-2 text-sm text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                    pathname === href && "bg-sidebar-accent text-foreground",
                   )}
                 >
-                  {item.label}
+                  {label}
                 </Link>
               ))}
             </nav>
-            {project && (
-              <p className="mt-9 hidden px-3 text-xs leading-6 text-muted-foreground lg:block">
-                从故事到镜头
-                <br />
-                让每一步创作保持连贯。
-              </p>
-            )}
-          </aside>
+          </div>
+        ) : (
+          <div className="mt-7 flex flex-col gap-1">
+            <p className="mb-2 px-3 text-xs text-muted-foreground">创作空间</p>
+            <Link
+              href="/#guides"
+              onClick={onNavigate}
+              className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <BookOpen aria-hidden="true" className="size-4.5" />
+              创作指南
+              <Badge variant="secondary" className="ml-auto text-primary">
+                入门
+              </Badge>
+            </Link>
+            <Link
+              href="/admin/providers"
+              onClick={onNavigate}
+              className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Settings2 aria-hidden="true" className="size-4.5" />
+              服务管理
+            </Link>
+          </div>
         )}
-        <main id="main-content" className="min-w-0 pt-5">
-          <div className="mb-7 flex items-center gap-2 text-xs text-muted-foreground">
-            <Link href="/projects">工作台</Link>
-            <ChevronRight aria-hidden="true" className="size-3" />
-            <span>
-              {project?.name ??
-                (admin
-                  ? "内部管理"
-                  : pathname.startsWith("/tasks")
-                    ? "任务中心"
-                    : "我的项目")}
+      </div>
+      <div className="flex flex-col gap-3">
+        <Link
+          href="/#guides"
+          onClick={onNavigate}
+          className="group relative hidden aspect-[1.8] overflow-hidden rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring lg:block"
+        >
+          <Image
+            src="/studio/motion-studio.png"
+            alt="雾中森林，创作指南示意图"
+            fill
+            sizes="208px"
+            className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transform-none motion-reduce:transition-none"
+          />
+          <div className="absolute inset-0 bg-linear-to-t from-black/90 via-black/20 to-transparent" />
+          <div className="absolute inset-x-4 bottom-4 text-white">
+            <p className="text-base font-medium">让故事成为画面</p>
+            <p className="mt-1 text-xs text-white/70">从你的第一张画布开始</p>
+          </div>
+        </Link>
+        <Link
+          href="/account"
+          onClick={onNavigate}
+          className="flex h-9 items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <UserRound aria-hidden="true" className="size-4" />
+          账号与设置
+          <ChevronRight aria-hidden="true" className="ml-auto size-4" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export function WorkspaceShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  if (/^\/projects\/[^/]+\/canvas$/.test(pathname)) return <>{children}</>;
+  const title =
+    pathname === "/"
+      ? "创作工作台"
+      : pathname.startsWith("/projects")
+        ? "项目空间"
+        : pathname.startsWith("/assets")
+          ? "资产库"
+          : pathname.startsWith("/tasks")
+            ? "任务中心"
+            : pathname.startsWith("/admin")
+              ? "服务管理"
+              : "账号与设置";
+  return (
+    <div className="min-h-dvh bg-background text-foreground">
+      <a
+        href="#main-content"
+        className="sr-only rounded-lg bg-popover p-3 focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
+      >
+        跳转到主要内容
+      </a>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 bg-sidebar lg:block">
+        <WorkspaceNavigation pathname={pathname} />
+      </aside>
+      <div className="min-w-0 lg:pl-60">
+        <header className="flex h-16 items-center justify-between gap-3 px-4 sm:px-7 lg:px-10">
+          <div className="flex min-w-0 items-center gap-3">
+            <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="打开导航菜单"
+                  className="lg:hidden"
+                >
+                  <Menu />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="inset-y-0 left-0 h-dvh w-[min(20rem,85vw)] translate-x-0 translate-y-0 gap-0 rounded-none bg-sidebar p-0 sm:max-w-none">
+                <DialogHeader className="sr-only">
+                  <DialogTitle>工作台导航</DialogTitle>
+                  <DialogDescription>
+                    访问项目、画布、资产和任务。
+                  </DialogDescription>
+                </DialogHeader>
+                <WorkspaceNavigation
+                  pathname={pathname}
+                  onNavigate={() => setMenuOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+            <span className="truncate text-sm text-muted-foreground">
+              {title}
             </span>
           </div>
+          <div className="flex items-center gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="secondary" className="rounded-full">
+                  <CircleHelp data-icon="inline-start" />
+                  <span className="hidden sm:inline">使用指南</span>
+                  <span className="sr-only sm:hidden">使用指南</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>开始你的创作</DialogTitle>
+                  <DialogDescription>
+                    新建项目，确定画幅与风格，再进入画布组织故事和已有素材。
+                  </DialogDescription>
+                </DialogHeader>
+                <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm leading-6 text-muted-foreground">
+                  <li>在项目空间创建或打开项目，进入创作画布。</li>
+                  <li>从资产库选择项目，查看已有图片、视频和音频。</li>
+                  <li>生成服务与任务中心中的样例会显示准备或预览状态。</li>
+                </ol>
+                <DialogClose asChild>
+                  <Button asChild>
+                    <Link href="/projects?create=true">
+                      创建第一个项目
+                      <ArrowUpRight data-icon="inline-end" />
+                    </Link>
+                  </Button>
+                </DialogClose>
+              </DialogContent>
+            </Dialog>
+            <ThemeToggle />
+            <Button
+              variant="secondary"
+              size="icon"
+              asChild
+              className="rounded-full"
+            >
+              <Link href="/account" aria-label="账号设置">
+                <UserRound />
+              </Link>
+            </Button>
+          </div>
+        </header>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-[1800px] px-4 pb-12 outline-none sm:px-7 lg:px-10"
+        >
           {children}
         </main>
       </div>

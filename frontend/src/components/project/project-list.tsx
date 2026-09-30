@@ -2,19 +2,19 @@
 
 import { useId } from "react";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Clapperboard, LayoutGrid, List } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent,
   CardFooter,
 } from "@/components/ui/card";
 import {
   Empty,
   EmptyHeader,
+  EmptyMedia,
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
@@ -52,7 +52,11 @@ function projectStyle(project: ProjectListDisplayItem) {
   return "风格化";
 }
 function StatusLabel({ project }: { project: ProjectListDisplayItem }) {
-  return <Badge variant="secondary">{projectStatus(project)}</Badge>;
+  return (
+    <Badge variant="secondary" className="border-0 font-normal">
+      {projectStatus(project)}
+    </Badge>
+  );
 }
 function ProjectName({ project }: { project: ProjectListDisplayItem }) {
   return project.isDeleted ? (
@@ -73,10 +77,16 @@ export function ProjectList({
 }: ProjectListProps) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-6">
+    <section
+      aria-labelledby={headingId}
+      className="flex min-w-0 flex-col gap-5"
+    >
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 id={headingId} className="text-lg font-semibold tracking-tight">
-          项目
+        <h2
+          id={headingId}
+          className="text-sm font-medium text-muted-foreground"
+        >
+          项目列表
         </h2>
         <ToggleGroup
           type="single"
@@ -85,18 +95,23 @@ export function ProjectList({
             if (value === "cards" || value === "table") onViewChange(value);
           }}
           aria-label="项目列表视图"
+          size="sm"
+          className="rounded-lg bg-muted/50 p-1"
         >
           <ToggleGroupItem value="cards" aria-label="卡片视图">
-            卡片
+            <LayoutGrid aria-hidden="true" className="size-4" />
           </ToggleGroupItem>
           <ToggleGroupItem value="table" aria-label="表格视图">
-            表格
+            <List aria-hidden="true" className="size-4" />
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
       {projects.length === 0 ? (
-        <Empty role="status" className="bg-muted/40 py-16">
+        <Empty role="status" className="rounded-2xl border-0 bg-muted/30 py-20">
           <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Clapperboard aria-hidden="true" />
+            </EmptyMedia>
             <EmptyTitle>当前列表没有项目。</EmptyTitle>
             <EmptyDescription>
               新建项目，或调整搜索和状态筛选。
@@ -104,13 +119,25 @@ export function ProjectList({
           </EmptyHeader>
         </Empty>
       ) : view === "cards" ? (
-        <ul className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {projects.map((project) => (
             <li key={project.id} className="min-w-0">
-              <Card className="h-full gap-5 border-0 bg-muted/40 p-6 shadow-none ring-0">
-                <CardHeader className="px-0">
+              <Card className="group h-full gap-3 overflow-visible border-0 bg-transparent p-0 shadow-none ring-0">
+                <div
+                  aria-hidden="true"
+                  className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl bg-linear-to-br from-muted via-muted/70 to-muted/40 transition-colors group-hover:bg-muted"
+                >
+                  <Clapperboard
+                    className="size-12 text-muted-foreground/35"
+                    strokeWidth={1.25}
+                  />
+                  <span className="absolute right-3 bottom-3 rounded-md bg-background/70 px-2 py-1 text-xs text-muted-foreground tabular-nums">
+                    {project.aspectRatio}
+                  </span>
+                </div>
+                <CardHeader className="gap-2 px-0">
                   <CardTitle>
-                    <h3 className="text-xl break-words">
+                    <h3 className="text-base font-medium break-words">
                       <ProjectName project={project} />
                     </h3>
                   </CardTitle>
@@ -118,14 +145,12 @@ export function ProjectList({
                     {project.aspectRatio} · {projectStyle(project)}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-wrap items-center gap-3 px-0">
-                  <StatusLabel project={project} />
-                </CardContent>
                 <CardFooter className="mt-auto justify-between gap-3 border-0 bg-transparent px-0 py-0">
+                  <StatusLabel project={project} />
                   {!project.isDeleted && (
                     <Link
                       href={`/projects/${project.id}/canvas`}
-                      className="inline-flex items-center gap-1 rounded-sm text-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                      className="inline-flex items-center gap-1 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={`打开 ${project.name} 的画布`}
                     >
                       进入画布

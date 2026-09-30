@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Search, UserRound, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FieldGroup } from "@/components/ui/field";
 import {
   PageHeading,
@@ -11,6 +13,7 @@ import {
   TextField,
   ChoiceField,
   DraftNotice,
+  EmptyMessage,
   usePreviewQuery,
 } from "./workbench-components";
 
@@ -23,19 +26,20 @@ export const adminPages = [
 ] as const;
 export type AdminPage = (typeof adminPages)[number];
 export function AdminScreen({ section }: { section: AdminPage }) {
-  const { readOnly } = usePreviewQuery();
+  const { readOnly, params, set } = usePreviewQuery();
   const [model, setModel] = useState("视频模型（样例）");
   const [price, setPrice] = useState("1.20");
   const [duration, setDuration] = useState("5");
   if (section === "models")
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <PageHeading
-          eyebrow="INTERNAL / CATALOG"
+          eyebrow="服务管理"
           title="模型能力与价格"
-          description="按协议、输入、输出和计费单位表达能力。厂商品牌不能替代模型合同，样例不表示真实可用。"
+          description="查看模型输入、输出与计费方式。当前为配置预览，模型服务尚未接入。"
+          action={<Badge variant="secondary">配置预览</Badge>}
         />
-        <div className="grid gap-7 xl:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
           <Panel title="模型注册表">
             <DataTable
               caption="模型注册表"
@@ -75,13 +79,14 @@ export function AdminScreen({ section }: { section: AdminPage }) {
                 onChange={setDuration}
                 disabled={readOnly}
               />
-              <p className="text-sm">
-                估算：
-                {Number.isFinite(Number(price)) && Number(price) >= 0
-                  ? `¥${(Number(price) * Number(duration)).toFixed(2)}`
-                  : "请输入有效价格"}
-                （样例）
-              </p>
+              <div className="rounded-xl bg-muted/50 p-4">
+                <p className="text-xs text-muted-foreground">费用估算 · 样例</p>
+                <p className="mt-2 text-xl font-semibold tabular-nums">
+                  {Number.isFinite(Number(price)) && Number(price) >= 0
+                    ? `¥${(Number(price) * Number(duration)).toFixed(2)}`
+                    : "请输入有效价格"}
+                </p>
+              </div>
               <DraftNotice
                 changed={
                   price !== "1.20" ||
@@ -110,8 +115,8 @@ export function AdminScreen({ section }: { section: AdminPage }) {
   const screens = {
     users: {
       title: "用户与权限",
-      description:
-        "内部账号和项目角色预览。权限最终由 Go 服务检查，当前页面不提供真实授权保护。",
+      description: "查看内部成员与项目角色。当前为样例账号与权限。",
+      listTitle: "项目成员",
       columns: ["用户", "角色", "状态", "项目范围"],
       rows: [
         ["创作负责人（样例）", "owner", "启用", "雾港来信"],
@@ -121,7 +126,8 @@ export function AdminScreen({ section }: { section: AdminPage }) {
     },
     providers: {
       title: "供应商连接",
-      description: "配置与连通性状态预览。页面不读取、显示或保存任何真实凭据。",
+      description: "查看连接协议与服务状态，当前供应商均未接入。",
+      listTitle: "连接列表",
       columns: ["供应商", "协议", "区域", "状态"],
       rows: [
         ["图像供应商（样例）", "异步任务", "待确认", "尚未接入"],
@@ -131,8 +137,8 @@ export function AdminScreen({ section }: { section: AdminPage }) {
     },
     audit: {
       title: "审计记录",
-      description:
-        "展示对象、动作和结果；真实审计由服务记录。不展示剧本正文、凭据或签名 URL。",
+      description: "按时间追溯操作、对象与结果。当前为样例记录。",
+      listTitle: "操作记录",
       columns: ["时间", "操作", "对象", "结果"],
       rows: [
         ["今天 10:42", "候选登记", "shot-01 / v3", "样例成功"],
@@ -142,8 +148,8 @@ export function AdminScreen({ section }: { section: AdminPage }) {
     },
     health: {
       title: "依赖状态",
-      description:
-        "连通性、技术检查和业务验收分开记录。样例状态不会被解释为真实服务健康。",
+      description: "查看工作台依赖。当前页面尚未执行实时检查。",
+      listTitle: "服务依赖",
       columns: ["依赖", "职责", "当前证据", "状态"],
       rows: [
         ["Go API", "业务命令与查询", "未从本页检测", "待验证"],
@@ -156,20 +162,47 @@ export function AdminScreen({ section }: { section: AdminPage }) {
     },
   };
   const screen = screens[section];
+  const q = params.get("q") ?? "";
+  const search = q.trim().toLocaleLowerCase();
+  const rows = screen.rows.filter((row) =>
+    row.join(" ").toLocaleLowerCase().includes(search),
+  );
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeading
-        eyebrow="INTERNAL / OPERATIONS"
+        eyebrow="服务管理"
         title={screen.title}
         description={screen.description}
         action={<Badge variant="secondary">内部管理</Badge>}
       />
-      <Panel title={screen.title}>
-        <DataTable
-          caption={screen.title}
-          columns={screen.columns}
-          rows={screen.rows}
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {rows.length} 条样例记录
+        </p>
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground"
+          />
+          <Input
+            aria-label={`搜索${screen.title}`}
+            placeholder="搜索名称、状态或范围"
+            value={q}
+            onChange={(event) => set("q", event.target.value)}
+            className="h-9 rounded-full border-0 bg-muted/50 pl-9"
+          />
+        </div>
+      </div>
+      <Panel title={screen.listTitle}>
+        {rows.length ? (
+          <DataTable
+            caption={screen.title}
+            columns={screen.columns}
+            rows={rows}
+          />
+        ) : (
+          <EmptyMessage title="没有匹配的记录" description="尝试其他搜索词。" />
+        )}
       </Panel>
       <p className="text-xs text-muted-foreground">
         管理写入、权限与实时检查将在服务补齐阶段实现。
@@ -182,32 +215,55 @@ export function AccountPage() {
   const [name, setName] = useState("创作负责人");
   const [language, setLanguage] = useState("简体中文");
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeading
         title="账号与偏好"
         description="内部演示账号。当前未接入登录会话或账号持久化。"
       />
-      <Panel title="个人资料" className="max-w-2xl">
-        <FieldGroup>
-          <TextField
-            id="profile-name"
-            label="显示名称"
-            value={name}
-            onChange={setName}
-            disabled={readOnly}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(250px,1fr)]">
+        <Panel title="个人资料">
+          <div className="mb-6 flex items-center gap-3">
+            <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <UserRound aria-hidden="true" className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-medium">{name || "未填写名称"}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                演示账号 · 资料仅在本页预览
+              </p>
+            </div>
+          </div>
+          <FieldGroup>
+            <TextField
+              id="profile-name"
+              label="显示名称"
+              value={name}
+              onChange={setName}
+              disabled={readOnly}
+            />
+            <ChoiceField
+              id="profile-language"
+              label="工作台语言"
+              value={language}
+              options={["简体中文"]}
+              onChange={setLanguage}
+              disabled={readOnly}
+            />
+            <DraftNotice changed={name !== "创作负责人"} />
+            <Button disabled>保存服务待接入</Button>
+          </FieldGroup>
+        </Panel>
+        <Panel title="访问与会话">
+          <ShieldCheck
+            aria-hidden="true"
+            className="mb-4 size-6 text-muted-foreground"
           />
-          <ChoiceField
-            id="profile-language"
-            label="工作台语言"
-            value={language}
-            options={["简体中文"]}
-            onChange={setLanguage}
-            disabled={readOnly}
-          />
-          <DraftNotice changed={name !== "创作负责人"} />
-          <Button disabled>保存服务待接入</Button>
-        </FieldGroup>
-      </Panel>
+          <p className="text-sm font-medium">登录会话待接入</p>
+          <p className="mt-2 text-xs leading-6 text-muted-foreground">
+            当前资料来自演示页面。实际身份、项目权限和账号保存由账号服务提供。
+          </p>
+        </Panel>
+      </div>
     </div>
   );
 }
