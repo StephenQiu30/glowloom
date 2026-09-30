@@ -3,4 +3,6 @@
 !go.sum
 !cmd/
 !internal/
+# public_api.go imports the generated Swagger Go package at runtime.
+!docs/
 **/*_test.go
