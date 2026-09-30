@@ -24,6 +24,8 @@
 
 2026-09-30 用户进一步明确：按上线标准实现完整 Lanverse，当前优先跑通整项目验证和 Demo；画布直接复用 BeefTV 固定提交 0d9e9f48 的 DOM/SVG/rAF InfiniteCanvas 核心及对应设计，替换现有实现（见 BeefTV 引入设计、DES-06/38）。本轮接正式 text/image/video/audio/group 资源节点与 Go/PostgreSQL 合同，不保留独立 PoC 产品入口、旧 live/creation 引擎或双状态；不迁整个 BeefTV provider/3D/插件/时间轴。完整生成/参考/选定/Agent 仍按产品范围持续验收，单次 Demo 不等于 MVP 完成。现有 SQL/业务历史保留，字段演进追加迁移。用户随后明确要求先清理独立 Python `agent/` 服务，范围见 [Agent 服务目录清理](docs/design/Agent服务目录清理设计.md)；其执行能力尚未由 Go 承接，M1-12 继续评估和实施。
 
+2026-09-30 用户明确当前先保证 PoC 页面和服务可用，不需要登录认证。用户随后指定直接清理登录功能，不保留兼容分支或免登录开关；单一工作区复用正式项目/画布持久化，消费者认证后置。配置、身份、写入和失败边界见 BeefTV 引入设计 §4.1。
+
 当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。当前复用合同以 [BeefTV 迁移设计](docs/design/BeefTV能力引入设计.md) 和 [第三方代码声明](THIRD_PARTY_NOTICES.md) 为准；LibTV 与旧 infinite-canvas 的历史调研、业务规则来源与许可证据继续保留，不作为当前主要参考或画布引擎建议。
 
 ## 2. 仓库结构与职责
@@ -124,17 +126,15 @@ backend/
 frontend/
   src/
     app/                         # 路由与布局装配
-    features/<业务>/             # project script bible storyboard operation review edit delivery canvas
-      components/                #   业务组件
-      queries.ts                 #   TanStack Query 查询与 mutation
-      store.ts                   #   局部状态（按需，Zustand）
-    features/operation/param-form/  # 按 ModelProfile.param_schema 渲染参数表单
-    features/canvas/
-      engine/                    #   BeefTV DOM/SVG/rAF 核心、视口、LOD、媒体播放管控
-      document/                  #   画布文档类型、命令、撤销重做、同步与冲突处理
-      nodes/                     #   NodeShell 与三类节点
-      panels/                    #   工具栏、创建菜单、设置弹层、编辑弹窗
-    components/ui/               # shadcn/ui（Radix）基础组件
+    components/
+      canvas/                    # 画布装配、文档命令、查询和 Zustand 状态
+        engine/                  # BeefTV DOM/SVG/rAF 核心、视口、LOD、媒体播放管控
+        nodes/                   # 节点组件与媒体生命周期
+      catalog/                   # 按 ModelProfile.param_schema 渲染参数表单
+      operation/                 # 报价确认组件与查询钩子
+      project/                   # 项目列表、创建对话框与预算组件
+      workbench/                 # 工作台页面组件、布局与路由映射
+      ui/                        # shadcn/ui（Radix）基础组件
     lib/                         # 前端基础能力
       request.ts                  # Axios 请求封装；普通 HTTP 与流式连接的统一入口
     gen/api/                     # @umijs/openapi 从后端在线 Swagger 文档生成，禁止手改
@@ -143,6 +143,8 @@ frontend/
   .prettierrc.json               # Prettier 配置（含 tailwind 插件）
   components.json                # shadcn 配置（Radix 体系）
 ```
+
+2026-09-30 按用户指定的目录方式，业务组件直接放在 `components/<业务>/`。模块私有的查询、钩子、类型、状态与就近测试随组件放在同一业务目录；共享请求与基础能力继续在 `lib/`，生成 API 继续在 `gen/api/`。不再设置 `src/features/` 或重复嵌套的业务 `components/` 层，尚未实现的模块不预建目录。
 
 1. 服务端事实只来自 TanStack Query；SSE 事件只用于让相关查询失效。
 2. 编辑器高频交互状态放 Zustand（嵌套更新用 Immer）；持久化一律通过后端命令接口。

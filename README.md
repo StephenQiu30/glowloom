@@ -82,9 +82,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 Go Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow,media`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。`flow` 注册基础设施维护、凭据测试、单项/批量 Operation 与报价过期 Workflow，`media` 注册媒体接管 Activity。Relay 投递 Outbox，投影已登记的项目/预算/Operation 事件，并按允许字段消费账号、注册表、项目和业务命令审计。公开 SSE、真实供应商及完整生成验收仍以对应 BACKLOG 任务为准。
 
-在已完成 Outbox、账号及组织迁移的空账号库中，可执行 `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse admin bootstrap --login-name <name>` 创建首位管理员；密码在终端交互输入并确认，不设置默认密码。命令若发现已有账号会拒绝重复初始化。详情见 [OPS-01](docs/operation/01-环境与部署.md#7-初始化与种子数据)。
-
-应用全部数据库迁移后，浏览器打开 `/projects`，登录并按要求修改初始密码。正式列表读取当前组织项目；“新建项目”保存项目规格、零预算及事件，成功后进入 `/projects/{UUID}/canvas`，可创建画布、编辑并保存。预设列表来自组织已有数据，可为空。项目创建与画布入口的证据和剩余范围见 [E-10 验证记录](docs/acceptance/E10-项目创建与画布入口验证.md)。
+应用全部数据库迁移后，浏览器直接打开 `http://127.0.0.1:3000/projects`。当前已移除登录页、认证拦截和 `/api/auth/*`，没有兼容入口或认证切换开关；Go 自动建立单一工作区身份，复用既有组织和真实项目数据。正式列表读取当前组织项目；“新建项目”保存项目规格、零预算及事件，成功后进入 `/projects/{UUID}/canvas`，可创建画布、编辑并保存。预设列表来自组织已有数据，可为空。项目创建与画布入口的证据和剩余范围见 [E-10 验证记录](docs/acceptance/E10-项目创建与画布入口验证.md)。
 
 Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_RELAY_HEALTH_ADDR` 提供 `GET /healthz`（样例端口 8081、8082）；该接口只表示进程正在运行，任务处理状况仍需检查 Temporal Worker 与 Outbox 积压。
 

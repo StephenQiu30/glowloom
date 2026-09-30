@@ -9,7 +9,7 @@ Lanverse 的无限画布包含从 [glanderness/BeefTV](https://github.com/glande
 - 版权：2026 @beefnoode and BeefTV contributors；2026 basketikun；2026 ddcat。
 - 上游来源：BeefTV 的 `NOTICE` 声明其包含 Infinite Canvas v0.5.0（`568f0f1838df8de31fe885a4e130e2f346dd14ab`）的派生代码，并记录上游在 `890ba95858bbb13496d23978003716656109abb2` 改为 MIT 许可。
 
-下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；目标均相对于 Lanverse 的 `frontend/src/features/canvas/`。
+下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；目标均相对于 Lanverse 的 `frontend/src/components/canvas/`。
 
 | 目标文件                             | 源文件                                                                                                                                  | 适配范围                                                                       |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |

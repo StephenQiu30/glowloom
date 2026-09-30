@@ -1,5 +1,7 @@
 # Lanverse BACKLOG
 
+2026-09-30 阶段调整：用户要求清理当前登录功能，不保留兼容处理。当前工作台与项目/画布 API 直接使用单一工作区身份；账号/会话相关旧任务和验收记录为历史能力，不代表当前运行入口。消费者认证后置，实施边界见 BeefTV 引入设计 §4.1。
+
 项目进度与待执行任务的唯一清单。需求与设计以 `docs/` 为准，本文件只记录**要做什么、怎么做（要点与设计链接）、改哪些文件、做到哪一步**。
 
 | 项 | 内容 |
@@ -218,7 +220,7 @@
 | E-06-01 | 数据与领域模型 | 迁移建表 / 加列：`identity.user`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问），Redis 会话和登录 IP 限流。详见 [DES-09 §2](docs/design/09-账号与会话.md#2-数据) | `backend/db/migrations/`、`backend/internal/identity/domain/`、`backend/internal/identity/adapter/postgres/`、`backend/internal/identity/adapter/redis/`、`backend/internal/platform/config/` | 完成（迁移、领域与仓储、Redis 会话和 IP 限流、首位管理员 bootstrap；隔离 PostgreSQL/Redis 集成测试已纳入 CI） | 本次提交 |
 | E-06-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/auth/login、POST /api/admin/users；swag 注解生成 OpenAPI。详见 [DES-09 §3](docs/design/09-账号与会话.md#3-接口) | `backend/internal/identity/application/`、`backend/internal/identity/adapter/http/`、`backend/docs/` | 进行中（会话鉴权、管理员账号创建/修改/列表/禁用/启用/重置、密码登录、登出和本人改密的内部用例已验证；公开接口和幂等待实施，公共契约依赖 DES-03 评审） | — |
 | E-06-03 | 异步、工作流与事件 | 事件 `identity.user_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无工作流。账号变更事务内写 Outbox 事件 `identity.user_changed.v1` 与 `audit.recorded.v1`（审计只经后者写入，DES-12）。 详见 [DES-09 §4](docs/design/09-账号与会话.md#4-异步与工作流) | `backend/internal/identity/adapter/workflow/`、`backend/internal/identity/adapter/event/` | 进行中（创建、修改、禁用、启用、重置及本人改密的双 Outbox 事务已验证，创建审计已由正式 Relay 消费；identity 事件消费者待实施） | — |
-| E-06-04 | 前端 | - 登录页：登录名、密码、错误与锁定提示（剩余时间）。 - 强制改密页：当前密码、新密码、确认新密码，实时显示强度规则。 - 管理 · 账号：列表（登录名、显示名、角色、状态、最后登录）、创建对话框、操作菜单（修改、禁用 / 启用、重置密码）。 - 应用外壳用户菜单：修改密码、登出。 详见 [DES-09 §6](docs/design/09-账号与会话.md#6-界面) | `frontend/src/features/auth/` | 待办 | — |
+| E-06-04 | 前端 | - 登录页：登录名、密码、错误与锁定提示（剩余时间）。 - 强制改密页：当前密码、新密码、确认新密码，实时显示强度规则。 - 管理 · 账号：列表（登录名、显示名、角色、状态、最后登录）、创建对话框、操作菜单（修改、禁用 / 启用、重置密码）。 - 应用外壳用户菜单：修改密码、登出。 详见 [DES-09 §6](docs/design/09-账号与会话.md#6-界面) | `frontend/src/components/auth/` | 待办 | — |
 | E-06-05 | 测试与验收 | 单元：密码规则、锁定计数与解锁时间、会话纪元比较、最后一个管理员保护。 集成（testcontainers PostgreSQL + Redis）：登录 → 会话 → 禁用 → 会话失效；并发修改同一账号的版本冲突。 安全：未认证访问全部接口返回 401（遍历…；验收用例 TC-06-01～09（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 **E-06-01 账号数据与领域切片（2026-09-27）**：按 DES-02 §5.1 建立 `identity."user"`，`citext` 加组织范围部分唯一索引；领域实现 bcrypt cost 12、密码长度与字母数字规则、五次失败锁定 15 分钟、会话纪元比较和最后管理员禁用保护。仓储创建时拒绝明文密码，按组织查询并将重复登录名映射为可判定错误；登录状态更新使用 `revision` 乐观锁，禁用管理员使用组织级事务锁以保留至少一名启用管理员。核心规则先以缺失包和方法的编译失败确认 Red；本机隔离 PostgreSQL 库应用迁移后，`go test -race ./tests/identity -count=1 -v` 验证大小写重复、跨组织隔离、过期修订和并发禁用，随后回滚迁移并删除临时库。
@@ -257,7 +259,7 @@
 | E-07-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/admin/providers/{id}/credentials、GET /api/admin/providers/{id}；swag 注解生成 OpenAPI。详见 [DES-10 §3](docs/design/10-供应商凭据.md#3-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 进行中（内部供应商登记、修改、凭据保存、停用及安全详情和列表查询已验证；公共鉴权、持久幂等与 HTTP 契约待实施） | `ac110dac`、`26d1bfb6`、`5e45289d` |
 | E-07-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `CredentialTestWorkflow`；事件 `catalog.credential_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：- 测试：`backend-api` 直接执行一个短工作流 `CredentialTestWorkflow` → Activity `provider.test_credential`（`agent` 队列，超时 15… 详见 [DES-10 §4](docs/design/10-供应商凭据.md#4-异步与工作流) | `backend/internal/catalog/adapter/workflow/`、`backend/internal/catalog/adapter/event/` | 进行中（Go 工作流、双阶段鉴权及测试结果与事件的事务写入已验证；公共启动接口、缓存消费者与真实供应商联调待实施） | `ac110dac`、`26d1bfb6`、`5e45289d` |
 | E-07-04 | Agent 服务 | 供应商凭据解封与连通性测试 Activity `provider.test_credential`；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/activities/`、`agent/app/providers/` | 进行中（私钥文件配置、Activity 与 OpenRouter 免费鉴权探测已在模拟 HTTP 和本机 Temporal 验证；Go/Python 共享示例契约已接入，其他适配器、真实凭据与评测待实施） | `29aee2e6`、`614231dc`、`b65ef335`、`f2a7c4bb`、`5a40fe73` |
-| E-07-05 | 前端 | 供应商列表：名称、区域、凭据状态（末 4 位、最后测试结果与时间）、模型数量；凭据对话框为密码输入框，保存后不可查看。 详见 [DES-10 §6](docs/design/10-供应商凭据.md#6-界面) | `frontend/src/features/admin/` | 待办 | — |
+| E-07-05 | 前端 | 供应商列表：名称、区域、凭据状态（末 4 位、最后测试结果与时间）、模型数量；凭据对话框为密码输入框，保存后不可查看。 详见 [DES-10 §6](docs/design/10-供应商凭据.md#6-界面) | `frontend/src/components/admin/` | 待办 | — |
 | E-07-06 | 测试与验收 | 单元：封装 / 解封；`secret` 按适配器 schema 校验。 集成：停用后新报价失败、进行中任务继续查询；日志与响应敏感词扫描；验收用例 TC-07-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 进行中（封装/解封、Go→Agent 互通、Agent 免费测试模拟 HTTP/Temporal、Go 工作流与本机 PostgreSQL 测试已通过；TC-07 与真实供应商验收未实施） | `2630afc0`、`28c77036`、`f2a7c4bb` |
 
 **E-07-01 数据底座切片（2026-09-27）**：按 DES-02 §5.3 创建 `catalog.provider` 与 `catalog.provider_credential`，数据库部分唯一索引限制每供应商最多一个启用凭据；领域校验供应商状态、限额和凭据元数据，密文字段不参与 JSON 序列化。仓储用供应商行锁串行化替换，在同一事务中停用旧凭据并插入新凭据，支持修订号条件更新、启用凭据查询与停用。先以缺少 `catalog` 包确认 Red；隔离本机 PostgreSQL 中验证重复启用被拒绝、替换失败回滚、两次并发替换后仍只有一个启用凭据、停用供应商不再提供新提交凭据；迁移 up/down 均通过并删除测试库。全量 `go test -race ./... -count=1`、`go vet ./...`、`golangci-lint run ./...`、gofmt/goimports 通过；`govulncheck ./...` 无可达漏洞，另有一个未调用模块告警。此切片尚未实现公钥封装、管理员实时鉴权、审计与 Outbox；仓储仅接收已封装密文，不能将其视为完整凭据保存命令或 TC-07 验收。
@@ -293,7 +295,7 @@
 | E-08-01 | 数据与领域模型 | 迁移建表 / 加列：`catalog.capability`、`catalog.model_profile`、`catalog.model_profile_version`、`catalog.price_rule_version`；实现领域对象、状态机与仓储（组织 / 平台级，按管理员权限访问）。详见 [DES-11 §3](docs/design/11-模型注册表与价格.md#3-数据) | `backend/db/migrations/`、`backend/internal/catalog/domain/`、`backend/internal/catalog/adapter/postgres/` | 完成（迁移、领域校验与状态机、管理员复核和只追加写入仓储已验证；管理用例与审计属 E-08-02） | — |
 | E-08-02 | 用例与接口 | 实现查询接口：GET /api/models；swag 注解生成 OpenAPI。详见 [DES-11 §4](docs/design/11-模型注册表与价格.md#4-接口) | `backend/internal/catalog/application/`、`backend/internal/catalog/adapter/http/`、`backend/docs/` | 进行中（管理员登记、版本 / 价格发布、启停命令及项目模型查询读侧已验证；公共 HTTP 契约、接口与 OpenAPI 待实施） | — |
 | E-08-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `catalog.model_changed.v1`、`catalog.price_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无。模型版本中的 `queue` 与 `supports_*` 被 OperationWorkflow 读取（DES-04）。 详见 [DES-11 §5](docs/design/11-模型注册表与价格.md#5-异步与工作流) | `backend/internal/catalog/adapter/workflow/`、`backend/internal/catalog/adapter/event/` | 待办 | — |
-| E-08-04 | 前端 | - 管理 · 模型注册表：列表（模型、供应商、能力、区域、状态、当前版本、价格）；详情编辑器（JSON 编辑 + 表单预览）；版本差异对比。 - 生成面板：`ModelParamsForm` 组件按 `param_schema` 渲染；`ReferenceLimitBar` 显示各用途用量 / 上限… 详见 [DES-11 §7](docs/design/11-模型注册表与价格.md#7-界面) | `frontend/src/features/admin/` | 待办 | — |
+| E-08-04 | 前端 | - 管理 · 模型注册表：列表（模型、供应商、能力、区域、状态、当前版本、价格）；详情编辑器（JSON 编辑 + 表单预览）；版本差异对比。 - 生成面板：`ModelParamsForm` 组件按 `param_schema` 渲染；`ReferenceLimitBar` 显示各用途用量 / 上限… 详见 [DES-11 §7](docs/design/11-模型注册表与价格.md#7-界面) | `frontend/src/components/admin/` | 待办 | — |
 | E-08-05 | 测试与验收 | 单元：`param_schema` 与 `limits` 校验器（前后端共用同一套 JSON Schema 规则）；价格计算（按张、按秒、按 token、按字符、分辨率系数）。 集成：发布版本 → 缓存失效 → 报价使用新版本。 前端：各组件类型渲染与校验的快…；验收用例 TC-08-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 **E-08-01 模型注册表迁移切片（2026-09-27）**：按 DES-02 §5.3 与 DES-11 §3 建立能力、模型、模型版本和价格版本四表。约束当前版本只能归属同一模型、版本号唯一且为正、价格单位与 JSON 形状有效、非人民币价格必须有正汇率；为供应商模型计数建立索引。先在缺表的隔离 PostgreSQL 中确认 Red，再验证模型版本归属、重复版本和缺汇率拒绝，迁移 up/down 往返成功。
@@ -323,7 +325,7 @@
 | E-09-01 | 数据与领域模型 | 迁移建表 / 加列：`audit.audit_log`、`infra.processed_event`；实现领域对象、状态机与仓储（`audit.audit_log`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤；`infra.processed_event`：组织 / 平台级，按管理员权限访问）。详见 [DES-12 §3](docs/design/12-审计日志.md#3-数据) | `backend/db/migrations/`、`backend/internal/audit/domain/`、`backend/internal/audit/adapter/postgres/` | 完成（数据层与真实受限登录契约；本机既有配置及部署账号切换仍待运维验证） | `eb1f0289`、`f639d9c8`、`091ae31f`、`8c6d9a38`、`9214b55b`、本次提交 |
 | E-09-02 | 用例与接口 | 实现查询接口：GET /api/admin/audit-logs、GET /api/admin/audit-logs:export；swag 注解生成 OpenAPI。详见 [DES-12 §4](docs/design/12-审计日志.md#4-接口) | `backend/internal/audit/application/`、`backend/internal/audit/adapter/http/`、`backend/docs/` | 进行中（管理员权限实时复核的内部查询已实现；公开接口、导出及查询审计待实施） | `95f152b0`、`f67d2cd0` |
 | E-09-03 | 异步、工作流与事件 | 事件 `audit.recorded.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：audit 消费者（`backend-relay`）只消费 `audit.recorded.v1`：命令层对 REQ-09 R1 列出的每个动作（登录与账号变更、凭据、注册表与价格、预算、报价确认、取消、人工核对处理、所… 详见 [DES-12 §5](docs/design/12-审计日志.md#5-异步与工作流) | `backend/internal/audit/adapter/workflow/`、`backend/internal/audit/adapter/event/` | 进行中（正式 Relay 审计消费已联调；`user.created` 已经真实 Kafka 落审计，内部登录与登出的审计 Outbox 已在 PostgreSQL/Redis 验证；月分区维护及独立维护账号的手工双表预备命令已验证；定时调度、三年归档、调用明细维护和其余动作覆盖待实施） | `091ae31f`、`bfd63e5c`、`ac6e6733`、`e5d2a27d`、`d88890b6`、`83613bd2`、`1c516bad`、`1c5eeb5a` |
-| E-09-04 | 前端 | 筛选栏（时间范围、操作人、项目、对象类型、动作）+ 虚拟滚动表格 + 详情抽屉（前后值差异）。 详见 [DES-12 §7](docs/design/12-审计日志.md#7-界面) | `frontend/src/features/admin/` | 待办 | — |
+| E-09-04 | 前端 | 筛选栏（时间范围、操作人、项目、对象类型、动作）+ 虚拟滚动表格 + 详情抽屉（前后值差异）。 详见 [DES-12 §7](docs/design/12-审计日志.md#7-界面) | `frontend/src/components/admin/` | 待办 | — |
 | E-09-05 | 测试与验收 | 命令覆盖测试：遍历 R1 中每个命令，断言产生对应审计记录。 消费者幂等：重复投递同一事件只产生一条记录；验收用例 TC-09-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 **E-09-01 审计建表切片（2026-09-27）**：先以缺失表运行集成测试确认 Red；`eb1f0289` 建立 `audit.audit_log` 当前 UTC 月及未来三个月分区和默认分区，触发器拒绝 `UPDATE` / `DELETE`，约束拒绝以 `is_delete=true` 写入。隔离 PostgreSQL 临时库中，Race 测试验证分区路由、拒绝修改的 SQLSTATE `42501`、逻辑删除约束错误 `23514`，迁移 down 后 schema 消失；临时库已删除。全量 Go Race、vet、golangci-lint、格式检查通过；`govulncheck` 0 个可达漏洞，另有 1 个未调用模块告警。`infra.processed_event` 已在 M1-08 建立；尚未配置非表所有者的应用数据库账号与仅 `INSERT` / `SELECT` 的 ACL，领域仓储、消费者、查询接口、审计动作覆盖与 3 年归档清理均未实现，E-09-01 和 E-09 均不计完成。
@@ -359,9 +361,9 @@
 | E-10-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`workspace.project`、`workspace.style_preset`；实现领域对象、状态机与仓储（`billing.budget`：仓储查询强制带 `project_id`；`workspace.project`：按当前用户组织授权并以项目 ID 过滤，MVP 无项目成员；`workspace.style_preset`：`project_id` 可空，按用户与组织授权，带项目时再按项目过滤）。详见 [DES-13 §2](docs/design/13-项目管理.md#2-数据) | `backend/db/migrations/`、`backend/internal/workspace/domain/`、`backend/internal/workspace/adapter/postgres/` | 完成（三表迁移、领域状态机、项目与零预算原子创建、组织授权仓储已验证；接口由 E-10-02 实现） | `2705c9f9`、`afb9b55c` |
 | E-10-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects、GET /api/projects/{pid}/overview、DELETE /api/projects/{pid}；swag 注解生成 OpenAPI。详见 [DES-13 §3](docs/design/13-项目管理.md#3-接口) | `backend/internal/workspace/application/`、`backend/internal/workspace/adapter/http/`、`backend/docs/` | 进行中（内部创建、组织授权列表查询及四项设置修改命令已验证；公共接口、持久幂等、概览、其余设置和生命周期命令待实施） | `80e54fbf`、`620c66e8` |
 | E-10-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `project-purge`；事件 `workspace.project_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：- `project-purge`（每日）：对 `purge_after < now()` 的项目执行分批清理工作流（删除对象存储前缀、删除各 schema 数据），可断点续跑。 - 概览物化：`realtime` 之外… 详见 [DES-13 §4](docs/design/13-项目管理.md#4-异步与工作流) | `backend/internal/workspace/adapter/workflow/`、`backend/internal/workspace/adapter/event/` | 进行中（创建和修改事件的 Relay → Redis → 项目 SSE 投影已验证；清理工作流、概览消费者和生命周期事件生产方待实施） | `850e8ce7`、`74aab306`、`133f1941` |
-| E-10-04 | 前端 | 项目列表（卡片 / 表格切换、状态筛选、回收站视图）；新建项目对话框（风格类型切换后显示子风格与预设缩略图）；项目概览矩阵（单元格点击跳转）；设置页（画幅与风格只读并说明原因）。 详见 [DES-13 §6](docs/design/13-项目管理.md#6-界面) | `frontend/src/features/project/` | 进行中（已验证仅接收外部项目数据的卡片 / 表格展示组件；状态筛选、回收站查询、页面与接口接入、创建和设置交互待实现） | `59e56649`、`758d0985` |
+| E-10-04 | 前端 | 项目列表（卡片 / 表格切换、状态筛选、回收站视图）；新建项目对话框（风格类型切换后显示子风格与预设缩略图）；项目概览矩阵（单元格点击跳转）；设置页（画幅与风格只读并说明原因）。 详见 [DES-13 §6](docs/design/13-项目管理.md#6-界面) | `frontend/src/components/project/` | 进行中（已验证仅接收外部项目数据的卡片 / 表格展示组件；状态筛选、回收站查询、页面与接口接入、创建和设置交互待实现） | `59e56649`、`758d0985` |
 | E-10-05 | 测试与验收 | 单元：概览阶段计算；生命周期状态机。 集成：清理工作流中断后续跑；触发器拒绝修改画幅；验收用例 TC-10-01～06（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
-| E-10-06 | 正式项目创建与画布入口 | 按 PRJ-01、DES-13 §3/6 和 DES-03 IF4～IF6 注册 POST /api/projects 与组织级安全预设查询，持久 UUID 幂等；原子项目/零预算/双 Outbox，正式 /projects 查询/创建对话框，创建后进入真实 UUID 画布；生成链与路由覆盖门禁、真实 PG/浏览器验证。E-10-02/04 的其余概览、生命周期、策略和界面范围继续保留 | `backend/internal/workspace/`、`backend/tests/workspace/`、`frontend/src/features/project/`、正式项目路由、在线生成 API、CI | 完成（创建与入口限定合同；真实 PG/生产浏览器/契约门禁通过，E-10 全量和 MVP 继续验收） | 本次提交 |
+| E-10-06 | 正式项目创建与画布入口 | 按 PRJ-01、DES-13 §3/6 和 DES-03 IF4～IF6 注册 POST /api/projects 与组织级安全预设查询，持久 UUID 幂等；原子项目/零预算/双 Outbox，正式 /projects 查询/创建对话框，创建后进入真实 UUID 画布；生成链与路由覆盖门禁、真实 PG/浏览器验证。E-10-02/04 的其余概览、生命周期、策略和界面范围继续保留 | `backend/internal/workspace/`、`backend/tests/workspace/`、`frontend/src/components/project/`、正式项目路由、在线生成 API、CI | 完成（创建与入口限定合同；真实 PG/生产浏览器/契约门禁通过，E-10 全量和 MVP 继续验收） | 本次提交 |
 
 **E-10-01 项目数据底座切片（2026-09-27）**：依 DES-02/REQ-10 建立组织内风格预设、项目和每项目唯一预算三表，数据库固定 `1080p`、默认禁止境外模型、限制风格组合与预算余额，并以触发器禁止修改项目画幅和风格类型。领域校验覆盖中文名称长度、画幅、风格、分辨率及状态。隔离本机 PostgreSQL Race 测试验证约束与可修改字段，迁移 down/up 往返验证；项目与默认 0 预算的同事务创建、跨组织预设授权、项目读取及公共接口尚未实施。此数据底座为 E-08-02 按项目过滤模型的前置条件，TC-10-01～06 未计完成。
 
@@ -390,7 +392,7 @@
 | E-11-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`billing.ledger_entry`（其中 `billing.budget` 由 E-10 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-14 §2](docs/design/14-项目预算.md#2-数据) | `backend/db/migrations/`、`backend/internal/billing/domain/`、`backend/internal/billing/adapter/postgres/` | 完成（隔离 PostgreSQL 迁移、只追加权限、项目范围与原子仓储已验证） | `7e3ba601`、`26e129aa`、`825829f5`、`ec634a77`、`0ca81f16` |
 | E-11-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/budget、PUT /api/projects/{pid}/budget；swag 注解生成 OpenAPI。详见 [DES-14 §3](docs/design/14-项目预算.md#3-接口) | `backend/internal/billing/application/`、`backend/internal/billing/adapter/http/`、`backend/docs/` | 进行中（内部预算调整命令与原子事务已验证；公开路由、持久幂等和 OpenAPI 待 DES-03 IF4～IF6 / M1-06） | `ec634a77`、`0ca81f16` |
 | E-11-03 | 异步、工作流与事件 | 事件 `billing.budget_changed.v1`、`billing.budget_low.v1`、`billing.budget_overrun.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无；预留与结算在 `flow` 队列 Activity 的数据库事务中执行（DES-04）。 详见 [DES-14 §4](docs/design/14-项目预算.md#4-异步与工作流) | `backend/internal/billing/adapter/workflow/`、`backend/internal/billing/adapter/event/` | 进行中（预算调整与结算的余额事实、低余额和超支 Outbox 已接入；预算实时投影有本机跨边界证据；完整工作流与 E-33 通知消费仍待验收） | `5213b3e3`、`52bcfb9e` |
-| E-11-04 | 前端 | 设置页预算卡片（上限、已结算、已预留、可用、使用率进度条）；报价对话框显示剩余预算与差额；顶部低余额横幅。 详见 [DES-14 §6](docs/design/14-项目预算.md#6-界面) | `frontend/src/features/project/` | 进行中（纯属性预算卡片与状态测试已完成；设置页挂载、真实预算 API 与全局横幅待 E-11-02 公开接口） | `35c485b7`、`dffe11cf` |
+| E-11-04 | 前端 | 设置页预算卡片（上限、已结算、已预留、可用、使用率进度条）；报价对话框显示剩余预算与差额；顶部低余额横幅。 详见 [DES-14 §6](docs/design/14-项目预算.md#6-界面) | `frontend/src/components/project/` | 进行中（纯属性预算卡片与状态测试已完成；设置页挂载、真实预算 API 与全局横幅待 E-11-02 公开接口） | `35c485b7`、`dffe11cf` |
 | E-11-05 | 测试与验收 | 并发确认测试（race）；结算超支路径；阈值通知去重；验收用例 TC-11-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 **E-11-01 预算与账本数据底座切片（2026-09-27）**：复用 E-10 的项目默认 0 预算，新增 DES-02 §5.10 的 `billing.ledger_entry` 迁移、只追加触发器和应用角色列级权限；预算领域校验最低可设金额、整数溢出与超支恢复，账本和预算仓储读取强制核对当前账号、组织及项目范围。补明 `budget_change` 的正负号口径（新上限减旧上限）。先以缺失领域包确认 Red，再以隔离本机 PostgreSQL 迁移、应用角色权限、跨组织读取和 Go Race 测试确认数据底座；预算调整事务在下一切片补齐，TC-11 尚未计完成。
@@ -412,7 +414,7 @@
 | E-21-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.budget`、`billing.ledger_entry`、`billing.reservation`、`operation.batch`、`operation.operation`、`operation.operation_input`（其中 `billing.budget` 由 E-10 建表，本 Epic 只加列或复用、`billing.ledger_entry` 由 E-11 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（`billing.budget`、`billing.ledger_entry`、`billing.reservation`、`operation.batch`、`operation.operation`、`billing.budget`、`billing.ledger_entry`：仓储查询强制带 `project_id`；`operation.operation_input`：无 `project_id`，经父对象外键继承项目范围校验）。详见 [DES-24 §3](docs/design/24-报价与二次确认.md#3-数据) | `backend/db/migrations/`、`backend/internal/operation/domain/`、`backend/internal/operation/adapter/postgres/` | 完成（迁移、领域状态、项目隔离读取及报价快照原子创建；确认和终态写入归 E-21-02/03） | `920b0431`、`51007ed8` |
 | E-21-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、审计、Outbox；`expected_revision` 按 DES-03 的 `Rev` 标记）实现：POST /api/projects/{pid}/quotes、POST /api/batches/{id}:confirm、POST /api/operations/{id}:confirm；swag 注解生成 OpenAPI。详见 [DES-24 §4](docs/design/24-报价与二次确认.md#4-接口) | `backend/internal/operation/application/`、`backend/internal/operation/adapter/http/`、`backend/docs/` | 进行中（内部 `free` 单项及批量报价已覆盖提示词、媒体输入与项目默认模型；单项与批量确认、复用源复核和持久幂等已实现；其余目标、公开接口与 OpenAPI 待实施） | — |
 | E-21-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`、`BatchWorkflow`、`flow.SettleOperation`、`quote-expiry`；事件 `operation.confirmed.v1`（单项）、`batch.confirmed.v1`（批量）（Outbox → Kafka，消费者按事件 ID 去重）。要点：确认事务提交后启动 `OperationWorkflow`（单项）或 `BatchWorkflow`（批量；`agent_session` 例外，不启动工作流，见 DES-04 §8.7）；工作流型操作的结算由工作流最后… 详见 [DES-24 §5](docs/design/24-报价与二次确认.md#5-异步与工作流) | `backend/internal/operation/adapter/workflow/`、`backend/internal/operation/adapter/event/` | 进行中（单项与真实批次确认事件的 Kafka→Temporal 启动、批次父工作流本机运行与 Worker 重启后取消恢复、复用零费结算、报价过期 Schedule 及非 mock 用量计价已验证；真实供应商适配、人工正费用判定和全链路验收待实施） | — |
-| E-21-04 | 前端 | `QuoteConfirmDialog` 组件（REQ-05 §4.1）：逐项费用（可展开）、合计、剩余预算、倒计时、区域提示、错误项列表与“剔除”操作；确认按钮不响应回车；按钮文案“生成（约 ¥X）”由 `useQuote` 钩子统一计算。 详见 [DES-24 §7](docs/design/24-报价与二次确认.md#7-界面) | `frontend/src/features/operation/` | 进行中（共享组件框架；待真实接口、入口接入与 Playwright） | `46bf86fd` |
+| E-21-04 | 前端 | `QuoteConfirmDialog` 组件（REQ-05 §4.1）：逐项费用（可展开）、合计、剩余预算、倒计时、区域提示、错误项列表与“剔除”操作；确认按钮不响应回车；按钮文案“生成（约 ¥X）”由 `useQuote` 钩子统一计算。 详见 [DES-24 §7](docs/design/24-报价与二次确认.md#7-界面) | `frontend/src/components/operation/` | 进行中（共享组件框架；待真实接口、入口接入与 Playwright） | `46bf86fd` |
 | E-21-05 | 测试与验收 | 单元：计价（各计价单位、系数）、`input_hash` 规范化、报价失效判断。 集成：确认事务（预算约束、并发）；工作流启动失败恢复；复用路径。 故障注入：确认后立即重启 API 与 Worker，任务仍被执行一次；验收用例 TC-21-01～06（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 进行中（计价、指纹、单项确认并发及复用零费路径已有单元 / 本机 PostgreSQL Race 证据；启动恢复与 TC-21 全链路待实施） | — |
 
 **E-21-01 数据底座切片（2026-09-27）**：新增批次、操作、冻结输入和预留表，外键约束同项目批次、复用与预留身份；实现批次状态、报价有效性、预留结算计算，以及按当前账号、组织、项目读取的仓储。隔离本机 PostgreSQL 执行迁移 up/down/up；集成测试覆盖跨项目关联拒绝、跨组织与已删除项目不可见、撤销账号拒绝读取。`go test -race ./...`、`go vet ./...`、`golangci-lint run ./...` 通过；`govulncheck ./...` 无可达漏洞，另有 1 个未调用模块告警。条件写入、同事务预留与结算、真实报价确认及 TC-21 尚未完成；DES-03 IF4–IF6 未决前不注册公开接口。
@@ -494,7 +496,7 @@
 | E-24-01 | 数据与领域模型 | 迁移建表 / 加列：`operation.operation`、`operation.operation_event`、`operation.provider_call`（其中 `operation.operation` 由 E-21 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（`operation.operation`、`operation.provider_call`、`operation.operation`：仓储查询强制带 `project_id`；`operation.operation_event`：无 `project_id`，经父对象外键继承项目范围校验）。详见 [DES-27 §2](docs/design/27-任务中心与对账.md#2-数据) | `backend/db/migrations/`、`backend/internal/operation/domain/`、`backend/internal/operation/adapter/postgres/` | 待办 | — |
 | E-24-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/operations、GET /api/operations/{id}、POST /api/operations/{id}:cancel、POST /api/operations/{id}:retry、POST /api/operations/{id}:resolve-manual；swag 注解生成 OpenAPI。详见 [DES-27 §3](docs/design/27-任务中心与对账.md#3-接口) | `backend/internal/operation/application/`、`backend/internal/operation/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-24-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`、`inflight-watchdog`；事件 `operation.manual.v1`、`operation.status_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：OperationWorkflow 的提交、轮询、对账、取消、人工核对分支见 DES-04；`inflight-watchdog`（每 5 分钟）检测 R4 并向工作流发送 `reconcile` 信号。 详见 [DES-27 §4](docs/design/27-任务中心与对账.md#4-异步与工作流) | `backend/internal/operation/adapter/workflow/`、`backend/internal/operation/adapter/event/` | 待办 | — |
-| E-24-04 | 前端 | 任务中心表格（筛选栏、状态徽标、进度、费用、耗时、操作：取消 / 重试 / 查看）；详情抽屉（时间线、输入缩略图、调用明细、费用）；管理员“待人工核对”视图与处理表单。 详见 [DES-27 §6](docs/design/27-任务中心与对账.md#6-界面) | `frontend/src/features/operation/` | 待办 | — |
+| E-24-04 | 前端 | 任务中心表格（筛选栏、状态徽标、进度、费用、耗时、操作：取消 / 重试 / 查看）；详情抽屉（时间线、输入缩略图、调用明细、费用）；管理员“待人工核对”视图与处理表单。 详见 [DES-27 §6](docs/design/27-任务中心与对账.md#6-界面) | `frontend/src/components/operation/` | 待办 | — |
 | E-24-05 | 测试与验收 | 模拟供应商（REQ-02 DEP-06）注入：超时但已受理、超时且未受理、重复回调、结果链接过期、查询接口 5xx；每种场景断言状态与账本；验收用例 TC-24-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-25 结果复用与写入边界
@@ -506,7 +508,7 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | E-25-01 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`、`flow.CompleteFromReuse`。要点：复用项确认后不启动供应商流程：`OperationWorkflow` 直接执行 `flow.CompleteFromReuse`。 详见 [DES-28 §4](docs/design/28-结果复用与写入边界.md#4-异步与工作流) | `backend/internal/operation/adapter/workflow/`、`backend/internal/operation/adapter/event/` | 待办 | — |
-| E-25-02 | 前端 | 报价对话框中复用项显示“复用已有结果 ¥0”与“强制重新生成”开关；候选卡片显示“基于 vN 生成”。 详见 [DES-28 §6](docs/design/28-结果复用与写入边界.md#6-界面) | `frontend/src/features/operation/` | 待办 | — |
+| E-25-02 | 前端 | 报价对话框中复用项显示“复用已有结果 ¥0”与“强制重新生成”开关；候选卡片显示“基于 vN 生成”。 详见 [DES-28 §6](docs/design/28-结果复用与写入边界.md#6-界面) | `frontend/src/components/operation/` | 待办 | — |
 | E-25-03 | 测试与验收 | `input_hash` 规范化的表驱动测试（等价与不等价用例）；架构依赖规则测试；验收用例 TC-25-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-30 媒体库
@@ -521,7 +523,7 @@
 | E-30-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/uploads、POST /api/uploads/{media_asset_id}:complete、GET /api/projects/{pid}/media、GET /api/media/{id}、DELETE /api/media/{id}；swag 注解生成 OpenAPI。详见 [DES-33 §4](docs/design/33-媒体库.md#4-接口) | `backend/internal/media/application/`、`backend/internal/media/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-30-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `MediaIngestWorkflow`、`media.DetectAndProbe`、`media.Hash`、`media.MakeRenditions`、`flow.MarkMediaReady`、`media-purge`；事件 `media.asset_status_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：`MediaIngestWorkflow`（`media-ingest/{id}`）：`media.DetectAndProbe` → `media.Hash` → `media.MakeRenditions`（并行）→… 详见 [DES-33 §5](docs/design/33-媒体库.md#5-异步与工作流) | `backend/internal/media/adapter/workflow/`、`backend/internal/media/adapter/event/` | 待办 | — |
 | E-30-04 | Agent 服务 | 内容审核适配器 `moderation.check`；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/moderation/` | 待办 | — |
-| E-30-05 | 前端 | 媒体库网格 / 列表切换（虚拟滚动）、筛选栏、搜索；拖拽上传区（多文件进度、失败原因）；预览（图片灯箱、视频播放器、音频波形）；详情抽屉（来源、合规、引用位置）。 详见 [DES-33 §7](docs/design/33-媒体库.md#7-界面) | `frontend/src/features/media/` | 待办 | — |
+| E-30-05 | 前端 | 媒体库网格 / 列表切换（虚拟滚动）、筛选栏、搜索；拖拽上传区（多文件进度、失败原因）；预览（图片灯箱、视频播放器、音频波形）；详情抽屉（来源、合规、引用位置）。 详见 [DES-33 §7](docs/design/33-媒体库.md#7-界面) | `frontend/src/components/media/` | 待办 | — |
 | E-30-06 | 测试与验收 | 内容类型识别；分片上传续传；引用检查覆盖全部引用来源（表驱动）；清理任务；验收用例 TC-30-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 **E-30-01 数据与领域模型（2026-09-28）**：新增素材与派生版本迁移，绑定项目及同项目生成操作；领域规则限制对象键身份、状态迁移、审核通过后引用和删除 30 天后清理。PostgreSQL 仓储对当前账号、组织、项目与父素材复核后创建或读取记录，派生版本对象键必须位于父素材前缀。隔离 PostgreSQL 验证迁移 up/down/up、跨项目外键、撤权后不可读、错误对象键不可写与生成来源完整保留；`go test -race ./... -count=1`、`go vet ./...`、`golangci-lint run ./...`、`gofmt` / `goimports` 和 `govulncheck ./...` 已通过（漏洞扫描另报告 1 个未调用模块告警）。CI 增加媒体真实 PostgreSQL 契约门禁，远端结果随本项提交核验。上传/浏览接口、真实对象存储处理、引用检查及 TC-30-01～05 尚未完成，不计为 Epic 验收。
@@ -537,7 +539,7 @@
 | E-33-01 | 数据与领域模型 | 迁移建表 / 加列：`notify.notification`；实现领域对象、状态机与仓储（`project_id` 可空，按用户与组织授权，带项目时再按项目过滤）。详见 [DES-36 §2](docs/design/36-站内通知.md#2-数据) | `backend/db/migrations/`、`backend/internal/notify/domain/`、`backend/internal/notify/adapter/postgres/` | 待办 | — |
 | E-33-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/notifications、POST /api/notifications/{id}:read、POST /api/notifications:read-all、GET /api/me/events；swag 注解生成 OpenAPI。详见 [DES-36 §3](docs/design/36-站内通知.md#3-接口) | `backend/internal/notify/application/`、`backend/internal/notify/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-33-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 消费者 `notify`（`backend-relay`，按 §4 把事件转换为通知并发布 SSE）；事件 消费 `batch.finished.v1`、`operation.failed.v1`、`operation.manual.v1`、`billing.budget_low.v1`、`billing.budget_overrun.v1`、`script.version_imported.v1`、`media.consent_revoked.v1`、`billing.reconciliation_diff.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：`notify` 消费者（`backend-relay`）按下表把事件转换为通知，并发布 SSE。事件的生产方与消费者清单以 DES-03 §6.2 为准，本表只定义通知规则（类型、接收人、去重键）： / 通知类型（RE… 详见 [DES-36 §4](docs/design/36-站内通知.md#4-异步与工作流) | `backend/internal/notify/adapter/workflow/`、`backend/internal/notify/adapter/event/` | 待办 | — |
-| E-33-04 | 前端 | 顶栏铃铛（未读数）→ 下拉列表（分组：今天 / 更早）→ 点击跳转；Sonner toast 即时提示。 详见 [DES-36 §6](docs/design/36-站内通知.md#6-界面) | `frontend/src/features/notify/` | 待办 | — |
+| E-33-04 | 前端 | 顶栏铃铛（未读数）→ 下拉列表（分组：今天 / 更早）→ 点击跳转；Sonner toast 即时提示。 详见 [DES-36 §6](docs/design/36-站内通知.md#6-界面) | `frontend/src/components/notify/` | 待办 | — |
 | E-33-05 | 测试与验收 | 去重；接收人计算；验收用例 TC-33-01～02（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 ### M2 剧本到设定集（估算 3 周）
@@ -560,7 +562,7 @@
 | E-12-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/script-imports、GET /api/projects/{pid}/script-imports/{import_id}、GET /api/projects/{pid}/episodes、POST /api/projects/{pid}/episodes/split:confirm；swag 注解生成 OpenAPI。详见 [DES-15 §4](docs/design/15-剧本导入与分集.md#4-接口) | `backend/internal/script/application/`、`backend/internal/script/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-12-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `ScriptImportWorkflow`；事件 `script.version_imported.v1`、`script.split_confirmed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：导入由 `ScriptImportWorkflow`（`script-import/{import_id}`）执行抽取、规范化、去重、保存版本与规则分集，写入规则分集候选；需要 AI 分集时生成 `episode_spl… 详见 [DES-15 §5](docs/design/15-剧本导入与分集.md#5-异步与工作流) | `backend/internal/script/adapter/workflow/`、`backend/internal/script/adapter/event/` | 待办 | — |
 | E-12-04 | Agent 服务 | Skill `split_episodes`（规则分集失败时）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/skills/split_episodes/`、`agent/evals/` | 待办 | — |
-| E-12-05 | 前端 | - 剧本页：导入按钮 → 多文件拖拽区（显示每个文件的校验结果与顺序）→ 版权确认复选框。 - 分集编辑器：左侧集列表（集号、标题、字数、首尾预览），右侧原文；在原文中点击“在此处拆分”、在列表中“与下一集合并”、编辑标题；顶部“确认分集”。 详见 [DES-15 §7](docs/design/15-剧本导入与分集.md#7-界面) | `frontend/src/features/script/` | 待办 | — |
+| E-12-05 | 前端 | - 剧本页：导入按钮 → 多文件拖拽区（显示每个文件的校验结果与顺序）→ 版权确认复选框。 - 分集编辑器：左侧集列表（集号、标题、字数、首尾预览），右侧原文；在原文中点击“在此处拆分”、在列表中“与下一集合并”、编辑标题；顶部“确认分集”。 详见 [DES-15 §7](docs/design/15-剧本导入与分集.md#7-界面) | `frontend/src/components/script/` | 待办 | — |
 | E-12-06 | 测试与验收 | 单元：编码识别（UTF-8、GBK、GB18030、带 BOM）；集号识别正则；边界校验（重叠、遗漏）。 评测：10 部样例剧本的分集准确率（TST-03）。 集成：导入工作流中断续跑；重复导入；验收用例 TC-12-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-13 逐集结构解析
@@ -575,7 +577,7 @@
 | E-13-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/quotes、GET /api/episodes/{eid}/structure、POST /api/episodes/{eid}/structure、POST /api/episodes/{eid}/structure:confirm、GET /api/episodes/{eid}/source-text、POST /api/episodes/{eid}/parse:retry；swag 注解生成 OpenAPI。详见 [DES-16 §4](docs/design/16-逐集结构解析.md#4-接口) | `backend/internal/script/application/`、`backend/internal/script/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-13-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`（LLM 同步分支，`target_type = episode_parse`）、`BatchWorkflow`；事件 `script.episode_structure_confirmed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：每集一个 `OperationWorkflow`（`operation/{operation_id}`，`target_type = episode_parse`）的 LLM 同步分支（DES-04 §3、§8.3）：`… 详见 [DES-16 §5](docs/design/16-逐集结构解析.md#5-异步与工作流) | `backend/internal/script/adapter/workflow/`、`backend/internal/script/adapter/event/` | 待办 | — |
 | E-13-04 | Agent 服务 | Skill `parse_episode`（原文位置校验与修复）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/skills/parse_episode/`、`agent/app/harness/validators/`、`agent/evals/` | 待办 | — |
-| E-13-05 | 前端 | 双栏：原文（虚拟滚动，高亮当前选中条目）/ 结构树（场 → 动作与台词，行内编辑说话人、情绪、内容；拖拽调整归属；拆场 / 合场按钮）；“待处理”抽屉；版本下拉与差异对比；确认按钮（未处理完禁用并说明）。 详见 [DES-16 §7](docs/design/16-逐集结构解析.md#7-界面) | `frontend/src/features/script/` | 待办 | — |
+| E-13-05 | 前端 | 双栏：原文（虚拟滚动，高亮当前选中条目）/ 结构树（场 → 动作与台词，行内编辑说话人、情绪、内容；拖拽调整归属；拆场 / 合场按钮）；“待处理”抽屉；版本下拉与差异对比；确认按钮（未处理完禁用并说明）。 详见 [DES-16 §7](docs/design/16-逐集结构解析.md#7-界面) | `frontend/src/components/script/` | 待办 | — |
 | E-13-06 | 测试与验收 | 单元：稳定键保持算法（编辑、拆分、合并）；`content_hash`；偏移校验。 评测：样例剧本解析指标（TST-03）。 集成：确认 → 过期事件 → 镜头过期；验收用例 TC-13-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-14 设定集抽取与造型
@@ -590,7 +592,7 @@
 | E-14-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/quotes、GET /api/projects/{pid}/characters、POST /api/characters/{id}:merge、POST /api/characters/{id}:split、POST /api/projects/{pid}/bible:confirm、GET /api/projects/{pid}/speaker-mapping、POST /api/projects/{pid}/speaker-mapping、POST /api/characters/{id}/looks；swag 注解生成 OpenAPI。详见 [DES-17 §4](docs/design/17-设定集抽取与造型.md#4-接口) | `backend/internal/bible/application/`、`backend/internal/bible/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-14-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`（LLM 同步分支，`target_type = bible_extract`）；事件 `bible.entries_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：`OperationWorkflow`（`target_type = bible_extract`）的 LLM 同步分支（DES-04 §3）：`llm.run_skill(extract_bible)`（可分块，见 D… 详见 [DES-17 §5](docs/design/17-设定集抽取与造型.md#5-异步与工作流) | `backend/internal/bible/adapter/workflow/`、`backend/internal/bible/adapter/event/` | 待办 | — |
 | E-14-04 | Agent 服务 | Skill `extract_bible`（分块抽取 + 别名合并）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/skills/extract_bible/`、`agent/evals/` | 待办 | — |
-| E-14-05 | 前端 | 三栏列表（角色 / 场景 / 道具）；多选合并；条目详情：别名标签、描述、出场集时间轴、造型卡片；说话人映射对话框。 详见 [DES-17 §7](docs/design/17-设定集抽取与造型.md#7-界面) | `frontend/src/features/bible/` | 待办 | — |
+| E-14-05 | 前端 | 三栏列表（角色 / 场景 / 道具）；多选合并；条目详情：别名标签、描述、出场集时间轴、造型卡片；说话人映射对话框。 详见 [DES-17 §7](docs/design/17-设定集抽取与造型.md#7-界面) | `frontend/src/components/bible/` | 待办 | — |
 | E-14-06 | 测试与验收 | 合并 / 拆分对引用与台词回填的影响；分块抽取的合并正确性（评测集）；验收用例 TC-14-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-31 依赖传播与影响清单
@@ -604,7 +606,7 @@
 | E-31-01 | 数据与领域模型 | 迁移建表 / 加列：`lineage.dependency`、`lineage.stale_mark`（其中 `lineage.dependency` 由 E-13 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-34 §2](docs/design/34-依赖传播与影响清单.md#2-数据) | `backend/db/migrations/`、`backend/internal/lineage/domain/`、`backend/internal/lineage/adapter/postgres/` | 待办 | — |
 | E-31-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/impact、POST /api/projects/{pid}/impact:quote、POST /api/projects/{pid}/impact:dismiss；swag 注解生成 OpenAPI。详见 [DES-34 §3](docs/design/34-依赖传播与影响清单.md#3-接口) | `backend/internal/lineage/application/`、`backend/internal/lineage/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-31-03 | 异步、工作流与事件 | 事件 `lineage.stale_marked.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：`lineage` 消费者（`backend-relay`）：接收上游事件 → 递归 CTE 查询下游 → 批量写 `stale_mark` → 发 `lineage.stale_marked.v1`；清除逻辑在下游对象… 详见 [DES-34 §4](docs/design/34-依赖传播与影响清单.md#4-异步与工作流) | `backend/internal/lineage/adapter/workflow/`、`backend/internal/lineage/adapter/event/` | 待办 | — |
-| E-31-04 | 前端 | 各列表中的“过期”徽标（悬停显示原因）；影响清单页（分组、勾选、合计预估、“为选中项报价”“标记为无需重做”）；改锁 / 改选前的影响确认框。 详见 [DES-34 §6](docs/design/34-依赖传播与影响清单.md#6-界面) | `frontend/src/features/lineage/` | 待办 | — |
+| E-31-04 | 前端 | 各列表中的“过期”徽标（悬停显示原因）；影响清单页（分组、勾选、合计预估、“为选中项报价”“标记为无需重做”）；改锁 / 改选前的影响确认框。 详见 [DES-34 §6](docs/design/34-依赖传播与影响清单.md#6-界面) | `frontend/src/components/lineage/` | 待办 | — |
 | E-31-05 | 测试与验收 | 依赖表（§2.1）逐行的集成测试；递归深度；大规模传播性能；清除条件；验收用例 TC-31-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 ### M3 资产定稿、分镜与生成全链路（估算 4 周）
@@ -627,7 +629,7 @@
 | E-15-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/episodes/{eid}/asset-readiness、GET /api/reference-slots/{sid}、GET /api/reference-slots/{sid}/impact、POST /api/reference-slots/{sid}:lock、POST /api/projects/{pid}/quotes；swag 注解生成 OpenAPI。详见 [DES-18 §3](docs/design/18-参考定稿与跨集复用.md#3-接口) | `backend/internal/bible/application/`、`backend/internal/bible/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-15-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `bible.reference_locked.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：候选生成使用通用 OperationWorkflow（DES-04）。锁定为同步命令；事务内写 `reference_version`、更新槽位、写 Outbox `bible.reference_locked.v1`。 详见 [DES-18 §4](docs/design/18-参考定稿与跨集复用.md#4-异步与工作流) | `backend/internal/bible/adapter/workflow/`、`backend/internal/bible/adapter/event/` | 待办 | — |
 | E-15-04 | Agent 服务 | 生图适配器（参考图生成）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/providers/` | 待办 | — |
-| E-15-05 | 前端 | 资产定稿页：按角色 / 场景 / 道具分组的卡片，每卡显示槽位锁定状态；批量“为未锁定槽位生成”；槽位详情：候选网格（REQ-22 组件）、锁定按钮、版本历史、改锁影响确认框。 详见 [DES-18 §6](docs/design/18-参考定稿与跨集复用.md#6-界面) | `frontend/src/features/bible/` | 待办 | — |
+| E-15-05 | 前端 | 资产定稿页：按角色 / 场景 / 道具分组的卡片，每卡显示槽位锁定状态；批量“为未锁定槽位生成”；槽位详情：候选网格（REQ-22 组件）、锁定按钮、版本历史、改锁影响确认框。 详见 [DES-18 §6](docs/design/18-参考定稿与跨集复用.md#6-界面) | `frontend/src/components/bible/` | 待办 | — |
 | E-15-06 | 测试与验收 | 锁定并发冲突；改锁过期传播覆盖（参考组合、关键帧、视频）；本集清单计算；验收用例 TC-15-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-16 角色音色
@@ -642,7 +644,7 @@
 | E-16-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/models、GET /api/characters/{id}/voice、PUT /api/characters/{id}/voice、POST /api/projects/{pid}/quotes；swag 注解生成 OpenAPI。详见 [DES-19 §3](docs/design/19-角色音色.md#3-接口) | `backend/internal/bible/application/`、`backend/internal/bible/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-16-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `bible.voice_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：试听走 OperationWorkflow（同步型 TTS，秒级完成）。 详见 [DES-19 §4](docs/design/19-角色音色.md#4-异步与工作流) | `backend/internal/bible/adapter/workflow/`、`backend/internal/bible/adapter/event/` | 待办 | — |
 | E-16-04 | Agent 服务 | TTS 适配器（音色枚举与试听）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/providers/` | 待办 | — |
-| E-16-05 | 前端 | 音色选择器（筛选标签、播放官方示例）；“用本角色台词试听”按钮（显示预估费用）；试听结果播放器。 详见 [DES-19 §6](docs/design/19-角色音色.md#6-界面) | `frontend/src/features/bible/` | 待办 | — |
+| E-16-05 | 前端 | 音色选择器（筛选标签、播放官方示例）；“用本角色台词试听”按钮（显示预估费用）；试听结果播放器。 详见 [DES-19 §6](docs/design/19-角色音色.md#6-界面) | `frontend/src/components/bible/` | 待办 | — |
 | E-16-06 | 测试与验收 | 音色变更的过期范围；试听复用；验收用例 TC-16-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-17 真人授权
@@ -656,7 +658,7 @@
 | E-17-01 | 数据与领域模型 | 迁移建表 / 加列：`media.consent_record`、`media.media_asset`（其中 `media.media_asset` 由 E-30 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-20 §2](docs/design/20-真人授权.md#2-数据) | `backend/db/migrations/`、`backend/internal/media/domain/`、`backend/internal/media/adapter/postgres/` | 待办 | — |
 | E-17-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/media/consents、POST /api/media/consents/{id}:revoke、POST /api/uploads/{media_asset_id}:complete、GET /api/media/consents/{id}；swag 注解生成 OpenAPI。详见 [DES-20 §3](docs/design/20-真人授权.md#3-接口) | `backend/internal/media/application/`、`backend/internal/media/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-17-03 | 异步、工作流与事件 | 事件 `media.consent_recorded.v1`、`media.consent_revoked.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无。 详见 [DES-20 §4](docs/design/20-真人授权.md#4-异步与工作流) | `backend/internal/media/adapter/workflow/`、`backend/internal/media/adapter/event/` | 待办 | — |
-| E-17-04 | 前端 | 上传对话框中的“包含真实人物”开关与声明表单；媒体详情显示授权状态；参考选择器中未授权素材置灰并说明原因。 详见 [DES-20 §6](docs/design/20-真人授权.md#6-界面) | `frontend/src/features/bible/` | 待办 | — |
+| E-17-04 | 前端 | 上传对话框中的“包含真实人物”开关与声明表单；媒体详情显示授权状态；参考选择器中未授权素材置灰并说明原因。 详见 [DES-20 §6](docs/design/20-真人授权.md#6-界面) | `frontend/src/components/bible/` | 待办 | — |
 | E-17-05 | 测试与验收 | 引用校验在锁定、参考组合、报价三处均生效；验收用例 TC-17-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-18 分镜生成与镜头编辑
@@ -671,9 +673,9 @@
 | E-18-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/quotes、GET /api/episodes/{eid}/shots、POST /api/shots/{id}/versions、POST /api/shots:bulk-update、POST /api/episodes/{eid}/shots、POST /api/shots/{id}:move、POST /api/shots:merge、POST /api/shots/{id}:split、DELETE /api/shots/{id}、GET /api/shots/{id}/versions、POST /api/scene-boards/{id}:confirm；swag 注解生成 OpenAPI。详见 [DES-21 §4](docs/design/21-分镜生成与镜头编辑.md#4-接口) | `backend/internal/storyboard/application/`、`backend/internal/storyboard/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-18-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`（LLM 同步分支，`target_type = scene_storyboard`）、`BatchWorkflow`；事件 `storyboard.shot_version_created.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：每场一个 `OperationWorkflow`（`target_type = scene_storyboard`）的 LLM 同步分支（DES-04 §3）：`llm.run_skill(storyboard)` →… 详见 [DES-21 §5](docs/design/21-分镜生成与镜头编辑.md#5-异步与工作流) | `backend/internal/storyboard/adapter/workflow/`、`backend/internal/storyboard/adapter/event/` | 待办 | — |
 | E-18-04 | Agent 服务 | Skill `storyboard`（台词分配、引用、模式建议）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/skills/storyboard/`、`agent/evals/` | 待办 | — |
-| E-18-05 | 前端 | 镜头表（TanStack Table + Virtual）：按场分组、行内编辑（下拉、时长步进器）、多选工具栏（批量改参数、批量生成、删除）、拖拽排序（dnd-kit）；画面描述使用 Tiptap + Mention（@造型 / @场景 / @道具）；版本抽屉；场确认按钮与校验提示。 详见 [DES-21 §7](docs/design/21-分镜生成与镜头编辑.md#7-界面) | `frontend/src/features/storyboard/` | 待办 | — |
+| E-18-05 | 前端 | 镜头表（TanStack Table + Virtual）：按场分组、行内编辑（下拉、时长步进器）、多选工具栏（批量改参数、批量生成、删除）、拖拽排序（dnd-kit）；画面描述使用 Tiptap + Mention（@造型 / @场景 / @道具）；版本抽屉；场确认按钮与校验提示。 详见 [DES-21 §7](docs/design/21-分镜生成与镜头编辑.md#7-界面) | `frontend/src/components/storyboard/` | 待办 | — |
 | E-18-06 | 测试与验收 | 台词分配校验；合并拆分对 `shot_line` 与引用的影响；批量部分成功；分镜 Skill 评测（TST-03）；验收用例 TC-18-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
-| E-18-07 | 镜头语言模板（SB-06，M5） | `storyboard.shot_template`；模板应用 = 批量修改生成新版本（DES-21-Q4） | `backend/internal/storyboard/`、`frontend/src/features/storyboard/` | 待办 | — |
+| E-18-07 | 镜头语言模板（SB-06，M5） | `storyboard.shot_template`；模板应用 = 批量修改生成新版本（DES-21-Q4） | `backend/internal/storyboard/`、`frontend/src/components/storyboard/` | 待办 | — |
 
 #### E-19 生成模式与参考组合
 
@@ -685,7 +687,7 @@
 | --- | --- | --- | --- | --- | --- |
 | E-19-01 | 数据与领域模型 | 迁移建表 / 加列：`lineage.dependency`、`operation.operation_input`、`storyboard.reference_item`、`storyboard.shot_version`（其中 `lineage.dependency` 由 E-13 建表，本 Epic 只加列或复用、`operation.operation_input` 由 E-21 建表，本 Epic 只加列或复用、`storyboard.reference_item` 由 E-18 建表，本 Epic 只加列或复用、`storyboard.shot_version` 由 E-18 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（`lineage.dependency`、`storyboard.shot_version`、`lineage.dependency`、`storyboard.shot_version`：仓储查询强制带 `project_id`；`operation.operation_input`、`storyboard.reference_item`、`operation.operation_input`、`storyboard.reference_item`：无 `project_id`，经父对象外键继承项目范围校验）。详见 [DES-22 §2](docs/design/22-生成模式与参考组合.md#2-数据) | `backend/db/migrations/`、`backend/internal/storyboard/domain/`、`backend/internal/storyboard/adapter/postgres/` | 待办 | — |
 | E-19-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/shots/{id}/versions、POST /api/shots/{id}:validate-references、GET /api/projects/{pid}/characters、GET /api/projects/{pid}/media、GET /api/episodes/{eid}/dialogue；swag 注解生成 OpenAPI。详见 [DES-22 §3](docs/design/22-生成模式与参考组合.md#3-接口) | `backend/internal/storyboard/application/`、`backend/internal/storyboard/adapter/http/`、`backend/docs/` | 待办 | — |
-| E-19-03 | 前端 | 参考组合面板（REQ-05 §4.4）：顶部上限条；卡片列表（缩略图 / 波形、名称与版本、用途下拉、“有新版本”提示、移除）；添加菜单（设定集 / 媒体库 / 台词音频 / 上传）；拖拽排序。 详见 [DES-22 §6](docs/design/22-生成模式与参考组合.md#6-界面) | `frontend/src/features/storyboard/` | 待办 | — |
+| E-19-03 | 前端 | 参考组合面板（REQ-05 §4.4）：顶部上限条；卡片列表（缩略图 / 波形、名称与版本、用途下拉、“有新版本”提示、移除）；添加菜单（设定集 / 媒体库 / 台词音频 / 上传）；拖拽排序。 详见 [DES-22 §6](docs/design/22-生成模式与参考组合.md#6-界面) | `frontend/src/components/storyboard/` | 待办 | — |
 | E-19-04 | 测试与验收 | 校验器的所有规则组合（表驱动单元测试）；前后端校验结果一致性（共用测试向量）；验收用例 TC-19-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-20 故事板视图
@@ -699,7 +701,7 @@
 | E-20-01 | 数据与领域模型 | 迁移建表 / 加列：`lineage.stale_mark`、`media.rendition`、`storyboard.shot`（其中 `lineage.stale_mark` 由 E-31 建表，本 Epic 只加列或复用、`media.rendition` 由 E-30 建表，本 Epic 只加列或复用、`storyboard.shot` 由 E-22 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（`lineage.stale_mark`、`storyboard.shot`、`lineage.stale_mark`、`storyboard.shot`：仓储查询强制带 `project_id`；`media.rendition`、`media.rendition`：无 `project_id`，经父对象外键继承项目范围校验）。详见 [DES-23 §2](docs/design/23-故事板视图.md#2-数据) | `backend/db/migrations/`、`backend/internal/storyboard/domain/`、`backend/internal/storyboard/adapter/postgres/` | 待办 | — |
 | E-20-02 | 用例与接口 | 实现查询接口：GET /api/episodes/{eid}/shots；swag 注解生成 OpenAPI。详见 [DES-23 §3](docs/design/23-故事板视图.md#3-接口) | `backend/internal/storyboard/application/`、`backend/internal/storyboard/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-20-03 | 异步、工作流与事件 | 事件 `operation.status_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无。 详见 [DES-23 §4](docs/design/23-故事板视图.md#4-异步与工作流) | `backend/internal/storyboard/adapter/workflow/`、`backend/internal/storyboard/adapter/event/` | 待办 | — |
-| E-20-04 | 前端 | 网格（TanStack Virtual 行虚拟化）；按场分组标题；筛选栏；多选（Shift 连选）后底部操作栏：批量生成关键帧 / 视频、批量改参数（跳镜头表）。 详见 [DES-23 §6](docs/design/23-故事板视图.md#6-界面) | `frontend/src/features/storyboard/` | 待办 | — |
+| E-20-04 | 前端 | 网格（TanStack Virtual 行虚拟化）；按场分组标题；筛选栏；多选（Shift 连选）后底部操作栏：批量生成关键帧 / 视频、批量改参数（跳镜头表）。 详见 [DES-23 §6](docs/design/23-故事板视图.md#6-界面) | `frontend/src/components/storyboard/` | 待办 | — |
 | E-20-05 | 测试与验收 | 进度状态机单元测试；前端性能录制（150 格）；验收用例 TC-20-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-22 多候选与选定
@@ -713,7 +715,7 @@
 | E-22-01 | 数据与领域模型 | 迁移建表 / 加列：`media.rendition`、`operation.operation_output`、`storyboard.shot`、`storyboard.shot_selection_log`（其中 `media.rendition` 由 E-30 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（`media.rendition`、`media.rendition`：无 `project_id`，经父对象外键继承项目范围校验；`operation.operation_output`、`storyboard.shot`、`storyboard.shot_selection_log`：仓储查询强制带 `project_id`）。详见 [DES-25 §2](docs/design/25-多候选与选定.md#2-数据) | `backend/db/migrations/`、`backend/internal/storyboard/domain/`、`backend/internal/storyboard/adapter/postgres/` | 待办 | — |
 | E-22-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/shots/{id}/candidates、POST /api/shots/{id}:select-take；swag 注解生成 OpenAPI。详见 [DES-25 §3](docs/design/25-多候选与选定.md#3-接口) | `backend/internal/storyboard/application/`、`backend/internal/storyboard/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-22-03 | 异步、工作流与事件 | 事件 `storyboard.selection_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：无；选定为同步命令。 详见 [DES-25 §4](docs/design/25-多候选与选定.md#4-异步与工作流) | `backend/internal/storyboard/adapter/workflow/`、`backend/internal/storyboard/adapter/event/` | 待办 | — |
-| E-22-04 | 前端 | `CandidateCompare` 组件：2–4 列网格；视频同步播放、逐帧（`← →`）、静音切换；数字键 1–9 聚焦，`S` 选定（REQ-05 §7）；“已选定”角标；改选确认框（影响数量）。 详见 [DES-25 §6](docs/design/25-多候选与选定.md#6-界面) | `frontend/src/features/review/` | 待办 | — |
+| E-22-04 | 前端 | `CandidateCompare` 组件：2–4 列网格；视频同步播放、逐帧（`← →`）、静音切换；数字键 1–9 聚焦，`S` 选定（REQ-05 §7）；“已选定”角标；改选确认框（影响数量）。 详见 [DES-25 §6](docs/design/25-多候选与选定.md#6-界面) | `frontend/src/components/review/` | 待办 | — |
 | E-22-05 | 测试与验收 | 选定命令并发；改选下游过期；前端同步播放；验收用例 TC-22-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-23 批量生成
@@ -727,7 +729,7 @@
 | E-23-01 | 数据与领域模型 | 迁移建表 / 加列：`operation.batch`（其中 `operation.batch` 由 E-21 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-26 §3](docs/design/26-批量生成.md#3-数据) | `backend/db/migrations/`、`backend/internal/operation/domain/`、`backend/internal/operation/adapter/postgres/` | 待办 | — |
 | E-23-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/quotes、POST /api/batches/{id}:confirm、GET /api/batches/{id}、POST /api/batches/{id}:cancel、POST /api/batches/{id}:resume、POST /api/batches/{id}:retry-failed；swag 注解生成 OpenAPI。详见 [DES-26 §4](docs/design/26-批量生成.md#4-接口) | `backend/internal/operation/application/`、`backend/internal/operation/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-23-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `BatchWorkflow`、`OperationWorkflow`；事件 `batch.finished.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：`BatchWorkflow`（`batch/{id}`）：子工作流 `operation/{op_id}`，`ParentClosePolicy = ABANDON`（父工作流异常不影响已提交的子项）；使用信号 `ca… 详见 [DES-26 §5](docs/design/26-批量生成.md#5-异步与工作流) | `backend/internal/operation/adapter/workflow/`、`backend/internal/operation/adapter/event/` | 待办 | — |
-| E-23-04 | 前端 | 批量工具栏；报价对话框（逐项列表可剔除）；批次进度条（在任务中心与发起页面顶部）；完成后结果摘要与“重试失败项”。 详见 [DES-26 §7](docs/design/26-批量生成.md#7-界面) | `frontend/src/features/operation/` | 待办 | — |
+| E-23-04 | 前端 | 批量工具栏；报价对话框（逐项列表可剔除）；批次进度条（在任务中心与发起页面顶部）；完成后结果摘要与“重试失败项”。 详见 [DES-26 §7](docs/design/26-批量生成.md#7-界面) | `frontend/src/components/operation/` | 待办 | — |
 | E-23-05 | 测试与验收 | 父子工作流回放测试；熔断暂停；取消与预留释放；验收用例 TC-23-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-26 关键帧
@@ -742,7 +744,7 @@
 | E-26-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/quotes、POST /api/shots/{id}/frames:upload、POST /api/shots/{id}:select-frame；swag 注解生成 OpenAPI。详见 [DES-29 §3](docs/design/29-关键帧.md#3-接口) | `backend/internal/storyboard/application/`、`backend/internal/storyboard/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-26-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`。要点：生成：OperationWorkflow（图片同步或异步视供应商）；上传裁剪：`media` 队列 `CropImage` Activity。 详见 [DES-29 §4](docs/design/29-关键帧.md#4-异步与工作流) | `backend/internal/storyboard/adapter/workflow/`、`backend/internal/storyboard/adapter/event/` | 待办 | — |
 | E-26-04 | Agent 服务 | 生图适配器（关键帧，含参考输入）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/providers/` | 待办 | — |
-| E-26-05 | 前端 | 镜头详情“关键帧”标签页：生成按钮（数量、模型、参数）、上传区（裁剪框）、候选对比、选定。 详见 [DES-29 §6](docs/design/29-关键帧.md#6-界面) | `frontend/src/features/storyboard/` | 待办 | — |
+| E-26-05 | 前端 | 镜头详情“关键帧”标签页：生成按钮（数量、模型、参数）、上传区（裁剪框）、候选对比、选定。 详见 [DES-29 §6](docs/design/29-关键帧.md#6-界面) | `frontend/src/components/storyboard/` | 待办 | — |
 | E-26-06 | 测试与验收 | 输入展开正确性；上传裁剪；审核拒绝路径；验收用例 TC-26-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-28 全能参考生视频
@@ -756,7 +758,7 @@
 | E-28-01 | 数据与领域模型 | 迁移建表 / 加列：`lineage.dependency`、`operation.operation`、`operation.operation_input`、`storyboard.reference_item`（其中 `lineage.dependency` 由 E-13 建表，本 Epic 只加列或复用、`operation.operation` 由 E-21 建表，本 Epic 只加列或复用、`operation.operation_input` 由 E-21 建表，本 Epic 只加列或复用、`storyboard.reference_item` 由 E-18 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（`lineage.dependency`、`operation.operation`、`lineage.dependency`、`operation.operation`：仓储查询强制带 `project_id`；`operation.operation_input`、`storyboard.reference_item`、`operation.operation_input`、`storyboard.reference_item`：无 `project_id`，经父对象外键继承项目范围校验）。详见 [DES-31 §2](docs/design/31-全能参考生视频.md#2-数据) | `backend/db/migrations/`、`backend/internal/operation/domain/`、`backend/internal/operation/adapter/postgres/` | 待办 | — |
 | E-28-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/quotes；swag 注解生成 OpenAPI。详见 [DES-31 §3](docs/design/31-全能参考生视频.md#3-接口) | `backend/internal/operation/application/`、`backend/internal/operation/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-28-03 | Agent 服务 | 视频适配器 `omni_reference` 用途映射与提示词指代；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/providers/` | 待办 | — |
-| E-28-04 | 前端 | 镜头详情：参考组合（REQ-19）+ 提示词预览（带指代编号高亮）+ 生成；候选卡片可展开“所用参考”列表。 详见 [DES-31 §6](docs/design/31-全能参考生视频.md#6-界面) | `frontend/src/features/storyboard/` | 待办 | — |
+| E-28-04 | 前端 | 镜头详情：参考组合（REQ-19）+ 提示词预览（带指代编号高亮）+ 生成；候选卡片可展开“所用参考”列表。 详见 [DES-31 §6](docs/design/31-全能参考生视频.md#6-界面) | `frontend/src/components/storyboard/` | 待办 | — |
 | E-28-05 | 测试与验收 | 适配器映射单元测试（每个供应商的参数形态）；提示词指代与输入顺序一致性。 人工评测：TST-03 全能参考评测集（写实 + 4 种风格化 × 单角色 / 双角色 / 动作 / 运镜 / 音频）；验收用例 TC-28-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-32 成本账本与报表
@@ -770,9 +772,9 @@
 | E-32-01 | 数据与领域模型 | 迁移建表 / 加列：`billing.cost_summary`、`billing.ledger_entry`、`billing.reconciliation_run`（其中 `billing.ledger_entry` 由 E-11 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（`billing.cost_summary`、`billing.ledger_entry`、`billing.ledger_entry`：仓储查询强制带 `project_id`；`billing.reconciliation_run`：组织 / 平台级，按管理员权限访问）。详见 [DES-35 §2](docs/design/35-成本账本与报表.md#2-数据) | `backend/db/migrations/`、`backend/internal/billing/domain/`、`backend/internal/billing/adapter/postgres/` | 待办 | — |
 | E-32-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/costs、GET /api/projects/{pid}/ledger、POST /api/admin/ledger:adjust、GET /api/admin/costs、GET /api/projects/{pid}/metrics；swag 注解生成 OpenAPI。详见 [DES-35 §3](docs/design/35-成本账本与报表.md#3-接口) | `backend/internal/billing/application/`、`backend/internal/billing/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-32-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `ledger-reconcile`；消费者 `billing-report`（消费 `billing.settled.v1`、`billing.ledger_adjusted.v1`，维护 `billing.cost_summary`）；事件 发布 `billing.reconciliation_diff.v1`；消费 `billing.settled.v1`、`billing.ledger_adjusted.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：`billing-report` 消费者；`ledger-reconcile`（每日 02:00）。 详见 [DES-35 §4](docs/design/35-成本账本与报表.md#4-异步与工作流) | `backend/internal/billing/adapter/workflow/`、`backend/internal/billing/adapter/event/` | 待办 | — |
-| E-32-04 | 前端 | 成本页：项目总览卡（已结算、预留、预算）、按集表格（费用、选定片段总时长、单分钟成本、按能力拆分）、镜头明细下钻、账本明细。 详见 [DES-35 §6](docs/design/35-成本账本与报表.md#6-界面) | `frontend/src/features/billing/` | 待办 | — |
+| E-32-04 | 前端 | 成本页：项目总览卡（已结算、预留、预算）、按集表格（费用、选定片段总时长、单分钟成本、按能力拆分）、镜头明细下钻、账本明细。 详见 [DES-35 §6](docs/design/35-成本账本与报表.md#6-界面) | `frontend/src/components/billing/` | 待办 | — |
 | E-32-05 | 测试与验收 | 汇总与全量重建一致性；对账差异检测；生产指标按固定数据集的计算结果（REQ-32 验收）；验收用例 TC-32-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
-| E-32-06 | 成本报表（CST-06，M5） | `GET /api/admin/costs` 跨项目报表界面与 CSV 导出（复用 E-32-02 的查询接口）；报表中呈现各项目预算告警状态。低余额与超支的判断、事件与站内通知已在 M1 由 E-11、E-33 交付 | `backend/internal/billing/`、`frontend/src/features/billing/` | 待办 | — |
+| E-32-06 | 成本报表（CST-06，M5） | `GET /api/admin/costs` 跨项目报表界面与 CSV 导出（复用 E-32-02 的查询接口）；报表中呈现各项目预算告警状态。低余额与超支的判断、事件与站内通知已在 M1 由 E-11、E-33 交付 | `backend/internal/billing/`、`frontend/src/components/billing/` | 待办 | — |
 
 ### M4 视频、配音与生成增强（估算 3–4 周）
 
@@ -794,7 +796,7 @@
 | E-27-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/quotes、GET /api/shots/{id}/prompt-preview；swag 注解生成 OpenAPI。详见 [DES-30 §3](docs/design/30-图生视频.md#3-接口) | `backend/internal/operation/application/`、`backend/internal/operation/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-27-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`。要点：OperationWorkflow（异步视频）：提交 → 轮询（退避 5 s → 30 s）→ 接管（下载、ffprobe、转码、缩略图、代理）→ 审核 → 完成。提示词由 Go 规则模板拼接（免费）；AI 优化提示词不… 详见 [DES-30 §4](docs/design/30-图生视频.md#4-异步与工作流) | `backend/internal/operation/adapter/workflow/`、`backend/internal/operation/adapter/event/` | 待办 | — |
 | E-27-04 | Agent 服务 | 视频适配器 `image2video` 模式（提示词由 Go 规则模板生成，不需 Skill）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/providers/` | 待办 | — |
-| E-27-05 | 前端 | 镜头详情“视频”标签页：前置状态提示、提示词预览与改写、时长提示、生成、候选对比。 详见 [DES-30 §6](docs/design/30-图生视频.md#6-界面) | `frontend/src/features/storyboard/` | 待办 | — |
+| E-27-05 | 前端 | 镜头详情“视频”标签页：前置状态提示、提示词预览与改写、时长提示、生成、候选对比。 详见 [DES-30 §6](docs/design/30-图生视频.md#6-界面) | `frontend/src/components/storyboard/` | 待办 | — |
 | E-27-06 | 测试与验收 | 时长交集计算；提示词组装快照测试；接管流程（转码、代理）；验收用例 TC-27-01～03（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-29 台词配音
@@ -809,7 +811,7 @@
 | E-29-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/episodes/{eid}/dialogue、PUT /api/episodes/{eid}/dialogue/{line_key}/override、POST /api/projects/{pid}/quotes、POST /api/episodes/{eid}/dialogue/{line_key}:select-audio；swag 注解生成 OpenAPI。详见 [DES-32 §3](docs/design/32-台词配音.md#3-接口) | `backend/internal/audio/application/`、`backend/internal/audio/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-29-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `audio.selection_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：TTS：`OperationWorkflow`（同步型）。 详见 [DES-32 §4](docs/design/32-台词配音.md#4-异步与工作流) | `backend/internal/audio/adapter/workflow/`、`backend/internal/audio/adapter/event/` | 待办 | — |
 | E-29-04 | Agent 服务 | TTS 适配器（逐句参数、发音修正）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/providers/` | 待办 | — |
-| E-29-05 | 前端 | 按场分组的台词表：说话人、文本、音色、语速 / 情绪、候选播放、选定；批量工具栏（批量报价 TTS、批量选定最新候选）。 详见 [DES-32 §6](docs/design/32-台词配音.md#6-界面) | `frontend/src/features/audio/` | 待办 | — |
+| E-29-05 | 前端 | 按场分组的台词表：说话人、文本、音色、语速 / 情绪、候选播放、选定；批量工具栏（批量报价 TTS、批量选定最新候选）。 详见 [DES-32 §6](docs/design/32-台词配音.md#6-界面) | `frontend/src/components/audio/` | 待办 | — |
 | E-29-06 | 测试与验收 | 过期规则（文本、音色）；逐句覆盖参数进入 `input_hash`；组合键 `target_key` 解析；验收用例 TC-29-01～02（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-39 生成增强：首尾帧、片段续接、改图、模型切换
@@ -824,7 +826,7 @@
 | E-39-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/shots/{id}/frames:extract-from-take、GET /api/shots/{id}/candidates、POST /api/projects/{pid}/quotes、POST /api/operations/{id}:confirm；swag 注解生成 OpenAPI。详见 [DES-41 §3](docs/design/41-生成增强.md#3-接口) | `backend/internal/storyboard/application/`、`backend/internal/storyboard/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-39-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `media.ExtractFrame`、`OperationWorkflow`。要点：抽帧 `media.ExtractFrame`；其余复用 OperationWorkflow。 详见 [DES-41 §4](docs/design/41-生成增强.md#4-异步与工作流) | `backend/internal/storyboard/adapter/workflow/`、`backend/internal/storyboard/adapter/event/` | 待办 | — |
 | E-39-04 | Agent 服务 | 适配器支持 `frames2video`、`image.edit`（蒙版）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/providers/` | 待办 | — |
-| E-39-05 | 前端 | 参考选择器新增“前一镜片段”；首尾帧槽位；关键帧编辑器（画笔蒙版 + 描述）；候选对比按模型筛选。 详见 [DES-41 §5](docs/design/41-生成增强.md#5-界面) | `frontend/src/features/storyboard/` | 待办 | — |
+| E-39-05 | 前端 | 参考选择器新增“前一镜片段”；首尾帧槽位；关键帧编辑器（画笔蒙版 + 描述）；候选对比按模型筛选。 详见 [DES-41 §5](docs/design/41-生成增强.md#5-界面) | `frontend/src/components/storyboard/` | 待办 | — |
 | E-39-06 | 测试与验收 | 抽帧精度；新模式在注册表与适配器中的映射；过期传播扩展；验收用例 TC-39-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 ### M5 画布、对话式 Agent 与运营辅助（估算 5–6 周）= MVP
@@ -844,7 +846,7 @@
 | 任务 | 内容 | 怎么做 | 涉及文件 | 状态 | 提交 |
 | --- | --- | --- | --- | --- | --- |
 | E-35-01 | 用例与接口 | 实现查询接口：GET /api/admin/health；swag 注解生成 OpenAPI。详见 [DES-37 §3](docs/design/37-系统健康视图.md#3-接口) | `backend/internal/operation/application/`、`backend/internal/operation/adapter/http/`、`backend/docs/` | 待办 | — |
-| E-35-02 | 前端 | 卡片 + 表格，异常红色高亮，外链到 Grafana、Temporal UI。 详见 [DES-37 §4](docs/design/37-系统健康视图.md#4-界面) | `frontend/src/features/admin/` | 待办 | — |
+| E-35-02 | 前端 | 卡片 + 表格，异常红色高亮，外链到 Grafana、Temporal UI。 详见 [DES-37 §4](docs/design/37-系统健康视图.md#4-界面) | `frontend/src/components/admin/` | 待办 | — |
 | E-35-03 | 测试与验收 | 阈值判断单元测试；验收用例 TC-35-01～02（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-36 画布
@@ -859,12 +861,12 @@
 | E-36-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/canvases、POST /api/projects/{pid}/canvases、GET /api/canvases/{id}、GET /api/canvases/{id}/changes、POST /api/canvases/{id}/commands、POST /api/canvases/{id}/nodes/{nid}:run、POST /api/canvases/{id}/snapshots；swag 注解生成 OpenAPI。详见 [DES-38 §3](docs/design/38-画布功能.md#3-接口) | `backend/internal/canvas/application/`、`backend/internal/canvas/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-36-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `canvas.document_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：生成节点运行复用 OperationWorkflow；无新工作流。 详见 [DES-38 §4](docs/design/38-画布功能.md#4-异步与工作流) | `backend/internal/canvas/adapter/workflow/`、`backend/internal/canvas/adapter/event/` | 待办 | — |
 | E-36-04 | Agent 服务 | AI 画布助手（经对话式 Agent 下发画布命令提案）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/harness/` | 待办 | — |
-| E-36-05 | 前端 | 直接复用 BeefTV 0d9e9f48 InfiniteCanvas 核心/对应设计（DES-08 §7）；左侧节点库、右侧属性面板、顶部工具栏、小地图；快捷键见 REQ-05 §7。 详见 [DES-38 §6](docs/design/38-画布功能.md#6-界面) | `frontend/src/features/canvas/` | 待办 | — |
+| E-36-05 | 前端 | 直接复用 BeefTV 0d9e9f48 InfiniteCanvas 核心/对应设计（DES-08 §7）；左侧节点库、右侧属性面板、顶部工具栏、小地图；快捷键见 REQ-05 §7。 详见 [DES-38 §6](docs/design/38-画布功能.md#6-界面) | `frontend/src/components/canvas/` | 待办 | — |
 | E-36-06 | 测试与验收 | 命令冲突重放；reference 连线与参考组合双向一致；Playwright 性能录制；验收用例 TC-36-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
-| E-36-07 | 真实备注布局接入 | 复用真实登录/首次改密、组织项目和公开契约；Go PostgreSQL 保存 text resource 备注、annotation 连线与 viewport，原子 revision/幂等、布局撤销重做和刷新恢复。命令与失败合同见 DES-38 §3.1；reference/promote/run 留后续 | `backend/internal/canvas/`、`backend/db/migrations/`、`backend/tests/canvas/`、`frontend/src/features/canvas/`、在线生成 API | 被替代（07dfd2d 历史未完检查点，不追认完成；由 E-36-09/10 承接） | 07dfd2d |
-| E-36-08 | 性能 PoC 录制与媒体复验入口 | 保留固定基线；浏览器内记录 60 秒真实运动窗口、可信输入、隐藏中断与 JSON 导出；自选不同图片/视频只在内存 blob URL 展示。固定样本、本机自选媒体、目标 M1/8 GB 与 Windows 中端机、跨设备布局分别留证 | `frontend/src/features/canvas/`、`frontend/tests/`、`docs/acceptance/` | 被替代（07dfd2d 历史未完检查点；新引擎验证归 E-36-11，不保留独立入口） | 07dfd2d |
-| E-36-09 | BeefTV 无限画布核心与设计迁移 | 固定 source 0d9e9f48、实际源码/许可清单；直接移植 DOM/SVG/rAF、视口/选择/框选/拖动/对齐/分组/连接/快捷键/历史/小地图、空间索引/LOD/播放设计，替换 AntD/主题端口；删除旧 frontend poc/live/creation 引擎和独立入口，不迁整应用 | frontend/src/features/canvas/、正式画布路由、许可清单、DES-06/38/08 | 完成（固定源码/许可、旧引擎删除、21 文件/92 项前端测试、生产构建与真实浏览器核心交互通过；目标机器性能归 E-36-11） | 本次提交 |
-| E-36-10 | 正式资源与生产交互接线 | UUID text/image/video/audio/group resource、title/parent/z_index、类型白名单；ResizeNodes/RenameNodes/SetNodeParents/SetNodeZIndex、annotation、k↔zoom0.05～4、world 绝对坐标/删组解组；同项目已接管媒体与服务端投影，auth/归档/revision/持久幂等/Outbox 原子性，保留 DDL/历史 | backend/internal/canvas/、forward SQL、backend/tests/canvas/、frontend/src/features/canvas/、在线生成 API | 完成（正式 DTO/命令、12 项真实 PG、授权 MinIO 播放与并发/草稿恢复通过；完整生成业务继续独立交付） | 本次提交 |
+| E-36-07 | 真实备注布局接入 | 复用真实登录/首次改密、组织项目和公开契约；Go PostgreSQL 保存 text resource 备注、annotation 连线与 viewport，原子 revision/幂等、布局撤销重做和刷新恢复。命令与失败合同见 DES-38 §3.1；reference/promote/run 留后续 | `backend/internal/canvas/`、`backend/db/migrations/`、`backend/tests/canvas/`、`frontend/src/components/canvas/`、在线生成 API | 被替代（07dfd2d 历史未完检查点，不追认完成；由 E-36-09/10 承接） | 07dfd2d |
+| E-36-08 | 性能 PoC 录制与媒体复验入口 | 保留固定基线；浏览器内记录 60 秒真实运动窗口、可信输入、隐藏中断与 JSON 导出；自选不同图片/视频只在内存 blob URL 展示。固定样本、本机自选媒体、目标 M1/8 GB 与 Windows 中端机、跨设备布局分别留证 | `frontend/src/components/canvas/`、`frontend/tests/`、`docs/acceptance/` | 被替代（07dfd2d 历史未完检查点；新引擎验证归 E-36-11，不保留独立入口） | 07dfd2d |
+| E-36-09 | BeefTV 无限画布核心与设计迁移 | 固定 source 0d9e9f48、实际源码/许可清单；直接移植 DOM/SVG/rAF、视口/选择/框选/拖动/对齐/分组/连接/快捷键/历史/小地图、空间索引/LOD/播放设计，替换 AntD/主题端口；删除旧 frontend poc/live/creation 引擎和独立入口，不迁整应用 | frontend/src/components/canvas/、正式画布路由、许可清单、DES-06/38/08 | 完成（固定源码/许可、旧引擎删除、21 文件/92 项前端测试、生产构建与真实浏览器核心交互通过；目标机器性能归 E-36-11） | 本次提交 |
+| E-36-10 | 正式资源与生产交互接线 | UUID text/image/video/audio/group resource、title/parent/z_index、类型白名单；ResizeNodes/RenameNodes/SetNodeParents/SetNodeZIndex、annotation、k↔zoom0.05～4、world 绝对坐标/删组解组；同项目已接管媒体与服务端投影，auth/归档/revision/持久幂等/Outbox 原子性，保留 DDL/历史 | backend/internal/canvas/、forward SQL、backend/tests/canvas/、frontend/src/components/canvas/、在线生成 API | 完成（正式 DTO/命令、12 项真实 PG、授权 MinIO 播放与并发/草稿恢复通过；完整生成业务继续独立交付） | 本次提交 |
 | E-36-11 | 整项目验证与演示回归 | 三端完整适用门禁、真实依赖和正式入口 Demo；覆盖身份/首登改密/项目/核心画布/正式资源/保存恢复/失败路径，新引擎性能与历史数据单列证据；完整业务缺口接下一轮 M1/功能任务，不用 Demo 代替九场景验收 | backend/tests/、agent/tests/、frontend/tests/、docs/acceptance/、BACKLOG.md | 进行中（三端适用检查与正式画布生产构建 Demo 通过；完整业务链、真实供应商、目标机器性能和上线验收仍待完成） | 本次提交 |
 
 #### E-37 对话式 Agent
@@ -879,7 +881,7 @@
 | E-37-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/agent/sessions、GET /api/projects/{pid}/agent/sessions、POST /api/projects/{pid}/agent/sessions/{sid}/runs、GET /api/projects/{pid}/agent/sessions/{sid}/messages、POST /api/agent/proposals/{id}:apply、POST /api/agent/proposals/{id}:reject、DELETE /api/projects/{pid}/agent/sessions/{sid}、GET /api/admin/agent/runs/{run_id}/debug、POST /api/projects/{pid}/agent/sessions/{sid}/budget-quotes、POST /api/projects/{pid}/agent/sessions/{sid}:close、POST /internal/agent/runs/{run_id}/calls、PUT /internal/agent/runs/{run_id}/calls/{call_seq}；swag 注解生成 OpenAPI。详见 [DES-39 §3](docs/design/39-对话式Agent.md#3-接口) | `backend/internal/agent/application/`、`backend/internal/agent/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-37-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`、`agent-session-settle`。要点：对话运行不使用 Temporal（交互式、短时），`agent-api` 直接流式执行。每次运行前 Go 在当前额度内登记一条 `agent.run` 并占用 `run_cap`，作为 Harness Budget 传入… 详见 [DES-39 §4](docs/design/39-对话式Agent.md#4-异步与工作流) | `backend/internal/agent/adapter/workflow/`、`backend/internal/agent/adapter/event/` | 待办 | — |
 | E-37-04 | Agent 服务 | agent-api 对话运行、只读工具、提案与生成草稿（AG-UI）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/api/`、`agent/app/harness/tools.py`、`agent/evals/` | 待办 | — |
-| E-37-05 | 前端 | CopilotKit 面板：流式消息（Streamdown）、步骤与工具调用折叠卡、提案差异卡（应用 / 拒绝）、生成草稿卡（报价确认组件）；会话列表；管理员调试抽屉（上下文、事件流）。 详见 [DES-39 §6](docs/design/39-对话式Agent.md#6-界面) | `frontend/src/features/agent/` | 待办 | — |
+| E-37-05 | 前端 | CopilotKit 面板：流式消息（Streamdown）、步骤与工具调用折叠卡、提案差异卡（应用 / 拒绝）、生成草稿卡（报价确认组件）；会话列表；管理员调试抽屉（上下文、事件流）。 详见 [DES-39 §6](docs/design/39-对话式Agent.md#6-界面) | `frontend/src/components/agent/` | 待办 | — |
 | E-37-06 | 测试与验收 | 提案失效与重放；工具范围越权测试；提示注入评测集（TST-03）；验收用例 TC-37-01～04（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
 
 #### E-38 剧本修订对比
@@ -893,7 +895,7 @@
 | E-38-01 | 数据与领域模型 | 迁移建表 / 加列：`script.episode`、`script.script_version`（其中 `script.episode` 由 E-12 建表，本 Epic 只加列或复用、`script.script_version` 由 E-12 建表，本 Epic 只加列或复用）；实现领域对象、状态机与仓储（仓储查询强制带 `project_id`）。详见 [DES-40 §2](docs/design/40-剧本修订对比.md#2-数据) | `backend/db/migrations/`、`backend/internal/script/domain/`、`backend/internal/script/adapter/postgres/` | 待办 | — |
 | E-38-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：POST /api/projects/{pid}/script-imports、GET /api/projects/{pid}/script-versions/{a}/diff/{b}、POST /api/projects/{pid}/script-versions/{id}:adopt；swag 注解生成 OpenAPI。详见 [DES-40 §3](docs/design/40-剧本修订对比.md#3-接口) | `backend/internal/script/application/`、`backend/internal/script/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-38-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `ScriptRevisionWorkflow`。要点：`ScriptRevisionWorkflow`（对齐 → 重解析变化集 → 台词匹配 → 待确认）。 详见 [DES-40 §4](docs/design/40-剧本修订对比.md#4-异步与工作流) | `backend/internal/script/adapter/workflow/`、`backend/internal/script/adapter/event/` | 待办 | — |
-| E-38-04 | 前端 | 版本对比页（集列表带变化标记、并排文本差异、受影响镜头数）。 详见 [DES-40 §5](docs/design/40-剧本修订对比.md#5-界面) | `frontend/src/features/script/` | 待办 | — |
+| E-38-04 | 前端 | 版本对比页（集列表带变化标记、并排文本差异、受影响镜头数）。 详见 [DES-40 §5](docs/design/40-剧本修订对比.md#5-界面) | `frontend/src/components/script/` | 待办 | — |
 | E-38-05 | 测试与验收 | 台词匹配准确率（评测集）；集对齐边界（插入新集导致集号偏移时按内容相似度对齐）；验收用例 TC-38-01～02（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`frontend/tests/` | 待办 | — |
 
 ## 5. 变更记录

@@ -4,7 +4,7 @@
 
 ## 1. 目标与范围
 
-Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目验证和 Demo。Demo 使用同一套正式入口、权限、模块与数据合同；一次演示、一条生成链路或基础画布不能替代 PRD-01 §8.2 的九个 MVP 场景和上线门禁。
+Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目验证和 Demo。当前用户明确先完成页面与服务 PoC，暂不要求登录认证；本机可直接进入同一套工作台和数据合同。消费者账号与登录验收后置；一次演示、一条生成链路或基础画布不能替代 PRD-01 §8.2 的九个 MVP 场景和上线门禁。
 
 用户指定直接复用 **BeefTV 无限画布及对应设计**，替换现有画布以减少重复开发。范围为 DOM/SVG/rAF 引擎、视口/缩放、框选/拖动、对齐/分组、连接、快捷键、历史、小地图、空间索引、LOD、媒体播放设计及 Lanverse 正式节点/服务端接线。不得降为外观借鉴、自绘 React Flow 替代品或纯备注画布。
 
@@ -29,7 +29,7 @@ Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目�
 
 ## 3. 正式模块与端口
 
-继续 Next.js、React、TypeScript、shadcn/ui、TanStack Query、Zustand；核心与 Lanverse 业务绑定按职责分开：迁入运行/算法位于 features/canvas/engine，节点位于 nodes，正式装配由 workspace.tsx 的 CanvasWorkspace 承担。Go 保持 adapter → application → domain。
+继续 Next.js、React、TypeScript、shadcn/ui、TanStack Query、Zustand；核心与 Lanverse 业务绑定按职责分开：迁入运行/算法位于 components/canvas/engine，节点位于 nodes，正式装配由 workspace.tsx 的 CanvasWorkspace 承担。Go 保持 adapter → application → domain。
 
 | 端口 / 状态 | 正式合同 | 所有者 |
 | --- | --- | --- |
@@ -58,13 +58,25 @@ Next 页面保留 Server Component 与 Suspense；浏览器引擎在 Client Comp
 
 ## 4. 入口、删除与数据保留
 
-正式 /canvas 与 /projects/{UUID}/canvas 使用同一 CanvasWorkspace；项目路由传 initialProjectId，选择与读取使用真实项目/画布 ID 和真实登录/首登改密。业务入口、组件/服务命名、按钮和产品文案不含 poc 或 livedemo；不保留旧画布兼容入口。
+2026-09-30 用户指定业务组件统一放在 `frontend/src/components/<业务>/`，当前 auth、canvas、catalog、operation、project、workbench 六个目录及其私有查询/状态/测试整体迁入。画布核心、相对模块依赖与正式路由保持，只更新导入路径；下文旧引擎删除路径保留为当时位置。目录约定以 PROJECT §6 为准。
+
+正式 /canvas 与 /projects/{UUID}/canvas 使用同一 CanvasWorkspace；项目路由传 initialProjectId，选择与读取使用真实项目/画布 ID ；当前阶段由 Go 提供单一工作区身份，不需要登录、首登改密或会话查询。业务入口、组件/服务命名、按钮和产品文案不含 poc 或 livedemo；不保留旧画布兼容入口。
 
 删除 frontend/src/features/canvas 中旧 poc-*、live-* 引擎/编辑器/状态及旧用例，删除 frontend/src/app/poc/canvas 和旧 features/workbench/creation-canvas.tsx，实现正式路由接新引擎。替换消除双引擎/双状态，不能只改标签。专用依赖/样本确认无其他消费者再移除，不误删其他工作台和共享认证/请求模块。
 
 源码替换不授予清库权限。保留历史 DDL、画布记录、revision、日志、账号/项目及其他业务历史；旧备注在新引擎可呈现/编辑。未知历史值不可静默覆盖/清空，变更追加迁移并验证恢复/回滚；不得重建数据库或导入 source local workspace 覆盖项目。
 
 验证和测量放在正常命名 tests/e2e/acceptance；synthetic fixture 明确来源。Demo 使用正式引擎，不增独立 PoC 产品页或第二份正式持久化。固定媒体、真实媒体、目标机器和跨设备分别留证，旧引擎结果不移作新引擎通过证明。
+
+## 4.1 当前阶段移除登录功能（用户指定）
+
+用户明确清理当前登录功能，不保留认证兼容分支或免登录开关。删除 `/login` 页面、前端身份查询/拦截、退出/改密交互，以及 Go 公开 `/api/auth/*` 登录、当前会话、退出和改密接口与 Redis 会话、登录限流、密码登录用例。路由或接口被移除后返回 404，不创建重定向或兼容入口。
+
+当前工作台直接调用项目、画布和媒体 API。Go identity 适配器提供单一工作区身份，在事务中复用唯一启用组织（空库才创建）并建立固定 producer 身份；此身份只用于现有项目隔离、审计与命令合同，不需要浏览器凭据，不持有可使用的初始密码。重复请求不新增或改写账号；组织/身份被停用、冲突或依赖失败时阻断，不自动恢复。
+
+继续复用 PostgreSQL、业务命令、修订、UUID 幂等、审计与 Outbox。写请求仍检查精确 Origin 与幂等键；删除会话 cookie、CSRF token 及登录豁免规则。当前工作区只提供本机服务，组合根校验 `LV_ENV=local` 和回环浏览器 Origin，不开放消费者部署；消费者认证是后续独立需求。历史 SQL、账号、项目、画布与审计记录保留，不删除数据或改写历史迁移。
+
+本切片验收真实 Go/PostgreSQL 的直接访问、项目创建、画布保存、刷新恢复和无登录请求；验证移除接口返回 404、跨 Origin 拒绝写入、缺失幂等键拒绝及停用身份不会被恢复。供应商生成与样例页面的全部后端不在本次清理范围。
 
 ## 5. 失败、权限与幂等
 
@@ -73,7 +85,7 @@ Next 页面保留 Server Component 与 Suspense；浏览器引擎在 Client Comp
 - 交互可预览，服务端确认前不显示已保存。网络失败保留草稿，以原键重放/查明结果；409 取最新正式文档并提示，不能静默覆盖他人配置或重放付费操作。
 - 复制新 UUID，清除不可继承的任务/选定身份；撤销/重做提交新允许命令，不回退 revision，不撤销付费生成/正式选定。
 - 媒体失败可恢复，预签名过期重新授权；切换项目/卸载释放监听、pointer capture、rAF、计时器、播放/blob URL；只读取消在途手势。
-- 保持同源 /api、Origin/CSRF、环境 Cookie、RFC 9457；浏览器不持有供应商/中间件/存储管理密钥。2026-09-30 用户另行要求移除 Python 服务目录，范围见 [Agent 服务目录清理](Agent服务目录清理设计.md)；Provider Activity 的 Go 承接继续由 M1-12 设计与验收，画布迁移不代表生成链已完成。
+- 当前保持同源 /api、精确 Origin、UUID 幂等键与 RFC 9457；会话 Cookie/CSRF 已随登录功能移除。浏览器不持有供应商/中间件/存储管理密钥。2026-09-30 用户另行要求移除 Python 服务目录，范围见 [Agent 服务目录清理](Agent服务目录清理设计.md)；Provider Activity 的 Go 承接继续由 M1-12 设计与验收，画布迁移不代表生成链已完成。
 
 ## 6. 核心交互与验收
 
