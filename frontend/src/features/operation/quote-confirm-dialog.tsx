@@ -21,6 +21,7 @@ type QuoteConfirmDialogProps = {
   onConfirm: (excludeOperationIds: string[]) => void | Promise<void>;
   onRequote: () => void;
   onForceRegenerate?: (operationId: string) => void;
+  previewOnly?: boolean;
 };
 
 const rejectionMessages: Record<string, string> = {
@@ -120,6 +121,7 @@ function QuoteDialogContent({
   onConfirm,
   onRequote,
   onForceRegenerate,
+  previewOnly = false,
 }: QuoteConfirmDialogProps) {
   const [excludedIndexes, setExcludedIndexes] = useState<ReadonlySet<number>>(
     () => new Set(),
@@ -136,6 +138,7 @@ function QuoteDialogContent({
     : 0;
   const expired = secondsLeft === 0;
   const canConfirm =
+    !previewOnly &&
     summary.count > 0 &&
     !summary.invalid &&
     !summary.malformedAmount &&
@@ -202,7 +205,9 @@ function QuoteDialogContent({
               确认生成报价
             </Dialog.Title>
             <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-              请核对费用和服务区域。只有点击下方生成按钮才会提交确认。
+              {previewOnly
+                ? "前端 PoC · 样例报价，仅预览费用和决策流程，尚未接入生成服务。"
+                : "请核对费用和服务区域。只有点击下方生成按钮才会提交确认。"}
             </Dialog.Description>
           </div>
 
@@ -303,7 +308,7 @@ function QuoteDialogContent({
                             type="button"
                             size="sm"
                             variant="ghost"
-                            disabled={pending}
+                            disabled={pending || previewOnly}
                             onClick={() =>
                               onForceRegenerate(item.operation_id!)
                             }
@@ -396,7 +401,11 @@ function QuoteDialogContent({
                 }}
                 onClick={confirm}
               >
-                {pending ? "确认中…" : summary.label}
+                {previewOnly
+                  ? "生成服务待接入"
+                  : pending
+                    ? "确认中…"
+                    : summary.label}
               </Button>
             </div>
           </div>

@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css";
 @import "tw-animate-css";
+
+/* React Flow 自带 attribution 的灰字在浅色背景上对比度不足。 */
+.creation-canvas .react-flow__attribution {
+  background: var(--background);
+}
+.creation-canvas .react-flow__attribution a {
+  color: var(--foreground);
+}
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -63,10 +71,10 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.5 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.52 0.22 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
