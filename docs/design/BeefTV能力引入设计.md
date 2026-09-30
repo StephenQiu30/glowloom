@@ -33,7 +33,7 @@ Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目�
 
 | 端口 / 状态 | 正式合同 | 所有者 |
 | --- | --- | --- |
-| 身份/项目 | 当前会话、首登改密、组织项目、只读权限 | identity/workspace，不映射样例 ID |
+| 工作区/项目 | 单一工作区身份、组织项目、归档只读 | identity/workspace，不映射样例 ID |
 | 文档/节点 | document/node/edge/viewport/revision；节点 title/parent_id/z_index 与类型安全 config | Go/PostgreSQL；source k ↔ API zoom 显式转换 |
 | 命令提交 | expected_revision、UUID 幂等键、确认文档/结果或结构化错误 | 在线 Swagger 生成 API → request.ts |
 | 媒体 | 同项目已接管可用 media_asset ID，授权 URL/缩略图由服务端投影 | media，不保存任意 URL/blob/本机路径/storageKey/密钥 |
@@ -58,9 +58,9 @@ Next 页面保留 Server Component 与 Suspense；浏览器引擎在 Client Comp
 
 ## 4. 入口、删除与数据保留
 
-2026-09-30 用户指定业务组件统一放在 `frontend/src/components/<业务>/`，当前 auth、canvas、catalog、operation、project、workbench 六个目录及其私有查询/状态/测试整体迁入。画布核心、相对模块依赖与正式路由保持，只更新导入路径；下文旧引擎删除路径保留为当时位置。目录约定以 PROJECT §6 为准。
+2026-09-30 用户指定业务组件统一放在 `frontend/src/components/<业务>/`，当前 auth、canvas、catalog、operation、project、workbench 六个目录及其私有查询/状态/测试整体迁入。随后按用户指令清理登录功能并删除 auth 目录，当前保留其余五个业务目录。画布核心、相对模块依赖与正式路由保持，只更新导入路径；下文旧引擎删除路径保留为当时位置。目录约定以 PROJECT §6 为准。
 
-正式 /canvas 与 /projects/{UUID}/canvas 使用同一 CanvasWorkspace；项目路由传 initialProjectId，选择与读取使用真实项目/画布 ID ；当前阶段由 Go 提供单一工作区身份，不需要登录、首登改密或会话查询。业务入口、组件/服务命名、按钮和产品文案不含 poc 或 livedemo；不保留旧画布兼容入口。
+正式 /canvas 与 /projects/{UUID}/canvas 使用同一 CanvasWorkspace；项目路由传 initialProjectId，选择与读取使用真实项目/画布 ID；当前阶段由 Go 提供单一工作区身份，不需要登录、首登改密或会话查询。业务入口、组件/服务命名、按钮和产品文案不含 poc 或 livedemo；不保留旧画布兼容入口。
 
 删除 frontend/src/features/canvas 中旧 poc-*、live-* 引擎/编辑器/状态及旧用例，删除 frontend/src/app/poc/canvas 和旧 features/workbench/creation-canvas.tsx，实现正式路由接新引擎。替换消除双引擎/双状态，不能只改标签。专用依赖/样本确认无其他消费者再移除，不误删其他工作台和共享认证/请求模块。
 
