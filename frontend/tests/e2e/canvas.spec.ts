@@ -64,7 +64,8 @@ async function drag(page: Page, target: Locator, dx: number, dy: number) {
   );
   await page.mouse.up();
 }
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(`/canvas?project=${projectId}`);
 });
 
@@ -292,7 +293,7 @@ test("物理缩放节点、重命名、平移框选及分组折叠保存正式�
   doc = await saved(page, id, doc.revision);
   await page.getByRole("button", { name: "文字", exact: true }).click();
   doc = await saved(page, id, doc.revision);
-  await page.getByRole("button", { name: "移动", exact: true }).click();
+  await page.getByRole("radio", { name: "移动", exact: true }).click();
   const region = page.getByRole("region", { name: "画布编辑区", exact: true });
   const bounds = (await region.boundingBox())!;
   const viewport = { ...doc.viewport };
@@ -302,7 +303,7 @@ test("物理缩放节点、重命名、平移框选及分组折叠保存正式�
   await page.mouse.up();
   doc = await saved(page, id, doc.revision);
   expect(doc.viewport.x).not.toBe(viewport.x);
-  await page.getByRole("button", { name: "框选", exact: true }).click();
+  await page.getByRole("radio", { name: "框选", exact: true }).click();
   const boxes = await Promise.all(
     doc.nodes.map((node) =>
       page.locator(`[data-node-id="${node.id}"]`).boundingBox(),

@@ -8,6 +8,7 @@ import {
   renameCanvas,
   deleteCanvas,
   getMediaPreview,
+  uploadCanvasMedia,
 } from "./queries";
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -23,6 +24,40 @@ const payload = () => ({
 });
 afterEach(() => {
   vi.restoreAllMocks();
+});
+it("上传消费在线生成客户端并校验同项目资产，只发送multipart及稳定键", async () => {
+  const asset = {
+    id: id(3),
+    project_id: id(2),
+    kind: "image",
+    file_name: "图片.png",
+    mime_type: "image/png",
+    byte_size: 12,
+    revision: 1,
+  };
+  const send = vi
+    .spyOn(axios, "request")
+    .mockResolvedValue({ data: { asset, duplicate_of: null } });
+  const file = new File(["test"], "图片.png", { type: "image/png" });
+  const signal = new AbortController().signal;
+  const onProgress = vi.fn();
+  expect(
+    await uploadCanvasMedia(id(2), file, id(7), { signal, onProgress }),
+  ).toEqual(asset);
+  const sent = send.mock.calls[0][0];
+  expect(sent.data).toBeInstanceOf(FormData);
+  expect((sent.data as FormData).get("file")).toBe(file);
+  expect((sent.data as FormData).get("local_review_confirmed")).toBe("true");
+  expect(sent.headers).toMatchObject({ "Idempotency-Key": id(7) });
+  expect(sent.headers).not.toHaveProperty("Content-Type");
+  expect(sent.signal).toBe(signal);
+  expect(sent.timeout).toBeGreaterThanOrEqual(300000);
+  vi.mocked(send).mockResolvedValue({
+    data: { asset: { ...asset, project_id: id(99) }, duplicate_of: null },
+  });
+  await expect(
+    uploadCanvasMedia(id(2), file, id(8), { signal, onProgress }),
+  ).rejects.toMatchObject({ code: "invalid_response" });
 });
 it("历史省略尺寸有显式默认值，父group与媒体仅映射正式身份", () => {
   const decoded = decodeDocument({

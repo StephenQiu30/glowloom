@@ -6,6 +6,30 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("公共请求入口", () => {
+  it("multipart文件请求由浏览器产生boundary并保留取消/进度/幂等，不强制JSON", async () => {
+    const send = vi.spyOn(axios, "request").mockResolvedValue({ data: {} });
+    const body = new FormData();
+    body.append("file", new File(["bytes"], "file.png", { type: "image/png" }));
+    const signal = new AbortController().signal;
+    const onUploadProgress = vi.fn();
+    await request("/api/projects/one/media/uploads", {
+      method: "POST",
+      data: body,
+      signal,
+      onUploadProgress,
+      headers: {
+        "Content-Type": "multipart/form-data",
+        "Idempotency-Key": "file-key",
+      },
+    });
+    expect(send.mock.calls[0][0].data).toBe(body);
+    expect(send.mock.calls[0][0].signal).toBe(signal);
+    expect(send.mock.calls[0][0].onUploadProgress).toBe(onUploadProgress);
+    expect(send.mock.calls[0][0].headers).not.toHaveProperty("Content-Type");
+    expect(send.mock.calls[0][0].headers).toMatchObject({
+      "Idempotency-Key": "file-key",
+    });
+  });
   it("同源写请求无需认证并保留调用方的稳定幂等键", async () => {
     const send = vi
       .spyOn(axios, "request")
