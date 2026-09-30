@@ -2,7 +2,9 @@
 
 Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发布成片为终点，把整部剧解析、角色与场景设定、参考定稿、分镜、全能参考视频生成、配音、剪辑和交付放进同一条可审阅、可恢复、成本透明的生产线；并提供复用 BeefTV 核心与设计的无限画布作为探索与精修界面。
 
-> **当前状态（2026-09-26）：** 产品与技术设计已从零重做并完成交叉评审；旧实现（`backend/`、`agent/`、`frontend/` 及旧工程配置）已删除，完整保留在标签 `legacy-2026-09`（`git checkout legacy-2026-09 -- <路径>` 可取回）。新代码按 [BACKLOG](BACKLOG.md) 从 M1 起重建。
+> **历史重建（2026-09-26）：** 产品与技术设计已从零重做并完成交叉评审；旧实现（`backend/`、`agent/`、`frontend/` 及旧工程配置）已删除，完整保留在标签 `legacy-2026-09`（`git checkout legacy-2026-09 -- <路径>` 可取回）。新代码按 [BACKLOG](BACKLOG.md) 从 M1 起重建。
+>
+> **当前服务调整（2026-09-30）：** 按用户指令移除独立 Python `agent/` 服务及其 Compose/CI 入口，保留 Next.js 前端和现有 Go API、Worker、Relay。供应商、凭据测试、审核、Skill/Harness 的 Go 承接尚未实现；完整生成链仍待验证，见 [清理范围与后续能力](docs/design/Agent服务目录清理设计.md)。
 
 ## 工作流
 
@@ -20,14 +22,14 @@ Next.js（流水线视图 / 画布 / 审阅 /（V2）时间线）
    │ REST + SSE
 Go backend-api（Gin · 命令层 · 领域模块）──启动 / 信号──→ Temporal
    │                                                  ├─ backend-worker（Go 工作流 · 写库 · FFmpeg）
-   │                                                  └─ agent-worker（Activity · Agent Harness · 供应商适配器）
+   │                                                  └─ 供应商 / 审核 / Skill Activity（执行端待补，M1-12）
 PostgreSQL（业务事实 + Outbox）→ backend-relay → Kafka → 通知 / 过期传播 / 成本 / 审计
 Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体对象）
 ```
 
 - **结构化生产对象是事实源**：剧本、集、场、角色、造型、镜头、剪辑计划都有版本与依赖。
 - **所有生成都是 Operation**：能力 + 模式 + 模型 + 参数 + 带用途的输入 → 工作流 → 候选。
-- **Temporal 编排全部长流程**，工作流只用 Go 编写；Agent 服务只执行 AI 步骤。
+- **Temporal 编排全部长流程**，工作流只用 Go 编写；AI 执行端待由 Go 承接。
 - **模型通过声明式注册表接入**；付费生成报价 → 确认 → 预留 → 执行 → 结算，结果未知先对账。
 
 详见 [DES-01 系统架构设计](docs/design/01-系统架构设计.md)。
@@ -38,7 +40,6 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | --- | --- |
 | 前端 | Next.js、TypeScript、Tailwind CSS、shadcn/ui、Radix UI、ESLint、Prettier、TanStack Query、Zustand；无限画布复用 BeefTV 的 DOM/SVG 交互核心 |
 | 后端 | Go：Gin、GORM、golang-migrate、Viper、Zap、Wire、swag、Temporal SDK、go-redis、franz-go、minio-go |
-| Agent 服务 | Python：FastAPI、Pydantic、Temporal Python SDK、Agent Harness、httpx |
 | 工作流 | Temporal |
 | 中间件 | PostgreSQL、Redis、Kafka；对象存储开发用 MinIO、生产用火山引擎 TOS |
 | 媒体 | FFmpeg / ffprobe |
@@ -70,15 +71,14 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 ## 开发
 
-工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机直接启动三端进程，连接已运行的本机中间件；配置写在根目录 `.env`（键名样例见 `.env.example`）。
+工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机直接启动前端与现有 Go 服务进程，连接已运行的本机中间件；配置写在根目录 `.env`（键名样例见 `.env.example`）。
 
 | 目录 | 技术栈 | 本地启动 | 健康检查 |
 | --- | --- | --- | --- |
 | `backend/` | Go 1.26 · Gin · Viper · Zap | `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
-| `agent/` | Python 3.12 · uv · FastAPI · pydantic-settings | `cd agent && uv run --env-file ../.env uvicorn app.main_api:create_app --factory --port 8090` | `GET :8090/internal/health` |
 | `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && node --env-file=../.env "$(command -v corepack)" pnpm exec next dev` | `GET :3000/healthz` |
 
-Agent Activity Worker 在另一终端运行：`cd agent && uv run --frozen --env-file ../.env python -m app.main_worker`。它连接 `.env` 中本机已运行的 Redis 与 Temporal，监听模拟供应商 `agent.mock` 队列，以及 Skill 和 `provider.test_credential` 所在的 `agent` 队列。根目录 `.env` 同时设置 `LV_CREDENTIAL_KEY_ID` 与 `LV_CREDENTIAL_PRIVATE_KEY_REF`（绝对 PEM 私钥文件路径）后，可用 Agent 私钥执行 OpenRouter 免费鉴权测试；未配置时返回测试服务不可用，不发起供应商请求。本地开发不启动 Compose。
+原 `agent` / `agent.mock` 队列当前没有应用提供的执行 Worker；Go 工作流仍保留这些协议引用，相关任务可能等待或超时。API 健康/就绪检查不证明供应商执行可用；Go 承接完成前，不能将生成、凭据测试、审核或 Skill 运行计为验证通过。本地开发不启动 Compose。
 
 Go Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow,media`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。`flow` 注册基础设施维护、凭据测试、单项/批量 Operation 与报价过期 Workflow，`media` 注册媒体接管 Activity。Relay 投递 Outbox，投影已登记的项目/预算/Operation 事件，并按允许字段消费账号、注册表、项目和业务命令审计。公开 SSE、真实供应商及完整生成验收仍以对应 BACKLOG 任务为准。
 

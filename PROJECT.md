@@ -22,7 +22,7 @@
 
 业务范围以 `docs/prd/` 与 `docs/requirement/` 为准，架构决策以 `docs/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改需求或设计文档并评审，再同步本文。
 
-2026-09-30 用户进一步明确：按上线标准实现完整 Lanverse，当前优先跑通整项目验证和 Demo；画布直接复用 BeefTV 固定提交 0d9e9f48 的 DOM/SVG/rAF InfiniteCanvas 核心及对应设计，替换现有实现（见 BeefTV 引入设计、DES-06/38）。本轮接正式 text/image/video/audio/group 资源节点与 Go/PostgreSQL 合同，不保留独立 PoC 产品入口、旧 live/creation 引擎或双状态；不迁整个 BeefTV provider/3D/插件/时间轴。完整生成/参考/选定/Agent 仍按产品范围持续验收，单次 Demo 不等于 MVP 完成。现有 SQL/业务历史保留，字段演进追加迁移。Go/Python 职责继续有效，Provider Activity 的 Go 迁移仍由 M1-12 独立评估。
+2026-09-30 用户进一步明确：按上线标准实现完整 Lanverse，当前优先跑通整项目验证和 Demo；画布直接复用 BeefTV 固定提交 0d9e9f48 的 DOM/SVG/rAF InfiniteCanvas 核心及对应设计，替换现有实现（见 BeefTV 引入设计、DES-06/38）。本轮接正式 text/image/video/audio/group 资源节点与 Go/PostgreSQL 合同，不保留独立 PoC 产品入口、旧 live/creation 引擎或双状态；不迁整个 BeefTV provider/3D/插件/时间轴。完整生成/参考/选定/Agent 仍按产品范围持续验收，单次 Demo 不等于 MVP 完成。现有 SQL/业务历史保留，字段演进追加迁移。用户随后明确要求先清理独立 Python `agent/` 服务，范围见 [Agent 服务目录清理](docs/design/Agent服务目录清理设计.md)；其执行能力尚未由 Go 承接，M1-12 继续评估和实施。
 
 当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。当前复用合同以 [BeefTV 迁移设计](docs/design/BeefTV能力引入设计.md) 和 [第三方代码声明](THIRD_PARTY_NOTICES.md) 为准；LibTV 与旧 infinite-canvas 的历史调研、业务规则来源与许可证据继续保留，不作为当前主要参考或画布引擎建议。
 
@@ -31,20 +31,18 @@
 ```text
 Lanverse/
   .env.example              本机进程配置样例；实际 .env 不入库
-  docker-compose.yml        应用服务（frontend、backend-api、agent-api）
+  docker-compose.yml        应用服务（frontend、backend-api、backend-worker、backend-worker-media、backend-relay）及维护角色
   docker-compose-env.yml    完整部署依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
-  agent/            Python：FastAPI + Temporal Activity Worker + Agent Harness + 供应商适配器
   frontend/         Next.js：Web 应用（流水线视图、画布、审阅、时间线、任务中心）
   docs/             生命周期文档：产品需求、需求规格、设计、计划、测试、运维、验收
 ```
 
-不设 `contracts/`：公共 REST 契约由后端 Gin 注解与 DTO 经 swag 自动生成，在后端 Swagger 端点在线提供，再由 `@umijs/openapi` 生成前端 API（见 §7）；Activity 与事件的输入输出由 Go、Python 各自手写类型，用契约测试保证一致，不引入单独的 schema 文件与代码生成流水线，避免为两个语言维护一套额外的中间表示。
+不设 `contracts/`：公共 REST 契约由后端 Gin 注解与 DTO 经 swag 自动生成，在后端 Swagger 端点在线提供，再由 `@umijs/openapi` 生成前端 API（见 §7）；现有 Activity 与事件的输入输出由 Go 手写类型，不引入单独的 schema 文件与代码生成流水线。被移除的 Python 执行端协议保留在 DES-03，Go 承接时须验证兼容性。
 
 | 单元 | 必须负责 | 不得负责 |
 | --- | --- | --- |
-| `backend/` | 全部业务事实、权限、计费、公共 API、全部工作流定义、写库与媒体 Activity、Outbox 与事件消费、SSE | 直接调用模型供应商 |
-| `agent/` | `agent` 队列的 Activity：Harness 执行的 LLM 任务、供应商 submit / query / cancel、内容审核；内部调试接口 | 连接业务数据库；编排业务流程；持有 MinIO 管理凭据；自动重提结果未知的付费请求 |
+| `backend/` | 全部业务事实、权限、计费、公共 API、全部工作流定义、写库与媒体 Activity、Outbox 与事件消费、SSE | M1-12 接入前直接调用模型供应商；在 Workflow 内执行 I/O |
 | `frontend/` | 界面、交互、服务端状态缓存、编辑器局部状态、按参数 schema 渲染表单 | 持有供应商密钥；直连 Agent 服务、Temporal、Kafka、Redis |
 
 **调用路径：**
@@ -53,7 +51,7 @@ Lanverse/
 浏览器 → Next.js → backend-api(Gin) ─┬─ 命令 / 查询 → PostgreSQL（业务表 + Outbox）
                                      ├─ 启动 / 信号 → Temporal ─┬─ flow  队列 → backend-worker
                                      │                          ├─ media 队列 → backend-worker（FFmpeg → MinIO）
-                                     │                          └─ agent 队列 → agent-worker → 模型供应商
+                                     │                          └─ agent / agent.mock 队列 → 执行端待补（M1-12）
                                      └─ SSE ← Redis Pub/Sub ← backend-relay ← Kafka ← Outbox
 浏览器 ↔ MinIO：预签名 URL 上传 / 下载
 ```
@@ -66,7 +64,6 @@ Lanverse/
 | 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、BeefTV InfiniteCanvas 核心、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、`@umijs/openapi` + Axios；CopilotKit（AG-UI） |
 | 后端 | Go、Gin、GORM（pgx 驱动）、golang-migrate、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator |
 | 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go |
-| Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；ag-ui-protocol |
 | 工作流 | Temporal（自建，PostgreSQL 持久化） |
 | 中间件 | PostgreSQL、Redis、Kafka（KRaft）、对象存储（开发 MinIO，生产火山引擎 TOS，均为 S3 协议） |
 | 媒体 | FFmpeg / ffprobe |
@@ -115,41 +112,11 @@ backend/
 16. 日志统一用 Zap（不混用标准库 `log` / `slog`）的结构化字段（`trace_id`、`project_id`、`operation_id`），不记录凭据与剧本全文。
 17. 文件名 `snake_case.go`；Go 测试集中放在 `backend/tests/<模块>/`，按被测模块分目录并使用外部测试包（`<package>_test`）；生产源码目录不存放 `*_test.go`。集成测试放在对应模块目录中并使用 testcontainers 启动 PostgreSQL、Redis、Kafka、MinIO，工作流用 Temporal testsuite 与回放测试。
 
-## 5. Agent 服务
+## 5. AI 执行能力的后续承接
 
-```text
-agent/
-  app/
-    main_api.py                  # FastAPI 应用工厂（agent-api）
-    main_worker.py               # Temporal Activity Worker 入口（agent-worker）
-    config.py                    # pydantic-settings 集中校验配置
-    activities/                  # Activity 定义：输入 → Harness / 适配器 → 输出；类型与 DES-03 §7.1 保持一致（不生成代码）
-    harness/
-      skills/                    # Skill Registry：加载、版本、hash
-      context.py                 # Context Builder
-      router.py                  # Model Router（读模型注册表快照）
-      tools.py                   # Tool Registry（只读工具、按任务白名单）
-      loop.py                    # 执行循环：调用 → 校验 → 修复
-      validators/                # schema、原文位置、业务规则
-      budget.py                  # token / 费用 / 时长
-      trace.py                   # 执行追踪
-    providers/<适配器>.py        # 供应商：角色映射、submit / query / cancel、用量
-    moderation/
-    api/                         # agent-api 路由：健康检查、Harness 调试与评测
-  skills/<skill>/<版本>/         # SKILL.md、references/、schema
-  evals/                         # 评测集与离线回归（录制的模型响应）
-  tests/
-  pyproject.toml
-  uv.lock
-```
+独立 Python 服务目录、启动入口、镜像与质量门禁已移除。供应商 submit/query/cancel、凭据解封与测试、审核、Skill/Harness 当前没有运行实现，后续由 M1-12 形成 Go 承接设计。现有 `agent` / `agent.mock` 队列名称与 Activity 协议仍在 Go 工作流中保留，不代表有 Worker 正在执行这些任务。
 
-1. 任务只经 Temporal Activity 进入（MVP）；输入冻结：版本 ID、原文片段、参考描述、媒体预签名 URL、Skill 版本、预算。
-2. 不连接业务数据库；结果、Trace、用量作为 Activity 返回值，由 Go 落库。
-3. 付费请求使用 Go 生成的 `provider_request_key`；超时或响应丢失返回“结果未知”，不自动重提。
-4. 长任务定期 heartbeat，响应 Temporal 取消。
-5. Harness 的工具只读，按任务白名单授予；Skill 修改须更新版本并通过 `evals/` 回归。
-6. 供应商凭据只在本服务环境中，不写日志、不回传。
-7. 工具：`uv sync --locked`、`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`、`uv run pytest`。
+冻结输入、预算上限、只读工具白名单、长任务 heartbeat/取消，以及结果未知不自动重提付费请求的业务约束继续有效；迁移须补齐测试、历史兼容与真实供应商证据，不恢复独立 Python 服务作为默认前提。范围与失败路径见 [清理设计](docs/design/Agent服务目录清理设计.md)。
 
 ## 6. 前端
 
@@ -195,20 +162,20 @@ frontend/
 | 契约 | 唯一来源 | 生成物 |
 | --- | --- | --- |
 | 公共 REST | Gin Handler 的 swag 注解 + DTO | `backend/docs`（生成的 Swagger 2.0）→ 后端在线 `/swagger/doc.json` → `@umijs/openapi` → `frontend/src/gen/api` |
-| Activity | Go、Python 各自手写的类型（Go struct / Pydantic 模型），DES-03 §7.1 表格为字段的唯一权威描述 | — |
+| Activity | 现有 Go 类型；DES-03 §7.1 表格为字段的唯一权威描述，原 Python 执行端待 Go 承接 | — |
 | 数据库 | `backend/db/migrations/` | — |
 | 事件 | Go 结构体，按主题版本号 `.v<N>` 手写，生产者与消费者各自维护 | — |
 
 1. REST：改 Handler / DTO 与注解 → 运行 swag 自动生成 → 启动后端并从在线 `/swagger/doc.json` 运行 `@umijs/openapi` → 改前端实现。生成器配置 `schemaPath` 为在线地址、`requestImportStatement` 为 `@/lib/request` 的导入语句；Swagger 文档与前端 API 文件均禁止手改。后端未启动或在线规范不可用时生成失败，不以旧文件代替。
-2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 改 Python 类型 → 契约测试（两端对同一组示例输入输出分别断言，发现字段不一致即失败）。不做代码生成，因为两端只是各自的普通类型定义，生成流水线只会增加一层无必要的间接。
+2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 契约测试。同一组示例固定字段语义；M1-12 承接旧执行端时还须验证历史输入输出与队列兼容性。不做代码生成。
 3. 不兼容变更升级版本号（Activity 名称或事件主题后缀 `.v<N>`）；旧版本在仍有在途工作流或未消费事件时保留。
 
 Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，再执行 `goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go`；`wire_gen.go` 仅由工具生成和格式化，CI 重复这两条命令并比较文件，不设脚本或 Makefile。
 
 ## 8. 配置、数据与安全
 
-- 配置来自环境变量（Viper / pydantic-settings），启动时集中校验；`.env.example` 只记录占位值与说明，真实 `.env` 与凭据不入库。
-- 供应商凭据只注入 Agent 服务；MinIO、Kafka、Redis、Temporal 凭据只注入需要的单元。
+- 配置来自环境变量（Go 使用 Viper），启动时集中校验；`.env.example` 只记录占位值与说明，真实 `.env` 与凭据不入库。
+- 供应商凭据仅供服务端使用，现有封装保留，解封与执行端待 M1-12；MinIO、Kafka、Redis、Temporal 凭据只注入需要的单元。
 - 测试数据必须合成或脱敏。构建产物、缓存、日志、本地数据卷不进入仓库。
 
 ## 9. 质量门禁与交付
@@ -216,9 +183,8 @@ Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，�
 | 端 | 必须通过 |
 | --- | --- |
 | Go | `gofmt`、`goimports`、`go vet`、`golangci-lint`、`go test -race ./...`、`govulncheck`、swag 与 Wire 生成一致性 |
-| Python | ruff check、ruff format --check、mypy、pytest |
 | 前端 | `pnpm exec eslint .`、`pnpm exec prettier --check .`、`pnpm exec next typegen` + `pnpm exec tsc --noEmit`、`pnpm exec vitest run`、`pnpm exec next build`；交互变化补 Playwright |
-| 契约 | swag 生成物与后端在线 Swagger 一致；`@umijs/openapi` 从在线文档重生的 API 一致；公开路由文档覆盖；Activity 样例两端通过 |
+| 契约 | swag 生成物与后端在线 Swagger 一致；`@umijs/openapi` 从在线文档重生的 API 一致；公开路由文档覆盖；现有 Go Activity 样例通过，原执行端的真实链路待 M1-12 |
 
 1. 核心业务逻辑（Operation 状态机、预算与对账、依赖传播、工作流）先写测试再实现。
 2. 每个里程碑的验收记录在 `docs/acceptance/`；静态检查通过不等于功能验收通过。

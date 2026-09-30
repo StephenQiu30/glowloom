@@ -2,22 +2,16 @@ package catalog_test
 
 import (
 	"bytes"
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -128,46 +122,5 @@ func TestCredentialSealRejectsInvalidInput(t *testing.T) {
 		if _, err := sealer.Seal(input.providerID, input.credentialID, input.secret); !errors.Is(err, credentialseal.ErrInvalidSecret) {
 			t.Fatalf("invalid credential accepted: %v", err)
 		}
-	}
-}
-
-func TestGoCredentialEnvelopeOpensInAgent(t *testing.T) {
-	if os.Getenv("LV_TEST_CREDENTIAL_INTEROP") != "1" {
-		t.Skip("set LV_TEST_CREDENTIAL_INTEROP=1 for the Go-to-Agent test")
-	}
-	privateKey, publicPEM := testCredentialKey(t)
-	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	if err != nil {
-		t.Fatalf("marshal temporary private key: %v", err)
-	}
-	sealer, err := credentialseal.NewSealer("agent-2026", publicPEM)
-	if err != nil {
-		t.Fatalf("new sealer: %v", err)
-	}
-	providerID, credentialID := uuid.New(), uuid.New()
-	envelope, err := sealer.Seal(providerID, credentialID, json.RawMessage(`{"api_key":"local-test-value"}`))
-	if err != nil {
-		t.Fatalf("seal credential: %v", err)
-	}
-	encode := base64.StdEncoding.EncodeToString
-	payload, err := json.Marshal(map[string]string{
-		"key_id": "agent-2026", "provider_id": providerID.String(),
-		"credential_id": credentialID.String(), "ciphertext": encode(envelope),
-		"private_key": encode(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
-	})
-	if err != nil {
-		t.Fatalf("encode temporary test payload: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "uv", "run", "--frozen", "pytest", "tests/test_credential_crypto.py", "-k", "test_go_envelope_interoperability")
-	cmd.Dir = filepath.Join("..", "..", "..", "agent")
-	cmd.Env = append(os.Environ(), "LV_TEST_CREDENTIAL_INTEROP_PAYLOAD="+encode(payload))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Agent rejected Go envelope: %v\n%s", err, output)
-	}
-	if !bytes.Contains(output, []byte("1 passed")) {
-		t.Fatalf("Agent did not execute the interoperability assertion: %s", output)
 	}
 }

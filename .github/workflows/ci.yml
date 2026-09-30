@@ -348,28 +348,6 @@ jobs:
             echo 'This gate does not probe /readyz or prove Temporal/object-storage readiness or product acceptance.'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  agent:
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: agent
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v9.0.0
-      - run: uv python install 3.12
-      - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run mypy app tests
-      - run: uv run pytest
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
-      - name: Verify Go credential envelopes in Agent
-        run: LV_TEST_CREDENTIAL_INTEROP=1 go test -race ./tests/catalog -run TestGoCredentialEnvelopeOpensInAgent -count=1
-        working-directory: backend
-
   frontend:
     runs-on: ubuntu-24.04
     defaults:
@@ -392,9 +370,8 @@ jobs:
 
   images:
     runs-on: ubuntu-24.04
-    needs: [backend, agent, frontend]
+    needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v7
       - run: docker build --file backend/Dockerfile --tag lanverse/backend:ci backend
-      - run: docker build --file agent/Dockerfile --tag lanverse/agent:ci agent
       - run: docker build --file frontend/Dockerfile --tag lanverse/frontend:ci frontend

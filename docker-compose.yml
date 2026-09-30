@@ -106,22 +106,3 @@ services:
       LV_OTEL_ENDPOINT: ${LV_OTEL_ENDPOINT:-}
     ports:
       - "${LV_RELAY_HEALTH_PORT:-8082}:8082"
-
-  agent-api:
-    build: ./agent
-    image: lanverse/agent:local
-    environment:
-      LV_ENV: ${LV_ENV:-local}
-      LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
-    ports:
-      - "${LV_AGENT_PORT:-8090}:8090"
-
-  agent-worker:
-    build: ./agent
-    image: lanverse/agent:local
-    command: ["python", "-m", "app.main_worker"]
-    environment:
-      LV_REDIS_URL: ${LV_REDIS_URL:?Set LV_REDIS_URL for the agent worker}
-      LV_TEMPORAL_ADDR: ${LV_TEMPORAL_ADDR:?Set LV_TEMPORAL_ADDR for the agent worker}
-      LV_TEMPORAL_NAMESPACE: ${LV_TEMPORAL_NAMESPACE:?Set LV_TEMPORAL_NAMESPACE for the agent worker}
-      LV_OTEL_ENDPOINT: ${LV_OTEL_ENDPOINT:-}

@@ -1,1 +1,0 @@
-"""Content moderation Activity adapters."""

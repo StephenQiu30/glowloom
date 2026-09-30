@@ -1,5 +1,7 @@
 # OPS-02 CI/CD 与发布
 
+> 2026-09-30 按 [Agent 服务目录清理](../design/Agent服务目录清理设计.md) 移除 Python 服务的 CI 作业、镜像构建及跨语言测试。当前 `.github/workflows/ci.yml` 保留 backend、frontend、images 三个作业；下文仍是完整发布能力的目标规划，未实现的门禁不计为通过。
+
 | 项 | 内容 |
 | --- | --- |
 | 文档状态 | 草案，待评审（2026-09-25） |
@@ -18,16 +20,15 @@
 
 ```text
 PR / push 到分支
-  ├─ changes：按路径判断受影响的端（backend / agent / frontend / contracts / docs）
+  ├─ changes：按路径判断受影响的端（backend / frontend / contracts / docs）
   ├─ backend ：gofmt/goimports 检查 → go vet → golangci-lint → go test -race（单元）→ 集成（testcontainers）→ 工作流回放 → govulncheck → wire 生成一致 → swag 生成一致 → 启动同提交后端并核对在线 Swagger
-  ├─ agent   ：ruff check + format --check → mypy → pytest → 契约模型生成一致 → pip-audit → Skill 版本 / hash 校验 →（Skill 变更时）评测门禁
   ├─ frontend：pnpm install --frozen-lockfile → 从同提交后端在线 Swagger 用 @umijs/openapi 重生 API 并比较 → lint → format:check → typecheck → vitest → pnpm audit → build
-  ├─ contracts：JSON Schema 校验 → Go / Python 生成物一致 → 事件 schema 兼容性检查
+  ├─ contracts：Go Activity / 事件样例兼容性检查；AI 执行端的 Skill / 评测门禁随 M1-12 补齐
   ├─ docs    ：链接与锚点校验、需求 / 非功能 / 功能编号校验、TST-02 与功能文件一致
   ├─ security：gitleaks → 依赖许可检查
   └─ e2e-smoke：Compose 启动全部组件 + 模拟供应商 → Playwright 冒烟（TST-01 §6）
 合并到 main
-  └─ 上述全部 → 构建镜像（backend、agent、frontend）→ Trivy 扫描 → SBOM → 推送镜像仓库（标签 = git sha）→ 自动部署 staging → staging 冒烟
+  └─ 上述全部 → 构建镜像（backend、frontend）→ Trivy 扫描 → SBOM → 推送镜像仓库（标签 = git sha）→ 自动部署 staging → staging 冒烟
 夜间（main）
   └─ 全量 E2E（多浏览器）、性能、故障注入矩阵、fuzz 样本、每周 AI 评测
 ```
@@ -36,10 +37,10 @@ PR / push 到分支
 
 | 门禁 | 阻断 PR | 说明 |
 | --- | --- | --- |
-| 格式与静态检查（三端） | 是 | PROJECT.md §9 |
+| 格式与静态检查（Go / 前端） | 是 | PROJECT.md §9 |
 | 单元、集成、工作流回放、前端组件测试 | 是 | TST-01 §2 |
 | Race Detector | 是 | AGENTS.md |
-| 漏洞扫描（高危） | 是 | govulncheck、pnpm audit、pip-audit、Trivy |
+| 漏洞扫描（高危） | 是 | govulncheck、pnpm audit、Trivy |
 | 生成物一致（wire、swag、在线 Swagger、`@umijs/openapi` API）及公开路由覆盖 | 是 | REQ-02 MNT-03 |
 | 迁移可在空库与上一版本库执行 | 是 | DES-02 §10 |
 | Secret 扫描 | 是 | DES-07 §13 |
@@ -147,8 +148,8 @@ CI 运行时长目标：PR 全部检查 ≤ 20 分钟（依赖缓存：Go module
 
 ## 9. 依赖更新
 
-- Renovate 每周创建依赖更新 PR（分组：Go、npm、Python、Docker 基础镜像、GitHub Actions）；安全更新即时创建。
-- 主要框架（Next.js、Gin、GORM、Temporal SDK、FastAPI）大版本升级作为单独任务评估。
+- Renovate 每周创建依赖更新 PR（分组：Go、npm、Docker 基础镜像、GitHub Actions）；安全更新即时创建。
+- 主要框架（Next.js、Gin、GORM、Temporal SDK）大版本升级作为单独任务评估。
 - 基础镜像固定摘要；FFmpeg、libvips 版本升级需运行媒体黄金样例测试（TST-01）。
 
 ## 10. CI 中的密钥
