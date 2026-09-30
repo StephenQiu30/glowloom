@@ -277,3 +277,52 @@ it("shows both token rates with micro-unit precision", () => {
     screen.getByText(/输出上限 800 token × ¥0\.000023\/千 token/),
   ).toBeTruthy();
 });
+
+it("never submits a preview-only quote even after exclusions or requote", () => {
+  const onConfirm = vi.fn();
+  const onRequote = vi.fn();
+  render(
+    <QuoteConfirmDialog
+      previewOnly
+      open
+      quote={quote()}
+      onConfirm={onConfirm}
+      onRequote={onRequote}
+      onOpenChange={vi.fn()}
+    />,
+  );
+  const confirm = screen.getByRole("button", {
+    name: "生成服务待接入",
+  }) as HTMLButtonElement;
+  expect(confirm.disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: /剔除/ }));
+  fireEvent.click(screen.getByRole("button", { name: /恢复/ }));
+  fireEvent.click(screen.getByRole("button", { name: "重新报价" }));
+  fireEvent.click(confirm);
+  expect(confirm.disabled).toBe(true);
+  expect(onRequote).toHaveBeenCalledOnce();
+  expect(onConfirm).not.toHaveBeenCalled();
+});
+
+it("blocks force regeneration callbacks in preview-only mode", () => {
+  const onForceRegenerate = vi.fn();
+  const sample = quote();
+  sample.items[0].reused = true;
+  render(
+    <QuoteConfirmDialog
+      previewOnly
+      open
+      quote={sample}
+      onOpenChange={vi.fn()}
+      onConfirm={vi.fn()}
+      onRequote={vi.fn()}
+      onForceRegenerate={onForceRegenerate}
+    />,
+  );
+  const force = screen.getByRole("button", {
+    name: /强制重新生成/,
+  }) as HTMLButtonElement;
+  expect(force.disabled).toBe(true);
+  fireEvent.click(force);
+  expect(onForceRegenerate).not.toHaveBeenCalled();
+});
