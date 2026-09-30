@@ -1,31 +1,52 @@
 basePath: /
 definitions:
-  application.CommandResult:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandResult:
     properties:
       ok:
         type: boolean
     type: object
-  application.CommandsInput:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandsInput:
     properties:
       commands:
         items:
-          $ref: '#/definitions/domain.Command'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Command'
         type: array
       expected_revision:
         type: integer
     type: object
-  application.CreateInput:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CreateInput:
     properties:
       name:
         type: string
       scope:
         type: object
     type: object
-  application.Result:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteInput:
+    properties:
+      expected_revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteResult:
+    properties:
+      deleted:
+        type: boolean
+      id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_application.RenameInput:
+    properties:
+      expected_revision:
+        type: integer
+      name:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_application.Result:
     properties:
       edges:
         items:
-          $ref: '#/definitions/domain.Edge'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge'
         type: array
       id:
         type: string
@@ -33,27 +54,29 @@ definitions:
         type: string
       nodes:
         items:
-          $ref: '#/definitions/domain.Node'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node'
         type: array
       project_id:
         type: string
       results:
         items:
-          $ref: '#/definitions/application.CommandResult'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandResult'
         type: array
       revision:
         type: integer
       scope:
         type: object
       viewport:
-        $ref: '#/definitions/domain.Viewport'
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport'
     type: object
-  domain.Command:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Command:
     properties:
       config:
-        $ref: '#/definitions/domain.TextConfig'
-      edge:
-        $ref: '#/definitions/domain.Edge'
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.NodeConfig'
+      edges:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge'
+        type: array
       id:
         type: string
       ids:
@@ -62,22 +85,38 @@ definitions:
         type: array
       moves:
         items:
-          $ref: '#/definitions/domain.Move'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Move'
+        type: array
+      names:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Name'
         type: array
       nodes:
         items:
-          $ref: '#/definitions/domain.Node'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node'
+        type: array
+      parents:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Parent'
+        type: array
+      sizes:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Size'
         type: array
       type:
         type: string
       viewport:
-        $ref: '#/definitions/domain.Viewport'
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport'
+      z_indices:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.ZIndex'
+        type: array
     type: object
-  domain.Document:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document:
     properties:
       edges:
         items:
-          $ref: '#/definitions/domain.Edge'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge'
         type: array
       id:
         type: string
@@ -85,7 +124,7 @@ definitions:
         type: string
       nodes:
         items:
-          $ref: '#/definitions/domain.Node'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node'
         type: array
       project_id:
         type: string
@@ -94,9 +133,9 @@ definitions:
       scope:
         type: object
       viewport:
-        $ref: '#/definitions/domain.Viewport'
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport'
     type: object
-  domain.Edge:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge:
     properties:
       binding:
         type: object
@@ -111,7 +150,7 @@ definitions:
       target_node_id:
         type: string
     type: object
-  domain.Move:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Move:
     properties:
       id:
         type: string
@@ -120,10 +159,17 @@ definitions:
       "y":
         type: number
     type: object
-  domain.Node:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Name:
+    properties:
+      id:
+        type: string
+      title:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node:
     properties:
       config:
-        $ref: '#/definitions/domain.TextConfig'
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.NodeConfig'
       height:
         type: number
       id:
@@ -140,6 +186,8 @@ definitions:
         type: string
       ref_type:
         type: string
+      title:
+        type: string
       width:
         type: number
       x:
@@ -149,12 +197,31 @@ definitions:
       z_index:
         type: integer
     type: object
-  domain.TextConfig:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.NodeConfig:
     properties:
+      collapsed:
+        type: boolean
       text:
         type: string
     type: object
-  domain.Viewport:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Parent:
+    properties:
+      id:
+        type: string
+      parent_id:
+        type: string
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Size:
+    properties:
+      height:
+        type: number
+      id:
+        type: string
+      width:
+        type: number
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport:
     properties:
       x:
         type: number
@@ -163,65 +230,55 @@ definitions:
       zoom:
         type: number
     type: object
-  http.LoginRequest:
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.ZIndex:
     properties:
-      login_name:
-        type: string
-      password:
-        type: string
-    type: object
-  http.PasswordRequest:
-    properties:
-      current_password:
-        type: string
-      new_password:
-        type: string
-    type: object
-  http.PasswordResponse:
-    properties:
-      must_change_password:
-        type: boolean
-      revision:
-        type: integer
-    type: object
-  http.ProjectResponse:
-    properties:
-      aspect_ratio:
-        type: string
       id:
         type: string
-      name:
+      z_index:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary'
+        type: array
+      next_cursor:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary:
+    properties:
+      byte_size:
+        type: integer
+      duration_ms:
+        type: integer
+      file_name:
+        type: string
+      height:
+        type: integer
+      id:
+        type: string
+      kind:
+        type: string
+      mime_type:
+        type: string
+      project_id:
         type: string
       revision:
         type: integer
-      status:
-        type: string
-      style_type:
-        type: string
+      width:
+        type: integer
     type: object
-  http.SessionResponse:
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.Preview:
     properties:
-      must_change_password:
-        type: boolean
-      user:
-        $ref: '#/definitions/http.UserResponse'
-    type: object
-  http.UserResponse:
-    properties:
-      display_name:
+      asset:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary'
+      expires_at:
         type: string
-      id:
-        type: string
-      login_name:
-        type: string
-      must_change_password:
-        type: boolean
-      org_id:
-        type: string
-      role:
+      url:
         type: string
     type: object
-  httpapi.Problem:
+  github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem:
     properties:
       code:
         type: string
@@ -243,23 +300,82 @@ definitions:
     properties:
       items:
         items:
-          $ref: '#/definitions/domain.Document'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document'
         type: array
       next_cursor:
+        type: string
+    type: object
+  internal_identity_adapter_http.LoginRequest:
+    properties:
+      login_name:
+        type: string
+      password:
+        type: string
+    type: object
+  internal_identity_adapter_http.PasswordRequest:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        type: string
+    type: object
+  internal_identity_adapter_http.PasswordResponse:
+    properties:
+      must_change_password:
+        type: boolean
+      revision:
+        type: integer
+    type: object
+  internal_identity_adapter_http.SessionResponse:
+    properties:
+      must_change_password:
+        type: boolean
+      user:
+        $ref: '#/definitions/internal_identity_adapter_http.UserResponse'
+    type: object
+  internal_identity_adapter_http.UserResponse:
+    properties:
+      display_name:
+        type: string
+      id:
+        type: string
+      login_name:
+        type: string
+      must_change_password:
+        type: boolean
+      org_id:
+        type: string
+      role:
         type: string
     type: object
   internal_workspace_adapter_http.ListResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/http.ProjectResponse'
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectResponse'
         type: array
       next_cursor:
         type: string
     type: object
+  internal_workspace_adapter_http.ProjectResponse:
+    properties:
+      aspect_ratio:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      revision:
+        type: integer
+      status:
+        type: string
+      style_type:
+        type: string
+    type: object
 info:
   contact: {}
-  description: Public identity, project query and note canvas commands.
+  description: Public identity, project query, resource canvas commands and authorized
+    media previews.
   title: Lanverse API
   version: "0.1"
 paths:
@@ -274,34 +390,34 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/http.LoginRequest'
+          $ref: '#/definitions/internal_identity_adapter_http.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.SessionResponse'
+            $ref: '#/definitions/internal_identity_adapter_http.SessionResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "429":
           description: Too Many Requests
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 密码登录
       tags:
       - auth
@@ -325,19 +441,19 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 登出
       tags:
       - auth
@@ -350,15 +466,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.SessionResponse'
+            $ref: '#/definitions/internal_identity_adapter_http.SessionResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 当前账号
       tags:
       - auth
@@ -383,34 +499,94 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/http.PasswordRequest'
+          $ref: '#/definitions/internal_identity_adapter_http.PasswordRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.PasswordResponse'
+            $ref: '#/definitions/internal_identity_adapter_http.PasswordResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 修改本人密码
       tags:
       - auth
   /api/canvases/{id}:
+    delete:
+      consumes:
+      - application/json
+      operationId: deleteCanvas
+      parameters:
+      - description: 画布UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: CSRF令牌
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: 当前修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 删除画布
+      tags:
+      - canvases
     get:
       operationId: getCanvas
       parameters:
@@ -425,28 +601,88 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.Document'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 获取画布文档
+      tags:
+      - canvases
+    patch:
+      consumes:
+      - application/json
+      operationId: renameCanvas
+      parameters:
+      - description: 画布UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: CSRF令牌
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: 当前修订与名称
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.RenameInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 修改画布名称
       tags:
       - canvases
   /api/canvases/{id}/commands:
@@ -475,42 +711,42 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/application.CommandsInput'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandsInput'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/application.Result'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.Result'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "413":
           description: Request Entity Too Large
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 提交画布命令批次
       tags:
       - canvases
@@ -544,19 +780,19 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 有权项目列表
       tags:
       - projects
@@ -579,23 +815,23 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 项目画布列表
       tags:
       - canvases
@@ -624,35 +860,130 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/application.CreateInput'
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CreateInput'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/domain.Document'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/httpapi.Problem'
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/httpapi.Problem'
-      summary: 创建备注画布
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 创建画布
       tags:
       - canvases
+  /api/projects/{pid}/media:
+    get:
+      operationId: listMediaAssets
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: image/video/audio
+        in: query
+        name: kind
+        type: string
+      - description: 不透明游标
+        in: query
+        name: cursor
+        type: string
+      - description: 1..200，默认50
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetPage'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 项目可用媒体列表
+      tags:
+      - media
+  /api/projects/{pid}/media/{asset_id}/preview:
+    get:
+      operationId: getMediaPreview
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 媒体UUID
+        in: path
+        name: asset_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.Preview'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 获取媒体预览
+      tags:
+      - media
 swagger: "2.0"

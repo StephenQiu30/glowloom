@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	// Generated docs register the public Swagger schema with swag at initialization.
 	_ "github.com/StephenQiu30/lanverse/backend/docs"
 	canvashttp "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/http"
 	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
@@ -19,8 +20,12 @@ import (
 	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
 	redisidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/redis"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/http"
+	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
 	workspacehttp "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/http"
 	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
@@ -30,9 +35,9 @@ import (
 // Its stores are the same injected dependencies used by the API role.
 // @title Lanverse API
 // @version 0.1
-// @description Public identity, project query and note canvas commands.
+// @description Public identity, project query, resource canvas commands and authorized media previews.
 // @BasePath /
-func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, redisConn *redisclient.Client) (*gin.Engine, error) {
+func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, redisConn *redisclient.Client, storage *objectstorage.Client) (*gin.Engine, error) {
 	if database == nil || redisConn == nil {
 		return nil, fmt.Errorf("public API requires database and Redis")
 	}
@@ -72,7 +77,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	protected := api.Group("")
 	protected.Use(identity.RequireSession())
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database))).Register(protected)
-	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database))).Register(protected)
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) }
+	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewStore(database), storage)).Register(protected)
 	router.GET("/swagger/doc.json", func(c *gin.Context) {
 		body, err := swag.ReadDoc()
 		if err != nil {

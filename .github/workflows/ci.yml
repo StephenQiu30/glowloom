@@ -140,6 +140,19 @@ jobs:
         run: psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE ROLE lanverse_app'
       - name: Apply migrations for PostgreSQL contract tests
         run: find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -f
+      - name: Prepare isolated canvas contract databases
+        run: |
+          for database in lanverse_canvas_store_test lanverse_canvas_http_test; do
+            psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+            contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
+            find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+          done
+      - name: Verify canvas persistence and public HTTP contracts
+        env:
+          LV_TEST_CANVAS_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_canvas_store_test?sslmode=disable
+          LV_TEST_CANVAS_HTTP_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_canvas_http_test?sslmode=disable
+          LV_TEST_CANVAS_REDIS_URL: redis://127.0.0.1:6379/13
+        run: go test -race ./tests/canvas -count=1 -v
       - name: Verify identity commands in isolated databases
         env:
           LV_TEST_IDENTITY_REDIS_URL: redis://127.0.0.1:6379/14

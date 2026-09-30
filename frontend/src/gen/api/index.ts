@@ -5,8 +5,10 @@
 import * as auth from "./auth";
 import * as canvases from "./canvases";
 import * as projects from "./projects";
+import * as media from "./media";
 export default {
   auth,
   canvases,
   projects,
+  media,
 };

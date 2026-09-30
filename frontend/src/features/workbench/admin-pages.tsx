@@ -12,7 +12,7 @@ import {
   ChoiceField,
   DraftNotice,
   usePreviewQuery,
-} from "./poc-components";
+} from "./workbench-components";
 
 export const adminPages = [
   "users",
@@ -162,7 +162,7 @@ export function AdminScreen({ section }: { section: AdminPage }) {
         eyebrow="INTERNAL / OPERATIONS"
         title={screen.title}
         description={screen.description}
-        action={<Badge variant="secondary">内部管理 PoC</Badge>}
+        action={<Badge variant="secondary">内部管理</Badge>}
       />
       <Panel title={screen.title}>
         <DataTable

@@ -97,9 +97,6 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
-	if err := ValidatePublicOrigin(c.PublicOrigin, c.Env); err != nil {
-		return err
-	}
 	if c.MediaAllowTestLoopbackTLS && c.Env != "local" {
 		return fmt.Errorf("%w: LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS is local-only", ErrInvalid)
 	}
@@ -130,7 +127,7 @@ func (c Config) validate() error {
 // ValidatePublicOrigin requires a configured browser origin, HTTPS outside local development.
 func ValidatePublicOrigin(origin, env string) error {
 	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") {
+	if err != nil || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return fmt.Errorf("%w: LV_PUBLIC_ORIGIN must be an exact HTTP origin", ErrInvalid)
 	}
 	if u.Scheme == "http" && (env != "local" || (u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" && u.Hostname() != "::1")) {

@@ -1,14 +1,5 @@
 @import "tailwindcss";
-@import "@xyflow/react/dist/style.css";
 @import "tw-animate-css";
-
-/* React Flow 自带 attribution 的灰字在浅色背景上对比度不足。 */
-.creation-canvas .react-flow__attribution {
-  background: var(--background);
-}
-.creation-canvas .react-flow__attribution a {
-  color: var(--foreground);
-}
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));

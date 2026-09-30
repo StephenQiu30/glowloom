@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { AdminScreen, type AdminPage } from "@/features/workbench/admin-pages";
-import { PreviewBoundary } from "@/features/workbench/poc-components";
+import { PreviewBoundary } from "@/features/workbench/workbench-components";
 export default async function AdminPageRoute({
   params,
 }: {

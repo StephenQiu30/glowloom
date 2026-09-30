@@ -206,7 +206,7 @@ function QuoteDialogContent({
             </Dialog.Title>
             <Dialog.Description className="mt-1 text-sm text-muted-foreground">
               {previewOnly
-                ? "前端 PoC · 样例报价，仅预览费用和决策流程，尚未接入生成服务。"
+                ? "演示模式 · 样例报价，仅预览费用和决策流程，尚未接入生成服务。"
                 : "请核对费用和服务区域。只有点击下方生成按钮才会提交确认。"}
             </Dialog.Description>
           </div>

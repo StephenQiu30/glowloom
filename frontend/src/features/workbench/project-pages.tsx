@@ -36,7 +36,7 @@ import {
   ChoiceField,
   DraftNotice,
   usePreviewQuery,
-} from "./poc-components";
+} from "./workbench-components";
 
 export function ProjectBrowser() {
   const { params, set, readOnly } = usePreviewQuery();

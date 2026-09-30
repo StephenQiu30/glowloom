@@ -26,7 +26,7 @@ import {
   ChoiceField,
   QuotePreview,
   usePreviewQuery,
-} from "./poc-components";
+} from "./workbench-components";
 
 export function ShotsPage({
   projectId,
@@ -85,7 +85,7 @@ export function ShotsPage({
                 className="block rounded-lg focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <Image
-                  src="/poc/scene.svg"
+                  src="/examples/media/scene.svg"
                   width={560}
                   height={340}
                   alt={`${s.title}的内置样例缩略图`}
@@ -225,7 +225,7 @@ export function ShotDetailPage({
               </TabsList>
               <TabsContent value="image">
                 <Image
-                  src="/poc/scene.svg"
+                  src="/examples/media/scene.svg"
                   width={560}
                   height={340}
                   alt={`候选 ${candidate} · 内置山景插画，非真实镜头生成结果`}
@@ -234,8 +234,8 @@ export function ShotDetailPage({
               </TabsContent>
               <TabsContent value="video">
                 <video
-                  src="/poc/preview.mp4"
-                  poster="/poc/scene.svg"
+                  src="/examples/media/preview.mp4"
+                  poster="/examples/media/scene.svg"
                   preload="none"
                   controls
                   aria-label="镜头视频样例"

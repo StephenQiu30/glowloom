@@ -20,36 +20,35 @@
 | M2 | 剧本导入、解析、设定集 | 4 | 23 | 0 | 未开始 |
 | M3 | 资产定稿、分镜、生成全链路 | 11 | 60 | 0 | 未开始 |
 | M4 | 视频、配音、生成增强 | 3 | 18 | 0 | 未开始 |
-| M5 | 画布、Agent、运营辅助 = MVP；F2 提前接备注布局 | 4 | 22 | 0 | 进行中（限定切片） |
-| 合计 | | 33 | 197 | 15 | |
+| M5 | 画布、Agent、运营辅助 = MVP；当前核心迁移与整项目验证 | 4 | 25 | 0 | 进行中 |
+| 合计 | | 33 | 200 | 15 | |
 
 ## 2. 当前焦点与下一步
 
-1. **本轮授权（2026-09-30）**：处理整体评估问题、优化性能 PoC、将画布接入真实服务。P0-07 修复文档基线；E-36-07 接真实会话/首次改密、项目及 PostgreSQL 备注布局；E-36-08 改进浏览器测量与自选媒体入口。切片验证完成前均保持进行中。
-2. **F2 前置**：本次授权采纳 DES-03 IF4～IF6 推荐默认，先落实 M1-06 公共契约与 M1-07 命令合同，再复用 E-06 登录/会话/首次改密与 E-10 项目读取；仅开放 DES-38 §3.1 的备注布局，完整业务画布仍待后续合同。
-3. **F3 与 P0**：P0-01～06 的账号、能力、价格与预算结论仍需真实评测。F3 单条真实创作链路先证明一次生成、接管、选定与费用核对；完整九场景保留 MVP 门禁。M1-12 独立评估 Provider Activity 迁入 Go，尚不删除 Python。
+1. **当前用户确认（2026-09-30）**：Lanverse 按上线标准实现完整产品；当前优先跑通整项目验证和 Demo。主要参考项目更新为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，固定源码 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。画布直接复用其无限画布核心及对应设计，替换旧引擎；范围以 [迁移设计](docs/design/BeefTV能力引入设计.md) 为准，历史 LibTV/旧引擎研究与验收不作为当前参考建议。
+2. **当前任务**：E-36-09 源核心/设计迁移，E-36-10 正式资源与生产交互合同，E-36-11 整项目验证/Demo；状态与证据分别维护。旧 E-36-07/08 为 07dfd2d 未完检查点，已被新方案替代，保留历史、不追认完成。P0-07 文档修复继续同步最新方向。
+3. **后续接线**：补 M1-04/06/07 的公共 CI/契约/持久幂等缺口，再按 E-10 项目生命周期、E-30 媒体、E-07/08 注册表、E-11 预算、E-21/24 报价/任务、E-22 选定合同接业务；P0 真实能力/价格与完整九场景继续验收。M1-12 Go Provider Activity 迁移仍独立评估，未直接删除 Python。
 
-### 2.1 F 阶段与原任务映射、合同前置
+### 2.1 完整生产目标与当前执行合同
 
-F1～F4 是当前执行视图，M1～M5 是完整范围与验收视图（PLN-01 §2.1），不分别计算重复任务。原任务已有部分内部实现和 F1 样例界面，最终完成仍取决于任务的真实证据。
+执行优先级不缩减 PRD-01/REQ 的完整产品目标，也不新增独立 PoC 产品入口。正常产品命名与正式入口用于 Demo；synthetic fixture、mock 和真实业务证据分别记录。原 M1～M5 继续表达完整范围，迁移任务是现有范围的具体实现，不重复计算 Epic。
 
-| 阶段 / 合同 | 对应任务 | 可领取前置与放行 |
+| 当前合同 | 对应任务 | 前置与放行 |
 | --- | --- | --- |
-| F1 样例工作台 / 性能 PoC | M1-11、原各 Epic 前端任务的展示部分；P0-05、E-36-08 | 已有样例交互继续优化；真实服务/业务验收未完成的原前端任务不标完成 |
-| F2 公共底座 | M1-06、M1-07、M1-04 公共契约门禁；E-06-02 的登录/会话/首次改密 | IF4～IF6 本轮授权采用；会话、Cookie、Origin/CSRF、幂等、错误与在线 Swagger 合同验证，不等待完整账号管理 Epic |
-| F2 项目与备注画布 | E-10-02 的组织项目列表合同；E-36-07 | 公共底座及已有 identity/workspace 内部用例/数据就绪；真实 PostgreSQL 和浏览器布局恢复验证，不等待 E-18/19/21/22/30 全 Epic |
-| F2 生成服务逐条接线 | E-30 上传/媒体查询；E-07/08 供应商/注册表；E-11 预算；E-21 报价/确认；E-25 复用；E-24 任务/对账；E-22 候选/选定 | 每条合同就绪后接对应页面；内部测试与模拟开发不替代真实服务和产品验收 |
-| F3 单条真实创作链路 | P0-01/04/06 的供应商、能力、价格、预算决策；上述上传→报价确认→生成接管→候选选定→账本合同 | 一条真实链路有实际供应商/媒体/费用和刷新恢复证据；完整全剧、五风格、九场景仍按 MVP 门禁 |
-| F4 消费者能力 | REQ-34 与后续接受的注册/套餐/支付/运营/分享设计 | F3 验收后另行规划，本轮不领取 |
-| Go Provider Activity 迁移 | M1-12 | 工作流已在 Go；迁移范围仅职责/合同/运行证据评估，未证明回放与真实供应商前保留 Python |
+| BeefTV 无限画布核心/设计 | E-36-09；E-36-05 的核心实现 | 用户确认 source SHA、实际源码/许可清单、核心交互/旧入口删除证据；不迁整应用 |
+| 正式资源与服务端交互 | E-36-10；E-36-01/02/03 的相应合同 | M1-06/07、E-06 身份/改密、E-10 项目授权；资源引用 E-30 已接管媒体合同，真实库/浏览器验证 |
+| 整项目验证和 Demo | E-36-11；M1-04/06/07 未完门禁 | 三端完整适用检查、本机真实依赖、正式身份/项目/画布/资源演示；缺失业务合同单列并接后续任务 |
+| 持续业务服务接线 | E-30、E-07/08、E-11、E-21/24/25、E-22，后续 script/bible/storyboard/audio/Agent | 每条具体合同就绪后接相应页面；业务 reference/promote/run 依旧有报价确认和权限门禁 |
+| 完整产品与消费者阶段 | PRD-01 九场景与 M1～M5；REQ-34 后续消费者设计 | Demo/核心通过不代表完整 MVP；注册/支付等另行接受，不自动纳入本轮 |
+| Go Provider Activity | M1-12 | Go 工作流已存在，核对 Python 职责/队列/回放/真实供应商后接受迁移，当前不删除 |
 
-**消除完成循环：**E-09 审计写入/消费合同先供其他命令使用，全部业务动作覆盖与真实视频选定后补验；E-31 在 M2 交付 E-31-01/03 的剧本→设定核心和相应接口，M3/M4 再补 TC-31 的真实镜头/音频验收；E-18 的 M3 合同集合不包含 M5 的 E-18-07 模板；E-36-07、E-36-01/02/03/05 的布局与命令合同不依赖 E-36-04 AI 助手，后者仅在 E-37-02/04 提案合同就绪后联调；E-37 依赖已就绪的画布命令合同，不依赖整个 E-36 完成。
+**前置不形成完成循环：**E-09 审计写入/消费先供业务命令，全部动作后补验；E-31 在 M2 交付剧本→设定核心，M3/M4 补真实镜头/音频；E-18 M3 不等待 M5 模板；E-36 核心/资源/命令不等待 AI 助手，E-36-04 在 E-37 提案合同后联调，E-37 不等待整个 E-36 完成。模拟只用于开发/技术验证，不计真实产品通过。
 
-具体领取任务若超过 PLN-02 的 3 天规模，追加编号拆成可验收用例；不要把未完成的整 Epic 当作单次提交门禁，也不要用无编号的持续内部切片替代任务状态。
+任务超过 PLN-02 的 3 天规模继续编号拆成可独立验收用例，不以整 Epic 或持续无编号内部切片代替任务完成定义。
 
 ## 3. 待确认事项
 
-设计层面的待确认问题（原清单共 100 条）按确认时机汇总；每条默认方案只作为评审候选。确认或用户明确授权限定实施后，记录具体范围，不由默认值推断整份草案已接受。2026-09-30 本轮授权采纳 IF4～IF6 推荐默认及 DES-38 §3.1/§9 限定切片，其他未决问题继续保留。
+设计层面的待确认问题（原清单共 100 条）按确认时机汇总；每条默认方案只作为评审候选。确认或用户明确授权限定实施后，记录具体范围，不由默认值推断整份草案已接受。2026-09-30 已采纳 IF4～IF6；用户进一步确认 BeefTV 核心/设计与 DES-38 §3.2 正式资源合同，完整生产目标保持，其他未决问题继续保留。
 
 | 确认时机 | 数量 | 编号 |
 | --- | --- | --- |
@@ -78,9 +77,9 @@ F1～F4 是当前执行视图，M1～M5 是完整范围与验收视图（PLN-01 
 | P0-02 | 其他能力评测 | 带参考生图（Seedream、GPT Image）、TTS（MiniMax、豆包）、剧本解析 LLM（原文位置准确率） | `agent/evals/` | 待办 | — |
 | P0-03 | 样片与成本模型 | 5 种风格各 1 条 30–60 秒样片；单镜成本、单分钟成本、平均重拍次数 | `docs/acceptance/P0-验收记录.md` | 待办 | — |
 | P0-04 | 注册表初始配置 | 选定模型的 ModelProfile（模式、输入上限、参数 schema、价格）写入种子文件 | `backend/db/seed/catalog.yaml` | 待办 | — |
-| P0-05 | 画布 PoC | React Flow + 移植 infinite-canvas；核实源码许可，并按 REQ-02 PERF-06 验证 500 节点 / 800 连线 ≥ 50 fps、打开 ≤ 3 秒、2,000 节点 ≥ 30 fps，记录 DES-08 §7 的内存目标（DES-38-Q1/Q2） | `frontend/`、`docs/acceptance/` | 完成（本机固定样本达标；DES-38-Q1 正式选型待产品确认，真实媒体复验归 E-36） | `5832c77a`、`7004567e`、`36f08449` |
+| P0-05 | 旧引擎技术验证（历史） | React Flow + 移植 infinite-canvas；核实源码许可，并按 REQ-02 PERF-06 验证 500 节点 / 800 连线 ≥ 50 fps、打开 ≤ 3 秒、2,000 节点 ≥ 30 fps，记录 DES-08 §7 的内存目标（DES-38-Q1/Q2） | `frontend/`、`docs/acceptance/` | 完成（旧引擎本机固定样本历史；当前源核心已换，旧证据不替代新引擎验收） | `5832c77a`、`7004567e`、`36f08449` |
 | P0-06 | P0 决策收口 | 确定主供应商、内容审核服务、Agent LLM；回填 DES-11-Q1、DES-31-Q1、DES-33-Q1、DES-39-Q2、DES-41-Q3 等 | `docs/design/`、`docs/prd/01-产品需求文档.md` | 待办 | — |
-| P0-07 | 计划基线与验收边界修复 | 统一 F/M 阶段、任务级前置、IF4～IF6、画布限定合同、Go Activity 迁移边界与 PoC 证据；同步追踪矩阵和计数，不宣称整体草案接受 | `BACKLOG.md`、`PROJECT.md`、`docs/` | 进行中（文档修复，待交叉核对） | — |
+| P0-07 | 计划基线与验收边界修复 | 统一生产目标/验证优先级、任务级前置、IF4～IF6、BeefTV 核心/正式资源合同、Go Activity 边界和真实证据；同步追踪矩阵和计数，不宣称整体草案接受 | `BACKLOG.md`、`PROJECT.md`、`docs/` | 进行中（文档修复，待交叉核对） | — |
 
 **P0-05 验证记录（2026-09-27）**：固定上游提交 `dab19adc0847e32e39b7fc8ff90cb392561fb826` 的 LICENSE 为 MIT。PoC 用 React Flow 重新实现其卡片与工具栏界面，保留许可全文及公示入口；未复制上游业务代码。500/600、500/800、2,000/3,200 三组场景的本机重复帧率、首屏时间、进程 RSS 代理指标及局限见 [P0-05 画布 PoC 记录](docs/acceptance/P0-画布PoC记录.md)。依用户要求直接提交至 `main`，未创建 PoC 分支。此结果不替代 DES-38-Q1 的产品选型确认或 E-36 的真实媒体、跨设备与业务验收。
 
@@ -99,7 +98,7 @@ F1～F4 是当前执行视图，M1～M5 是完整范围与验收视图（PLN-01 
 | M1-03 | 本地环境 | 根目录 `.env` 配置三端本机进程，指向已启动的 PostgreSQL、Redis、Kafka、MinIO、Temporal；逐项健康检查与隔离的备份恢复演练；后续部署的 `docker-compose-env.yml` 独立定义依赖环境，本地不通过 Docker 启动；不使用项目脚本或 Makefile | `.env.example`、`docker-compose-env.yml`、`docs/operation/01-环境与部署.md` | 完成（环境底座；业务客户端在 M1-05 接入） | `e4038453`、`a2c11fa6`、`30769030` |
 | M1-04 | CI 流水线 | lint、format、typecheck、test、race、govulncheck、契约一致性、镜像构建（OPS-02）；首批三端静态检查、测试与镜像构建已写入工作流，`provider.*` Activity 共享示例随 Go/Python 测试运行，公共 API 生成物契约门禁待 M1-06 | `.github/workflows/` | 进行中（公共契约门禁与最终远端运行待验证） | `2690c95d` |
 | M1-05 | 平台层 | config（Viper）、log（Zap）、db（GORM/pgx）、redis、kafka（franz-go）、objectstorage（MinIO / S3 兼容协议）、temporal、otel、Wire 组合根与 `--role=api|worker|relay|all` 均已接入；API、`flow` / `media` Worker、Relay 的进程探针与本机服务集成已验证；无 Collector 时保留 Go → Temporal → Agent Worker 的 TraceID，配置 OTLP/HTTP 时可导出。其他业务事件消费者归 M1-08，完整用户生成链路按 OBS-01 由后续功能任务验收 | `backend/internal/platform/`、`backend/internal/app/`、`backend/cmd/lanverse/`、`agent/app/main_worker.py` | 完成（平台底座与跨进程追踪；不代表完整 OBS-01 产品验收） | `7f4d27ff`、`c09607ce`、`39aecd56`、`84fab235`、`4acd6529`、`ca9f78db`、`ee19a1fc`、`583ef6ed`、`fb0b6715`、`87a8b157`、`a2307b2d`、`f911c33a`、`a9f42249`、`e2541616`、`d1c69906`、本次提交 |
-| M1-06 | 契约链与统一错误响应 | Gin Handler 注解与 DTO → swag 自动生成并在线提供 `/swagger/doc.json`（禁止手改）→ `@umijs/openapi` 从在线文档生成 `frontend/src/gen/api`；公共 `/api` 的 Go 全局错误映射与 panic 恢复按 DES-03 返回 RFC 9457 错误，成功响应使用端点 DTO；Axios `frontend/src/lib/request.ts` 为请求唯一入口并统一解析错误；契约测试覆盖校验、鉴权、冲突、404、依赖和未预期错误及脱敏，CI 校验在线文档、公开路由覆盖和生成物一致。Activity 输入输出类型由 Go 与 Python 各自手写，以同一组示例校验一致；`provider.submit/query/cancel` 的内部预备见下文，公共契约链按 DES-03 本轮采纳的限定合同实施 | `backend/internal/app/`、`backend/docs/`、`frontend/src/gen/api/`、`frontend/src/lib/request.ts` | 进行中（内部 `provider.*` 预备已验证；IF4～IF6 已采纳，公开链随 E-36-07 验证；全量门禁待办） | — |
+| M1-06 | 契约链与统一错误响应 | Gin Handler 注解与 DTO → swag 自动生成并在线提供 `/swagger/doc.json`（禁止手改）→ `@umijs/openapi` 从在线文档生成 `frontend/src/gen/api`；公共 `/api` 的 Go 全局错误映射与 panic 恢复按 DES-03 返回 RFC 9457 错误，成功响应使用端点 DTO；Axios `frontend/src/lib/request.ts` 为请求唯一入口并统一解析错误；契约测试覆盖校验、鉴权、冲突、404、依赖和未预期错误及脱敏，CI 校验在线文档、公开路由覆盖和生成物一致。Activity 输入输出类型由 Go 与 Python 各自手写，以同一组示例校验一致；`provider.submit/query/cancel` 的内部预备见下文，公共契约链按 DES-03 本轮采纳的限定合同实施 | `backend/internal/app/`、`backend/docs/`、`frontend/src/gen/api/`、`frontend/src/lib/request.ts` | 进行中（内部 `provider.*` 预备已验证；IF4～IF6 已采纳，公开链随 E-36-10/11 验证；全量门禁待办） | — |
 | M1-07 | 命令层 | 鉴权（Redis 会话）、幂等键、`expected_revision`、审计、Outbox 统一中间层 | `backend/internal/command/` | 待办 | — |
 | M1-08 | Outbox 与实时链路 | Outbox relay → Kafka → realtime 消费者 → Redis Pub/Sub → SSE（`/api/projects/{pid}/events`、`/api/me/events`，Last-Event-ID）；已落 `infra.outbox`、`infra.processed_event` 迁移、常驻 Outbox 投递循环、月分区创建、默认分区搬迁及空历史分区删除方法、数据库副作用去重边界、30 天消费标记与已投递 7 天 Outbox 的分批清理方法、两项清理的 Temporal Workflow/Activity 与 Schedule 安装器、手动提交 Kafka offset 的消费者、`operation.status_changed.v1`、`workspace.project_changed.v1`、`billing.budget_changed.v1` 与 `billing.settled.v1` 实时投影、Redis 补读和项目 SSE 处理器 | `backend/db/migrations/`、`backend/internal/infra/`、`backend/internal/app/` | 进行中（本机 PostgreSQL、Kafka、Redis、Temporal 与项目 SSE 处理器的测试授权链路已验证；进程角色中的 Outbox/realtime 链路及清理 Schedule 安装命令已接入；公开项目 SSE 路由待身份与项目授权后挂载，个人通知 SSE、其余事件投影和部署环境 Schedule 周期触发待完成） | `cbfa526d`、`7632f630`、`abf70b5a`、`e9cd3b45`、`c2d83288`、`22e3b235`、`891a00f6`、`c8b63843`、`7939d661`、`a8aa6c20`、`6793c419`、`ba5e96da`、`c6877115`、`850e8ce7`、`74aab306` |
 | M1-09 | Temporal Worker 与 OperationWorkflow 骨架 | flow / media 队列 Worker；Operation 状态机 quote → confirm → submit → poll → ingest → moderate → settle，`unknown` → 对账（DES-04） | `backend/internal/operation/` | 完成（骨架：已确认单项的 mock 图片生成、对账、接管、审核和结算；公开确认命令、批量、取消和真实供应商由对应 Epic 实现） | `9ec58b2e`、`a2e039db` |
@@ -846,7 +845,7 @@ F1～F4 是当前执行视图，M1～M5 是完整范围与验收视图（PLN-01 
 
 #### E-36 画布
 
-- **需求**：[REQ-36](docs/requirement/36-画布.md)（CNV-01 项目画布；CNV-02 画布发起生成；CNV-03 画布参考连线；CNV-04 布局保存；CNV-05 撤销重做、复制粘贴、快捷键；CNV-06 画布性能；CNV-08 风格与镜头语言素材节点）　**设计**：[DES-38](docs/design/38-画布功能.md)　**依赖**：E-36-07 仅需 M1-06/07、E-06 登录/改密与 E-10 项目读取合同；完整业务画布按 E-18/19/21/22/30 的具体合同逐条接入　**联调**：E-36-04 AI 助手待 E-37 提案合同
+- **需求**：[REQ-36](docs/requirement/36-画布.md)（CNV-01 项目画布；CNV-02 画布发起生成；CNV-03 画布参考连线；CNV-04 布局保存；CNV-05 撤销重做、复制粘贴、快捷键；CNV-06 画布性能；CNV-08 风格与镜头语言素材节点）　**设计**：[DES-38](docs/design/38-画布功能.md)　**依赖**：E-36-09 源码/设计已确认；E-36-10 需 M1-06/07、E-06 登录/改密、E-10 项目授权及 E-30 已接管媒体合同；完整业务按 E-18/19/21/22/30 具体合同接入　**联调**：E-36-04 AI 助手待 E-37 提案合同
 - **验收**：TC-36-01～05（5 条）
 - **待确认**：DES-38-Q1、DES-38-Q2、DES-38-Q3（候选默认见设计文档，确认或限定授权后实施）
 
@@ -856,10 +855,13 @@ F1～F4 是当前执行视图，M1～M5 是完整范围与验收视图（PLN-01 
 | E-36-02 | 用例与接口 | 写操作经命令层（鉴权、幂等键、`expected_revision`、审计、Outbox）实现：GET /api/projects/{pid}/canvases、POST /api/projects/{pid}/canvases、GET /api/canvases/{id}、GET /api/canvases/{id}/changes、POST /api/canvases/{id}/commands、POST /api/canvases/{id}/nodes/{nid}:run、POST /api/canvases/{id}/snapshots；swag 注解生成 OpenAPI。详见 [DES-38 §3](docs/design/38-画布功能.md#3-接口) | `backend/internal/canvas/application/`、`backend/internal/canvas/adapter/http/`、`backend/docs/` | 待办 | — |
 | E-36-03 | 异步、工作流与事件 | 工作流 / Activity / 定时任务 `OperationWorkflow`；事件 `canvas.document_changed.v1`（Outbox → Kafka，消费者按事件 ID 去重）。要点：生成节点运行复用 OperationWorkflow；无新工作流。 详见 [DES-38 §4](docs/design/38-画布功能.md#4-异步与工作流) | `backend/internal/canvas/adapter/workflow/`、`backend/internal/canvas/adapter/event/` | 待办 | — |
 | E-36-04 | Agent 服务 | AI 画布助手（经对话式 Agent 下发画布命令提案）；输入输出类型由 Go 与 Python 各自定义，契约测试（同一组示例输入输出）校验一致，离线评测纳入 `agent/evals/`。 | `agent/app/harness/` | 待办 | — |
-| E-36-05 | 前端 | React Flow 引擎 + 移植 infinite-canvas 卡片与交互（DES-08 §7）；左侧节点库、右侧属性面板、顶部工具栏、小地图；快捷键见 REQ-05 §7。 详见 [DES-38 §6](docs/design/38-画布功能.md#6-界面) | `frontend/src/features/canvas/` | 待办 | — |
+| E-36-05 | 前端 | 直接复用 BeefTV 0d9e9f48 InfiniteCanvas 核心/对应设计（DES-08 §7）；左侧节点库、右侧属性面板、顶部工具栏、小地图；快捷键见 REQ-05 §7。 详见 [DES-38 §6](docs/design/38-画布功能.md#6-界面) | `frontend/src/features/canvas/` | 待办 | — |
 | E-36-06 | 测试与验收 | 命令冲突重放；reference 连线与参考组合双向一致；Playwright 性能录制；验收用例 TC-36-01～05（[TST-02](docs/test/02-需求追踪矩阵.md)）。 | `backend/tests/`、`agent/tests/`、`frontend/tests/` | 待办 | — |
-| E-36-07 | 真实备注布局接入 | 复用真实登录/首次改密、组织项目和公开契约；Go PostgreSQL 保存 text resource 备注、annotation 连线与 viewport，原子 revision/幂等、布局撤销重做和刷新恢复。命令与失败合同见 DES-38 §3.1；reference/promote/run 留后续 | `backend/internal/canvas/`、`backend/db/migrations/`、`backend/tests/canvas/`、`frontend/src/features/canvas/`、在线生成 API | 进行中（限定切片，待真实依赖/浏览器验证） | — |
-| E-36-08 | 性能 PoC 录制与媒体复验入口 | 保留固定基线；浏览器内记录 60 秒真实运动窗口、可信输入、隐藏中断与 JSON 导出；自选不同图片/视频只在内存 blob URL 展示。固定样本、本机自选媒体、目标 M1/8 GB 与 Windows 中端机、跨设备布局分别留证 | `frontend/src/features/canvas/`、`frontend/tests/`、`docs/acceptance/` | 进行中（待实现与本机证据；目标机器/跨设备尚未验收） | — |
+| E-36-07 | 真实备注布局接入 | 复用真实登录/首次改密、组织项目和公开契约；Go PostgreSQL 保存 text resource 备注、annotation 连线与 viewport，原子 revision/幂等、布局撤销重做和刷新恢复。命令与失败合同见 DES-38 §3.1；reference/promote/run 留后续 | `backend/internal/canvas/`、`backend/db/migrations/`、`backend/tests/canvas/`、`frontend/src/features/canvas/`、在线生成 API | 被替代（07dfd2d 历史未完检查点，不追认完成；由 E-36-09/10 承接） | 07dfd2d |
+| E-36-08 | 性能 PoC 录制与媒体复验入口 | 保留固定基线；浏览器内记录 60 秒真实运动窗口、可信输入、隐藏中断与 JSON 导出；自选不同图片/视频只在内存 blob URL 展示。固定样本、本机自选媒体、目标 M1/8 GB 与 Windows 中端机、跨设备布局分别留证 | `frontend/src/features/canvas/`、`frontend/tests/`、`docs/acceptance/` | 被替代（07dfd2d 历史未完检查点；新引擎验证归 E-36-11，不保留独立入口） | 07dfd2d |
+| E-36-09 | BeefTV 无限画布核心与设计迁移 | 固定 source 0d9e9f48、实际源码/许可清单；直接移植 DOM/SVG/rAF、视口/选择/框选/拖动/对齐/分组/连接/快捷键/历史/小地图、空间索引/LOD/播放设计，替换 AntD/主题端口；删除旧 frontend poc/live/creation 引擎和独立入口，不迁整应用 | frontend/src/features/canvas/、正式画布路由、许可清单、DES-06/38/08 | 完成（固定源码/许可、旧引擎删除、21 文件/92 项前端测试、生产构建与真实浏览器核心交互通过；目标机器性能归 E-36-11） | 本次提交 |
+| E-36-10 | 正式资源与生产交互接线 | UUID text/image/video/audio/group resource、title/parent/z_index、类型白名单；ResizeNodes/RenameNodes/SetNodeParents/SetNodeZIndex、annotation、k↔zoom0.05～4、world 绝对坐标/删组解组；同项目已接管媒体与服务端投影，auth/归档/revision/持久幂等/Outbox 原子性，保留 DDL/历史 | backend/internal/canvas/、forward SQL、backend/tests/canvas/、frontend/src/features/canvas/、在线生成 API | 完成（正式 DTO/命令、12 项真实 PG、授权 MinIO 播放与并发/草稿恢复通过；完整生成业务继续独立交付） | 本次提交 |
+| E-36-11 | 整项目验证与演示回归 | 三端完整适用门禁、真实依赖和正式入口 Demo；覆盖身份/首登改密/项目/核心画布/正式资源/保存恢复/失败路径，新引擎性能与历史数据单列证据；完整业务缺口接下一轮 M1/功能任务，不用 Demo 代替九场景验收 | backend/tests/、agent/tests/、frontend/tests/、docs/acceptance/、BACKLOG.md | 进行中（三端适用检查与正式画布生产构建 Demo 通过；完整业务链、真实供应商、目标机器性能和上线验收仍待完成） | 本次提交 |
 
 #### E-37 对话式 Agent
 
@@ -896,3 +898,4 @@ F1～F4 是当前执行视图，M1～M5 是完整范围与验收视图（PLN-01 
 | --- | --- |
 | 2026-09-26 | 首次生成：P0 6 项、M1 基础 11 项、功能 Epic 33 个，共 193 项任务 |
 | 2026-09-30 | 用户授权修复计划与 PoC：新增 P0-07、M1-12、E-36-07、E-36-08，共 197 项；F 阶段复用原任务，完整 MVP 范围保留 |
+| 2026-09-30 | 用户明确无限画布及设计复用与生产目标：新增 E-36-09～11，旧 07/08 被替代历史未完成；总任务 200，完整产品范围和验收保持 |

@@ -1,6 +1,6 @@
 # Lanverse
 
-Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发布成片为终点，把整部剧解析、角色与场景设定、参考定稿、分镜、全能参考视频生成、配音、剪辑和交付放进同一条可审阅、可恢复、成本透明的生产线；并提供 LibTV 式的无限画布作为探索与精修界面。
+Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发布成片为终点，把整部剧解析、角色与场景设定、参考定稿、分镜、全能参考视频生成、配音、剪辑和交付放进同一条可审阅、可恢复、成本透明的生产线；并提供复用 BeefTV 核心与设计的无限画布作为探索与精修界面。
 
 > **当前状态（2026-09-26）：** 产品与技术设计已从零重做并完成交叉评审；旧实现（`backend/`、`agent/`、`frontend/` 及旧工程配置）已删除，完整保留在标签 `legacy-2026-09`（`git checkout legacy-2026-09 -- <路径>` 可取回）。新代码按 [BACKLOG](BACKLOG.md) 从 M1 起重建。
 
@@ -36,7 +36,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 | 层 | 技术 |
 | --- | --- |
-| 前端 | Next.js、TypeScript、Tailwind CSS、shadcn/ui、Radix UI、ESLint、Prettier、TanStack Query、Zustand、React Flow |
+| 前端 | Next.js、TypeScript、Tailwind CSS、shadcn/ui、Radix UI、ESLint、Prettier、TanStack Query、Zustand；无限画布复用 BeefTV 的 DOM/SVG 交互核心 |
 | 后端 | Go：Gin、GORM、golang-migrate、Viper、Zap、Wire、swag、Temporal SDK、go-redis、franz-go、minio-go |
 | Agent 服务 | Python：FastAPI、Pydantic、Temporal Python SDK、Agent Harness、httpx |
 | 工作流 | Temporal |
@@ -46,6 +46,8 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 选型与各中间件职责见 [DES-08 技术选型决策](docs/design/08-技术选型决策.md)，工程约定见 [PROJECT.md](PROJECT.md)。
 
+当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。复用范围为无限画布核心及对应设计，正式数据接入和验收状态见 [BeefTV 能力引入设计](docs/design/BeefTV能力引入设计.md)、[PLN-32](docs/plan/32-画布功能.md) 与 [第三方代码声明](THIRD_PARTY_NOTICES.md)。正式入口为 `/canvas` 和 `/projects/{UUID}/canvas`；项目整体验证与 Demo 仍需按完整 MVP 链路验收。LibTV 与旧 infinite-canvas 的调研和验收记录保留为历史来源。
+
 ## 文档
 
 | 文件 | 内容 |
@@ -53,7 +55,8 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 | [docs/README.md](docs/README.md) | 文档中心：按生命周期组织的全部文档、编号规则 |
 | [BACKLOG.md](BACKLOG.md) | 项目进度与待执行任务：P0、M1～M5 的任务、实现要点、涉及文件与状态 |
 | [PRD-01 产品需求文档](docs/prd/01-产品需求文档.md) | 产品目标、用户、场景、产品决策、版本规划、成功指标 |
-| [PRD-02 LibTV 能力调研与核心能力评估](docs/prd/02-LibTV能力调研与核心能力评估.md) | 竞品能力与实现设计、核心能力取舍、顶层架构要求 |
+| [BeefTV 无限画布迁移设计](docs/design/BeefTV能力引入设计.md) | 当前主要参考项目、固定源码、核心与设计复用范围、正式服务端端口 |
+| [PRD-02 LibTV 历史能力调研](docs/prd/02-LibTV能力调研与核心能力评估.md) | 历史公开事实与已接受业务规则的来源；不作为当前画布选型依据 |
 | [REQ-01 功能需求总表](docs/requirement/01-功能需求总表.md) | 全部需求编号与优先级；功能文件 REQ-06～REQ-33、REQ-35～REQ-39（MVP）与 REQ-34（V2 需求池）写明用户故事、规则与验收标准；对应的功能设计为 DES-09～DES-41 |
 | [REQ-02 非功能需求规格](docs/requirement/02-非功能需求规格.md) | 性能、可靠性、安全、备份恢复、可观测、AI 质量、合规的可度量目标 |
 | [REQ-03 业务流程与用例模型](docs/requirement/03-业务流程与用例模型.md) | 参与者、用例、业务阶段、状态模型 |

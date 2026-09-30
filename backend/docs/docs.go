@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.LoginRequest"
+                            "$ref": "#/definitions/internal_identity_adapter_http.LoginRequest"
                         }
                     }
                 ],
@@ -43,37 +43,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.SessionResponse"
+                            "$ref": "#/definitions/internal_identity_adapter_http.SessionResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -109,25 +109,25 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -147,19 +147,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.SessionResponse"
+                            "$ref": "#/definitions/internal_identity_adapter_http.SessionResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -199,7 +199,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.PasswordRequest"
+                            "$ref": "#/definitions/internal_identity_adapter_http.PasswordRequest"
                         }
                     }
                 ],
@@ -207,31 +207,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.PasswordResponse"
+                            "$ref": "#/definitions/internal_identity_adapter_http.PasswordResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -260,37 +260,215 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.Document"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "canvases"
+                ],
+                "summary": "删除画布",
+                "operationId": "deleteCanvas",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "画布UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "CSRF令牌",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "当前修订",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "canvases"
+                ],
+                "summary": "修改画布名称",
+                "operationId": "renameCanvas",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "画布UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "CSRF令牌",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "当前修订与名称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.RenameInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -337,7 +515,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/application.CommandsInput"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandsInput"
                         }
                     }
                 ],
@@ -345,49 +523,49 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/application.Result"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.Result"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "413": {
                         "description": "Request Entity Too Large",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -439,25 +617,25 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -492,31 +670,31 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -531,7 +709,7 @@ const docTemplate = `{
                 "tags": [
                     "canvases"
                 ],
-                "summary": "创建备注画布",
+                "summary": "创建画布",
                 "operationId": "createCanvas",
                 "parameters": [
                     {
@@ -561,7 +739,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/application.CreateInput"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CreateInput"
                         }
                     }
                 ],
@@ -569,37 +747,180 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/domain.Document"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.Problem"
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{pid}/media": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "项目可用媒体列表",
+                "operationId": "listMediaAssets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "项目UUID",
+                        "name": "pid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "image/video/audio",
+                        "name": "kind",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "不透明游标",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1..200，默认50",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetPage"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{pid}/media/{asset_id}/preview": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "获取媒体预览",
+                "operationId": "getMediaPreview",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "项目UUID",
+                        "name": "pid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "媒体UUID",
+                        "name": "asset_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.Preview"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
                     }
                 }
@@ -607,7 +928,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "application.CommandResult": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandResult": {
             "type": "object",
             "properties": {
                 "ok": {
@@ -615,13 +936,13 @@ const docTemplate = `{
                 }
             }
         },
-        "application.CommandsInput": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandsInput": {
             "type": "object",
             "properties": {
                 "commands": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Command"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Command"
                     }
                 },
                 "expected_revision": {
@@ -629,7 +950,7 @@ const docTemplate = `{
                 }
             }
         },
-        "application.CreateInput": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CreateInput": {
             "type": "object",
             "properties": {
                 "name": {
@@ -640,13 +961,46 @@ const docTemplate = `{
                 }
             }
         },
-        "application.Result": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteInput": {
+            "type": "object",
+            "properties": {
+                "expected_revision": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_application.DeleteResult": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_application.RenameInput": {
+            "type": "object",
+            "properties": {
+                "expected_revision": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_application.Result": {
             "type": "object",
             "properties": {
                 "edges": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Edge"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge"
                     }
                 },
                 "id": {
@@ -658,7 +1012,7 @@ const docTemplate = `{
                 "nodes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Node"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node"
                     }
                 },
                 "project_id": {
@@ -667,7 +1021,7 @@ const docTemplate = `{
                 "results": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/application.CommandResult"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandResult"
                     }
                 },
                 "revision": {
@@ -677,18 +1031,21 @@ const docTemplate = `{
                     "type": "object"
                 },
                 "viewport": {
-                    "$ref": "#/definitions/domain.Viewport"
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport"
                 }
             }
         },
-        "domain.Command": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Command": {
             "type": "object",
             "properties": {
                 "config": {
-                    "$ref": "#/definitions/domain.TextConfig"
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.NodeConfig"
                 },
-                "edge": {
-                    "$ref": "#/definitions/domain.Edge"
+                "edges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge"
+                    }
                 },
                 "id": {
                     "type": "string"
@@ -702,30 +1059,54 @@ const docTemplate = `{
                 "moves": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Move"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Move"
+                    }
+                },
+                "names": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Name"
                     }
                 },
                 "nodes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Node"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node"
+                    }
+                },
+                "parents": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Parent"
+                    }
+                },
+                "sizes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Size"
                     }
                 },
                 "type": {
                     "type": "string"
                 },
                 "viewport": {
-                    "$ref": "#/definitions/domain.Viewport"
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport"
+                },
+                "z_indices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.ZIndex"
+                    }
                 }
             }
         },
-        "domain.Document": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document": {
             "type": "object",
             "properties": {
                 "edges": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Edge"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge"
                     }
                 },
                 "id": {
@@ -737,7 +1118,7 @@ const docTemplate = `{
                 "nodes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Node"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node"
                     }
                 },
                 "project_id": {
@@ -750,11 +1131,11 @@ const docTemplate = `{
                     "type": "object"
                 },
                 "viewport": {
-                    "$ref": "#/definitions/domain.Viewport"
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport"
                 }
             }
         },
-        "domain.Edge": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Edge": {
             "type": "object",
             "properties": {
                 "binding": {
@@ -777,7 +1158,7 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.Move": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Move": {
             "type": "object",
             "properties": {
                 "id": {
@@ -791,11 +1172,22 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.Node": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Name": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Node": {
             "type": "object",
             "properties": {
                 "config": {
-                    "$ref": "#/definitions/domain.TextConfig"
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.NodeConfig"
                 },
                 "height": {
                     "type": "number"
@@ -821,6 +1213,9 @@ const docTemplate = `{
                 "ref_type": {
                     "type": "string"
                 },
+                "title": {
+                    "type": "string"
+                },
                 "width": {
                     "type": "number"
                 },
@@ -835,15 +1230,44 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.TextConfig": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.NodeConfig": {
             "type": "object",
             "properties": {
+                "collapsed": {
+                    "type": "boolean"
+                },
                 "text": {
                     "type": "string"
                 }
             }
         },
-        "domain.Viewport": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Parent": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "string",
+                    "x-nullable": true
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Size": {
+            "type": "object",
+            "properties": {
+                "height": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "width": {
+                    "type": "number"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Viewport": {
             "type": "object",
             "properties": {
                 "x": {
@@ -857,97 +1281,81 @@ const docTemplate = `{
                 }
             }
         },
-        "http.LoginRequest": {
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.ZIndex": {
             "type": "object",
             "properties": {
-                "login_name": {
+                "id": {
                     "type": "string"
                 },
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "http.PasswordRequest": {
-            "type": "object",
-            "properties": {
-                "current_password": {
-                    "type": "string"
-                },
-                "new_password": {
-                    "type": "string"
-                }
-            }
-        },
-        "http.PasswordResponse": {
-            "type": "object",
-            "properties": {
-                "must_change_password": {
-                    "type": "boolean"
-                },
-                "revision": {
+                "z_index": {
                     "type": "integer"
                 }
             }
         },
-        "http.ProjectResponse": {
+        "github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetPage": {
             "type": "object",
             "properties": {
-                "aspect_ratio": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary"
+                    }
+                },
+                "next_cursor": {
                     "type": "string"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary": {
+            "type": "object",
+            "properties": {
+                "byte_size": {
+                    "type": "integer"
+                },
+                "duration_ms": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "height": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "string"
                 },
-                "name": {
+                "kind": {
+                    "type": "string"
+                },
+                "mime_type": {
+                    "type": "string"
+                },
+                "project_id": {
                     "type": "string"
                 },
                 "revision": {
                     "type": "integer"
                 },
-                "status": {
-                    "type": "string"
-                },
-                "style_type": {
-                    "type": "string"
+                "width": {
+                    "type": "integer"
                 }
             }
         },
-        "http.SessionResponse": {
+        "github_com_StephenQiu30_lanverse_backend_internal_media_application.Preview": {
             "type": "object",
             "properties": {
-                "must_change_password": {
-                    "type": "boolean"
+                "asset": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary"
                 },
-                "user": {
-                    "$ref": "#/definitions/http.UserResponse"
-                }
-            }
-        },
-        "http.UserResponse": {
-            "type": "object",
-            "properties": {
-                "display_name": {
+                "expires_at": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "string"
-                },
-                "login_name": {
-                    "type": "string"
-                },
-                "must_change_password": {
-                    "type": "boolean"
-                },
-                "org_id": {
-                    "type": "string"
-                },
-                "role": {
+                "url": {
                     "type": "string"
                 }
             }
         },
-        "httpapi.Problem": {
+        "github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem": {
             "type": "object",
             "properties": {
                 "code": {
@@ -980,10 +1388,77 @@ const docTemplate = `{
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Document"
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.Document"
                     }
                 },
                 "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identity_adapter_http.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "login_name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identity_adapter_http.PasswordRequest": {
+            "type": "object",
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_identity_adapter_http.PasswordResponse": {
+            "type": "object",
+            "properties": {
+                "must_change_password": {
+                    "type": "boolean"
+                },
+                "revision": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_identity_adapter_http.SessionResponse": {
+            "type": "object",
+            "properties": {
+                "must_change_password": {
+                    "type": "boolean"
+                },
+                "user": {
+                    "$ref": "#/definitions/internal_identity_adapter_http.UserResponse"
+                }
+            }
+        },
+        "internal_identity_adapter_http.UserResponse": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "login_name": {
+                    "type": "string"
+                },
+                "must_change_password": {
+                    "type": "boolean"
+                },
+                "org_id": {
+                    "type": "string"
+                },
+                "role": {
                     "type": "string"
                 }
             }
@@ -994,10 +1469,33 @@ const docTemplate = `{
                 "items": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/http.ProjectResponse"
+                        "$ref": "#/definitions/internal_workspace_adapter_http.ProjectResponse"
                     }
                 },
                 "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectResponse": {
+            "type": "object",
+            "properties": {
+                "aspect_ratio": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "style_type": {
                     "type": "string"
                 }
             }
@@ -1012,7 +1510,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Lanverse API",
-	Description:      "Public identity, project query and note canvas commands.",
+	Description:      "Public identity, project query, resource canvas commands and authorized media previews.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

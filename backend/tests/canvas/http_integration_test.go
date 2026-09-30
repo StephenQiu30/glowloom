@@ -3,6 +3,7 @@ package canvas_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"net"
@@ -22,7 +23,9 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
 	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
 )
 
 func TestPublicCanvasAPIWithLocalPostgresRedis(t *testing.T) {
@@ -45,8 +48,22 @@ func TestPublicCanvasAPIWithLocalPostgresRedis(t *testing.T) {
 	if err := database.Exec(`UPDATE identity."user" SET login_name='canvas-browser',password_hash=?,must_change_password=true WHERE id=?`, hash, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
+	var storage *objectstorage.Client
+	var mediaDigests map[uuid.UUID][32]byte
+	if os.Getenv("LV_TEST_CANVAS_USE_ENV_OBJECT_STORAGE") == "1" {
+		// Only the caller can opt in to its already configured local object storage.
+		localConfig, err := config.Load()
+		if err != nil {
+			t.Fatal("object storage test configuration unavailable")
+		}
+		storage, err = objectstorage.Open(localConfig.ObjectStorageEndpoint, localConfig.ObjectStorageBucket, localConfig.ObjectStorageAccessKey, localConfig.ObjectStorageSecretKey, localConfig.ObjectStorageRegion)
+		if err != nil {
+			t.Fatal("object storage test client unavailable")
+		}
+		mediaDigests = seedOwnedCanvasBrowserMedia(t, database, storage, project)
+	}
 	const origin = "http://127.0.0.1:3140"
-	router, err := app.NewBusinessRouter(zap.NewNop(), func(_ context.Context) error { return nil }, noop.NewTracerProvider(), config.Config{Env: "local", PublicOrigin: origin}, database, redisConn)
+	router, err := app.NewBusinessRouter(zap.NewNop(), func(_ context.Context) error { return nil }, noop.NewTracerProvider(), config.Config{Env: "local", PublicOrigin: origin}, database, redisConn, storage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +96,7 @@ func TestPublicCanvasAPIWithLocalPostgresRedis(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		data, err = io.ReadAll(res.Body)
 		if err != nil {
 			t.Fatal(err)
@@ -126,7 +143,7 @@ func TestPublicCanvasAPIWithLocalPostgresRedis(t *testing.T) {
 		t.Fatalf("create replay %d %s", code, replayed)
 	}
 	path := "/api/canvases/" + doc.ID.String() + "/commands"
-	input := map[string]any{"expected_revision": 1, "commands": []map[string]any{{"type": "AddNodes", "nodes": []map[string]any{{"id": uuid.NewString(), "node_type": "text", "node_action": "resource", "config": map[string]string{"text": "持久备注"}, "x": 0, "y": 0}}}}}
+	input := map[string]any{"expected_revision": 1, "commands": []map[string]any{{"type": "AddNodes", "nodes": []map[string]any{{"id": uuid.NewString(), "title": "文字", "node_type": "text", "node_action": "resource", "config": map[string]string{"text": "持久备注"}, "x": 0, "y": 0}}}}}
 	key = uuid.NewString()
 	code, body = request("POST", path, input, key, true, origin)
 	if code != 200 {
@@ -148,6 +165,51 @@ func TestPublicCanvasAPIWithLocalPostgresRedis(t *testing.T) {
 	if code, _ := request("GET", "/api/not-open", nil, "", false, ""); code != 404 {
 		t.Fatalf("missing route %d", code)
 	}
+	renameKey := uuid.NewString()
+	renameInput := map[string]any{"expected_revision": 2, "name": "HTTP正式画布"}
+	if code, body := request("PATCH", "/api/canvases/"+doc.ID.String(), renameInput, renameKey, true, origin); code != 200 || !bytes.Contains(body, []byte(`"revision":3`)) {
+		t.Fatalf("rename %d %s", code, body)
+	}
+	if code, body := request("PATCH", "/api/canvases/"+doc.ID.String(), renameInput, renameKey, true, origin); code != 200 || !bytes.Contains(body, []byte(`"revision":3`)) {
+		t.Fatalf("rename replay %d %s", code, body)
+	}
+	deleteKey := uuid.NewString()
+	for range 2 {
+		if code, body := request("DELETE", "/api/canvases/"+doc.ID.String(), map[string]any{"expected_revision": 3}, deleteKey, true, origin); code != 200 || !bytes.Contains(body, []byte(`"deleted":true`)) {
+			t.Fatalf("delete %d %s", code, body)
+		}
+	}
+	if code, _ := request("GET", "/api/canvases/"+doc.ID.String(), nil, "", false, ""); code != 404 {
+		t.Fatalf("deleted readable %d", code)
+	}
+	code, body = request("GET", "/api/projects/"+project.String()+"/media", nil, "", false, "")
+	var mediaPage mediaapp.AssetPage
+	if code != 200 || json.Unmarshal(body, &mediaPage) != nil || len(mediaPage.Items) != len(mediaDigests) {
+		t.Fatalf("owned media list status=%d", code)
+	}
+	for _, asset := range mediaPage.Items {
+		code, body = request("GET", "/api/projects/"+project.String()+"/media/"+asset.ID.String()+"/preview", nil, "", false, "")
+		var preview mediaapp.Preview
+		if code != 200 || json.Unmarshal(body, &preview) != nil || preview.Asset.ID != asset.ID || !preview.ExpiresAt.After(time.Now()) || preview.ExpiresAt.After(time.Now().Add(11*time.Minute)) {
+			t.Fatalf("owned media preview status=%d", code)
+		}
+		// The signed URL is never printed or persisted; verify actual object
+		// bytes using a client with no application session cookies.
+		objectRequest, err := http.NewRequestWithContext(t.Context(), http.MethodGet, preview.URL, nil)
+		if err != nil {
+			t.Fatal("owned media preview URL invalid")
+		}
+		objectClient := &http.Client{Timeout: 30 * time.Second}
+		response, err := objectClient.Do(objectRequest)
+		if err != nil {
+			t.Fatal("owned media preview download failed")
+		}
+		content, readErr := io.ReadAll(io.LimitReader(response.Body, 16<<20+1))
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK || int64(len(content)) != asset.ByteSize || sha256.Sum256(content) != mediaDigests[asset.ID] {
+			t.Fatal("owned media preview bytes do not match uploaded fixture")
+		}
+	}
 	if code, _ := request("POST", "/api/auth/logout", nil, uuid.NewString(), true, origin); code != 204 {
 		t.Fatalf("logout %d", code)
 	}
@@ -159,13 +221,15 @@ func TestPublicCanvasAPIWithLocalPostgresRedis(t *testing.T) {
 		if err := database.Exec(`UPDATE identity."user" SET password_hash=?,must_change_password=true,session_epoch=session_epoch+1 WHERE id=?`, hash, actor.ID).Error; err != nil {
 			t.Fatal(err)
 		}
-		listener, err := net.Listen("tcp", address)
+		var listenerConfig net.ListenConfig
+		listener, err := listenerConfig.Listen(t.Context(), "tcp", address)
 		if err != nil {
 			t.Fatal(err)
 		}
 		srv := &http.Server{Handler: router, ReadHeaderTimeout: 30 * time.Second}
-		go func() { _ = srv.Serve(listener) }()
-		t.Cleanup(func() { _ = srv.Close() })
+		done := make(chan struct{})
+		go func() { defer close(done); _ = srv.Serve(listener) }()
+		t.Cleanup(func() { _ = srv.Close(); <-done })
 		t.Logf("isolated browser API ready at %s, project %s", address, project)
 		deadline := time.Now().Add(30 * time.Minute)
 		for time.Now().Before(deadline) {

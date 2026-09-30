@@ -11,6 +11,11 @@ module.exports = {
   requestOptionsType: 'import("@/lib/request").RequestOptions',
   nullable: false,
   hook: {
+    // Swagger 2 x-nullable 经转换为 nullable；只扩展声明允许清空的字段。
+    customType(schema, namespace, defaultGetType) {
+      if (schema?.nullable || schema?.["x-nullable"])
+        return `${defaultGetType(schema, namespace)} | null`;
+    },
     // 保留 Go schema 的包名，避免多个 ListResponse 被生成器折叠为同名类型。
     afterOpenApiDataInited(schema) {
       const rename = (name) => name.replaceAll(".", "_");

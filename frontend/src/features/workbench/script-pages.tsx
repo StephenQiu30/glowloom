@@ -14,7 +14,7 @@ import {
   DraftNotice,
   QuotePreview,
   usePreviewQuery,
-} from "./poc-components";
+} from "./workbench-components";
 
 export function ScriptPage({ projectId }: { projectId: string }) {
   const [draft, setDraft] = useState(sourceScript);

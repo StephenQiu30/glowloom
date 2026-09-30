@@ -12,7 +12,7 @@ import {
   DataTable,
   EmptyMessage,
   usePreviewQuery,
-} from "./poc-components";
+} from "./workbench-components";
 
 const filters = {
   all: "全部",

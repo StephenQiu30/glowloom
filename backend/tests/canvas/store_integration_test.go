@@ -15,6 +15,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 )
 
@@ -52,24 +54,24 @@ func seedCanvasActor(t *testing.T, database *gorm.DB) (identityapp.Principal, uu
 func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(pgcanvas.NewStore(database))
+	service := application.NewService(canvasStore(database))
 	key := uuid.NewString()
 	doc, err := service.Create(t.Context(), actor, project, key, application.CreateInput{Name: "备注"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := application.NewService(pgcanvas.NewStore(database)).Create(t.Context(), actor, project, key, application.CreateInput{Name: "备注"})
+	again, err := application.NewService(canvasStore(database)).Create(t.Context(), actor, project, key, application.CreateInput{Name: "备注"})
 	if err != nil || again.ID != doc.ID {
 		t.Fatalf("persistent create replay: %+v %v", again, err)
 	}
 	n1, n2, e := uuid.New(), uuid.New(), uuid.New()
-	input := application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, NodeType: "text", NodeAction: "resource", Config: domain.TextConfig{Text: "A"}}, {ID: n2, NodeType: "text", NodeAction: "resource", Config: domain.TextConfig{Text: "B"}}}}, {Type: "Connect", Edge: &domain.Edge{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}}}
+	input := application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("A")}}, {ID: n2, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("B")}}}}, {Type: "Connect", Edges: []domain.Edge{{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}}}}
 	key = uuid.NewString()
 	result, err := service.Execute(t.Context(), actor, doc.ID, key, input)
 	if err != nil || result.Revision != 2 {
 		t.Fatalf("apply: %+v %v", result, err)
 	}
-	result, err = application.NewService(pgcanvas.NewStore(database)).Execute(t.Context(), actor, doc.ID, key, input)
+	result, err = application.NewService(canvasStore(database)).Execute(t.Context(), actor, doc.ID, key, input)
 	if err != nil || result.Revision != 2 {
 		t.Fatalf("persistent command replay: %+v %v", result, err)
 	}
@@ -91,7 +93,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	if _, err := service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 3, Commands: input.Commands}); !errors.Is(err, domain.ErrInvalidCommand) {
 		t.Fatalf("duplicate existing node allowed: %v", err)
 	}
-	restore := application.CommandsInput{ExpectedRevision: 3, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, NodeType: "text", NodeAction: "resource", Config: domain.TextConfig{Text: "A"}}}}, {Type: "Connect", Edge: &domain.Edge{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}}}
+	restore := application.CommandsInput{ExpectedRevision: 3, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("A")}}}}, {Type: "Connect", Edges: []domain.Edge{{ID: e, EdgeType: "annotation", SourceNodeID: n1, TargetNodeID: n2}}}}}
 	result, err = service.Execute(t.Context(), actor, doc.ID, uuid.NewString(), restore)
 	if err != nil || len(result.Nodes) != 2 || len(result.Edges) != 1 {
 		t.Fatalf("restore: %+v %v", result, err)
@@ -104,7 +106,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = service.Execute(t.Context(), other, otherDoc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, NodeType: "text", NodeAction: "resource"}}}}})
+	_, err = service.Execute(t.Context(), other, otherDoc.ID, uuid.NewString(), application.CommandsInput{ExpectedRevision: 1, Commands: []domain.Command{{Type: "AddNodes", Nodes: []domain.Node{{ID: n1, Title: "备注", NodeType: "text", NodeAction: "resource", Config: domain.NodeConfig{Text: ptr("")}}}}}})
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("crossdocument UUID restored: %v", err)
 	}
@@ -126,7 +128,7 @@ func TestCanvasPersistenceRevisionReplayRollbackAndRestore(t *testing.T) {
 func TestConcurrentCanvasCommandsAdvanceOneRevision(t *testing.T) {
 	database := canvasDB(t, "LV_TEST_CANVAS_DB_DSN")
 	actor, project := seedCanvasActor(t, database)
-	service := application.NewService(pgcanvas.NewStore(database))
+	service := application.NewService(canvasStore(database))
 	doc, err := service.Create(t.Context(), actor, project, uuid.NewString(), application.CreateInput{Name: "Concurrent"})
 	if err != nil {
 		t.Fatal(err)
@@ -144,15 +146,20 @@ func TestConcurrentCanvasCommandsAdvanceOneRevision(t *testing.T) {
 	ok, conflict := 0, 0
 	for err := range results {
 		var revision *application.RevisionConflict
-		if err == nil {
+		switch {
+		case err == nil:
 			ok++
-		} else if errors.As(err, &revision) {
+		case errors.As(err, &revision):
 			conflict++
-		} else {
+		default:
 			t.Fatal(err)
 		}
 	}
 	if ok != 1 || conflict != 1 {
 		t.Fatalf("success=%d conflict=%d", ok, conflict)
 	}
+}
+
+func canvasStore(database *gorm.DB) *pgcanvas.Store {
+	return pgcanvas.NewStore(database, func(tx *gorm.DB) application.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) })
 }

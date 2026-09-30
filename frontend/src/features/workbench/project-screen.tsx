@@ -9,7 +9,7 @@ const CreationCanvas = dynamic(
   () => import("./creation-canvas").then((m) => m.CreationCanvas),
   { ssr: false, loading: () => <p>正在加载创作画布…</p> },
 );
-import { PreviewBoundary } from "./poc-components";
+import { PreviewBoundary } from "./workbench-components";
 import type { ProjectRoute } from "./routes";
 
 export function ProjectScreen({ route }: { route: ProjectRoute }) {

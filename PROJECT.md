@@ -22,7 +22,9 @@
 
 业务范围以 `docs/prd/` 与 `docs/requirement/` 为准，架构决策以 `docs/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改需求或设计文档并评审，再同步本文。
 
-2026-09-30 用户授权的当前执行视图为 F1 前端工作台 → F2 对应服务 → F3 单条真实创作链路 PoC → F4 消费者能力（PLN-01 §2.1、BACKLOG）。本轮 E-36-07 仅把真实会话/项目和 PostgreSQL 备注布局接入画布，完整业务节点、生成、选定及 Agent 仍按原任务验收。下面 Go/Python 职责继续有效；Provider Activity 迁入 Go 须先完成 M1-12 的职责、回放/队列兼容与真实供应商证据，再同步架构与运行配置。
+2026-09-30 用户进一步明确：按上线标准实现完整 Lanverse，当前优先跑通整项目验证和 Demo；画布直接复用 BeefTV 固定提交 0d9e9f48 的 DOM/SVG/rAF InfiniteCanvas 核心及对应设计，替换现有实现（见 BeefTV 引入设计、DES-06/38）。本轮接正式 text/image/video/audio/group 资源节点与 Go/PostgreSQL 合同，不保留独立 PoC 产品入口、旧 live/creation 引擎或双状态；不迁整个 BeefTV provider/3D/插件/时间轴。完整生成/参考/选定/Agent 仍按产品范围持续验收，单次 Demo 不等于 MVP 完成。现有 SQL/业务历史保留，字段演进追加迁移。Go/Python 职责继续有效，Provider Activity 的 Go 迁移仍由 M1-12 独立评估。
+
+当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。当前复用合同以 [BeefTV 迁移设计](docs/design/BeefTV能力引入设计.md) 和 [第三方代码声明](THIRD_PARTY_NOTICES.md) 为准；LibTV 与旧 infinite-canvas 的历史调研、业务规则来源与许可证据继续保留，不作为当前主要参考或画布引擎建议。
 
 ## 2. 仓库结构与职责
 
@@ -61,7 +63,7 @@ Lanverse/
 | 范围 | 技术 |
 | --- | --- |
 | 前端 | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier |
-| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、@xyflow/react、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、`@umijs/openapi` + Axios；CopilotKit（AG-UI） |
+| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、BeefTV InfiniteCanvas 核心、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、`@umijs/openapi` + Axios；CopilotKit（AG-UI） |
 | 后端 | Go、Gin、GORM（pgx 驱动）、golang-migrate、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator |
 | 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go |
 | Agent 服务 | Python 3.12+、uv、FastAPI、Uvicorn、Pydantic v2、pydantic-settings、Temporal Python SDK、httpx、redis-py、OpenAI 兼容 SDK；ag-ui-protocol |
@@ -71,7 +73,7 @@ Lanverse/
 | 可观测 | OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo / Jaeger、Temporal UI、Kafka UI |
 | 部署 | Docker、Docker Compose；规模化后 Kubernetes |
 
-每个中间件的职责边界见 [DES-08 §6](docs/design/08-技术选型决策.md#6-中间件职责)；与 LibTV 的技术对齐与差异见 [DES-08 §10](docs/design/08-技术选型决策.md#10-与-libtv-的技术对齐)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
+每个中间件的职责边界见 [DES-08 §6](docs/design/08-技术选型决策.md#6-中间件职责)；当前 BeefTV 参考范围与历史技术比较见 [DES-08 §10](docs/design/08-技术选型决策.md#10-参考项目与技术边界)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
 
 ## 4. Go 后端
 
@@ -161,7 +163,7 @@ frontend/
       store.ts                   #   局部状态（按需，Zustand）
     features/operation/param-form/  # 按 ModelProfile.param_schema 渲染参数表单
     features/canvas/
-      engine/                    #   React Flow 装配、视口、LOD、视频播放管控
+      engine/                    #   BeefTV DOM/SVG/rAF 核心、视口、LOD、媒体播放管控
       document/                  #   画布文档类型、命令、撤销重做、同步与冲突处理
       nodes/                     #   NodeShell 与三类节点
       panels/                    #   工具栏、创建菜单、设置弹层、编辑弹窗

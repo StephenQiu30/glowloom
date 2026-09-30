@@ -1,0 +1,25 @@
+/* Core composited world layers and rails adapted from BeefTV globals.css; scoped here. */
+.canvas-editor .canvas-world-layer {
+  transform: translate3d(var(--canvas-live-x), var(--canvas-live-y), 0);
+  transform-origin: 0 0;
+}
+.canvas-editor .canvas-world-raster-layer {
+  transform: scale(var(--canvas-committed-scale));
+  transform-origin: 0 0;
+}
+.canvas-editor [data-canvas-viewport-interacting="true"] .canvas-world-layer {
+  will-change: transform;
+}
+.canvas-editor [data-canvas-selection-preview="include"] {
+  outline: 2px solid var(--foreground);
+}
+.canvas-editor [data-canvas-selection-preview="remove"] {
+  outline: none;
+}
+.canvas-editor .canvas-cursor-select {
+  cursor: crosshair;
+}
+.canvas-editor [data-canvas-node-dragging="true"] video,
+.canvas-editor [data-canvas-node-dragging="true"] audio {
+  pointer-events: none;
+}

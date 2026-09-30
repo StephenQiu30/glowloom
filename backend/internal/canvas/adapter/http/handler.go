@@ -1,4 +1,4 @@
-// Package http exposes note and annotation canvas commands without business-generation capabilities.
+// Package http exposes resource canvas commands without business-generation capabilities.
 package http
 
 import (
@@ -12,6 +12,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
 	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
 )
 
@@ -32,6 +33,8 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 	group.GET("/projects/:pid/canvases", h.List)
 	group.POST("/projects/:pid/canvases", h.Create)
 	group.GET("/canvases/:id", h.Get)
+	group.PATCH("/canvases/:id", h.Rename)
+	group.DELETE("/canvases/:id", h.Delete)
 	group.POST("/canvases/:id/commands", h.Commands)
 }
 
@@ -62,7 +65,7 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 // Create creates an empty project canvas.
-// @Summary 创建备注画布
+// @Summary 创建画布
 // @ID createCanvas
 // @Accept json
 // @Tags canvases
@@ -121,7 +124,7 @@ func (h *Handler) Get(c *gin.Context) {
 	c.JSON(200, doc)
 }
 
-// Commands atomically applies note, layout, annotation and viewport edits.
+// Commands atomically applies resource, layout, annotation and viewport edits.
 // @Summary 提交画布命令批次
 // @ID applyCanvasCommands
 // @Accept json
@@ -174,12 +177,12 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.As(err, &conflict):
 		httpapi.WriteProblem(c, http.StatusConflict, "revision_conflict", map[string]any{"current_revision": conflict.CurrentRevision})
-	case errors.Is(err, application.ErrNotFound):
-		httpapi.WriteProblem(c, 404, "not_found", nil)
+	case errors.Is(err, application.ErrNotFound), errors.Is(err, mediaapp.ErrNotFound):
+		httpapi.WriteProblem(c, 404, "not_found", meta)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
-		httpapi.WriteProblem(c, 422, "idempotency_conflict", nil)
+		httpapi.WriteProblem(c, 422, "idempotency_key_reused", nil)
 	case errors.Is(err, domain.ErrUnsupportedCommand):
 		httpapi.WriteProblem(c, 422, "unsupported_command", meta)
 	case errors.Is(err, domain.ErrInvalidCommand):
@@ -187,4 +190,74 @@ func writeError(c *gin.Context, err error) {
 	default:
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
+}
+
+// Rename changes document metadata under an optimistic revision.
+// @Summary 修改画布名称
+// @ID renameCanvas
+// @Tags canvases
+// @Accept json
+// @Produce json
+// @Param id path string true "画布UUID"
+// @Param Idempotency-Key header string true "UUID"
+// @Param X-CSRF-Token header string true "CSRF令牌"
+// @Param body body application.RenameInput true "当前修订与名称"
+// @Success 200 {object} domain.Document
+// @Failure 401 {object} httpapi.Problem
+// @Failure 403 {object} httpapi.Problem
+// @Failure 404 {object} httpapi.Problem
+// @Failure 409 {object} httpapi.Problem
+// @Failure 422 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
+// @Router /api/canvases/{id} [patch]
+func (h *Handler) Rename(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	var input application.RenameInput
+	if !httpapi.Decode(c, &input) {
+		return
+	}
+	result, err := h.service.Rename(c.Request.Context(), identityhttp.Principal(c), id, c.GetHeader("Idempotency-Key"), input)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(200, result)
+}
+
+// Delete removes the canvas, retaining referenced media facts.
+// @Summary 删除画布
+// @ID deleteCanvas
+// @Tags canvases
+// @Accept json
+// @Produce json
+// @Param id path string true "画布UUID"
+// @Param Idempotency-Key header string true "UUID"
+// @Param X-CSRF-Token header string true "CSRF令牌"
+// @Param body body application.DeleteInput true "当前修订"
+// @Success 200 {object} application.DeleteResult
+// @Failure 401 {object} httpapi.Problem
+// @Failure 403 {object} httpapi.Problem
+// @Failure 404 {object} httpapi.Problem
+// @Failure 409 {object} httpapi.Problem
+// @Failure 422 {object} httpapi.Problem
+// @Failure 503 {object} httpapi.Problem
+// @Router /api/canvases/{id} [delete]
+func (h *Handler) Delete(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	var input application.DeleteInput
+	if !httpapi.Decode(c, &input) {
+		return
+	}
+	result, err := h.service.Delete(c.Request.Context(), identityhttp.Principal(c), id, c.GetHeader("Idempotency-Key"), input)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(200, result)
 }

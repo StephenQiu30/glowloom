@@ -1,7 +1,7 @@
 import { Suspense } from "react";
-import { LiveWorkspace } from "@/features/canvas/live-workspace";
+import { CanvasWorkspace } from "@/features/canvas/workspace";
 
-export const metadata = { title: "真实备注画布 · Lanverse" };
+export const metadata = { title: "无限画布 · Lanverse" };
 export default function CanvasPage() {
   return (
     <Suspense
@@ -11,7 +11,7 @@ export default function CanvasPage() {
         </main>
       }
     >
-      <LiveWorkspace />
+      <CanvasWorkspace />
     </Suspense>
   );
 }

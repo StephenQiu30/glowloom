@@ -52,7 +52,7 @@ it("blocks draft mutation and selection in readonly mode while preserving compar
 });
 
 it("preserves the candidate when retrying a failed read", async () => {
-  const { PreviewBoundary } = await import("./poc-components");
+  const { PreviewBoundary } = await import("./workbench-components");
   search.value = "state=error&candidate=b";
   render(
     <PreviewBoundary>
@@ -71,7 +71,7 @@ it("preserves the candidate when retrying a failed read", async () => {
 });
 
 it("falls back to the normal preview for an unsupported state parameter", async () => {
-  const { PreviewBoundary } = await import("./poc-components");
+  const { PreviewBoundary } = await import("./workbench-components");
   search.value = "state=constructor";
   render(
     <PreviewBoundary>

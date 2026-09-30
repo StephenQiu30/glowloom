@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -157,6 +158,18 @@ func (c *Client) Remove(ctx context.Context, key string) error {
 		return fmt.Errorf("remove media object: %w", err)
 	}
 	return nil
+}
+
+// PresignGet grants bounded access to one safe, server-selected object key.
+func (c *Client) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	if c == nil || c.sdk == nil || !validKey(key) || ttl < time.Second || ttl > 15*time.Minute {
+		return "", ErrInvalidObject
+	}
+	signed, err := c.sdk.PresignedGetObject(ctx, c.bucket, key, ttl, url.Values{})
+	if err != nil {
+		return "", fmt.Errorf("sign media preview: %w", err)
+	}
+	return signed.String(), nil
 }
 
 func validKey(key string) bool {

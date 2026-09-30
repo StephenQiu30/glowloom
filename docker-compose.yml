@@ -5,7 +5,10 @@ name: lanverse
 
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        LV_API_BASE_URL: ${LV_API_BASE_URL:-http://backend-api:8080}
     image: lanverse/frontend:local
     ports:
       - "${LV_FRONTEND_PORT:-3000}:3000"
@@ -18,6 +21,7 @@ services:
       LV_ENV: ${LV_ENV:-local}
       LV_LOG_LEVEL: ${LV_LOG_LEVEL:-info}
       LV_HTTP_ADDR: ":8080"
+      LV_PUBLIC_ORIGIN: ${LV_PUBLIC_ORIGIN:?Set LV_PUBLIC_ORIGIN to the browser origin}
       LV_DB_DSN: ${LV_DB_DSN:?Set LV_DB_DSN for the backend API}
       LV_REDIS_URL: ${LV_REDIS_URL:?Set LV_REDIS_URL for the backend API}
       LV_SESSION_IDLE_TTL: ${LV_SESSION_IDLE_TTL:-12h}

@@ -25,7 +25,7 @@ import {
   DataTable,
   EmptyMessage,
   usePreviewQuery,
-} from "./poc-components";
+} from "./workbench-components";
 
 const categories = {
   characters: "角色",
@@ -216,9 +216,9 @@ export function MediaPage() {
                 </DialogDescription>
               </DialogHeader>
               <Field>
-                <FieldLabel htmlFor="upload-poc">选择本地素材</FieldLabel>
+                <FieldLabel htmlFor="upload-media">选择本地素材</FieldLabel>
                 <Input
-                  id="upload-poc"
+                  id="upload-media"
                   type="file"
                   accept="image/*,video/*,audio/*"
                   onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")}
@@ -262,7 +262,7 @@ export function MediaPage() {
             <Panel key={m.id} title={m.name}>
               <div className="relative mb-5 aspect-video overflow-hidden rounded-lg bg-muted">
                 <Image
-                  src="/poc/scene.svg"
+                  src="/examples/media/scene.svg"
                   alt="内置素材样例：山景插画，非真实生成产物"
                   fill
                   sizes="(max-width: 768px) 90vw, 30vw"
@@ -296,13 +296,13 @@ export function MediaPage() {
                   <DialogHeader>
                     <DialogTitle>{m.name}</DialogTitle>
                     <DialogDescription>
-                      {m.origin} · {m.id} · 所有媒体是内置 PoC 样例。
+                      {m.origin} · {m.id} · 所有媒体是内置演示素材。
                     </DialogDescription>
                   </DialogHeader>
                   {m.type === "video" ? (
                     <video
-                      src="/poc/preview.mp4"
-                      poster="/poc/scene.svg"
+                      src="/examples/media/preview.mp4"
+                      poster="/examples/media/scene.svg"
                       controls
                       preload="none"
                       className="aspect-video w-full rounded-lg"
@@ -312,7 +312,7 @@ export function MediaPage() {
                     <Image
                       width={560}
                       height={340}
-                      src="/poc/scene.svg"
+                      src="/examples/media/scene.svg"
                       alt="内置山景插画样例"
                       className="w-full rounded-lg"
                     />

@@ -12,6 +12,7 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 )
 
 var (
@@ -49,12 +50,37 @@ type Result struct {
 	Results []CommandResult `json:"results"`
 }
 
+// RenameInput renames a document at its current revision.
+type RenameInput struct {
+	ExpectedRevision int64  `json:"expected_revision"`
+	Name             string `json:"name"`
+}
+
+// DeleteInput soft-deletes a canvas without deleting referenced media.
+type DeleteInput struct {
+	ExpectedRevision int64 `json:"expected_revision"`
+}
+
+// DeleteResult is the durable idempotent deletion result.
+type DeleteResult struct {
+	ID       uuid.UUID `json:"id"`
+	Revision int64     `json:"revision"`
+	Deleted  bool      `json:"deleted"`
+}
+
+// MediaReader is the small application boundary needed for new media references.
+type MediaReader interface {
+	Reference(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (mediaapp.AssetSummary, error)
+}
+
 // Store is the transaction boundary that rechecks project access and persists replay results.
 type Store interface {
 	List(context.Context, identityapp.Principal, uuid.UUID) ([]domain.Document, error)
 	Get(context.Context, identityapp.Principal, uuid.UUID) (domain.Document, error)
 	Create(context.Context, identityapp.Principal, uuid.UUID, string, CreateInput) (domain.Document, error)
 	Execute(context.Context, identityapp.Principal, uuid.UUID, string, CommandsInput) (Result, error)
+	Rename(context.Context, identityapp.Principal, uuid.UUID, string, RenameInput) (domain.Document, error)
+	Delete(context.Context, identityapp.Principal, uuid.UUID, string, DeleteInput) (DeleteResult, error)
 }
 
 // Service validates transport-independent input before entering persistence.
@@ -94,3 +120,20 @@ func (s *Service) Execute(ctx context.Context, a identityapp.Principal, id uuid.
 	return s.store.Execute(ctx, a, id, key, input)
 }
 func validKey(key string) bool { id, err := uuid.Parse(key); return err == nil && id != uuid.Nil }
+
+// Rename validates bounded user-facing metadata before the optimistic transaction.
+func (s *Service) Rename(ctx context.Context, a identityapp.Principal, id uuid.UUID, key string, input RenameInput) (domain.Document, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	if !validKey(key) || input.ExpectedRevision < 1 || input.Name == "" || !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) > 128 {
+		return domain.Document{}, domain.ErrInvalidCommand
+	}
+	return s.store.Rename(ctx, a, id, key, input)
+}
+
+// Delete removes only the current canvas; media remains owned by its original context.
+func (s *Service) Delete(ctx context.Context, a identityapp.Principal, id uuid.UUID, key string, input DeleteInput) (DeleteResult, error) {
+	if !validKey(key) || input.ExpectedRevision < 1 {
+		return DeleteResult{}, domain.ErrInvalidCommand
+	}
+	return s.store.Delete(ctx, a, id, key, input)
+}

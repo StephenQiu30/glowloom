@@ -4,7 +4,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -15,15 +14,16 @@ import (
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
 	workspacedomain "github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
 var (
 	// ErrNotFound hides missing and out-of-project media records.
-	ErrNotFound = errors.New("media record not found")
+	ErrNotFound = application.ErrNotFound
 	// ErrUnavailable means the store has no database handle.
-	ErrUnavailable = errors.New("media store unavailable")
+	ErrUnavailable = application.ErrUnavailable
 	// ErrProjectStateConflict means an inactive project cannot accept new media.
 	ErrProjectStateConflict = workspacedomain.ErrProjectStateConflict
 )
@@ -111,6 +111,7 @@ func (s *Store) FindAsset(ctx context.Context, actor identityapp.Principal, proj
 			JOIN workspace.project AS p ON p.id = a.project_id
 			WHERE a.id = ?::uuid AND a.project_id = ?::uuid AND p.org_id = ?::uuid
 			  AND NOT a.is_delete AND NOT p.is_delete
+			FOR SHARE OF a, p
 		`, assetID.String(), projectID.String(), actor.OrgID.String()).Scan(&row)
 		if result.Error != nil {
 			return fmt.Errorf("read media asset: %w", result.Error)
@@ -369,4 +370,45 @@ func (r renditionRow) domain() domain.Rendition {
 		Width: r.Width, Height: r.Height, ByteSize: r.ByteSize,
 		CreateTime: r.CreateTime, UpdateTime: r.UpdateTime, IsDelete: r.IsDelete,
 	}
+}
+
+// ListReadyAssets uses an ID keyset after rechecking current actor and project visibility.
+func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, kind string, after uuid.UUID, limit int) ([]domain.MediaAsset, error) {
+	if s == nil || s.db == nil {
+		return nil, ErrUnavailable
+	}
+	var rows []assetRow
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireCurrentActor(tx, actor); err != nil {
+			return err
+		}
+		if err := requireProject(tx, actor, projectID, false); err != nil {
+			return err
+		}
+		query := `SELECT * FROM media.media_asset WHERE project_id=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND kind IN ('image','video','audio')`
+		args := []any{projectID}
+		if kind != "" {
+			query += ` AND kind=?`
+			args = append(args, kind)
+		}
+		if after != uuid.Nil {
+			query += ` AND id<?`
+			args = append(args, after)
+		}
+		query += ` ORDER BY id DESC LIMIT ?`
+		args = append(args, limit)
+		return tx.Raw(query, args...).Scan(&rows).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	assets := make([]domain.MediaAsset, 0, len(rows))
+	for _, r := range rows {
+		a := r.domain()
+		if err := a.Validate(); err != nil {
+			return nil, fmt.Errorf("validate available media: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	return assets, nil
 }

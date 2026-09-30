@@ -43,6 +43,8 @@ const adminSections = [
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  // 正式画布提供自己的全屏工作区与真实项目导航。
+  if (/^\/projects\/[^/]+\/canvas$/.test(pathname)) return <>{children}</>;
   const episodeId = episodes.some((e) => e.id === pathname.split("/")[4])
     ? pathname.split("/")[4]
     : "ep-01";
@@ -53,7 +55,10 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const admin = pathname.startsWith("/admin");
   const nav = project
     ? projectSections.map(([path, label]) => ({
-        href: `/projects/${project.id}${path ? `/${path.replace("ep-01", episodeId)}` : ""}`,
+        href:
+          path === "canvas"
+            ? "/canvas"
+            : `/projects/${project.id}${path ? `/${path.replace("ep-01", episodeId)}` : ""}`,
         label,
       }))
     : admin
@@ -88,6 +93,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <nav aria-label="主要导航" className="flex gap-1">
             {[
               ["/projects", "项目", Folder],
+              ["/canvas", "画布", Folder],
               ["/tasks", "任务", ListChecks],
               ["/admin/users", "管理", Settings2],
             ].map(([href, label, Icon]) => {
@@ -114,7 +120,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="hidden sm:inline-flex">
-            内部 PoC
+            演示模式
           </Badge>
           <Dialog>
             <DialogTrigger asChild>
