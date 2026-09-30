@@ -17,6 +17,7 @@ func TestLoadFromDotEnvFile(t *testing.T) {
 	}
 	t.Setenv("LV_ENV_FILE", path)
 	t.Setenv("LV_ENV", "prod")
+	t.Setenv("LV_PUBLIC_ORIGIN", "https://lanverse.example")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -71,6 +72,7 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("LV_ENV", "staging")
+	t.Setenv("LV_PUBLIC_ORIGIN", "https://lanverse.example")
 	t.Setenv("LV_HTTP_ADDR", ":9090")
 	t.Setenv("LV_WORKER_HEALTH_ADDR", ":9091")
 	t.Setenv("LV_RELAY_HEALTH_ADDR", ":9092")
@@ -85,7 +87,7 @@ func TestLoadFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := config.Config{Env: "staging", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/lanverse", RedisURL: "redis://localhost:6379/1", SessionIdleTTL: 12 * time.Hour, SessionAbsoluteTTL: 7 * 24 * time.Hour, KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "lanverse-staging"}
+	want := config.Config{Env: "staging", PublicOrigin: "https://lanverse.example", HTTPAddr: ":9090", WorkerHealthAddr: ":9091", RelayHealthAddr: ":9092", LogLevel: "debug", DBDSN: "postgres://localhost/lanverse", RedisURL: "redis://localhost:6379/1", SessionIdleTTL: 12 * time.Hour, SessionAbsoluteTTL: 7 * 24 * time.Hour, KafkaBrokers: "localhost:9092", TemporalAddr: "localhost:7233", TemporalNamespace: "lanverse-staging"}
 	if cfg != want {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
@@ -118,6 +120,7 @@ func TestLoadMediaResultDownloadPolicy(t *testing.T) {
 		t.Fatal("Load() did not preserve media result policy")
 	}
 	t.Setenv("LV_ENV", "prod")
+	t.Setenv("LV_PUBLIC_ORIGIN", "https://lanverse.example")
 	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
 		t.Fatalf("production loopback policy error = %v, want ErrInvalid", err)
 	}

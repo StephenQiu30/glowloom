@@ -7,7 +7,7 @@
 | 里程碑 | M5（[PLN-01](01-实施路线与交付计划.md)） |
 | BACKLOG Epic | E-37（[BACKLOG](../../BACKLOG.md)） |
 | 前置计划 | E-18（[BACKLOG](../../BACKLOG.md)）、E-19（[BACKLOG](../../BACKLOG.md)）、E-21（[BACKLOG](../../BACKLOG.md)）、E-36（[BACKLOG](../../BACKLOG.md)） |
-| 联调 | 无 |
+| 联调 | E-36-04 AI 画布助手在 E-37 提案合同就绪后接入 |
 | 状态 | 待办 |
 
 ## 1. 目标与完成定义
@@ -16,7 +16,7 @@
 
 ## 2. 前置条件
 
-- 前置 Epic：E-18（[BACKLOG](../../BACKLOG.md)）、E-19（[BACKLOG](../../BACKLOG.md)）、E-21（[BACKLOG](../../BACKLOG.md)）、E-36（[BACKLOG](../../BACKLOG.md)）；按 [BACKLOG](../../BACKLOG.md) 对应里程碑的“Epic 实施顺序”执行。
+- 前置合同：E-18/19 镜头编辑、E-21 报价/会话额度、E-36 布局与命令合同。无需 E-36-04 AI 助手或整个 E-36 先验收；先落实 E-37-02/04 的提案合同，再联调 E-36-04，消除 Canvas/Agent 完成循环。
 - 底座与外部条件：PLN-01 对应里程碑的命令层、真实依赖与运行环境；测试数据为近景修改提案、10 镜头生成草稿、断线续传和恶意台词。
 - 待确认：REQ-37-Q1、DES-39-Q1、DES-39-Q2、DES-39-Q3、DES-39-Q4。确认前不把默认方案写成已批准结论。
 

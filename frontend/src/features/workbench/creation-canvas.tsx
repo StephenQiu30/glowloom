@@ -109,9 +109,14 @@ export function CreationCanvas({ projectId }: { projectId: string }) {
         title="把创作关系放在一张画布上。"
         description="拖动画布和节点，查看剧本、资产、镜头、候选与任务的关系。位置只在本页保留。"
         action={
-          <Button variant="secondary" asChild>
-            <Link href="/poc/canvas">独立性能画布</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href="/canvas">打开真实备注画布</Link>
+            </Button>
+            <Button variant="secondary" asChild>
+              <Link href="/poc/canvas">独立性能画布</Link>
+            </Button>
+          </div>
         }
       />
       <div

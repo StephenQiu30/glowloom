@@ -17,6 +17,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+
+	_ "github.com/StephenQiu30/lanverse/backend/docs"
 )
 
 // Injectors from wire.go:
@@ -53,7 +55,14 @@ func initializeAPI(ctx context.Context, cfg config.Config, logger *zap.Logger) (
 		return nil, nil, err
 	}
 	readyCheck := provideReadyCheck(connection, redisconnConnection, temporalconnConnection, client)
-	server := provideAPIServer(cfg, logger, readyCheck, tracerProvider)
+	server, err := provideAPIServer(cfg, logger, readyCheck, tracerProvider, connection, redisconnConnection)
+	if err != nil {
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
 	return server, func() {
 		cleanup4()
 		cleanup3()

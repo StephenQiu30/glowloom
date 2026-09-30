@@ -1,0 +1,658 @@
+basePath: /
+definitions:
+  application.CommandResult:
+    properties:
+      ok:
+        type: boolean
+    type: object
+  application.CommandsInput:
+    properties:
+      commands:
+        items:
+          $ref: '#/definitions/domain.Command'
+        type: array
+      expected_revision:
+        type: integer
+    type: object
+  application.CreateInput:
+    properties:
+      name:
+        type: string
+      scope:
+        type: object
+    type: object
+  application.Result:
+    properties:
+      edges:
+        items:
+          $ref: '#/definitions/domain.Edge'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      nodes:
+        items:
+          $ref: '#/definitions/domain.Node'
+        type: array
+      project_id:
+        type: string
+      results:
+        items:
+          $ref: '#/definitions/application.CommandResult'
+        type: array
+      revision:
+        type: integer
+      scope:
+        type: object
+      viewport:
+        $ref: '#/definitions/domain.Viewport'
+    type: object
+  domain.Command:
+    properties:
+      config:
+        $ref: '#/definitions/domain.TextConfig'
+      edge:
+        $ref: '#/definitions/domain.Edge'
+      id:
+        type: string
+      ids:
+        items:
+          type: string
+        type: array
+      moves:
+        items:
+          $ref: '#/definitions/domain.Move'
+        type: array
+      nodes:
+        items:
+          $ref: '#/definitions/domain.Node'
+        type: array
+      type:
+        type: string
+      viewport:
+        $ref: '#/definitions/domain.Viewport'
+    type: object
+  domain.Document:
+    properties:
+      edges:
+        items:
+          $ref: '#/definitions/domain.Edge'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      nodes:
+        items:
+          $ref: '#/definitions/domain.Node'
+        type: array
+      project_id:
+        type: string
+      revision:
+        type: integer
+      scope:
+        type: object
+      viewport:
+        $ref: '#/definitions/domain.Viewport'
+    type: object
+  domain.Edge:
+    properties:
+      binding:
+        type: object
+      edge_type:
+        type: string
+      id:
+        type: string
+      role:
+        type: string
+      source_node_id:
+        type: string
+      target_node_id:
+        type: string
+    type: object
+  domain.Move:
+    properties:
+      id:
+        type: string
+      x:
+        type: number
+      "y":
+        type: number
+    type: object
+  domain.Node:
+    properties:
+      config:
+        $ref: '#/definitions/domain.TextConfig'
+      height:
+        type: number
+      id:
+        type: string
+      last_operation_id:
+        type: string
+      node_action:
+        type: string
+      node_type:
+        type: string
+      parent_id:
+        type: string
+      ref_id:
+        type: string
+      ref_type:
+        type: string
+      width:
+        type: number
+      x:
+        type: number
+      "y":
+        type: number
+      z_index:
+        type: integer
+    type: object
+  domain.TextConfig:
+    properties:
+      text:
+        type: string
+    type: object
+  domain.Viewport:
+    properties:
+      x:
+        type: number
+      "y":
+        type: number
+      zoom:
+        type: number
+    type: object
+  http.LoginRequest:
+    properties:
+      login_name:
+        type: string
+      password:
+        type: string
+    type: object
+  http.PasswordRequest:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        type: string
+    type: object
+  http.PasswordResponse:
+    properties:
+      must_change_password:
+        type: boolean
+      revision:
+        type: integer
+    type: object
+  http.ProjectResponse:
+    properties:
+      aspect_ratio:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      revision:
+        type: integer
+      status:
+        type: string
+      style_type:
+        type: string
+    type: object
+  http.SessionResponse:
+    properties:
+      must_change_password:
+        type: boolean
+      user:
+        $ref: '#/definitions/http.UserResponse'
+    type: object
+  http.UserResponse:
+    properties:
+      display_name:
+        type: string
+      id:
+        type: string
+      login_name:
+        type: string
+      must_change_password:
+        type: boolean
+      org_id:
+        type: string
+      role:
+        type: string
+    type: object
+  httpapi.Problem:
+    properties:
+      code:
+        type: string
+      detail:
+        type: string
+      meta:
+        additionalProperties: {}
+        type: object
+      request_id:
+        type: string
+      status:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  internal_canvas_adapter_http.ListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.Document'
+        type: array
+      next_cursor:
+        type: string
+    type: object
+  internal_workspace_adapter_http.ListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/http.ProjectResponse'
+        type: array
+      next_cursor:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Public identity, project query and note canvas commands.
+  title: Lanverse API
+  version: "0.1"
+paths:
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      operationId: login
+      parameters:
+      - description: 登录请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SessionResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 密码登录
+      tags:
+      - auth
+  /api/auth/logout:
+    post:
+      operationId: logout
+      parameters:
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 会话CSRF令牌
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 登出
+      tags:
+      - auth
+  /api/auth/me:
+    get:
+      operationId: currentUser
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.SessionResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 当前账号
+      tags:
+      - auth
+  /api/auth/password:
+    post:
+      consumes:
+      - application/json
+      operationId: changePassword
+      parameters:
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 会话CSRF令牌
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: 当前与新密码
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/http.PasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.PasswordResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 修改本人密码
+      tags:
+      - auth
+  /api/canvases/{id}:
+    get:
+      operationId: getCanvas
+      parameters:
+      - description: 画布UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Document'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 获取画布文档
+      tags:
+      - canvases
+  /api/canvases/{id}/commands:
+    post:
+      consumes:
+      - application/json
+      operationId: applyCanvasCommands
+      parameters:
+      - description: 画布UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: CSRF令牌
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: 乐观版本与命令
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/application.CommandsInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/application.Result'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 提交画布命令批次
+      tags:
+      - canvases
+  /api/projects:
+    get:
+      operationId: listProjects
+      parameters:
+      - description: 分页大小，上限200
+        in: query
+        name: limit
+        type: integer
+      - description: 不透明游标
+        in: query
+        name: cursor
+        type: string
+      - description: 名称检索
+        in: query
+        name: q
+        type: string
+      - description: active或archived
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 有权项目列表
+      tags:
+      - projects
+  /api/projects/{pid}/canvases:
+    get:
+      operationId: listCanvases
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_canvas_adapter_http.ListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 项目画布列表
+      tags:
+      - canvases
+    post:
+      consumes:
+      - application/json
+      operationId: createCanvas
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: CSRF令牌
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
+      - description: 画布名称与空scope
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/application.CreateInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Document'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/httpapi.Problem'
+      summary: 创建备注画布
+      tags:
+      - canvases
+swagger: "2.0"

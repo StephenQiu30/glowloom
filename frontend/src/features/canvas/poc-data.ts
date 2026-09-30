@@ -4,7 +4,36 @@ export type PocCardData = {
   kind: "image" | "video" | "text";
   title: string;
   playing: boolean;
+  src?: string;
+  localMedia?: boolean;
 };
+
+export type PocMedia = { kind: "image" | "video"; url: string };
+
+export function mediaSelectionError(
+  files: Pick<File, "type" | "size">[],
+): string | null {
+  if (files.length > 40) return "最多选择 40 个素材。";
+  if (
+    files.some(
+      (file) =>
+        ![
+          "image/png",
+          "image/jpeg",
+          "image/webp",
+          "image/avif",
+          "video/mp4",
+          "video/webm",
+        ].includes(file.type),
+    )
+  )
+    return "请选择 PNG、JPEG、WebP、AVIF 图片或 MP4、WebM 视频。";
+  if (files.some((file) => file.size > 100 * 1024 * 1024))
+    return "单个素材不能超过 100 MB。";
+  if (files.reduce((bytes, file) => bytes + file.size, 0) > 300 * 1024 * 1024)
+    return "素材总大小不能超过 300 MB。";
+  return null;
+}
 
 export type PocNode = Node<PocCardData, "pocCard">;
 
@@ -12,6 +41,7 @@ export type PocNode = Node<PocCardData, "pocCard">;
 export function makePocGraph(
   nodeCount: number,
   edgeCount: number,
+  media: PocMedia[] = [],
 ): { nodes: PocNode[]; edges: Edge[] } {
   if (
     !Number.isInteger(nodeCount) ||
@@ -32,10 +62,14 @@ export function makePocGraph(
 
   let images = 0;
   let playing = 0;
+  let videos = 0;
+  const imageSources = media.filter((item) => item.kind === "image");
+  const videoSources = media.filter((item) => item.kind === "video");
   const nodes: PocNode[] = Array.from({ length: nodeCount }, (_, index) => {
     let kind: PocCardData["kind"] = "text";
     if (videoIndices.has(index)) {
       kind = "video";
+      videos += 1;
     } else if (images < imageCount) {
       kind = "image";
       images += 1;
@@ -55,6 +89,18 @@ export function makePocGraph(
         kind,
         title: `${kind === "image" ? "场景画面" : kind === "video" ? "镜头预览" : "创作笔记"} ${String(index + 1).padStart(3, "0")}`,
         playing: shouldPlay,
+        src:
+          kind === "image"
+            ? imageSources[(images - 1) % imageSources.length]?.url
+            : kind === "video"
+              ? videoSources[(videos - 1) % videoSources.length]?.url
+              : undefined,
+        localMedia:
+          kind === "image"
+            ? imageSources.length > 0
+            : kind === "video"
+              ? videoSources.length > 0
+              : false,
       },
     };
   });

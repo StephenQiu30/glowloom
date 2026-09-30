@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ var ErrInvalid = errors.New("invalid configuration")
 type Config struct {
 	Env                       string
 	HTTPAddr                  string
+	PublicOrigin              string
 	WorkerHealthAddr          string
 	RelayHealthAddr           string
 	LogLevel                  string
@@ -50,6 +52,7 @@ func Load() (Config, error) {
 	v.AutomaticEnv()
 	v.SetDefault("LV_ENV", "local")
 	v.SetDefault("LV_HTTP_ADDR", ":8080")
+	v.SetDefault("LV_PUBLIC_ORIGIN", "http://localhost:3000")
 	v.SetDefault("LV_WORKER_HEALTH_ADDR", ":8081")
 	v.SetDefault("LV_RELAY_HEALTH_ADDR", ":8082")
 	v.SetDefault("LV_LOG_LEVEL", "info")
@@ -66,6 +69,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		Env:                       strings.TrimSpace(v.GetString("LV_ENV")),
 		HTTPAddr:                  strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
+		PublicOrigin:              strings.TrimSpace(v.GetString("LV_PUBLIC_ORIGIN")),
 		WorkerHealthAddr:          strings.TrimSpace(v.GetString("LV_WORKER_HEALTH_ADDR")),
 		RelayHealthAddr:           strings.TrimSpace(v.GetString("LV_RELAY_HEALTH_ADDR")),
 		LogLevel:                  strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
@@ -93,6 +97,9 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if err := ValidatePublicOrigin(c.PublicOrigin, c.Env); err != nil {
+		return err
+	}
 	if c.MediaAllowTestLoopbackTLS && c.Env != "local" {
 		return fmt.Errorf("%w: LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS is local-only", ErrInvalid)
 	}
@@ -116,6 +123,18 @@ func (c Config) validate() error {
 	}
 	if c.SessionAbsoluteTTL < c.SessionIdleTTL {
 		return fmt.Errorf("%w: LV_SESSION_ABSOLUTE_TTL must be at least LV_SESSION_IDLE_TTL", ErrInvalid)
+	}
+	return nil
+}
+
+// ValidatePublicOrigin requires a configured browser origin, HTTPS outside local development.
+func ValidatePublicOrigin(origin, env string) error {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("%w: LV_PUBLIC_ORIGIN must be an exact HTTP origin", ErrInvalid)
+	}
+	if u.Scheme == "http" && (env != "local" || (u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" && u.Hostname() != "::1")) {
+		return fmt.Errorf("%w: HTTP public origin is local-loopback only", ErrInvalid)
 	}
 	return nil
 }
