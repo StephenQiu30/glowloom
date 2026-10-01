@@ -143,3 +143,22 @@
 - 副本浏览器实际加载图片 160×90、播放视频 2 秒及音频 3 秒、WebGL2 渲染自包含 GLB；导演场景 3D、图库与封面实际可读，时间线实际播放视频/音频/图片且无播放器错误。390×844 视口页面宽度 390、对话框 358，无横向溢出；刷新恢复同任务、明确副本入口和主画布 7 个节点。全部取消/未知写入/来源隔离的数据库与私有存储证据独立保留，未宣称全部取消路径已做浏览器验收。
 
 固定 Copy 快照在 Go 1.26.8 下 `gofmt/goimports`、`go vet ./...`、`golangci-lint run ./...`（0 issues）、`govulncheck ./...`（无可达/导入包漏洞，一个未调用 required module 提示）通过。全树 Race 顶层 359 通过/318 缺专用环境跳过；实际隔离 PostgreSQL、私有 MinIO、真实 Temporal 与四项正式 Router/Swagger 合同的定向 Race 27 顶层通过、无跳过。前端 68 文件/353 测试、全量 ESLint、生成接口与所属格式检查、TypeScript 及 Next.js 生产构建通过。Wire/Swag 固定快照重新生成逐字一致。CI 增加真实 PostgreSQL/私有对象 Copy 门禁；真实 Temporal 回归依赖专用环境，不能把通用 CI 中跳过视为服务验收。
+
+第七阶段提交 `29ce5664c6ad2f712e59c71ea1ad506441a98466` 已推送 main，CI `36919525973` 的 backend/frontend/images 全部完成且通过。
+
+## 第八阶段：原生视频深度、人工审核与恢复（2026-10-02）
+
+此阶段完成固定 Small/MPS profile 的视频节点深度处理闭环。完整来源迁移仍继续，项目目录、正式剧本/分集/镜头、历史对话、分类及内容包等未完成项不因本阶段通过而关闭。
+
+- `202610020030_media_depth` 在原业务 PostgreSQL（OID 345144296）核验前置结构和实际运行任务后单事务应用，up SHA256 `e38543934eaa1ecc1b5a531033aee504da4d00cae07674099dc3ba89f62340da`；实际不可变列 ACL 保持。API、worker、relay 使用同一已验证二进制，三个 health 为 200；正式 Router/在线 Swagger 为 78 个 operationId，九个 Depth 入口和生成客户端逐字一致。沿用既有 Temporal namespace `lanverse-local`，没有新建或切换 namespace。
+- 固定 VDA/Small SHA 和 18 文件运行包见设计 §14、许可页及部署文档 §6.3。Python 3.11.15/Torch 2.14.0/MPS 实际执行；唯一原生 Runner 串行，8 GiB 为采样监控上限，不能当操作系统硬隔离。2 秒、15 秒、最大 453 帧/960×960 输入均完整解码、输出且实际停止，裁剪运行包前后结果字节相同。本阶段不提供 CPU/Linux/Windows 的真实原生验收。
+- 正式画布源项目 `efea9b62-33cf-41ff-af67-a72d897d99a3`、画布 `7a61890a-58da-4cd0-a96c-6ad953270d26`、视频节点 `ea5cfb98-81d2-44ef-b295-d59fa29083e4`。主 job `bebcf96d-b0fa-4640-ab7d-b4f89fe17267` 在 attempt 1/revision 14 成功；结果资产 `d65bcbef-0aad-53e3-a920-4360978b773c` 为 658532 字节，SHA256 `983e9debd1d510646fb05912c3cc0b9f8f78131180228e7c695db70235207213`。真实字节为 1920×1080、H.264/yuv420p、无音轨、25fps/50 帧/2000ms，未将低于 30fps 的输入强制报为 30fps。独立私有读取/ffprobe/全片解码与实际浏览器 0.083 秒至 2 秒 ended/50 decoded frames 相互核对。
+- 审核前正式下载返回 409；实际浏览器明确 SHA/revision 审核后下载同 SHA 的 MP4。采纳经正式画布命令从 revision 2 到 3，生成唯一结果节点 `319e867d-82e5-4e1b-bd00-1f6f04f9f512` 和来源边 `2b3c0681-07b9-49c5-8e01-d29a637df679`。刷新及再次采纳保持 revision 3、2 节点/1 边；源节点属性和原视频字节 SHA `f63362f4f08e195198d2818247f6743d4a1fcbae2e79349be0ae4459e7c2e6d6` 不变。
+- 第二 job `96b8f834-e7bf-4b2c-8ff8-54f47c912818` 实际 running 后由页面取消，attempt 1/revision 13 为 cancelled、无结果、execution_unconfirmed=false；同 job 明确重试 attempt 2，实际完整预览/审核后 revision 27 成功。此浏览器实验没有瞬时观察到原生 child PID，不能单独当进程树停止证据；独立真实模型/PG 回归确实观察拥有的原生 PID 和停止事实。
+- 浏览器在审核发送前阻断 POST，刷新仍保存原 actor/org/origin、UUID key、revision 与 SHA，人工同键核验后成功；没有证明服务器已审核而响应丢失。第三 job `3b66283a-faa2-4f46-a390-296dd68b42ab` 复现禁用旧审核按钮导致焦点出 Dialog 的缺陷，Red→Green 后焦点进入“核验原审核请求”，Tab/ShiftTab 保留在 Dialog，Enter 用原 key/body 恢复 revision 14 并清除未知意图。服务器已提交的永久审核回执重放由真实 PostgreSQL 测试另行验证。
+- 四次真实 Temporal 历史分别 12/13/12/12 个事件、全部 Completed。成功原生 receipt 分别为 7437/6070/7063ms、采样 RSS 1236844544/1146535936/1133527040 字节，均 groupJoined=true；取消 attempt 无成功结果 receipt。每个实际尝试的三个安全审计事件均已由 relay 发布，实际 audit 表每事件恰一行、Inbox marker 存在，证据不记录对象键/签名 URL/输入载荷。
+- 390×844 页面宽 390、Dialog 358，无横向溢出；关闭回到原视频节点。最终完整页面 axe 4.12.1 WCAG 2A/AA+2.1AA 为零 violation/零 incomplete；结果 Dialog 为零 violation、三项 incomplete，按真实键盘焦点、无音轨与移动截图逐项人工核验，未混称自动全部通过。
+
+固定后端 55 文件在 Go 1.26.8 下 goimports、`go vet ./...`、`golangci-lint run ./...`（0 issues）、`govulncheck ./...`（无可达/导入包漏洞，一个未调用 required module 提示）及生产二进制构建通过；全树 Race 顶层 379 通过/337 缺专用环境跳过。真实 Small/MPS、非 owner PostgreSQL、私有 MinIO、正式 HTTP/画布和 Temporal 的 `TestDepthJob` 定向 Race 21 顶层通过、零跳过（69.525s），与固定候选相关代码逐字相同。新增控制者撤权回归保持原 intent/对象/attempt 不变，重放不再次推理；无进程/无对象且完整原控制证据的撤权失败允许当前主体明确新取消，缺证据或未知物理事实仍保持 fence。CI 增加真实 PostgreSQL/私有对象 Depth 门禁，至少九项通过且零失败/零跳过；Linux CI 不冒充 MPS 前向验收。
+
+固定前端 27 文件全量 ESLint（零警告）、全量 Prettier、76 文件/389 测试、`tsc --noEmit` 和 Next.js 生产构建通过。正式 8080 的在线 78-operation Swagger 重新生成全部 12 个客户端文件，显式格式检查后逐字相同；不采用生成器忽略的格式化错误作为验证。完整安全原始证据保存在独占临时验收目录，未提交私有媒体、签名 URL、cookie、环境配置或运行日志。

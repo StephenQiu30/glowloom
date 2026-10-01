@@ -7,8 +7,6 @@ import (
 
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	pgtool "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
@@ -22,12 +20,7 @@ import (
 func provideMediaTranscriptionStore(database *gorm.DB, enabled bool) *pgtool.TranscriptionStore {
 	var source pgtool.TranscriptionSourceFactory
 	if enabled {
-		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
-			return canvasapp.NewTranscriptionSourceReader(pgcanvas.NewStore(tx,
-				func(mediaTx *gorm.DB) canvasapp.MediaReader {
-					return mediaapp.NewAssetQuery(pgmedia.NewStore(mediaTx), nil)
-				}))
-		}
+		source = provideMediaToolSource
 	}
 	return pgtool.NewTranscriptionStore(database, source,
 		func(tx *gorm.DB) toolapp.DerivedMedia {

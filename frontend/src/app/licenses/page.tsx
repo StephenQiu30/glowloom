@@ -37,6 +37,22 @@ export default function LicensesPage() {
           <li>
             <a
               className="underline underline-offset-4"
+              href="/licenses/video-depth-anything.txt"
+            >
+              Video Depth Anything Apache-2.0 许可
+            </a>
+          </li>
+          <li>
+            <a
+              className="underline underline-offset-4"
+              href="/licenses/video-depth-anything-small.md"
+            >
+              Video Depth Anything Small 权重来源
+            </a>
+          </li>
+          <li>
+            <a
+              className="underline underline-offset-4"
               href="/licenses/CC-BY-4.0.txt"
             >
               Khronos glTF 核心规范 CC-BY-4.0

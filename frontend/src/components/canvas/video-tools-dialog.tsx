@@ -42,6 +42,8 @@ export function VideoToolsDialog({
   onClose,
   onFrame,
   onTimeline,
+  onDepth,
+  depthDisabled = false,
 }: {
   node: CanvasNodeData;
   projectId: string;
@@ -49,6 +51,8 @@ export function VideoToolsDialog({
   onClose: () => void;
   onFrame: (files: File[]) => void;
   onTimeline: (value: TimelineProject) => Promise<boolean>;
+  onDepth?: () => void;
+  depthDisabled?: boolean;
 }) {
   const preview = useQuery({
     queryKey: ["canvas", "video-tools", projectId, node.assetId],
@@ -449,6 +453,15 @@ export function VideoToolsDialog({
           裁切编码时按偶数像素对齐。按所选画幅适配画面；视频文件需要时间线中创建实际导出任务。
         </p>
         <DialogFooter>
+          {onDepth ? (
+            <Button
+              variant="outline"
+              disabled={running || depthDisabled || !node.assetId}
+              onClick={onDepth}
+            >
+              生成视频深度
+            </Button>
+          ) : null}
           <Button variant="outline" disabled={running} onClick={onClose}>
             关闭
           </Button>

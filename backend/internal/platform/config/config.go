@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -38,6 +39,10 @@ type Config struct {
 	MediaResultAllowedOrigins string
 	MediaAllowTestLoopbackTLS bool
 	WhisperEndpoint           string
+	VideoDepthPythonPath      string
+	VideoDepthSourceDir       string
+	VideoDepthModelPath       string
+	VideoDepthDevice          string
 	OTelEndpoint              string
 }
 
@@ -87,6 +92,10 @@ func Load() (Config, error) {
 		MediaResultAllowedOrigins: strings.TrimSpace(v.GetString("LV_MEDIA_RESULT_ALLOWED_ORIGINS")),
 		MediaAllowTestLoopbackTLS: v.GetBool("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
 		WhisperEndpoint:           strings.TrimSpace(v.GetString("LV_WHISPER_ENDPOINT")),
+		VideoDepthPythonPath:      strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_PYTHON_PATH")),
+		VideoDepthSourceDir:       strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_SOURCE_DIR")),
+		VideoDepthModelPath:       strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_MODEL_PATH")),
+		VideoDepthDevice:          strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_DEVICE")),
 		OTelEndpoint:              strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
 	}
 	if err := cfg.validate(); err != nil {
@@ -96,6 +105,26 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	depthValues := []string{c.VideoDepthPythonPath, c.VideoDepthSourceDir, c.VideoDepthModelPath, c.VideoDepthDevice}
+	depthConfigured := 0
+	for _, value := range depthValues {
+		if value != "" {
+			depthConfigured++
+		}
+	}
+	if depthConfigured != 0 {
+		if depthConfigured != len(depthValues) {
+			return fmt.Errorf("%w: video depth requires Python, source, model and device together", ErrInvalid)
+		}
+		for _, path := range depthValues[:3] {
+			if !filepath.IsAbs(path) {
+				return fmt.Errorf("%w: video depth runtime paths must be absolute", ErrInvalid)
+			}
+		}
+		if c.VideoDepthDevice != "mps" {
+			return fmt.Errorf("%w: video depth requires the verified mps device profile", ErrInvalid)
+		}
+	}
 	if (c.CredentialPublicKeyFile == "") != (c.CredentialKeyID == "") || len(c.CredentialKeyID) > 128 {
 		return fmt.Errorf("%w: credential public key file and key ID must be configured together", ErrInvalid)
 	}

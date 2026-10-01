@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -201,6 +201,11 @@ const VideoToolsDialog = dynamic(
     import("./video-tools-dialog").then((module) => module.VideoToolsDialog),
   { ssr: false },
 );
+const MediaDepthDialog = dynamic(
+  () =>
+    import("./media-depth-dialog").then((module) => module.MediaDepthDialog),
+  { ssr: false },
+);
 
 type Attempt = {
   revision: number;
@@ -229,6 +234,7 @@ export function CanvasEditor({
   onBusyChange,
 }: CanvasEditorProps) {
   const router = useRouter();
+  const depthParameters = useSearchParams();
   const [store] = useState(() => createCanvasStore(initial));
   const document = useStore(store, (state) => state.document),
     selectedIds = useStore(store, (state) => state.selectedIds),
@@ -262,6 +268,17 @@ export function CanvasEditor({
   const [imageToolNode, setImageToolNode] = useState<CanvasNodeData>();
   const [imageMaskNode, setImageMaskNode] = useState<CanvasNodeData>();
   const [videoToolNode, setVideoToolNode] = useState<CanvasNodeData>();
+  const [depthNode, setDepthNode] = useState<CanvasNodeData | undefined>(() =>
+    depthParameters.get("depth_job")
+      ? initial.nodes.find(
+          (node) =>
+            node.id === depthParameters.get("node_id") &&
+            node.type === CanvasNodeType.Video &&
+            Boolean(node.assetId),
+        )
+      : undefined,
+  );
+  const [depthLocked, setDepthLocked] = useState(false);
   const videoAttempt = useRef<{
     config: string;
     attempt: Attempt;
@@ -353,6 +370,7 @@ export function CanvasEditor({
   const dirty =
     saving ||
     importing ||
+    depthLocked ||
     Boolean(failed) ||
     textDirty ||
     titleDrafts.length > 0;
@@ -366,7 +384,12 @@ export function CanvasEditor({
     [],
   );
   const locked =
-    readOnly || saving || importing || Boolean(failed) || textDirty;
+    readOnly ||
+    saving ||
+    importing ||
+    depthLocked ||
+    Boolean(failed) ||
+    textDirty;
   useLayoutEffect(() => {
     interactionLocked.current = locked;
   }, [locked]);
@@ -380,8 +403,8 @@ export function CanvasEditor({
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
   useEffect(() => {
-    onBusyChange?.(saving || importing);
-  }, [saving, importing, onBusyChange]);
+    onBusyChange?.(saving || importing || depthLocked);
+  }, [saving, importing, depthLocked, onBusyChange]);
   useEffect(
     () => () => {
       onDirtyChange(false);
@@ -2651,6 +2674,84 @@ export function CanvasEditor({
           }}
         />
       ) : null}
+      {depthNode ? (
+        <MediaDepthDialog
+          key={depthNode.id}
+          projectId={document.projectId}
+          canvasId={document.id}
+          nodeId={depthNode.id}
+          jobId={depthParameters.get("depth_job") || undefined}
+          onLockChange={setDepthLocked}
+          onClose={() => setDepthNode(undefined)}
+          restoreFocus={() =>
+            (
+              containerRef.current?.querySelector<HTMLElement>(
+                `[data-node-id="${depthNode.id}"]`,
+              ) ??
+              window.document.querySelector<HTMLElement>(
+                `[data-node-id="${depthNode.id}"]`,
+              )
+            )?.focus()
+          }
+          onPrepareSource={async () => {
+            const current = store.getState().document;
+            if (
+              readOnly ||
+              busy.current ||
+              importing ||
+              textDirty ||
+              titleDrafts.length ||
+              failed ||
+              !mounted.current
+            )
+              throw new Error("请先确认保存当前画布，再冻结深度视频来源。");
+            const { getCanvas } = await import("./queries");
+            const latest = await getCanvas(current.id);
+            const source = latest.nodes.find(
+              (node) =>
+                node.id === depthNode.id &&
+                node.type === CanvasNodeType.Video &&
+                node.assetId === depthNode.assetId,
+            );
+            if (
+              latest.projectId !== current.projectId ||
+              latest.revision !== current.revision ||
+              !source
+            )
+              throw new Error(
+                "来源画布或视频已改变，请读取最新画布后重新选择。",
+              );
+            return {
+              canvas_id: latest.id,
+              node_id: source.id,
+              revision: latest.revision,
+            };
+          }}
+          onAdopt={async (job, asset) => {
+            if (
+              readOnly ||
+              busy.current ||
+              importing ||
+              textDirty ||
+              titleDrafts.length ||
+              failed ||
+              !mounted.current
+            )
+              return false;
+            const current = store.getState().document;
+            const { depthResultCommands } = await import("./media-depth-model");
+            const commands = depthResultCommands(current, job, asset);
+            if (!commands.length) return true;
+            const attempt: Attempt = {
+              commands,
+              revision: current.revision,
+              key: crypto.randomUUID(),
+              kind: "edit",
+            };
+            return persist(attempt);
+          }}
+        />
+      ) : null}
       {videoToolNode ? (
         <VideoToolsDialog
           key={videoToolNode.id}
@@ -2658,6 +2759,15 @@ export function CanvasEditor({
           projectId={document.projectId}
           remainingSlots={2000 - document.nodes.length}
           onClose={() => setVideoToolNode(undefined)}
+          depthDisabled={readOnly || dirty || titleDrafts.length > 0}
+          onDepth={() => {
+            if (readOnly || dirty || titleDrafts.length > 0 || busy.current) {
+              setNotice("请先确认保存当前画布，再打开视频深度。");
+              return;
+            }
+            setDepthNode(videoToolNode);
+            setVideoToolNode(undefined);
+          }}
           onFrame={(files) => {
             const source = store
               .getState()

@@ -1116,6 +1116,44 @@ definitions:
       revision:
         type: integer
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.DepthCreateInput:
+    properties:
+      canvas_id:
+        type: string
+      node_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.DepthPage:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.DepthJob'
+        type: array
+      next_cursor:
+        type: string
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.DepthPreview:
+    properties:
+      asset:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary'
+      expires_at:
+        type: string
+      job_id:
+        type: string
+      revision:
+        type: integer
+      sha256:
+        type: string
+      url:
+        type: string
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPage:
     properties:
       items:
@@ -1206,6 +1244,72 @@ definitions:
       srt:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.DepthJob:
+    properties:
+      asset_id:
+        type: string
+        x-nullable: true
+      attempt:
+        type: integer
+      cancellation_requested:
+        type: boolean
+      created_at:
+        type: string
+      execution_unconfirmed:
+        type: boolean
+      failure_code:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      needs_reconciliation:
+        type: boolean
+      profile_id:
+        type: string
+      project_id:
+        type: string
+      reconciliation_requested:
+        type: boolean
+      retryable:
+        type: boolean
+      revision:
+        type: integer
+      sha256:
+        type: string
+        x-nullable: true
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source'
+      source_asset_id:
+        type: string
+      source_asset_revision:
+        type: integer
+      source_sha256:
+        type: string
+      stage:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.DepthStatus'
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.DepthStatus:
+    enum:
+    - queued
+    - running
+    - review_required
+    - succeeded
+    - failed
+    - cancel_requested
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - DepthQueued
+    - DepthRunning
+    - DepthReviewRequired
+    - DepthSucceeded
+    - DepthFailed
+    - DepthCancelRequested
+    - DepthCancelled
   github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.ExportJob:
     properties:
       asset_id:
@@ -2149,6 +2253,54 @@ definitions:
         type: integer
       status:
         $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_catalog_domain.ProviderStatus'
+    type: object
+  internal_mediatool_adapter_http.DepthJobResponse:
+    properties:
+      asset_id:
+        type: string
+        x-nullable: true
+      attempt:
+        type: integer
+      cancellation_requested:
+        type: boolean
+      created_at:
+        type: string
+      execution_unconfirmed:
+        type: boolean
+      failure_code:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      needs_reconciliation:
+        type: boolean
+      profile_id:
+        type: string
+      project_id:
+        type: string
+      reconciliation_requested:
+        type: boolean
+      retryable:
+        type: boolean
+      revision:
+        type: integer
+      sha256:
+        type: string
+        x-nullable: true
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source'
+      source_asset_id:
+        type: string
+      source_asset_revision:
+        type: integer
+      source_sha256:
+        type: string
+      stage:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.DepthStatus'
+      updated_at:
+        type: string
     type: object
   internal_mediatool_adapter_http.ExportJobResponse:
     properties:
@@ -3491,6 +3643,342 @@ paths:
       summary: 提交画布命令批次
       tags:
       - canvases
+  /api/media-depths/{job_id}:
+    get:
+      operationId: getMediaDepth
+      parameters:
+      - description: Depth UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.DepthJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Get local video depth depth
+      tags:
+      - media-depths
+  /api/media-depths/{job_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      operationId: cancelMediaDepth
+      parameters:
+      - description: Depth UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Current job revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.DepthJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Cancel local video depth depth
+      tags:
+      - media-depths
+  /api/media-depths/{job_id}/download:
+    get:
+      operationId: downloadMediaDepth
+      parameters:
+      - description: Depth UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - video/mp4
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Download reviewed local depth output
+      tags:
+      - media-depths
+  /api/media-depths/{job_id}/preview:
+    get:
+      operationId: previewMediaDepth
+      parameters:
+      - description: Depth UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.DepthPreview'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Preview exact local depth output
+      tags:
+      - media-depths
+  /api/media-depths/{job_id}/reconcile:
+    post:
+      consumes:
+      - application/json
+      operationId: reconcileMediaDepth
+      parameters:
+      - description: Depth UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Exact source and review facts
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.DepthJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Reconcile original local depth result objects
+      tags:
+      - media-depths
+  /api/media-depths/{job_id}/retry:
+    post:
+      consumes:
+      - application/json
+      operationId: retryMediaDepth
+      parameters:
+      - description: Depth UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Current job revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.DepthJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Retry failed or cancelled local video depth depth
+      tags:
+      - media-depths
+  /api/media-depths/{job_id}/review:
+    post:
+      consumes:
+      - application/json
+      operationId: reviewMediaDepth
+      parameters:
+      - description: Depth UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Exact source and review facts
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ReviewInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.DepthJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Review exact local depth output
+      tags:
+      - media-depths
   /api/media-exports/{job_id}:
     get:
       operationId: getMediaExport
@@ -4986,6 +5474,108 @@ paths:
       summary: 项目可用媒体列表
       tags:
       - media
+  /api/projects/{pid}/media-depths:
+    get:
+      operationId: listMediaDepths
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Canvas UUID
+        in: query
+        name: canvas_id
+        type: string
+      - description: Timeline node UUID
+        in: query
+        name: node_id
+        type: string
+      - description: 1..200, default 50
+        in: query
+        name: limit
+        type: integer
+      - description: Project and source bound cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.DepthPage'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: List project media depths
+      tags:
+      - media-depths
+    post:
+      consumes:
+      - application/json
+      operationId: createMediaDepth
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Saved source identity
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.DepthCreateInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.DepthJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Create local video depth depth
+      tags:
+      - media-depths
   /api/projects/{pid}/media-exports:
     get:
       operationId: listMediaExports

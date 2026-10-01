@@ -5,6 +5,7 @@
 import * as settings from "./settings";
 import * as operations from "./operations";
 import * as canvases from "./canvases";
+import * as mediaDepths from "./mediaDepths";
 import * as mediaExports from "./mediaExports";
 import * as mediaTranscriptions from "./mediaTranscriptions";
 import * as models from "./models";
@@ -15,6 +16,7 @@ export default {
   settings,
   operations,
   canvases,
+  mediaDepths,
   mediaExports,
   mediaTranscriptions,
   models,

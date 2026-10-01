@@ -62,6 +62,9 @@ export function TaskWorkspace() {
         <p className="mt-3 text-sm text-muted-foreground">
           查看生成进度、费用和结果，继续尚未完成的创作。
         </p>
+        <Button asChild variant="ghost" className="mt-3">
+          <Link href="/depths">视频深度任务</Link>
+        </Button>
       </div>
       <ProjectScope>
         {(project) => <ProjectTasks projectId={project.id} />}

@@ -271,6 +271,27 @@ jobs:
           LV_TEST_PROJECT_COPY_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
           LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
         run: go test -race ./tests/workspace ./tests/canvas ./tests/media -run '^TestProjectCopy' -count=1 -v
+      - name: Verify depth job PostgreSQL authority and private object contracts
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
+        run: |
+          go test -race ./tests/media -run '^TestDepthJobPG' -count=1 -json | tee "$RUNNER_TEMP/depth-pg.jsonl"
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          counts = collections.Counter()
+          for line in (Path(os.environ["RUNNER_TEMP"]) / "depth-pg.jsonl").read_text().splitlines():
+              event = json.loads(line)
+              test = event.get("Test", "")
+              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
+                  counts[event["Action"]] += 1
+          assert counts["pass"] >= 9 and counts["fail"] == 0 and counts["skip"] == 0, counts
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n## Depth job PostgreSQL contracts\n\n{counts['pass']} actual PostgreSQL/private-object tests passed, with no skips. Fixed-model MPS and real Temporal acceptance run separately; this Linux step does not prove native inference.\n")
+          PY
       - name: Clean up isolated private contract storage
         if: always()
         run: |

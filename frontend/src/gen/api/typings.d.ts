@@ -9,6 +9,11 @@ declare namespace API {
     pid: string;
   };
 
+  type cancelMediaDepthParams = {
+    /** Depth UUID */
+    job_id: string;
+  };
+
   type cancelMediaExportParams = {
     /** Export UUID */
     job_id: string;
@@ -59,6 +64,11 @@ declare namespace API {
     pid: string;
   };
 
+  type createMediaDepthParams = {
+    /** Project UUID */
+    pid: string;
+  };
+
   type createMediaExportParams = {
     /** Project UUID */
     pid: string;
@@ -89,6 +99,13 @@ declare namespace API {
     id: string;
     /** 凭据UUID */
     credential_id: string;
+  };
+
+  type downloadMediaDepthParams = {
+    /** Depth UUID */
+    job_id: string;
+    /** Project UUID */
+    project_id: string;
   };
 
   type downloadMediaExportParams = {
@@ -125,6 +142,13 @@ declare namespace API {
   type getCanvasParams = {
     /** 画布UUID */
     id: string;
+  };
+
+  type getMediaDepthParams = {
+    /** Depth UUID */
+    job_id: string;
+    /** Project UUID */
+    project_id: string;
   };
 
   type getMediaExportParams = {
@@ -816,6 +840,31 @@ declare namespace API {
       revision?: number;
     };
 
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationDepthCreateInput =
+    {
+      canvas_id?: string;
+      node_id?: string;
+      revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationDepthPage =
+    {
+      current_actor_id?: string;
+      current_org_id?: string;
+      items?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainDepthJob[];
+      next_cursor?: string | null;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationDepthPreview =
+    {
+      asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationAssetSummary;
+      expires_at?: string;
+      job_id?: string;
+      revision?: number;
+      sha256?: string;
+      url?: string;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationExportPage =
     {
       items?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainExportJob[];
@@ -874,6 +923,39 @@ declare namespace API {
       source_sha256?: string;
       srt?: string;
     };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolDomainDepthJob = {
+    asset_id?: string | null;
+    attempt?: number;
+    cancellation_requested?: boolean;
+    created_at?: string;
+    execution_unconfirmed?: boolean;
+    failure_code?: string | null;
+    id?: string;
+    needs_reconciliation?: boolean;
+    profile_id?: string;
+    project_id?: string;
+    reconciliation_requested?: boolean;
+    retryable?: boolean;
+    revision?: number;
+    sha256?: string | null;
+    source?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainSource;
+    source_asset_id?: string;
+    source_asset_revision?: number;
+    source_sha256?: string;
+    stage?: string;
+    status?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainDepthStatus;
+    updated_at?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolDomainDepthStatus =
+    | "queued"
+    | "running"
+    | "review_required"
+    | "succeeded"
+    | "failed"
+    | "cancel_requested"
+    | "cancelled";
 
   type githubComStephenQiu30LanverseBackendInternalMediatoolDomainExportJob = {
     asset_id?: string | null;
@@ -1358,6 +1440,30 @@ declare namespace API {
     status?: githubComStephenQiu30LanverseBackendInternalCatalogDomainProviderStatus;
   };
 
+  type internalMediatoolAdapterHttpDepthJobResponse = {
+    asset_id?: string | null;
+    attempt?: number;
+    cancellation_requested?: boolean;
+    created_at?: string;
+    execution_unconfirmed?: boolean;
+    failure_code?: string | null;
+    id?: string;
+    needs_reconciliation?: boolean;
+    profile_id?: string;
+    project_id?: string;
+    reconciliation_requested?: boolean;
+    retryable?: boolean;
+    revision?: number;
+    sha256?: string | null;
+    source?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainSource;
+    source_asset_id?: string;
+    source_asset_revision?: number;
+    source_sha256?: string;
+    stage?: string;
+    status?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainDepthStatus;
+    updated_at?: string;
+  };
+
   type internalMediatoolAdapterHttpExportJobResponse = {
     asset_id?: string | null;
     attempt?: number;
@@ -1612,6 +1718,19 @@ declare namespace API {
     limit?: number;
   };
 
+  type listMediaDepthsParams = {
+    /** Project UUID */
+    pid: string;
+    /** Canvas UUID */
+    canvas_id?: string;
+    /** Timeline node UUID */
+    node_id?: string;
+    /** 1..200, default 50 */
+    limit?: number;
+    /** Project and source bound cursor */
+    cursor?: string;
+  };
+
   type listMediaExportsParams = {
     /** Project UUID */
     pid: string;
@@ -1707,6 +1826,13 @@ declare namespace API {
     cursor?: string;
   };
 
+  type previewMediaDepthParams = {
+    /** Depth UUID */
+    job_id: string;
+    /** Project UUID */
+    project_id: string;
+  };
+
   type previewMediaExportParams = {
     /** Export UUID */
     job_id: string;
@@ -1722,6 +1848,11 @@ declare namespace API {
   type publishAdminModelVersionParams = {
     /** 模型UUID */
     id: string;
+  };
+
+  type reconcileMediaDepthParams = {
+    /** Depth UUID */
+    job_id: string;
   };
 
   type reconcileProjectCopyParams = {
@@ -1744,6 +1875,11 @@ declare namespace API {
     id: string;
   };
 
+  type retryMediaDepthParams = {
+    /** Depth UUID */
+    job_id: string;
+  };
+
   type retryMediaExportParams = {
     /** Export UUID */
     job_id: string;
@@ -1757,6 +1893,11 @@ declare namespace API {
   type retryProjectCopyParams = {
     /** 复制任务UUID */
     id: string;
+  };
+
+  type reviewMediaDepthParams = {
+    /** Depth UUID */
+    job_id: string;
   };
 
   type reviewMediaExportParams = {

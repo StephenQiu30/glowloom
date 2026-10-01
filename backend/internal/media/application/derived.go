@@ -19,6 +19,7 @@ type DerivedRepository interface {
 	StoreDerived(context.Context, identityapp.Principal, domain.MediaAsset, []domain.Rendition) error
 	ReviewDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, time.Time) error
 	RejectDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, time.Time) error
+	AuthorizeDerivedRemoval(context.Context, identityapp.Principal, DerivedRemoval) error
 }
 
 // DerivedService preserves the media ownership boundary for local tool jobs.
@@ -96,7 +97,7 @@ func (s *DerivedService) Reject(ctx context.Context, actor identityapp.Principal
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
-	if id == uuid.Nil || project == uuid.Nil || reason != "export_cancelled" || now.IsZero() {
+	if id == uuid.Nil || project == uuid.Nil || (reason != "export_cancelled" && reason != "depth_cancelled") || now.IsZero() {
 		return ErrInvalidQuery
 	}
 	return s.repo.RejectDerived(ctx, actor, project, id, reason, now)

@@ -1,5 +1,13 @@
 # 第三方代码声明
 
+## 视频深度推理
+
+Lanverse 的 Go 任务消费者使用固定 [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072) 的 18 个实际模型依赖文件作为离线执行包，保留源文件头部及 Apache-2.0 声明。该包包含 ByteDance、Meta Platforms（DINOv2）、Hugging Face（attention）和 guoyww/AnimateDiff（motion module）的原始署名；完整原许可保存在 [docs/licenses/video-depth-anything.txt](docs/licenses/video-depth-anything.txt)，公开入口 `/licenses/video-depth-anything.txt`。未调用的上游 CLI、Gradio、stream 与 Tencent `dc_utils.py` 不包含在此执行包中。
+
+当前采用的 Small 权重来自官方固定版本 `256875362cff76724b920335dfb4b29dd611f66e`，模型卡声明 Apache-2.0。固定来源、权重大小与 SHA256 见 [docs/licenses/video-depth-anything-small.md](docs/licenses/video-depth-anything-small.md)，公开入口 `/licenses/video-depth-anything-small.md`。该说明仅针对实际采用的 Small 权重。
+
+`backend/internal/mediatool/adapter/videodepth/worker.py` 的全片 P2/P98 与 gamma 后处理改写自固定 BeefTV `1ae25027` 的 `tools/depth-capture/depth_capture/pipeline.py:108–129`，沿用 [BeefTV MIT 许可](docs/licenses/beeftv.txt)。Lanverse 用完整 CFR 预处理、逐帧等价计算、Go 所有的进程取消/等待、私有对象和正式审核替换上游本地脚本运行与文件输出；源模型结构与 Small 权重保持。
+
 ## 时间线算法的上游声明
 
 BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline-snap.ts` 标明移植自 `yoqu/lingji-cut`。Lanverse 的 `frontend/src/components/canvas/timeline.ts` 改写其碰撞、间隙和吸附算法，使用自身 UUID、闭合输入和画布保存合同。保留该传递来源与修改声明，不将其视为 BeefTV 原创。

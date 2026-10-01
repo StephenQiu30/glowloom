@@ -94,6 +94,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 	case "flow":
 		toolflow.RegisterWorkflow(queueWorker)
 		toolflow.RegisterTranscriptionWorkflow(queueWorker)
+		toolflow.RegisterDepthWorkflow(queueWorker)
 		workspaceflow.RegisterProjectCopyWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
@@ -157,6 +158,11 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		transcriptions := provideMediaTranscriptionStore(dbConn.DB, transcriber != nil)
 		transcriptionWorker := toolapp.NewTranscriptionWorker(transcriptions, toolflow.NewObjects(storage), audioPreprocessor, transcriber)
 		toolflow.RegisterTranscriptionActivities(queueWorker, toolflow.NewTranscriptionActivities(transcriptionWorker, transcriptions))
+		depthWorker, depths, err := provideMediaDepthWorker(dbConn.DB, storage, cfg)
+		if err != nil {
+			return nil, err
+		}
+		toolflow.RegisterDepthActivities(queueWorker, toolflow.NewDepthActivities(depthWorker, depths))
 		copyWorker, copies := provideProjectCopyWorker(dbConn.DB, storage)
 		workspaceflow.RegisterProjectCopyActivities(queueWorker, workspaceflow.NewProjectCopyActivities(copyWorker, copies))
 	default:
@@ -213,11 +219,12 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 			pgcatalog.NewStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
 		exportHandler := toolevent.NewHandler(processed, provideMediaExportStore(dbConn.DB), toolflow.NewStarter(temporalConn.Client))
 		transcriptionHandler := toolevent.NewTranscriptionHandler(processed, provideMediaTranscriptionStore(dbConn.DB, false), toolflow.NewTranscriptionStarter(temporalConn.Client))
+		depthHandler := toolevent.NewDepthHandler(processed, provideMediaDepthStore(dbConn.DB, false), toolflow.NewDepthStarter(temporalConn.Client))
 		copyHandler := workspaceevent.NewProjectCopyHandler(processed, provideProjectCopyStore(dbConn.DB), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, workspaceevent.ProjectCopyTopic}, workflowDelivery{
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler, transcriptions: transcriptionHandler, copies: copyHandler,
+				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler,
 			})
 		if err != nil {
 			temporalConn.Close()
@@ -250,6 +257,7 @@ type workflowDelivery struct {
 	credentials    inboxapp.Handler
 	exports        inboxapp.Handler
 	transcriptions inboxapp.Handler
+	depths         inboxapp.Handler
 	copies         inboxapp.Handler
 }
 
@@ -265,6 +273,9 @@ func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) er
 	}
 	if record.Topic == toolevent.TranscriptionTopic {
 		return h.transcriptions.Handle(ctx, record)
+	}
+	if record.Topic == toolevent.DepthTopic {
+		return h.depths.Handle(ctx, record)
 	}
 	return h.operations.Handle(ctx, record)
 }

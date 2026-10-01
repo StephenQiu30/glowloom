@@ -42,6 +42,9 @@ func NewRecordedActionParser() *Parser {
 	for _, action := range []string{"project.copy_requested", "project.copy_retry", "project.copy_cancel", "project.copy_reconcile", "project.copy_completed", "project.copy_failed", "project.copy_cancelled"} {
 		fields[action] = []string{"copy_job_id", "source_project_id", "target_project_id", "status", "stage", "revision", "documents", "assets", "renditions", "needs_reconciliation", "failure_code"}
 	}
+	for _, action := range []string{"media.depth_requested", "media.depth_cancel", "media.depth_retry", "media.depth_reconcile", "media.depth_reviewed", "media.depth_rendered", "media.depth_failed", "media.depth_cancelled"} {
+		fields[action] = []string{"id", "project_id", "canvas_id", "node_id", "source_revision", "source_asset_id", "source_asset_revision", "profile_id", "status", "stage", "attempt", "revision", "asset_id", "sha256", "failure_code", "needs_reconciliation", "execution_unconfirmed"}
+	}
 	return NewParser(fields)
 }
 
