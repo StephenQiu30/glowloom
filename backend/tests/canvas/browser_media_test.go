@@ -38,10 +38,10 @@ func ownedBrowserMedia(t *testing.T) []browserMedia {
 	if err := png.Encode(&encoded, img); err != nil {
 		t.Fatal("encode owned image fixture")
 	}
-	// This is a tracked public example, never a user's local media file.
-	video, err := os.ReadFile("../../../frontend/public/examples/media/preview.mp4")
+	// This tracked synthetic fixture belongs to backend tests, never a user's media.
+	video, err := os.ReadFile("testdata/preview.mp4")
 	if err != nil || len(video) == 0 || len(video) > 16<<20 {
-		t.Fatal("tracked public video fixture unavailable")
+		t.Fatal("tracked synthetic video fixture unavailable")
 	}
 	const sampleRate, sampleCount = 8000, 16000
 	wav := make([]byte, 44+sampleCount*2)
