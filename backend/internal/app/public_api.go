@@ -33,6 +33,8 @@ import (
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	toolhttp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/http"
+	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
 	operationhttp "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/http"
 	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
 	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
@@ -94,6 +96,8 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
 	}
 	mediahttp.NewUploadHandler(mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)).Register(protected)
+	exports := provideMediaExportStore(database)
+	toolhttp.NewHandler(exports, toolapp.NewExportQuery(exports, storage, storage)).Register(protected)
 	catalogStore := pgcatalog.NewStore(database)
 	credentialSchema := credentialschema.NewRegistry()
 	parameterValidator, err := paramvalidation.NewValidator()
@@ -138,7 +142,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		PublishPrice:      catalogapp.NewPublishPriceRuleCommand(catalogStore, priceValidator, time.Now),
 		SetModelStatus:    catalogapp.NewSetModelStatusCommand(catalogStore, time.Now),
 	}).Register(protected)
-	operations := pgoperation.NewStore(database)
+	operations := pgoperation.NewStoreWithPromptCompiler(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
+		return promptapp.NewCompiler(pgprompt.NewStore(tx))
+	})
 	operationhttp.NewHandler(operationhttp.Dependencies{
 		FreeQuote:    operationapp.NewCreateFreeQuoteCommand(operations),
 		BatchQuote:   operationapp.NewCreateBatchFreeQuoteCommand(operations),

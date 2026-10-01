@@ -15,6 +15,7 @@ import (
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
 )
 
 // CreateBatchFreeQuote preserves request order, excludes only invalid items,
@@ -70,7 +71,7 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			result.Items[index] = application.BatchFreeQuoteItemResult{
 				ModelKey: requested.ModelKey, Mode: requested.Mode,
 			}
-			item, modelKey, itemErr := prepareFreeQuoteItem(ctx, tx, actor, application.CreateFreeQuoteInput{
+			item, modelKey, itemErr := s.prepareFreeQuoteItem(ctx, tx, actor, application.CreateFreeQuoteInput{
 				ProjectID: input.ProjectID, RequestID: input.RequestID,
 				FreeQuoteItemInput: requested,
 			}, project, now)
@@ -94,6 +95,10 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			result.Items[index].QuoteDetail = item.Operation.QuoteDetail
 			result.Items[index].ReusedFromID = item.Operation.ReusedFromID
 			result.Items[index].Region = *item.Operation.Region
+			result.Items[index].PromptPreparation = item.PromptPreparation
+			if item.PromptPreparation != nil {
+				result.Items[index].FinalPrompt = *item.Inputs[0].TextValue
+			}
 			valid = append(valid, item)
 		}
 		budget, err := pgbilling.NewStore(tx).FindBudget(ctx, actor, input.ProjectID)
@@ -130,6 +135,12 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 
 func batchQuoteItemError(err error) (string, bool) {
 	switch {
+	case errors.Is(err, promptapp.ErrTemplateInvalid):
+		return "template_invalid", true
+	case errors.Is(err, promptapp.ErrTemplateChanged):
+		return "template_changed", true
+	case errors.Is(err, promptapp.ErrTemplateContextUnavailable):
+		return "context_unavailable", true
 	case errors.Is(err, application.ErrFreeQuoteModelMissing):
 		return "model_unavailable", true
 	case errors.Is(err, application.ErrInvalidFreeQuote),

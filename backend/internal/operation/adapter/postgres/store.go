@@ -25,10 +25,18 @@ var (
 )
 
 // Store keeps the database handle injected by the composition root.
-type Store struct{ db *gorm.DB }
+type Store struct {
+	db             *gorm.DB
+	promptCompiler func(*gorm.DB) application.QuotePromptCompiler
+}
 
 // NewStore injects the caller's database handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
+
+// NewStoreWithPromptCompiler injects a compiler that reads through the quote transaction.
+func NewStoreWithPromptCompiler(db *gorm.DB, factory func(*gorm.DB) application.QuotePromptCompiler) *Store {
+	return &Store{db: db, promptCompiler: factory}
+}
 
 // FindBatch checks the actor and project before returning a batch.
 func (s *Store) FindBatch(ctx context.Context, actor identityapp.Principal, projectID, batchID uuid.UUID) (domain.Batch, error) {

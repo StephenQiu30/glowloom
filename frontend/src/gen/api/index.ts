@@ -5,6 +5,7 @@
 import * as settings from "./settings";
 import * as operations from "./operations";
 import * as canvases from "./canvases";
+import * as mediaExports from "./mediaExports";
 import * as models from "./models";
 import * as projects from "./projects";
 import * as media from "./media";
@@ -12,6 +13,7 @@ export default {
   settings,
   operations,
   canvases,
+  mediaExports,
   models,
   projects,
   media,

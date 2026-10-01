@@ -1,4 +1,5 @@
 import type { GenerationItem } from "@/components/operation/queries";
+import type { QuoteResponse } from "@/components/operation/use-quote";
 import {
   batchPrompt,
   batchTableSchema,
@@ -64,5 +65,56 @@ export function batchGenerationItems(
         media_inputs,
       };
     }),
+  };
+}
+
+/** Prepare every enabled row before the first API call; each quote stays within REST limits. */
+export function batchGenerationGroups(
+  config: BatchTableConfig,
+  nodes: CanvasNodeData[],
+  model: Parameters<typeof batchGenerationItems>[2],
+  rowId?: string,
+) {
+  const value = batchTableSchema.parse(config);
+  const count = value.rows.filter(
+    (row) => row.enabled && (!rowId || row.id === rowId),
+  ).length;
+  if (!count) throw new Error("没有启用的行。");
+  return Array.from({ length: Math.ceil(count / 150) }, (_, page) =>
+    batchGenerationItems(value, nodes, model, page, rowId),
+  );
+}
+
+/** UI summary only: confirmation must still target the original server batch identities. */
+export function mergeBatchQuotes(groups: QuoteResponse[]): QuoteResponse {
+  if (!groups.length || groups.length > 4)
+    throw new Error("报价分组数量无效。");
+  const items = groups.flatMap((group) => group.items);
+  const ids = items.flatMap((item) =>
+    item.operation_id ? [item.operation_id] : [],
+  );
+  const total = groups.reduce((sum, group) => sum + group.total_micros, 0);
+  const available = Math.min(...groups.map((group) => group.available_micros));
+  const expiry = Math.min(
+    ...groups.map((group) => Date.parse(group.expires_at)),
+  );
+  if (
+    ids.length !== new Set(ids).size ||
+    items.length > 500 ||
+    ![total, available, ...groups.map((group) => group.total_micros)].every(
+      (value) => Number.isSafeInteger(value) && value >= 0,
+    ) ||
+    !Number.isFinite(expiry)
+  )
+    throw new Error("报价身份或金额无效，请重新读取。");
+  return {
+    batch_id: null,
+    items,
+    expires_at: groups.find((group) => Date.parse(group.expires_at) === expiry)!
+      .expires_at,
+    total_micros: total,
+    available_micros: available,
+    confirmable:
+      groups.every((group) => group.confirmable) && total <= available,
   };
 }

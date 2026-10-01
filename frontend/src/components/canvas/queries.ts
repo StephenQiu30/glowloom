@@ -88,7 +88,7 @@ const projectListSchema = z.object({
   ),
   next_cursor: z.string().nullable(),
 });
-const mediaSchema = z.object({
+export const mediaSchema = z.object({
   id: uuid,
   project_id: uuid,
   kind: z.enum(["image", "video", "audio", "model"]),

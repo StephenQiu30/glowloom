@@ -170,13 +170,13 @@ export function BatchTableDialog({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !saving) onClose();
+        if (!open && !saving && !generationBusy) onClose();
       }}
     >
       <DialogContent
-        className="flex max-h-[92dvh] w-[96vw] flex-col sm:max-w-[1400px]"
+        className="flex max-h-[92dvh] w-[96vw] flex-col overflow-y-auto sm:max-w-[1400px] [&>*]:shrink-0"
         onEscapeKeyDown={(event) => {
-          if (saving) event.preventDefault();
+          if (saving || generationBusy) event.preventDefault();
         }}
       >
         <DialogHeader>
@@ -319,7 +319,7 @@ export function BatchTableDialog({
         </div>
         <div
           ref={scroll}
-          className="min-h-40 flex-1 overflow-auto rounded-md border"
+          className="h-[min(36dvh,22rem)] min-h-40 shrink-0 overflow-auto rounded-md border"
         >
           <Table className="min-w-[950px] table-fixed">
             <TableHeader className="sticky top-0 z-10 bg-background">
@@ -645,7 +645,11 @@ export function BatchTableDialog({
           onBusy={setGenerationBusy}
         />
         <DialogFooter>
-          <Button variant="outline" disabled={saving} onClick={onClose}>
+          <Button
+            variant="outline"
+            disabled={saving || generationBusy}
+            onClick={onClose}
+          >
             关闭
           </Button>
           <Button disabled={disabled} onClick={save}>

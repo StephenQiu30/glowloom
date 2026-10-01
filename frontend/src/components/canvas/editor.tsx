@@ -2322,6 +2322,38 @@ export function CanvasEditor({
           node={timelineNode}
           nodes={document.nodes}
           projectId={document.projectId}
+          canvasId={document.id}
+          source={() => ({
+            canvas_id: store.getState().document.id,
+            node_id: timelineNode.id,
+            revision: store.getState().document.revision,
+          })}
+          onExportResult={async (asset) => {
+            const source = store
+              .getState()
+              .document.nodes.find((node) => node.id === timelineNode.id);
+            if (!source || readOnly || interactionLocked.current) return false;
+            const nodes = mediaAssetsToCanvasNodes([asset], {
+              x: source.position.x + source.width + 48,
+              y: source.position.y,
+            });
+            return persist({
+              commands: [
+                { type: "AddNodes", nodes },
+                {
+                  type: "Connect",
+                  edges: nodes.map((node) => ({
+                    id: crypto.randomUUID(),
+                    fromNodeId: source.id,
+                    toNodeId: node.id,
+                  })),
+                },
+              ],
+              revision: store.getState().document.revision,
+              key: crypto.randomUUID(),
+              kind: "edit",
+            });
+          }}
           readOnly={readOnly || Boolean(failed)}
           onClose={() => setTimelineNode(undefined)}
           onSave={async (value) => {

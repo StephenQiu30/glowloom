@@ -4,6 +4,11 @@ declare namespace API {
     id: string;
   };
 
+  type cancelMediaExportParams = {
+    /** Export UUID */
+    job_id: string;
+  };
+
   type cancelOperationBatchParams = {
     /** Batch UUID */
     id: string;
@@ -39,6 +44,11 @@ declare namespace API {
     pid: string;
   };
 
+  type createMediaExportParams = {
+    /** Project UUID */
+    pid: string;
+  };
+
   type deleteCanvasParams = {
     /** 画布UUID */
     id: string;
@@ -49,6 +59,20 @@ declare namespace API {
     id: string;
     /** 凭据UUID */
     credential_id: string;
+  };
+
+  type downloadMediaExportParams = {
+    /** Export UUID */
+    job_id: string;
+    /** Project UUID */
+    project_id: string;
+  };
+
+  type downloadMediaExportSubtitlesParams = {
+    /** Export UUID */
+    job_id: string;
+    /** Project UUID */
+    project_id: string;
   };
 
   type getAdminModelParams = {
@@ -64,6 +88,13 @@ declare namespace API {
   type getCanvasParams = {
     /** 画布UUID */
     id: string;
+  };
+
+  type getMediaExportParams = {
+    /** Export UUID */
+    job_id: string;
+    /** Project UUID */
+    project_id: string;
   };
 
   type getMediaPreviewParams = {
@@ -695,6 +726,74 @@ declare namespace API {
       duplicate_of?: string;
     };
 
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationControlInput =
+    {
+      project_id?: string;
+      revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationCreateInput =
+    {
+      canvas_id?: string;
+      node_id?: string;
+      revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationExportPage =
+    {
+      items?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainExportJob[];
+      next_cursor?: string | null;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationExportPreview =
+    {
+      asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationAssetSummary;
+      expires_at?: string;
+      job_id?: string;
+      revision?: number;
+      sha256?: string;
+      url?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationReviewInput =
+    {
+      local_review_confirmed?: boolean;
+      project_id?: string;
+      revision?: number;
+      sha256?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolDomainExportJob = {
+    asset_id?: string | null;
+    attempt?: number;
+    created_at?: string;
+    failure_code?: string | null;
+    id?: string;
+    progress?: number;
+    project_id?: string;
+    revision?: number;
+    sha256?: string | null;
+    source?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainSource;
+    stage?: string;
+    status?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainStatus;
+    updated_at?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolDomainSource = {
+    canvas_id?: string;
+    node_id?: string;
+    revision?: number;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolDomainStatus =
+    | "queued"
+    | "running"
+    | "review_required"
+    | "succeeded"
+    | "failed"
+    | "cancel_requested"
+    | "cancelled";
+
   type githubComStephenQiu30LanverseBackendInternalOperationApplicationBatchDetail =
     {
       cancel_requested_at?: string | null;
@@ -714,9 +813,11 @@ declare namespace API {
   type githubComStephenQiu30LanverseBackendInternalOperationApplicationBatchFreeQuoteItemResult =
     {
       error_code?: string;
+      final_prompt?: string;
       mode?: string;
       model_key?: string;
       operation_id?: string;
+      prompt_preparation?: githubComStephenQiu30LanverseBackendInternalOperationDomainPromptPreparation;
       quote_detail?: number[];
       quote_micros?: number;
       region?: string;
@@ -752,6 +853,7 @@ declare namespace API {
       outputs?: githubComStephenQiu30LanverseBackendInternalOperationApplicationTaskOutput[];
       params?: Record<string, any>;
       project_id?: string;
+      prompt_preparation?: githubComStephenQiu30LanverseBackendInternalOperationDomainPromptPreparation;
       quote_detail?: Record<string, any>;
       quote_expires_at?: string | null;
       quote_micros?: number | null;
@@ -840,6 +942,20 @@ declare namespace API {
       row_id?: string | null;
     };
 
+  type githubComStephenQiu30LanverseBackendInternalOperationDomainPromptPreparation =
+    {
+      content_sha256?: string;
+      customization_id?: string;
+      customization_revision?: number;
+      operation?: string;
+      policy?: string;
+      request_sha256?: string;
+      template_id?: string;
+      template_version?: number;
+      user_prompt_sha256?: string;
+      version?: number;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalOperationDomainStatus =
     | "draft"
     | "quoted"
@@ -867,11 +983,39 @@ declare namespace API {
     type?: string;
   };
 
+  type githubComStephenQiu30LanverseBackendInternalPromptApplicationOutlineOptions =
+    {
+      chapter_count: "3" | "5" | "8" | "10";
+      chapter_length: "短" | "中" | "长";
+      character_scale: "2 个" | "3-4 个" | "5-6 个";
+      perspective: "第三人称" | "第一人称" | "多视角";
+      structure: "单线推进" | "双线并行" | "群像多线" | "反转嵌套";
+      tone: "平稳叙事" | "轻松喜剧" | "紧张悬疑" | "热血成长" | "甜宠治愈";
+      word_count: "500" | "800" | "1200" | "2000";
+    };
+
   type githubComStephenQiu30LanverseBackendInternalPromptApplicationPreference =
     {
       customization?: githubComStephenQiu30LanverseBackendInternalPromptDomainCustomization;
       definition?: githubComStephenQiu30LanverseBackendInternalPromptDomainDefinition;
       outdated?: boolean;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalPromptApplicationTemplateRequest =
+    {
+      expected_customization_revision: number;
+      expected_template_id: string;
+      operation:
+        | "chapter_assets_extract"
+        | "character_extract"
+        | "character_turnaround"
+        | "storyboard_plan"
+        | "storyboard_repair"
+        | "storyboard_first_frame"
+        | "storyboard_video"
+        | "short_drama_outline"
+        | "skill_draft";
+      outline?: githubComStephenQiu30LanverseBackendInternalPromptApplicationOutlineOptions;
     };
 
   type githubComStephenQiu30LanverseBackendInternalPromptDomainCustomization = {
@@ -1052,6 +1196,22 @@ declare namespace API {
     status?: githubComStephenQiu30LanverseBackendInternalCatalogDomainProviderStatus;
   };
 
+  type internalMediatoolAdapterHttpExportJobResponse = {
+    asset_id?: string | null;
+    attempt?: number;
+    created_at?: string;
+    failure_code?: string | null;
+    id?: string;
+    progress?: number;
+    project_id?: string;
+    revision?: number;
+    sha256?: string | null;
+    source?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainSource;
+    stage?: string;
+    status?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainStatus;
+    updated_at?: string;
+  };
+
   type internalOperationAdapterHttpConfirmBatchItem = {
     operation_id?: string;
     reasons?: string[];
@@ -1090,6 +1250,7 @@ declare namespace API {
     output_count?: number;
     params?: Record<string, any>;
     prompt?: string;
+    prompt_template?: githubComStephenQiu30LanverseBackendInternalPromptApplicationTemplateRequest;
     source?: githubComStephenQiu30LanverseBackendInternalOperationDomainCanvasSource | null;
   };
 
@@ -1102,7 +1263,9 @@ declare namespace API {
     available_micros?: number;
     confirmable?: boolean;
     expires_at?: string;
+    final_prompt?: string;
     operation_id?: string;
+    prompt_preparation?: githubComStephenQiu30LanverseBackendInternalOperationDomainPromptPreparation;
     quote_detail?: Record<string, any>;
     quote_micros?: number;
     reused_from_id?: string | null;
@@ -1192,6 +1355,19 @@ declare namespace API {
     limit?: number;
   };
 
+  type listMediaExportsParams = {
+    /** Project UUID */
+    pid: string;
+    /** Canvas UUID */
+    canvas_id?: string;
+    /** Timeline node UUID */
+    node_id?: string;
+    /** 1..200, default 50 */
+    limit?: number;
+    /** Project and source bound cursor */
+    cursor?: string;
+  };
+
   type listProjectModelsParams = {
     /** 项目UUID */
     project_id: string;
@@ -1252,6 +1428,13 @@ declare namespace API {
     cursor?: string;
   };
 
+  type previewMediaExportParams = {
+    /** Export UUID */
+    job_id: string;
+    /** Project UUID */
+    project_id: string;
+  };
+
   type publishAdminModelPriceParams = {
     /** 模型UUID */
     id: string;
@@ -1270,6 +1453,16 @@ declare namespace API {
   type resumeOperationBatchParams = {
     /** Batch UUID */
     id: string;
+  };
+
+  type retryMediaExportParams = {
+    /** Export UUID */
+    job_id: string;
+  };
+
+  type reviewMediaExportParams = {
+    /** Export UUID */
+    job_id: string;
   };
 
   type saveProjectModelDefaultsParams = {

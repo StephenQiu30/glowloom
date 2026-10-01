@@ -180,6 +180,9 @@ func Compile(operation string, customization *Customization, values map[string]s
 	if protected := strings.TrimSpace(protectedPromptContext(operation, values)); protected != "" {
 		parts = append(parts, protected)
 	}
+	if request := values["本次用户要求"]; strings.TrimSpace(request) != "" {
+		parts = append(parts, "【本次用户要求】\n"+request)
+	}
 	// Even a rewrite omitting placeholders cannot remove server-provided values.
 	for _, variable := range definition.Variables {
 		key := strings.TrimSuffix(strings.TrimPrefix(variable.Placeholder, "{{"), "}}")

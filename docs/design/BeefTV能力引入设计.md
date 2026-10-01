@@ -72,6 +72,8 @@
 
 页面切换和刷新必须恢复同一项目、配置、候选与任务；浏览器关闭、SSE 断连、服务/Worker 重启不得重复生成或收费。未知结果先对账；失败重试不能无声改供应商或创建新的付费执行。参数或引用变化使旧报价失效，正式选定不被迟到结果覆盖。真实外部条件缺失的项保持未通过，同时继续不依赖该条件的工作，不能用 mock、禁用按钮或源功能文档关闭完整迁移。
 
+500 行全表可按每组最多 150 行统一报价并一次审阅总费用；各组确认使用各自原始幂等键，部分确认失败时保留已确认事实，不能用新键重复发起。服务端启动准入按同项目、同画布、同节点的全部批次合计占用槽位；跨 revision 仍计入，已有活动使用的最小冻结并发限制在其结算释放前保持生效。项目和渠道限流继续叠加；未知、未结算或仅请求取消的活动不能提前释放槽位。
+
 ### 0.6 完整验收与完成定义
 
 1. **覆盖验收：**逐项核对固定快照中的路由、菜单、弹窗、工具、节点及模型能力，全部映射到目标实现或明确记录源不可用状态；每项有页面、操作、接口、保存和验证证据，没有遗漏或占位成功。
@@ -243,3 +245,69 @@ POST `/api/projects/{pid}/media-exports` 创建后台事实与 Outbox；GET 项�
 渲染结果沿用 media 的字节哈希、实际 ffprobe、真实 poster/proxy、私有对象检查与领域状态，产物为 `origin=system`、`processing/pending`，不能预先宣称未知输出已通过审核。`GET /api/media-exports/{id}/preview?project_id=...` 只对当前有权查看该 job 的操作者提供短签名原件与 `{job_id,revision,sha256,url,expires_at,asset}`；该临时查看不使资产进入普通 ready 列表。操作者实际查看后 POST `/api/media-exports/{id}/review` 提交 `{project_id,revision,sha256,local_review_confirmed:true}`，在锁内确认正是当前产生的文件，记录独立人工审核身份／时间／SHA 证据，事务内切换媒体 ready/passed 与 job succeeded。审核前不能作为其他任务输入或下载正式成片；取消不销毁未知提交，私有未通过产物按媒体保留／清理合同处理。归档保留只读 job／已通过预览，拒绝新执行与审核写入。
 
 源 frame／trim／audio／combine／captions 继续作为此本地媒体处理边界的实际消费者迁移，不能用空端点或样例文件代替。whisper.cpp transcription 必须配置与真实可用性验证后接入；当前未建立实际 Whisper 服务与可分发识别模型，转写明确 pending，不生成假段落或字幕。首个验收为真实授权素材→已保存 timeline→Outbox／Temporal 接管→实际 FFmpeg 文件→processing/pending→实际预览与人工审核→正式资产／下载及刷新恢复；单元／模拟 Workflow 验证不能替代这一验收。
+
+### 9.1 已实现的导出边界与验证事实
+
+实际公开合同是 `POST /api/projects/{pid}/media-exports` 提交 `{canvas_id,node_id,revision}`，以及同路径 GET 恢复有界 job 列表（可选 canvas_id、node_id、绑定项目及筛选的 cursor）。`GET /api/media-exports/{job_id}?project_id=...` 返回唯一持久 job；preview、download、subtitles 后缀分别提供实际待审核原件、通过审核后的 MP4 附件、冻结可见字幕／文字轨道的 SRT。POST review、cancel、retry 使用独立 Idempotency-Key，按 SHA／job revision 或当前 job revision 判定，不能使用 asset revision 代替 job revision。所有 job 状态、进度与结果都由 mediatool 保存，timeline 的编辑输入不保存这些运行事实。
+
+070 SQL 使用非拥有者 `lanverse_app`：仅新增 mediatool schema USAGE、job SELECT／INSERT／可变运行列 UPDATE、command SELECT／INSERT。冻结 JSON、来源身份与创建时刻没有 UPDATE 权限，历史没有 DELETE 权限。API 接受事务同时提交永久请求回执、独立执行 Outbox 和严格平铺摘要的 audit Outbox；现有 audit consumer 负责实际解析和入库。最多两个 queued／running／cancel_requested job 可并发占用一个项目。每次显式 retry 增加 attempt，旧活动不得覆盖新尝试。活动会话 `active_worker` 只存在内部数据库，不能由浏览器提交；只有对应会话从实际子进程和文件清理返回后，才能登记运行中取消完成。无法确认活动退出的取消保持 cancel_requested。已产生并完整登记的 review_required 文件则证明渲染结束，可在取消事务中拒绝 pending 媒体并登记 cancelled。
+
+FFmpeg 先做真实原件 SHA／kind／像素尺寸检查，裁切以整数 `crop=...:exact=1` 在最终缩放前处理；音频用原生逐 sample afade，并保持片段在整条 clip 中的时间位置。渲染按 frame 边界分段，每段最多 32 个活动轨道和一个字幕 PNG 管道，每段及最终文件均检查真实时长，防止限额截断冒充完整输出。原件暂存合计上限 2 GiB，中间段合计 2 GiB，最终原件 500 MiB；超过限额明确失败。24 小时／1000 clip 是编辑合同边界，不代表任何素材一定能在这些实际处理资源上限内导出。
+
+已在隔离 PostgreSQL／MinIO 与实际 FFmpeg 下执行：正式 canvas 保存与修订冻结、空间 crop 像素检查、拼接空隙、中文与混合字符／换行／三种对齐／透明背景及描边、PCM 解码后的音量和淡入淡出、private preview 原件 SHA、pending 不可正式引用／下载、明确审核及相同回执重放、通过后附件与 SRT、刷新列表、严格 audit consumer 重放、旧 worker session／旧 attempt 竞争。使用实际 `SET ROLE lanverse_app` 的连接验证非 superuser／非 table owner 及冻结字段不可修改。生产 Activities 已在 Temporal SDK 测试环境中运行真实上述渲染和取消；这不等于真实 Temporal／Kafka／浏览器的运行验收，后者仍需由组合根接线后实际执行。
+
+### 9.2 音频提取接续合同
+
+完整迁移继续在同一 ExportJob 增加可选 `output_kind=video|audio`，缺省 video 保持当前请求与用户流程。字段必须在创建时验证并进入冻结输入／请求指纹／公开 job 投影，不允许在运行中变更。audio 仍只接受保存的 timeline 来源；将实际可见、未静音的 audio／video 轨道按 trim／volume／fade／时间位置混合为 M4A，复用同一授权、活动会话、取消、Outbox、pending→实际预览→明确审核→正式下载链。音频媒体使用实际 probe 的时长、channels、codec，不能填写视频像素字段；提供实际 waveform，不伪造 poster。若可见源视频没有真实 audio stream，且没有其他可用音频轨道，明确返回无可提取音频失败，不把生成静音文件宣称提取成功。该接续仍须 Red→Green 与真实私有媒体验收，不能以本节合同存在或当前视频导出通过宣称音频提取／Whisper 已完成。
+
+
+## 10. 提示词模板消费与报价冻结合同（2026-10-01，接线评审）
+
+### 10.1 固定来源的真实消费者
+
+以下事实来自固定 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`，不是运行验收：`backend/internal/app/provider.go:290-299` 是唯一统一编译调用，由 `metadata.promptTemplateOperation/promptTemplateVariables` 驱动；第 292 行明确视频模式不编译，最终视频提示词保留输入框内容。`web/src/pages/projects/index.tsx` 的旧大纲入口当前未被 `/projects` 路由装配；章节/角色详情受 localMode 重定向限制；`/skills` 关闭。九项定义全部保留，但来源中未装配或旁路的入口不算九条已运行生成链。
+
+| 模板 | 固定来源调用事实 | 目标编译所需权威上下文 |
+| --- | --- | --- |
+| chapter_assets_extract | `project-chapter-ai.ts` 的实际章节资产创建使用此模板 | 已保存章节正文/名称、项目名称与画风 |
+| character_extract | 现章节代码仅用于旧任务结果识别，没有新的独立创建调用 | 同上，角色输出仍按独立契约校验 |
+| character_turnaround | `project-character-media.ts` 创建任务元数据，项目详情本地路由受限 | 已确认角色名称/设定/版本、项目画风及正式参考 |
+| storyboard_plan / storyboard_repair | 前端只有操作常量，没有当前模板创建调用；章节分镜走自定义提示词 | 真实剧情、资产/角色版本、镜头数量/时长规则；repair 另需原输出和真实校验错误 |
+| storyboard_first_frame | `canvas-project-domain.ts` 为含变量的分镜行写元数据 | 已保存镜头的首帧构图、表演起始状态、项目视觉、负面要求 |
+| storyboard_video | 前端可写分镜视频元数据，但服务端明确旁路模板 | 最终提示词保持用户输入；不得静默应用个人模板 |
+| short_drama_outline | 旧项目页用大纲模板创建文本任务并导入章节，当前旧页未装配 | 用户本次故事 + 七项明确故事选项，项目权限复核 |
+| skill_draft | `lib/canvas/skill-drafting.ts` 创建模板任务，调用页 `/skills` 关闭 | 用户本次技能想法；保存技能/采用结果另按实际业务合同 |
+
+现 Lanverse 的运行实体是 workspace.project、canvas 资源/生成/批量表、Operation 与 media；script、bible、storyboard、skill 正式实体尚未实现。接通模板编译与报价不替代实体、原入口、结构化结果校验/采用及真实模型执行验收。不搬源 SQLite、Wails、浏览器 metadata 直达供应商或第二套本地任务。
+
+### 10.2 闭合请求与 application 端口
+
+公开 `QuoteItemRequest` 与内部 `FreeQuoteItemInput` 增加可选 `prompt_template`，未提供时保留原来的直接提示词链与指纹。请求类型归 prompt/application：`TemplateRequest={operation, expected_template_id, expected_customization_revision, outline?}`；operation 仅九项固定标识，expected_customization_revision 显式提供，首次为 0。outline 只用于 short_drama_outline，七项值沿固定源枚举：chapter_count 3/5/8/10、structure 单线推进/双线并行/群像多线/反转嵌套、word_count 500/800/1200/2000、perspective 第三人称/第一人称/多视角、tone 平稳叙事/轻松喜剧/紧张悬疑/热血成长/甜宠治愈、character_scale 2 个/3-4 个/5-6 个、chapter_length 短/中/长。其他操作拒绝 outline；不得公开任意 variables、system_prompt、输出 schema、身份或项目事实覆盖字段。
+
+prompt/application 的 Compiler 消费小接口 `CustomizationReader.ReadCustomizations(ctx, actor)`，由组合根注入位于同一报价事务的 pgprompt Store。`Compiler.Prepare(ctx,actor,request,runtime)` 返回 `Preparation`：原用户输入、最终提示词、operation、policy、基线 ID/版本、个人定制 ID/revision 与最终内容 SHA256。runtime 仅来自已复核权限和修订的正式业务 application 投影，包含 project_id、capability/mode、原用户输入与内部 ServerValues；Client 不能提交 ServerValues。业务尚不能产生某模板所需权威上下文时返回明确 context_unavailable，不用前端声称的章/角色/镜头事实补齐。
+
+六个结构化模板匹配 text.structured；首帧与三视图匹配 image.generate；视频匹配 video.generate 并返回 policy=bypass_video，不读取/应用个人模板，不改变原提示词。纯 domain.Compile 仍可预览九项定义；该预览不能触发视频生成编译。普通生成只有显式选用 prompt_template 才消费偏好；原用户本次输入作为受保护本次要求保留在最终文本，不能被 inherit/append/rewrite 消去。服务端基线/输出约束仍在本次要求之后形成最终保护层。
+
+### 10.3 单一报价与冻结事实
+
+事务顺序为实时主体/项目授权 → 稳定请求键锁 → 按原始请求（含可选模板请求）优先重放既有报价 → 锁定并验证已保存 canvas source/原用户 prompt、参数、引用、修订 → 读取权威上下文与当前个人模板修订 → Compile → 当前模型/价格/预算及完整输入指纹 → 插入 Operation、最终 prompt 输入、模板冻结证据与报价回执。任一失败均不插入部分 Operation，不执行供应商，不扣款。
+
+operation/application 新增 `QuotePromptCompiler` 消费端口及 `PrepareFreeQuoteWithTemplate`；原 `PrepareFreeQuote` 保持直接输入行为。prepared 结果带 `PromptPreparation`，由 operation adapter 持久化；最终提示词用于 OperationInput、输入哈希、字符/Token 估价，原输入仅用于 canvas/cfg 来源校验及请求幂等。模板证据包括 operation、policy、baseline/version、personal revision、content hash，在同一事务进入冻结报价事实；不建立第二份任务。nil 模板不改变旧 JSON 请求指纹，带模板的规范请求字段完整纳入同键异体校验。
+
+同键重放优先返回第一次冻结结果，之后个人偏好变更不得重新编译/重复报价；确认、重试、Worker 恢复均读取冻结文本，不能再次读取当前偏好。不同请求键且模板 revision 过期返回 template_changed；普通保存偏好不修改已有草稿、报价或执行任务。source revision/cfg hash、模型版本、价格版本、预算和费用门禁保持既有行为。是否复用已完成产物仍依最终实际输入的既有指纹判断，不能凭模板名字视为等价。
+
+公开报价返回可选 prompt_preparation 供用户在确认生成前审阅（policy、操作、基线/个人修订、最终提示词与哈希）；视频明确显示模板未应用。该内容是当前组织项目内本次已选生成输入，不开放读取其他主体的偏好目录。任务和费用状态仍由唯一 Operation 决定；保存/编译/报价成功均不等于执行、审核或结算成功。
+
+### 10.4 失败与验收边界
+
+非法操作/枚举/变量与不匹配 capability 返回 422 template_invalid；模板或个人修订变化返回 409 template_changed；缺少已接入的正式上下文返回 409 context_unavailable；存储/编译依赖失败返回 503 dependency_unavailable。视频旁路是明确 policy，不伪造“已应用”。编译后仍遵守既有最终 prompt 64 KiB 和输入/参数/项目大小限制，不扩张 provider 任意系统指令或工具权限。
+
+测试依次覆盖：闭合 DTO、所有声明模板的 application 编译/角色与受保护输入、修订与模式/类型、视频字节不变且不读取偏好、context 缺失/错误、最终估价与指纹；真实 PostgreSQL 覆盖同事务冻结、同键偏好变更重放、不同键 stale 拒绝、审计/存储故障无部分写；公开 Handler→Swagger→generated client→浏览器明确采用和预览。source 缺少的入口、九个业务结果消费者、真实文本/图片/视频供应商和应用到正式实体分别登记未通过；模板函数或 mock 不关闭完整迁移。
+
+### 10.5 当前已实现与未验收事实
+
+组合根使用 `pgoperation.NewStoreWithPromptCompiler(database, factory)`，factory 从同一 `gorm.DB` 报价事务构造 pgprompt Reader；原 NewStore 的直接输入链不读取偏好，未注入 compiler 的模板请求明确失败。事务先复核主体与项目、同键回执，再以原始 prompt 校验保存的 generation/batch source，之后编译及计算最终文本的报价与输入指纹。当前权威上下文仅有锁定的项目名称/画风；六项依赖章、角色或正式镜头的模板继续返回 context_unavailable，不接受客户端变量补齐。outline/skill 已可通过报价端口冻结，尚无对应正式文本业务实体的创建/结果采用验收。视频维持输入原文且不读取个人偏好。
+
+SQL 080 新增独立 `operation.operation.prompt_preparation` JSONB，闭合证明字段、版本、策略、能力、哈希及个人修订形状；现有运行角色的列 UPDATE 授权不包含此列。该列不保存最终文本；文本仍为唯一 operation_input 的 prompt。报价回执中的 `final_prompt` 是该冻结输入的审阅投影，稳定重放时不会再次编译。任务详情恢复同一证明并复核冻结文本哈希。报价目前验证了既有按字符计价的最终文本路径；per_1k_tokens 仍须有已接受的输入估计与模型输出上限事实，缺少时依既有计费门禁拒绝，不伪造 Token 数或完成验收。
+
+隔离 PostgreSQL 17.11 实测通过个人偏好修改后的旧报价重放、同键异体冲突、新键 stale、项目/主体范围、缺实体、batch 逐项排除、事务回滚、原 canvas prompt 与 revision 门禁、nil 模板的历史 JSON 指纹逐字保持、HTTP 嵌套未知字段拒绝和刷新证明。`SET LOCAL ROLE lanverse_app` 的实际写入及不可更新证明列通过。该证据不等于当前在线服务已切换非 owner 数据库账号，也不等于 PostgreSQL 18.4、真实供应商或九项正式业务消费者验收。

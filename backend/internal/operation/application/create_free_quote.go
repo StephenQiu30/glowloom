@@ -15,6 +15,7 @@ import (
 	catalogdomain "github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
 )
 
 var (
@@ -41,6 +42,7 @@ type FreeQuoteItemInput struct {
 	ForceRegenerate bool
 	MediaInputs     []FreeQuoteMediaInput
 	Source          *domain.CanvasSource
+	PromptTemplate  *promptapp.TemplateRequest
 }
 
 // FreeQuoteMediaInput names an ordered canvas asset and its model input role.
@@ -51,6 +53,11 @@ type FreeQuoteMediaInput struct {
 
 // Validate checks prompt, optional model selection and JSON bounds.
 func (i FreeQuoteItemInput) Validate() error {
+	if i.PromptTemplate != nil {
+		if err := i.PromptTemplate.ValidateFor(i.Capability); err != nil {
+			return err
+		}
+	}
 	if i.Source != nil && !i.Source.Valid() {
 		return ErrInvalidFreeQuote
 	}
@@ -117,15 +124,19 @@ type FreeQuoteMediaFact struct {
 
 // PreparedFreeQuote holds a new immutable quote before the adapter writes it.
 type PreparedFreeQuote struct {
-	Operation domain.Operation
-	Inputs    []domain.OperationInput
-	Reusable  bool
+	Operation         domain.Operation
+	Inputs            []domain.OperationInput
+	Reusable          bool
+	PromptPreparation *domain.PromptPreparation
 }
 
 // PrepareFreeQuote validates the published model and actual request, then
 // calculates the frozen fingerprint and exact price. The candidate is trusted
 // only after a project-scoped completed-output lookup by the adapter.
 func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, media []FreeQuoteMediaFact, now time.Time, candidate *uuid.UUID) (PreparedFreeQuote, error) {
+	if input.PromptTemplate != nil {
+		return PreparedFreeQuote{}, promptapp.ErrTemplateUnavailable
+	}
 	if len(input.Params) == 0 {
 		input.Params = json.RawMessage(`{}`)
 	}
@@ -257,13 +268,15 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 
 // CreateFreeQuoteResult contains the committed quote and observed balance.
 type CreateFreeQuoteResult struct {
-	OperationID     uuid.UUID
-	QuoteMicros     int64
-	QuoteDetail     json.RawMessage
-	AvailableMicros int64
-	ExpiresAt       time.Time
-	ReusedFromID    *uuid.UUID
-	Confirmable     bool
+	OperationID       uuid.UUID
+	QuoteMicros       int64
+	QuoteDetail       json.RawMessage
+	AvailableMicros   int64
+	ExpiresAt         time.Time
+	ReusedFromID      *uuid.UUID
+	Confirmable       bool
+	PromptPreparation *domain.PromptPreparation `json:"prompt_preparation,omitempty"`
+	FinalPrompt       string                    `json:"final_prompt,omitempty"`
 }
 
 // FreeQuoteCreator persists one project-scoped free quote transaction.
@@ -284,8 +297,11 @@ func (c *CreateFreeQuoteCommand) Execute(ctx context.Context, actor identityapp.
 	if len(input.Params) == 0 {
 		input.Params = json.RawMessage(`{}`)
 	}
-	if c == nil || c.store == nil || input.Validate() != nil {
+	if c == nil || c.store == nil {
 		return CreateFreeQuoteResult{}, ErrInvalidFreeQuote
+	}
+	if err := input.Validate(); err != nil {
+		return CreateFreeQuoteResult{}, err
 	}
 	result, err := c.store.CreateFreeQuote(ctx, actor, input)
 	if err != nil {

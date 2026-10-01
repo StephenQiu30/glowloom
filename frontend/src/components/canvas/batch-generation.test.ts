@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { batchGenerationItems } from "./batch-generation";
+import {
+  batchGenerationItems,
+  batchGenerationGroups,
+  mergeBatchQuotes,
+} from "./batch-generation";
 import { createBatchTable, createBatchRow } from "./batch-table";
 import { createNode } from "./document";
 import { CanvasNodeType } from "./model";
@@ -66,6 +70,82 @@ describe("批量报价编排", () => {
         ...model,
         inputRoles: ["prompt"],
       }),
+    ).toThrow();
+  });
+  it("500行全表按150分组，保留每一行身份且只排除关闭行", () => {
+    const { config, images, row } = fixture();
+    config.rows = Array.from({ length: 500 }, () => ({
+      ...row,
+      id: crypto.randomUUID(),
+      inputNodeIds: [...row.inputNodeIds],
+    }));
+    const groups = batchGenerationGroups(config, images, model);
+    expect(groups.map((group) => group.items.length)).toEqual([
+      150, 150, 150, 50,
+    ]);
+    expect(groups.flatMap((group) => group.rowIds)).toEqual(
+      config.rows.map((item) => item.id),
+    );
+    config.rows[3].enabled = false;
+    expect(
+      batchGenerationGroups(config, images, model).flatMap(
+        (group) => group.rowIds,
+      ),
+    ).not.toContain(config.rows[3].id);
+  });
+  it("全表报价提前检查最后一组，防止前面报价后才发现遗漏行无效", () => {
+    const { config, images, row } = fixture();
+    config.globalPrompt = "";
+    config.rows = Array.from({ length: 151 }, () => ({
+      ...row,
+      id: crypto.randomUUID(),
+      inputNodeIds: [...row.inputNodeIds],
+      prompt: "有效提示",
+    }));
+    config.rows[150].prompt = "";
+    expect(() => batchGenerationGroups(config, images, model)).toThrow("151");
+  });
+  it("综合费用取最早到期和最小可用余额，拒绝重复操作身份和金额溢出", () => {
+    const quote = (cost: number, available: number, expires: string) => ({
+      batch_id: crypto.randomUUID(),
+      items: [
+        {
+          operation_id: crypto.randomUUID(),
+          target_label: "行",
+          errors: [],
+          quote_micros: cost,
+        },
+      ],
+      total_micros: cost,
+      available_micros: available,
+      expires_at: expires,
+      confirmable: true,
+    });
+    const groups = [
+      quote(400, 900, "2026-10-01T14:00:00Z"),
+      quote(300, 800, "2026-10-01T13:59:00Z"),
+    ];
+    expect(mergeBatchQuotes(groups)).toMatchObject({
+      batch_id: null,
+      total_micros: 700,
+      available_micros: 800,
+      expires_at: "2026-10-01T13:59:00Z",
+      confirmable: true,
+    });
+    expect(
+      mergeBatchQuotes([groups[0], { ...groups[1], available_micros: 500 }])
+        .confirmable,
+    ).toBe(false);
+    expect(() => mergeBatchQuotes([groups[0], groups[0]])).toThrow();
+    expect(() =>
+      mergeBatchQuotes([
+        quote(
+          Number.MAX_SAFE_INTEGER,
+          Number.MAX_SAFE_INTEGER,
+          groups[0].expires_at,
+        ),
+        groups[1],
+      ]),
     ).toThrow();
   });
 });

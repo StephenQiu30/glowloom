@@ -1069,6 +1069,117 @@ definitions:
       duplicate_of:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput:
+    properties:
+      project_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.CreateInput:
+    properties:
+      canvas_id:
+        type: string
+      node_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.ExportJob'
+        type: array
+      next_cursor:
+        type: string
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPreview:
+    properties:
+      asset:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary'
+      expires_at:
+        type: string
+      job_id:
+        type: string
+      revision:
+        type: integer
+      sha256:
+        type: string
+      url:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ReviewInput:
+    properties:
+      local_review_confirmed:
+        type: boolean
+      project_id:
+        type: string
+      revision:
+        type: integer
+      sha256:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.ExportJob:
+    properties:
+      asset_id:
+        type: string
+        x-nullable: true
+      attempt:
+        type: integer
+      created_at:
+        type: string
+      failure_code:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      progress:
+        type: integer
+      project_id:
+        type: string
+      revision:
+        type: integer
+      sha256:
+        type: string
+        x-nullable: true
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source'
+      stage:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Status'
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source:
+    properties:
+      canvas_id:
+        type: string
+      node_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Status:
+    enum:
+    - queued
+    - running
+    - review_required
+    - succeeded
+    - failed
+    - cancel_requested
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - Queued
+    - Running
+    - ReviewRequired
+    - Succeeded
+    - Failed
+    - CancelRequested
+    - Cancelled
   github_com_StephenQiu30_lanverse_backend_internal_operation_application.BatchDetail:
     properties:
       cancel_requested_at:
@@ -1104,12 +1215,16 @@ definitions:
     properties:
       error_code:
         type: string
+      final_prompt:
+        type: string
       mode:
         type: string
       model_key:
         type: string
       operation_id:
         type: string
+      prompt_preparation:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation'
       quote_detail:
         items:
           type: integer
@@ -1183,6 +1298,8 @@ definitions:
         type: object
       project_id:
         type: string
+      prompt_preparation:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation'
       quote_detail:
         type: object
       quote_expires_at:
@@ -1362,6 +1479,29 @@ definitions:
         type: string
         x-nullable: true
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation:
+    properties:
+      content_sha256:
+        type: string
+      customization_id:
+        type: string
+      customization_revision:
+        type: integer
+      operation:
+        type: string
+      policy:
+        type: string
+      request_sha256:
+        type: string
+      template_id:
+        type: string
+      template_version:
+        type: integer
+      user_prompt_sha256:
+        type: string
+      version:
+        type: integer
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_operation_domain.Status:
     enum:
     - draft
@@ -1414,6 +1554,64 @@ definitions:
       type:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_prompt_application.OutlineOptions:
+    properties:
+      chapter_count:
+        enum:
+        - "3"
+        - "5"
+        - "8"
+        - "10"
+        type: string
+      chapter_length:
+        enum:
+        - 短
+        - 中
+        - 长
+        type: string
+      character_scale:
+        enum:
+        - 2 个
+        - 3-4 个
+        - 5-6 个
+        type: string
+      perspective:
+        enum:
+        - 第三人称
+        - 第一人称
+        - 多视角
+        type: string
+      structure:
+        enum:
+        - 单线推进
+        - 双线并行
+        - 群像多线
+        - 反转嵌套
+        type: string
+      tone:
+        enum:
+        - 平稳叙事
+        - 轻松喜剧
+        - 紧张悬疑
+        - 热血成长
+        - 甜宠治愈
+        type: string
+      word_count:
+        enum:
+        - "500"
+        - "800"
+        - "1200"
+        - "2000"
+        type: string
+    required:
+    - chapter_count
+    - chapter_length
+    - character_scale
+    - perspective
+    - structure
+    - tone
+    - word_count
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_prompt_application.Preference:
     properties:
       customization:
@@ -1422,6 +1620,33 @@ definitions:
         $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_prompt_domain.Definition'
       outdated:
         type: boolean
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_prompt_application.TemplateRequest:
+    properties:
+      expected_customization_revision:
+        maximum: 2147483647
+        minimum: 0
+        type: integer
+      expected_template_id:
+        type: string
+      operation:
+        enum:
+        - chapter_assets_extract
+        - character_extract
+        - character_turnaround
+        - storyboard_plan
+        - storyboard_repair
+        - storyboard_first_frame
+        - storyboard_video
+        - short_drama_outline
+        - skill_draft
+        type: string
+      outline:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_prompt_application.OutlineOptions'
+    required:
+    - expected_customization_revision
+    - expected_template_id
+    - operation
     type: object
   github_com_StephenQiu30_lanverse_backend_internal_prompt_domain.Customization:
     properties:
@@ -1748,6 +1973,38 @@ definitions:
       status:
         $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_catalog_domain.ProviderStatus'
     type: object
+  internal_mediatool_adapter_http.ExportJobResponse:
+    properties:
+      asset_id:
+        type: string
+        x-nullable: true
+      attempt:
+        type: integer
+      created_at:
+        type: string
+      failure_code:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      progress:
+        type: integer
+      project_id:
+        type: string
+      revision:
+        type: integer
+      sha256:
+        type: string
+        x-nullable: true
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source'
+      stage:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Status'
+      updated_at:
+        type: string
+    type: object
   internal_operation_adapter_http.ConfirmBatchItem:
     properties:
       operation_id:
@@ -1817,6 +2074,8 @@ definitions:
         type: object
       prompt:
         type: string
+      prompt_template:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_prompt_application.TemplateRequest'
       source:
         allOf:
         - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_operation_domain.CanvasSource'
@@ -1837,8 +2096,12 @@ definitions:
         type: boolean
       expires_at:
         type: string
+      final_prompt:
+        type: string
       operation_id:
         type: string
+      prompt_preparation:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation'
       quote_detail:
         type: object
       quote_micros:
@@ -2853,6 +3116,330 @@ paths:
       summary: 提交画布命令批次
       tags:
       - canvases
+  /api/media-exports/{job_id}:
+    get:
+      operationId: getMediaExport
+      parameters:
+      - description: Export UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.ExportJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Get local media export
+      tags:
+      - media-exports
+  /api/media-exports/{job_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      operationId: cancelMediaExport
+      parameters:
+      - description: Export UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Current job revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.ExportJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Cancel local media export
+      tags:
+      - media-exports
+  /api/media-exports/{job_id}/download:
+    get:
+      operationId: downloadMediaExport
+      parameters:
+      - description: Export UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - video/mp4
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Download reviewed media export
+      tags:
+      - media-exports
+  /api/media-exports/{job_id}/preview:
+    get:
+      operationId: previewMediaExport
+      parameters:
+      - description: Export UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPreview'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Preview pending or reviewed media export
+      tags:
+      - media-exports
+  /api/media-exports/{job_id}/retry:
+    post:
+      consumes:
+      - application/json
+      operationId: retryMediaExport
+      parameters:
+      - description: Export UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Current job revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.ExportJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Retry failed or cancelled local media export
+      tags:
+      - media-exports
+  /api/media-exports/{job_id}/review:
+    post:
+      consumes:
+      - application/json
+      operationId: reviewMediaExport
+      parameters:
+      - description: Export UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: SHA, revision and explicit owner review
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ReviewInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.ExportJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Confirm review of actual exported file
+      tags:
+      - media-exports
+  /api/media-exports/{job_id}/subtitles:
+    get:
+      operationId: downloadMediaExportSubtitles
+      parameters:
+      - description: Export UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/x-subrip
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Download timeline subtitles as SRT
+      tags:
+      - media-exports
   /api/models:
     get:
       operationId: listProjectModels
@@ -3317,6 +3904,108 @@ paths:
       summary: 项目可用媒体列表
       tags:
       - media
+  /api/projects/{pid}/media-exports:
+    get:
+      operationId: listMediaExports
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Canvas UUID
+        in: query
+        name: canvas_id
+        type: string
+      - description: Timeline node UUID
+        in: query
+        name: node_id
+        type: string
+      - description: 1..200, default 50
+        in: query
+        name: limit
+        type: integer
+      - description: Project and source bound cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPage'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: List project media exports
+      tags:
+      - media-exports
+    post:
+      consumes:
+      - application/json
+      operationId: createMediaExport
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Saved source identity
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.CreateInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.ExportJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Create local timeline export
+      tags:
+      - media-exports
   /api/projects/{pid}/media/{asset_id}/preview:
     get:
       operationId: getMediaPreview

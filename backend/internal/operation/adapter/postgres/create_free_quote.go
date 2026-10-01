@@ -15,6 +15,7 @@ import (
 	catalogdomain "github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
 )
 
 // CreateFreeQuote keeps the current project, catalog and quote snapshot in one
@@ -61,7 +62,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 			return nil
 		}
 		now := time.Now().UTC()
-		item, _, err := prepareFreeQuoteItem(ctx, tx, actor, input, project, now)
+		item, _, err := s.prepareFreeQuoteItem(ctx, tx, actor, input, project, now)
 		if err != nil {
 			return err
 		}
@@ -80,8 +81,12 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 			OperationID: item.Operation.ID, QuoteMicros: *item.Operation.QuoteMicros,
 			QuoteDetail:     item.Operation.QuoteDetail,
 			AvailableMicros: available, ExpiresAt: *item.Operation.QuoteExpiresAt,
-			ReusedFromID: item.Operation.ReusedFromID,
-			Confirmable:  available >= *item.Operation.QuoteMicros,
+			ReusedFromID:      item.Operation.ReusedFromID,
+			Confirmable:       available >= *item.Operation.QuoteMicros,
+			PromptPreparation: item.PromptPreparation,
+		}
+		if item.PromptPreparation != nil {
+			result.FinalPrompt = *item.Inputs[0].TextValue
 		}
 		return insertQuoteRequest(tx, actor, requestID, fingerprint, result)
 	})
@@ -94,12 +99,14 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 type freeQuoteProject struct {
 	AllowOverseasModels bool
 	DefaultModels       string
+	Name                string
+	StyleType           string
 }
 
 func lockFreeQuoteProject(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID) (freeQuoteProject, error) {
 	var project freeQuoteProject
 	read := tx.Raw(`
-		SELECT allow_overseas_models, default_models::text AS default_models FROM workspace.project
+		SELECT allow_overseas_models, default_models::text AS default_models,name,style_type FROM workspace.project
 		WHERE id = ?::uuid AND org_id = ?::uuid
 		  AND status = 'active' AND NOT is_delete FOR SHARE
 	`, projectID.String(), actor.OrgID.String()).Scan(&project)
@@ -112,7 +119,7 @@ func lockFreeQuoteProject(tx *gorm.DB, actor identityapp.Principal, projectID uu
 	return project, nil
 }
 
-func prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor identityapp.Principal,
+func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor identityapp.Principal,
 	input application.CreateFreeQuoteInput, project freeQuoteProject, now time.Time,
 ) (QuoteItem, string, error) {
 	if len(input.Params) == 0 {
@@ -129,6 +136,24 @@ func prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor identityapp.Pr
 	if _, err := readQuoteCanvasSource(tx, input.ProjectID, input.FreeQuoteItemInput); err != nil {
 		return QuoteItem{}, "", err
 	}
+	var compilation *promptapp.Preparation
+	if input.PromptTemplate != nil {
+		if s.promptCompiler == nil {
+			return QuoteItem{}, "", promptapp.ErrTemplateUnavailable
+		}
+		compiler := s.promptCompiler(tx)
+		if compiler == nil {
+			return QuoteItem{}, "", promptapp.ErrTemplateUnavailable
+		}
+		preparedPrompt, err := compiler.Prepare(ctx, actor, *input.PromptTemplate, promptapp.RuntimeContext{
+			ProjectID: input.ProjectID, Capability: input.Capability, Mode: input.Mode, UserPrompt: input.Prompt,
+			ServerValues: map[string]string{"项目名称": project.Name, "项目画风": project.StyleType},
+		})
+		if err != nil {
+			return QuoteItem{}, "", err
+		}
+		compilation = &preparedPrompt
+	}
 	catalog, err := readFreeQuoteCatalog(tx, input, project.AllowOverseasModels, now)
 	if err != nil {
 		return QuoteItem{}, "", err
@@ -137,7 +162,7 @@ func prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor identityapp.Pr
 	if err != nil {
 		return QuoteItem{}, "", err
 	}
-	prepared, err := application.PrepareFreeQuote(input, catalog, media, now, nil)
+	prepared, err := application.PrepareFreeQuoteWithTemplate(input, catalog, media, now, nil, compilation)
 	if err != nil {
 		return QuoteItem{}, "", err
 	}
@@ -147,13 +172,13 @@ func prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor identityapp.Pr
 			return QuoteItem{}, "", findErr
 		}
 		if findErr == nil {
-			prepared, err = application.PrepareFreeQuote(input, catalog, media, now, &candidateID)
+			prepared, err = application.PrepareFreeQuoteWithTemplate(input, catalog, media, now, &candidateID, compilation)
 			if err != nil {
 				return QuoteItem{}, "", err
 			}
 		}
 	}
-	return QuoteItem{Operation: prepared.Operation, Inputs: prepared.Inputs}, modelKey, nil
+	return QuoteItem{Operation: prepared.Operation, Inputs: prepared.Inputs, PromptPreparation: prepared.PromptPreparation}, modelKey, nil
 }
 
 func resolveFreeQuoteModelKey(input application.FreeQuoteItemInput, project freeQuoteProject) (string, error) {

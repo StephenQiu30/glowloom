@@ -1328,6 +1328,492 @@
                 }
             }
         },
+        "/api/media-exports/{job_id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Get local media export",
+                "operationId": "getMediaExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export UUID",
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_mediatool_adapter_http.ExportJobResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/media-exports/{job_id}/cancel": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Cancel local media export",
+                "operationId": "cancelMediaExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export UUID",
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Command UUID",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Current job revision",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/internal_mediatool_adapter_http.ExportJobResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/media-exports/{job_id}/download": {
+            "get": {
+                "produces": [
+                    "video/mp4"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Download reviewed media export",
+                "operationId": "downloadMediaExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export UUID",
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/media-exports/{job_id}/preview": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Preview pending or reviewed media export",
+                "operationId": "previewMediaExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export UUID",
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPreview"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/media-exports/{job_id}/retry": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Retry failed or cancelled local media export",
+                "operationId": "retryMediaExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export UUID",
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Command UUID",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Current job revision",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/internal_mediatool_adapter_http.ExportJobResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/media-exports/{job_id}/review": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Confirm review of actual exported file",
+                "operationId": "reviewMediaExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export UUID",
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Command UUID",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "SHA, revision and explicit owner review",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ReviewInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_mediatool_adapter_http.ExportJobResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/media-exports/{job_id}/subtitles": {
+            "get": {
+                "produces": [
+                    "application/x-subrip"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Download timeline subtitles as SRT",
+                "operationId": "downloadMediaExportSubtitles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Export UUID",
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
         "/api/models": {
             "get": {
                 "produces": [
@@ -2007,6 +2493,159 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{pid}/media-exports": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "List project media exports",
+                "operationId": "listMediaExports",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "pid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Canvas UUID",
+                        "name": "canvas_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Timeline node UUID",
+                        "name": "node_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1..200, default 50",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project and source bound cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPage"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media-exports"
+                ],
+                "summary": "Create local timeline export",
+                "operationId": "createMediaExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "pid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Command UUID",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Saved source identity",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.CreateInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/internal_mediatool_adapter_http.ExportJobResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
@@ -4299,6 +4938,168 @@
                 }
             }
         },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.CreateInput": {
+            "type": "object",
+            "properties": {
+                "canvas_id": {
+                    "type": "string"
+                },
+                "node_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.ExportJob"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string",
+                    "x-nullable": true
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportPreview": {
+            "type": "object",
+            "properties": {
+                "asset": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "job_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "sha256": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ReviewInput": {
+            "type": "object",
+            "properties": {
+                "local_review_confirmed": {
+                    "type": "boolean"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "sha256": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.ExportJob": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "attempt": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "failure_code": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "id": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "sha256": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "source": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source"
+                },
+                "stage": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Status"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source": {
+            "type": "object",
+            "properties": {
+                "canvas_id": {
+                    "type": "string"
+                },
+                "node_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Status": {
+            "type": "string",
+            "enum": [
+                "queued",
+                "running",
+                "review_required",
+                "succeeded",
+                "failed",
+                "cancel_requested",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "Queued",
+                "Running",
+                "ReviewRequired",
+                "Succeeded",
+                "Failed",
+                "CancelRequested",
+                "Cancelled"
+            ]
+        },
         "github_com_StephenQiu30_lanverse_backend_internal_operation_application.BatchDetail": {
             "type": "object",
             "properties": {
@@ -4351,6 +5152,9 @@
                 "error_code": {
                     "type": "string"
                 },
+                "final_prompt": {
+                    "type": "string"
+                },
                 "mode": {
                     "type": "string"
                 },
@@ -4359,6 +5163,9 @@
                 },
                 "operation_id": {
                     "type": "string"
+                },
+                "prompt_preparation": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation"
                 },
                 "quote_detail": {
                     "type": "array",
@@ -4468,6 +5275,9 @@
                 },
                 "project_id": {
                     "type": "string"
+                },
+                "prompt_preparation": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation"
                 },
                 "quote_detail": {
                     "type": "object"
@@ -4729,6 +5539,41 @@
                 }
             }
         },
+        "github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation": {
+            "type": "object",
+            "properties": {
+                "content_sha256": {
+                    "type": "string"
+                },
+                "customization_id": {
+                    "type": "string"
+                },
+                "customization_revision": {
+                    "type": "integer"
+                },
+                "operation": {
+                    "type": "string"
+                },
+                "policy": {
+                    "type": "string"
+                },
+                "request_sha256": {
+                    "type": "string"
+                },
+                "template_id": {
+                    "type": "string"
+                },
+                "template_version": {
+                    "type": "integer"
+                },
+                "user_prompt_sha256": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "github_com_StephenQiu30_lanverse_backend_internal_operation_domain.Status": {
             "type": "string",
             "enum": [
@@ -4793,6 +5638,81 @@
                 }
             }
         },
+        "github_com_StephenQiu30_lanverse_backend_internal_prompt_application.OutlineOptions": {
+            "type": "object",
+            "required": [
+                "chapter_count",
+                "chapter_length",
+                "character_scale",
+                "perspective",
+                "structure",
+                "tone",
+                "word_count"
+            ],
+            "properties": {
+                "chapter_count": {
+                    "type": "string",
+                    "enum": [
+                        "3",
+                        "5",
+                        "8",
+                        "10"
+                    ]
+                },
+                "chapter_length": {
+                    "type": "string",
+                    "enum": [
+                        "短",
+                        "中",
+                        "长"
+                    ]
+                },
+                "character_scale": {
+                    "type": "string",
+                    "enum": [
+                        "2 个",
+                        "3-4 个",
+                        "5-6 个"
+                    ]
+                },
+                "perspective": {
+                    "type": "string",
+                    "enum": [
+                        "第三人称",
+                        "第一人称",
+                        "多视角"
+                    ]
+                },
+                "structure": {
+                    "type": "string",
+                    "enum": [
+                        "单线推进",
+                        "双线并行",
+                        "群像多线",
+                        "反转嵌套"
+                    ]
+                },
+                "tone": {
+                    "type": "string",
+                    "enum": [
+                        "平稳叙事",
+                        "轻松喜剧",
+                        "紧张悬疑",
+                        "热血成长",
+                        "甜宠治愈"
+                    ]
+                },
+                "word_count": {
+                    "type": "string",
+                    "enum": [
+                        "500",
+                        "800",
+                        "1200",
+                        "2000"
+                    ]
+                }
+            }
+        },
         "github_com_StephenQiu30_lanverse_backend_internal_prompt_application.Preference": {
             "type": "object",
             "properties": {
@@ -4804,6 +5724,41 @@
                 },
                 "outdated": {
                     "type": "boolean"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_prompt_application.TemplateRequest": {
+            "type": "object",
+            "required": [
+                "expected_customization_revision",
+                "expected_template_id",
+                "operation"
+            ],
+            "properties": {
+                "expected_customization_revision": {
+                    "type": "integer",
+                    "maximum": 2147483647,
+                    "minimum": 0
+                },
+                "expected_template_id": {
+                    "type": "string"
+                },
+                "operation": {
+                    "type": "string",
+                    "enum": [
+                        "chapter_assets_extract",
+                        "character_extract",
+                        "character_turnaround",
+                        "storyboard_plan",
+                        "storyboard_repair",
+                        "storyboard_first_frame",
+                        "storyboard_video",
+                        "short_drama_outline",
+                        "skill_draft"
+                    ]
+                },
+                "outline": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_prompt_application.OutlineOptions"
                 }
             }
         },
@@ -5304,6 +6259,53 @@
                 }
             }
         },
+        "internal_mediatool_adapter_http.ExportJobResponse": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "attempt": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "failure_code": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "id": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "sha256": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "source": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source"
+                },
+                "stage": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Status"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_operation_adapter_http.ConfirmBatchItem": {
             "type": "object",
             "properties": {
@@ -5410,6 +6412,9 @@
                 "prompt": {
                     "type": "string"
                 },
+                "prompt_template": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_prompt_application.TemplateRequest"
+                },
                 "source": {
                     "allOf": [
                         {
@@ -5443,8 +6448,14 @@
                 "expires_at": {
                     "type": "string"
                 },
+                "final_prompt": {
+                    "type": "string"
+                },
                 "operation_id": {
                     "type": "string"
+                },
+                "prompt_preparation": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_operation_domain.PromptPreparation"
                 },
                 "quote_detail": {
                     "type": "object"

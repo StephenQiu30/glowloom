@@ -49,6 +49,10 @@ import {
   type TimelineTrack,
 } from "./timeline";
 import { TimelinePreview } from "./timeline-preview";
+import { TimelineCropControl } from "./timeline-crop-control";
+import { MediaExportPanel } from "./media-export-panel";
+import type { ExportSource } from "./media-export-model";
+import type { MediaAsset } from "./queries";
 
 const labels = {
   video: "视频",
@@ -64,7 +68,9 @@ type Props = {
   readOnly: boolean;
   onClose: () => void;
   onSave: (value: TimelineProject) => Promise<boolean>;
-  exportControl?: React.ReactNode;
+  canvasId: string;
+  source: () => ExportSource;
+  onExportResult: (asset: MediaAsset) => Promise<boolean>;
 };
 function downloadText(content: string, name: string) {
   const url = URL.createObjectURL(
@@ -83,7 +89,9 @@ export function TimelineDialog({
   readOnly,
   onClose,
   onSave,
-  exportControl,
+  canvasId,
+  source,
+  onExportResult,
 }: Props) {
   const [draft, setDraft] = useState(() => timelineSchema.parse(node.timeline));
   const [timeMs, setTimeMs] = useState(0);
@@ -92,6 +100,7 @@ export function TimelineDialog({
   const [sourceId, setSourceId] = useState("");
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [error, setError] = useState("");
   const [scale, setScale] = useState(0.04);
   const [newKind, setNewKind] = useState<TimelineTrack["kind"]>("video");
@@ -112,7 +121,7 @@ export function TimelineDialog({
   const selectedTrack = draft.tracks.find(
     (track) => track.id === selected?.trackId,
   );
-  const disabled = readOnly || saving || adding;
+  const disabled = readOnly || saving || adding || exportBusy;
   const available = nodes.filter((item) =>
     [
       CanvasNodeType.Image,
@@ -321,13 +330,13 @@ export function TimelineDialog({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !saving) onClose();
+        if (!open && !saving && !exportBusy) onClose();
       }}
     >
       <DialogContent
-        className="flex max-h-[94dvh] w-[98vw] flex-col overflow-y-auto sm:max-w-[1400px]"
+        className="flex max-h-[94dvh] w-[98vw] flex-col overflow-y-auto sm:max-w-[1400px] [&>*]:shrink-0"
         onEscapeKeyDown={(event) => {
-          if (saving) event.preventDefault();
+          if (saving || exportBusy) event.preventDefault();
         }}
       >
         <DialogHeader>
@@ -806,6 +815,19 @@ export function TimelineDialog({
                 />
               </Field>
             ) : null}
+            {selected.kind === "video" || selected.kind === "image" ? (
+              <TimelineCropControl
+                key={selected.id}
+                clip={selected}
+                projectId={projectId}
+                assetId={
+                  selected.assetId ??
+                  nodes.find((item) => item.id === selected.nodeId)?.assetId
+                }
+                disabled={disabled || Boolean(selectedTrack?.locked)}
+                onChange={(crop) => patchClip({ crop })}
+              />
+            ) : null}
             <div className="flex items-end gap-2">
               <Button
                 variant="outline"
@@ -958,9 +980,23 @@ export function TimelineDialog({
             {error}
           </p>
         ) : null}
-        {exportControl}
+        <MediaExportPanel
+          projectId={projectId}
+          canvasId={canvasId}
+          nodeId={node.id}
+          draft={draft}
+          source={source}
+          disabled={disabled}
+          onPersist={onSave}
+          onImport={onExportResult}
+          onBusy={setExportBusy}
+        />
         <DialogFooter>
-          <Button variant="outline" disabled={saving} onClick={onClose}>
+          <Button
+            variant="outline"
+            disabled={saving || exportBusy}
+            onClick={onClose}
+          >
             关闭
           </Button>
           <Button disabled={disabled} onClick={save}>

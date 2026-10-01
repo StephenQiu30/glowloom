@@ -63,6 +63,12 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 
 前端包依赖的许可仍由各依赖声明。
 
+## Noto CJK 字幕字体
+
+Go 时间轴渲染器使用原字节的 `NotoSansCJKsc-Regular.otf` 绘制中英文字幕，来源为 [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk/tree/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese)，固定提交 `f8d157532fbfaeda587e826d4cd5b21a49186f7c`，未修改字体。目标路径 `backend/internal/mediatool/adapter/ffmpeg/fonts/NotoSansCJKsc-Regular.otf`；文件 16,437,364 字节，SHA256 `2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b`。
+
+适用 SIL Open Font License 1.1，上游 `Sans/LICENSE` 原文保存于字体旁 `OFL.txt`、[docs/licenses/noto-cjk-ofl.txt](docs/licenses/noto-cjk-ofl.txt) 和运行时 `/licenses/noto-cjk-ofl.txt`。不把字体替换成浏览器页面字体，也不将其作为 Lanverse 自有字体发布。
+
 ## Khronos glTF 输入校验规范
 
 服务端 `backend/internal/media/adapter/gltf/schema/` 的 JSON Schema 原文来自 [KhronosGroup/glTF](https://github.com/KhronosGroup/glTF/tree/5decc120c95764c319c4f92e7f7ead026d926ef3)，固定提交 `5decc120c95764c319c4f92e7f7ead026d926ef3`，2026-10-01 获取。JSON Schema 保持原字节；适配和资源预算校验为 Lanverse 自身 Go 实现。

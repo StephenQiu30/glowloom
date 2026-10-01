@@ -50,6 +50,14 @@ export default function LicensesPage() {
               Khronos 扩展规范版权声明
             </a>
           </li>
+          <li>
+            <a
+              className="underline underline-offset-4"
+              href="/licenses/noto-cjk-ofl.txt"
+            >
+              Noto CJK 字幕字体 SIL Open Font License 1.1
+            </a>
+          </li>
         </ul>
         <p className="text-sm text-muted-foreground">
           来源版本：BeefTV 0d9e9f48 画布核心；完整能力迁移参考 1ae25027。© 2026

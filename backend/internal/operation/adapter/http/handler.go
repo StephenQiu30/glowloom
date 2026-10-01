@@ -19,6 +19,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
 )
 
 // Dependencies are the commands and queries consumed by the public workbench.
@@ -59,15 +60,16 @@ type QuoteMediaInput struct {
 
 // QuoteItemRequest contains user input; model and price versions freeze server-side.
 type QuoteItemRequest struct {
-	ModelKey        string               `json:"model_key"`
-	Capability      string               `json:"capability"`
-	Mode            string               `json:"mode"`
-	Prompt          string               `json:"prompt"`
-	Params          json.RawMessage      `json:"params" swaggertype:"object"`
-	OutputCount     int32                `json:"output_count"`
-	ForceRegenerate bool                 `json:"force_regenerate"`
-	MediaInputs     []QuoteMediaInput    `json:"media_inputs"`
-	Source          *domain.CanvasSource `json:"source,omitempty" extensions:"x-nullable"`
+	ModelKey        string                     `json:"model_key"`
+	Capability      string                     `json:"capability"`
+	Mode            string                     `json:"mode"`
+	Prompt          string                     `json:"prompt"`
+	Params          json.RawMessage            `json:"params" swaggertype:"object"`
+	OutputCount     int32                      `json:"output_count"`
+	ForceRegenerate bool                       `json:"force_regenerate"`
+	MediaInputs     []QuoteMediaInput          `json:"media_inputs"`
+	Source          *domain.CanvasSource       `json:"source,omitempty" extensions:"x-nullable"`
+	PromptTemplate  *promptapp.TemplateRequest `json:"prompt_template,omitempty"`
 }
 
 func (i QuoteItemRequest) input() application.FreeQuoteItemInput {
@@ -75,18 +77,20 @@ func (i QuoteItemRequest) input() application.FreeQuoteItemInput {
 	for _, item := range i.MediaInputs {
 		media = append(media, application.FreeQuoteMediaInput{Role: item.Role, MediaAssetID: item.MediaAssetID})
 	}
-	return application.FreeQuoteItemInput{ModelKey: i.ModelKey, Capability: i.Capability, Mode: i.Mode, Prompt: i.Prompt, Params: i.Params, OutputCount: i.OutputCount, ForceRegenerate: i.ForceRegenerate, MediaInputs: media, Source: i.Source}
+	return application.FreeQuoteItemInput{ModelKey: i.ModelKey, Capability: i.Capability, Mode: i.Mode, Prompt: i.Prompt, Params: i.Params, OutputCount: i.OutputCount, ForceRegenerate: i.ForceRegenerate, MediaInputs: media, Source: i.Source, PromptTemplate: i.PromptTemplate}
 }
 
 // QuoteResponse is an immutable estimate, not an execution result.
 type QuoteResponse struct {
-	OperationID     uuid.UUID       `json:"operation_id"`
-	QuoteMicros     int64           `json:"quote_micros"`
-	QuoteDetail     json.RawMessage `json:"quote_detail" swaggertype:"object"`
-	AvailableMicros int64           `json:"available_micros"`
-	ExpiresAt       time.Time       `json:"expires_at"`
-	ReusedFromID    *uuid.UUID      `json:"reused_from_id" extensions:"x-nullable"`
-	Confirmable     bool            `json:"confirmable"`
+	OperationID       uuid.UUID                 `json:"operation_id"`
+	QuoteMicros       int64                     `json:"quote_micros"`
+	QuoteDetail       json.RawMessage           `json:"quote_detail" swaggertype:"object"`
+	AvailableMicros   int64                     `json:"available_micros"`
+	ExpiresAt         time.Time                 `json:"expires_at"`
+	ReusedFromID      *uuid.UUID                `json:"reused_from_id" extensions:"x-nullable"`
+	Confirmable       bool                      `json:"confirmable"`
+	PromptPreparation *domain.PromptPreparation `json:"prompt_preparation,omitempty"`
+	FinalPrompt       string                    `json:"final_prompt,omitempty"`
 }
 
 // QuotesRequest contains one or more independent free-generation items.
@@ -128,7 +132,7 @@ func (h *Handler) FreeQuote(c *gin.Context) {
 }
 
 func quoteResponse(result application.CreateFreeQuoteResult) QuoteResponse {
-	return QuoteResponse{OperationID: result.OperationID, QuoteMicros: result.QuoteMicros, QuoteDetail: result.QuoteDetail, AvailableMicros: result.AvailableMicros, ExpiresAt: result.ExpiresAt, ReusedFromID: result.ReusedFromID, Confirmable: result.Confirmable}
+	return QuoteResponse{OperationID: result.OperationID, QuoteMicros: result.QuoteMicros, QuoteDetail: result.QuoteDetail, AvailableMicros: result.AvailableMicros, ExpiresAt: result.ExpiresAt, ReusedFromID: result.ReusedFromID, Confirmable: result.Confirmable, PromptPreparation: result.PromptPreparation, FinalPrompt: result.FinalPrompt}
 }
 
 // Quotes creates a bounded batch, preserving invalid-item results in request order.
@@ -167,7 +171,7 @@ func (h *Handler) Quotes(c *gin.Context) {
 			return
 		}
 		item := body.Items[0]
-		c.JSON(201, application.CreateBatchFreeQuoteResult{ExpiresAt: result.ExpiresAt, Items: []application.BatchFreeQuoteItemResult{{OperationID: &result.OperationID, ModelKey: item.ModelKey, Mode: item.Mode, QuoteMicros: &result.QuoteMicros, QuoteDetail: result.QuoteDetail, ReusedFromID: result.ReusedFromID}}, TotalMicros: result.QuoteMicros, AvailableMicros: result.AvailableMicros, Confirmable: result.Confirmable})
+		c.JSON(201, application.CreateBatchFreeQuoteResult{ExpiresAt: result.ExpiresAt, Items: []application.BatchFreeQuoteItemResult{{OperationID: &result.OperationID, ModelKey: item.ModelKey, Mode: item.Mode, QuoteMicros: &result.QuoteMicros, QuoteDetail: result.QuoteDetail, ReusedFromID: result.ReusedFromID, PromptPreparation: result.PromptPreparation, FinalPrompt: result.FinalPrompt}}, TotalMicros: result.QuoteMicros, AvailableMicros: result.AvailableMicros, Confirmable: result.Confirmable})
 		return
 	}
 	items := make([]application.FreeQuoteItemInput, 0, len(body.Items))
@@ -550,6 +554,12 @@ func queryProject(c *gin.Context) (uuid.UUID, bool) {
 }
 func writeError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, promptapp.ErrTemplateInvalid):
+		httpapi.WriteProblem(c, 422, "template_invalid", nil)
+	case errors.Is(err, promptapp.ErrTemplateChanged):
+		httpapi.WriteProblem(c, 409, "template_changed", nil)
+	case errors.Is(err, promptapp.ErrTemplateContextUnavailable):
+		httpapi.WriteProblem(c, 409, "context_unavailable", nil)
 	case errors.Is(err, application.ErrQuoteSourceStale):
 		httpapi.WriteProblem(c, 409, "canvas_revision_conflict", nil)
 	case errors.Is(err, identityapp.ErrForbidden):

@@ -77,14 +77,15 @@ type TaskEvent struct {
 // TaskDetail is the persisted task snapshot used after refresh or reconnection.
 type TaskDetail struct {
 	TaskSummary
-	Params         json.RawMessage `json:"params" swaggertype:"object"`
-	OutputCount    int32           `json:"output_count"`
-	QuoteDetail    json.RawMessage `json:"quote_detail" swaggertype:"object"`
-	QuoteExpiresAt *time.Time      `json:"quote_expires_at" extensions:"x-nullable"`
-	ReusedFromID   *uuid.UUID      `json:"reused_from_id" extensions:"x-nullable"`
-	Inputs         []TaskInput     `json:"inputs"`
-	Outputs        []TaskOutput    `json:"outputs"`
-	Events         []TaskEvent     `json:"events"`
+	PromptPreparation *domain.PromptPreparation `json:"prompt_preparation,omitempty"`
+	Params            json.RawMessage           `json:"params" swaggertype:"object"`
+	OutputCount       int32                     `json:"output_count"`
+	QuoteDetail       json.RawMessage           `json:"quote_detail" swaggertype:"object"`
+	QuoteExpiresAt    *time.Time                `json:"quote_expires_at" extensions:"x-nullable"`
+	ReusedFromID      *uuid.UUID                `json:"reused_from_id" extensions:"x-nullable"`
+	Inputs            []TaskInput               `json:"inputs"`
+	Outputs           []TaskOutput              `json:"outputs"`
+	Events            []TaskEvent               `json:"events"`
 }
 
 // TaskCursor is an internal keyset position; HTTP owns its binding and encoding.

@@ -30,6 +30,9 @@ func NewRecordedActionParser() *Parser {
 	fields["operation.cancel_requested"] = []string{"status"}
 	fields["batch.cancel_requested"] = []string{"status"}
 	fields["batch.resume_requested"] = []string{"status"}
+	for _, action := range []string{"media.export_requested", "media.export_cancel", "media.export_retry", "media.export_reviewed"} {
+		fields[action] = []string{"id", "project_id", "canvas_id", "node_id", "source_revision", "status", "stage", "progress", "attempt", "revision", "asset_id", "sha256", "failure_code", "created_at", "updated_at"}
+	}
 	return NewParser(fields)
 }
 

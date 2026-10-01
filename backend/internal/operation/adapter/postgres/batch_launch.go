@@ -142,6 +142,7 @@ func (s *Store) AcquireBatchLaunch(ctx context.Context, batchID, operationID uui
 			return nil
 		}
 		var frozenScope struct {
+			CanvasID    *uuid.UUID `json:"canvas_id"`
 			NodeID      *uuid.UUID `json:"node_id"`
 			Concurrency int        `json:"concurrency"`
 		}
@@ -149,14 +150,32 @@ func (s *Store) AcquireBatchLaunch(ctx context.Context, batchID, operationID uui
 			return application.ErrInvalidWorkflowBatch
 		}
 		if frozenScope.NodeID != nil {
-			if *frozenScope.NodeID == uuid.Nil || frozenScope.Concurrency < 1 || frozenScope.Concurrency > 32 {
+			if frozenScope.CanvasID == nil || *frozenScope.CanvasID == uuid.Nil || *frozenScope.NodeID == uuid.Nil || frozenScope.Concurrency < 1 || frozenScope.Concurrency > 32 {
 				return application.ErrInvalidWorkflowBatch
 			}
-			var activeBatch int64
-			if err := tx.Raw(`SELECT count(*) FROM operation.batch_launch WHERE batch_id=?::uuid AND state='active'`, batchID).Scan(&activeBatch).Error; err != nil {
+			// The project admission lock above serializes every split batch.
+			// Count the saved source node across batches and revisions, retaining
+			// the lowest frozen limit while an older batch still owns a slot.
+			var source struct {
+				Active int64
+				Limit  *int
+			}
+			if err := tx.Raw(`
+				SELECT count(*) AS active, min((b.scope->>'concurrency')::integer) AS "limit"
+				FROM operation.batch_launch l JOIN operation.batch b ON b.id=l.batch_id
+				WHERE l.project_id=? AND l.state='active'
+				  AND b.scope->>'canvas_id'=? AND b.scope->>'node_id'=?
+			`, item.ProjectID, frozenScope.CanvasID.String(), frozenScope.NodeID.String()).Scan(&source).Error; err != nil {
 				return fmt.Errorf("count saved canvas batch capacity: %w", err)
 			}
-			if activeBatch >= int64(frozenScope.Concurrency) {
+			limit := frozenScope.Concurrency
+			if source.Limit != nil {
+				if *source.Limit < 1 || *source.Limit > 32 {
+					return application.ErrInvalidWorkflowBatch
+				}
+				limit = min(limit, *source.Limit)
+			}
+			if source.Active >= int64(limit) {
 				return nil
 			}
 		}

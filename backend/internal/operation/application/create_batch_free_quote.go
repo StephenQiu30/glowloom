@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
 )
 
 // ErrInvalidBatchFreeQuote means a batch request has no stable scope or size.
@@ -34,14 +35,16 @@ func (i CreateBatchFreeQuoteInput) Validate() error {
 
 // BatchFreeQuoteItemResult maps to one requested item at the same position.
 type BatchFreeQuoteItemResult struct {
-	OperationID  *uuid.UUID      `json:"operation_id,omitempty"`
-	ModelKey     string          `json:"model_key"`
-	Mode         string          `json:"mode"`
-	QuoteMicros  *int64          `json:"quote_micros,omitempty"`
-	QuoteDetail  json.RawMessage `json:"quote_detail,omitempty"`
-	ReusedFromID *uuid.UUID      `json:"reused_from_id,omitempty"`
-	Region       string          `json:"region,omitempty"`
-	ErrorCode    string          `json:"error_code,omitempty"`
+	OperationID       *uuid.UUID                `json:"operation_id,omitempty"`
+	ModelKey          string                    `json:"model_key"`
+	Mode              string                    `json:"mode"`
+	QuoteMicros       *int64                    `json:"quote_micros,omitempty"`
+	QuoteDetail       json.RawMessage           `json:"quote_detail,omitempty"`
+	ReusedFromID      *uuid.UUID                `json:"reused_from_id,omitempty"`
+	Region            string                    `json:"region,omitempty"`
+	ErrorCode         string                    `json:"error_code,omitempty"`
+	PromptPreparation *domain.PromptPreparation `json:"prompt_preparation,omitempty"`
+	FinalPrompt       string                    `json:"final_prompt,omitempty"`
 }
 
 // CreateBatchFreeQuoteResult is the committed selection and observed balance.

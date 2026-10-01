@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && mkdir -p /work \
     && chown 65532:65532 /work
 COPY --from=build /out/lanverse /usr/local/bin/lanverse
+COPY internal/media/adapter/gltf/schema/COPYING.adoc internal/media/adapter/gltf/schema/LICENSE.adoc internal/media/adapter/gltf/schema/PROVENANCE.md /usr/share/lanverse/licenses/gltf/
+COPY internal/media/adapter/gltf/schema/LICENSES/ /usr/share/lanverse/licenses/gltf/LICENSES/
+COPY internal/mediatool/adapter/ffmpeg/fonts/OFL.txt internal/mediatool/adapter/ffmpeg/fonts/PROVENANCE.md /usr/share/lanverse/licenses/noto-cjk/
 ENV TMPDIR=/work
 USER 65532:65532
 EXPOSE 8080 8081 8082

@@ -27,12 +27,13 @@ const publicTaskJoin = ` FROM operation.operation AS o
  LEFT JOIN catalog.model_profile AS m ON m.id=v.model_profile_id`
 
 type publicTaskDetailRow struct {
-	Summary        publicTaskRow `gorm:"embedded"`
-	Params         string
-	OutputCount    int32
-	QuoteDetail    string
-	QuoteExpiresAt *time.Time
-	ReusedFromID   *uuid.UUID
+	Summary               publicTaskRow `gorm:"embedded"`
+	Params                string
+	OutputCount           int32
+	QuoteDetail           string
+	QuoteExpiresAt        *time.Time
+	ReusedFromID          *uuid.UUID
+	PromptPreparationJSON *string
 }
 
 type publicTaskRow struct {
@@ -152,7 +153,7 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		}
 		var task publicTaskDetailRow
 		row := tx.Raw(publicTaskSelect+`,o.params::text AS params,o.output_count,o.quote_detail::text AS quote_detail,
- o.quote_expires_at,o.reused_from_id`+publicTaskJoin+` WHERE o.id=?::uuid AND o.project_id=?::uuid AND NOT o.is_delete`, operationID, projectID).Scan(&task)
+ o.quote_expires_at,o.reused_from_id,o.prompt_preparation::text AS prompt_preparation_json`+publicTaskJoin+` WHERE o.id=?::uuid AND o.project_id=?::uuid AND NOT o.is_delete`, operationID, projectID).Scan(&task)
 		if row.Error != nil {
 			return fmt.Errorf("read public task: %w", row.Error)
 		}
@@ -166,6 +167,13 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		}
 		result.Params, result.QuoteDetail = json.RawMessage(task.Params), json.RawMessage(task.QuoteDetail)
 		result.OutputCount, result.QuoteExpiresAt, result.ReusedFromID = task.OutputCount, task.QuoteExpiresAt, task.ReusedFromID
+		if task.PromptPreparationJSON != nil {
+			var preparation domain.PromptPreparation
+			if err := json.Unmarshal([]byte(*task.PromptPreparationJSON), &preparation); err != nil || preparation.ValidateFor(result.Capability) != nil {
+				return fmt.Errorf("invalid stored prompt preparation")
+			}
+			result.PromptPreparation = &preparation
+		}
 		if len(result.Params) == 0 {
 			result.Params = json.RawMessage(`{}`)
 		}
@@ -175,6 +183,14 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		if err := tx.Raw(`SELECT seq_no AS sequence,role,text_value AS text,media_asset_id,mask_asset_id
  FROM operation.operation_input WHERE operation_id=?::uuid AND NOT is_delete ORDER BY seq_no`, operationID).Scan(&result.Inputs).Error; err != nil {
 			return fmt.Errorf("read public task inputs: %w", err)
+		}
+		if result.PromptPreparation != nil {
+			if len(result.Inputs) == 0 || result.Inputs[0].Sequence != 0 || result.Inputs[0].Role != "prompt" || result.Inputs[0].Text == nil {
+				return fmt.Errorf("missing frozen prepared prompt")
+			}
+			if quotePromptDigest(*result.Inputs[0].Text) != result.PromptPreparation.ContentSHA256 {
+				return fmt.Errorf("frozen prepared prompt digest mismatch")
+			}
 		}
 		if err := tx.Raw(`SELECT id,seq_no AS sequence,kind,media_asset_id,moderation_status,create_time
  FROM operation.operation_output WHERE operation_id=?::uuid AND project_id=?::uuid AND NOT is_delete ORDER BY seq_no`, operationID, projectID).Scan(&result.Outputs).Error; err != nil {

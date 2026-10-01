@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,8 +24,9 @@ var ErrInvalidQuoteSnapshot = errors.New("invalid quote snapshot")
 // must validate current targets, model availability, price, and consent before
 // persistence; this store does not confirm or reserve the quote.
 type QuoteItem struct {
-	Operation domain.Operation
-	Inputs    []domain.OperationInput
+	Operation         domain.Operation
+	Inputs            []domain.OperationInput
+	PromptPreparation *domain.PromptPreparation
 }
 
 // CreateQuoteSnapshot atomically persists one quoted operation or a quoted
@@ -72,7 +75,7 @@ func (s *Store) CreateQuoteSnapshot(ctx context.Context, actor identityapp.Princ
 			}
 		}
 		for _, item := range items {
-			if err := insertQuotedOperation(tx, item.Operation); err != nil {
+			if err := insertQuotedOperation(tx, item.Operation, item.PromptPreparation); err != nil {
 				return err
 			}
 			for _, input := range item.Inputs {
@@ -128,6 +131,14 @@ func validateQuoteSnapshot(batch *domain.Batch, items []QuoteItem) (uuid.UUID, e
 				return uuid.Nil, ErrInvalidQuoteSnapshot
 			}
 		}
+		if item.PromptPreparation != nil {
+			if item.PromptPreparation.ValidateFor(op.Capability) != nil || op.Origin != "canvas" || op.TargetType != "free" || len(item.Inputs) == 0 || item.Inputs[0].SeqNo != 0 || item.Inputs[0].Role != "prompt" || item.Inputs[0].RefType != "text" || item.Inputs[0].TextValue == nil {
+				return uuid.Nil, ErrInvalidQuoteSnapshot
+			}
+			if quotePromptDigest(*item.Inputs[0].TextValue) != item.PromptPreparation.ContentSHA256 {
+				return uuid.Nil, ErrInvalidQuoteSnapshot
+			}
+		}
 	}
 	if batch != nil && (batch.Validate() != nil || batch.ProjectID != projectID ||
 		batch.Status != domain.BatchStatusQuoted || batch.TotalCount != int32(len(items)) ||
@@ -138,7 +149,15 @@ func validateQuoteSnapshot(batch *domain.Batch, items []QuoteItem) (uuid.UUID, e
 	return projectID, nil
 }
 
-func insertQuotedOperation(tx *gorm.DB, op domain.Operation) error {
+func insertQuotedOperation(tx *gorm.DB, op domain.Operation, preparation *domain.PromptPreparation) error {
+	var promptEvidence any
+	if preparation != nil {
+		encoded, err := json.Marshal(preparation)
+		if err != nil {
+			return fmt.Errorf("encode frozen prompt evidence: %w", err)
+		}
+		promptEvidence = string(encoded)
+	}
 	var source any
 	if op.Source != nil {
 		body, err := json.Marshal(op.Source)
@@ -153,16 +172,16 @@ func insertQuotedOperation(tx *gorm.DB, op domain.Operation) error {
 		   target_version_no, capability, mode, model_profile_version_id,
 		   price_rule_version_id, params, output_count, input_hash, origin,
 		   status, quote_micros, quote_detail, quote_expires_at, reused_from_id,
-		   force_regenerate, region, create_time,source_context)
+		   force_regenerate, region, create_time,source_context,prompt_preparation)
 		VALUES (?::uuid, ?::uuid, ?::uuid, NULLIF(?, ''), ?::uuid, ?,
 		        ?, ?, ?, ?::uuid, ?::uuid, ?::jsonb, ?, ?, ?,
-		        ?, ?, ?::jsonb, ?, ?::uuid, ?, ?, ?,?::jsonb)
+		        ?, ?, ?::jsonb, ?, ?::uuid, ?, ?, ?,?::jsonb,?::jsonb)
 	`, op.ID.String(), op.ProjectID.String(), op.BatchID, op.TargetType,
 		op.TargetID, op.TargetKey, op.TargetVersionNo, op.Capability, op.Mode,
 		op.ModelProfileVersionID, op.PriceRuleVersionID, string(op.Params),
 		op.OutputCount, op.InputHash, op.Origin, string(op.Status),
 		op.QuoteMicros, nullableJSON(op.QuoteDetail), op.QuoteExpiresAt,
-		op.ReusedFromID, op.ForceRegenerate, op.Region, op.CreateTime, source)
+		op.ReusedFromID, op.ForceRegenerate, op.Region, op.CreateTime, source, promptEvidence)
 	if result.Error != nil {
 		return fmt.Errorf("insert quoted operation: %w", result.Error)
 	}
@@ -177,4 +196,9 @@ func nullableJSON(value []byte) any {
 		return nil
 	}
 	return string(value)
+}
+
+func quotePromptDigest(content string) string {
+	digest := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(digest[:])
 }

@@ -13,6 +13,7 @@ import (
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
 )
 
 func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Size]byte, error) {
@@ -32,6 +33,7 @@ func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Si
 		OutputCount     int32                             `json:"output_count"`
 		ForceRegenerate bool                              `json:"force_regenerate"`
 		Source          *domain.CanvasSource              `json:"source"`
+		PromptTemplate  *promptapp.TemplateRequest        `json:"prompt_template,omitempty"`
 	}{
 		Kind:      "free_single",
 		ProjectID: input.ProjectID, ModelKey: input.ModelKey,
@@ -40,6 +42,7 @@ func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Si
 		Params:      params, OutputCount: input.OutputCount,
 		ForceRegenerate: input.ForceRegenerate,
 		Source:          input.Source,
+		PromptTemplate:  input.PromptTemplate,
 	})
 	if err != nil {
 		return [sha256.Size]byte{}, fmt.Errorf("encode quote request fingerprint: %w", err)
@@ -58,6 +61,7 @@ func batchQuoteRequestFingerprint(input application.CreateBatchFreeQuoteInput) (
 		OutputCount     int32                             `json:"output_count"`
 		ForceRegenerate bool                              `json:"force_regenerate"`
 		Source          *domain.CanvasSource              `json:"source"`
+		PromptTemplate  *promptapp.TemplateRequest        `json:"prompt_template,omitempty"`
 	}
 	items := make([]item, 0, len(input.Items))
 	for _, requested := range input.Items {
@@ -80,7 +84,8 @@ func batchQuoteRequestFingerprint(input application.CreateBatchFreeQuoteInput) (
 			ModelKey: requested.ModelKey, Capability: requested.Capability,
 			Mode: requested.Mode, Prompt: requested.Prompt, MediaInputs: requested.MediaInputs, Params: raw,
 			OutputCount: requested.OutputCount, ForceRegenerate: requested.ForceRegenerate,
-			Source: requested.Source,
+			Source:         requested.Source,
+			PromptTemplate: requested.PromptTemplate,
 		})
 	}
 	encoded, err := json.Marshal(struct {
