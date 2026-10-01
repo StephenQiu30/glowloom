@@ -16,6 +16,7 @@ import (
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
 	"github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
 // Handler adapts current-rights project creation and navigation.
@@ -32,16 +33,18 @@ func NewHandler(list *application.ListProjectsQuery, create *application.CreateP
 
 // ProjectResponse exposes safe project-list fields needed for navigation.
 type ProjectResponse struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Status      string     `json:"status"`
-	Revision    int64      `json:"revision"`
-	AspectRatio string     `json:"aspect_ratio"`
-	StyleType   string     `json:"style_type"`
-	IsDelete    bool       `json:"is_delete"`
-	ArchivedAt  *time.Time `json:"archived_at" extensions:"x-nullable"`
-	DeleteTime  *time.Time `json:"delete_time" extensions:"x-nullable"`
-	PurgeAfter  *time.Time `json:"purge_after" extensions:"x-nullable"`
+	ID                uuid.UUID  `json:"id"`
+	Name              string     `json:"name"`
+	Status            string     `json:"status"`
+	Revision          int64      `json:"revision"`
+	AspectRatio       string     `json:"aspect_ratio"`
+	StyleType         string     `json:"style_type"`
+	IsDelete          bool       `json:"is_delete"`
+	ArchivedAt        *time.Time `json:"archived_at" extensions:"x-nullable"`
+	DeleteTime        *time.Time `json:"delete_time" extensions:"x-nullable"`
+	PurgeAfter        *time.Time `json:"purge_after" extensions:"x-nullable"`
+	FolderID          *uuid.UUID `json:"folder_id" extensions:"x-nullable"`
+	PlacementRevision int64      `json:"placement_revision"`
 }
 
 // ListResponse contains one keyset page of visible projects.
@@ -72,13 +75,27 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Param q query string false "名称检索"
 // @Param status query string false "active或archived"
 // @Param deleted query boolean false "只查询回收中的项目"
+// @Param folder_id query string false "个人目录UUID，root表示未分类；未指定列出全部"
 // @Success 200 {object} ListResponse
 // @Failure 403 {object} httpapi.Problem
+// @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects [get]
 func (h *Handler) List(c *gin.Context) {
 	input := application.ListProjectsInput{Query: strings.TrimSpace(c.Query("q")), Status: c.Query("status"), Limit: 50}
+	if raw := c.Query("folder_id"); raw != "" {
+		id := uuid.Nil
+		if raw != "root" {
+			var err error
+			id, err = uuid.Parse(raw)
+			if err != nil || id == uuid.Nil {
+				httpapi.WriteProblem(c, 422, "invalid_request", nil)
+				return
+			}
+		}
+		input.FolderID = &id
+	}
 	if raw := c.Query("limit"); raw != "" {
 		value, err := strconv.Atoi(raw)
 		if err != nil {
@@ -100,10 +117,10 @@ func (h *Handler) List(c *gin.Context) {
 	}
 	actor := identityhttp.Principal(c)
 	binding := cursorBinding(actor, "projects", struct {
-		Query, Status string
-		Deleted       bool
-		Limit         int
-	}{input.Query, input.Status, input.Deleted, input.Limit})
+		Query, Status, Folder string
+		Deleted               bool
+		Limit                 int
+	}{input.Query, input.Status, c.Query("folder_id"), input.Deleted, input.Limit})
 	if raw := c.Query("cursor"); raw != "" {
 		if len(raw) > base64.RawURLEncoding.EncodedLen(512) {
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
@@ -124,6 +141,8 @@ func (h *Handler) List(c *gin.Context) {
 			httpapi.WriteProblem(c, 403, "forbidden", nil)
 		case errors.Is(err, application.ErrInvalidProjectList):
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
+		case errors.Is(err, domain.ErrProjectFolderNotFound):
+			httpapi.WriteProblem(c, 404, "not_found", nil)
 		default:
 			httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 		}
@@ -131,7 +150,7 @@ func (h *Handler) List(c *gin.Context) {
 	}
 	response := ListResponse{Items: make([]ProjectResponse, 0, len(page.Projects))}
 	for _, p := range page.Projects {
-		response.Items = append(response.Items, ProjectResponse{ID: p.ID, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter})
+		response.Items = append(response.Items, ProjectResponse{ID: p.ID, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, FolderID: p.FolderID, PlacementRevision: p.PlacementRevision})
 	}
 	if page.Next != nil {
 		body, _ := json.Marshal(cursor{ID: page.Next.ID, Time: page.Next.UpdateTime, Binding: binding})

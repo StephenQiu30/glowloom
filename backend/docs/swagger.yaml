@@ -2043,6 +2043,13 @@ definitions:
       style_type:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover:
+    properties:
+      asset_id:
+        type: string
+      project_id:
+        type: string
+    type: object
   internal_canvas_adapter_http.ListResponse:
     properties:
       items:
@@ -2583,10 +2590,25 @@ definitions:
         type: string
         x-nullable: true
     type: object
+  internal_workspace_adapter_http.ProjectCopyPlacementRequest:
+    properties:
+      expected_folder_revision:
+        type: integer
+      expected_placement_revision:
+        type: integer
+      folder_id:
+        type: string
+        x-nullable: true
+    required:
+    - expected_folder_revision
+    - expected_placement_revision
+    type: object
   internal_workspace_adapter_http.ProjectCopyRequest:
     properties:
       expected_revision:
         type: integer
+      placement:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyPlacementRequest'
       target_name:
         maxLength: 50
         minLength: 1
@@ -2697,12 +2719,71 @@ definitions:
       update_time:
         type: string
     type: object
-  internal_workspace_adapter_http.ProjectResponse:
+  internal_workspace_adapter_http.ProjectFolderChangeResponse:
     properties:
-      archived_at:
+      folder:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderResponse'
+      placement:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderPlacementResponse'
+      recycled_project_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_workspace_adapter_http.ProjectFolderCreateRequest:
+    properties:
+      cover:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover'
+      name:
+        maxLength: 160
+        minLength: 1
+        type: string
+    type: object
+  internal_workspace_adapter_http.ProjectFolderListResponse:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderResponse'
+        type: array
+      next_cursor:
         type: string
         x-nullable: true
-      aspect_ratio:
+    type: object
+  internal_workspace_adapter_http.ProjectFolderMoveRequest:
+    properties:
+      expected_folder_revision:
+        type: integer
+      expected_placement_revision:
+        type: integer
+      expected_project_revision:
+        type: integer
+      folder_id:
+        type: string
+        x-nullable: true
+    type: object
+  internal_workspace_adapter_http.ProjectFolderPlacementResponse:
+    properties:
+      folder_id:
+        type: string
+        x-nullable: true
+      project_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  internal_workspace_adapter_http.ProjectFolderResponse:
+    properties:
+      cover:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover'
+        x-nullable: true
+      cover_unavailable:
+        type: boolean
+      create_time:
         type: string
       delete_time:
         type: string
@@ -2713,6 +2794,48 @@ definitions:
         type: boolean
       name:
         type: string
+      project_count:
+        type: integer
+        x-nullable: true
+      revision:
+        type: integer
+      update_time:
+        type: string
+    type: object
+  internal_workspace_adapter_http.ProjectFolderUpdateRequest:
+    properties:
+      cover:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover'
+        x-nullable: true
+      expected_revision:
+        type: integer
+      name:
+        maxLength: 160
+        minLength: 1
+        type: string
+    type: object
+  internal_workspace_adapter_http.ProjectResponse:
+    properties:
+      archived_at:
+        type: string
+        x-nullable: true
+      aspect_ratio:
+        type: string
+      delete_time:
+        type: string
+        x-nullable: true
+      folder_id:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      is_delete:
+        type: boolean
+      name:
+        type: string
+      placement_revision:
+        type: integer
       purge_after:
         type: string
         x-nullable: true
@@ -4922,6 +5045,189 @@ paths:
       summary: 重试已知失败的项目复制
       tags:
       - projectCopies
+  /api/project-folders:
+    get:
+      operationId: listProjectFolders
+      parameters:
+      - description: 分页大小，上限200
+        in: query
+        name: limit
+        type: integer
+      - description: 当前主体目录分页游标
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderListResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 项目目录列表
+      tags:
+      - projects
+    post:
+      consumes:
+      - application/json
+      operationId: createProjectFolder
+      parameters:
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 目录名称及可选正式封面
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 新建项目目录
+      tags:
+      - projects
+  /api/project-folders/{folder_id}:
+    delete:
+      consumes:
+      - application/json
+      operationId: recycleProjectFolder
+      parameters:
+      - description: 目录UUID
+        in: path
+        name: folder_id
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 观察到的目录修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 回收目录及其中全部项目
+      tags:
+      - projects
+    patch:
+      consumes:
+      - application/json
+      operationId: updateProjectFolder
+      parameters:
+      - description: 目录UUID
+        in: path
+        name: folder_id
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 目录修订及字段，cover=null移除封面
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 修改项目目录
+      tags:
+      - projects
   /api/projects:
     get:
       operationId: listProjects
@@ -4946,6 +5252,10 @@ paths:
         in: query
         name: deleted
         type: boolean
+      - description: 个人目录UUID，root表示未分类；未指定列出全部
+        in: query
+        name: folder_id
+        type: string
       produces:
       - application/json
       responses:
@@ -4955,6 +5265,10 @@ paths:
             $ref: '#/definitions/internal_workspace_adapter_http.ListResponse'
         "403":
           description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
         "422":
@@ -5375,6 +5689,58 @@ paths:
       summary: 创建完整项目内容副本
       tags:
       - projectCopies
+  /api/projects/{pid}/folder:
+    put:
+      consumes:
+      - application/json
+      operationId: moveProjectToFolder
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 观察到的项目、放置与目标目录修订，folder_id=null移至根目录
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderMoveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 移动项目目录位置
+      tags:
+      - projects
   /api/projects/{pid}/free-operations:
     post:
       consumes:

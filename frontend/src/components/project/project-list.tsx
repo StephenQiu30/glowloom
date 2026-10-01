@@ -54,7 +54,7 @@ export type ProjectListDisplayItem = Readonly<{
 export type ProjectListView = "cards" | "table";
 export type ProjectAction =
   "settings" | "archive" | "unarchive" | "delete" | "restore";
-export type ProjectListAction = ProjectAction | "copy" | "copies";
+export type ProjectListAction = ProjectAction | "copy" | "copies" | "move";
 type ProjectListProps = {
   projects: readonly ProjectListDisplayItem[];
   view: ProjectListView;
@@ -105,6 +105,7 @@ function ProjectActions({
           variant="ghost"
           size="icon-sm"
           aria-label={`${project.name}的项目操作`}
+          data-project-actions={project.id}
         >
           <MoreHorizontal aria-hidden="true" />
         </Button>
@@ -125,6 +126,12 @@ function ProjectActions({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onAction(project, "copies")}>
                 复制任务
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={project.status !== "active"}
+                onSelect={() => onAction(project, "move")}
+              >
+                移动到目录
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() =>

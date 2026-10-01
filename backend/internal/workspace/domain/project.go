@@ -146,7 +146,7 @@ func (p *Project) Delete(now time.Time, hasBlockingOperations bool) error {
 
 // Restore returns a deleted project to its active or archived state before purge is due.
 func (p *Project) Restore(now time.Time) error {
-	if !p.IsDelete {
+	if !p.IsDelete || (p.Status != "active" && p.Status != "archived") {
 		return ErrProjectStateConflict
 	}
 	if now.IsZero() || p.DeleteTime == nil || p.PurgeAfter == nil ||

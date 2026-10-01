@@ -548,3 +548,90 @@ Depth Temporal 按具体命令执行：start 使用固定 job/attempt workflowID
 ### 14.6 正式部署与用户验收事实
 
 030 已原子应用于原业务数据库，九个公开入口、正式 API/worker/relay、78-operation 在线 Swagger 与全部生成客户端已逐字核对。实际 namespace 为既有 `lanverse-local`；三个成功 Small/MPS 任务、一次页面取消及同 job 新 attempt、明确私有视频/SHA 审核、正式下载、画布采纳去重及刷新已实际完成。浏览器发送前阻断仅证明原意图保留与人工重放；服务器已提交的回执重放、真实进程树退出与控制者撤权由独立真实 PostgreSQL/模型/Temporal 回归补足，不混称浏览器已证明所有未知提交路径。最终固定后端 55 文件全树 Race 379 pass/337 条件 skip，专用 TestDepthJob 21 pass/0 skip；固定前端 27 文件、389 测试和生产构建通过。详细 job/字节/hash/历史、审计与剩余环境边界见 [E37 第八阶段](../acceptance/E37-BeefTV完整迁移验收进度.md)，离线运行包与配置见 [部署文档 §6.3](../operation/01-环境与部署.md)。本阶段完成不关闭 §0 的其他来源能力缺口。
+
+## 15. 项目目录、正式生产实体与内容包完整迁移（技术审阅通过，连续实施中；2026-10-02）
+
+本节承接 §0、§13，固定来源仍是 BeefTV `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`。完整迁移不由本节的首项实现缩减；项目库目录、个人素材分类、项目内素材目录、正式剧集/镜头/角色、历史对话、完整复制和内容包分别按自己的真实拥有模块实现。保留现有 Go/PostgreSQL/Temporal/Next/shadcn 及正式媒体、命令、审核与费用合同，不复制来源本地数据库或新增通用树/导入框架。
+
+### 15.1 固定来源的实际装配和未实现状态
+
+以下是源码事实，不能当作目标运行验收：
+
+| 范围         | 固定源实现与调用证据                                                                                                                                                | 状态与迁移边界                                                                                                                                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 项目与七视图 | `web/src/router.tsx:39-43,96-122`；`pages/projects/detail.tsx:24-34,153-159`                                                                                        | 项目库实际为 CanvasPage；七视图 overview/chapters/workflow/canvases/editor/assets/settings 在 hosted 路径装配，本地模式项目详情统一重定向画布。`backend/internal/handler/api.go:56-58` 注册 ProjectRoutes 并受 shortDrama gate；`platform/feature_availability.go:44-50` 默认 shortDrama=true。不能称七视图默认本地开放，或称后端默认关闭。 |
+| Project      | `backend/internal/model/models_project.go:185-213`；`handler/project.go:59-222`                                                                                     | project 与 canvas 是不同聚合。源 project 为 user/name/type/aspect/source/description/folder/cover/style snapshot/default models/status/revision。目标复用 workspace.project；规格不可变、允许重名、归档只读和 30 天回收沿自有合同。                                                                                                         |
+| 项目目录     | `stores/canvas/use-canvas-store.ts:44-50,525-552`；`pages/canvas/index.tsx:573-579`                                                                                 | 真正本地库是扁平 CanvasFolder；可建、改名、移入移出、封面。库页删除目录先回收其中项目。另一套后端 ProjectFolder 只有列/建与项目移动：`handler/project.go:15-44`，无目录改名/删除 API；其 parent 字段不证明本地项目树已开放。                                                                                                                |
+| 素材目录     | `pages/assets/index.tsx:291-346`；`pages/projects/detail/assets.tsx:272-300,452`；`app/project_asset_folder.go:35-139`                                              | 个人 AssetFolder 是扁平分类，删除移至未分类且保留媒体。ProjectAssetFolder 是项目内嵌套目录，校验同级名称、循环、项目归属，移动追加同级 position；仅空目录可删除。二者删除语义不能混用。                                                                                                                                                     |
+| Unit         | `model/models_project.go:231-243`；`app/project.go:42-60,486-539`；`pages/projects/detail/chapters.tsx:208-250`                                                     | kind=chapter/episode、title、富文本 sourceText、wordCount、draft/ready/completed、position。API 不接受 parent，UI 是平铺章节。导入 1-2500 项全量校验后原子写入；重排完整 ID 集。源状态不等于自有分集/结构正式确认。                                                                                                                         |
+| 镜头与版本   | `model/models_project.go:254-314`；`handler/project.go:818-906`；`workflow-production-workbench.tsx:240-295`                                                        | 稳定 Shot 头、不可变 Revision、带 revision/task/resource 的 Artifact 和 AssetVersion 引用。实际 UI 保存/版本/删除/参考/生成命令存在。目标映射 storyboard.shot/version/reference 与正式 Operation/候选/选定，不把运行事实写入 canvas config。                                                                                                |
+| 角色         | `app/project_character.go:16-41,120-209`；`detail/assets.tsx:317-355`                                                                                               | 角色是 entity/character Asset + AssetVersion + ProjectAssetLink，无独立 Character 表；编辑/图像/声音绑定产生新版本。目标映射 bible.character/look/reference_slot/voice，不照搬任意 definition/metadata。                                                                                                                                    |
+| 历史对话     | `types/canvas.ts:565-591`；`stores/canvas/use-canvas-store.ts:18-42`；`handler/api.go:43-45`；`pages/canvas/project.tsx:895-905`                                    | sessions/messages 仍在项目记录，旧 Agent dock/深链和 `/agent/*` 已移除。历史 pendingBackendSession/generationEffectKeys/tool detail 不是可重放执行合同。保留有界、类型明确的历史内容与映射附件，未支持字段明示；自有 Agent 继续 DES-39，不由历史导入激活。                                                                                  |
+| 删除与复制   | `repository/repository.go:1034-1061,1074-1155,1242-1284`；`pages/canvas/index.tsx:145-173`                                                                          | 源 domain project 硬删业务子记录并解绑但保留画布/原媒体；源 CloneProject 只复制头+units。另一库入口只复制 nodes/edges/chat，多入口不同。目标复用既有软删除/活动任务保护及 §13 完整 owning 复制，不能因源不完整删减。                                                                                                                        |
+| 画布项目包   | `lib/canvas/canvas-export.ts:12-64`；`types/canvas-export.ts:4-43`；`pages/canvas/index.tsx:244-277,443-473`                                                        | 实际 `projects.json` v3/v4 ZIP 为画布工作区包，含选中目录、图、视口、director/timeline、历史聊天、绘图 JSON/预览和真实文件，不含后端 ProjectUnit/Shot/Character/ProjectAssetFolder 表。源可静默漏文件，导入失败可遗留部分项目；目标必须有独立恢复合同。                                                                                     |
+| 素材包       | `pages/assets/asset-transfer.ts:9-60`；`pages/assets/index.tsx:535-547`                                                                                             | `assets.json` v1 + files，含 Asset 数据但没有目录定义；读回缺文件可静默跳过。目标明确报告缺失/不支持，实际媒体经正式接管/审核，不允许本地 fallback 伪装正式资产。                                                                                                                                                                           |
+| LibTV/TapNow | `services/api/libtv.ts:7-56`、`tapnow.ts:7-56`；`pages/canvas/components/*-import-dialog.tsx:18`；`canvas-project-top-bar.tsx:42-43`；`handler/api_test.go:105-108` | 只有前端 DTO/弹窗/HTTP 请求定义；顶栏未解构/调用回调，弹窗默认 false，无实际入口；全仓 Go 仅排除路由测试命中，无实际 importer。LibTV DTO 为 image/video，TapNow 另有 audio/text，保持图相对位置、跳过/警告；不产正式章节/角色/镜头。两项留在未实现清单，启用前独立核验公开输入条件，不臆造私有接口或抓取。                                  |
+
+### 15.2 正式业务数据与现有范围
+
+当前 SQL/API 已落地 workspace/canvas/media/Operation 与 media-tool；script/bible/storyboard 尚无持久模块。下列完整能力继续按已接受 DES-02/03/15/17/21 实施，而不是加 source Unit 和第二份业务 JSON：
+
+- Unit → `script.source/script_version/episode/episode_structure`。规范化正文与 immutable version、内容 SHA、完整字符区间、split set、seq_no、确认/解析状态是正式事实；source kind/标题/顺序可作为明确导入来源。源 HTML 实际解析为可编辑结构与规范化文本；章节编辑产生新版本并按影响门禁确认失效，不直接覆盖已确认结构。source position 为 0 基顺序，目标正式集号为 1 基；不得误认 source parent 是已实现章节树。
+- Shot/Revision/Artifact/AssetReference → storyboard 稳定头/不可变版本/正式参考组合、Operation 候选和选定。剧情、动作、台词、景别、角度、运动、时长、图/视频/负面提示、连续性与动作节拍保留类型明确语义；版本引用与 media UUID 明确校验，旧产物可显示 stale，不覆盖已确认选定。删除是自己的 soft delete；删除节点仅移除布局引用。
+- 角色 entity Asset → bible Character/Look、typed slots 与声音配置；场景/道具按既有实体。名称/别名/描述/造型作用范围、参考版本与用途、声音模型/voice key/参数明确保存。source representation 的角色用途映射到当前正式槽位，不以 raw map 延迟类型决策。绑定媒体必须当前 ready/passed、项目归属与授权满足。
+- 七视图复用 Next/shadcn/TanStack Query；Tiptap 正文与引用、超过 100 行的 Virtual 列表沿 PROJECT。URL 定位 project/episode/shot，表单与画布读取同一业务 UUID，切换先经所属 owner 保存，未知保存保留原键，409 保留差异并重新确认。概览只聚合实际确认/选定，不造制作完成百分比。
+
+### 15.3 项目库扁平目录的首个完整合同
+
+workspace 拥有 actor+org 范围的目录分类和放置，不改变项目业务规格，不新增通用树。新增 `202610020040_workspace_project_folder`：
+
+1. `workspace.project_folder`：id/org_id/actor_id/name（trim、UTF-8、1-160 字符、禁止 NUL，允许重名）、可空 cover_project_id + cover_asset_id（必须同时有值）、revision、is_delete/delete_time/create_time/update_time。无 parent。目录软删除仅为保持命令/历史引用，不新增来源不存在的目录恢复入口。
+2. `workspace.project_folder_placement`：org_id/actor_id/project_id、可空 folder_id、revision/create_time/update_time；唯一(actor_id,project_id)。没有 placement 行表示 root、revision=0。一个用户的一个项目最多属于一个目录，不修改 media.project_id，不改变其他用户分类。移动使用 placement revision；成员变化递增源/目标目录 revision，确保目录回收的 CAS 对成员集合有效。
+3. `workspace.project_folder_command`：actor/org、永久 UUID 幂等键、closed action/create|patch|move|recycle、请求 SHA、确定 response、create_time。应用角色只可 SELECT/INSERT，无过期覆盖；同键同输入返回原响应，同键异输入 409。请求 fingerprint 包含 scope、目标身份、预期 revision、名称/cover 或放置字段，不保存 URL/秘密。
+
+目录 create/patch/list 与项目 move/recycle 由 workspace application 的小消费端口和专用 pg/http 文件实现。新 FolderStore 显式注入 DB、现有 ProjectWorkFactory、`media.Reference` 的事务 factory 与 clock；不改现有 Copy/Depth。所有请求均复核当前主体/组织 active 和 admin|producer，不相信缓存 Principal 角色。目录只对同 actor+org 可见。
+
+公开路径：GET/POST `/api/project-folders`；PATCH/DELETE `/api/project-folders/{id}`；PUT `/api/projects/{pid}/folder`。创建传 name、可选 cover；patch 传 expected_revision 与明确修改字段；move 传 expected_project_revision、expected_placement_revision、folder_id|null 和目标 expected_folder_revision；DELETE 传 expected_revision，意为“回收该目录及其中项目”。写入使用现有 Origin/RequestID/UUID Idempotency-Key。目录列表 bounded keyset，实际项目数来自可见项目，不含 copying/已回收。封面不返回 URL/对象键，仅返回授权资源 UUID，preview 仍沿 media。
+
+移动在当前项目可写时进行；回收可以覆盖 active/archived 成员，保留其原状态和 30 天恢复期。目录锁之后按项目 UUID 排序持行锁，再逐个消费现有 `ProjectWorkGuard(tx)` 的全部真实模块证据（Operation/upload/export/transcription/depth/copy 及后续 owner）。任何成员 copying、待对账或活动任务都整体拒绝。受理在同事务读取全部当前成员，不由浏览器 ID 列表决定删除范围；按已接受 PrepareProjectChange(delete) 得到变更，全部项目软删除、placement 移 root、目录软删除、receipt/audit/Outbox 一次提交。失联查原键；不能只回收一部分后显示目录已删。用户单独恢复项目时位于 root，原目录不复活。
+
+封面 cover_project_id/asset_id 通过 media owning Reference 在同事务校验同组织授权、当前项目 active/archived、正式 ready/passed image，并共享锁冻结到目录保存 commit。读取目录再次授权封面；媒体被撤销、来源项目回收或删除时不暴露封面，明确返回不可用状态，不能以旧 URL 播放。封面原媒体不因目录删除被删除。
+
+持久放置是个人导航状态，独立 placement revision，不递增项目内容 revision或使报价失效；仍持项目锁并验证 expected_project_revision 避免 readonly/删除并发。所有 directory 命令统一 actor 范围 advisory transaction lock，再锁目录和项目。Copy admission 若接入默认放置必须先取同 actor 目录锁，保持一致锁序，不能在持项目锁后反向锁目录。
+
+目录命令复用现有 `lanverse.audit.recorded.v1` 与项目回收的 `lanverse.workspace.project_changed.v1` 安全 Outbox；普通目录变化由 HTTP 成功后的 TanStack 查询失效更新，不新增无消费者的目录 topic。不新增 Inbox 用于同步 HTTP 命令；Relay/已有审计消费者继续既有 Inbox 去重。所有权限/版本/事件与 permanent command receipt 同事务。审计动作闭集为 project_folder.created/updated/moved/recycled，只记录目录/项目 UUID、revision、实际回收数和 changed 布尔值，不记录名称全文、媒体路径/URL或剧本内容。
+
+项目列表最少扩展现 `ListProjectsInput`、pg list query、http list DTO：可选 folder filter=root|UUID|未指定（保留旧全列表语义）、safe folder_id/placement_revision；分页前过滤，cursor 绑定当前 actor/org/folder/q/status/deleted，不允许仅前端筛选已加载页。不可见 folder 为404。回收列表不复用普通目录过滤。
+
+### 15.4 删除、复制与包的完成边界
+
+项目内容复制继续 §13。目录不成为跨用户可克隆的项目业务内容；复制由发起 actor 默认放置到其源项目目录。copy admission 同事务冻结并建立目标 placement；源在 root 就复制到 root。源目录改名不改变 UUID；目录被回收或预期版本不符明确409，不静默改变目标位置。copying 目标不出现在普通目录计数或项目查询，但其 placement 参与回收 guard，阻止目录删除绕过 Copy 源/目标保护。显式目标目录选择可在同一 admission 类型中加入，必须按当前 actor 授权并冻结。本切片不编辑既有 Copy 文件，由组合任务补同事务 port 接线；未接线前不得声明复制保留目录通过。
+
+新 script/bible/storyboard 对完整 Copy 提供各自具体 Freeze/Copy/Cleanup 与 immutable snapshot/receipt；明确映射 episode/structure/scene/line/character/look/slot/shot/version/media/画布业务引用。缺 owner 时返回 unsupported_copy_content，不把部分内容发布为完整。Operation、任务、报价、财务历史不复制；正式媒体内容仍完整复制，历史对话不重放 pending/tool 执行。
+
+包区分 source canvas v3/v4、source asset v1 与自有完整 project pack。包拥有独立有界命令/批次，manifest/version/文件数/展开大小/安全相对路径/SHA/真实 MIME probe/引用闭合校验，typed mapping 与 staging publication；不放松当前媒体上传白名单。实际字节经 private media 接管与人工确认。缺文件、未支持节点/资源/未知 schema 明示并保留原批次恢复，不静默丢内容、不复制源 UUID 为当前身份、不把源状态/任务/费用/URL/对象键/凭据变为新事实。source legacy business projectId 只作来源标识，不能未经绑定引用当前项目。Live LibTV/TapNow 需独立公开协议核验后才实现读取/预览/确认导入；现在保留未实现事实，不为了 UI 完整新增伪请求成功。
+
+### 15.5 失败与真实验收
+
+404 隐藏外来 actor/org 目录/项目；409 表示 readonly、stale revision、成员变化、活动/未知工作、同键异输入、循环/非空项目素材目录/未闭合业务引用；422 为 closed schema、名称/排序/用途/数量/包预算错误；依赖 guard/media 无法取证返回503，不默认允许。无强制删除/自动取消、无静默迁移后台操作。
+
+目录验收至少包括：真实 nonowner PG create/rename/cover/move/list/recycle/refresh；同名与root分类、独立 actor 隔离；完整 guards 任一阻挡全事务零写；成员移动/创建与回收并发锁证明；stale/重复请求/撤权重放/错误封面；30天项目恢复位于root；Outbox与审计 Inbox 实际消费；Next 短视口和键盘、分页筛选、刷新恢复；Copy目录冻结独立通过。实体/包/Agent以各正式模块完整内容往返、引用/媒体实际可用及真实执行分别验收，目录切片通过不关闭这些剩余范围。
+
+### 15.6 Copy placement 接线的精确顺序（后端、页面与真实复制/取消/回收恢复已验证）
+
+请求增量为可选 `placement:{expected_placement_revision:int64,folder_id:UUID|null,expected_folder_revision:int64}`。placement 缺省保持旧 Copy 请求可用：同一受理事务冻结当前发起 actor 的 source placement；显式提供时三字段完整闭合，root 的 expected_folder_revision=0，指定目录必须正版本，并与当前 source placement ID/版本和目录版本精确匹配。复制一律以该 actor 的个人分类为准，不能由管理员取消身份改变创建者分类。
+
+永久请求 SHA 只包含闭合用户输入 SourceProjectID/ExpectedRevision/trim TargetName/可选 placement，须区分整个 placement 缺省与显式 root CAS；不含 RequestID、原幂等键，也不含在受理时查得的目录名称、计数或后续 folder 版本。隐式 source placement 的实际冻结事实另外写入现有不可变 workspace snapshot/manifest，不混入重放请求 fingerprint。
+
+事务顺序：
+
+1. `requireCurrentActor` 核当前组织/身份/角色，再 `LockProjectLibrary(ctx,tx,actor)`；该 actor library advisory lock 必须在 copy source project 行锁之前。Copy 原请求键锁可随后保留。
+2. 先按 actor+org+UUID key 读取 Copy 的永久 admission_response/request_sha256。相同 fingerprint 立即返回首次已接受响应；不再读取或 CAS source project、source placement、folder，也不因目录改名、后来移入/移出项目、目录删除或目标已发布使重放失败。当前 actor/组织被撤权仍拒绝。不同 fingerprint 明确409；现有 infra 短时键冲突保护继续，不替代永久 Copy 回执。
+3. 新受理时读取当前个人 placement（缺行为 root/rev0），再读取其当前 active 目录并持锁。缺省请求在锁内冻结真实值，显式请求核完整 CAS；目录已经回收、不可见或版本不符拒绝，不能静默移至 root。
+4. 按原 Copy 合同持 source project FOR UPDATE、核 expected project revision/active或archived和全部 owning guards。冻结全部内容、正式素材与 canvas；原 Copy 指纹/范围不缩水。
+5. 创建 invisible copying target 后，在同一个 admission 事务插入其个人 placement(revision=1；源 root 则 folder_id=null)。非root以冻结的 folder revision CAS递增 folder.revision，并把源 classification freeze 和目标 attached placement事实写入不可变 Copy workspace snapshot/manifest。新增目标成员因此立即参与 folder.recycle 的实际完整成员锁和 Copy guard；普通目录计数与列表仍排除 copying。
+6. placement、workspace snapshot、job admission_response、必要安全审计/原有 Copy Outbox 和永久请求回执共同提交。丢失响应按同原键恢复；不能用 UI第二请求移动目标。worker发布不重选目录；显式cancel清理只处理目标，不删或修改创建者目录/其他项目分类。
+
+建议自有 PG helper（在同 workspace adapter 内，消费方 Copy 不引入新跨模块框架）：`FreezeCopyPlacement(ctx,tx,actor,sourceProjectID,expect *CopyPlacementExpectation) -> CopyPlacementFreeze{folder_id,folder_revision,source_placement_revision}`；`AttachCopyPlacement(ctx,tx,actor,targetProjectID,freeze,now) -> FolderPlacement`。两者仅接受调用者现有事务，前者在 actor lock后且 source project锁前，后者在 target INSERT后；不能以独立事务“补挂”目录。无需新增REST、topic、数据库或任务表。
+
+取消目标清理在真实 private 对象全部确认移除、canvas/media owning 清理完成后，于 FinishCancelled 同事务将未发布 copying target 逻辑删除，保持原 admission/manifest、placement 与目录版本不变；不在持 project 锁时反向取得 library/folder 锁。旧目标终态重放不再清理、不增修订、不重复事件。Restore 只接受 active/archived 的已删除正式项目，copying 墓碑不可恢复；实际 pending object、failed→cancel、重复 Finish 及 library/folder/project 阻塞链已做 PostgreSQL Red→Green。目录回收排除已退休目标的 work，但清其分类；活跃 copying 目标仍阻挡全目录事务。项目自身封面仍是单独未完成能力，不用目录 cover 代替。

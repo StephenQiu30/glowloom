@@ -162,3 +162,22 @@
 固定后端 55 文件在 Go 1.26.8 下 goimports、`go vet ./...`、`golangci-lint run ./...`（0 issues）、`govulncheck ./...`（无可达/导入包漏洞，一个未调用 required module 提示）及生产二进制构建通过；全树 Race 顶层 379 通过/337 缺专用环境跳过。真实 Small/MPS、非 owner PostgreSQL、私有 MinIO、正式 HTTP/画布和 Temporal 的 `TestDepthJob` 定向 Race 21 顶层通过、零跳过（69.525s），与固定候选相关代码逐字相同。新增控制者撤权回归保持原 intent/对象/attempt 不变，重放不再次推理；无进程/无对象且完整原控制证据的撤权失败允许当前主体明确新取消，缺证据或未知物理事实仍保持 fence。CI 增加真实 PostgreSQL/私有对象 Depth 门禁，至少九项通过且零失败/零跳过；Linux CI 不冒充 MPS 前向验收。
 
 固定前端 27 文件全量 ESLint（零警告）、全量 Prettier、76 文件/389 测试、`tsc --noEmit` 和 Next.js 生产构建通过。正式 8080 的在线 78-operation Swagger 重新生成全部 12 个客户端文件，显式格式检查后逐字相同；不采用生成器忽略的格式化错误作为验证。完整安全原始证据保存在独占临时验收目录，未提交私有媒体、签名 URL、cookie、环境配置或运行日志。
+
+第八阶段提交 `b9e50650497ab0fb0c922e47ca9666b85cb5c64c` 已推送 main，CI `36933243710` 的 backend/frontend/images 全部完成且通过。
+
+## 第九阶段：个人项目目录与原子复制放置（2026-10-02）
+
+本阶段将固定来源的扁平目录适配为当前 actor/org 的正式分类。允许同名目录，根目录和其他目录的查询在服务端分页前过滤；目录 revision 与个人 placement revision 独立于项目内容 revision。目录回收在一个事务中验证全部成员和全部真实工作 owner，保留原项目状态及 30 天恢复期，单独恢复项目回到根目录。
+
+- `202610020040_workspace_project_folder` 在同一原业务 PostgreSQL（OID 345144296、相同实例启动时间）核验 030 结构及未完成工作后原子应用，up SHA256 `70c9fb739d3b1a3a3e2c0042889fbf9ebd542be4680457aa86044fcc20987a4c`；没有重置数据、数据库、工作区身份或角色。应用角色只可插入永久目录命令，冻结身份和历史没有额外 UPDATE/DELETE 权限。
+- Copy admission 在项目行锁之前取个人库/目录锁，同一事务冻结来源分类、创建隐藏目标和挂入相同目录；页面没有第二次移动请求。旧请求缺省 placement 时，既有 request fingerprint 和旧 manifest 编码保持逐字兼容。重放先核当前授权再读永久回执，目录后来改名或来源移动不改变原任务。发布核真实目标 placement，完整私有对象清理后取消只将未发布 copying 目标留为不可恢复的墓碑。
+- 固定后端 44 文件在 Go 1.26.8 下 goimports、`go vet ./...`、`golangci-lint run ./...`（0 issues）、`govulncheck ./...`（无可达/导入包漏洞，一个未调用 required module 提示）与生产构建通过；全树 Race 顶层 386 通过、361 缺专用条件跳过。隔离非 owner PostgreSQL 的 `^TestProject(Folder|CopyPlacement)` 30 顶层全通过、零跳过；旧 workspace/Copy 28 项及真实私有媒体/HTTP Copy 四项独立回归均零跳过。CAS、撤权、成员并发、六类 guard、审计/Outbox 故障回滚、取消墓碑和恢复拒绝分别核验。
+- API、worker、relay 使用同一 final2 二进制（SHA256 `2a6d7482db842975d19b4c77dc16415475a85fcfa022b877f27550060537f3a1`），实际三项 health=200；正式 Router/在线 Swagger 为 83 个 operationId。明确 `cover=null` 的 x-nullable 合同从 Go 注解生成，12 个在线生成客户端在显式 Prettier 后重新生成逐字相同。Wire/Swag 固定快照重生逐字相同。
+
+- 真实浏览器创建两个同名独立目录，主目录 `bb2866d4-7714-4565-a481-01232a00092b` 与另一个 `a9b4d6e1-b77f-4ca4-b6c3-d72596e1b6bd`；Unicode 改名、本地单图片检查/版权确认上传、正式封面保存与明确清除、根目录往返及三种 revision 移动通过。封面上传资产 `b92b9f1a-03fd-4bc5-ad8f-dd335bfdaac8` 为 96×64/1873 字节，SHA256 `2047eeeb4a8b74a5b7aa7437434f61a7c95a6137103b96db286fa3fa5c2cd531`，未追加画布节点。
+- 同目录 Copy job `2fd231d0-630b-467e-b059-95e3b207a9b7` 实际 succeeded/revision 5，将源 `34a935a8-c861-415e-86d6-87b64a7d98a9` 复制为 `65d1e8e7-74b4-4705-9509-c746d13350ce`；一画布、两正式图片、四衍生物全部完成。项目/画布/两资产/节点共五组身份独立映射，两个原件字节分别与副本 SHA 相同；源完整画布 revision 2、SHA256 `4af4b67a065a0102e929962459b824bb392b27af8927ccd368bdab5f2114bc35` 不变。
+- 浏览器第二次复制后实际发出取消；job `ef24b0ca-1815-4c8d-8224-d66bf75c2cec` 为 cancelled/revision 4，无未知执行/待对账，完成内容数为零。数据库确认目标 `dd76b4c0-8138-4283-8781-fa8750a1762d` 是 copying/is_delete=true 的不可恢复墓碑，不报告浏览器观察到了物理原生进程。这两个真实 Temporal workflow 各 12 个历史事件、均 Completed。
+- 主目录实际一次回收 active 副本和 archived 源，两个项目的 30 天 purge_after 相同，分类都变为 root；随后只用页面恢复源，保留 archived/根目录，目录没有复活，源画布与两媒体事实逐字保持。另一目录的封面在来源回收后 unavailable/null，恢复后重新授权为原正式图片。精确目录/项目/Copy 的 21 个真实审计事件全部发布，每事件 audit 恰一行且 Inbox 存在。
+- 真实发送前 abort 后刷新保留相同 scope/key/body，键盘 Enter 以原 key `035d7772-ea9c-48db-ac9d-92a362afe880` 人工核验成功；此证据不冒充服务端成功后丢响应，提交后未知回执由后端实际测试另证明。额外 25 个独占空目录实际跨页、带 cursor 刷新、末页目录进入/面包屑与清 cursor 通过，全部仅页面回收清理；390×844 页面宽度390，Dialog 的 Tab/Escape 与精确触发按钮焦点恢复通过。
+
+固定前端 22 文件与正式在线生成客户端在独立 HEAD+allowlist 快照完成全树 ESLint（零警告）、全树 Prettier、Next typegen、tsc、82 文件/415 测试及 Next.js 生产构建。首次共享树运行旧 Copy beforeunload 断言失败（414/415）保留记录；旧 Copy 定向 12/12、第二次共享树 415/415 和根协调者独立冻结快照 415/415 均通过，没有更改该断言、超时或 Copy 代码。实际 390px Dialog 连续八次 Tab 保持内部、Escape 回精确目录菜单；axe 无 violation，仍有背景对比度/遮挡计算 incomplete，经实际截图和焦点核验，未报告为自动全部完成。录像停止工具因 daemon 重试失败，JSON/截图/键盘证据保留，不报告完整录像。目录切片不关闭项目自身封面、个人/项目素材分类、正式剧本/分集/镜头、对话及内容包的剩余范围。

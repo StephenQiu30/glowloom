@@ -17,17 +17,21 @@ import (
 
 // ProjectCopyInput freezes a complete source revision behind a durable request key.
 type ProjectCopyInput struct {
-	SourceProjectID  uuid.UUID `json:"source_project_id"`
-	ExpectedRevision int64     `json:"expected_revision"`
-	TargetName       string    `json:"target_name"`
-	IdempotencyKey   uuid.UUID `json:"-"`
-	RequestID        string    `json:"-"`
+	SourceProjectID  uuid.UUID                 `json:"source_project_id"`
+	ExpectedRevision int64                     `json:"expected_revision"`
+	TargetName       string                    `json:"target_name"`
+	Placement        *CopyPlacementExpectation `json:"placement,omitempty"`
+	IdempotencyKey   uuid.UUID                 `json:"-"`
+	RequestID        string                    `json:"-"`
 }
 
 // Validate rejects unscoped, stale-shaped or incomplete public admission requests.
 func (i ProjectCopyInput) Validate() error {
 	request, err := uuid.Parse(i.RequestID)
 	if i.SourceProjectID == uuid.Nil || i.ExpectedRevision < 1 || i.ExpectedRevision > math.MaxInt32 || i.IdempotencyKey == uuid.Nil || err != nil || request == uuid.Nil || request.String() != i.RequestID || strings.TrimSpace(i.TargetName) == "" || !utf8.ValidString(i.TargetName) || utf8.RuneCountInString(i.TargetName) > 50 || strings.ContainsRune(i.TargetName, 0) {
+		return domain.ErrInvalidProjectCopy
+	}
+	if i.Placement != nil && i.Placement.Validate() != nil {
 		return domain.ErrInvalidProjectCopy
 	}
 	return nil

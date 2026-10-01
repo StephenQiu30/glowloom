@@ -17,7 +17,15 @@ const ports = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
   searchParams: "",
+  folders: vi.fn(),
+  folder: vi.fn(),
 }));
+vi.mock("./folder-queries", () => ({
+  FOLDERS_KEY: ["projects", "folders"],
+  listFolders: ports.folders,
+  findFolder: ports.folder,
+}));
+vi.mock("./project-folder-dialog", () => ({ ProjectFolderDialog: () => null }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: ports.replace, push: ports.push }),
   useSearchParams: () => new URLSearchParams(ports.searchParams),
@@ -56,6 +64,20 @@ const project = {
   status: "active",
   is_delete: false,
   revision: 1,
+  folder_id: null,
+  placement_revision: 0,
+};
+const folder = {
+  id: "9f3e948c-550b-47c8-8fa2-f2c31c88927c",
+  name: "目录一",
+  cover: null,
+  cover_unavailable: false,
+  project_count: 2,
+  revision: 3,
+  is_delete: false,
+  delete_time: null,
+  create_time: "2026-10-02T00:00:00Z",
+  update_time: "2026-10-02T00:00:00Z",
 };
 beforeEach(() => {
   vi.resetAllMocks();
@@ -63,6 +85,13 @@ beforeEach(() => {
   ports.list.mockResolvedValue({ items: [project], next_cursor: null });
   ports.presets.mockResolvedValue({ items: [], next_cursor: null });
   ports.create.mockResolvedValue({ ...project, name: "新项目" });
+  ports.folders.mockResolvedValue({
+    current_actor_id: "acafc61c-2bf8-48ba-b6c4-f7a84d95c518",
+    current_org_id: "1a39f9d1-a43c-4d98-8947-901b385d5457",
+    items: [folder],
+    next_cursor: null,
+  });
+  ports.folder.mockResolvedValue(folder);
 });
 afterEach(cleanup);
 function setup() {
@@ -82,6 +111,8 @@ it("工作台直接读取项目且不请求登录会话", async () => {
   await screen.findByText("逆光");
   expect(ports.list).toHaveBeenCalled();
   expect(ports.replace).not.toHaveBeenCalled();
+  expect(ports.list.mock.calls[0][0].folder_id).toBe("root");
+  await screen.findByRole("button", { name: "打开目录 目录一" });
 });
 it("服务错误明确展示且可重试，不跳转登录页", async () => {
   ports.list.mockRejectedValueOnce(new ApiError(503, "dependency_unavailable"));
@@ -241,4 +272,82 @@ it("搜索与视图筛选保留复制恢复参数", async () => {
     "93021a72-3281-42b2-91cf-6a4413ee8956",
   );
   expect(next.searchParams.get("q")).toBe("另一搜索");
+});
+
+it("晚页目录URL刷新读取真实目录，进入回收站移除目录绑定且保留Copy恢复参数", async () => {
+  ports.searchParams = `folder_id=${folder.id}&cursor=project-later&page=3&copy_source=${project.id}`;
+  setup();
+  await screen.findByRole("button", { name: "修改当前目录名称" });
+  expect(ports.folder).toHaveBeenCalledWith(
+    folder.id,
+    expect.objectContaining({
+      actorId: "acafc61c-2bf8-48ba-b6c4-f7a84d95c518",
+    }),
+    expect.any(AbortSignal),
+  );
+  expect(ports.list.mock.calls[0][0]).toMatchObject({
+    folder_id: folder.id,
+    cursor: "project-later",
+  });
+  fireEvent.click(screen.getByRole("radio", { name: "回收站" }));
+  await waitFor(() =>
+    expect(ports.list.mock.calls.at(-1)![0]).toMatchObject({
+      folder_id: undefined,
+      cursor: undefined,
+      deleted: true,
+    }),
+  );
+  const next = new URL(
+    ports.replace.mock.calls.at(-1)![0],
+    window.location.origin,
+  );
+  expect(next.searchParams.has("folder_id")).toBe(false);
+  expect(next.searchParams.has("cursor")).toBe(false);
+  expect(next.searchParams.get("copy_source")).toBe(project.id);
+  expect(screen.queryByRole("navigation", { name: "项目目录路径" })).toBeNull();
+});
+
+it("目录分页失败可重读，原目录和Copy参数不被错误页覆盖", async () => {
+  ports.searchParams = `folder_cursor=folder-later&copy_source=${project.id}`;
+  ports.folders.mockImplementation((cursor?: string) =>
+    cursor === "folder-later"
+      ? Promise.reject(new ApiError(503, "dependency_unavailable"))
+      : Promise.resolve({
+          current_actor_id: "acafc61c-2bf8-48ba-b6c4-f7a84d95c518",
+          current_org_id: "1a39f9d1-a43c-4d98-8947-901b385d5457",
+          items: [],
+          next_cursor: "folder-later",
+        }),
+  );
+  setup();
+  await screen.findByText("目录列表未能加载");
+  expect(screen.queryByRole("button", { name: "打开目录 目录一" })).toBeNull();
+  ports.folders.mockResolvedValue({
+    current_actor_id: "acafc61c-2bf8-48ba-b6c4-f7a84d95c518",
+    current_org_id: "1a39f9d1-a43c-4d98-8947-901b385d5457",
+    items: [folder],
+    next_cursor: null,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "重试读取目录" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "打开目录 目录一" }),
+  );
+  const next = new URL(
+    ports.replace.mock.calls.at(-1)![0],
+    window.location.origin,
+  );
+  expect(next.searchParams.get("folder_id")).toBe(folder.id);
+  expect(next.searchParams.has("folder_cursor")).toBe(false);
+  expect(next.searchParams.get("copy_source")).toBe(project.id);
+});
+
+it("无效目录UUID不发项目或目录详情GET，可人工返回真实根目录", async () => {
+  ports.searchParams = "folder_id=not-a-folder";
+  setup();
+  await screen.findByText("目录链接无效");
+  expect(ports.list).not.toHaveBeenCalled();
+  expect(ports.folder).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "根目录" }));
+  await screen.findByText("逆光");
+  expect(ports.list.mock.calls.at(-1)![0].folder_id).toBe("root");
 });

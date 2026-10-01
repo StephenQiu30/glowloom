@@ -3254,6 +3254,281 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/project-folders": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "项目目录列表",
+                "operationId": "listProjectFolders",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "分页大小，上限200",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "当前主体目录分页游标",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderListResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "新建项目目录",
+                "operationId": "createProjectFolder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "UUID幂等键",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "目录名称及可选正式封面",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/project-folders/{folder_id}": {
+            "delete": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "回收目录及其中全部项目",
+                "operationId": "recycleProjectFolder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "目录UUID",
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID幂等键",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "观察到的目录修订",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "修改项目目录",
+                "operationId": "updateProjectFolder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "目录UUID",
+                        "name": "folder_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID幂等键",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "目录修订及字段，cover=null移除封面",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
         "/api/projects": {
             "get": {
                 "produces": [
@@ -3294,6 +3569,12 @@ const docTemplate = `{
                         "description": "只查询回收中的项目",
                         "name": "deleted",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "个人目录UUID，root表示未分类；未指定列出全部",
+                        "name": "folder_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3305,6 +3586,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
@@ -3899,6 +4186,84 @@ const docTemplate = `{
                         "description": "Accepted",
                         "schema": {
                             "$ref": "#/definitions/internal_workspace_adapter_http.ProjectCopyResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{pid}/folder": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "移动项目目录位置",
+                "operationId": "moveProjectToFolder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "项目UUID",
+                        "name": "pid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID幂等键",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "观察到的项目、放置与目标目录修订，folder_id=null移至根目录",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderMoveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderChangeResponse"
                         }
                     },
                     "403": {
@@ -8383,6 +8748,17 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_canvas_adapter_http.ListResponse": {
             "type": "object",
             "properties": {
@@ -9203,6 +9579,25 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_workspace_adapter_http.ProjectCopyPlacementRequest": {
+            "type": "object",
+            "required": [
+                "expected_folder_revision",
+                "expected_placement_revision"
+            ],
+            "properties": {
+                "expected_folder_revision": {
+                    "type": "integer"
+                },
+                "expected_placement_revision": {
+                    "type": "integer"
+                },
+                "folder_id": {
+                    "type": "string",
+                    "x-nullable": true
+                }
+            }
+        },
         "internal_workspace_adapter_http.ProjectCopyRequest": {
             "type": "object",
             "required": [
@@ -9211,6 +9606,9 @@ const docTemplate = `{
             "properties": {
                 "expected_revision": {
                     "type": "integer"
+                },
+                "placement": {
+                    "$ref": "#/definitions/internal_workspace_adapter_http.ProjectCopyPlacementRequest"
                 },
                 "target_name": {
                     "type": "string",
@@ -9368,14 +9766,105 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_workspace_adapter_http.ProjectResponse": {
+        "internal_workspace_adapter_http.ProjectFolderChangeResponse": {
             "type": "object",
             "properties": {
-                "archived_at": {
+                "folder": {
+                    "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderResponse"
+                },
+                "placement": {
+                    "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderPlacementResponse"
+                },
+                "recycled_project_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectFolderCreateRequest": {
+            "type": "object",
+            "properties": {
+                "cover": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 160,
+                    "minLength": 1
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectFolderListResponse": {
+            "type": "object",
+            "properties": {
+                "current_actor_id": {
+                    "type": "string"
+                },
+                "current_org_id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_workspace_adapter_http.ProjectFolderResponse"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string",
+                    "x-nullable": true
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectFolderMoveRequest": {
+            "type": "object",
+            "properties": {
+                "expected_folder_revision": {
+                    "type": "integer"
+                },
+                "expected_placement_revision": {
+                    "type": "integer"
+                },
+                "expected_project_revision": {
+                    "type": "integer"
+                },
+                "folder_id": {
+                    "type": "string",
+                    "x-nullable": true
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectFolderPlacementResponse": {
+            "type": "object",
+            "properties": {
+                "folder_id": {
                     "type": "string",
                     "x-nullable": true
                 },
-                "aspect_ratio": {
+                "project_id": {
+                    "type": "string"
+                },
+                "revision": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectFolderResponse": {
+            "type": "object",
+            "properties": {
+                "cover": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "cover_unavailable": {
+                    "type": "boolean"
+                },
+                "create_time": {
                     "type": "string"
                 },
                 "delete_time": {
@@ -9390,6 +9879,69 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "project_count": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "revision": {
+                    "type": "integer"
+                },
+                "update_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectFolderUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "cover": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_workspace_domain.FolderCover"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "expected_revision": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 160,
+                    "minLength": 1
+                }
+            }
+        },
+        "internal_workspace_adapter_http.ProjectResponse": {
+            "type": "object",
+            "properties": {
+                "archived_at": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "aspect_ratio": {
+                    "type": "string"
+                },
+                "delete_time": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "folder_id": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_delete": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "placement_revision": {
+                    "type": "integer"
                 },
                 "purge_after": {
                     "type": "string",

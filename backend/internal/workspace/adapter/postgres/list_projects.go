@@ -10,6 +10,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
 // ListProjectsForActor reads one organization-scoped keyset page after
@@ -20,7 +21,8 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 	}
 	if input.Limit < 1 || input.Limit > 200 ||
 		(input.Status != "" && input.Status != "active" && input.Status != "archived") ||
-		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) {
+		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) ||
+		(input.Deleted && input.FolderID != nil) {
 		return application.ProjectListPage{}, application.ErrInvalidProjectList
 	}
 	var page application.ProjectListPage
@@ -28,16 +30,36 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 		if err := requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
+		if input.FolderID != nil && *input.FolderID != uuid.Nil {
+			var exists bool
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.project_folder WHERE id=? AND org_id=? AND actor_id=? AND NOT is_delete)`, *input.FolderID, actor.OrgID, actor.ID).Scan(&exists).Error; err != nil {
+				return err
+			}
+			if !exists {
+				return domain.ErrProjectFolderNotFound
+			}
+		}
 		query := `
 			SELECT p.id, p.org_id, p.name, p.aspect_ratio, p.style_type,
 			       p.style_subtype, p.style_preset_id, p.resolution,
 			       p.allow_overseas_models, p.status, p.is_delete,
 			       p.archived_at, p.delete_time, p.purge_after, p.revision,
-			       p.create_time, p.update_time
+			       p.create_time, p.update_time, f.id AS folder_id,
+			       coalesce(m.revision,0) AS placement_revision
 			FROM workspace.project AS p
+			LEFT JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id AND m.actor_id=?::uuid
+			LEFT JOIN workspace.project_folder f ON f.id=m.folder_id AND f.org_id=m.org_id AND f.actor_id=m.actor_id AND NOT f.is_delete
 			WHERE p.org_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
 		`
-		args := []any{actor.OrgID.String(), input.Deleted}
+		args := []any{actor.ID.String(), actor.OrgID.String(), input.Deleted}
+		if input.FolderID != nil {
+			if *input.FolderID == uuid.Nil {
+				query += ` AND f.id IS NULL`
+			} else {
+				query += ` AND f.id=?::uuid`
+				args = append(args, input.FolderID.String())
+			}
+		}
 		if input.Status != "" {
 			query += ` AND p.status = ?`
 			args = append(args, input.Status)
@@ -95,6 +117,8 @@ type projectListRow struct {
 	Revision            int64
 	CreateTime          time.Time
 	UpdateTime          time.Time
+	FolderID            *uuid.UUID
+	PlacementRevision   int64
 }
 
 func (row projectListRow) item() application.ProjectListItem {
@@ -106,6 +130,7 @@ func (row projectListRow) item() application.ProjectListItem {
 		IsDelete: row.IsDelete, ArchivedAt: row.ArchivedAt,
 		DeleteTime: row.DeleteTime, PurgeAfter: row.PurgeAfter,
 		Revision: row.Revision, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
+		FolderID: row.FolderID, PlacementRevision: row.PlacementRevision,
 	}
 	if row.StyleSubtype != nil {
 		item.StyleSubtype = *row.StyleSubtype

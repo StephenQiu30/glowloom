@@ -90,6 +90,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(pgworkspace.NewStore(database)), workspaceapp.NewCreateProjectCommand(pgworkspace.NewStore(database), time.Now), workspaceapp.NewListStylePresetsQuery(pgworkspace.NewStore(database))).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(provideWorkspaceLifecycleStore(database), time.Now)).Register(protected)
 	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(provideProjectCopyStore(database), time.Now)).Register(protected)
+	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(provideProjectFolderStore(database), time.Now)).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) }
 	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)
 	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewStore(database), storage)).Register(protected)

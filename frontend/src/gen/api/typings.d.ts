@@ -1327,6 +1327,12 @@ declare namespace API {
       style_type?: string;
     };
 
+  type githubComStephenQiu30LanverseBackendInternalWorkspaceDomainFolderCover =
+    {
+      asset_id?: string;
+      project_id?: string;
+    };
+
   type internalCanvasAdapterHttpListResponse = {
     items?: githubComStephenQiu30LanverseBackendInternalCanvasDomainDocument[];
     next_cursor?: string;
@@ -1602,8 +1608,15 @@ declare namespace API {
     next_cursor?: string | null;
   };
 
+  type internalWorkspaceAdapterHttpProjectCopyPlacementRequest = {
+    expected_folder_revision: number;
+    expected_placement_revision: number;
+    folder_id?: string | null;
+  };
+
   type internalWorkspaceAdapterHttpProjectCopyRequest = {
     expected_revision: number;
+    placement?: internalWorkspaceAdapterHttpProjectCopyPlacementRequest;
     target_name?: string;
   };
 
@@ -1658,13 +1671,65 @@ declare namespace API {
     update_time?: string;
   };
 
-  type internalWorkspaceAdapterHttpProjectResponse = {
-    archived_at?: string | null;
-    aspect_ratio?: string;
+  type internalWorkspaceAdapterHttpProjectFolderChangeResponse = {
+    folder?: internalWorkspaceAdapterHttpProjectFolderResponse;
+    placement?: internalWorkspaceAdapterHttpProjectFolderPlacementResponse;
+    recycled_project_ids?: string[];
+  };
+
+  type internalWorkspaceAdapterHttpProjectFolderCreateRequest = {
+    cover?: githubComStephenQiu30LanverseBackendInternalWorkspaceDomainFolderCover;
+    name?: string;
+  };
+
+  type internalWorkspaceAdapterHttpProjectFolderListResponse = {
+    current_actor_id?: string;
+    current_org_id?: string;
+    items?: internalWorkspaceAdapterHttpProjectFolderResponse[];
+    next_cursor?: string | null;
+  };
+
+  type internalWorkspaceAdapterHttpProjectFolderMoveRequest = {
+    expected_folder_revision?: number;
+    expected_placement_revision?: number;
+    expected_project_revision?: number;
+    folder_id?: string | null;
+  };
+
+  type internalWorkspaceAdapterHttpProjectFolderPlacementResponse = {
+    folder_id?: string | null;
+    project_id?: string;
+    revision?: number;
+  };
+
+  type internalWorkspaceAdapterHttpProjectFolderResponse = {
+    cover?: githubComStephenQiu30LanverseBackendInternalWorkspaceDomainFolderCover | null;
+    cover_unavailable?: boolean;
+    create_time?: string;
     delete_time?: string | null;
     id?: string;
     is_delete?: boolean;
     name?: string;
+    project_count?: number | null;
+    revision?: number;
+    update_time?: string;
+  };
+
+  type internalWorkspaceAdapterHttpProjectFolderUpdateRequest = {
+    cover?: githubComStephenQiu30LanverseBackendInternalWorkspaceDomainFolderCover | null;
+    expected_revision?: number;
+    name?: string;
+  };
+
+  type internalWorkspaceAdapterHttpProjectResponse = {
+    archived_at?: string | null;
+    aspect_ratio?: string;
+    delete_time?: string | null;
+    folder_id?: string | null;
+    id?: string;
+    is_delete?: boolean;
+    name?: string;
+    placement_revision?: number;
     purge_after?: string | null;
     revision?: number;
     status?: string;
@@ -1766,6 +1831,13 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listProjectFoldersParams = {
+    /** 分页大小，上限200 */
+    limit?: number;
+    /** 当前主体目录分页游标 */
+    cursor?: string;
+  };
+
   type listProjectModelsParams = {
     /** 项目UUID */
     project_id: string;
@@ -1813,6 +1885,8 @@ declare namespace API {
     status?: string;
     /** 只查询回收中的项目 */
     deleted?: boolean;
+    /** 个人目录UUID，root表示未分类；未指定列出全部 */
+    folder_id?: string;
   };
 
   type listStylePresetsParams = {
@@ -1824,6 +1898,11 @@ declare namespace API {
     limit?: number;
     /** 与账号、组织及筛选绑定的游标 */
     cursor?: string;
+  };
+
+  type moveProjectToFolderParams = {
+    /** 项目UUID */
+    pid: string;
   };
 
   type previewMediaDepthParams = {
@@ -1858,6 +1937,11 @@ declare namespace API {
   type reconcileProjectCopyParams = {
     /** 复制任务UUID */
     id: string;
+  };
+
+  type recycleProjectFolderParams = {
+    /** 目录UUID */
+    folder_id: string;
   };
 
   type renameCanvasParams = {
@@ -1940,6 +2024,11 @@ declare namespace API {
   type updateAdminProviderParams = {
     /** 渠道UUID */
     id: string;
+  };
+
+  type updateProjectFolderParams = {
+    /** 目录UUID */
+    folder_id: string;
   };
 
   type updateProjectParams = {

@@ -1,0 +1,6 @@
+{
+  "input_bytes": "{\"source_project_id\":\"00000000-0000-4000-8000-000000000001\",\"expected_revision\":7,\"target_name\":\"固定完整副本\"}",
+  "input_sha256": "df07f6f9b29e142aab627ec0f0f975f4c828fb733d53e7cd87695d4ee7eb0d8f",
+  "workspace_bytes": "{\"SourceProjectID\":\"00000000-0000-4000-8000-000000000001\",\"SourceRevision\":7,\"Target\":{\"ID\":\"00000000-0000-4000-8000-000000000002\",\"OrgID\":\"00000000-0000-4000-8000-000000000003\",\"Name\":\"固定完整副本\",\"Description\":\"原始完整描述\",\"AspectRatio\":\"16:9\",\"StyleType\":\"realistic\",\"StyleSubtype\":\"\",\"StylePresetID\":\"00000000-0000-0000-0000-000000000000\",\"Resolution\":\"1080p\",\"AllowOverseasModels\":false,\"Status\":\"copying\",\"ArchivedAt\":null,\"IsDelete\":false,\"DeleteTime\":null,\"PurgeAfter\":null,\"Revision\":1,\"CreateTime\":\"2026-10-02T00:00:00Z\",\"UpdateTime\":\"2026-10-02T00:00:00Z\"},\"DefaultModels\":{\"image.generate\":\"fixed-image\",\"video.generate\":\"fixed-video\"},\"AIGCMarkStyle\":{\"opacity\":0.5,\"preset\":\"bottom_right\"},\"Presets\":[]}",
+  "workspace_sha256": "a7c740d9efaaefade32efc483ba56f6bcf4dd1490d8c818c4f9aa587c28e644e"
+}

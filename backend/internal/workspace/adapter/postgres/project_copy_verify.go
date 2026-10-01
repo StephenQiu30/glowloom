@@ -46,6 +46,11 @@ func verifyCopyWorkspace(tx *gorm.DB, job domain.ProjectCopyJob) error {
 	if err != nil || digest != job.Manifest.WorkspaceSHA256 || frozen.SourceProjectID != job.SourceProjectID || frozen.SourceRevision != job.SourceRevision || frozen.Target.ID != job.TargetProjectID || frozen.Target.OrgID != job.OrgID {
 		return domain.ErrInvalidProjectCopy
 	}
+	if frozen.Placement != nil {
+		if err := verifyCopyPlacement(tx, job, *frozen.Placement); err != nil {
+			return err
+		}
+	}
 	var actual domain.Project
 	read = tx.Raw(`SELECT id,org_id,name,description,aspect_ratio,style_type,COALESCE(style_subtype,'') AS style_subtype,COALESCE(style_preset_id,'00000000-0000-0000-0000-000000000000'::uuid) AS style_preset_id,resolution,allow_overseas_models,status,revision,is_delete FROM workspace.project WHERE id=? AND org_id=? FOR SHARE`, job.TargetProjectID, job.OrgID).Scan(&actual)
 	if read.Error != nil {

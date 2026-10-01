@@ -350,6 +350,10 @@ func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityap
 		if err != nil {
 			return err
 		}
+		if before.Status == "cancelled" && worker != uuid.Nil {
+			saved = before
+			return nil
+		}
 		if before.Status != "cancel_requested" || before.WorkerID != worker || worker == uuid.Nil {
 			return domain.ErrProjectCopyWorkerConflict
 		}
@@ -365,6 +369,9 @@ func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityap
 		}
 		saved = before
 		if err := saved.ConfirmCancelled(worker, true); err != nil {
+			return err
+		}
+		if err := retireCopyTarget(tx, before, time.Now().UTC()); err != nil {
 			return err
 		}
 		if err := saveCopyJob(tx, before, saved); err != nil {

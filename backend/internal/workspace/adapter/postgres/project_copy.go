@@ -42,6 +42,7 @@ type copyWorkspaceSnapshot struct {
 	DefaultModels   map[string]string
 	AIGCMarkStyle   json.RawMessage
 	Presets         []domain.StylePreset
+	Placement       *copyPlacementSnapshot `json:",omitempty"`
 }
 
 func copyJSON(body []byte, target any) error {
@@ -192,6 +193,9 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		if err := requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
+		if err := LockProjectLibrary(ctx, tx, actor); err != nil {
+			return err
+		}
 		var locked int
 		if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.ID.String()+":"+input.IdempotencyKey.String()).Scan(&locked).Error; err != nil {
 			return err
@@ -216,6 +220,10 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		}
 		if existing == 1 {
 			return application.ErrIdempotencyConflict
+		}
+		placement, err := FreezeCopyPlacement(ctx, tx, actor, input.SourceProjectID, input.Placement)
+		if err != nil {
+			return err
 		}
 		source, err := readLifecycleProject(tx, actor.OrgID, input.SourceProjectID, true)
 		if err != nil {
@@ -247,6 +255,10 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
+		targetPlacement, err := AttachCopyPlacement(ctx, tx, actor, target.ID, placement, now)
+		if err != nil {
+			return err
+		}
 		media, err := owners.Media.Freeze(ctx, actor, copyMediaBinding(saved), now)
 		if err != nil {
 			return err
@@ -264,7 +276,7 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		target.StylePresetID = selected
-		workspace := copyWorkspaceSnapshot{SourceProjectID: source.Project.ID, SourceRevision: source.Project.Revision, Target: target, DefaultModels: source.DefaultModels, AIGCMarkStyle: mark.AIGCMarkStyle, Presets: presets}
+		workspace := copyWorkspaceSnapshot{SourceProjectID: source.Project.ID, SourceRevision: source.Project.Revision, Target: target, DefaultModels: source.DefaultModels, AIGCMarkStyle: mark.AIGCMarkStyle, Presets: presets, Placement: &copyPlacementSnapshot{Source: placement.Placement, SourceFolderRevision: placement.FolderRevision, Target: targetPlacement}}
 		digest, body, err := copyWorkspaceDigest(workspace)
 		if err != nil {
 			return err

@@ -10,7 +10,7 @@ const styleSubtype = z.enum([
   "cartoon_3d",
   "manhwa",
 ]);
-const projectSummary = z.object({
+const projectBase = z.object({
   id: z.string().uuid(),
   name: z.string(),
   aspect_ratio: z.enum(["9:16", "16:9"]),
@@ -22,8 +22,17 @@ const projectSummary = z.object({
   delete_time: z.iso.datetime({ offset: true }).nullable().optional(),
   purge_after: z.iso.datetime({ offset: true }).nullable().optional(),
 });
-export type ProjectSummary = z.infer<typeof projectSummary>;
-const projectDetail = projectSummary.extend({
+const projectSummary = projectBase
+  .extend({
+    folder_id: z.string().uuid().nullable(),
+    placement_revision: z.number().int().nonnegative().max(2147483647),
+  })
+  .refine(
+    (project) => project.folder_id === null || project.placement_revision > 0,
+  );
+export type ProjectSummary = z.infer<typeof projectBase>;
+export type ProjectListedSummary = z.infer<typeof projectSummary>;
+const projectDetail = projectBase.extend({
   description: z.string(),
   style_subtype: styleSubtype.optional(),
   style_preset_id: z.string().uuid().nullable(),

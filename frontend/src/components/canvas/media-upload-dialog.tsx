@@ -44,6 +44,7 @@ export type MediaUploadDialogProps = {
   onBusyChange?: (busy: boolean) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  target?: "canvas" | "folder-cover";
 };
 type Entry = {
   file: File;
@@ -80,6 +81,7 @@ function MediaUploadSession({
   onBusyChange,
   disabled = false,
   readOnly = false,
+  target = "canvas",
 }: MediaUploadDialogProps) {
   const [entries, setEntries] = useState(() => entriesFor(initialFiles));
   const [confirmed, setConfirmed] = useState(false);
@@ -94,10 +96,12 @@ function MediaUploadSession({
   const reviewId = useId();
   const busy = phase !== "idle";
   const blocked = disabled || readOnly;
+  const folderCover = target === "folder-cover";
   const validation = validateCanvasMediaFiles(
     entries.map((entry) => entry.file),
     remainingSlots,
     maximumFiles,
+    folderCover,
   );
   const successful = entries.flatMap((entry) =>
     entry.asset ? [entry.asset] : [],
@@ -149,7 +153,9 @@ function MediaUploadSession({
         setSaveError(
           safeError(
             error,
-            "素材已上传，但画布尚未确认保存。请重试加入画布，或稍后从媒体库添加。",
+            folderCover
+              ? "图片已上传，但封面草稿尚未确认更新。请用原批次重试选择，素材已保留。"
+              : "素材已上传，但画布尚未确认保存。请重试加入画布，或稍后从媒体库添加。",
           ),
         );
     } finally {
@@ -257,10 +263,18 @@ function MediaUploadSession({
         }}
       >
         <DialogHeader>
-          <DialogTitle>上传媒体到画布</DialogTitle>
+          <DialogTitle>
+            {folderCover ? "上传目录封面" : "上传媒体到画布"}
+          </DialogTitle>
           <DialogDescription>
-            每批最多 {maximumFiles} 个文件、总计 700 MiB；当前可添加{" "}
-            {Math.max(0, remainingSlots)} 个节点。上传后将保存正式素材引用。
+            {folderCover ? (
+              "上传一张图片到选中的来源项目。完成后选择正式素材作为封面草稿，再明确保存目录封面。"
+            ) : (
+              <>
+                每批最多 {maximumFiles} 个文件、总计 700 MiB；当前可添加{" "}
+                {Math.max(0, remainingSlots)} 个节点。上传后将保存正式素材引用。
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -269,8 +283,12 @@ function MediaUploadSession({
             <Input
               id={filesId}
               type="file"
-              multiple
-              accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.mp3,.wav,.m4a,.glb"
+              multiple={maximumFiles > 1}
+              accept={
+                folderCover
+                  ? ".jpg,.jpeg,.png,.webp"
+                  : ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.mp3,.wav,.m4a,.glb"
+              }
               disabled={busy || blocked || successful.length > 0}
               onChange={(event) => {
                 if (inFlight.current || successful.length) return;
@@ -281,11 +299,17 @@ function MediaUploadSession({
               }}
             />
             <FieldDescription>
-              图片 JPG/PNG/WebP ≤20 MiB；视频 MP4/MOV 与静音 VP8/VP9 WebM ≤500
-              MiB、≤60 秒；WebM 将实际转换为 MP4。音频 MP3/WAV/M4A ≤100
-              MiB。图片和视频每边 ≤8192、总像素 ≤4000 万。 GLB v2 ≤64
-              MiB，资源须在包内或嵌入 data
-              URI。服务端将检查真实格式、尺寸和时长。
+              {folderCover ? (
+                "图片 JPG/PNG/WebP ≤20 MiB，每边 ≤8192、总像素 ≤4000 万。服务端将检查真实格式和尺寸。"
+              ) : (
+                <>
+                  图片 JPG/PNG/WebP ≤20 MiB；视频 MP4/MOV 与静音 VP8/VP9 WebM
+                  ≤500 MiB、≤60 秒；WebM 将实际转换为 MP4。音频 MP3/WAV/M4A ≤100
+                  MiB。图片和视频每边 ≤8192、总像素 ≤4000 万。 GLB v2 ≤64
+                  MiB，资源须在包内或嵌入 data
+                  URI。服务端将检查真实格式、尺寸和时长。
+                </>
+              )}
             </FieldDescription>
             <FieldError
               errors={validation.errors.map((message) => ({ message }))}
@@ -329,7 +353,9 @@ function MediaUploadSession({
                     : entry.status === "uploading"
                       ? `${entry.progress === undefined ? "正在上传" : `正在上传 ${entry.progress}%`}，完成后由服务端校验`
                       : entry.status === "ready"
-                        ? "已上传，等待加入画布"
+                        ? folderCover
+                          ? "已上传，等待选择为目录封面"
+                          : "已上传，等待加入画布"
                         : entry.status === "cancelled"
                           ? "已取消，可用原请求重试"
                           : entry.error}
@@ -342,32 +368,46 @@ function MediaUploadSession({
           <Alert>
             <AlertTitle>已成功上传的素材已保留</AlertTitle>
             <AlertDescription>
-              {saveError
-                ? "请重试原画布保存批次。素材已进入媒体库，无需重新上传。"
-                : failed
-                  ? "请重试未成功的文件，或选择将成功的素材加入画布。"
-                  : "素材已进入媒体库，画布保存失败时可以直接重试加入。"}{" "}
-              关闭后仍可从媒体库添加。
+              {folderCover ? (
+                "正式图片已进入来源项目媒体库。选用失败时请重试原批次，无需重新上传。关闭后仍可在正式图片列表选择。"
+              ) : (
+                <>
+                  {saveError
+                    ? "请重试原画布保存批次。素材已进入媒体库，无需重新上传。"
+                    : failed
+                      ? "请重试未成功的文件，或选择将成功的素材加入画布。"
+                      : "素材已进入媒体库，画布保存失败时可以直接重试加入。"}{" "}
+                  关闭后仍可从媒体库添加。
+                </>
+              )}
             </AlertDescription>
           </Alert>
         )}
         {saveError && (
           <Alert variant="destructive">
-            <AlertTitle>画布未确认保存</AlertTitle>
+            <AlertTitle>
+              {folderCover ? "封面草稿未确认更新" : "画布未确认保存"}
+            </AlertTitle>
             <AlertDescription>{saveError}</AlertDescription>
           </Alert>
         )}
         {blocked && (
           <Alert>
-            <AlertTitle>当前画布不可修改</AlertTitle>
+            <AlertTitle>
+              {folderCover ? "当前项目不可上传" : "当前画布不可修改"}
+            </AlertTitle>
             <AlertDescription>
-              请退出只读状态后再上传和添加素材。
+              {folderCover
+                ? "请选择当前可编辑的来源项目后再上传封面。"
+                : "请退出只读状态后再上传和添加素材。"}
             </AlertDescription>
           </Alert>
         )}
         {phase === "saving" && (
           <p role="status" className="text-sm text-muted-foreground">
-            正在加入画布，请等待保存结果。
+            {folderCover
+              ? "正在选择目录封面，请等待结果。"
+              : "正在加入画布，请等待保存结果。"}
           </p>
         )}
         <DialogFooter>
@@ -390,9 +430,11 @@ function MediaUploadSession({
                   }
                   onClick={saveSuccessful}
                 >
-                  {saveError
-                    ? "重试加入画布"
-                    : `将成功的 ${successful.length} 个加入画布`}
+                  {folderCover
+                    ? "重试选择目录封面"
+                    : saveError
+                      ? "重试加入画布"
+                      : `将成功的 ${successful.length} 个加入画布`}
                 </Button>
               )}
               {(!attempted || failed) && !saveError && (

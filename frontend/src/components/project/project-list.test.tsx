@@ -173,3 +173,27 @@ it.each(["cards", "table"] as const)(
     expect(screen.queryByRole("menuitem", { name: "复制完整项目" })).toBeNull();
   },
 );
+it("可写项目提供移动入口，归档与回收项目禁用或省略", async () => {
+  const action = vi.fn();
+  render(
+    <ProjectList
+      projects={projects}
+      view="cards"
+      onViewChange={vi.fn()}
+      onAction={action}
+    />,
+  );
+  fireEvent.keyDown(screen.getByRole("button", { name: "逆光的项目操作" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "移动到目录" }));
+  expect(action).toHaveBeenLastCalledWith(projects[0], "move");
+  fireEvent.keyDown(screen.getByRole("button", { name: "旧城的项目操作" }), {
+    key: "ArrowDown",
+  });
+  expect(
+    (await screen.findByRole("menuitem", { name: "移动到目录" })).getAttribute(
+      "aria-disabled",
+    ),
+  ).toBe("true");
+});

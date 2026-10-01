@@ -13,6 +13,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
 // ErrInvalidProjectList means a list request or its stored page is invalid.
@@ -44,6 +45,8 @@ type ProjectListItem struct {
 	Revision            int64
 	CreateTime          time.Time
 	UpdateTime          time.Time
+	FolderID            *uuid.UUID
+	PlacementRevision   int64
 }
 
 // ProjectListPage contains one bounded page of project summaries.
@@ -59,6 +62,8 @@ type ListProjectsInput struct {
 	Query   string
 	Limit   int
 	After   *ProjectListCursor
+	// FolderID is nil for all projects, uuid.Nil for root, or a personal folder.
+	FolderID *uuid.UUID
 }
 
 // ListProjectsStore rechecks current rights before reading a project page.
@@ -87,7 +92,8 @@ func (q *ListProjectsQuery) Execute(ctx context.Context, actor identityapp.Princ
 	if (input.Status != "" && input.Status != "active" && input.Status != "archived") ||
 		input.Limit < 0 || input.Limit > 200 || !utf8.ValidString(input.Query) ||
 		utf8.RuneCountInString(input.Query) > 200 ||
-		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) {
+		(input.After != nil && (input.After.ID == uuid.Nil || input.After.UpdateTime.IsZero())) ||
+		(input.Deleted && input.FolderID != nil) {
 		return ProjectListPage{}, ErrInvalidProjectList
 	}
 	for _, r := range input.Query {
@@ -112,6 +118,12 @@ func (q *ListProjectsQuery) Execute(ctx context.Context, actor identityapp.Princ
 			(project.Status != "active" && project.Status != "archived") ||
 			(input.Status != "" && project.Status != input.Status) {
 			return ProjectListPage{}, ErrInvalidProjectList
+		}
+		if project.PlacementRevision < 0 || project.FolderID != nil && (*project.FolderID == uuid.Nil || project.PlacementRevision < 1) {
+			return ProjectListPage{}, ErrInvalidProjectList
+		}
+		if input.FolderID != nil && (*input.FolderID == uuid.Nil && project.FolderID != nil || *input.FolderID != uuid.Nil && (project.FolderID == nil || *project.FolderID != *input.FolderID)) {
+			return ProjectListPage{}, domain.ErrInvalidProjectFolder
 		}
 	}
 	if page.Next != nil {

@@ -37,6 +37,7 @@ function setup({
   imported = vi.fn().mockResolvedValue(undefined),
   remainingSlots = 20,
   disabled = false,
+  target = "canvas" as "canvas" | "folder-cover",
 } = {}) {
   const changed = vi.fn();
   const busy = vi.fn();
@@ -55,6 +56,8 @@ function setup({
         onImported={imported}
         onBusyChange={busy}
         disabled={disabled}
+        target={target}
+        maximumFiles={target === "folder-cover" ? 1 : undefined}
       />
     );
   }
@@ -81,6 +84,20 @@ it("必须显式本地人工确认，没有自动审核和预览URL", async () =
   expect(view.upload).toHaveBeenCalledTimes(1);
   expect(view.upload.mock.calls[0][1]).toMatch(/^[0-9a-f-]{36}$/);
   expect(view.changed).toHaveBeenCalledWith(false);
+});
+it("目录封面只受理图片并确认使用权，上传后选素材而不显示画布保存", async () => {
+  const view = setup({ target: "folder-cover", remainingSlots: 1 });
+  expect(screen.getByRole("dialog", { name: "上传目录封面" })).toBeTruthy();
+  expect(screen.getByLabelText("选择本地媒体文件").getAttribute("accept")).toBe(
+    ".jpg,.jpeg,.png,.webp",
+  );
+  expect(screen.queryByText(/加入画布|当前可添加/)).toBeNull();
+  confirm();
+  start();
+  await waitFor(() =>
+    expect(view.imported).toHaveBeenCalledExactlyOnceWith([asset]),
+  );
+  expect(view.upload).toHaveBeenCalledTimes(1);
 });
 it("逐文件上传，可见真实发送进度，全部成功只保存一次", async () => {
   let finish: (asset: MediaAsset) => void = () => {};

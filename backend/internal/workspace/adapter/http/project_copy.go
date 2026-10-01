@@ -41,10 +41,11 @@ func (h *ProjectCopyHandler) Register(g *gin.RouterGroup) {
 	g.POST("/project-copies/:id/reconcile", h.Reconcile)
 }
 
-// ProjectCopyRequest includes only a source revision and a target name.
+// ProjectCopyRequest binds the source revision, target name and optional personal placement CAS.
 type ProjectCopyRequest struct {
-	ExpectedRevision *int64 `json:"expected_revision" binding:"required"`
-	TargetName       string `json:"target_name" minLength:"1" maxLength:"50"`
+	ExpectedRevision *int64                       `json:"expected_revision" binding:"required"`
+	TargetName       string                       `json:"target_name" minLength:"1" maxLength:"50"`
+	Placement        *ProjectCopyPlacementRequest `json:"placement,omitempty"`
 }
 
 // UnmarshalJSON rejects replacement of invalid UTF-8 and undeclared transport fields.
@@ -57,6 +58,13 @@ func (r *ProjectCopyRequest) UnmarshalJSON(body []byte) error {
 	d := json.NewDecoder(bytes.NewReader(body))
 	d.DisallowUnknownFields()
 	if d.Decode(&value) != nil || d.Decode(new(any)) != io.EOF {
+		return domain.ErrInvalidProjectCopy
+	}
+	var present map[string]json.RawMessage
+	if json.Unmarshal(body, &present) != nil || present == nil {
+		return domain.ErrInvalidProjectCopy
+	}
+	if raw, ok := present["placement"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return domain.ErrInvalidProjectCopy
 	}
 	*r = ProjectCopyRequest(value)
@@ -119,9 +127,9 @@ func writeCopyError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
+	case errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound), errors.Is(err, domain.ErrProjectFolderNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
-	case errors.Is(err, domain.ErrProjectRevisionConflict):
+	case errors.Is(err, domain.ErrProjectRevisionConflict), errors.Is(err, domain.ErrProjectFolderRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
 	case errors.Is(err, domain.ErrProjectCopyStateConflict), errors.Is(err, domain.ErrProjectCopyWorkerConflict), errors.Is(err, domain.ErrProjectStateConflict):
 		httpapi.WriteProblem(c, 409, "state_conflict", nil)
@@ -176,7 +184,12 @@ func (h *ProjectCopyHandler) Create(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
 		return
 	}
-	job, err := h.service.Create(c.Request.Context(), identityhttp.Principal(c), application.ProjectCopyInput{SourceProjectID: id, ExpectedRevision: *body.ExpectedRevision, TargetName: body.TargetName, IdempotencyKey: key, RequestID: c.GetString("request_id")})
+	input := application.ProjectCopyInput{SourceProjectID: id, ExpectedRevision: *body.ExpectedRevision, TargetName: body.TargetName, IdempotencyKey: key, RequestID: c.GetString("request_id")}
+	if body.Placement != nil {
+		expect := body.Placement.expectation()
+		input.Placement = &expect
+	}
+	job, err := h.service.Create(c.Request.Context(), identityhttp.Principal(c), input)
 	if err != nil {
 		writeCopyError(c, err)
 		return

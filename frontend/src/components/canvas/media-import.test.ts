@@ -24,6 +24,19 @@ const asset: MediaAsset = {
   height: 1080,
   revision: 1,
 };
+it("封面显式image-only且最多1张，普通画布仍可4类上传", () => {
+  expect(
+    validateCanvasMediaFiles([file("a.png", "image/png")], 1, 1, true).valid,
+  ).toBe(true);
+  for (const value of [
+    file("a.mp4", "video/mp4"),
+    file("a.wav", "audio/wav"),
+    file("a.glb", "model/gltf-binary"),
+  ]) {
+    expect(validateCanvasMediaFiles([value], 1, 1, true).valid).toBe(false);
+    expect(validateCanvasMediaFiles([value]).valid).toBe(true);
+  }
+});
 it("接受约定格式的大小上界，空 MIME 仍按扩展初筛", () => {
   for (const [name, mime, size] of [
     ["a.JPG", "image/jpeg", 20 * mib],

@@ -90,6 +90,8 @@ it("真实列表向生成端口传筛选和服务端游标，拒绝无UUID或假
     status: "archived",
     is_delete: false,
     revision: 2,
+    folder_id: null,
+    placement_revision: 0,
   };
   api.list.mockResolvedValue({ items: [item], next_cursor: "next" });
   expect(await listProjects(params, signal)).toEqual({
@@ -102,6 +104,17 @@ it("真实列表向生成端口传筛选和服务端游标，拒绝无UUID或假
     next_cursor: null,
   });
   await expect(listProjects(params)).rejects.toBeInstanceOf(ApiError);
+  for (const change of [
+    { placement_revision: undefined },
+    { folder_id: undefined },
+    { folder_id: id, placement_revision: 0 },
+  ]) {
+    api.list.mockResolvedValue({
+      items: [{ ...item, ...change }],
+      next_cursor: null,
+    });
+    await expect(listProjects(params)).rejects.toBeInstanceOf(ApiError);
+  }
 });
 it("预设真实分页仅暴露安全字段，空列表保持空且服务失败不补seed", async () => {
   api.presets.mockResolvedValue({

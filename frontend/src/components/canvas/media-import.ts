@@ -28,6 +28,7 @@ export function validateCanvasMediaFiles(
   files: readonly File[],
   remainingSlots = 20,
   maximumFiles = 20,
+  imageOnly = false,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   if (!files.length) errors.push("请先选择本地媒体文件。");
@@ -51,6 +52,8 @@ export function validateCanvasMediaFiles(
       ? formats[extension]
       : undefined;
     const mime = file.type.toLowerCase();
+    if (imageOnly && !["jpg", "jpeg", "png", "webp"].includes(extension))
+      errors.push(`${file.name}：目录封面只支持图片。`);
     if (
       !format ||
       (mime &&
