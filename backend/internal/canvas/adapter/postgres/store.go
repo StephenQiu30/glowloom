@@ -471,6 +471,18 @@ func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identit
 		if config == nil {
 			return nil
 		}
+		if config.Cover != nil {
+			if err := check(config.Cover.AssetID, "image", index); err != nil {
+				return err
+			}
+		}
+		for _, shot := range config.Shots {
+			for _, screenshot := range shot.Screenshots {
+				if err := check(screenshot.AssetID, "image", index); err != nil {
+					return err
+				}
+			}
+		}
 		if config.Panorama != nil {
 			if err := check(config.Panorama.AssetID, "image", index); err != nil {
 				return err

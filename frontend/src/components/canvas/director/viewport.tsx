@@ -168,6 +168,7 @@ function Stage(props: Props) {
   const gl = useThree((state) => state.gl);
   const threeScene = useThree((state) => state.scene);
   const size = useThree((state) => state.size);
+  const get = useThree((state) => state.get);
   const stage = directorStageTransform(scene),
     ground = directorGroundSettings(scene);
   const framing = resolveDirectorViewFraming({
@@ -183,12 +184,31 @@ function Stage(props: Props) {
       })
     : null;
   const assetsReady = useRef(new Map<string, boolean>());
+  const committedRenderMode = useRef(renderMode);
+  const pendingCaptureFrame = useRef<{
+    frames: number;
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+  useEffect(() => {
+    committedRenderMode.current = renderMode;
+  }, [renderMode]);
+  useFrame(() => {
+    const pending = pendingCaptureFrame.current;
+    if (!pending) return;
+    if (committedRenderMode.current === "beauty") pending.frames += 1;
+    if (pending.frames >= 2) {
+      clearTimeout(pending.timer);
+      pendingCaptureFrame.current = null;
+      pending.resolve();
+    } else get().invalidate();
+  });
   const snapshots = useRef({ scene, time });
   useEffect(() => {
     snapshots.current = { scene, time };
   }, [scene, time]);
   const onViewReady = props.onViewReady;
-  const get = useThree((state) => state.get);
   useEffect(() => {
     onViewReady(() => {
       const camera = get().camera;
@@ -207,6 +227,19 @@ function Stage(props: Props) {
   useEffect(() => {
     let cancelled = false;
     captureReady(async (mode) => {
+      if (cancelled) throw new Error("导演台已关闭。");
+      await new Promise<void>((resolve, reject) => {
+        if (pendingCaptureFrame.current) {
+          reject(new Error("已有截图正在等待视口。"));
+          return;
+        }
+        const timer = setTimeout(() => {
+          pendingCaptureFrame.current = null;
+          reject(new Error("场景材质尚未就绪，请重新捕获。"));
+        }, 3000);
+        pendingCaptureFrame.current = { frames: 0, resolve, reject, timer };
+        get().invalidate();
+      });
       if (cancelled) throw new Error("导演台已关闭。");
       if (gl.getContext().isContextLost())
         throw new Error("3D 视口上下文已失效，请重新打开导演台后截图。");
@@ -276,13 +309,22 @@ function Stage(props: Props) {
         hidden.forEach(({ item, visible }) => {
           item.visible = visible;
         });
+        const current = get();
+        gl.render(threeScene, current.camera);
+        current.invalidate();
       }
     });
     return () => {
       cancelled = true;
+      const pending = pendingCaptureFrame.current;
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingCaptureFrame.current = null;
+        pending.reject(new Error("导演台已关闭。"));
+      }
       captureReady(null);
     };
-  }, [captureReady, gl, threeScene, size.width, size.height]);
+  }, [captureReady, get, gl, threeScene, size.width, size.height]);
   useEffect(() => {
     const lost = (event: Event) => {
       event.preventDefault();

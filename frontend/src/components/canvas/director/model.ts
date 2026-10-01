@@ -236,6 +236,25 @@ const shot = z
       "handheld",
     ]),
     prompt: z.string().max(10000),
+    screenshots: z
+      .array(
+        z
+          .object({
+            id,
+            assetId: id,
+            name: z
+              .string()
+              .min(1)
+              .max(128)
+              .refine(
+                (value) => Boolean(value.trim()) && !value.includes("\0"),
+              ),
+            createdAt: z.iso.datetime({ offset: true }),
+          })
+          .strict(),
+      )
+      .max(64)
+      .optional(),
   })
   .strict();
 export const directorSchema = z
@@ -280,6 +299,7 @@ export const directorSchema = z
     lights: z.array(light).max(32),
     shots: z.array(shot).min(1).max(128),
     activeShotId: id,
+    cover: z.object({ assetId: id, shotId: id }).strict().optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -295,9 +315,16 @@ export const directorSchema = z
       context.addIssue({ code: "custom", message: "场景元素身份重复。" });
     if (
       !shots.has(value.activeShotId) ||
-      value.shots.some((item) => !cameras.has(item.cameraId))
+      value.shots.some((item) => !cameras.has(item.cameraId)) ||
+      (value.cover && !shots.has(value.cover.shotId))
     )
       context.addIssue({ code: "custom", message: "分镜引用不存在的摄影机。" });
+    const screenshots = value.shots.flatMap((item) => item.screenshots ?? []);
+    if (
+      screenshots.length > 512 ||
+      new Set(screenshots.map((item) => item.id)).size !== screenshots.length
+    )
+      context.addIssue({ code: "custom", message: "场景截图超额或身份重复。" });
     if (
       value.cameras.some(
         (item) =>
@@ -361,6 +388,9 @@ export type DirectorObject = DirectorScene["objects"][number];
 export type DirectorCamera = DirectorScene["cameras"][number];
 export type DirectorLight = DirectorScene["lights"][number];
 export type DirectorShot = DirectorScene["shots"][number];
+export type DirectorScreenshot = NonNullable<
+  DirectorShot["screenshots"]
+>[number];
 export type DirectorTransform = z.infer<typeof transform>;
 export type DirectorKeyframe = z.infer<typeof keyframe>;
 export type DirectorKeyframeEasing = z.infer<typeof easing>;

@@ -266,6 +266,7 @@ declare namespace API {
       aspect_ratio?: string;
       background?: string;
       cameras?: githubComStephenQiu30LanverseBackendInternalCanvasDomainDirectorCamera[];
+      cover?: githubComStephenQiu30LanverseBackendInternalCanvasDomainDirectorCover;
       environment_intensity?: number;
       grid_snap?: boolean;
       grid_visible?: boolean;
@@ -282,6 +283,11 @@ declare namespace API {
       title?: string;
       version?: number;
     };
+
+  type githubComStephenQiu30LanverseBackendInternalCanvasDomainDirectorCover = {
+    asset_id?: string;
+    shot_id?: string;
+  };
 
   type githubComStephenQiu30LanverseBackendInternalCanvasDomainDirectorGround =
     {
@@ -357,6 +363,14 @@ declare namespace API {
     bone_map?: Record<string, any>;
   };
 
+  type githubComStephenQiu30LanverseBackendInternalCanvasDomainDirectorScreenshot =
+    {
+      asset_id?: string;
+      created_at?: string;
+      id?: string;
+      name?: string;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalCanvasDomainDirectorShot = {
     camera_id?: string;
     camera_move?: string;
@@ -365,6 +379,7 @@ declare namespace API {
     id?: string;
     name?: string;
     prompt?: string;
+    screenshots?: githubComStephenQiu30LanverseBackendInternalCanvasDomainDirectorScreenshot[];
     shot_size?: string;
   };
 

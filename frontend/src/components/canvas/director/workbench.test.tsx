@@ -48,6 +48,22 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 describe("导演台捕获生命周期", () => {
+  it("保存并关闭时先确认场景保存，再捕获并交给正式人工上传链", async () => {
+    api.capture.mockResolvedValue(
+      new File(["pixels"], "scene.png", { type: "image/png" }),
+    );
+    const view = mount();
+    fireEvent.click(screen.getByRole("button", { name: "保存并关闭" }));
+    await waitFor(() => expect(view.capture).toHaveBeenCalledOnce());
+    expect(view.save.mock.invocationCallOrder[0]).toBeLessThan(
+      api.capture.mock.invocationCallOrder[0],
+    );
+    expect(view.capture.mock.calls[0][1]).toMatchObject({
+      sceneId: view.save.mock.calls[0][0].id,
+      shotId: view.save.mock.calls[0][0].activeShotId,
+    });
+    expect(view.save.mock.calls[0][0].cover).toBeUndefined();
+  });
   it("迟到捕获不回填已经卸载的场景", async () => {
     let finish!: (file: File) => void;
     api.capture.mockImplementation(

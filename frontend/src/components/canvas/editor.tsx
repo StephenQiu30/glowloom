@@ -274,12 +274,27 @@ export function CanvasEditor({
     generationNodeId: string;
   } | null>(null);
   const [uploadMaximum, setUploadMaximum] = useState(20);
+  const directorSavedCapture = useRef<{
+    canvasId: string;
+    nodeId: string;
+    revision: number;
+    context: import("./director/outputs").DirectorCaptureContext;
+  } | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false),
     [uploadFiles, setUploadFiles] = useState<File[]>([]),
     [importing, setImporting] = useState(false),
     [fileDragOver, setFileDragOver] = useState(false);
   const uploadTarget = useRef<
-    { point: Position; connection?: ConnectionHandle } | undefined
+    | {
+        point: Position;
+        connection?: ConnectionHandle;
+        director?: {
+          sourceNodeId: string;
+          savedRevision: number;
+          context: import("./director/outputs").DirectorCaptureContext;
+        };
+      }
+    | undefined
   >(undefined);
   const importAttempt = useRef<
     { assetIds: string; attempt: Attempt } | undefined
@@ -574,9 +589,14 @@ export function CanvasEditor({
     files: File[] = [],
     point = canvasCenter(),
     handle?: ConnectionHandle,
+    director?: {
+      sourceNodeId: string;
+      savedRevision: number;
+      context: import("./director/outputs").DirectorCaptureContext;
+    },
   ) {
     if (interactionLocked.current || document.nodes.length >= 2000) return;
-    uploadTarget.current = { point, connection: handle };
+    uploadTarget.current = { point, connection: handle, director };
     importAttempt.current = undefined;
     setUploadMaximum(20);
     setUploadFiles(files);
@@ -596,23 +616,53 @@ export function CanvasEditor({
       throw new Error("当前画布不能接收此批素材。");
     const assetIds = assets.map((asset) => asset.id).join(",");
     if (!importAttempt.current || importAttempt.current.assetIds !== assetIds) {
-      const nodes = mediaAssetsToCanvasNodes(
-        assets,
-        uploadTarget.current?.point ?? canvasCenter(),
-      );
-      const handle = uploadTarget.current?.connection;
-      const commands: CanvasCommand[] = [{ type: "AddNodes", nodes }];
-      if (handle && nodes[0])
-        commands.push(nodeCreationCommands(nodes[0], handle)[1]);
-      importAttempt.current = {
-        assetIds,
-        attempt: {
-          commands,
-          key: crypto.randomUUID(),
-          revision: store.getState().document.revision,
-          kind: "edit",
-        },
-      };
+      const target = uploadTarget.current;
+      if (target?.director) {
+        if (assets.length !== 1)
+          throw new Error("每次导演截图只接收一张图片。");
+        const { directorCaptureResultCommands } =
+          await import("./director/capture-result");
+        // This callback owns the active import. Its own importing flag locks
+        // unrelated gestures, but must not block the same asset's canvas write.
+        if (readOnly || busy.current || failed || textDirty || !mounted.current)
+          throw new Error("当前画布尚未确认保存。");
+        const current = store.getState().document;
+        const commands = directorCaptureResultCommands(
+          current,
+          target.director.sourceNodeId,
+          target.director.context,
+          assets[0],
+          target.director.savedRevision,
+        );
+        if (!commands.length) return;
+        importAttempt.current = {
+          assetIds,
+          attempt: {
+            commands,
+            key: crypto.randomUUID(),
+            revision: current.revision,
+            kind: "edit",
+          },
+        };
+      } else {
+        const nodes = mediaAssetsToCanvasNodes(
+          assets,
+          uploadTarget.current?.point ?? canvasCenter(),
+        );
+        const handle = uploadTarget.current?.connection;
+        const commands: CanvasCommand[] = [{ type: "AddNodes", nodes }];
+        if (handle && nodes[0])
+          commands.push(nodeCreationCommands(nodes[0], handle)[1]);
+        importAttempt.current = {
+          assetIds,
+          attempt: {
+            commands,
+            key: crypto.randomUUID(),
+            revision: store.getState().document.revision,
+            kind: "edit",
+          },
+        };
+      }
     }
     if (!(await persist(importAttempt.current.attempt)))
       throw new Error("素材已接管，画布未确认保存。");
@@ -2251,8 +2301,13 @@ export function CanvasEditor({
                 .document.nodes.some((node) => node.id === directorNode.id)
             )
               return false;
-            const { encodeDirector } = await import("./director/model");
-            return persist({
+            directorSavedCapture.current = null;
+            const [{ encodeDirector }, { createDirectorCaptureContext }] =
+              await Promise.all([
+                import("./director/model"),
+                import("./director/outputs"),
+              ]);
+            const saved = await persist({
               commands: [
                 {
                   type: "UpdateNodeConfig",
@@ -2264,13 +2319,34 @@ export function CanvasEditor({
               key: crypto.randomUUID(),
               kind: "edit",
             });
+            if (saved)
+              directorSavedCapture.current = {
+                canvasId: store.getState().document.id,
+                nodeId: directorNode.id,
+                revision: store.getState().document.revision,
+                context: createDirectorCaptureContext(scene),
+              };
+            return saved;
           }}
-          onCapture={(files) => {
+          onCapture={(files, context) => {
             const source = store
               .getState()
               .document.nodes.find((node) => node.id === directorNode.id);
             if (!source || readOnly || interactionLocked.current) {
               setNotice("导演台节点已改变，请重新打开后截图。");
+              return;
+            }
+            const saved = directorSavedCapture.current;
+            if (
+              context &&
+              (!saved ||
+                saved.canvasId !== store.getState().document.id ||
+                saved.nodeId !== source.id ||
+                saved.context.sceneId !== context.sceneId ||
+                saved.context.shotId !== context.shotId ||
+                saved.context.renderKey !== context.renderKey)
+            ) {
+              setNotice("当前场景截图尚未确认对应的保存修订，请重新捕获。");
               return;
             }
             setDirectorNode(undefined);
@@ -2281,6 +2357,13 @@ export function CanvasEditor({
                 y: source.position.y,
               },
               { nodeId: source.id, handleType: "source" },
+              context && saved
+                ? {
+                    sourceNodeId: source.id,
+                    savedRevision: saved.revision,
+                    context,
+                  }
+                : undefined,
             );
           }}
           onGenerate={async (prompt) => {

@@ -36,6 +36,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DirectorGallery } from "./gallery";
+import {
+  createDirectorCaptureContext,
+  reconcileDirectorCover,
+  type DirectorCaptureContext,
+} from "./outputs";
 import type { CanvasNodeData } from "../model";
 import {
   DIRECTOR_MODES,
@@ -124,7 +131,7 @@ type Props = {
   readOnly: boolean;
   onClose: () => void;
   onSave: (scene: DirectorScene) => Promise<boolean>;
-  onCapture: (files: File[]) => void;
+  onCapture: (files: File[], context?: DirectorCaptureContext) => void;
   onPrompt: (prompt: string) => void;
   onGenerate: (prompt: string) => Promise<boolean>;
   modelControl?: (
@@ -211,7 +218,7 @@ export function DirectorWorkbench({
   function change(next: DirectorScene) {
     if (disabled || next === scene) return;
     setHistory({ past: [...history.past.slice(-49), scene], future: [] });
-    setScene(next);
+    setScene(reconcileDirectorCover(scene, next));
   }
   function patchObject(patch: Partial<DirectorObject>) {
     if (selectedObject)
@@ -381,14 +388,22 @@ export function DirectorWorkbench({
     try {
       if (!(await save(false)) || !mounted.current || !capture.current) return;
       setSaving(true);
+      const context =
+        mode === "beauty" ? createDirectorCaptureContext(scene) : undefined;
+      // The viewport waits for its own committed beauty frames; the WebGL root
+      // commits separately from the surrounding DOM dialog.
+      setRenderMode("beauty");
       const file = await capture.current(mode);
-      if (mounted.current) onCapture([file]);
+      if (mounted.current) onCapture([file], context);
     } catch (failure) {
       if (mounted.current)
         setError(failure instanceof Error ? failure.message : "截图未完成。");
     } finally {
       captureBusy.current = false;
-      if (mounted.current) setSaving(false);
+      if (mounted.current) {
+        setRenderMode(renderMode);
+        setSaving(false);
+      }
     }
   }
   function deleteSelected() {
@@ -855,830 +870,887 @@ export function DirectorWorkbench({
             />
           </main>
           <aside className="min-h-0 space-y-4 overflow-y-auto rounded border p-3">
-            {selected ? (
-              <>
-                <Field>
-                  <FieldLabel htmlFor="director-element-name">名称</FieldLabel>
-                  <Input
-                    id="director-element-name"
-                    value={selected.name}
-                    maxLength={128}
-                    disabled={disabled}
-                    onChange={(event) => {
-                      if (selectedObject)
-                        patchObject({ name: event.target.value });
-                      if (selectedCamera)
-                        patchCamera({ name: event.target.value });
-                      if (selectedLight)
-                        change({
-                          ...scene,
-                          lights: scene.lights.map((light) =>
-                            light.id === selectedId
-                              ? { ...light, name: event.target.value }
-                              : light,
-                          ),
-                        });
-                    }}
-                  />
-                </Field>
-                <TransformFields
-                  value={selected.transform}
-                  disabled={disabled}
-                  onChange={(next) => transform(selectedId, next)}
-                />
-                {selectedObject ? (
+            <Tabs defaultValue="properties">
+              <TabsList aria-label="导演台检查器">
+                <TabsTrigger value="properties">属性</TabsTrigger>
+                <TabsTrigger value="screenshots">机位截图</TabsTrigger>
+              </TabsList>
+              <TabsContent value="properties" className="space-y-4">
+                {selected ? (
                   <>
                     <Field>
-                      <FieldLabel htmlFor="director-object-color">
-                        颜色
+                      <FieldLabel htmlFor="director-element-name">
+                        名称
                       </FieldLabel>
                       <Input
-                        id="director-object-color"
-                        type="color"
-                        value={selectedObject.color}
-                        disabled={disabled}
-                        onChange={(event) =>
-                          patchObject({ color: event.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="director-uniform-scale">
-                        统一倍率
-                      </FieldLabel>
-                      <Input
-                        id="director-uniform-scale"
-                        type="number"
-                        min={0.1}
-                        max={10}
-                        step={0.1}
-                        value={selectedObject.uniformScale ?? 1}
+                        id="director-element-name"
+                        value={selected.name}
+                        maxLength={128}
                         disabled={disabled}
                         onChange={(event) => {
-                          const next = applyDirectorUniformScale(
-                            selectedObject,
-                            Number(event.target.value),
-                          );
-                          patchObject(next);
+                          if (selectedObject)
+                            patchObject({ name: event.target.value });
+                          if (selectedCamera)
+                            patchCamera({ name: event.target.value });
+                          if (selectedLight)
+                            change({
+                              ...scene,
+                              lights: scene.lights.map((light) =>
+                                light.id === selectedId
+                                  ? { ...light, name: event.target.value }
+                                  : light,
+                              ),
+                            });
                         }}
                       />
                     </Field>
-                    {capabilities.bones &&
-                    (selectedObject.kind === "actor" ||
-                      selectedObject.primitive === "character") ? (
+                    <TransformFields
+                      value={selected.transform}
+                      disabled={disabled}
+                      onChange={(next) => transform(selectedId, next)}
+                    />
+                    {selectedObject ? (
                       <>
                         <Field>
-                          <FieldLabel>角色姿态</FieldLabel>
-                          <Select
-                            value={selectedObject.pose ?? "stand"}
+                          <FieldLabel htmlFor="director-object-color">
+                            颜色
+                          </FieldLabel>
+                          <Input
+                            id="director-object-color"
+                            type="color"
+                            value={selectedObject.color}
                             disabled={disabled}
-                            onValueChange={(pose: DirectorPose) =>
-                              patchObject({ pose })
+                            onChange={(event) =>
+                              patchObject({ color: event.target.value })
                             }
-                          >
-                            <SelectTrigger aria-label="角色姿态">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {poses.map((pose) => (
-                                <SelectItem key={pose} value={pose}>
-                                  {directorPoseLabel(pose)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          />
                         </Field>
-                        {selectedObject.assetId ? (
+                        <Field>
+                          <FieldLabel htmlFor="director-uniform-scale">
+                            统一倍率
+                          </FieldLabel>
+                          <Input
+                            id="director-uniform-scale"
+                            type="number"
+                            min={0.1}
+                            max={10}
+                            step={0.1}
+                            value={selectedObject.uniformScale ?? 1}
+                            disabled={disabled}
+                            onChange={(event) => {
+                              const next = applyDirectorUniformScale(
+                                selectedObject,
+                                Number(event.target.value),
+                              );
+                              patchObject(next);
+                            }}
+                          />
+                        </Field>
+                        {capabilities.bones &&
+                        (selectedObject.kind === "actor" ||
+                          selectedObject.primitive === "character") ? (
                           <>
-                            <p className="text-xs text-muted-foreground">
-                              {
-                                Object.keys(selectedObject.rig?.boneMap ?? {})
-                                  .length
-                              }{" "}
-                              个已映射骨骼 ·{" "}
-                              {selectedObject.rig?.animationNames.length ?? 0}{" "}
-                              个内置动画
-                            </p>
                             <Field>
-                              <FieldLabel>模型动作片段</FieldLabel>
+                              <FieldLabel>角色姿态</FieldLabel>
                               <Select
-                                value={
-                                  selectedObject.activeMotionClipId ?? "none"
-                                }
-                                disabled={
-                                  disabled ||
-                                  !selectedObject.motionClips?.length
-                                }
-                                onValueChange={(value) =>
-                                  patchObject({
-                                    activeMotionClipId:
-                                      value === "none" ? undefined : value,
-                                  })
+                                value={selectedObject.pose ?? "stand"}
+                                disabled={disabled}
+                                onValueChange={(pose: DirectorPose) =>
+                                  patchObject({ pose })
                                 }
                               >
-                                <SelectTrigger aria-label="模型动作片段">
+                                <SelectTrigger aria-label="角色姿态">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="none">
-                                    无动作 · 使用姿势
-                                  </SelectItem>
-                                  {selectedObject.motionClips?.map((clip) => (
-                                    <SelectItem key={clip.id} value={clip.id}>
-                                      {clip.name}
+                                  {poses.map((pose) => (
+                                    <SelectItem key={pose} value={pose}>
+                                      {directorPoseLabel(pose)}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </Field>
-                            {selectedObject.activeMotionClipId
-                              ? selectedObject.motionClips
-                                  ?.filter(
-                                    (clip) =>
-                                      clip.id ===
-                                      selectedObject.activeMotionClipId,
-                                  )
-                                  .map((clip) => (
-                                    <div key={clip.id} className="space-y-2">
-                                      <Field>
-                                        <FieldLabel htmlFor="director-motion-start">
-                                          动作开始秒
-                                        </FieldLabel>
-                                        <Input
-                                          id="director-motion-start"
-                                          type="number"
-                                          min={0}
-                                          max={3600}
-                                          step={0.1}
-                                          disabled={disabled}
-                                          value={clip.start}
-                                          onChange={(event) =>
-                                            patchObject({
-                                              motionClips:
-                                                selectedObject.motionClips?.map(
-                                                  (item) =>
-                                                    item.id === clip.id
-                                                      ? {
-                                                          ...item,
-                                                          start: Number(
-                                                            event.target.value,
-                                                          ),
-                                                        }
-                                                      : item,
-                                                ),
-                                            })
-                                          }
-                                        />
-                                      </Field>
-                                      <Field>
-                                        <FieldLabel htmlFor="director-motion-rate">
-                                          动作播放倍率
-                                        </FieldLabel>
-                                        <Input
-                                          id="director-motion-rate"
-                                          type="number"
-                                          min={0.1}
-                                          max={4}
-                                          step={0.1}
-                                          disabled={disabled}
-                                          value={clip.playbackRate}
-                                          onChange={(event) =>
-                                            patchObject({
-                                              motionClips:
-                                                selectedObject.motionClips?.map(
-                                                  (item) =>
-                                                    item.id === clip.id
-                                                      ? {
-                                                          ...item,
-                                                          playbackRate: Number(
-                                                            event.target.value,
-                                                          ),
-                                                        }
-                                                      : item,
-                                                ),
-                                            })
-                                          }
-                                        />
-                                      </Field>
-                                      <label className="flex gap-2 text-sm">
-                                        <Checkbox
-                                          checked={clip.loop}
-                                          disabled={disabled}
-                                          onCheckedChange={(loop) =>
-                                            patchObject({
-                                              motionClips:
-                                                selectedObject.motionClips?.map(
-                                                  (item) =>
-                                                    item.id === clip.id
-                                                      ? {
-                                                          ...item,
-                                                          loop: loop === true,
-                                                        }
-                                                      : item,
-                                                ),
-                                            })
-                                          }
-                                        />
-                                        循环播放动作
-                                      </label>
-                                    </div>
-                                  ))
-                              : null}
+                            {selectedObject.assetId ? (
+                              <>
+                                <p className="text-xs text-muted-foreground">
+                                  {
+                                    Object.keys(
+                                      selectedObject.rig?.boneMap ?? {},
+                                    ).length
+                                  }{" "}
+                                  个已映射骨骼 ·{" "}
+                                  {selectedObject.rig?.animationNames.length ??
+                                    0}{" "}
+                                  个内置动画
+                                </p>
+                                <Field>
+                                  <FieldLabel>模型动作片段</FieldLabel>
+                                  <Select
+                                    value={
+                                      selectedObject.activeMotionClipId ??
+                                      "none"
+                                    }
+                                    disabled={
+                                      disabled ||
+                                      !selectedObject.motionClips?.length
+                                    }
+                                    onValueChange={(value) =>
+                                      patchObject({
+                                        activeMotionClipId:
+                                          value === "none" ? undefined : value,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger aria-label="模型动作片段">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">
+                                        无动作 · 使用姿势
+                                      </SelectItem>
+                                      {selectedObject.motionClips?.map(
+                                        (clip) => (
+                                          <SelectItem
+                                            key={clip.id}
+                                            value={clip.id}
+                                          >
+                                            {clip.name}
+                                          </SelectItem>
+                                        ),
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                </Field>
+                                {selectedObject.activeMotionClipId
+                                  ? selectedObject.motionClips
+                                      ?.filter(
+                                        (clip) =>
+                                          clip.id ===
+                                          selectedObject.activeMotionClipId,
+                                      )
+                                      .map((clip) => (
+                                        <div
+                                          key={clip.id}
+                                          className="space-y-2"
+                                        >
+                                          <Field>
+                                            <FieldLabel htmlFor="director-motion-start">
+                                              动作开始秒
+                                            </FieldLabel>
+                                            <Input
+                                              id="director-motion-start"
+                                              type="number"
+                                              min={0}
+                                              max={3600}
+                                              step={0.1}
+                                              disabled={disabled}
+                                              value={clip.start}
+                                              onChange={(event) =>
+                                                patchObject({
+                                                  motionClips:
+                                                    selectedObject.motionClips?.map(
+                                                      (item) =>
+                                                        item.id === clip.id
+                                                          ? {
+                                                              ...item,
+                                                              start: Number(
+                                                                event.target
+                                                                  .value,
+                                                              ),
+                                                            }
+                                                          : item,
+                                                    ),
+                                                })
+                                              }
+                                            />
+                                          </Field>
+                                          <Field>
+                                            <FieldLabel htmlFor="director-motion-rate">
+                                              动作播放倍率
+                                            </FieldLabel>
+                                            <Input
+                                              id="director-motion-rate"
+                                              type="number"
+                                              min={0.1}
+                                              max={4}
+                                              step={0.1}
+                                              disabled={disabled}
+                                              value={clip.playbackRate}
+                                              onChange={(event) =>
+                                                patchObject({
+                                                  motionClips:
+                                                    selectedObject.motionClips?.map(
+                                                      (item) =>
+                                                        item.id === clip.id
+                                                          ? {
+                                                              ...item,
+                                                              playbackRate:
+                                                                Number(
+                                                                  event.target
+                                                                    .value,
+                                                                ),
+                                                            }
+                                                          : item,
+                                                    ),
+                                                })
+                                              }
+                                            />
+                                          </Field>
+                                          <label className="flex gap-2 text-sm">
+                                            <Checkbox
+                                              checked={clip.loop}
+                                              disabled={disabled}
+                                              onCheckedChange={(loop) =>
+                                                patchObject({
+                                                  motionClips:
+                                                    selectedObject.motionClips?.map(
+                                                      (item) =>
+                                                        item.id === clip.id
+                                                          ? {
+                                                              ...item,
+                                                              loop:
+                                                                loop === true,
+                                                            }
+                                                          : item,
+                                                    ),
+                                                })
+                                              }
+                                            />
+                                            循环播放动作
+                                          </label>
+                                        </div>
+                                      ))
+                                  : null}
+                              </>
+                            ) : null}
+                            <Field>
+                              <FieldLabel>骨骼</FieldLabel>
+                              <Select
+                                value={bone}
+                                disabled={disabled}
+                                onValueChange={(value: DirectorHumanoidBone) =>
+                                  setBone(value)
+                                }
+                              >
+                                <SelectTrigger aria-label="角色骨骼">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {directorBoneNames.map((name) => (
+                                    <SelectItem key={name} value={name}>
+                                      {directorBoneLabel(name)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </Field>
+                            <div className="grid grid-cols-3 gap-2">
+                              {[boneEuler.x, boneEuler.y, boneEuler.z].map(
+                                (angle, index) => (
+                                  <Field key={index}>
+                                    <FieldLabel
+                                      htmlFor={`director-bone-${index}`}
+                                    >
+                                      {["X", "Y", "Z"][index]} (°)
+                                    </FieldLabel>
+                                    <Input
+                                      id={`director-bone-${index}`}
+                                      type="number"
+                                      step={1}
+                                      value={Number(
+                                        ((angle * 180) / Math.PI).toFixed(2),
+                                      )}
+                                      disabled={disabled}
+                                      onChange={(event) => {
+                                        const values = [
+                                          boneEuler.x,
+                                          boneEuler.y,
+                                          boneEuler.z,
+                                        ];
+                                        values[index] =
+                                          (Number(event.target.value) *
+                                            Math.PI) /
+                                          180;
+                                        const rotation = new Quaternion()
+                                          .setFromEuler(
+                                            new Euler(
+                                              ...(values as DirectorVec3),
+                                            ),
+                                          )
+                                          .toArray();
+                                        patchObject({
+                                          boneOverrides: {
+                                            ...selectedObject.boneOverrides,
+                                            [bone]: rotation,
+                                          },
+                                        });
+                                      }}
+                                    />
+                                  </Field>
+                                ),
+                              )}
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={disabled}
+                              onClick={() =>
+                                patchObject({
+                                  boneTracks: upsertDirectorBoneKeyframe(
+                                    selectedObject.boneTracks ?? [],
+                                    bone,
+                                    time,
+                                    boneRotation,
+                                  ),
+                                })
+                              }
+                            >
+                              记录骨骼关键帧
+                            </Button>
+                            {selectedObject.boneTracks
+                              ?.find((track) => track.bone === bone)
+                              ?.keyframes.map((frame) => (
+                                <div
+                                  key={frame.id}
+                                  className="flex items-center gap-2 text-xs"
+                                >
+                                  <button
+                                    onClick={() => {
+                                      setPlaying(false);
+                                      setTime(frame.time);
+                                    }}
+                                  >
+                                    {frame.time.toFixed(3)} s
+                                  </button>
+                                  <Select
+                                    value={frame.easing ?? "linear"}
+                                    disabled={disabled}
+                                    onValueChange={(
+                                      easing: "step" | "linear" | "smooth",
+                                    ) =>
+                                      patchObject({
+                                        boneTracks:
+                                          selectedObject.boneTracks!.map(
+                                            (track) =>
+                                              track.bone === bone
+                                                ? {
+                                                    ...track,
+                                                    keyframes:
+                                                      track.keyframes.map(
+                                                        (item) =>
+                                                          item.id === frame.id
+                                                            ? {
+                                                                ...item,
+                                                                easing,
+                                                              }
+                                                            : item,
+                                                      ),
+                                                  }
+                                                : track,
+                                          ),
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger
+                                      aria-label="骨骼关键帧缓动"
+                                      className="h-7"
+                                    >
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="linear">
+                                        线性
+                                      </SelectItem>
+                                      <SelectItem value="smooth">
+                                        平滑
+                                      </SelectItem>
+                                      <SelectItem value="step">保持</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={disabled}
+                                    aria-label="删除骨骼关键帧"
+                                    onClick={() =>
+                                      patchObject({
+                                        boneTracks: removeDirectorBoneKeyframe(
+                                          selectedObject.boneTracks ?? [],
+                                          bone,
+                                          frame.id,
+                                        ),
+                                      })
+                                    }
+                                  >
+                                    <Trash2 />
+                                  </Button>
+                                </div>
+                              ))}
                           </>
                         ) : null}
+                      </>
+                    ) : null}
+                    {selectedCamera ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(
+                            [
+                              ["focalLength", "焦距 (mm)"],
+                              ["aperture", "光圈"],
+                              ["focusDistance", "焦点 (m)"],
+                              ["near", "近裁剪 (m)"],
+                              ["far", "远裁剪 (m)"],
+                            ] as const
+                          ).map(([key, label]) => (
+                            <Field key={key}>
+                              <FieldLabel htmlFor={`director-camera-${key}`}>
+                                {label}
+                              </FieldLabel>
+                              <Input
+                                id={`director-camera-${key}`}
+                                type="number"
+                                step={0.1}
+                                value={selectedCamera[key]}
+                                disabled={disabled}
+                                onChange={(event) => {
+                                  const next = Number(event.target.value);
+                                  patchCamera({
+                                    [key]: next,
+                                    ...(key === "focalLength"
+                                      ? { fov: directorFocalLengthToFov(next) }
+                                      : {}),
+                                  });
+                                }}
+                              />
+                            </Field>
+                          ))}
+                        </div>
+                        <VectorFields
+                          label="注视坐标"
+                          value={selectedCamera.target}
+                          disabled={disabled}
+                          onChange={(target) => patchCamera({ target })}
+                        />
                         <Field>
-                          <FieldLabel>骨骼</FieldLabel>
+                          <FieldLabel>注视方式</FieldLabel>
                           <Select
-                            value={bone}
+                            value={selectedCamera.lookAtMode ?? "coordinates"}
                             disabled={disabled}
-                            onValueChange={(value: DirectorHumanoidBone) =>
-                              setBone(value)
-                            }
+                            onValueChange={(
+                              lookAtMode: NonNullable<
+                                DirectorCamera["lookAtMode"]
+                              >,
+                            ) => patchCamera({ lookAtMode })}
                           >
-                            <SelectTrigger aria-label="角色骨骼">
+                            <SelectTrigger aria-label="摄影机注视方式">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {directorBoneNames.map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  {directorBoneLabel(name)}
+                              <SelectItem value="coordinates">坐标</SelectItem>
+                              <SelectItem value="rotation">旋转方向</SelectItem>
+                              <SelectItem value="object">对象</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        {selectedCamera.lookAtMode === "object" ? (
+                          <Select
+                            value={selectedCamera.lookAtObjectId ?? "none"}
+                            disabled={disabled}
+                            onValueChange={(lookAtObjectId) =>
+                              patchCamera({
+                                lookAtObjectId:
+                                  lookAtObjectId === "none"
+                                    ? undefined
+                                    : lookAtObjectId,
+                              })
+                            }
+                          >
+                            <SelectTrigger aria-label="摄影机注视对象">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">未选择</SelectItem>
+                              {scene.objects.map((object) => (
+                                <SelectItem key={object.id} value={object.id}>
+                                  {object.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : null}
+                        <Field>
+                          <FieldLabel>跟随对象</FieldLabel>
+                          <Select
+                            value={selectedCamera.followObjectId ?? "none"}
+                            disabled={disabled}
+                            onValueChange={(target) =>
+                              patchCamera(
+                                target === "none"
+                                  ? unbindDirectorCameraFollow(
+                                      selectedCamera,
+                                      scene,
+                                      time,
+                                    )
+                                  : bindDirectorCameraFollow(
+                                      selectedCamera,
+                                      scene,
+                                      target,
+                                      time,
+                                    ),
+                              )
+                            }
+                          >
+                            <SelectTrigger aria-label="摄影机跟随对象">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">自由机位</SelectItem>
+                              {scene.objects.map((object) => (
+                                <SelectItem key={object.id} value={object.id}>
+                                  {object.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </Field>
-                        <div className="grid grid-cols-3 gap-2">
-                          {[boneEuler.x, boneEuler.y, boneEuler.z].map(
-                            (angle, index) => (
-                              <Field key={index}>
-                                <FieldLabel htmlFor={`director-bone-${index}`}>
-                                  {["X", "Y", "Z"][index]} (°)
-                                </FieldLabel>
-                                <Input
-                                  id={`director-bone-${index}`}
-                                  type="number"
-                                  step={1}
-                                  value={Number(
-                                    ((angle * 180) / Math.PI).toFixed(2),
-                                  )}
-                                  disabled={disabled}
-                                  onChange={(event) => {
-                                    const values = [
-                                      boneEuler.x,
-                                      boneEuler.y,
-                                      boneEuler.z,
-                                    ];
-                                    values[index] =
-                                      (Number(event.target.value) * Math.PI) /
-                                      180;
-                                    const rotation = new Quaternion()
-                                      .setFromEuler(
-                                        new Euler(...(values as DirectorVec3)),
-                                      )
-                                      .toArray();
-                                    patchObject({
-                                      boneOverrides: {
-                                        ...selectedObject.boneOverrides,
-                                        [bone]: rotation,
-                                      },
-                                    });
-                                  }}
-                                />
-                              </Field>
-                            ),
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={disabled}
-                          onClick={() =>
-                            patchObject({
-                              boneTracks: upsertDirectorBoneKeyframe(
-                                selectedObject.boneTracks ?? [],
-                                bone,
-                                time,
-                                boneRotation,
-                              ),
-                            })
-                          }
-                        >
-                          记录骨骼关键帧
-                        </Button>
-                        {selectedObject.boneTracks
-                          ?.find((track) => track.bone === bone)
-                          ?.keyframes.map((frame) => (
-                            <div
-                              key={frame.id}
-                              className="flex items-center gap-2 text-xs"
-                            >
-                              <button
-                                onClick={() => {
-                                  setPlaying(false);
-                                  setTime(frame.time);
-                                }}
-                              >
-                                {frame.time.toFixed(3)} s
-                              </button>
-                              <Select
-                                value={frame.easing ?? "linear"}
-                                disabled={disabled}
-                                onValueChange={(
-                                  easing: "step" | "linear" | "smooth",
-                                ) =>
-                                  patchObject({
-                                    boneTracks: selectedObject.boneTracks!.map(
-                                      (track) =>
-                                        track.bone === bone
-                                          ? {
-                                              ...track,
-                                              keyframes: track.keyframes.map(
-                                                (item) =>
-                                                  item.id === frame.id
-                                                    ? { ...item, easing }
-                                                    : item,
-                                              ),
-                                            }
-                                          : track,
-                                    ),
-                                  })
-                                }
-                              >
-                                <SelectTrigger
-                                  aria-label="骨骼关键帧缓动"
-                                  className="h-7"
-                                >
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="linear">线性</SelectItem>
-                                  <SelectItem value="smooth">平滑</SelectItem>
-                                  <SelectItem value="step">保持</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={disabled}
-                                aria-label="删除骨骼关键帧"
-                                onClick={() =>
-                                  patchObject({
-                                    boneTracks: removeDirectorBoneKeyframe(
-                                      selectedObject.boneTracks ?? [],
-                                      bone,
-                                      frame.id,
-                                    ),
-                                  })
-                                }
-                              >
-                                <Trash2 />
-                              </Button>
-                            </div>
-                          ))}
                       </>
                     ) : null}
-                  </>
-                ) : null}
-                {selectedCamera ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(
-                        [
-                          ["focalLength", "焦距 (mm)"],
-                          ["aperture", "光圈"],
-                          ["focusDistance", "焦点 (m)"],
-                          ["near", "近裁剪 (m)"],
-                          ["far", "远裁剪 (m)"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <Field key={key}>
-                          <FieldLabel htmlFor={`director-camera-${key}`}>
-                            {label}
+                    {selectedLight ? (
+                      <>
+                        <Field>
+                          <FieldLabel htmlFor="director-light-color">
+                            灯光颜色
                           </FieldLabel>
                           <Input
-                            id={`director-camera-${key}`}
-                            type="number"
-                            step={0.1}
-                            value={selectedCamera[key]}
+                            id="director-light-color"
+                            type="color"
+                            value={selectedLight.color}
                             disabled={disabled}
-                            onChange={(event) => {
-                              const next = Number(event.target.value);
-                              patchCamera({
-                                [key]: next,
-                                ...(key === "focalLength"
-                                  ? { fov: directorFocalLengthToFov(next) }
-                                  : {}),
-                              });
-                            }}
+                            onChange={(event) =>
+                              change({
+                                ...scene,
+                                lights: scene.lights.map((light) =>
+                                  light.id === selectedId
+                                    ? { ...light, color: event.target.value }
+                                    : light,
+                                ),
+                              })
+                            }
                           />
                         </Field>
-                      ))}
-                    </div>
-                    <VectorFields
-                      label="注视坐标"
-                      value={selectedCamera.target}
-                      disabled={disabled}
-                      onChange={(target) => patchCamera({ target })}
-                    />
-                    <Field>
-                      <FieldLabel>注视方式</FieldLabel>
-                      <Select
-                        value={selectedCamera.lookAtMode ?? "coordinates"}
-                        disabled={disabled}
-                        onValueChange={(
-                          lookAtMode: NonNullable<DirectorCamera["lookAtMode"]>,
-                        ) => patchCamera({ lookAtMode })}
-                      >
-                        <SelectTrigger aria-label="摄影机注视方式">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="coordinates">坐标</SelectItem>
-                          <SelectItem value="rotation">旋转方向</SelectItem>
-                          <SelectItem value="object">对象</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    {selectedCamera.lookAtMode === "object" ? (
-                      <Select
-                        value={selectedCamera.lookAtObjectId ?? "none"}
-                        disabled={disabled}
-                        onValueChange={(lookAtObjectId) =>
-                          patchCamera({
-                            lookAtObjectId:
-                              lookAtObjectId === "none"
-                                ? undefined
-                                : lookAtObjectId,
-                          })
-                        }
-                      >
-                        <SelectTrigger aria-label="摄影机注视对象">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">未选择</SelectItem>
-                          {scene.objects.map((object) => (
-                            <SelectItem key={object.id} value={object.id}>
-                              {object.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        {(
+                          [
+                            ["intensity", "强度"],
+                            ["angle", "聚光角 (rad)"],
+                            ["penumbra", "柔边 (0～1)"],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <Field key={key}>
+                            <FieldLabel htmlFor={`director-light-${key}`}>
+                              {label}
+                            </FieldLabel>
+                            <Input
+                              id={`director-light-${key}`}
+                              type="number"
+                              min={0}
+                              step={0.05}
+                              value={selectedLight[key] ?? 0}
+                              disabled={disabled}
+                              onChange={(event) =>
+                                change({
+                                  ...scene,
+                                  lights: scene.lights.map((light) =>
+                                    light.id === selectedId
+                                      ? {
+                                          ...light,
+                                          [key]: Number(event.target.value),
+                                        }
+                                      : light,
+                                  ),
+                                })
+                              }
+                            />
+                          </Field>
+                        ))}
+                      </>
                     ) : null}
-                    <Field>
-                      <FieldLabel>跟随对象</FieldLabel>
-                      <Select
-                        value={selectedCamera.followObjectId ?? "none"}
+                    {selectedObject || selectedCamera ? (
+                      <Button
+                        variant="outline"
+                        className="w-full"
                         disabled={disabled}
-                        onValueChange={(target) =>
-                          patchCamera(
-                            target === "none"
-                              ? unbindDirectorCameraFollow(
-                                  selectedCamera,
-                                  scene,
-                                  time,
-                                )
-                              : bindDirectorCameraFollow(
-                                  selectedCamera,
-                                  scene,
-                                  target,
-                                  time,
-                                ),
-                          )
-                        }
+                        onClick={recordKeyframe}
                       >
-                        <SelectTrigger aria-label="摄影机跟随对象">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">自由机位</SelectItem>
-                          {scene.objects.map((object) => (
-                            <SelectItem key={object.id} value={object.id}>
-                              {object.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
+                        记录位置关键帧
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={
+                        disabled ||
+                        Boolean(selectedCamera && scene.cameras.length <= 1)
+                      }
+                      onClick={deleteSelected}
+                    >
+                      <Trash2 />
+                      删除选中元素
+                    </Button>
                   </>
-                ) : null}
-                {selectedLight ? (
-                  <>
-                    <Field>
-                      <FieldLabel htmlFor="director-light-color">
-                        灯光颜色
-                      </FieldLabel>
-                      <Input
-                        id="director-light-color"
-                        type="color"
-                        value={selectedLight.color}
-                        disabled={disabled}
-                        onChange={(event) =>
-                          change({
-                            ...scene,
-                            lights: scene.lights.map((light) =>
-                              light.id === selectedId
-                                ? { ...light, color: event.target.value }
-                                : light,
-                            ),
-                          })
-                        }
-                      />
-                    </Field>
-                    {(
-                      [
-                        ["intensity", "强度"],
-                        ["angle", "聚光角 (rad)"],
-                        ["penumbra", "柔边 (0～1)"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <Field key={key}>
-                        <FieldLabel htmlFor={`director-light-${key}`}>
-                          {label}
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    选择对象、摄影机或灯光编辑。
+                  </p>
+                )}
+                <div className="space-y-2 border-t pt-3">
+                  <p className="text-xs font-medium">场景</p>
+                  <Field>
+                    <FieldLabel htmlFor="director-scene-title">
+                      场景名称
+                    </FieldLabel>
+                    <Input
+                      id="director-scene-title"
+                      value={scene.title}
+                      maxLength={128}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        change({ ...scene, title: event.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="director-background">
+                      背景颜色
+                    </FieldLabel>
+                    <Input
+                      id="director-background"
+                      type="color"
+                      value={scene.background}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        change({ ...scene, background: event.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>画幅</FieldLabel>
+                    <Select
+                      value={scene.aspectRatio ?? "adaptive"}
+                      disabled={disabled}
+                      onValueChange={(
+                        aspectRatio: NonNullable<DirectorScene["aspectRatio"]>,
+                      ) => change({ ...scene, aspectRatio })}
+                    >
+                      <SelectTrigger aria-label="导演台画幅">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DIRECTOR_ASPECT_RATIOS.map((ratio) => (
+                          <SelectItem key={ratio} value={ratio}>
+                            {ratio === "adaptive" ? "自适应" : ratio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="director-ground-opacity">
+                      地面透明度
+                    </FieldLabel>
+                    <Input
+                      id="director-ground-opacity"
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      value={scene.ground?.opacity ?? 0.4}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        change({
+                          ...scene,
+                          ground: {
+                            visible: scene.ground?.visible ?? true,
+                            height: scene.ground?.height ?? 0,
+                            opacity: Number(event.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="director-environment">
+                      环境光强度
+                    </FieldLabel>
+                    <Input
+                      id="director-environment"
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={0.1}
+                      disabled={disabled}
+                      value={scene.environmentIntensity}
+                      onChange={(event) =>
+                        change({
+                          ...scene,
+                          environmentIntensity: Number(event.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={scene.ground?.visible ?? true}
+                      disabled={disabled}
+                      onCheckedChange={(visible) =>
+                        change({
+                          ...scene,
+                          ground: {
+                            ...scene.ground!,
+                            visible: visible === true,
+                            opacity: scene.ground?.opacity ?? 0.4,
+                            height: scene.ground?.height ?? 0,
+                          },
+                        })
+                      }
+                    />
+                    显示地面
+                  </label>
+                  <Field>
+                    <FieldLabel htmlFor="director-ground-height">
+                      地面高度
+                    </FieldLabel>
+                    <Input
+                      id="director-ground-height"
+                      type="number"
+                      min={-2}
+                      max={2}
+                      step={0.1}
+                      disabled={disabled}
+                      value={scene.ground?.height ?? 0}
+                      onChange={(event) =>
+                        change({
+                          ...scene,
+                          ground: {
+                            visible: scene.ground?.visible ?? true,
+                            opacity: scene.ground?.opacity ?? 0.4,
+                            height: Number(event.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="director-stage-scale">
+                      舞台整体倍率
+                    </FieldLabel>
+                    <Input
+                      id="director-stage-scale"
+                      type="number"
+                      min={0.1}
+                      max={10}
+                      step={0.1}
+                      disabled={disabled}
+                      value={scene.stageTransform?.scale ?? 1}
+                      onChange={(event) =>
+                        change({
+                          ...scene,
+                          stageTransform: {
+                            position: scene.stageTransform?.position ?? [
+                              0, 0, 0,
+                            ],
+                            rotation: scene.stageTransform?.rotation ?? [
+                              0, 0, 0,
+                            ],
+                            scale: Number(event.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <VectorFields
+                    label="舞台旋转 (°)"
+                    value={scene.stageTransform?.rotation ?? [0, 0, 0]}
+                    disabled={disabled}
+                    onChange={(rotation) =>
+                      change({
+                        ...scene,
+                        stageTransform: {
+                          position: scene.stageTransform?.position ?? [0, 0, 0],
+                          scale: scene.stageTransform?.scale ?? 1,
+                          rotation,
+                        },
+                      })
+                    }
+                  />
+                  {scene.panorama ? (
+                    <>
+                      <Field>
+                        <FieldLabel htmlFor="director-panorama-rotation">
+                          全景旋转角度
                         </FieldLabel>
                         <Input
-                          id={`director-light-${key}`}
+                          id="director-panorama-rotation"
                           type="number"
-                          min={0}
-                          step={0.05}
-                          value={selectedLight[key] ?? 0}
+                          min={-360}
+                          max={360}
                           disabled={disabled}
+                          value={scene.panoramaRotation ?? 0}
                           onChange={(event) =>
                             change({
                               ...scene,
-                              lights: scene.lights.map((light) =>
-                                light.id === selectedId
-                                  ? {
-                                      ...light,
-                                      [key]: Number(event.target.value),
-                                    }
-                                  : light,
-                              ),
+                              panoramaRotation: Number(event.target.value),
                             })
                           }
                         />
                       </Field>
-                    ))}
-                  </>
-                ) : null}
-                {selectedObject || selectedCamera ? (
-                  <Button
-                    variant="outline"
-                    className="w-full"
+                      <Field>
+                        <FieldLabel htmlFor="director-panorama-radius">
+                          全景半径
+                        </FieldLabel>
+                        <Input
+                          id="director-panorama-radius"
+                          type="number"
+                          min={1}
+                          max={200}
+                          disabled={disabled}
+                          value={scene.panoramaRadius ?? 60}
+                          onChange={(event) =>
+                            change({
+                              ...scene,
+                              panoramaRadius: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </Field>
+                    </>
+                  ) : null}
+                  <VectorFields
+                    label="舞台位置"
+                    value={scene.stageTransform?.position ?? [0, 0, 0]}
                     disabled={disabled}
-                    onClick={recordKeyframe}
-                  >
-                    记录位置关键帧
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  disabled={
-                    disabled ||
-                    Boolean(selectedCamera && scene.cameras.length <= 1)
-                  }
-                  onClick={deleteSelected}
-                >
-                  <Trash2 />
-                  删除选中元素
-                </Button>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                选择对象、摄影机或灯光编辑。
-              </p>
-            )}
-            <div className="space-y-2 border-t pt-3">
-              <p className="text-xs font-medium">场景</p>
-              <Field>
-                <FieldLabel htmlFor="director-scene-title">场景名称</FieldLabel>
-                <Input
-                  id="director-scene-title"
-                  value={scene.title}
-                  maxLength={128}
+                    onChange={(position) =>
+                      change({
+                        ...scene,
+                        stageTransform: {
+                          scale: scene.stageTransform?.scale ?? 1,
+                          rotation: scene.stageTransform?.rotation ?? [0, 0, 0],
+                          position,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              </TabsContent>
+              <TabsContent value="screenshots">
+                <DirectorGallery
+                  projectId={projectId}
+                  scene={scene}
                   disabled={disabled}
-                  onChange={(event) =>
-                    change({ ...scene, title: event.target.value })
-                  }
+                  onChange={change}
                 />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="director-background">背景颜色</FieldLabel>
-                <Input
-                  id="director-background"
-                  type="color"
-                  value={scene.background}
-                  disabled={disabled}
-                  onChange={(event) =>
-                    change({ ...scene, background: event.target.value })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel>画幅</FieldLabel>
-                <Select
-                  value={scene.aspectRatio ?? "adaptive"}
-                  disabled={disabled}
-                  onValueChange={(
-                    aspectRatio: NonNullable<DirectorScene["aspectRatio"]>,
-                  ) => change({ ...scene, aspectRatio })}
-                >
-                  <SelectTrigger aria-label="导演台画幅">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DIRECTOR_ASPECT_RATIOS.map((ratio) => (
-                      <SelectItem key={ratio} value={ratio}>
-                        {ratio === "adaptive" ? "自适应" : ratio}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="director-ground-opacity">
-                  地面透明度
-                </FieldLabel>
-                <Input
-                  id="director-ground-opacity"
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  value={scene.ground?.opacity ?? 0.4}
-                  disabled={disabled}
-                  onChange={(event) =>
-                    change({
-                      ...scene,
-                      ground: {
-                        visible: scene.ground?.visible ?? true,
-                        height: scene.ground?.height ?? 0,
-                        opacity: Number(event.target.value),
-                      },
-                    })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="director-environment">
-                  环境光强度
-                </FieldLabel>
-                <Input
-                  id="director-environment"
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.1}
-                  disabled={disabled}
-                  value={scene.environmentIntensity}
-                  onChange={(event) =>
-                    change({
-                      ...scene,
-                      environmentIntensity: Number(event.target.value),
-                    })
-                  }
-                />
-              </Field>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={scene.ground?.visible ?? true}
-                  disabled={disabled}
-                  onCheckedChange={(visible) =>
-                    change({
-                      ...scene,
-                      ground: {
-                        ...scene.ground!,
-                        visible: visible === true,
-                        opacity: scene.ground?.opacity ?? 0.4,
-                        height: scene.ground?.height ?? 0,
-                      },
-                    })
-                  }
-                />
-                显示地面
-              </label>
-              <Field>
-                <FieldLabel htmlFor="director-ground-height">
-                  地面高度
-                </FieldLabel>
-                <Input
-                  id="director-ground-height"
-                  type="number"
-                  min={-2}
-                  max={2}
-                  step={0.1}
-                  disabled={disabled}
-                  value={scene.ground?.height ?? 0}
-                  onChange={(event) =>
-                    change({
-                      ...scene,
-                      ground: {
-                        visible: scene.ground?.visible ?? true,
-                        opacity: scene.ground?.opacity ?? 0.4,
-                        height: Number(event.target.value),
-                      },
-                    })
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="director-stage-scale">
-                  舞台整体倍率
-                </FieldLabel>
-                <Input
-                  id="director-stage-scale"
-                  type="number"
-                  min={0.1}
-                  max={10}
-                  step={0.1}
-                  disabled={disabled}
-                  value={scene.stageTransform?.scale ?? 1}
-                  onChange={(event) =>
-                    change({
-                      ...scene,
-                      stageTransform: {
-                        position: scene.stageTransform?.position ?? [0, 0, 0],
-                        rotation: scene.stageTransform?.rotation ?? [0, 0, 0],
-                        scale: Number(event.target.value),
-                      },
-                    })
-                  }
-                />
-              </Field>
-              <VectorFields
-                label="舞台旋转 (°)"
-                value={scene.stageTransform?.rotation ?? [0, 0, 0]}
-                disabled={disabled}
-                onChange={(rotation) =>
-                  change({
-                    ...scene,
-                    stageTransform: {
-                      position: scene.stageTransform?.position ?? [0, 0, 0],
-                      scale: scene.stageTransform?.scale ?? 1,
-                      rotation,
-                    },
-                  })
-                }
-              />
-              {scene.panorama ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="director-panorama-rotation">
-                      全景旋转角度
-                    </FieldLabel>
-                    <Input
-                      id="director-panorama-rotation"
-                      type="number"
-                      min={-360}
-                      max={360}
-                      disabled={disabled}
-                      value={scene.panoramaRotation ?? 0}
-                      onChange={(event) =>
-                        change({
-                          ...scene,
-                          panoramaRotation: Number(event.target.value),
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="director-panorama-radius">
-                      全景半径
-                    </FieldLabel>
-                    <Input
-                      id="director-panorama-radius"
-                      type="number"
-                      min={1}
-                      max={200}
-                      disabled={disabled}
-                      value={scene.panoramaRadius ?? 60}
-                      onChange={(event) =>
-                        change({
-                          ...scene,
-                          panoramaRadius: Number(event.target.value),
-                        })
-                      }
-                    />
-                  </Field>
-                </>
-              ) : null}
-              <VectorFields
-                label="舞台位置"
-                value={scene.stageTransform?.position ?? [0, 0, 0]}
-                disabled={disabled}
-                onChange={(position) =>
-                  change({
-                    ...scene,
-                    stageTransform: {
-                      scale: scene.stageTransform?.scale ?? 1,
-                      rotation: scene.stageTransform?.rotation ?? [0, 0, 0],
-                      position,
-                    },
-                  })
-                }
-              />
-            </div>
+              </TabsContent>
+            </Tabs>
           </aside>
         </div>
         <div className="grid shrink-0 gap-3 lg:grid-cols-[200px_1fr_320px]">
@@ -1715,6 +1787,7 @@ export function DirectorWorkbench({
                   ...activeShot,
                   id: crypto.randomUUID(),
                   name: `镜头 ${scene.shots.length + 1}`,
+                  screenshots: undefined,
                 };
                 change({
                   ...scene,
@@ -2166,16 +2239,18 @@ export function DirectorWorkbench({
         ) : null}
         <DialogFooter className="shrink-0">
           <Button variant="outline" disabled={saving} onClick={onClose}>
-            关闭
+            取消
           </Button>
           <Button
             disabled={disabled}
             onClick={() => {
-              void save();
+              if (scene.cover) void save();
+              else if (captureReady) void takeCapture("beauty");
+              else setError("场景视口尚未就绪，请等待后保存并关闭。");
             }}
           >
             <Save />
-            {saving ? "保存中…" : "保存导演台"}
+            {saving ? "保存中…" : "保存并关闭"}
           </Button>
         </DialogFooter>
       </DialogContent>

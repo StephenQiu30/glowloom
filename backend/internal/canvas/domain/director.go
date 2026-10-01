@@ -30,6 +30,7 @@ type DirectorConfig struct {
 	Lights               []DirectorLight         `json:"lights"`
 	Shots                []DirectorShot          `json:"shots"`
 	ActiveShotID         uuid.UUID               `json:"active_shot_id"`
+	Cover                *DirectorCover          `json:"cover,omitempty"`
 }
 
 // DirectorTransform is an explicit position, rotation and positive scale.
@@ -157,14 +158,15 @@ type DirectorLight struct {
 
 // DirectorShot identifies a camera and the editable filmmaking intent.
 type DirectorShot struct {
-	ID         uuid.UUID `json:"id"`
-	Name       string    `json:"name"`
-	CameraID   uuid.UUID `json:"camera_id"`
-	Duration   float64   `json:"duration"`
-	FPS        int       `json:"fps"`
-	ShotSize   string    `json:"shot_size"`
-	CameraMove string    `json:"camera_move"`
-	Prompt     string    `json:"prompt"`
+	ID          uuid.UUID            `json:"id"`
+	Name        string               `json:"name"`
+	CameraID    uuid.UUID            `json:"camera_id"`
+	Duration    float64              `json:"duration"`
+	FPS         int                  `json:"fps"`
+	ShotSize    string               `json:"shot_size"`
+	CameraMove  string               `json:"camera_move"`
+	Prompt      string               `json:"prompt"`
+	Screenshots []DirectorScreenshot `json:"screenshots,omitempty"`
 }
 
 var directorBones = []string{"root", "hips", "spine", "chest", "neck", "head", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand", "leftUpperLeg", "leftLowerLeg", "leftFoot", "rightUpperLeg", "rightLowerLeg", "rightFoot", "leftThumb1", "leftThumb2", "leftThumb3", "leftIndex1", "leftIndex2", "leftIndex3", "leftMiddle1", "leftMiddle2", "leftMiddle3", "leftRing1", "leftRing2", "leftRing3", "leftPinky1", "leftPinky2", "leftPinky3", "rightThumb1", "rightThumb2", "rightThumb3", "rightIndex1", "rightIndex2", "rightIndex3", "rightMiddle1", "rightMiddle2", "rightMiddle3", "rightRing1", "rightRing2", "rightRing3", "rightPinky1", "rightPinky2", "rightPinky3"}
@@ -268,6 +270,9 @@ func validDirector(c DirectorConfig) bool {
 		if !validTitle(shot.Name) || !cameras[shot.CameraID] || !directorRange(shot.Duration, 0.1, 3600) || !slices.Contains([]int{24, 25, 30}, shot.FPS) || !directorChoice(shot.ShotSize, "extreme_wide", "wide", "full", "medium", "close_up", "extreme_close_up") || !directorChoice(shot.CameraMove, "static", "push_in", "pull_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "orbit_left", "orbit_right", "handheld") || !validPrompt(shot.Prompt) {
 			return false
 		}
+	}
+	if !validDirectorOutputs(c, shots) {
+		return false
 	}
 	raw, err := json.Marshal(c)
 	return err == nil && len(raw) <= 512<<10

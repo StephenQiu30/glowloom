@@ -10,6 +10,8 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 
 ## BeefTV 无限画布与完整工作台迁移
 
+导演台镜头图库与封面（2026-10-02）沿固定 `1ae25027` 的 `lib/canvas/director/director-session.ts`、`director-cover-write.ts` 和 `components/canvas/director/director-camera-screenshot-tabs.tsx` 改写到 `frontend/src/components/canvas/director/outputs.ts`。`gallery.tsx` 参考 `components/canvas/director/director-screenshot-gallery.tsx`，使用自身 shadcn/Radix；`capture-result.ts`、编辑器和节点内容通过正式审核资产、画布 CAS 与持久幂等关联，替换源应用本地路径和 Ant Design 调用。保留上述 MIT 来源与修改说明。
+
 2026-10-01 清理全部旧前端后，用户授权完整迁移重建。以下画布核心现从历史 `bd17655b` 中恢复已适配 Next.js/shadcn 与正式 Go 合同的实现，来源继续为固定 BeefTV `0d9e9f48`。完整工作台能力参考固定 `1ae25027`；新增移植文件逐项追加登记，不把整个上游源码目录复制为第二套应用。首页/导航的功能组织参考 `web/src/pages/home/home-dashboard.tsx` 与 `components/layout/workspace-sidebar-nav.tsx`，改写为自身 App Router 和 shadcn 工作台。
 
 - 固定来源：`0d9e9f48d407570cd431ad9730cdd522b06810c0`，用户确认采用该仓库当前 `main` 后固定此提交。
@@ -50,17 +52,17 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 
 当前完整工作台迁移还移植以下 MIT 算法与输入合同。源提交为 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`，目标均按 Lanverse UUID、服务端持久化、权限和关闭的输入范围改写；不保留源 Wails 外壳或本地数据库。未完成能力以正式设计清单为准，不能由许可登记推断已验收。
 
-| 目标（相对 `frontend/src/components/canvas/`）                                                                                        | 来源与改写内容                                                                                      |
-| ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `batch-table.ts`                                                                                                                      | BeefTV 批量表格行列、引用槽位、排序与编辑；改用 UUID 与服务端画布命令                               |
-| `image-tools.ts`、`subtitles.ts`                                                                                                      | 图片裁切、网格分割及字幕输入；改用私有媒体与正式保存合同                                            |
-| `image-mask.ts`、`image-mask-dialog.tsx`、`mask-draft.ts`                                                                             | `canvas-node-mask-edit-dialog.tsx` 的绘制、擦除和透明遮罩；改用正式素材上传、模型用途校验及画布草稿 |
-| `video-crop-geometry.ts`、`video-tools.ts`、`video-tools-dialog.tsx`                                                                  | `lib/canvas/video-crop-geometry.ts` 和视频工具的区域调整、截帧及裁切输入；改用正式素材与时间轴导出  |
-| `director/scene.ts`、`ground.ts`、`stage-transform.ts`、`aspect-ratio.ts`、`view-modes.ts`、`camera-binding.ts`、`prompt-compiler.ts` | 3D 场景、地面、变换、画幅、视图、机位绑定和提示词编译；接入闭合输入与正式资源引用                   |
-| `director/animation-semantics.ts`                                                                                                     | `director-animation-semantics.ts` 的动画增量与关键帧语义；保持自身类型和有限数值边界                |
-| `director/rig.ts`                                                                                                                     | `director-viewport.tsx` 的骨骼命名匹配；改为实际 GLB 骨骼扫描和纯函数映射                           |
-| `director/camera-presets.ts`、`modes.ts`、`camera-moves.ts`                                                                           | `director-camera-presets.ts`、导演模式和运镜预设；接入自身场景与机位合同                            |
-| `director/templates.ts`                                                                                                              | `lib/canvas/director/director-templates.ts` 的五种场景布局；改用自身 UUID、场景字段和正式新增节点合同 |
+| 目标（相对 `frontend/src/components/canvas/`）                                                                                        | 来源与改写内容                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `batch-table.ts`                                                                                                                      | BeefTV 批量表格行列、引用槽位、排序与编辑；改用 UUID 与服务端画布命令                                 |
+| `image-tools.ts`、`subtitles.ts`                                                                                                      | 图片裁切、网格分割及字幕输入；改用私有媒体与正式保存合同                                              |
+| `image-mask.ts`、`image-mask-dialog.tsx`、`mask-draft.ts`                                                                             | `canvas-node-mask-edit-dialog.tsx` 的绘制、擦除和透明遮罩；改用正式素材上传、模型用途校验及画布草稿   |
+| `video-crop-geometry.ts`、`video-tools.ts`、`video-tools-dialog.tsx`                                                                  | `lib/canvas/video-crop-geometry.ts` 和视频工具的区域调整、截帧及裁切输入；改用正式素材与时间轴导出    |
+| `director/scene.ts`、`ground.ts`、`stage-transform.ts`、`aspect-ratio.ts`、`view-modes.ts`、`camera-binding.ts`、`prompt-compiler.ts` | 3D 场景、地面、变换、画幅、视图、机位绑定和提示词编译；接入闭合输入与正式资源引用                     |
+| `director/animation-semantics.ts`                                                                                                     | `director-animation-semantics.ts` 的动画增量与关键帧语义；保持自身类型和有限数值边界                  |
+| `director/rig.ts`                                                                                                                     | `director-viewport.tsx` 的骨骼命名匹配；改为实际 GLB 骨骼扫描和纯函数映射                             |
+| `director/camera-presets.ts`、`modes.ts`、`camera-moves.ts`                                                                           | `director-camera-presets.ts`、导演模式和运镜预设；接入自身场景与机位合同                              |
+| `director/templates.ts`                                                                                                               | `lib/canvas/director/director-templates.ts` 的五种场景布局；改用自身 UUID、场景字段和正式新增节点合同 |
 
 前端包依赖的许可仍由各依赖声明。
 

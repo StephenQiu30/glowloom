@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import type { CanvasNodeData } from "../model";
+import { CanvasNodeType, type CanvasNodeData } from "../model";
 import { getMediaPreview } from "../queries";
 import { bindCanvasVideoHoverPreview } from "../engine/video-hover-preview";
 import { useMediaLifecycle, useReleaseMediaSource } from "./media-lifecycle";
@@ -48,6 +48,33 @@ export function NodeContent(props: Props) {
         </p>
       </div>
     );
+  if (node.director)
+    if (node.director.cover)
+      return (
+        <div className="flex h-full flex-col">
+          <div className="min-h-0 flex-1">
+            <MediaNodeContent
+              key={
+                props.projectId +
+                ":" +
+                node.id +
+                ":" +
+                node.director.cover.assetId
+              }
+              {...props}
+              node={{
+                ...node,
+                type: CanvasNodeType.Image,
+                assetId: node.director.cover.assetId,
+              }}
+              onPreview={undefined}
+            />
+          </div>
+          <p className="shrink-0 px-3 py-1 text-xs text-muted-foreground">
+            {node.director.shots.length} 分镜 · 导演台封面
+          </p>
+        </div>
+      );
   if (node.director)
     return (
       <div className="space-y-3 p-5 text-xs text-muted-foreground">

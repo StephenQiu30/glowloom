@@ -234,6 +234,8 @@ definitions:
         items:
           $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorCamera'
         type: array
+      cover:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorCover'
       environment_intensity:
         type: number
       grid_snap:
@@ -270,6 +272,13 @@ definitions:
         type: string
       version:
         type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorCover:
+    properties:
+      asset_id:
+        type: string
+      shot_id:
+        type: string
     type: object
   github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorGround:
     properties:
@@ -398,6 +407,17 @@ definitions:
           type: string
         type: object
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorScreenshot:
+    properties:
+      asset_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorShot:
     properties:
       camera_id:
@@ -414,6 +434,10 @@ definitions:
         type: string
       prompt:
         type: string
+      screenshots:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorScreenshot'
+        type: array
       shot_size:
         type: string
     type: object

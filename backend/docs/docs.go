@@ -4124,6 +4124,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorCamera"
                     }
                 },
+                "cover": {
+                    "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorCover"
+                },
                 "environment_intensity": {
                     "type": "number"
                 },
@@ -4177,6 +4180,17 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "integer"
+                }
+            }
+        },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorCover": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "string"
+                },
+                "shot_id": {
+                    "type": "string"
                 }
             }
         },
@@ -4374,6 +4388,23 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorScreenshot": {
+            "type": "object",
+            "properties": {
+                "asset_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorShot": {
             "type": "object",
             "properties": {
@@ -4397,6 +4428,12 @@ const docTemplate = `{
                 },
                 "prompt": {
                     "type": "string"
+                },
+                "screenshots": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_canvas_domain.DirectorScreenshot"
+                    }
                 },
                 "shot_size": {
                     "type": "string"

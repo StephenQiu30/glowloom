@@ -99,14 +99,14 @@ Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目�
 
 源码审计估计 InfiniteCanvas 运行闭包 9 文件/1,405 行，扩展核心 16 文件/2,632 行，核心外部依赖 React/Zustand。实际移植仍须逐文件列来源和改造，不能以行数证明完成。
 
-| 来源模块 | 复用 | 改造边界 |
-| --- | --- | --- |
-| web/src/components/canvas/infinite-canvas.tsx、视口/外观 | DOM 变换、平移/缩放、指针、背景 | Next 客户端组件，主题接 next-themes/Geist |
-| use-canvas-selection-controller、viewport-controller、空间索引 | 单选/多选/框选、群组拖动、坐标/预览 | 局部预览，交互结束提交正式命令 |
-| canvas-layout/frame/node-copy、连接策略 | 对齐/布局、分组、复制、连线算法 | 去除插件/本地仓储耦合；使用正式 UUID |
-| 节点壳、连线层、小地图、菜单/工具栏/属性设计 | 直接复用对应行为与设计 | AntD 换现有 shadcn，保留焦点/只读/错误语义 |
-| use-canvas-history、核心快捷键/操作 | 历史组织、反向操作 | 服务端确认后入栈，不用快照覆盖业务事实 |
-| 上游项目/媒体/生成服务依赖 | 由下文端口替换 | 不复制密钥、直连 provider、local workspace 或 IndexedDB |
+| 来源模块                                                       | 复用                                | 改造边界                                                |
+| -------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------- |
+| web/src/components/canvas/infinite-canvas.tsx、视口/外观       | DOM 变换、平移/缩放、指针、背景     | Next 客户端组件，主题接 next-themes/Geist               |
+| use-canvas-selection-controller、viewport-controller、空间索引 | 单选/多选/框选、群组拖动、坐标/预览 | 局部预览，交互结束提交正式命令                          |
+| canvas-layout/frame/node-copy、连接策略                        | 对齐/布局、分组、复制、连线算法     | 去除插件/本地仓储耦合；使用正式 UUID                    |
+| 节点壳、连线层、小地图、菜单/工具栏/属性设计                   | 直接复用对应行为与设计              | AntD 换现有 shadcn，保留焦点/只读/错误语义              |
+| use-canvas-history、核心快捷键/操作                            | 历史组织、反向操作                  | 服务端确认后入栈，不用快照覆盖业务事实                  |
+| 上游项目/媒体/生成服务依赖                                     | 由下文端口替换                      | 不复制密钥、直连 provider、local workspace 或 IndexedDB |
 
 根 LICENSE 为 MIT，含 BeefTV、basketikun、ddcat 版权；复制源码保留适用声明，核对实际文件和第三方依赖，实际清单以根 [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md) 为准，并在 /licenses 提供 /licenses/beeftv.txt 与来源致谢。根 MIT 不证明全部媒体和依赖可复制。只引入核心所需包，不复制上游 scripts、package scripts 或 Makefile。
 
@@ -114,14 +114,14 @@ Lanverse 按上线项目标准实现完整产品，当前优先跑通整项目�
 
 继续 Next.js、React、TypeScript、shadcn/ui、TanStack Query、Zustand；核心与 Lanverse 业务绑定按职责分开：迁入运行/算法位于 components/canvas/engine，节点位于 nodes，正式装配由 workspace.tsx 的 CanvasWorkspace 承担。Go 保持 adapter → application → domain。
 
-| 端口 / 状态 | 正式合同 | 所有者 |
-| --- | --- | --- |
-| 工作区/项目 | 单一工作区身份、组织项目、归档只读 | identity/workspace，不映射样例 ID |
-| 文档/节点 | document/node/edge/viewport/revision；节点 title/parent_id/z_index 与类型安全 config | Go/PostgreSQL；source k ↔ API zoom 显式转换 |
-| 命令提交 | expected_revision、UUID 幂等键、确认文档/结果或结构化错误 | 在线 Swagger 生成 API → request.ts |
-| 媒体 | 同项目已接管可用 media_asset ID，授权 URL/缩略图由服务端投影 | media，不保存任意 URL/blob/本机路径/storageKey/密钥 |
-| 业务对象/动作 | ref_type/ref_id、摘要、参考/报价/任务/候选/正式选定 | 与流水线共用业务模块/query key，不迁 source executor |
-| 交互/历史 | 选择/拖动/视口/草稿与成功操作反向历史 | Zustand/页面内，刷新从服务端恢复 |
+| 端口 / 状态   | 正式合同                                                                             | 所有者                                               |
+| ------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| 工作区/项目   | 单一工作区身份、组织项目、归档只读                                                   | identity/workspace，不映射样例 ID                    |
+| 文档/节点     | document/node/edge/viewport/revision；节点 title/parent_id/z_index 与类型安全 config | Go/PostgreSQL；source k ↔ API zoom 显式转换          |
+| 命令提交      | expected_revision、UUID 幂等键、确认文档/结果或结构化错误                            | 在线 Swagger 生成 API → request.ts                   |
+| 媒体          | 同项目已接管可用 media_asset ID，授权 URL/缩略图由服务端投影                         | media，不保存任意 URL/blob/本机路径/storageKey/密钥  |
+| 业务对象/动作 | ref_type/ref_id、摘要、参考/报价/任务/候选/正式选定                                  | 与流水线共用业务模块/query key，不迁 source executor |
+| 交互/历史     | 选择/拖动/视口/草稿与成功操作反向历史                                                | Zustand/页面内，刷新从服务端恢复                     |
 
 本轮资源类型闭集为 text/image/video/audio/group，node_action=resource；配置闭集 text={text:string}、group={collapsed:boolean}、media={}；媒体只引用授权同项目 ready/passed 已接管对象，经独立媒体 preview 端口取得临时 URL，不放 Document.Node。标题使用正式字段，禁止将上游任意 metadata 当可写配置。原布局命令 AddNodes/MoveNodes/UpdateNodeConfig/DeleteNodes/Connect(annotation)/Disconnect/SetViewport 保留，扩 ResizeNodes/RenameNodes/SetNodeParents/SetNodeZIndex；Connect/Disconnect 使用 edges/ids 数组，精确形状及画布名称/软删除、媒体列表/preview 合同见 DES-38 §3.2。
 
@@ -190,16 +190,16 @@ Next 页面保留 Server Component 与 Suspense；浏览器引擎在 Client Comp
 
 ## 6. 核心交互与验收
 
-| 能力 | 必须验证 | 映射 |
-| --- | --- | --- |
-| 平移/缩放/背景/小地图/定位 | 坐标/锚点、指针取消、控件不误触、视口保存 | CNV-04/05；TC-36-04 |
-| 选择/框选/群拖/对齐/分组/层级 | 空间索引、world 坐标、无环 parent、删组解组、失败恢复 | CNV-01/05；键盘/焦点 |
-| 创建/编辑/尺寸/标题/复制/删除/连接 | UUID/config 闭集、复制隔离、关联边、反向历史 | CNV-01/03/05；权限/原子性 |
-| 图片/视频/音频/播放 | 授权来源、过期/失败、离屏释放、同时播放限制 | MED、CNV-06 |
-| 保存/修订/历史 | 持久幂等、并发冲突、回滚、历史文档/跨设备恢复 | REL-04/06/07；TC-36-04 |
-| 业务节点/参考/生成/提升 | 流水线同源、报价确认、真实任务/候选/选定 | TC-36-01～03；E2E-11；对应合同 |
-| 新引擎性能 | 500/800、2,000 节点运动/首屏/真实媒体/内存来源 | PERF-06，缺目标机器写未执行 |
-| 删除旧实现/生产命名 | 无旧入口/import/依赖，无 poc 业务名；许可可追溯 | 替换完成门禁 |
+| 能力                               | 必须验证                                              | 映射                           |
+| ---------------------------------- | ----------------------------------------------------- | ------------------------------ |
+| 平移/缩放/背景/小地图/定位         | 坐标/锚点、指针取消、控件不误触、视口保存             | CNV-04/05；TC-36-04            |
+| 选择/框选/群拖/对齐/分组/层级      | 空间索引、world 坐标、无环 parent、删组解组、失败恢复 | CNV-01/05；键盘/焦点           |
+| 创建/编辑/尺寸/标题/复制/删除/连接 | UUID/config 闭集、复制隔离、关联边、反向历史          | CNV-01/03/05；权限/原子性      |
+| 图片/视频/音频/播放                | 授权来源、过期/失败、离屏释放、同时播放限制           | MED、CNV-06                    |
+| 保存/修订/历史                     | 持久幂等、并发冲突、回滚、历史文档/跨设备恢复         | REL-04/06/07；TC-36-04         |
+| 业务节点/参考/生成/提升            | 流水线同源、报价确认、真实任务/候选/选定              | TC-36-01～03；E2E-11；对应合同 |
+| 新引擎性能                         | 500/800、2,000 节点运动/首屏/真实媒体/内存来源        | PERF-06，缺目标机器写未执行    |
+| 删除旧实现/生产命名                | 无旧入口/import/依赖，无 poc 业务名；许可可追溯       | 替换完成门禁                   |
 
 先验证项目运行/依赖、身份/项目、核心画布与真实服务 Demo，再覆盖完整业务和上线门禁。单元/组件、真实 PostgreSQL、浏览器、真实供应商和产品验收分别记录；接口 200、fixture 和录制响应不等于完整 Demo/产品通过。质量门禁按 PROJECT/AGENTS，未执行如实列出。
 
@@ -208,7 +208,6 @@ Next 页面保留 Server Component 与 Suspense；浏览器引擎在 Client Comp
 本设计替代把“F1 样例 → 备注画布 → 单条链路 PoC”当当前目标的旧表述。E-36-07/08 和 07dfd2d 检查点保留历史且标被替代，不追认完成。PRD-01/32、REQ-36 保留完整产品范围；DES-06/38/08 同步技术/节点合同；PROJECT 保持工程边界；PLN-01/32、BACKLOG 列核心迁移、正式接线与整项目 Demo 任务。
 
 source SHA/文件/许可、DTO/命令、真实依赖和 Demo 证据逐项验收。未完成生成业务、Agent、跨设备、目标机器不宣称通过；执行优先级不降低上线标准。
-
 
 ## 8. 设置偏好持久保存合同（2026-10-01）
 
@@ -268,23 +267,22 @@ FFmpeg 先做真实原件 SHA／kind／像素尺寸检查，裁切以整数 `cro
 
 新建隔离 PG 17.11／固定官方 MinIO 在 `SET ROLE lanverse_app` 下执行全部 Export 与真实 Timeline renderer 的 Race 验证通过（10.908s）。新增 50 段音频的实际运行取消：观察正式 rendering 进度后提交取消并发出真实 Workflow signal，等待生产 Activity 结束全部进程／清理／release 后，才检查 cancelled、无输出资产与活动会话为空；Workflow future 本身不作退出证明。另以实际 UPDATE 验证冻结 `output_kind` 被 PostgreSQL `42501` 拒绝，拒写后仍为 audio，并逐字节重建原 video 指纹／历史命令回执验证重放；govulncheck 的调用与导入包漏洞为零，未消费依赖模块风险仍如实保留。
 
-
 ## 10. 提示词模板消费与报价冻结合同（2026-10-01，接线评审）
 
 ### 10.1 固定来源的真实消费者
 
 以下事实来自固定 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`，不是运行验收：`backend/internal/app/provider.go:290-299` 是唯一统一编译调用，由 `metadata.promptTemplateOperation/promptTemplateVariables` 驱动；第 292 行明确视频模式不编译，最终视频提示词保留输入框内容。`web/src/pages/projects/index.tsx` 的旧大纲入口当前未被 `/projects` 路由装配；章节/角色详情受 localMode 重定向限制；`/skills` 关闭。九项定义全部保留，但来源中未装配或旁路的入口不算九条已运行生成链。
 
-| 模板 | 固定来源调用事实 | 目标编译所需权威上下文 |
-| --- | --- | --- |
-| chapter_assets_extract | `project-chapter-ai.ts` 的实际章节资产创建使用此模板 | 已保存章节正文/名称、项目名称与画风 |
-| character_extract | 现章节代码仅用于旧任务结果识别，没有新的独立创建调用 | 同上，角色输出仍按独立契约校验 |
-| character_turnaround | `project-character-media.ts` 创建任务元数据，项目详情本地路由受限 | 已确认角色名称/设定/版本、项目画风及正式参考 |
-| storyboard_plan / storyboard_repair | 前端只有操作常量，没有当前模板创建调用；章节分镜走自定义提示词 | 真实剧情、资产/角色版本、镜头数量/时长规则；repair 另需原输出和真实校验错误 |
-| storyboard_first_frame | `canvas-project-domain.ts` 为含变量的分镜行写元数据 | 已保存镜头的首帧构图、表演起始状态、项目视觉、负面要求 |
-| storyboard_video | 前端可写分镜视频元数据，但服务端明确旁路模板 | 最终提示词保持用户输入；不得静默应用个人模板 |
-| short_drama_outline | 旧项目页用大纲模板创建文本任务并导入章节，当前旧页未装配 | 用户本次故事 + 七项明确故事选项，项目权限复核 |
-| skill_draft | `lib/canvas/skill-drafting.ts` 创建模板任务，调用页 `/skills` 关闭 | 用户本次技能想法；保存技能/采用结果另按实际业务合同 |
+| 模板                                | 固定来源调用事实                                                   | 目标编译所需权威上下文                                                      |
+| ----------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| chapter_assets_extract              | `project-chapter-ai.ts` 的实际章节资产创建使用此模板               | 已保存章节正文/名称、项目名称与画风                                         |
+| character_extract                   | 现章节代码仅用于旧任务结果识别，没有新的独立创建调用               | 同上，角色输出仍按独立契约校验                                              |
+| character_turnaround                | `project-character-media.ts` 创建任务元数据，项目详情本地路由受限  | 已确认角色名称/设定/版本、项目画风及正式参考                                |
+| storyboard_plan / storyboard_repair | 前端只有操作常量，没有当前模板创建调用；章节分镜走自定义提示词     | 真实剧情、资产/角色版本、镜头数量/时长规则；repair 另需原输出和真实校验错误 |
+| storyboard_first_frame              | `canvas-project-domain.ts` 为含变量的分镜行写元数据                | 已保存镜头的首帧构图、表演起始状态、项目视觉、负面要求                      |
+| storyboard_video                    | 前端可写分镜视频元数据，但服务端明确旁路模板                       | 最终提示词保持用户输入；不得静默应用个人模板                                |
+| short_drama_outline                 | 旧项目页用大纲模板创建文本任务并导入章节，当前旧页未装配           | 用户本次故事 + 七项明确故事选项，项目权限复核                               |
+| skill_draft                         | `lib/canvas/skill-drafting.ts` 创建模板任务，调用页 `/skills` 关闭 | 用户本次技能想法；保存技能/采用结果另按实际业务合同                         |
 
 现 Lanverse 的运行实体是 workspace.project、canvas 资源/生成/批量表、Operation 与 media；script、bible、storyboard、skill 正式实体尚未实现。接通模板编译与报价不替代实体、原入口、结构化结果校验/采用及真实模型执行验收。不搬源 SQLite、Wails、浏览器 metadata 直达供应商或第二套本地任务。
 
@@ -386,9 +384,17 @@ CopyJob 后续单独验证跨多画布全部内容、各 UUID/媒体对象映射
 
 捕获前先确认正式保存；上传仍经现有实际 File、本地检查确认与幂等接管。迟到捕获不得回填已关闭或替换的场景。追加图库/封面时复核最新画布修订及节点、场景、镜头身份与捕获配置，使用正式命令 CAS；若配置已变化，保留已接管素材并提示重新关联，不覆盖新配置。命令结果未知时沿原幂等键恢复，读取最新关联后不得重复加入图片或边。
 
+“保存并关闭”在场景保存确认后，对缺少当前有效封面的场景自动捕获 beauty 并进入既有人工上传确认，审核通过的正式 image 才能同次命令关联分镜图库、cover、图片节点和来源边。已有有效封面时直接保存关闭；“取消”及对话框关闭只退出编辑，不提交新的场景内容或未经确认的捕获。手动“场景截图”同样关联图库与最新封面，几何深度／法线捕获仍作为明确的诊断图片导入，不自动选作 beauty 封面。捕获模式不继承白膜／姿态预览材质，捕获结束恢复原预览。
+
 ### 12.3 白膜视频与验收边界
 
 浏览器录制须有明确所有者、镜头时长/帧率上限、取消机制、渲染/上下文失效处理、实际解码时长核验，并在所有结束路径清理 recorder、MediaStream tracks、动画回调、事件监听和临时 URL。录制期间禁止改变场景或镜头；失败或取消不回写残缺视频。服务端媒体模块以真实 FFmpeg/ffprobe 承接原始 WebM 到 MP4 的有界转码、审核及正式资产发布，不能给不支持的上传扩展换名后冒充 MP4，不能将录制事实塞进场景配置，也不创建 AI 报价/供应商 Operation。
+
+白膜承接复用现有 `media/application.UploadService` 的明确人工审核上传，不另建媒体发布服务。新增消费方 `UploadNormalizer.Normalize(ctx,*Downloaded)` 端口，由实际 FFmpeg adapter 返回新的规范文件及实际源 codec；组合构造为 `NewUploadService(repo,prober,normalizer,renderer,objects,now)`。只接受实际 WebM DocType、单一 VP8／VP9 视频流，无音频／其它流；原件及规范结果各不超过 500 MiB，实际输出不超过 60 秒，完整解码／转码须在有界上下文中结束。没有容器 duration 的 MediaRecorder 输出仍须完整转码并实际 probe；不使用浏览器声称时长，也不静默截断超限素材。PNG／JPEG／WebP、MP4／MOV、M4A／MP3／WAV 与 GLB 的既有格式及校验路径不变。
+
+请求回执继续以原 multipart 文件的服务端 SHA256、原安全名称和原字节数绑定幂等键；`FindUpload` 在转码前重放，不能把规范结果替换成请求身份。已审核资产保留规范 MP4 的独立 SHA256／byte_size／video/mp4／H264／实际尺寸及时长，以及由原安全名称派生的 `.mp4` 展示名。`LocalUploadReview` 增加可选闭合 `normalization={version:1,method:"webm_vp8_vp9_to_mp4_h264",source:{sha256,file_name,byte_size,mime_type,codec},canonical:{sha256,byte_size,mime_type,codec,width,height,duration_ms}}`；源字段由实际上传读取，输出字段由规范字节及 probe 得出，审核声明的 SHA256 仍绑定原输入。仓储对未规范化上传继续要求资产 SHA／字节／名称等于请求；规范化仅在该 typed 证明的源等于请求、输出等于资产且 codec／容器／尺寸／时长全部合规时接纳，不放宽原等式。证明属于 media 的审核事实，不进入导演场景 config，不暴露临时路径或对象 key。
+
+同键未知提交沿既有项目锁和 `UploadAssetExists` 保守恢复，不删除结果未知的已持有对象；所有失败路径清理转换临时文件。不同键上传相同原 WebM 由 media 自有审核证明的 source SHA 去重，同时保留每次原请求回执；不创建 AI Operation，不保留请求秘密。输出原件与 poster／proxy 仍经实际对象 Stat／SHA 校验后事务接管，proxy 不能冒充 canonical 原件。
 
 验收需分别覆盖五模板实际选择/刷新、骨骼与机位动画恢复、正式参考图片/模型加载、多个镜头与相同机位图集、旧捕获回执保护、正式图库与封面回读、短视口布局与键盘焦点，以及实际白膜动画生成→可解码预览→明确审核→正式素材引用→刷新。纯模型/组件测试、静态 PNG 或仅 WebGL 启动不关闭完整导演台能力。
 
@@ -419,3 +425,54 @@ whisper.cpp verbose_json 的 start／end 为秒，返回 language 是完整名�
 本机源默认 8082 已被 Lanverse Relay 占用。2026-10-02 独立 loopback `127.0.0.1:19282` 使用官方 `ggml-org/whisper.cpp` v1.9.4，source SHA `927cfce34f31707e17f2bff35c349632fb9e2c3a`；多语言 `ggml-base.bin` 来自官方脚本指向的 HuggingFace ggerganov/whisper.cpp repo SHA `5359861c739e955e79d9a303bcbc70fb988958b1`，147951465 B，SHA256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`。代码／权重 MIT 原许可分别保留；权重与编译服务只在任务 `/tmp/lanverse-whisper-20261001`，不提交模型、不读取用户媒体。实际单次英文／合成中文识别、失败、取消、私有存储／HTTP／画布导入与恢复仍逐项留证，不以服务健康或模型下载宣称完整迁移完成。
 
 固定 server 用 mutex 串行处理 inference，并有 HTTP 断连 abort callback，但协议没有请求 ID、cancel 状态查询或远端结束 receipt。因此客户端取消不作为识别退出证据：执行期间取消先持久 cancel_requested，受控 HTTP 调用等待实际终态响应，再丢弃结果、清理并在对应活动会话释放时确认 cancelled；若 timeout／连接异常使识别状态未知，保留 awaiting_reconciliation，不自动重试或假取消。响应／确认方案须以此固定 server 的实际行为验证，不用普通 health 探测充当任务退出证明。
+
+公开接口为 POST／GET `/api/projects/{pid}/media-transcriptions`、GET `/api/media-transcriptions/{job_id}`／`result`／`subtitles`，以及 POST 同 job 的 `cancel`／`retry`；查询 job／result／SRT 必带 project_id，控制 body 用 `{project_id,revision}`，写入沿 UUID Idempotency-Key 与 Origin 合同。job 公开 stage／progress（0..100）、attempt、revision、来源画布身份及安全失败代码；`awaiting_reconciliation` 保留 running 或 cancel_requested，并明确显示“结果待核验”，不伪装为正常识别进度。Result 返回 `{job_id,revision,sha256,draft,srt,source_asset_id,source_asset_revision,source_sha256}`，draft 的 hash 为标准 JSON 编码的实际字幕稿 SHA；读取时经当前 actor 的媒体 owner 端口复核冻结原件仍 ready／passed 且元数据一致，撤销审核或变更返回 409，原节点后续改引用不会把已生成字幕绑定到新媒体。
+
+原件暂存／转换上限 5min，native 识别上限 20min，结果持久化上限 1min，Activity 为 30min。提交前还从实际 Activity deadline 中保留 1min 持久化与 20s 结束清理预算，不能因 detached context 把 native 识别延长到 Activity 结束后；不足预算则在原子提交门禁前明确失败。永久 submitted 或 unknown（含工作进程丢失后遗留 owner）不得再 POST，同尝试 terminal 已知但缺 draft 工件只能明确失败后显式重试，不能偷跑第二次识别。sourceFactory 缺失时新建／新 retry 返回 503，不入队；已受理幂等回执、查询、取消仍可读写。未配置的历史 queued 经已注册活动的已知依赖失败路径收敛为 failed，不假写 submitted。部署可选配置 `LV_WHISPER_ENDPOINT` 仅指向显式 loopback native 服务，不能用媒体 URL 指定接收端或跟随重定向／HTTP proxy。
+
+## 13. 当前完整项目内容复制的具体合同（技术审阅通过；实施中；全来源工程仍待补齐）
+
+### 13.1 来源与里程碑
+
+本节落实 §11.4，保留固定 `1ae25027` 来源与自有技术栈。准确源码为 `backend/internal/app/project.go:120` 和 `backend/internal/repository/repository.go:1034`：DuplicateProject/CloneProject 只复制项目头及 units/parent。`web/src/pages/canvas/index.tsx:145` 遍历本地 workspace 的多张画布，但此入口只传 nodes/connections/chat；`project.tsx:700` 与 `stores/canvas/use-canvas-store.ts:553` 的 importProject 另保留 viewport、directorScenes、timeline 与呈现设置。源不同入口自身不一致，不能用最小入口作为删减依据。
+
+当前里程碑复制所有现存、未删除的正式项目内容：项目规格/设置、所有项目自有风格预设、全部画布与类型明确的编辑配置、完整媒体库原件和其全部正式衍生物。源 units/剧集/镜头业务实体、独立对话、项目/资产文件夹等尚无自有持久模块，仍是完整来源迁移的明确缺口，本里程碑成功不关闭这些验收。未知业务节点、业务边或不支持配置必须明确报 `unsupported_copy_content`，不得静默删除后把目标标成完整。
+
+### 13.2 冻结清单与身份映射
+
+| 拥有模块  | 冻结内容                                                                                                                   | 目标重建                                                                                                                                                          |
+| --------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| workspace | name/description、不可变规格、境外开关、default_models、aigc_mark_style；全部项目自有预设及当前选定预设的精确文本/参考素材 | 新 project UUID；预设形成目标项目私有快照与新 UUID，reference_asset_ids 用素材映射重写；catalog 模型 key/profile 是同组织配置引用，保留身份但不复制渠道/价格/凭据 |
+| canvas    | 所有未删除 document 的 name/scope/revision/viewport，以及全部未删除 node/edge 的完整闭合字段                               | 新 document/node/edge UUID、初始 revision=1；保留布局、标题、尺寸、父关系、z-index、文字及创作参数；不复制 command_log/原回执                                     |
+| media     | 所有未删除资产与全部未删除 rendition 的元数据/尺寸/时长/codec/原件 SHA/字节、审核与 AIGC 标记、私有源键                    | 新 asset/rendition UUID及目标项目私有键；每个原件与衍生物逐一核对真实 SHA/字节，不复用源键；未 ready/passed、上传中、缺失文件或未经支持的授权状态明确失败         |
+| billing   | 不读取源预算、reservation 或 ledger                                                                                        | 经 owning application 创建目标预算：limit/reserved/settled 全为 0；不生成账本转账或报价                                                                           |
+
+图身份由 job UUID 与源身份/字段作用域确定性生成；同一冻结任务重试得到同一目标，失败后不得重新随机映射。显式重写 document.project_id、node.parent_id、edge 两端、node.media_asset ref、generation.inputs、batch_table 各行 input_node_ids。batch 行/列身份、timeline track/clip 与 track_id、clip.node_id/asset_id 全部重建。director 的 scene/object/camera/light/shot、active shot、follow/look-at、source node、asset、panorama、motion clip/active clip、transform/bone keyframe、screenshots 及 cover 的 shot/asset 均显式映射；骨骼枚举/名称保持语义，不能用递归替换任意字符串误改用户提示词或 params。
+
+LastOperationID 清除并在 receipt 记录实际清除数量；不复制 Operation、批次、quote、provider_call、生成运行状态、已确认报价、导出/识别任务或财务历史。已有正式结果是媒体素材，仍按新媒体身份完整保存，不能为删除执行绑定丢掉图像/视频/模型。业务引用没有正式可复制内容 port 时明确拒绝。冻结与重建均验证整图引用闭合、数量/尺寸/配置上限；原输入不可被映射函数修改。
+
+### 13.3 最小模块端口与持久化
+
+不新增普适任务框架。workspace 的专用 ProjectCopy 应用消费 canvas 的 `FreezeProjectCopy`/`CopyProjectDocuments`、media 的 `FreezeProjectCopy`/`CopyProjectAssets`/`CleanupProjectCopy` 和 billing 的 `CreateZeroProjectBudget`。这些由各拥有模块 application 定义并返回本模块 typed snapshot/ref/receipt；组合根在受理时绑定同一 GORM 事务，workspace adapter 不查询 canvas/media/billing/operation 的业务内容表。canvas/media 的私有 snapshot 留在各自 schema，workspace job 只记录模块 snapshot ID/hash/count 和阶段 receipt，公开 DTO 不包含原文件键、提示词快照或凭据。
+
+新增 `202610020020_project_copy` 迁移，避开字幕提取的 `202610020010`。workspace.project 增加 copying 合法状态，现有 status=active admission 继续阻止普通创建、编辑、生成、上传和导出；Project.Validate 能读取 copying，CanWrite 对其返回状态冲突，生命周期 archive/delete/restore 不替代复制控制。专用 workspace.copy_job 与所属模块冻结/持久 intent/receipt 保存真实恢复状态、hash 和唯一 job+源身份。当前稳定生命周期文件不重构；公开接线与生成 client 随此闭环统一更新。
+
+未发布 copying 目标从普通项目 List/Get、canvas/media 正式读取与私有 preview 隐藏，仅 CopyJob 的安全 DTO 返回目标名称/身份和真实进度。所属 normal read adapter 按 active/archived 状态筛选；专用 copy owner 写入和恢复须持该 job 的目标绑定/worker fence，不能为 copying 放宽通用 CreateAsset/Execute。workspace owning copy guard 同事务阻挡尚未结束任务的源/目标 archive/delete/restore，当前跨模块 guard 聚合后再装配这个本模块事实；源内容正常编辑仍不改变已冻结 snapshot。
+
+受理顺序是当前主体/组织共享锁→既有 actor/key 幂等门禁→源项目 FOR UPDATE 和修订检查→拥有模块 work guard→冻结项目设置/预设及 canvas/media 快照、建立源资源 pin→目标 copying 项目、零预算、copy_job、两条 Outbox 与 202 回执单事务。copy 受理只允许非删除的 active/archived 源，进行中的生成/上传/导出/识别任务明确 409；不自动取消源任务。源后续编辑不会改原冻结快照。同键重放仍复核当前权限，永远返回同一 job/目标身份。
+
+### 13.4 私有字节、审核与完成条件
+
+对象复制由 media owner 有界流式读取固定私有源键；不接受客户端 URL/路径，不经过供应商。原件沿现行 image/video/audio/model 上限，GLB 必须保持 model/gltf-binary、glb2、自包含属性；全部 rendition 不遗漏，waveform 也在内。源原件 SHA 存在则实际读回比对；缺失 SHA 或 rendition 没有 SHA 时先实际读回计算并持久固定 object intent 的 digest/字节，再以稳定目标键 PutIfAbsent 写入并读回核对。目标已存在只按 exact digest/字节核验恢复，冲突不能覆盖。ready 资源的源键遵守 owning 媒体不可变规则，复制 pin 保留原件及衍生物直到原任务结束；尚未实现的源 purge 不由本任务新增或宣称通过。
+
+仅对已 passed 的完全相同字节继承审核结论，保留 AIGC/真人标记；不得将 pending/rejected 提升为 passed。generated 原件在目标成为独立 system 内容，清除源 Operation/provider/model/region 执行字段，保留内容/审核证据；GLB 原件按现行 domain 仍为 upload 类独立复制。media.consent_record 当前尚未迁移，含真人或 consent_record_id 的工程必须报 `consent_context_unavailable`；不能清除真人标记或沿用未经目标范围授权的 consent 来冒充通过，这仍是待迁移能力。
+
+只有原件及全部衍生物 byte receipts、所有媒体映射、预设参考闭合、全部 document receipts/hash/清除执行绑定数量一致，workspace 才按 job/worker fencing 与修订，将目标转 active、job 标 succeeded，并提交 changed/audit。实现不能以固定百分比、内存计数、mock port 或目录为空判完成。没有任何媒体的真实工程可正常复制，但不能用这种测试替代有素材工程的验收。
+
+### 13.5 失败、取消与验收
+
+公开沿 §11.4 的 POST `/projects/{pid}/copies`，GET `/project-copies/{id}`，POST 同 job 的 `/retry`、`/cancel`；控制 body 为 `{expected_revision}`，沿 UUID 幂等键/Origin/request_id。job 使用 queued/running/failed/cancel_requested/cancelled/succeeded；持久 stage 与 retryable/needs_reconciliation failure 明确区分。失败保留 copying，重试仅恢复原 manifest/身份和核对原 receipt，不重复已确认步骤。每次 Activity 复核发起主体/组织的当前权限及 job fencing，不通过伪造 admin principal 执行。
+
+取消先记录 cancel_requested，并由拥有 worker 停止后续阶段；运行中的对象传输必须实际结束、核对持久 receipt，未知结果先恢复核验再清理。完成与取消由同 job 行锁决定唯一结果，succeeded 后不能再撤销正式项目。清理只允许此 job 所有、尚未正式发布的目标对象与内容，按 media intent 的确定性目标键和 digest/所有权核验，不读取源键作为删除目标；释放 source pins 与清理 receipt 完整后才 cancelled。失败/取消不能触发源项目、源素材或任意共享对象的不可逆 purge，也不能删除用户在其他工程的数据。
+
+Red→Green 分别覆盖纯图的所有具体映射/不修改源/确定性、真实 PG actor/组织/CAS/幂等/Outbox 故障回滚与 copying admission、真实对象原件及全部衍生物 SHA/大小/独立键、冻结后源编辑不影响目标、重启/断线/目标已存在恢复、对象所有权冲突不覆盖或删除、取消竞态和清理失败。成功工程刷新后全部画布与图片/视频/音频/模型/导演图库和时间轴可访问；对象隔离测试仅用本任务合成对象，证明移除合成源键后副本仍可读，不以此宣称生产 purge 已实现。最后公开 Swagger/client 与实际复制页面/错误/加载/重试/取消/刷新单独留证。源 units/chat 等缺口继续记录，全来源复制不由本节提前验收。
