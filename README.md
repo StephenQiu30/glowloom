@@ -4,7 +4,9 @@ Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发�
 
 > **历史重建（2026-09-26）：** 产品与技术设计已从零重做并完成交叉评审；旧实现（`backend/`、`agent/`、`frontend/` 及旧工程配置）已删除，完整保留在标签 `legacy-2026-09`（`git checkout legacy-2026-09 -- <路径>` 可取回）。新代码按 [BACKLOG](BACKLOG.md) 从 M1 起重建。
 >
-> **当前服务调整（2026-09-30）：** 按用户指令移除独立 Python `agent/` 服务及其 Compose/CI 入口，保留 Next.js 前端和现有 Go API、Worker、Relay。供应商、凭据测试、审核、Skill/Harness 的 Go 承接尚未实现；完整生成链仍待验证，见 [清理范围与后续能力](docs/design/Agent服务目录清理设计.md)。
+> **历史服务调整（2026-09-30）：** 按用户指令移除独立 Python `agent/` 服务及其 Compose/CI 入口，当时保留 Next.js 前端和现有 Go API、Worker、Relay。供应商、凭据测试、审核、Skill/Harness 的 Go 承接尚未实现；完整生成链仍待验证，见 [清理范围与后续能力](docs/design/Agent服务目录清理设计.md)。
+>
+> **当前前端清理（2026-10-01）：** 按用户指令清空现有前端源码、测试和展示素材，保留 Next.js、React、TypeScript、pnpm 的依赖、锁文件及工程配置，暂不创建替代页面。当前前端入口不可启动；旧页面、画布和浏览器验收仅证明清理前对应提交的历史状态。现有 Go API、Worker、Relay、公开契约、SQL 迁移和项目／画布／媒体数据保留，范围见 [前端实现清理](docs/design/前端实现清理设计.md)。
 
 ## 工作流
 
@@ -47,7 +49,7 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 选型与各中间件职责见 [DES-08 技术选型决策](docs/design/08-技术选型决策.md)，工程约定见 [PROJECT.md](PROJECT.md)。
 
-当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。复用范围为无限画布核心及对应设计，正式数据接入和验收状态见 [BeefTV 能力引入设计](docs/design/BeefTV能力引入设计.md)、[PLN-32](docs/plan/32-画布功能.md) 与 [第三方代码声明](THIRD_PARTY_NOTICES.md)。正式入口为 `/canvas` 和 `/projects/{UUID}/canvas`；项目整体验证与 Demo 仍需按完整 MVP 链路验收。LibTV 与旧 infinite-canvas 的调研和验收记录保留为历史来源。
+当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。此前无限画布核心及对应设计的迁移范围、正式数据接入和历史验收见 [BeefTV 能力引入设计](docs/design/BeefTV能力引入设计.md)、[PLN-32](docs/plan/32-画布功能.md) 与 [第三方代码声明](THIRD_PARTY_NOTICES.md)。`/canvas` 和 `/projects/{UUID}/canvas` 已随前端实现清理，当前不可用；后续前端重建与产品验收另行确定。LibTV 与旧 infinite-canvas 的调研和验收记录保留为历史来源。
 
 ## 文档
 
@@ -71,18 +73,18 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 ## 开发
 
-工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机直接启动前端与现有 Go 服务进程，连接已运行的本机中间件；配置写在根目录 `.env`（键名样例见 `.env.example`）。
+工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机当前可直接启动现有 Go 服务进程，连接已运行的本机中间件；前端仅保留工程配置，重建前不执行启动或应用构建。配置写在根目录 `.env`（键名样例见 `.env.example`）。
 
 | 目录 | 技术栈 | 本地启动 | 健康检查 |
 | --- | --- | --- | --- |
 | `backend/` | Go 1.26 · Gin · Viper · Zap | `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
-| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && node --env-file=../.env "$(command -v corepack)" pnpm exec next dev` | `GET :3000/healthz` |
+| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix），配置保留 | 待重建，当前无应用入口 | 不适用 |
 
 原 `agent` / `agent.mock` 队列当前没有应用提供的执行 Worker；Go 工作流仍保留这些协议引用，相关任务可能等待或超时。API 健康/就绪检查不证明供应商执行可用；Go 承接完成前，不能将生成、凭据测试、审核或 Skill 运行计为验证通过。本地开发不启动 Compose。
 
 Go Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow,media`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。`flow` 注册基础设施维护、凭据测试、单项/批量 Operation 与报价过期 Workflow，`media` 注册媒体接管 Activity。Relay 投递 Outbox，投影已登记的项目/预算/Operation 事件，并按允许字段消费账号、注册表、项目和业务命令审计。公开 SSE、真实供应商及完整生成验收仍以对应 BACKLOG 任务为准。
 
-应用全部数据库迁移后，浏览器直接打开 `http://127.0.0.1:3000/projects`。当前已移除登录页、认证拦截和 `/api/auth/*`，没有兼容入口或认证切换开关；Go 自动建立单一工作区身份，复用既有组织和真实项目数据。正式列表读取当前组织项目；“新建项目”保存项目规格、零预算及事件，成功后进入 `/projects/{UUID}/canvas`，可创建画布、编辑并保存。预设列表来自组织已有数据，可为空。项目创建与画布入口的证据和剩余范围见 [E-10 验证记录](docs/acceptance/E10-项目创建与画布入口验证.md)。
+Go 继续提供单一工作区身份，复用既有组织和真实项目数据；公开 `/api/auth/*` 仍已移除，没有认证切换开关。前端清理前的项目列表、新建及画布流程见 [E-10 历史验证记录](docs/acceptance/E10-项目创建与画布入口验证.md)，其中浏览器证据不代表当前入口可用。重建前无法通过 `:3000/projects` 创建或编辑项目，现有服务端合同和业务数据保留。
 
 Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_RELAY_HEALTH_ADDR` 提供 `GET /healthz`（样例端口 8081、8082）；该接口只表示进程正在运行，任务处理状况仍需检查 Temporal Worker 与 Outbox 积压。
 

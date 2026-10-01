@@ -1,15 +1,15 @@
 # 第三方代码声明
 
-## BeefTV 无限画布
+## 历史 BeefTV 无限画布
 
-Lanverse 的无限画布包含从 [glanderness/BeefTV](https://github.com/glanderness/BeefTV) 移植并适配的代码。
+2026-10-01 按用户要求清空全部前端实现。以下记录清理前从 [glanderness/BeefTV](https://github.com/glanderness/BeefTV) 移植并适配的历史代码来源；对应代码已从当前工作区移除，保留许可文本与来源记录。
 
 - 固定来源：`0d9e9f48d407570cd431ad9730cdd522b06810c0`，用户确认采用该仓库当前 `main` 后固定此提交。
-- 许可：MIT，完整版权与许可文本保留在 [frontend/public/licenses/beeftv.txt](frontend/public/licenses/beeftv.txt)，产品公开入口为 `/licenses`。
+- 许可：MIT，完整版权与许可文本原字节迁至 [docs/licenses/beeftv.txt](docs/licenses/beeftv.txt)，原产品 `/licenses` 入口已移除。
 - 版权：2026 @beefnoode and BeefTV contributors；2026 basketikun；2026 ddcat。
 - 上游来源：BeefTV 的 `NOTICE` 声明其包含 Infinite Canvas v0.5.0（`568f0f1838df8de31fe885a4e130e2f346dd14ab`）的派生代码，并记录上游在 `890ba95858bbb13496d23978003716656109abb2` 改为 MIT 许可。
 
-下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；目标均相对于 Lanverse 的 `frontend/src/components/canvas/`。
+下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；历史目标均相对于已删除的 Lanverse `frontend/src/components/canvas/`。
 
 | 目标文件                             | 源文件                                                                                                                                  | 适配范围                                                                       |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -38,10 +38,10 @@ Lanverse 的无限画布包含从 [glanderness/BeefTV](https://github.com/glande
 | `nodes/node-shell.tsx`               | `components/canvas/canvas-node.tsx`                                                                                                     | 卡片、标题、连接端点与缩放手柄；移除生成和裁剪工具                             |
 | `canvas.css`                         | `globals.css`                                                                                                                           | 合成图层和选中态样式，限定到画布组件作用域                                     |
 
-`model.ts`、`document.ts`、`store.ts`、`queries.ts`、`workspace.tsx`、`editor.tsx` 与节点内容负责 Lanverse 的正式领域适配：身份与权限、项目资源、服务端 revision、原子命令、持久幂等和媒体预览。移植范围与状态以 [无限画布引入设计](docs/design/BeefTV能力引入设计.md) 和对应 Plan 为准。
+`model.ts`、`document.ts`、`store.ts`、`queries.ts`、`workspace.tsx`、`editor.tsx` 与节点内容曾负责 Lanverse 的正式领域适配：身份与权限、项目资源、服务端 revision、原子命令、持久幂等和媒体预览。历史移植范围见 [无限画布引入设计](docs/design/BeefTV能力引入设计.md) 和对应 Plan；当前状态以 [前端实现清理](docs/design/前端实现清理设计.md) 为准。
 
 BeefTV 的 Wails 桌面外壳、本地数据库、模型执行、插件、时间线、3D/深度工具及其资源未纳入本次移植。前端包依赖的许可仍由各依赖声明。
 
 ## 历史界面参考
 
-旧画布曾参考 basketikun/infinite-canvas 的 MIT 版本 `dab19adc0847e32e39b7fc8ff90cb392561fb826`。该实现已由本次无限画布替换，其历史许可文本仍保留在 [frontend/public/licenses/infinite-canvas.txt](frontend/public/licenses/infinite-canvas.txt)。
+旧画布曾参考 basketikun/infinite-canvas 的 MIT 版本 `dab19adc0847e32e39b7fc8ff90cb392561fb826`。这些前端实现已移除，其历史许可文本原字节迁至 [docs/licenses/infinite-canvas.txt](docs/licenses/infinite-canvas.txt)。

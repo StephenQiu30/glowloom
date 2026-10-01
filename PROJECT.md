@@ -2,6 +2,8 @@
 
 > 目标规范，2026-09-25 按 [DES-01 系统架构（第 3 版）](docs/design/01-系统架构设计.md) 与 [DES-08 技术选型（第 3 版）](docs/design/08-技术选型决策.md) 编写，随 PRD-01–PLN-01 一同评审；需求规格见 `docs/requirement/`。
 > 旧实现已于 2026-09-26 删除（BACKLOG M1-01），保留在标签 `legacy-2026-09`，按 [PLN-01 第 5 节](docs/plan/01-实施路线与交付计划.md#5-现有代码的处置已确认方案-a) 逐项审计后按需搬运。本文的路径与命令是目标约定，随 M1 落地。
+>
+> 2026-10-01 用户确认清空全部现有前端实现，保留现有技术栈、依赖、锁文件及工程配置；本轮不搭建替代页面，当前前端不可启动。此前页面、画布与前端验收为历史记录，Go API／Worker／Relay、公开契约、SQL 和业务数据保留。执行边界见 [前端实现清理](docs/design/前端实现清理设计.md)；下文前端目录和编码规则仍为工程约定，不代表对应源码当前存在。
 
 ## 1. 文件职责
 
@@ -37,10 +39,10 @@
 ```text
 Lanverse/
   .env.example              本机进程配置样例；实际 .env 不入库
-  docker-compose.yml        应用服务（frontend、backend-api、backend-worker、backend-worker-media、backend-relay）及维护角色
+  docker-compose.yml        Go 应用服务（backend-api、backend-worker、backend-worker-media、backend-relay）及维护角色；前端重建前停用
   docker-compose-env.yml    完整部署依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
-  frontend/         Next.js：Web 应用（流水线视图、画布、审阅、时间线、任务中心）
+  frontend/         Next.js 工程配置保留，Web 应用实现待重建
   docs/             生命周期文档：产品需求、需求规格、设计、计划、测试、运维、验收
 ```
 
@@ -128,6 +130,8 @@ backend/
 
 ## 6. 前端
 
+2026-10-01 当前状态：`src/`、`tests/` 和 `public/` 中的旧实现已清空，以下目录为重建时适用的工程约定。保留配置不代表应用可运行；重建期间不把历史 lint、构建或浏览器结果用于当前验收，新设计与实施范围另行确定。
+
 编码与审查遵循 [Vercel React Best Practices](https://vercel.com/blog/introducing-react-best-practices) 和 [Next.js 官方文档](https://nextjs.org/docs/app)，通过 Vercel 插件的 `vercel:react-best-practices`、`vercel:nextjs` 技能读取相关规则。执行顺序与检查项见 [AGENTS.md 的前端工程规范](AGENTS.md#前端工程规范)，具体 API 同时核对安装版本的 `node_modules/next/dist/docs/`。外部示例中的数据请求或缓存库须映射到本项目既有 TanStack Query、统一请求封装和 Go 业务合同；工具链变更仍遵循设计评审规则。
 
 ```text
@@ -168,6 +172,8 @@ frontend/
 12. 不设置项目脚本或 Makefile；前端开发和检查直接执行 `pnpm exec next`、`pnpm exec eslint`、`pnpm exec prettier`、`pnpm exec tsc`、`pnpm exec vitest`、`pnpm exec openapi2ts`。
 
 ## 7. 契约与生成
+
+2026-10-01 清理期间，公共 REST 仅保留后端公开路由文档覆盖、swag 静态生成及后端在线 Swagger 一致性门禁。前端生成客户端已删除，`@umijs/openapi` 客户端生成与对比暂停；前端检查和镜像构建也暂停。下文契约链与 §9 的前端门禁是重建后的恢复约定，须随新实现重新建立，不能以历史生成物或检查结果替代。
 
 | 契约 | 唯一来源 | 生成物 |
 | --- | --- | --- |
