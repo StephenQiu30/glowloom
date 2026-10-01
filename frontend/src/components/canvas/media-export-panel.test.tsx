@@ -104,6 +104,7 @@ describe("正式导出冻结与幂等请求", () => {
       projectId,
       { ...source, revision: 9 },
       expect.stringMatching(/^[a-f0-9-]{36}$/),
+      "video",
     ]);
     revision = 12;
     fireEvent.click(replay);

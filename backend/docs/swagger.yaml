@@ -1082,6 +1082,13 @@ definitions:
         type: string
       node_id:
         type: string
+      output_kind:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.OutputKind'
+        default: video
+        enum:
+        - video
+        - audio
       revision:
         type: integer
     type: object
@@ -1109,6 +1116,19 @@ definitions:
         type: string
       url:
         type: string
+      waveform:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportWaveformPreview'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ExportWaveformPreview:
+    properties:
+      expires_at:
+        type: string
+      height:
+        type: integer
+      url:
+        type: string
+      width:
+        type: integer
     type: object
   github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ReviewInput:
     properties:
@@ -1135,6 +1155,12 @@ definitions:
         x-nullable: true
       id:
         type: string
+      output_kind:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.OutputKind'
+        enum:
+        - video
+        - audio
       progress:
         type: integer
       project_id:
@@ -1153,6 +1179,14 @@ definitions:
       updated_at:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.OutputKind:
+    enum:
+    - video
+    - audio
+    type: string
+    x-enum-varnames:
+    - OutputVideo
+    - OutputAudio
   github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Source:
     properties:
       canvas_id:
@@ -1987,6 +2021,12 @@ definitions:
         x-nullable: true
       id:
         type: string
+      output_kind:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.OutputKind'
+        enum:
+        - video
+        - audio
       progress:
         type: integer
       project_id:
@@ -2203,9 +2243,25 @@ definitions:
     - default_models
     - expected_revision
     type: object
-  internal_workspace_adapter_http.ProjectResponse:
+  internal_workspace_adapter_http.ProjectDetailResponse:
     properties:
+      allow_overseas_models:
+        type: boolean
+      archived_at:
+        type: string
+        x-nullable: true
       aspect_ratio:
+        type: string
+      create_time:
+        type: string
+      default_models:
+        additionalProperties:
+          type: string
+        type: object
+      delete_time:
+        type: string
+        x-nullable: true
+      description:
         type: string
       id:
         type: string
@@ -2213,12 +2269,74 @@ definitions:
         type: boolean
       name:
         type: string
+      purge_after:
+        type: string
+        x-nullable: true
+      resolution:
+        type: string
+      revision:
+        type: integer
+      status:
+        type: string
+      style_preset_id:
+        type: string
+        x-nullable: true
+      style_subtype:
+        type: string
+      style_type:
+        type: string
+      update_time:
+        type: string
+    type: object
+  internal_workspace_adapter_http.ProjectResponse:
+    properties:
+      archived_at:
+        type: string
+        x-nullable: true
+      aspect_ratio:
+        type: string
+      delete_time:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      is_delete:
+        type: boolean
+      name:
+        type: string
+      purge_after:
+        type: string
+        x-nullable: true
       revision:
         type: integer
       status:
         type: string
       style_type:
         type: string
+    type: object
+  internal_workspace_adapter_http.ProjectTransitionRequest:
+    properties:
+      expected_revision:
+        type: integer
+    required:
+    - expected_revision
+    type: object
+  internal_workspace_adapter_http.ProjectUpdateRequest:
+    properties:
+      allow_overseas_models:
+        type: boolean
+      description:
+        type: string
+      expected_revision:
+        type: integer
+      name:
+        maxLength: 50
+        minLength: 1
+        type: string
+      style_preset_id:
+        type: string
+    required:
+    - expected_revision
     type: object
   internal_workspace_adapter_http.StylePresetListResponse:
     properties:
@@ -3224,6 +3342,7 @@ paths:
         type: string
       produces:
       - video/mp4
+      - audio/mp4
       responses:
         "200":
           description: OK
@@ -3721,6 +3840,195 @@ paths:
           schema:
             $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
       summary: 创建项目
+      tags:
+      - projects
+  /api/projects/{pid}:
+    delete:
+      consumes:
+      - application/json
+      operationId: deleteProject
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 项目修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectDetailResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 项目移入回收站
+      tags:
+      - projects
+    get:
+      operationId: getProject
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectDetailResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 项目详情
+      tags:
+      - projects
+    patch:
+      consumes:
+      - application/json
+      operationId: updateProject
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 项目修订与可变设置；零值预设UUID清除预设
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectDetailResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 修改项目名称与设置
+      tags:
+      - projects
+  /api/projects/{pid}/archive:
+    post:
+      consumes:
+      - application/json
+      operationId: archiveProject
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 项目修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectDetailResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 归档项目
       tags:
       - projects
   /api/projects/{pid}/canvases:
@@ -4323,6 +4631,110 @@ paths:
       summary: 单项或批量自由生成报价
       tags:
       - operations
+  /api/projects/{pid}/restore:
+    post:
+      consumes:
+      - application/json
+      operationId: restoreProject
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 项目修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectDetailResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 恢复回收项目
+      tags:
+      - projects
+  /api/projects/{pid}/unarchive:
+    post:
+      consumes:
+      - application/json
+      operationId: unarchiveProject
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 项目修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectDetailResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 取消项目归档
+      tags:
+      - projects
   /api/settings/prompt-preferences:
     get:
       operationId: listPromptPreferences

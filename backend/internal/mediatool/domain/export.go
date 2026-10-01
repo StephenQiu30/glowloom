@@ -12,6 +12,26 @@ import (
 // Status is a durable local export lifecycle, including explicit output review.
 type Status string
 
+// OutputKind selects one immutable local encoding contract.
+type OutputKind string
+
+// The request default is video; audio produces M4A and an actual waveform.
+const (
+	OutputVideo OutputKind = "video"
+	OutputAudio OutputKind = "audio"
+)
+
+// Effective applies the creation request's documented video default.
+func (k OutputKind) Effective() OutputKind {
+	if k == "" {
+		return OutputVideo
+	}
+	return k
+}
+
+// Valid reports whether a resolved output kind has a supported encoding.
+func (k OutputKind) Valid() bool { return k == OutputVideo || k == OutputAudio }
+
 // Export statuses never imply supplier generation or billing facts.
 const (
 	Queued          Status = "queued"
@@ -35,6 +55,7 @@ type Source struct {
 type ExportJob struct {
 	ID          uuid.UUID  `json:"id"`
 	ProjectID   uuid.UUID  `json:"project_id"`
+	OutputKind  OutputKind `json:"output_kind" enums:"video,audio"`
 	Source      Source     `json:"source"`
 	Status      Status     `json:"status"`
 	Stage       string     `json:"stage"`
@@ -64,6 +85,7 @@ type FrozenSource struct {
 
 // FrozenExport is the immutable rendering input stored with the local job.
 type FrozenExport struct {
-	Timeline canvasdomain.TimelineConfig `json:"timeline"`
-	Inputs   []FrozenSource              `json:"inputs"`
+	OutputKind OutputKind                  `json:"output_kind"`
+	Timeline   canvasdomain.TimelineConfig `json:"timeline"`
+	Inputs     []FrozenSource              `json:"inputs"`
 }

@@ -47,7 +47,10 @@ export function updateProjectDraft(
   if (next.style_type === "realistic") next.style_subtype = "";
   return next;
 }
-export function matchesPreset(draft: ProjectDraft, preset: StylePreset) {
+export function matchesPreset(
+  draft: Pick<ProjectDraft, "style_type" | "style_subtype">,
+  preset: StylePreset,
+) {
   return (
     draft.style_type === preset.style_type &&
     (draft.style_type === "realistic" ||

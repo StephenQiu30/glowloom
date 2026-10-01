@@ -4,6 +4,13 @@ import { useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ApiError } from "@/lib/request";
 import {
   MEDIA_EXPORTS_KEY,
@@ -52,8 +59,14 @@ export function MediaExportPanel({
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<ExportJob>();
   const [unknownCreate, setUnknownCreate] = useState(false);
+  const [outputKind, setOutputKind] =
+    useState<ExportJob["output_kind"]>("video");
   const active = useRef(false);
-  const attempt = useRef<{ source: ExportSource; key: string } | null>(null);
+  const attempt = useRef<{
+    source: ExportSource;
+    key: string;
+    outputKind: ExportJob["output_kind"];
+  } | null>(null);
   const commands = useRef(new Map<string, string>());
   const cache = useQueryClient();
   const queryKey = [...MEDIA_EXPORTS_KEY, projectId, canvasId, nodeId];
@@ -86,12 +99,17 @@ export function MediaExportPanel({
         if (!next.clips.length) throw new Error("请先加入实际素材或文字片段。");
         if (!(await onPersist(next)))
           throw new Error("时间线尚未确认保存，导出未启动。");
-        attempt.current = { source: source(), key: crypto.randomUUID() };
+        attempt.current = {
+          source: source(),
+          key: crypto.randomUUID(),
+          outputKind,
+        };
       }
       const result = await createTimelineExport(
         projectId,
         attempt.current.source,
         attempt.current.key,
+        attempt.current.outputKind,
       );
       setNotice(`已创建导出任务，使用画布修订 ${result.source.revision}。`);
       attempt.current = null;
@@ -159,12 +177,16 @@ export function MediaExportPanel({
       if (
         preview.asset.id !== job.asset_id ||
         preview.asset.project_id !== projectId ||
-        preview.asset.kind !== "video"
+        preview.asset.kind !== job.output_kind
       )
         throw new Error("导出素材身份不匹配。");
       if (!(await onImport(preview.asset)))
-        throw new Error("成片尚未确认加入画布，请修复保存错误后重试。");
-      setNotice("已将审核后的真实成片加入画布。");
+        throw new Error("输出尚未确认加入画布，请修复保存错误后重试。");
+      setNotice(
+        job.output_kind === "audio"
+          ? "已将审核后的真实音频加入画布。"
+          : "已将审核后的真实成片加入画布。",
+      );
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : "成片加入画布失败。",
@@ -202,27 +224,47 @@ export function MediaExportPanel({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-medium">导出成片</h3>
+          <h3 className="text-sm font-medium">导出视频与音频</h3>
           <p className="text-xs text-muted-foreground">
-            保存当前时间线并生成 MP4。完成后检查实际输出，再加入素材或下载。
+            保存当前时间线，导出 MP4 或提取真实音轨为
+            M4A。完成后检查实际输出，再加入素材或下载。
           </p>
         </div>
-        <Button
-          disabled={
-            pending ||
-            (disabled && !unknownCreate) ||
-            (!unknownCreate && !draft.clips.length)
-          }
-          onClick={() => {
-            void create();
-          }}
-        >
-          {pending
-            ? "请求处理中…"
-            : unknownCreate
-              ? "核验原导出创建请求"
-              : "保存并导出 MP4"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={outputKind}
+            disabled={pending || disabled || unknownCreate}
+            onValueChange={(value) =>
+              setOutputKind(value as ExportJob["output_kind"])
+            }
+          >
+            <SelectTrigger aria-label="导出类型" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="video">视频 MP4</SelectItem>
+              <SelectItem value="audio">音频 M4A</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            disabled={
+              pending ||
+              (disabled && !unknownCreate) ||
+              (!unknownCreate && !draft.clips.length)
+            }
+            onClick={() => {
+              void create();
+            }}
+          >
+            {pending
+              ? "请求处理中…"
+              : unknownCreate
+                ? "核验原导出创建请求"
+                : outputKind === "audio"
+                  ? "保存并提取 M4A"
+                  : "保存并导出 MP4"}
+          </Button>
+        </div>
       </div>
       {error || jobs.error ? (
         <p role="alert" className="text-sm text-destructive">
@@ -251,8 +293,11 @@ export function MediaExportPanel({
           <article key={job.id} className="space-y-2 rounded border p-3">
             <div className="flex flex-wrap justify-between gap-2 text-xs">
               <span>
-                {statusLabel[job.status]} · 第 {job.attempt} 次 · 画布修订{" "}
-                {job.source.revision}
+                {job.output_kind === "audio" ? "音频" : "视频"} ·{" "}
+                {job.output_kind === "audio" && job.status === "review_required"
+                  ? "等待检查音频"
+                  : statusLabel[job.status]}{" "}
+                · 第 {job.attempt} 次 · 画布修订 {job.source.revision}
               </span>
               <time dateTime={job.created_at}>
                 {new Date(job.created_at).toLocaleString("zh-CN")}
@@ -263,7 +308,10 @@ export function MediaExportPanel({
               aria-label={`导出任务进度 ${job.progress}%`}
             />
             <p className="text-xs text-muted-foreground">
-              {job.progress}%{job.failure_code ? ` · ${job.failure_code}` : ""}
+              {job.progress}%
+              {job.failure_code
+                ? ` · ${job.failure_code === "no_audio_stream" ? "此素材没有可提取音轨" : job.failure_code}`
+                : ""}
             </p>
             <div className="flex flex-wrap gap-2">
               {["review_required", "succeeded"].includes(job.status) ? (
@@ -274,8 +322,12 @@ export function MediaExportPanel({
                   onClick={() => setSelected(job)}
                 >
                   {job.status === "review_required"
-                    ? "检查并审核成片"
-                    : "预览成片"}
+                    ? job.output_kind === "audio"
+                      ? "检查并审核音频"
+                      : "检查并审核成片"
+                    : job.output_kind === "audio"
+                      ? "预览音频"
+                      : "预览成片"}
                 </Button>
               ) : null}
               {job.status === "succeeded" ? (
@@ -288,14 +340,16 @@ export function MediaExportPanel({
                       void addResult(job);
                     }}
                   >
-                    成片加入画布
+                    {job.output_kind === "audio"
+                      ? "音频加入画布"
+                      : "成片加入画布"}
                   </Button>
                   <Button size="sm" variant="outline" asChild>
                     <a
                       href={`/api/media-exports/${job.id}/download?project_id=${projectId}`}
-                      download={`timeline-${job.id}.mp4`}
+                      download={`timeline-${job.id}.${job.output_kind === "audio" ? "m4a" : "mp4"}`}
                     >
-                      下载 MP4
+                      {job.output_kind === "audio" ? "下载 M4A" : "下载 MP4"}
                     </a>
                   </Button>
                 </>

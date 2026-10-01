@@ -175,6 +175,14 @@ export function DirectorWorkbench({
   }>({ past: [], future: [] });
   const [bone, setBone] = useState<DirectorHumanoidBone>("head");
   const capture = useRef<DirectorCapture | null>(null);
+  const captureBusy = useRef(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const activeShot = scene.shots.find(
     (shot) => shot.id === scene.activeShotId,
   )!;
@@ -368,15 +376,19 @@ export function DirectorWorkbench({
     }
   }
   async function takeCapture(mode: "beauty" | "depth" | "normal") {
-    if (!capture.current || disabled || !(await save(false))) return;
-    setSaving(true);
+    if (!capture.current || disabled || captureBusy.current) return;
+    captureBusy.current = true;
     try {
+      if (!(await save(false)) || !mounted.current || !capture.current) return;
+      setSaving(true);
       const file = await capture.current(mode);
-      onCapture([file]);
+      if (mounted.current) onCapture([file]);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "截图未完成。");
+      if (mounted.current)
+        setError(failure instanceof Error ? failure.message : "截图未完成。");
     } finally {
-      setSaving(false);
+      captureBusy.current = false;
+      if (mounted.current) setSaving(false);
     }
   }
   function deleteSelected() {
@@ -448,7 +460,7 @@ export function DirectorWorkbench({
       }}
     >
       <DialogContent
-        className="flex h-[94dvh] w-[98vw] flex-col gap-3 sm:max-w-[1600px]"
+        className="flex h-[94dvh] w-[98vw] flex-col gap-3 overflow-y-auto sm:max-w-[1600px] [&>*]:shrink-0"
         onEscapeKeyDown={(event) => {
           if (saving) event.preventDefault();
         }}
@@ -643,7 +655,7 @@ export function DirectorWorkbench({
             </label>
           </div>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[200px_1fr_320px]">
+        <div className="grid shrink-0 grid-rows-[12rem_20rem_18rem] gap-3 lg:h-[min(54dvh,38rem)] lg:min-h-[280px] lg:grid-cols-[200px_1fr_320px] lg:grid-rows-1">
           <aside className="min-h-0 space-y-4 overflow-y-auto rounded border p-3">
             <div className="space-y-2">
               <p className="text-xs font-medium">演员与对象</p>

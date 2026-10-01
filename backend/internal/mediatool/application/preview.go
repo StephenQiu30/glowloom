@@ -47,7 +47,19 @@ func (q *ExportQuery) Preview(ctx context.Context, actor identityapp.Principal, 
 	if err != nil {
 		return ExportPreview{}, err
 	}
-	return ExportPreview{JobID: job.ID, Revision: job.Revision, SHA256: *job.SHA256, URL: url, ExpiresAt: time.Now().UTC().Add(ttl), Asset: mediaapp.AssetSummary{ID: asset.ID, ProjectID: asset.ProjectID, Kind: string(asset.Kind), FileName: asset.FileName, MIMEType: asset.MimeType, ByteSize: asset.ByteSize, Width: asset.Width, Height: asset.Height, DurationMS: asset.DurationMS, Revision: asset.Revision}}, nil
+	preview := ExportPreview{JobID: job.ID, Revision: job.Revision, SHA256: *job.SHA256, URL: url, ExpiresAt: time.Now().UTC().Add(ttl), Asset: mediaapp.AssetSummary{ID: asset.ID, ProjectID: asset.ProjectID, Kind: string(asset.Kind), FileName: asset.FileName, MIMEType: asset.MimeType, ByteSize: asset.ByteSize, Width: asset.Width, Height: asset.Height, DurationMS: asset.DurationMS, Revision: asset.Revision}}
+	if job.OutputKind.Effective() == domain.OutputAudio {
+		rendition, err := q.store.PreviewWaveform(ctx, actor, project, id, job.Revision, *job.SHA256)
+		if err != nil {
+			return ExportPreview{}, err
+		}
+		waveURL, err := q.signer.PresignGet(ctx, rendition.ObjectKey, ttl)
+		if err != nil || waveURL == "" {
+			return ExportPreview{}, fmt.Errorf("%w: sign audio waveform", ErrUnavailable)
+		}
+		preview.Waveform = &ExportWaveformPreview{URL: waveURL, ExpiresAt: preview.ExpiresAt, Width: *rendition.Width, Height: *rendition.Height}
+	}
+	return preview, nil
 }
 
 // Download allows an attachment only after the produced output passed manual review.

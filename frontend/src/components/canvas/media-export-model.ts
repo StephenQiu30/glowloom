@@ -14,6 +14,7 @@ export const exportJobSchema = z
   .object({
     id: z.string().uuid(),
     project_id: z.string().uuid(),
+    output_kind: z.enum(["video", "audio"]),
     source: exportSourceSchema,
     status: z.enum([
       "queued",
@@ -52,10 +53,19 @@ const previewSchema = z.object({
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   url: z.string().url(),
   expires_at: z.iso.datetime({ offset: true }),
+  waveform: z
+    .object({
+      url: z.string().url(),
+      expires_at: z.iso.datetime({ offset: true }),
+      width: z.number().int().min(1).max(8192),
+      height: z.number().int().min(1).max(8192),
+    })
+    .optional(),
   asset: mediaSchema.extend({
-    kind: z.literal("video"),
-    mime_type: z.literal("video/mp4"),
+    kind: z.enum(["video", "audio"]),
+    mime_type: z.enum(["video/mp4", "audio/mp4"]),
     byte_size: z.number().int().min(1),
+    duration_ms: z.number().int().min(1).max(86_400_000),
   }),
 });
 export type ExportPreview = z.infer<typeof previewSchema>;
@@ -67,12 +77,26 @@ export function parseExportPreview(
   if (!result.success) throw new ApiError(502, "invalid_response");
   const preview = result.data;
   const url = new URL(preview.url);
+  const waveformURL = preview.waveform
+    ? new URL(preview.waveform.url)
+    : undefined;
   if (
     preview.job_id !== job.id ||
     preview.revision !== job.revision ||
     preview.sha256 !== job.sha256 ||
     preview.asset.project_id !== job.project_id ||
     preview.asset.id !== job.asset_id ||
+    preview.asset.kind !== job.output_kind ||
+    preview.asset.mime_type !==
+      (job.output_kind === "audio" ? "audio/mp4" : "video/mp4") ||
+    (job.output_kind === "audio" && !preview.waveform) ||
+    (preview.waveform &&
+      (!waveformURL ||
+        !["http:", "https:"].includes(waveformURL.protocol) ||
+        waveformURL.username ||
+        waveformURL.password ||
+        Date.parse(preview.waveform.expires_at) <= Date.now() + 5000 ||
+        preview.waveform.width * preview.waveform.height > 1_048_576)) ||
     !["http:", "https:"].includes(url.protocol) ||
     url.username ||
     url.password ||

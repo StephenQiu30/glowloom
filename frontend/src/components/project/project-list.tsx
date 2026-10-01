@@ -2,7 +2,21 @@
 
 import { useId } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Clapperboard, LayoutGrid, List } from "lucide-react";
+import {
+  ArrowUpRight,
+  Clapperboard,
+  LayoutGrid,
+  List,
+  MoreHorizontal,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -38,10 +52,13 @@ export type ProjectListDisplayItem = Readonly<{
   isDeleted: boolean;
 }>;
 export type ProjectListView = "cards" | "table";
+export type ProjectAction =
+  "settings" | "archive" | "unarchive" | "delete" | "restore";
 type ProjectListProps = {
   projects: readonly ProjectListDisplayItem[];
   view: ProjectListView;
   onViewChange: (view: ProjectListView) => void;
+  onAction?: (project: ProjectListDisplayItem, action: ProjectAction) => void;
 };
 function projectStatus(project: ProjectListDisplayItem) {
   if (project.isDeleted) return "回收中";
@@ -70,10 +87,63 @@ function ProjectName({ project }: { project: ProjectListDisplayItem }) {
     </Link>
   );
 }
+function ProjectActions({
+  project,
+  onAction,
+}: {
+  project: ProjectListDisplayItem;
+  onAction: NonNullable<ProjectListProps["onAction"]>;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`${project.name}的项目操作`}
+        >
+          <MoreHorizontal aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          {project.isDeleted ? (
+            <DropdownMenuItem onSelect={() => onAction(project, "restore")}>
+              恢复项目
+            </DropdownMenuItem>
+          ) : (
+            <>
+              <DropdownMenuItem onSelect={() => onAction(project, "settings")}>
+                项目设置
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  onAction(
+                    project,
+                    project.status === "archived" ? "unarchive" : "archive",
+                  )
+                }
+              >
+                {project.status === "archived" ? "取消归档" : "归档项目"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => onAction(project, "delete")}
+              >
+                移入回收站
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 export function ProjectList({
   projects,
   view,
   onViewChange,
+  onAction,
 }: ProjectListProps) {
   const headingId = useId();
   return (
@@ -147,6 +217,9 @@ export function ProjectList({
                 </CardHeader>
                 <CardFooter className="mt-auto justify-between gap-3 border-0 bg-transparent px-0 py-0">
                   <StatusLabel project={project} />
+                  {onAction && (
+                    <ProjectActions project={project} onAction={onAction} />
+                  )}
                   {!project.isDeleted && (
                     <Link
                       href={`/projects/${project.id}/canvas`}
@@ -171,6 +244,11 @@ export function ProjectList({
               <TableHead>状态</TableHead>
               <TableHead>画幅</TableHead>
               <TableHead>风格</TableHead>
+              {onAction && (
+                <TableHead>
+                  <span className="sr-only">操作</span>
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -186,6 +264,11 @@ export function ProjectList({
                   {project.aspectRatio}
                 </TableCell>
                 <TableCell>{projectStyle(project)}</TableCell>
+                {onAction && (
+                  <TableCell>
+                    <ProjectActions project={project} onAction={onAction} />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

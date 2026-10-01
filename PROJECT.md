@@ -3,9 +3,9 @@
 > 目标规范，2026-09-25 按 [DES-01 系统架构（第 3 版）](docs/design/01-系统架构设计.md) 与 [DES-08 技术选型（第 3 版）](docs/design/08-技术选型决策.md) 编写，随 PRD-01–PLN-01 一同评审；需求规格见 `docs/requirement/`。
 > 旧实现已于 2026-09-26 删除（BACKLOG M1-01），保留在标签 `legacy-2026-09`，按 [PLN-01 第 5 节](docs/plan/01-实施路线与交付计划.md#5-现有代码的处置已确认方案-a) 逐项审计后按需搬运。本文的路径与命令是目标约定，随 M1 落地。
 >
-> 2026-10-01 用户确认清空全部现有前端实现，保留现有技术栈、依赖、锁文件及工程配置；本轮不搭建替代页面，当前前端不可启动。此前页面、画布与前端验收为历史记录，Go API／Worker／Relay、公开契约、SQL 和业务数据保留。执行边界见 [前端实现清理](docs/design/前端实现清理设计.md)；下文前端目录和编码规则仍为工程约定，不代表对应源码当前存在。
+> 2026-10-01 用户先确认清空旧前端实现，保留技术栈、依赖、锁文件及工程配置；该清理阶段当时不可启动。随后授权的完整工作台迁移已重建当前 Next.js 页面，恢复本机启动。旧页面验收继续视为历史记录，当前各能力的真实进度以 [E37 迁移验收](docs/acceptance/E37-BeefTV完整迁移验收进度.md) 为准。Go API／Worker／Relay、公开契约、SQL 和业务数据保留。
 >
-> 2026-10-01 后续用户决定：以 BeefTV **完整迁移页面与功能**重建，全部改造为本项目技术栈，持续推进到完整流程验收。迁移范围以 [完整工作台迁移设计 §0](docs/design/BeefTV能力引入设计.md#0-当前完整迁移合同2026-10-01) 为准，取代此前“只迁画布核心”的范围限制；现有数据与已通过的内部技术底座保留。完整功能快照为 `1ae25027`，画布核心继承 `0d9e9f48`。该决定不代表当前前端可运行或真实生成已通过。
+> 2026-10-01 后续用户决定：以 BeefTV **完整迁移页面与功能**重建，全部改造为本项目技术栈，持续推进到完整流程验收。迁移范围以 [完整工作台迁移设计 §0](docs/design/BeefTV能力引入设计.md#0-当前完整迁移合同2026-10-01) 为准，取代此前“只迁画布核心”的范围限制；现有数据与已通过的内部技术底座保留。完整功能快照为 `1ae25027`，画布核心继承 `0d9e9f48`。当前页面可运行，真实模型生成与完整产品验收仍未全部通过。
 
 ## 1. 文件职责
 
@@ -41,10 +41,10 @@
 ```text
 Lanverse/
   .env.example              本机进程配置样例；实际 .env 不入库
-  docker-compose.yml        Go 应用服务（backend-api、backend-worker、backend-worker-media、backend-relay）及维护角色；前端重建前停用
+  docker-compose.yml        Go 应用服务（backend-api、backend-worker、backend-worker-media、backend-relay）及维护角色
   docker-compose-env.yml    完整部署依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
-  frontend/         Next.js 工程配置保留，Web 应用实现待重建
+  frontend/         Next.js 工作台；完整迁移的未决能力见 E37
   docs/             生命周期文档：产品需求、需求规格、设计、计划、测试、运维、验收
 ```
 

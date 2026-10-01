@@ -6,9 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -67,13 +65,7 @@ func (c *UpdateProjectCommand) Execute(ctx context.Context, actor identityapp.Pr
 		(input.Name == nil && input.Description == nil && input.StylePresetID == nil && input.AllowOverseasModels == nil) {
 		return UpdatedProject{}, ErrInvalidUpdateProject
 	}
-	if input.Name != nil {
-		name := strings.TrimSpace(*input.Name)
-		if name == "" || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 50 {
-			return UpdatedProject{}, ErrInvalidUpdateProject
-		}
-	}
-	if input.Description != nil && !utf8.ValidString(*input.Description) {
+	if !validProjectPatch(input) {
 		return UpdatedProject{}, ErrInvalidUpdateProject
 	}
 	before, err := c.store.FindProject(ctx, actor, input.ProjectID)
@@ -89,19 +81,7 @@ func (c *UpdateProjectCommand) Execute(ctx context.Context, actor identityapp.Pr
 	if before.Revision != input.ExpectedRevision {
 		return UpdatedProject{}, domain.ErrProjectRevisionConflict
 	}
-	after := before
-	if input.Name != nil {
-		after.Name = strings.TrimSpace(*input.Name)
-	}
-	if input.Description != nil {
-		after.Description = *input.Description
-	}
-	if input.StylePresetID != nil {
-		after.StylePresetID = *input.StylePresetID
-	}
-	if input.AllowOverseasModels != nil {
-		after.AllowOverseasModels = *input.AllowOverseasModels
-	}
+	after := applyProjectPatch(before, input)
 	if sameProjectSettings(before, after) {
 		return projectSettingsResult(before), nil
 	}

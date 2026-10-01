@@ -15,6 +15,7 @@ import (
 type DerivedRepository interface {
 	AuthorizeDerivedProject(context.Context, identityapp.Principal, uuid.UUID, bool) error
 	FindAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.MediaAsset, error)
+	FindRenditions(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) ([]domain.Rendition, error)
 	StoreDerived(context.Context, identityapp.Principal, domain.MediaAsset, []domain.Rendition) error
 	ReviewDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, time.Time) error
 	RejectDerived(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, string, time.Time) error
@@ -58,10 +59,20 @@ func (s *DerivedService) Store(ctx context.Context, actor identityapp.Principal,
 	if s == nil || s.repo == nil {
 		return ErrUnavailable
 	}
-	if asset.Validate() != nil || asset.Origin != domain.OriginSystem || asset.Status != domain.StatusProcessing || asset.ModerationStatus != domain.ModerationPending || asset.ContainsRealPerson || asset.Kind != domain.KindVideo || asset.SHA256 == nil || len(*asset.SHA256) != 64 || len(renditions) != 2 {
+	if asset.Validate() != nil || asset.Origin != domain.OriginSystem || asset.Status != domain.StatusProcessing || asset.ModerationStatus != domain.ModerationPending || asset.ContainsRealPerson || (asset.Kind != domain.KindVideo && asset.Kind != domain.KindAudio) || asset.SHA256 == nil || len(*asset.SHA256) != 64 {
 		return domain.ErrInvalidMediaAsset
 	}
-	for i, kind := range []domain.RenditionKind{domain.RenditionPoster, domain.RenditionProxy720p} {
+	required := []domain.RenditionKind{domain.RenditionPoster, domain.RenditionProxy720p}
+	if asset.Kind == domain.KindAudio {
+		if asset.Width != nil || asset.Height != nil || asset.FPS != nil || asset.DurationMS == nil || asset.AudioChannels == nil {
+			return domain.ErrInvalidMediaAsset
+		}
+		required = []domain.RenditionKind{domain.RenditionWaveform}
+	}
+	if len(renditions) != len(required) {
+		return domain.ErrInvalidRendition
+	}
+	for i, kind := range required {
 		if renditions[i].Validate() != nil || renditions[i].Kind != kind || renditions[i].MediaAssetID != asset.ID {
 			return domain.ErrInvalidRendition
 		}
@@ -97,4 +108,12 @@ func (s *DerivedService) Asset(ctx context.Context, actor identityapp.Principal,
 		return domain.MediaAsset{}, ErrUnavailable
 	}
 	return s.repo.FindAsset(ctx, actor, project, id)
+}
+
+// Renditions reads scoped private previews for their owning tool's review contract.
+func (s *DerivedService) Renditions(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) ([]domain.Rendition, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrUnavailable
+	}
+	return s.repo.FindRenditions(ctx, actor, project, id)
 }

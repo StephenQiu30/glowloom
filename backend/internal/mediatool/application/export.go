@@ -4,6 +4,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,6 +29,8 @@ var (
 	ErrCancelled = errors.New("media export cancelled")
 	// ErrWorkerBusy prevents overlapping attempts from inventing cessation evidence.
 	ErrWorkerBusy = errors.New("media export worker active")
+	// ErrNoAudio rejects extraction when no visible, audible source stream exists.
+	ErrNoAudio = fmt.Errorf("%w: no audible source streams", ErrInvalidExport)
 )
 
 // TimelineReader freezes only a saved, authorized timeline under the enclosing
@@ -40,6 +43,7 @@ type TimelineReader interface {
 // repository uses this transaction-bound port rather than touching media tables.
 type DerivedMedia interface {
 	Asset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (mediadomain.MediaAsset, error)
+	Renditions(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) ([]mediadomain.Rendition, error)
 	AuthorizeProject(context.Context, identityapp.Principal, uuid.UUID, bool) error
 	Sources(context.Context, identityapp.Principal, uuid.UUID, []uuid.UUID) ([]mediadomain.MediaAsset, error)
 	Store(context.Context, identityapp.Principal, mediadomain.MediaAsset, []mediadomain.Rendition) error
@@ -49,19 +53,29 @@ type DerivedMedia interface {
 
 // ExportPreview exposes one actual private result for the explicit owner review.
 type ExportPreview struct {
-	JobID     uuid.UUID             `json:"job_id"`
-	Revision  int64                 `json:"revision"`
-	SHA256    string                `json:"sha256"`
-	URL       string                `json:"url"`
-	ExpiresAt time.Time             `json:"expires_at"`
-	Asset     mediaapp.AssetSummary `json:"asset"`
+	JobID     uuid.UUID              `json:"job_id"`
+	Revision  int64                  `json:"revision"`
+	SHA256    string                 `json:"sha256"`
+	URL       string                 `json:"url"`
+	ExpiresAt time.Time              `json:"expires_at"`
+	Asset     mediaapp.AssetSummary  `json:"asset"`
+	Waveform  *ExportWaveformPreview `json:"waveform,omitempty"`
+}
+
+// ExportWaveformPreview signs the actual audio rendition within one job review.
+type ExportWaveformPreview struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Width     int32     `json:"width"`
+	Height    int32     `json:"height"`
 }
 
 // CreateInput accepts saved source identity only, never a URL or local path.
 type CreateInput struct {
-	CanvasID uuid.UUID `json:"canvas_id"`
-	NodeID   uuid.UUID `json:"node_id"`
-	Revision int64     `json:"revision"`
+	OutputKind domain.OutputKind `json:"output_kind,omitempty" enums:"video,audio" default:"video"`
+	CanvasID   uuid.UUID         `json:"canvas_id"`
+	NodeID     uuid.UUID         `json:"node_id"`
+	Revision   int64             `json:"revision"`
 }
 
 // ReviewInput confirms the exact produced file at the current job revision.
@@ -78,7 +92,7 @@ type ControlInput struct {
 	Revision  int64     `json:"revision"`
 }
 
-// Renderer produces a real, bounded MP4 from worker-owned local files.
+// Renderer produces a real, bounded MP4 or M4A from worker-owned local files.
 type Renderer interface {
 	Render(context.Context, domain.FrozenExport, map[uuid.UUID]string, func(int, string) error) (*mediaapp.Downloaded, error)
 }
@@ -128,5 +142,6 @@ type ExportStore interface {
 	Control(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, uuid.UUID, int64, string) (domain.ExportJob, error)
 	Review(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, ReviewInput) (domain.ExportJob, error)
 	PreviewAsset(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ExportJob, mediadomain.MediaAsset, error)
+	PreviewWaveform(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, int64, string) (mediadomain.Rendition, error)
 	Frozen(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.FrozenExport, error)
 }

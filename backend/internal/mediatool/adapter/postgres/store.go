@@ -44,6 +44,7 @@ func NewStore(db *gorm.DB, timeline TimelineFactory, media MediaFactory) *Store 
 type jobRow struct {
 	ID, ProjectID, OrgID, ActorID, CanvasID, NodeID uuid.UUID
 	ActorRole                                       string
+	OutputKind                                      string
 	SourceRevision                                  int64
 	Frozen                                          []byte
 	Status, Stage                                   string
@@ -56,7 +57,7 @@ type jobRow struct {
 }
 
 func (r jobRow) public() domain.ExportJob {
-	return domain.ExportJob{ID: r.ID, ProjectID: r.ProjectID, Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Status: domain.Status(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, AssetID: r.AssetID, SHA256: r.SHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	return domain.ExportJob{ID: r.ID, ProjectID: r.ProjectID, OutputKind: domain.OutputKind(r.OutputKind).Effective(), Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Status: domain.Status(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, AssetID: r.AssetID, SHA256: r.SHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (r jobRow) actor() identityapp.Principal {
 	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID, Role: identitydomain.Role(r.ActorRole)}
@@ -139,6 +140,7 @@ func commandReplay(tx *gorm.DB, actor, key uuid.UUID, hash string) (domain.Expor
 	if err := json.Unmarshal(receipt.Response, &job); err != nil {
 		return job, false, err
 	}
+	job.OutputKind = job.OutputKind.Effective()
 	return job, true, nil
 }
 func recordCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string, job domain.ExportJob, emit string) error {
@@ -175,22 +177,23 @@ func recordCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash
 		return err
 	}
 	auditBody, err := json.Marshal(struct {
-		ID             uuid.UUID     `json:"id"`
-		ProjectID      uuid.UUID     `json:"project_id"`
-		CanvasID       uuid.UUID     `json:"canvas_id"`
-		NodeID         uuid.UUID     `json:"node_id"`
-		SourceRevision int64         `json:"source_revision"`
-		Status         domain.Status `json:"status"`
-		Stage          string        `json:"stage"`
-		Progress       int           `json:"progress"`
-		Attempt        int           `json:"attempt"`
-		Revision       int64         `json:"revision"`
-		AssetID        *uuid.UUID    `json:"asset_id"`
-		SHA256         *string       `json:"sha256"`
-		FailureCode    *string       `json:"failure_code"`
-		CreatedAt      string        `json:"created_at"`
-		UpdatedAt      string        `json:"updated_at"`
-	}{job.ID, job.ProjectID, job.Source.CanvasID, job.Source.NodeID, job.Source.Revision, job.Status, job.Stage, job.Progress, job.Attempt, job.Revision, job.AssetID, job.SHA256, job.FailureCode, job.CreatedAt.Format(time.RFC3339Nano), job.UpdatedAt.Format(time.RFC3339Nano)})
+		ID             uuid.UUID         `json:"id"`
+		ProjectID      uuid.UUID         `json:"project_id"`
+		OutputKind     domain.OutputKind `json:"output_kind"`
+		CanvasID       uuid.UUID         `json:"canvas_id"`
+		NodeID         uuid.UUID         `json:"node_id"`
+		SourceRevision int64             `json:"source_revision"`
+		Status         domain.Status     `json:"status"`
+		Stage          string            `json:"stage"`
+		Progress       int               `json:"progress"`
+		Attempt        int               `json:"attempt"`
+		Revision       int64             `json:"revision"`
+		AssetID        *uuid.UUID        `json:"asset_id"`
+		SHA256         *string           `json:"sha256"`
+		FailureCode    *string           `json:"failure_code"`
+		CreatedAt      string            `json:"created_at"`
+		UpdatedAt      string            `json:"updated_at"`
+	}{job.ID, job.ProjectID, job.OutputKind, job.Source.CanvasID, job.Source.NodeID, job.Source.Revision, job.Status, job.Stage, job.Progress, job.Attempt, job.Revision, job.AssetID, job.SHA256, job.FailureCode, job.CreatedAt.Format(time.RFC3339Nano), job.UpdatedAt.Format(time.RFC3339Nano)})
 	if err != nil {
 		return err
 	}
@@ -212,7 +215,18 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 	if project == uuid.Nil || input.CanvasID == uuid.Nil || input.NodeID == uuid.Nil || input.Revision < 1 {
 		return job, application.ErrInvalidExport
 	}
-	hash, err := commandHash("create", project, uuid.Nil, input)
+	kind := input.OutputKind.Effective()
+	if !kind.Valid() {
+		return job, application.ErrInvalidExport
+	}
+	canonical := input
+	canonical.OutputKind = kind
+	if kind == domain.OutputVideo {
+		// Preserve the original default-video request fingerprint, including
+		// durable command receipts created before audio extraction existed.
+		canonical.OutputKind = ""
+	}
+	hash, err := commandHash("create", project, uuid.Nil, canonical)
 	if err != nil {
 		return job, err
 	}
@@ -257,13 +271,17 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 		if err != nil {
 			return err
 		}
+		frozen.OutputKind = kind
+		if kind == domain.OutputAudio && !application.HasAudibleClip(timeline) {
+			return application.ErrNoAudio
+		}
 		raw, err := json.Marshal(frozen)
 		if err != nil {
 			return err
 		}
 		now := time.Now().UTC()
-		job = domain.ExportJob{ID: uuid.New(), ProjectID: project, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,'queued','queued',0,1,1,?,?)`, job.ID, project, actor.OrgID, actor.ID, string(actor.Role), input.CanvasID, input.NodeID, input.Revision, string(raw), now, now).Error; err != nil {
+		job = domain.ExportJob{ID: uuid.New(), ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,output_kind,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',0,1,1,?,?)`, job.ID, project, actor.OrgID, actor.ID, string(actor.Role), input.CanvasID, input.NodeID, input.Revision, string(raw), kind, now, now).Error; err != nil {
 			return err
 		}
 		return recordCommand(tx, actor, key, hash, "requested", job, "start")

@@ -22,7 +22,7 @@ import (
 )
 
 func TestTimelineRendererCreatesActualCompositionAndBurnedChinese(t *testing.T) {
-	renderer, err := exportff.NewRenderer()
+	renderer, err := exportff.NewRenderer(mediaflow.FFProber{})
 	if err != nil {
 		t.Fatal(err)
 	}

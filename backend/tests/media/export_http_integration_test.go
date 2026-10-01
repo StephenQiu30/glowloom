@@ -170,7 +170,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	if got := request("GET", jobURL+"?project_id="+foreign.String(), uuid.Nil, nil); got.Code != 404 {
 		t.Fatalf("foreign job %d", got.Code)
 	}
-	renderer, err := toolff.NewRenderer()
+	renderer, err := toolff.NewRenderer(mediaflow.FFProber{})
 	if err != nil {
 		t.Fatal(err)
 	}

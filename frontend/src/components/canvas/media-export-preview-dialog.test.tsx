@@ -17,6 +17,7 @@ vi.mock("./media-export-queries", () => ({
   reviewTimelineExport: api.review,
 }));
 const job = exportJobSchema.parse({
+  output_kind: "video",
   id: "282e0c06-905c-4c23-b2b8-42e91d2d092b",
   project_id: "bf8a08d7-0e46-4d99-9623-772c09ea5fbe",
   source: {
@@ -55,7 +56,7 @@ const preview = {
   },
 };
 const clients: QueryClient[] = [];
-function show() {
+function show(value = job) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -64,7 +65,7 @@ function show() {
   render(
     <QueryClientProvider client={client}>
       <MediaExportPreviewDialog
-        job={job}
+        job={value}
         readOnly={false}
         onClose={vi.fn()}
         onReviewed={reviewed}
@@ -87,6 +88,54 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("实际导出成片人工审核交互", () => {
+  it("音频须实际解码并明确检查，不能只凭链接或元数据审核", async () => {
+    const audioJob = { ...job, output_kind: "audio" as const };
+    const audioPreview = {
+      ...preview,
+      waveform: {
+        url: "https://example.test/actual-waveform.png",
+        expires_at: preview.expires_at,
+        width: 1280,
+        height: 256,
+      },
+      asset: {
+        ...preview.asset,
+        kind: "audio",
+        mime_type: "audio/mp4",
+        width: undefined,
+        height: undefined,
+      },
+    };
+    api.preview.mockResolvedValue(audioPreview);
+    const reviewed = show(audioJob);
+    await waitFor(() => expect(document.querySelector("audio")).not.toBeNull());
+    const audio = document.querySelector("audio")!;
+    const button = screen.getByRole("button", {
+      name: "确认审核音频",
+    }) as HTMLButtonElement;
+    Object.defineProperty(audio, "duration", { value: 1.5 });
+    fireEvent.loadedMetadata(audio);
+    expect(button.disabled).toBe(true);
+    fireEvent.loadedData(audio);
+    expect(button.disabled).toBe(true);
+    const waveform = screen.getByRole("img", { name: "实际导出音频波形" });
+    Object.defineProperties(waveform, {
+      naturalWidth: { value: 1280 },
+      naturalHeight: { value: 256 },
+    });
+    fireEvent.load(waveform);
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "我已检查实际音频并确认可用" }),
+    );
+    fireEvent.click(button);
+    await waitFor(() => expect(reviewed).toHaveBeenCalledOnce());
+    expect(api.review).toHaveBeenCalledWith(
+      audioJob,
+      audioPreview,
+      expect.any(String),
+    );
+    expect(document.querySelector("video")).toBeNull();
+  });
   it("真实媒体解码且用户复核后才能审核，不把preview授权当审核成功", async () => {
     const reviewed = show();
     await waitFor(() => expect(document.querySelector("video")).not.toBeNull());

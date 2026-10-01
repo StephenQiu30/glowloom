@@ -1,11 +1,10 @@
 "use client";
 
 import { Component, Suspense, useEffect, useRef, type ReactNode } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   GizmoHelper,
   GizmoViewport,
-  Html,
   OrbitControls,
   OrthographicCamera,
   PerspectiveCamera,
@@ -18,6 +17,7 @@ import {
   MeshNormalMaterial,
   PerspectiveCamera as ThreeCamera,
   Quaternion,
+  Vector3,
 } from "three";
 import { AuthorizedModel, AuthorizedImage } from "./asset-view";
 import { cropDirectorCanvas } from "./aspect-ratio";
@@ -90,19 +90,78 @@ export function DirectorViewport(props: Props) {
   return (
     <ViewportBoundary>
       <Canvas
-        shadows
+        shadows="percentage"
         frameloop="demand"
         dpr={[1, 1.5]}
         camera={{ position: [6, 4, 8], fov: 50, near: 0.05, far: 500 }}
         gl={{ preserveDrawingBuffer: false }}
         onPointerMissed={() => props.onSelect("")}
       >
-        <Suspense fallback={<Html center>正在载入场景…</Html>}>
+        <Suspense fallback={null}>
           <Stage {...props} />
         </Suspense>
       </Canvas>
     </ViewportBoundary>
   );
+}
+
+/** 标签是浏览器叠层；与画布一起清理，不为每个标签创建另一个 React root。 */
+function DirectorLabel({
+  text,
+  position = [0, 0, 0],
+}: {
+  text: string;
+  position?: [number, number, number];
+}) {
+  const gl = useThree((state) => state.gl);
+  const invalidate = useThree((state) => state.invalidate);
+  const anchor = useRef<Group>(null);
+  const label = useRef<HTMLSpanElement | null>(null);
+  const projected = useRef(new Vector3());
+  useEffect(() => {
+    const parent = gl.domElement.parentElement;
+    if (!parent) return;
+    const element = document.createElement("span");
+    element.textContent = text;
+    element.setAttribute("aria-hidden", "true");
+    Object.assign(element.style, {
+      position: "absolute",
+      left: "0",
+      top: "0",
+      display: "none",
+      whiteSpace: "nowrap",
+      pointerEvents: "none",
+      fontSize: "10px",
+      color: "white",
+      background: "rgba(0,0,0,0.6)",
+      padding: "1px 4px",
+      borderRadius: "4px",
+      zIndex: "1",
+    });
+    parent.append(element);
+    label.current = element;
+    invalidate();
+    return () => {
+      label.current = null;
+      element.remove();
+    };
+  }, [gl, text, invalidate]);
+  useFrame(({ camera, size }) => {
+    if (!anchor.current || !label.current) return;
+    anchor.current.updateWorldMatrix(true, false);
+    const point = anchor.current
+      .getWorldPosition(projected.current)
+      .project(camera);
+    const visible =
+      point.z >= -1 &&
+      point.z <= 1 &&
+      Math.abs(point.x) <= 1 &&
+      Math.abs(point.y) <= 1;
+    label.current.style.display = visible ? "block" : "none";
+    if (visible)
+      label.current.style.transform = `translate(-50%, -50%) translate(${((point.x + 1) * size.width) / 2}px, ${((1 - point.y) * size.height) / 2}px)`;
+  });
+  return <group ref={anchor} position={position} />;
 }
 function Stage(props: Props) {
   const { scene, time, viewMode, renderMode } = props;
@@ -405,11 +464,7 @@ function Stage(props: Props) {
                   />
                 </mesh>
                 {scene.labelsVisible ? (
-                  <Html center distanceFactor={10}>
-                    <span className="pointer-events-none rounded bg-black/60 px-1 text-[10px] text-white">
-                      {camera.name}
-                    </span>
-                  </Html>
+                  <DirectorLabel text={camera.name} />
                 ) : null}
               </group>
             ))
@@ -515,11 +570,7 @@ function ObjectView({
         </mesh>
       )}
       {labels ? (
-        <Html center position={[0, 2.1, 0]} distanceFactor={10}>
-          <span className="pointer-events-none rounded bg-black/60 px-1 text-[10px] text-white">
-            {object.name}
-          </span>
-        </Html>
+        <DirectorLabel text={object.name} position={[0, 2.1, 0]} />
       ) : null}
     </group>
   );

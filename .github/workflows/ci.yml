@@ -208,6 +208,69 @@ jobs:
           LV_TEST_MEDIA_STORE_DB_DSN="$LV_TEST_DB_DSN" \
           LV_TEST_MEDIA_MIGRATION_DB_DSN='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_migration_test?sslmode=disable' \
           go test -race ./tests/media -count=1
+      - name: Prepare private receipt and export contract storage
+        env:
+          CI_STORAGE_ACCESS_KEY: lanverse-ci-only
+          CI_STORAGE_SECRET_KEY: ci-only-private-object-storage
+        run: |
+          # 使用固定社区源提交构建，不依赖镜像仓库的历史制品可用性。
+          GOBIN="$RUNNER_TEMP/receipt-storage-bin" \
+            go install github.com/minio/minio@07c3a429bfed433e49018cb0f78a52145d4bedeb
+          mkdir -p "$RUNNER_TEMP/receipt-storage-data"
+          MINIO_ROOT_USER="$CI_STORAGE_ACCESS_KEY" \
+          MINIO_ROOT_PASSWORD="$CI_STORAGE_SECRET_KEY" \
+            "$RUNNER_TEMP/receipt-storage-bin/minio" server \
+            "$RUNNER_TEMP/receipt-storage-data" --address 127.0.0.1:19000 \
+            >"$RUNNER_TEMP/receipt-storage.log" 2>&1 &
+          echo "LV_CI_STORAGE_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail --max-time 2 http://127.0.0.1:19000/minio/health/live; then
+              break
+            fi
+            sleep 0.5
+          done
+          curl --silent --show-error --fail --max-time 5 http://127.0.0.1:19000/minio/health/live
+          curl --silent --show-error --fail --max-time 10 \
+            --aws-sigv4 'aws:amz:us-east-1:s3' \
+            --user "$CI_STORAGE_ACCESS_KEY:$CI_STORAGE_SECRET_KEY" \
+            --header 'x-amz-content-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' \
+            --request PUT http://127.0.0.1:19000/lanverse-receipt-test
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          config = Path(os.environ["RUNNER_TEMP"]) / "private-receipt-storage.json"
+          config.touch(mode=0o600)
+          config.write_text(json.dumps({
+              "endpoint": "http://127.0.0.1:19000",
+              "bucket": "lanverse-receipt-test",
+              "access_key": os.environ["CI_STORAGE_ACCESS_KEY"],
+              "secret_key": os.environ["CI_STORAGE_SECRET_KEY"],
+          }))
+          with Path(os.environ["GITHUB_ENV"]).open("a") as output:
+              output.write(f"LV_TEST_RECEIPT_STORAGE_CONFIG={config}\n")
+          PY
+      - name: Prepare isolated public tool contract database
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_receipt'
+          contract_dsn='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable'
+          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+      - name: Verify template quotes and private provider receipts
+        env:
+          LV_TEST_OPERATION_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
+        run: go test -race ./tests/prompt ./tests/operation -count=1 -v
+      - name: Verify actual private media exports and GLB under the runtime role
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_MEDIA_EXPORT_REQUIRE_ROLE: "1"
+        run: go test -race ./tests/media -run '^Test(Export|GLB)' -count=1 -v
+      - name: Clean up isolated private contract storage
+        if: always()
+        run: |
+          if [[ "${LV_CI_STORAGE_PID:-}" =~ ^[0-9]+$ ]]; then
+            kill "$LV_CI_STORAGE_PID" 2>/dev/null || true
+          fi
       - name: Prepare isolated restricted-login audit database
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE ROLE lanverse_runtime_test LOGIN INHERIT PASSWORD 'ci-only'"

@@ -25,18 +25,24 @@ export async function createTimelineExport(
   projectId: string,
   source: ExportSource,
   key: string,
+  outputKind: ExportJob["output_kind"] = "video",
 ) {
   const frozen = exportSourceSchema.parse(source);
   const result = job(
-    await exports.createMediaExport({ pid: projectId }, frozen, {
-      headers: { "Idempotency-Key": key },
-    }),
+    await exports.createMediaExport(
+      { pid: projectId },
+      { ...frozen, output_kind: outputKind },
+      {
+        headers: { "Idempotency-Key": key },
+      },
+    ),
     projectId,
   );
   if (
     result.source.canvas_id !== frozen.canvas_id ||
     result.source.node_id !== frozen.node_id ||
-    result.source.revision !== frozen.revision
+    result.source.revision !== frozen.revision ||
+    result.output_kind !== outputKind
   )
     throw new ApiError(502, "invalid_response");
   return result;
@@ -126,7 +132,8 @@ export async function reviewTimelineExport(
   if (
     result.status !== "succeeded" ||
     result.asset_id !== value.asset_id ||
-    result.sha256 !== preview.sha256
+    result.sha256 !== preview.sha256 ||
+    result.output_kind !== value.output_kind
   )
     throw new ApiError(502, "invalid_response");
   return result;

@@ -4,6 +4,11 @@ declare namespace API {
     id: string;
   };
 
+  type archiveProjectParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
   type cancelMediaExportParams = {
     /** Export UUID */
     job_id: string;
@@ -52,6 +57,11 @@ declare namespace API {
   type deleteCanvasParams = {
     /** 画布UUID */
     id: string;
+  };
+
+  type deleteProjectParams = {
+    /** 项目UUID */
+    pid: string;
   };
 
   type disableAdminCredentialParams = {
@@ -119,6 +129,11 @@ declare namespace API {
   };
 
   type getProjectModelDefaultsParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
+  type getProjectParams = {
     /** 项目UUID */
     pid: string;
   };
@@ -736,6 +751,7 @@ declare namespace API {
     {
       canvas_id?: string;
       node_id?: string;
+      output_kind?: "video" | "audio";
       revision?: number;
     };
 
@@ -753,6 +769,15 @@ declare namespace API {
       revision?: number;
       sha256?: string;
       url?: string;
+      waveform?: githubComStephenQiu30LanverseBackendInternalMediatoolApplicationExportWaveformPreview;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationExportWaveformPreview =
+    {
+      expires_at?: string;
+      height?: number;
+      url?: string;
+      width?: number;
     };
 
   type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationReviewInput =
@@ -769,6 +794,7 @@ declare namespace API {
     created_at?: string;
     failure_code?: string | null;
     id?: string;
+    output_kind?: "video" | "audio";
     progress?: number;
     project_id?: string;
     revision?: number;
@@ -778,6 +804,9 @@ declare namespace API {
     status?: githubComStephenQiu30LanverseBackendInternalMediatoolDomainStatus;
     updated_at?: string;
   };
+
+  type githubComStephenQiu30LanverseBackendInternalMediatoolDomainOutputKind =
+    "video" | "audio";
 
   type githubComStephenQiu30LanverseBackendInternalMediatoolDomainSource = {
     canvas_id?: string;
@@ -1202,6 +1231,7 @@ declare namespace API {
     created_at?: string;
     failure_code?: string | null;
     id?: string;
+    output_kind?: "video" | "audio";
     progress?: number;
     project_id?: string;
     revision?: number;
@@ -1310,14 +1340,50 @@ declare namespace API {
     expected_revision: number;
   };
 
-  type internalWorkspaceAdapterHttpProjectResponse = {
+  type internalWorkspaceAdapterHttpProjectDetailResponse = {
+    allow_overseas_models?: boolean;
+    archived_at?: string | null;
     aspect_ratio?: string;
+    create_time?: string;
+    default_models?: Record<string, any>;
+    delete_time?: string | null;
+    description?: string;
     id?: string;
     is_delete?: boolean;
     name?: string;
+    purge_after?: string | null;
+    resolution?: string;
+    revision?: number;
+    status?: string;
+    style_preset_id?: string | null;
+    style_subtype?: string;
+    style_type?: string;
+    update_time?: string;
+  };
+
+  type internalWorkspaceAdapterHttpProjectResponse = {
+    archived_at?: string | null;
+    aspect_ratio?: string;
+    delete_time?: string | null;
+    id?: string;
+    is_delete?: boolean;
+    name?: string;
+    purge_after?: string | null;
     revision?: number;
     status?: string;
     style_type?: string;
+  };
+
+  type internalWorkspaceAdapterHttpProjectTransitionRequest = {
+    expected_revision: number;
+  };
+
+  type internalWorkspaceAdapterHttpProjectUpdateRequest = {
+    allow_overseas_models?: boolean;
+    description?: string;
+    expected_revision: number;
+    name?: string;
+    style_preset_id?: string;
   };
 
   type internalWorkspaceAdapterHttpStylePresetListResponse = {
@@ -1450,6 +1516,11 @@ declare namespace API {
     id: string;
   };
 
+  type restoreProjectParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
   type resumeOperationBatchParams = {
     /** Batch UUID */
     id: string;
@@ -1492,9 +1563,19 @@ declare namespace API {
     credential_id: string;
   };
 
+  type unarchiveProjectParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
   type updateAdminProviderParams = {
     /** 渠道UUID */
     id: string;
+  };
+
+  type updateProjectParams = {
+    /** 项目UUID */
+    pid: string;
   };
 
   type uploadMediaAssetParams = {

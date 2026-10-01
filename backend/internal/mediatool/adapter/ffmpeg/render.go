@@ -20,7 +20,6 @@ import (
 	"golang.org/x/image/font/opentype"
 
 	canvasdomain "github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
@@ -34,10 +33,16 @@ var fontResource embed.FS
 
 // Renderer owns the immutable licensed typeface. Each render owns its scratch
 // directory, command contexts and caption face; callers own the returned file.
-type Renderer struct{ typeface *opentype.Font }
+type Renderer struct {
+	typeface *opentype.Font
+	prober   mediaapp.Prober
+}
 
-// NewRenderer parses the bundled official Noto SC typeface at construction.
-func NewRenderer() (*Renderer, error) {
+// NewRenderer injects byte probing and parses the bundled official Noto SC font.
+func NewRenderer(prober mediaapp.Prober) (*Renderer, error) {
+	if prober == nil {
+		return nil, application.ErrUnavailable
+	}
 	data, err := fontResource.ReadFile("fonts/NotoSansCJKsc-Regular.otf")
 	if err != nil {
 		return nil, err
@@ -46,7 +51,7 @@ func NewRenderer() (*Renderer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse export typeface: %w", err)
 	}
-	return &Renderer{typeface: typeface}, nil
+	return &Renderer{typeface: typeface, prober: prober}, nil
 }
 
 // Render segments at frame boundaries so 1000 clips never become 1000 open
@@ -54,6 +59,13 @@ func NewRenderer() (*Renderer, error) {
 func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, string) error) (*mediaapp.Downloaded, error) {
 	if r == nil || r.typeface == nil {
 		return nil, application.ErrUnavailable
+	}
+	kind := frozen.OutputKind.Effective()
+	if !kind.Valid() {
+		return nil, application.ErrInvalidExport
+	}
+	if kind == domain.OutputAudio {
+		return r.renderAudio(ctx, frozen, paths, progress)
 	}
 	parts, err := renderSegments(frozen.Timeline)
 	if err != nil {
@@ -159,7 +171,7 @@ func (r *Renderer) Render(ctx context.Context, frozen domain.FrozenExport, paths
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	probe, err := (mediaflow.FFProber{}).Probe(ctx, result)
+	probe, err := r.prober.Probe(ctx, result)
 	width, height := dimensions(frozen.Timeline.AspectRatio)
 	expectedMS := parts[len(parts)-1].end * 1000 / int64(frozen.Timeline.FPS)
 	if err != nil || probe.Width == nil || probe.Height == nil || int(*probe.Width) != width || int(*probe.Height) != height || probe.DurationMS == nil || abs(int64(*probe.DurationMS)-expectedMS) > int64(1000/frozen.Timeline.FPS)+25 {

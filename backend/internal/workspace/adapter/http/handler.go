@@ -32,13 +32,16 @@ func NewHandler(list *application.ListProjectsQuery, create *application.CreateP
 
 // ProjectResponse exposes safe project-list fields needed for navigation.
 type ProjectResponse struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Status      string    `json:"status"`
-	Revision    int64     `json:"revision"`
-	AspectRatio string    `json:"aspect_ratio"`
-	StyleType   string    `json:"style_type"`
-	IsDelete    bool      `json:"is_delete"`
+	ID          uuid.UUID  `json:"id"`
+	Name        string     `json:"name"`
+	Status      string     `json:"status"`
+	Revision    int64      `json:"revision"`
+	AspectRatio string     `json:"aspect_ratio"`
+	StyleType   string     `json:"style_type"`
+	IsDelete    bool       `json:"is_delete"`
+	ArchivedAt  *time.Time `json:"archived_at" extensions:"x-nullable"`
+	DeleteTime  *time.Time `json:"delete_time" extensions:"x-nullable"`
+	PurgeAfter  *time.Time `json:"purge_after" extensions:"x-nullable"`
 }
 
 // ListResponse contains one keyset page of visible projects.
@@ -128,12 +131,13 @@ func (h *Handler) List(c *gin.Context) {
 	}
 	response := ListResponse{Items: make([]ProjectResponse, 0, len(page.Projects))}
 	for _, p := range page.Projects {
-		response.Items = append(response.Items, ProjectResponse{ID: p.ID, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete})
+		response.Items = append(response.Items, ProjectResponse{ID: p.ID, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter})
 	}
 	if page.Next != nil {
 		body, _ := json.Marshal(cursor{ID: page.Next.ID, Time: page.Next.UpdateTime, Binding: binding})
 		value := base64.RawURLEncoding.EncodeToString(body)
 		response.NextCursor = &value
 	}
+	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, response)
 }

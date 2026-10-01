@@ -18,7 +18,28 @@ const projectSummary = z.object({
   status: z.enum(["active", "archived"]),
   is_delete: z.boolean(),
   revision: z.number().int().positive(),
+  archived_at: z.iso.datetime({ offset: true }).nullable().optional(),
+  delete_time: z.iso.datetime({ offset: true }).nullable().optional(),
+  purge_after: z.iso.datetime({ offset: true }).nullable().optional(),
 });
+export type ProjectSummary = z.infer<typeof projectSummary>;
+const projectDetail = projectSummary.extend({
+  description: z.string(),
+  style_subtype: styleSubtype.optional(),
+  style_preset_id: z.string().uuid().nullable(),
+  resolution: z.literal("1080p"),
+  allow_overseas_models: z.boolean(),
+  default_models: z.record(z.string(), z.string().uuid()),
+  archived_at: z.iso.datetime({ offset: true }).nullable(),
+  delete_time: z.iso.datetime({ offset: true }).nullable(),
+  purge_after: z.iso.datetime({ offset: true }).nullable(),
+  create_time: z.iso.datetime({ offset: true }),
+  update_time: z.iso.datetime({ offset: true }),
+});
+export type ProjectDetail = z.infer<typeof projectDetail>;
+export type ProjectChange =
+  API.internalWorkspaceAdapterHttpProjectUpdateRequest;
+export type ProjectTransition = "archive" | "unarchive" | "delete" | "restore";
 const projectPage = z.object({
   items: z.array(projectSummary).max(200),
   next_cursor: z.string().min(1).nullable(),
@@ -72,5 +93,46 @@ export async function createProject(body: CreationBody, key: string) {
   return parse(
     createdProject,
     await projects.createProject(body, { headers: { "Idempotency-Key": key } }),
+  );
+}
+export async function getProject(id: string, signal?: AbortSignal) {
+  return parse(
+    projectDetail.extend({ id: z.literal(id) }),
+    await projects.getProject({ pid: id }, { signal }),
+  );
+}
+export async function updateProject(
+  id: string,
+  body: ProjectChange,
+  key: string,
+) {
+  return parse(
+    projectDetail.extend({ id: z.literal(id) }),
+    await projects.updateProject({ pid: id }, body, {
+      headers: { "Idempotency-Key": key },
+    }),
+  );
+}
+export async function transitionProject(
+  id: string,
+  action: ProjectTransition,
+  revision: number,
+  key: string,
+) {
+  const command = {
+    archive: projects.archiveProject,
+    unarchive: projects.unarchiveProject,
+    delete: projects.deleteProject,
+    restore: projects.restoreProject,
+  }[action];
+  return parse(
+    projectDetail.extend({ id: z.literal(id) }),
+    await command(
+      { pid: id },
+      { expected_revision: revision },
+      {
+        headers: { "Idempotency-Key": key },
+      },
+    ),
   );
 }

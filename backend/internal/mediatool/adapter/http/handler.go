@@ -344,11 +344,11 @@ func (h *Handler) control(c *gin.Context, action string) {
 	c.JSON(202, job)
 }
 
-// Download streams a reviewed MP4 as an actual downloadable private attachment.
+// Download streams one reviewed MP4 or M4A as a private attachment.
 // @Summary Download reviewed media export
 // @ID downloadMediaExport
 // @Tags media-exports
-// @Produce video/mp4
+// @Produce video/mp4,audio/mp4
 // @Param job_id path string true "Export UUID"
 // @Param project_id query string true "Project UUID"
 // @Success 200 {file} binary
@@ -370,7 +370,16 @@ func (h *Handler) Download(c *gin.Context) {
 	}
 	defer func() { _ = reader.Close() }()
 	c.Header("Cache-Control", "private, no-store")
-	c.DataFromReader(200, size, "video/mp4", io.LimitReader(reader, size), map[string]string{"Content-Disposition": "attachment; filename=timeline-" + id.String() + ".mp4"})
+	job, err := h.store.Get(c.Request.Context(), identityhttp.Principal(c), project, id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	mime, ext := "video/mp4", "mp4"
+	if job.OutputKind == domain.OutputAudio {
+		mime, ext = "audio/mp4", "m4a"
+	}
+	c.DataFromReader(200, size, mime, io.LimitReader(reader, size), map[string]string{"Content-Disposition": "attachment; filename=timeline-" + id.String() + "." + ext})
 }
 
 // Subtitles downloads SRT from visible frozen captions without a transcription claim.

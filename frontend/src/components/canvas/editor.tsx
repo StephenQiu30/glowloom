@@ -170,6 +170,11 @@ const DirectorWorkbench = dynamic(
     import("./director/workbench").then((module) => module.DirectorWorkbench),
   { ssr: false },
 );
+const DirectorTemplateDialog = dynamic(() =>
+  import("./director/template-dialog").then(
+    (module) => module.DirectorTemplateDialog,
+  ),
+);
 
 const TimelineDialog = dynamic(
   () => import("./timeline-dialog").then((module) => module.TimelineDialog),
@@ -247,6 +252,10 @@ export function CanvasEditor({
     [focusMode, setFocusMode] = useState(false),
     [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [directorNode, setDirectorNode] = useState<CanvasNodeData>();
+  const [directorTemplateTarget, setDirectorTemplateTarget] = useState<{
+    point: Position;
+    handle?: ConnectionHandle;
+  }>();
   const [timelineNode, setTimelineNode] = useState<CanvasNodeData>();
   const [batchNode, setBatchNode] = useState<CanvasNodeData>();
   const [previewNode, setPreviewNode] = useState<CanvasNodeData>();
@@ -546,6 +555,10 @@ export function CanvasEditor({
     handle?: ConnectionHandle,
   ) {
     if (locked || document.nodes.length >= 2000) return;
+    if (type === CanvasNodeType.Director) {
+      setDirectorTemplateTarget({ point, handle });
+      return;
+    }
     const node = createNode(type, point);
     submit(nodeCreationCommands(node, handle));
   }
@@ -2201,6 +2214,27 @@ export function CanvasEditor({
         disabled={textDirty}
         readOnly={readOnly}
       />
+      {directorTemplateTarget ? (
+        <DirectorTemplateDialog
+          disabled={locked}
+          onClose={() => setDirectorTemplateTarget(undefined)}
+          onSelect={(scene) => {
+            if (
+              interactionLocked.current ||
+              store.getState().document.nodes.length >= 2000
+            )
+              return;
+            const node = createNode(
+              CanvasNodeType.Director,
+              directorTemplateTarget.point,
+            );
+            node.title = scene.title;
+            node.director = scene;
+            submit(nodeCreationCommands(node, directorTemplateTarget.handle));
+            setDirectorTemplateTarget(undefined);
+          }}
+        />
+      ) : null}
       {directorNode?.director ? (
         <DirectorWorkbench
           key={directorNode.id}
@@ -2329,27 +2363,20 @@ export function CanvasEditor({
             revision: store.getState().document.revision,
           })}
           onExportResult={async (asset) => {
-            const source = store
-              .getState()
-              .document.nodes.find((node) => node.id === timelineNode.id);
-            if (!source || readOnly || interactionLocked.current) return false;
-            const nodes = mediaAssetsToCanvasNodes([asset], {
-              x: source.position.x + source.width + 48,
-              y: source.position.y,
-            });
+            if (readOnly || interactionLocked.current || busy.current || failed)
+              return false;
+            const { exportResultCommands } = await import("./export-result");
+            if (interactionLocked.current || busy.current) return false;
+            const current = store.getState().document;
+            const commands = exportResultCommands(
+              current,
+              timelineNode.id,
+              asset,
+            );
+            if (!commands.length) return true;
             return persist({
-              commands: [
-                { type: "AddNodes", nodes },
-                {
-                  type: "Connect",
-                  edges: nodes.map((node) => ({
-                    id: crypto.randomUUID(),
-                    fromNodeId: source.id,
-                    toNodeId: node.id,
-                  })),
-                },
-              ],
-              revision: store.getState().document.revision,
+              commands,
+              revision: current.revision,
               key: crypto.randomUUID(),
               kind: "edit",
             });

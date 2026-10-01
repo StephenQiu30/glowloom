@@ -26,7 +26,10 @@ var (
 )
 
 // Store keeps project persistence behind an explicitly injected database handle.
-type Store struct{ db *gorm.DB }
+type Store struct {
+	db   *gorm.DB
+	work ProjectWorkFactory
+}
 
 // NewStore creates a project store using the caller's database handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }

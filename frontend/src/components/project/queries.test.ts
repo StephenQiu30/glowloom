@@ -1,16 +1,23 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/request";
-import { createProject, listProjects, listStylePresets } from "./queries";
+import {
+  createProject,
+  getProject,
+  listProjects,
+  listStylePresets,
+} from "./queries";
 
 const api = vi.hoisted(() => ({
   create: vi.fn(),
   list: vi.fn(),
   presets: vi.fn(),
+  detail: vi.fn(),
 }));
 vi.mock("@/gen/api/projects", () => ({
   createProject: api.create,
   listProjects: api.list,
   listStylePresets: api.presets,
+  getProject: api.detail,
 }));
 const id = "584ad191-2932-4d7c-bccb-0b9d481c5a76";
 const body = {
@@ -30,6 +37,30 @@ const created = {
   update_time: "2026-09-30T08:00:00Z",
 };
 beforeEach(() => vi.resetAllMocks());
+it("详情不得将其它项目或缺少实际设置的回执缓存到当前项目", async () => {
+  const detail = {
+    ...created,
+    style_preset_id: null,
+    default_models: {},
+    is_delete: false,
+    archived_at: null,
+    delete_time: null,
+    purge_after: null,
+  };
+  api.detail.mockResolvedValue({
+    ...detail,
+    id: "d77d3c2a-7092-4e30-bf41-a3c5d4d26418",
+  });
+  await expect(getProject(id)).rejects.toMatchObject({
+    status: 502,
+    code: "invalid_response",
+  });
+  api.detail.mockResolvedValue({ ...detail, default_models: undefined });
+  await expect(getProject(id)).rejects.toMatchObject({
+    status: 502,
+    code: "invalid_response",
+  });
+});
 it("创建只调用生成端口，原样传正文与幂等键并校验服务端回执", async () => {
   api.create.mockResolvedValue(created);
   expect(await createProject(body, id)).toEqual(created);

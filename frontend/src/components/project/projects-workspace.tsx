@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import {
@@ -21,16 +22,26 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ApiError } from "@/lib/request";
 import { CreateProjectDialog } from "./create-project-dialog";
-import { ProjectList, type ProjectListView } from "./project-list";
+import {
+  ProjectList,
+  type ProjectListView,
+  type ProjectAction,
+} from "./project-list";
 import {
   PROJECTS_KEY,
   createProject,
   listProjects,
   listStylePresets,
+  type ProjectSummary,
 } from "./queries";
 import type { CreationBody } from "./creation";
 
 type Filter = "all" | "active" | "archived" | "deleted";
+const ProjectManagementDialog = dynamic(() =>
+  import("./project-management-dialog").then(
+    (module) => module.ProjectManagementDialog,
+  ),
+);
 export function ProjectsWorkspace() {
   const router = useRouter();
   const params = useSearchParams();
@@ -52,6 +63,10 @@ export function ProjectsWorkspace() {
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [page, setPage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [management, setManagement] = useState<{
+    project: ProjectSummary;
+    action: ProjectAction;
+  } | null>(null);
   const creating = dialogOpen || params.get("create") === "true";
   const list = useQuery<Awaited<ReturnType<typeof listProjects>>>({
     queryKey: [...PROJECTS_KEY, { q: search, filter, cursor: cursors[page] }],
@@ -101,6 +116,20 @@ export function ProjectsWorkspace() {
   }
   return (
     <div id="projects-main" className="flex min-w-0 flex-col gap-7">
+      {management && (
+        <ProjectManagementDialog
+          key={`${management.project.id}:${management.action}`}
+          project={management.project}
+          action={management.action}
+          onClose={() => setManagement(null)}
+          onChanged={() => {
+            void Promise.all([
+              cache.invalidateQueries({ queryKey: PROJECTS_KEY }),
+              cache.invalidateQueries({ queryKey: ["canvas", "projects"] }),
+            ]);
+          }}
+        />
+      )}
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">我的项目</h1>
@@ -201,7 +230,7 @@ export function ProjectsWorkspace() {
       </div>
       {filter === "deleted" && (
         <p className="text-sm text-muted-foreground">
-          回收中的项目保留 30 天。
+          回收中的项目保留 30 天，恢复后保留原有画布、素材和归档状态。
         </p>
       )}
       {list.isPending ? (
@@ -247,6 +276,12 @@ export function ProjectsWorkspace() {
               onViewChange={(value) => {
                 setView(value);
                 syncUrl(search, filter, value);
+              }}
+              onAction={(item, action) => {
+                const project = list.data.items.find(
+                  (entry) => entry.id === item.id,
+                );
+                if (project) setManagement({ project, action });
               }}
             />
             <Pagination aria-label="项目分页" className="mt-2 justify-end">

@@ -135,12 +135,12 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 			return nil, fmt.Errorf("configure media activities: %w", err)
 		}
 		mediaflow.Register(queueWorker, activities)
-		exportRenderer, err := toolff.NewRenderer()
+		exportRenderer, err := toolff.NewRenderer(mediaflow.FFProber{})
 		if err != nil {
 			return nil, fmt.Errorf("configure media export renderer: %w", err)
 		}
 		exports := provideMediaExportStore(dbConn.DB)
-		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFRenderer{})
+		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
 		toolflow.RegisterActivities(queueWorker, toolflow.NewActivities(exportWorker, exports, exports))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)

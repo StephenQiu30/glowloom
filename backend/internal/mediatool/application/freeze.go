@@ -12,6 +12,22 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
 )
 
+// HasAudibleClip checks saved visibility, mute and gain; the worker must still
+// verify that the immutable source bytes actually contain an audio stream.
+func HasAudibleClip(config canvasdomain.TimelineConfig) bool {
+	tracks := make(map[uuid.UUID]canvasdomain.TimelineTrack, len(config.Tracks))
+	for _, track := range config.Tracks {
+		tracks[track.ID] = track
+	}
+	for _, clip := range config.Clips {
+		track := tracks[clip.TrackID]
+		if track.Visible && !track.Muted && clip.Volume > 0 && (clip.Kind == "audio" || clip.Kind == "video") {
+			return true
+		}
+	}
+	return false
+}
+
 // SourceIDs collects resolved originals once; caller has already locked the canvas.
 func SourceIDs(config canvasdomain.TimelineConfig) ([]uuid.UUID, error) {
 	if config.Validate() != nil {

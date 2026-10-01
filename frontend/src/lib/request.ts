@@ -20,6 +20,9 @@ function errorMessage(status: number, code: string) {
   if (code === "revision_conflict")
     return "内容已被其他页面修改，请载入最新版本后重新操作。";
   if (code === "project_archived") return "项目已归档，当前内容只可查看。";
+  if (code === "inflight_work")
+    return "项目仍有正在处理或结果待确认的任务，请处理完成后重试。";
+  if (code === "restore_expired") return "项目已超过恢复期限，当前不能恢复。";
   if (status === 401) return "服务拒绝了此请求，请重新读取后重试。";
   if (status === 403) return "当前账号没有此操作的权限。";
   if (status === 404) return "请求的内容不存在，或当前账号不可访问。";

@@ -260,6 +260,14 @@ FFmpeg 先做真实原件 SHA／kind／像素尺寸检查，裁切以整数 `cro
 
 完整迁移继续在同一 ExportJob 增加可选 `output_kind=video|audio`，缺省 video 保持当前请求与用户流程。字段必须在创建时验证并进入冻结输入／请求指纹／公开 job 投影，不允许在运行中变更。audio 仍只接受保存的 timeline 来源；将实际可见、未静音的 audio／video 轨道按 trim／volume／fade／时间位置混合为 M4A，复用同一授权、活动会话、取消、Outbox、pending→实际预览→明确审核→正式下载链。音频媒体使用实际 probe 的时长、channels、codec，不能填写视频像素字段；提供实际 waveform，不伪造 poster。若可见源视频没有真实 audio stream，且没有其他可用音频轨道，明确返回无可提取音频失败，不把生成静音文件宣称提取成功。该接续仍须 Red→Green 与真实私有媒体验收，不能以本节合同存在或当前视频导出通过宣称音频提取／Whisper 已完成。
 
+2026-10-01 音频实现合同：创建 body 可选 `output_kind`（缺省 `video`），公开 job 和新建冻结输入均返回明确值；SQL `090` 添加不可由 `lanverse_app` 更新的输出类型列，历史视频任务取列的 `video` 缺省。缺省／显式 video 的创建指纹保持原三个来源字段的准确 JSON 序列化，既有持久命令响应仍按相同键重放；audio 明确进入指纹，修改输出类型返回 409。worker 经同一活动会话与私有条件写产生 AAC/stereo M4A，使用实际音频 channels／codec／duration，并生成实际解码 `1280×256` PNG waveform；媒体元数据不填写视频 width／height／FPS。下载端点在明确审核后按冻结类型返回 `audio/mp4`／`.m4a` 或 `video/mp4`／`.mp4`；预览与审核输入的 job revision／SHA 契约不变。
+
+真实输入字节有可播放音频 stream 才可提取；静音轨道／零音量／不可见轨道不参与音频。无实际可提取音轨的已授权视频可进入真实 worker 校验，但终态为 `failed`、`failure_code=no_audio_stream`、无产物资产，不伪造静音提取成功。时间位置的空隙使用有界静音段保存已编辑的时间位置，音频内容经准确 source trim、gain 和逐样本 fade；最多同时解码实际活跃轨道，scratch／最终文件仍受 `2 GiB`／`500 MiB` 边界约束。renderer 的字节 probe 显式注入 `media.application.Prober`，不直接调用其他上下文的 adapter。
+
+新增核心验收先实际 Red：MP4 与 M4A 类型、无音轨拒绝、输出类型冻结及 closed HTTP 创建均准确失败；随后真实隔离非 owner PostgreSQL、MinIO 和生产 Temporal SDK Activities 验证了音频导出、PNG waveform、pending 引用／附件阻断、准确文件 SHA＋job revision 的明确审核、正式 M4A 下载及 `no_audio_stream` 终态。该证据只覆盖隔离存储及 SDK 接管；真实运行中的 Temporal／Kafka／浏览器音频闭环仍需另行执行，Whisper 服务／识别模型仍未就绪。
+
+新建隔离 PG 17.11／固定官方 MinIO 在 `SET ROLE lanverse_app` 下执行全部 Export 与真实 Timeline renderer 的 Race 验证通过（10.908s）。新增 50 段音频的实际运行取消：观察正式 rendering 进度后提交取消并发出真实 Workflow signal，等待生产 Activity 结束全部进程／清理／release 后，才检查 cancelled、无输出资产与活动会话为空；Workflow future 本身不作退出证明。另以实际 UPDATE 验证冻结 `output_kind` 被 PostgreSQL `42501` 拒绝，拒写后仍为 audio，并逐字节重建原 video 指纹／历史命令回执验证重放；govulncheck 的调用与导入包漏洞为零，未消费依赖模块风险仍如实保留。
+
 
 ## 10. 提示词模板消费与报价冻结合同（2026-10-01，接线评审）
 
@@ -311,3 +319,103 @@ operation/application 新增 `QuotePromptCompiler` 消费端口及 `PrepareFreeQ
 SQL 080 新增独立 `operation.operation.prompt_preparation` JSONB，闭合证明字段、版本、策略、能力、哈希及个人修订形状；现有运行角色的列 UPDATE 授权不包含此列。该列不保存最终文本；文本仍为唯一 operation_input 的 prompt。报价回执中的 `final_prompt` 是该冻结输入的审阅投影，稳定重放时不会再次编译。任务详情恢复同一证明并复核冻结文本哈希。报价目前验证了既有按字符计价的最终文本路径；per_1k_tokens 仍须有已接受的输入估计与模型输出上限事实，缺少时依既有计费门禁拒绝，不伪造 Token 数或完成验收。
 
 隔离 PostgreSQL 17.11 实测通过个人偏好修改后的旧报价重放、同键异体冲突、新键 stale、项目/主体范围、缺实体、batch 逐项排除、事务回滚、原 canvas prompt 与 revision 门禁、nil 模板的历史 JSON 指纹逐字保持、HTTP 嵌套未知字段拒绝和刷新证明。`SET LOCAL ROLE lanverse_app` 的实际写入及不可更新证明列通过。该证据不等于当前在线服务已切换非 owner 数据库账号，也不等于 PostgreSQL 18.4、真实供应商或九项正式业务消费者验收。
+
+## 11. 项目生命周期、回收与完整复制技术合同（技术审阅通过；生命周期实施中；复制未实现）
+
+### 11.1 固定来源与本轮边界
+
+继续使用 §0 的固定来源 SHA。源 `backend/internal/app/project.go` 的 DuplicateProject 与 `repository.go:1034` 实际只复制项目和 units；它不是完整制作工程复制。当前 `web/src/pages/canvas/index.tsx:145` 本地项目库复制会遍历同 workspace 组的画布、保留节点/连接/对话；编辑器 `project.tsx:700`、store 的 importProject 还带 viewport、directorScenes、timeline。不得把只复制项目头表宣称为已迁移“复制项目”。
+
+源回收站 `components/canvas/recycle-bin-dialog.tsx` 的恢复只在 local 模式把浏览器历史 payload 放回，彻底删除只移除历史项；源 backend DeleteProject 会硬删章、镜头、工作流等并解除画布归属。Lanverse 沿已接受的 30 天逻辑删除与恢复合同保全业务数据，回收事实必须来自 workspace.project。源浏览器历史、Wails/SQLite 与后台硬删流程不进入当前持久真相。
+
+先完成真实项目读取、rename/update、archive/unarchive、delete/restore、回收列表的公开应用与事务闭环。完整 copy 是本节后续明确状态与拥有模块复制端口的工作，生命周期上线不关闭 copy、项目文件夹、彻底清理或源制作工程的其他尚缺实体。
+
+### 11.2 公开合同与状态
+
+沿现有 GET /projects（status/deleted/q/绑定游标）增加真实 archived_at、delete_time、purge_after；回收状态和期限不能由浏览器推断。新增 GET /projects/{pid} 返回当前组织未删除项目的安全设置与修订，包含 description、生成规格、预设、境外开关、默认模型和生命周期时间；客户端不能指定组织/身份或读取预设提示词、供应商配置与对象地址。
+
+PATCH /projects/{pid} 只接 expected_revision、name?、description?、style_preset_id?、allow_overseas_models?，复用已接受的 UpdateProjectInput/领域约束；默认模型继续走已实现的 model-defaults 合同。项目画幅、风格类型/子风格、分辨率仍为创建后的不可变规格。name 使用现有去除首尾空白、1～50 Unicode 字符规则；空白/非法 UTF-8/NUL 拒绝。未提供字段不变，明确空描述可清空；空 preset UUID 按现有规则清除。PATCH 不接受 status/is_delete 或生命周期时间，避免绕过工作门禁。
+
+POST /projects/{pid}/archive、/unarchive、/restore 与 DELETE /projects/{pid} 均接闭合 `{expected_revision}`，UUID Idempotency-Key 和请求 ID 沿现有 HTTP middleware。返回 200 的安全项目元数据及实际新修订；删除成功也返回保留的原 status 和 30 天期限。active → archived、archived → active 沿现有 domain.Archive/Unarchive；软删除 active 或 archived 项目只置 project 的 is_delete/delete_time/purge_after，保留原 status；恢复必须在 purge_after 之前并恢复原 active/archived 状态。删除/归档后禁止内容写入、报价确认和新工具任务，允许未删除的 archived 工程读取与导出已有安全预览；回收工程只通过回收列表与 restore 合同操作。
+
+状态/修订/期限冲突返回 409（revision_conflict、state_conflict、inflight_work、restore_expired），输入非法 422，同键异体沿 workspace 既有 422 idempotency_key_reused，跨组织或不可见项目 404，失效主体 403，必需依赖失败 503。无实际字段变化的 PATCH 不提升修订或写 changed/audit 事件，但必须保存可重放的幂等结果，避免同一请求后来被解释为另一次修改。
+
+### 11.3 应用与同事务事实
+
+不新增普适任务/Controller/DAO 框架。沿 workspace/application 的项目命令增加小的生命周期消费端口和纯 PrepareProjectTransition：application 校验请求，adapter 在同事务锁定事实后调用 application 纯准备函数，后者调用已有 Project 状态方法并产出安全事件。公开 PATCH 补齐持久请求事实，不在旧应用层 FindProject/修订检查之前丢失同键重放机会。
+
+每次事务按同一锁顺序进行：当前用户/组织 FOR SHARE → 既有 actor:key 请求 advisory gate 与 infra.idempotency 回执 → 项目 FOR UPDATE（含归档/回收行，按 action 限定可见性）→ 同键异体/原结果重放 → expected_revision/CAS 与拥有模块工作门禁 → pure Prepare → 项目变更、两条 Outbox、安全回执一起提交。重放仍复核当前主体及目标组织权限；同键成功结果不再次升修订、重复审计或改变生命周期。字段更新、归档、删除、恢复与 generation/canvas/tool admission 共用项目行的 FOR UPDATE/FOR SHARE 互斥边界，不能先查“无任务”再在另一事务删除。
+
+工作判断由 workspace/application 按消费需要定义 `ProjectWorkGuard.HasInflightWork(ctx, actor, projectID)`，组合根将已有拥有模块的查询绑定到同一事务；workspace postgres 不读取 operation/provider/media/export 的业务表。Operation 拥有端口覆盖 confirmed、submitting、submitted、succeeded、ingesting、unknown、reconciling、manual、cancelling；draft/quoted 与明确终态不算运行，但归档/删除仍使其后续确认失败。media 拥有端口覆盖 uploading/processing；mediatool 拥有端口覆盖 queued/running/cancel_requested，不能把 Temporal worker 存在或浏览器 loading 当作事实。无法读取任一已装配模块时拒绝生命周期变更，不能默认“无工作”；不自动取消正在执行的任务或释放费用。
+
+软删除和恢复不级联改写 canvas、media、operation、账本、导出记录或对象存储。权限查询通过项目归属与删除状态隐藏内容，恢复后原 UUID/图结构/引用/候选/费用证据仍在。不可逆 purge 沿 DES-13 的独立清理工作推进；本轮 API 不用删除回收列表行冒充对象和业务数据已彻底清理。
+
+### 11.4 后续完整 CopyJob 合同
+
+完整复制新增专用 workspace CopyJob，仍使用现有 PostgreSQL/Outbox/Temporal；它只表达项目复制，不抽象为任意任务框架，也不创建供应商 Operation。POST /projects/{pid}/copies 接 `{expected_revision,name?}` 和稳定 Idempotency-Key，202 返回复制 job_id 与新项目 ID，不返回“复制成功”。job 的 source_project_id、source_revision、当前组织/发起者、各拥有模块的冻结 snapshot/manifest hash、target_project_id、状态/阶段/进度/失败码/修订与实际完成 receipts 都持久保存。同键同体返回原 job，同键异体拒绝；公开重试/取消均以 job 修订与独立幂等键操作原冻结任务。
+
+源项目当前主体授权与项目 FOR UPDATE 下，经 canvas/media application 的 FreezeProjectCopy 拥有端口获取所有现有内容的固定快照及对象引用；不由 workspace adapter 跨表拼装。冻结包含所有当前画布、节点/边、配置、viewport、媒体/衍生物，以及项目自有风格预设和默认模型。复制期间源内容后续编辑不改变已冻结 job；源项目 purge 与源对象回收必须尊重尚未结束的复制引用，引用保留/释放由各拥有模块的复制合同维护，不能只保护项目头表。
+
+新项目创建为明确 copying 状态，普通写入/生成/上传/导出 admission 必须拒绝；其列表卡片与复制详情可以显示真实进度。只有全部拥有模块 receipts 完成并验证 hash/引用闭合，workspace 才同事务将 job 标为 succeeded、新项目转为 active、提升修订并发 changed/audit。中途异常保持实际 failed/retryable/unknown 信息与 copying 状态，不能显示完整新工程。取消仅阻止继续复制并释放拥有模块引用/暂存产物，不修改源项目；失败/取消的新工程不允许生成，清理由明确复制任务控制。
+
+media 的 CopyProjectAssets 拥有端口必须为新项目产生新的媒体 UUID 与项目私有 object keys，复制并核对原文件及衍生物完整性；模型 GLB 也在实际 kind=model 范围内，不能静默漏掉。不得仅复用源 object key，让源项目 purge 损坏副本。对象存储不参与数据库事务：每个受限复制步骤需持久 intent/receipt、稳定目标键、内容 hash/大小核验与可恢复阶段；超时/EOF 后先核对目标证据，不能盲目重复或伪造完成。暂存对象、失败与取消后的清理由 media 所有，不暴露路径/凭据。
+
+canvas 的 CopyProjectDocuments 拥有端口重建独立 document/node/edge UUID，映射 frame/group、端点、选定媒体、generation references、batch input nodes、director/model 与 timeline clip 的实际引用，保留当前布局、参数、viewport 和创作内容。不要复制已确认报价、执行标识、正在运行状态或旧项目操作入口；这些执行事实只留在源项目，不把副本误接到源任务。被清除的报价/执行绑定应在复制结果中明确登记，已有素材通过新媒体映射保留。复制不能静默丢弃不支持的配置或未就绪引用，应让 job 明确失败并给出可处理原因。新项目预算沿已接受创建合同为 0，经 billing 拥有端口创建，不复制预留、扣费、账本、供应商调用、导出 job 或旧幂等回执。
+
+### 11.5 验收顺序
+
+生命周期先 Red→Green：已有领域状态机复用、修订/期限/无变化、闭合 DTO；真实独立 PostgreSQL 验证主体/组织、持久同键与并发、Outbox/回执故障全回滚、归档/删除与真实 Operation/media/export admission 竞态、未知/待核对任务不能绕过；恢复后对保存图结构与媒体/任务记录逐项比对。随后 Handler→Swagger→在线生成 client→真实 rename/归档/回收/恢复页面与刷新、错误/加载/确认交互验证。没有数据库和浏览器证据不能关闭页面功能。
+
+CopyJob 后续单独验证跨多画布全部内容、各 UUID/媒体对象映射、真实 PostgreSQL+对象存储、源 purge 后副本仍可访问、断线/服务重启继续原任务、同键不重复复制、失败/取消清理、源内容变更不改冻结快照、新工程未完成不可生成及全部完成后的正式可用性。只复制项目标题/空画布、纯内存 JSON、mock port 或静态页面不算完整复制迁移。
+
+## 12. 导演台图库、封面与动画输出完整迁移合同（2026-10-01，技术审阅通过；实施中）
+
+### 12.1 固定来源与已核验差额
+
+固定 `1ae25027` 的 `web/src/lib/canvas/director/director-templates.ts` 与 `web/src/components/canvas/director/canvas-director-template-modal.tsx` 提供空场景、单人对白、双人对话、人物走位、产品/道具镜头五类实际开局。布局、焦距、三点布光与独立元素身份规则直接适配到本项目受约束场景；新建前显式选择模板，不能无条件加入演员。模板的局部配置只经正式画布命令保存，Three.js 仍在低频导演台模块按需加载。
+
+`canvas-director-workbench.tsx:803–829` 实际捕获图片、上传并追加分镜截图；`director-camera-screenshot-tabs.tsx` 将截图按摄影机分组，`director-screenshot-gallery.tsx` 提供图片预览。`canvas-director-workbench.tsx:392–395` 与 `director-cover-write.ts` 在保存关闭时更新节点封面，并核对项目、节点、场景、镜头及异步请求是否仍有效。当前静态 PNG 回写画布不覆盖图集和封面迁移验收。
+
+`canvas-director-workbench.tsx:833–866` 与 `director-viewport.tsx:1292–1395` 为真实白膜动画输出：编辑辅助和全景隐藏，按镜头画幅捕获实际渲染帧，MediaRecorder 录制 WebM，核对真实可解码时长，再通过源媒体服务接管。它不等于单张白膜/深度 PNG，也不等于 AI 生成视频。固定源码未包含单图推理模型权重及许可；WebGL 深度输出只表达已有 3D 场景几何，不能替代单图插件或视频深度推理。
+
+### 12.2 本项目持久配置与素材关联
+
+沿 `node.config.director` 闭合合同扩展 `shots[].screenshots?: [{id,asset_id,name,created_at}]`，每镜头最多 64 张、单场景最多 512 张。截图 UUID 唯一，名称为 1～128 字符，时间为 RFC3339，资产必须是当前项目正式 ready/passed 的 image。截图关联跟随所属镜头，机位图库按镜头当前 camera_id 分组。`cover?: {asset_id,shot_id}` 只引用同场景存在的镜头和正式图片；它是用户选择的封面关联，不保存临时 URL、storage key、上传状态、任务/Operation ID。配置仍受整节点 512 KiB 上限限制。
+
+修改场景渲染内容后清除旧 cover，保留已有截图，用户可从图库重新选择；不能继续把旧封面显示为新场景的最新结果。删除图库条目只移除关联，不隐式删除正式素材。删除源画布资源节点不损坏已稳定的截图 asset_id；删除镜头同时移除该镜头截图关联及引用它的 cover。预览复用项目授权与短期私有素材租约，关闭/失效时释放图片及 WebGL 资源。
+
+捕获前先确认正式保存；上传仍经现有实际 File、本地检查确认与幂等接管。迟到捕获不得回填已关闭或替换的场景。追加图库/封面时复核最新画布修订及节点、场景、镜头身份与捕获配置，使用正式命令 CAS；若配置已变化，保留已接管素材并提示重新关联，不覆盖新配置。命令结果未知时沿原幂等键恢复，读取最新关联后不得重复加入图片或边。
+
+### 12.3 白膜视频与验收边界
+
+浏览器录制须有明确所有者、镜头时长/帧率上限、取消机制、渲染/上下文失效处理、实际解码时长核验，并在所有结束路径清理 recorder、MediaStream tracks、动画回调、事件监听和临时 URL。录制期间禁止改变场景或镜头；失败或取消不回写残缺视频。服务端媒体模块以真实 FFmpeg/ffprobe 承接原始 WebM 到 MP4 的有界转码、审核及正式资产发布，不能给不支持的上传扩展换名后冒充 MP4，不能将录制事实塞进场景配置，也不创建 AI 报价/供应商 Operation。
+
+验收需分别覆盖五模板实际选择/刷新、骨骼与机位动画恢复、正式参考图片/模型加载、多个镜头与相同机位图集、旧捕获回执保护、正式图库与封面回读、短视口布局与键盘焦点，以及实际白膜动画生成→可解码预览→明确审核→正式素材引用→刷新。纯模型/组件测试、静态 PNG 或仅 WebGL 启动不关闭完整导演台能力。
+
+### 9.3 待审核音频波形授权
+
+音频导出 preview 在同一 ExportJob 授权内返回可选 `waveform={url,expires_at,width,height}`；它必须来自该 job 的实际音频 asset 所绑定且未删除的 waveform rendition。读取时复核 job 的当前 revision、原件 SHA、review_required／succeeded 状态和 asset 的一致审核状态，不能调用普通 ready 素材接口放宽 pending 访问。原件与波形的 URL 都是十分钟私有签名，响应不暴露 object_key；明确审核仍只提交 preview 的 job revision＋原件 SHA。缺失、重复或无效波形明确失败，不能用占位条冒充真实波形。真实 HTTP 验收须取回签名 PNG 并解码像素尺寸，错项目及失效 job revision／SHA 不得取得 URL。
+
+### 11.6 生命周期后端当前实现与验证事实
+
+正式接口已注册 `getProject`、`updateProject`、`archiveProject`、`unarchiveProject`、`deleteProject`、`restoreProject`。详情与变更的 200 回执返回同一安全设置和生命周期投影，不包含组织身份、预设提示词、供应商凭据或对象地址；项目列表补齐 archived_at、delete_time、purge_after。PATCH 在原始 JSON 边界拒绝非法 UTF-8，继续拒绝未知字段、不可变规格、空名称及 NUL；零值预设 UUID 明确清除，未提供或 null 不改预设。所有写入沿既有 Origin、请求 ID、UUID 幂等键与错误合同。
+
+`workspace/application.ProjectLifecycle`、`PrepareProjectChange` 复用 Project 状态机及 UpdateProjectInput。`NewStoreWithProjectWorkGuard` 注入事务 factory，组合根顺序读取 operation/media/mediatool 各自 `project_work.go` 的拥有模块事实；workspace adapter 没有查询这些模块的业务表。主体与组织复核、同键门禁、项目 FOR UPDATE、原回执重放、CAS、工作判断、变更、两条 Outbox 及新回执在同一事务完成。无变化 PATCH 保存原结果但不升修订或发事件；数据库时间在拿到项目锁后读取，恢复不能复用等待锁之前的期限判断。归档/删除不自动取消任务，也不级联改写业务数据。
+
+在独立 PostgreSQL 17.11 数据库 `lanverse_workspace_lifecycle`（40 项 up SQL 至 090）实际通过：闭合 HTTP 与安全详情、更新/归档/回收/恢复及刷新回执；主体失效、跨组织、修订和恢复期限；同键 8 并发仅一次变更与回执、异键 CAS 单赢家、后续修改后的 no-op 原结果重放；SET LOCAL ROLE lanverse_app 的实际生命周期读写；Outbox 和幂等回执插入触发故障时全回滚；Operation 全部阻塞状态、上传/处理中媒体、排队/运行/取消中的导出；软删恢复前后原 canvas/node/media/operation/budget/export 行逐字不变。通过 pg_blocking_pids 实际观察生成确认、媒体 StoreDerived、正式时间轴 export Create 的项目锁，任务提交后生命周期重新读到进行中事实并拒绝；归档/删除后这些拥有模块拒绝新 admission。
+
+当前后端 `go test -race ./tests/workspace -count=1`（上述真实库）、公开 Router Swagger 合同、`go vet ./...` 和 `golangci-lint run ./...` 均通过；govulncheck 没有可达或导入包漏洞，仍提示一个未调用的 required-module 漏洞。上述合成业务数据和非 owner 探针不等于当前在线运行身份、PostgreSQL 18.4、真实供应商、对象 purge 或完整项目复制验收。正式页面与浏览器生命周期闭环由前端继续验证，完整 CopyJob、文件夹与彻底清理仍未实现。
+
+### 9.4 Whisper 字幕提取与字幕稿合同（2026-10-02）
+
+固定源 `1ae25027` 的 `task_timeline.go`／`transcription_whisper.go` 实际创建 `timeline_transcription`：归属音视频资源→FFmpeg 16 kHz／mono／PCM s16le WAV→本地 whisper.cpp `/inference` multipart `file`＋`response_format=verbose_json`＋可选 language→segments／SRT，任务写入真实终态与租约证据。源脚本要求独立 whisper-server 与 ggml 权重，未配置明确失败；不经过供应商报价。目标保留这一独立本地能力，由 owning `mediatool.TranscriptionJob`、Go adapter 与现有 flow／media Temporal 队列承接；不扩展 ExportJob 为任意任务框架，不引入 Python Agent，不给 FFmpeg／Whisper 伪造 AI Operation 或成功结果。
+
+创建只接受 `{canvas_id,node_id,revision,language}`：在同一命令事务中消费 `TranscriptionSourceReader` 的正式 canvas 修订／类型／media_asset 身份冻结，并经媒体 own application 读取当前可引用 audio／video 原件。固定 asset ID、revision、SHA、字节、duration、kind 与私有 object key；HTTP 不接受路径／URL，公开 job 不暴露这些私有键。原件最多 500 MiB，媒体时长不超 24h，实际 PCM 工作文件最多 512 MiB；预算不足、源没有真实 audio stream、转换截断或时间不符明确失败。每次转换须实际读回 PCM 格式，验证完整时长、16 kHz／mono／16-bit，不能以 FFmpeg exit=0 冒充完整转换。
+
+`TranscriptionJob` 的 `queued`／`running`／`succeeded`／`failed`／`cancel_requested`／`cancelled` 与 attempt／active_worker fencing 是独立事实。创建、控制与 retry 使用持久幂等 receipt、revision、audit 与 Outbox；沿用现有 Kafka／Temporal 传递机制及 Go 活动，数据库仓储只操作 mediatool 自己的表。归档／删除 guard 必须包含活动 transcription。任务成功产生真实 typed 字幕稿 `{version:1,language,duration_ms,segments:[{start_ms,end_ms,text}]}` 与确定性 SRT；不会自动修改画布或声明识别内容已通过人工复核。用户实际复核后明确将选定稿件写入 timeline 的 subtitle clips，由现有 canvas 修订命令接受并保存，运行状态不塞进编辑配置。超过剩余 1000 clips 的导入明确拒绝，不静默截断。
+
+whisper.cpp verbose_json 的 start／end 为秒，返回 language 是完整名称（如 chinese／english）。Go 边界验证必需字段、有限数值、非负起点、正时长、单调且不重叠、段落不超真实 WAV 时长、有效 UTF-8、文本与整体字节／段落上限；缺失时间戳或空识别不生成默认 0 或伪字幕。保存精确毫秒与文本；SRT 用 `hh:mm:ss,mmm`，空白／换行规范化不会重排序或编造内容。language 输入支持 `auto` 与固定 native Whisper 语言码，服务返回 unsupported model/language 明确失败。
+
+本机源默认 8082 已被 Lanverse Relay 占用。2026-10-02 独立 loopback `127.0.0.1:19282` 使用官方 `ggml-org/whisper.cpp` v1.9.4，source SHA `927cfce34f31707e17f2bff35c349632fb9e2c3a`；多语言 `ggml-base.bin` 来自官方脚本指向的 HuggingFace ggerganov/whisper.cpp repo SHA `5359861c739e955e79d9a303bcbc70fb988958b1`，147951465 B，SHA256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`。代码／权重 MIT 原许可分别保留；权重与编译服务只在任务 `/tmp/lanverse-whisper-20261001`，不提交模型、不读取用户媒体。实际单次英文／合成中文识别、失败、取消、私有存储／HTTP／画布导入与恢复仍逐项留证，不以服务健康或模型下载宣称完整迁移完成。
+
+固定 server 用 mutex 串行处理 inference，并有 HTTP 断连 abort callback，但协议没有请求 ID、cancel 状态查询或远端结束 receipt。因此客户端取消不作为识别退出证据：执行期间取消先持久 cancel_requested，受控 HTTP 调用等待实际终态响应，再丢弃结果、清理并在对应活动会话释放时确认 cancelled；若 timeout／连接异常使识别状态未知，保留 awaiting_reconciliation，不自动重试或假取消。响应／确认方案须以此固定 server 的实际行为验证，不用普通 health 探测充当任务退出证明。

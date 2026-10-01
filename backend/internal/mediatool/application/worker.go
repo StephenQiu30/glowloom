@@ -65,9 +65,17 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	if work.Job.Status == domain.ReviewRequired || work.Job.Status == domain.Succeeded {
 		return work.Job, nil
 	}
+	kind := work.Job.OutputKind.Effective()
+	if !kind.Valid() || kind != work.Frozen.OutputKind.Effective() {
+		return domain.ExportJob{}, ErrInvalidExport
+	}
+	mediaKind, mime, extension := mediadomain.KindVideo, "video/mp4", "mp4"
+	if kind == domain.OutputAudio {
+		mediaKind, mime, extension = mediadomain.KindAudio, "audio/mp4", "m4a"
+	}
 	assetID := uuid.NewSHA1(id.JobID, []byte("export-output/"+strconv.Itoa(id.Attempt)))
-	key := path.Join("projects", work.Job.ProjectID.String(), "video", work.Job.CreatedAt.UTC().Format("2006/01"), assetID.String()+".mp4")
-	output, err := w.existing(ctx, key)
+	key := path.Join("projects", work.Job.ProjectID.String(), string(mediaKind), work.Job.CreatedAt.UTC().Format("2006/01"), assetID.String()+"."+extension)
+	output, err := w.existing(ctx, key, mime)
 	if errors.Is(err, ErrObjectMissing) {
 		paths := make(map[uuid.UUID]string, len(work.Frozen.Inputs))
 		sources := make([]*mediaapp.Downloaded, 0, len(work.Frozen.Inputs))
@@ -100,7 +108,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 			if !errors.Is(err, mediaapp.ErrObjectAlreadyExists) {
 				return domain.ExportJob{}, err
 			}
-			output, err = w.existing(ctx, key)
+			output, err = w.existing(ctx, key, mime)
 			if err != nil {
 				return domain.ExportJob{}, err
 			}
@@ -113,7 +121,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 	}
 	defer func() { _ = output.Close() }()
 	probe, err := w.prober.Probe(ctx, output)
-	if err != nil || probe.Kind != mediadomain.KindVideo || probe.DurationMS == nil {
+	if err != nil || output.MIMEType != mime || probe.Kind != mediaKind || probe.DurationMS == nil {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
 	width, height := int32(1920), int32(1080)
@@ -133,7 +141,10 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 			duration = max(duration, clip.StartMS+clip.DurationMS)
 		}
 	}
-	if probe.Width == nil || probe.Height == nil || *probe.Width != width || *probe.Height != height || absDuration(int64(*probe.DurationMS)-duration) > int64(1000/work.Frozen.Timeline.FPS)+25 {
+	if absDuration(int64(*probe.DurationMS)-duration) > int64(1000/work.Frozen.Timeline.FPS)+25 {
+		return domain.ExportJob{}, ErrInvalidExport
+	}
+	if kind == domain.OutputVideo && (probe.Width == nil || probe.Height == nil || *probe.Width != width || *probe.Height != height) || kind == domain.OutputAudio && (probe.Width != nil || probe.Height != nil || probe.FPS != nil || probe.AudioChannels == nil || *probe.AudioChannels != 2) {
 		return domain.ExportJob{}, ErrInvalidExport
 	}
 	if err := w.store.Progress(ctx, id, 85, "previews"); err != nil {
@@ -150,12 +161,21 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 			}
 		}
 	}()
-	if len(rendered) != 2 || rendered[0].Kind != mediadomain.RenditionPoster || rendered[1].Kind != mediadomain.RenditionProxy720p {
+	required := []mediadomain.RenditionKind{mediadomain.RenditionPoster, mediadomain.RenditionProxy720p}
+	if kind == domain.OutputAudio {
+		required = []mediadomain.RenditionKind{mediadomain.RenditionWaveform}
+	}
+	if len(rendered) != len(required) {
 		return domain.ExportJob{}, ErrInvalidExport
+	}
+	for i, expected := range required {
+		if rendered[i].Kind != expected {
+			return domain.ExportJob{}, ErrInvalidExport
+		}
 	}
 	now := time.Now().UTC()
 	sha := output.SHA256
-	asset := mediadomain.MediaAsset{ID: assetID, ProjectID: work.Job.ProjectID, Kind: mediadomain.KindVideo, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ObjectKey: key, FileName: "timeline-" + id.JobID.String() + ".mp4", MimeType: output.MIMEType, ByteSize: output.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height, DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
+	asset := mediadomain.MediaAsset{ID: assetID, ProjectID: work.Job.ProjectID, Kind: mediaKind, Origin: mediadomain.OriginSystem, Status: mediadomain.StatusProcessing, ObjectKey: key, FileName: "timeline-" + id.JobID.String() + "." + extension, MimeType: output.MIMEType, ByteSize: output.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height, DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec, ModerationStatus: mediadomain.ModerationPending, Revision: 1, CreateTime: now, UpdateTime: now}
 	renditions := make([]mediadomain.Rendition, 0, len(rendered))
 	for _, file := range rendered {
 		if file.Result == nil || file.Result.File == nil || file.Width < 1 || file.Height < 1 {
@@ -184,12 +204,12 @@ func absDuration(v int64) int64 {
 	}
 	return v
 }
-func (w *Worker) existing(ctx context.Context, key string) (*mediaapp.Downloaded, error) {
+func (w *Worker) existing(ctx context.Context, key, mime string) (*mediaapp.Downloaded, error) {
 	info, err := w.objects.Stat(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	if info.Size < 1 || info.Size > 500<<20 || info.ContentType != "video/mp4" || len(info.SHA256) != 64 {
+	if info.Size < 1 || info.Size > 500<<20 || info.ContentType != mime || len(info.SHA256) != 64 {
 		return nil, ErrInvalidExport
 	}
 	return w.readChecked(ctx, key, info.Size, info.ContentType, info.SHA256)

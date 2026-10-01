@@ -121,6 +121,9 @@ func (a *Activities) RenderExport(ctx context.Context, id application.WorkID) (j
 		if errors.Is(err, application.ErrUnavailable) {
 			code = "dependency_unavailable"
 		}
+		if errors.Is(err, application.ErrNoAudio) {
+			code = "no_audio_stream"
+		}
 		if finishErr := a.store.Finish(finalize, id, cancelled, code); finishErr != nil && !errors.Is(finishErr, application.ErrConflict) {
 			return job, fmt.Errorf("record export worker cessation: %w", finishErr)
 		}

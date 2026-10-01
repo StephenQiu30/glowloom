@@ -60,6 +60,7 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 | `director/animation-semantics.ts`                                                                                                     | `director-animation-semantics.ts` 的动画增量与关键帧语义；保持自身类型和有限数值边界                |
 | `director/rig.ts`                                                                                                                     | `director-viewport.tsx` 的骨骼命名匹配；改为实际 GLB 骨骼扫描和纯函数映射                           |
 | `director/camera-presets.ts`、`modes.ts`、`camera-moves.ts`                                                                           | `director-camera-presets.ts`、导演模式和运镜预设；接入自身场景与机位合同                            |
+| `director/templates.ts`                                                                                                              | `lib/canvas/director/director-templates.ts` 的五种场景布局；改用自身 UUID、场景字段和正式新增节点合同 |
 
 前端包依赖的许可仍由各依赖声明。
 

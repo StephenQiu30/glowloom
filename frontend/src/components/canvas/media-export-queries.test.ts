@@ -23,6 +23,7 @@ const source = {
   revision: 9,
 };
 const value = {
+  output_kind: "video",
   id: "de44ee7b-ed23-407e-bc14-c4da6d4a5ebd",
   project_id: project,
   source,
@@ -43,9 +44,13 @@ describe("正式导出生成客户端边界", () => {
     const key = crypto.randomUUID();
     api.create.mockResolvedValue(value);
     await createTimelineExport(project, source, key);
-    expect(api.create).toHaveBeenCalledWith({ pid: project }, source, {
-      headers: { "Idempotency-Key": key },
-    });
+    expect(api.create).toHaveBeenCalledWith(
+      { pid: project },
+      { ...source, output_kind: "video" },
+      {
+        headers: { "Idempotency-Key": key },
+      },
+    );
     api.create.mockResolvedValue({
       ...value,
       source: { ...source, revision: 8 },

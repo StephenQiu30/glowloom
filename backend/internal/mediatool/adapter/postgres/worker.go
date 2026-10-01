@@ -18,6 +18,10 @@ func (s *Store) validateSources(ctx context.Context, tx *gorm.DB, row jobRow) er
 	if json.Unmarshal(row.Frozen, &frozen) != nil {
 		return application.ErrInvalidExport
 	}
+	kind := domain.OutputKind(row.OutputKind).Effective()
+	if !kind.Valid() || kind != frozen.OutputKind.Effective() || kind == domain.OutputAudio && !application.HasAudibleClip(frozen.Timeline) {
+		return application.ErrInvalidExport
+	}
 	ids := make([]uuid.UUID, 0, len(frozen.Inputs))
 	for _, input := range frozen.Inputs {
 		ids = append(ids, input.AssetID)
@@ -172,7 +176,7 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 		if row.Status == "cancel_requested" || row.Status == "cancelled" {
 			return application.ErrCancelled
 		}
-		if row.Status != "running" || asset.ProjectID != row.ProjectID {
+		if row.Status != "running" || asset.ProjectID != row.ProjectID || string(asset.Kind) != string(domain.OutputKind(row.OutputKind).Effective()) {
 			return application.ErrConflict
 		}
 		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
@@ -202,7 +206,7 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 
 // Finish records failure or confirmed worker cessation for one fenced attempt.
 func (s *Store) Finish(ctx context.Context, id application.WorkID, cancelled bool, code string) error {
-	if s == nil || s.db == nil || (code != "" && code != "render_failed" && code != "source_unavailable" && code != "dependency_unavailable") {
+	if s == nil || s.db == nil || (code != "" && code != "render_failed" && code != "source_unavailable" && code != "dependency_unavailable" && code != "no_audio_stream") {
 		return application.ErrInvalidExport
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

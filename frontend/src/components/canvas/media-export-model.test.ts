@@ -5,6 +5,7 @@ const project = "588bdf3e-ef94-4eaf-a2b4-8ebbef79d91c";
 const job = {
   id: "41493ffb-b3cd-41ac-b3d5-2999e31b9c7c",
   project_id: project,
+  output_kind: "video",
   source: {
     canvas_id: "c538a2ea-5708-42dc-a8df-9446296b34da",
     node_id: "d6991e21-188d-4b1d-beb6-ad578d4168e4",
@@ -43,6 +44,43 @@ function preview() {
   };
 }
 describe("本地导出输出审核边界", () => {
+  it("音频输出只能消费实际 M4A，不能将视频或另一种任务当音频", () => {
+    const audioJob = exportJobSchema.parse({ ...job, output_kind: "audio" });
+    const value = preview();
+    const audio = {
+      ...value,
+      waveform: {
+        url: "https://example.test/actual-waveform.png",
+        expires_at: "2099-10-01T13:20:00Z",
+        width: 1280,
+        height: 256,
+      },
+      asset: {
+        ...value.asset,
+        kind: "audio",
+        mime_type: "audio/mp4",
+        width: undefined,
+        height: undefined,
+      },
+    };
+    expect(parseExportPreview(audio, audioJob).asset.kind).toBe("audio");
+    expect(() =>
+      parseExportPreview({ ...audio, waveform: undefined }, audioJob),
+    ).toThrow();
+    expect(() =>
+      parseExportPreview(
+        {
+          ...audio,
+          waveform: { ...audio.waveform, url: "data:image/png;base64,invalid" },
+        },
+        audioJob,
+      ),
+    ).toThrow();
+    expect(() => parseExportPreview(value, audioJob)).toThrow();
+    expect(() =>
+      parseExportPreview(audio, exportJobSchema.parse(job)),
+    ).toThrow();
+  });
   it("输出审核冻结job修订与SHA，预审核素材修订可以不同", () => {
     const result = parseExportPreview(preview(), exportJobSchema.parse(job));
     expect(result.revision).toBe(4);
