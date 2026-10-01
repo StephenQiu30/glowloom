@@ -1,19 +1,25 @@
-# Lanverse 前端工程配置
+# Lanverse 前端
 
-2026-10-01 按用户要求清空现有全部前端实现，仅保留工程配置和已安装依赖。本目录当前没有页面、组件、画布、请求实现、生成客户端、测试或展示素材；旧 3000 服务已停止，没有替代页面。
+工作台完整迁移正在执行。当前源码采用 Next.js App Router、React、TypeScript strict、Tailwind、shadcn/ui（Radix）、TanStack Query 和 Zustand；首页、项目、素材、表单生成、任务、模型配置与无限画布已接入自身 Go API。批量表格、导演台、GLB、图片工具和时间轴的迁移状态以 [正式设计](../docs/design/BeefTV能力引入设计.md) 为准，页面存在不等于完整能力或真实模型验收完成。
 
-保留 Next.js（App Router）+ React + TypeScript strict + Tailwind CSS + shadcn/ui（Radix）技术栈，以及包版本、pnpm 锁文件、lint、格式、测试、生成器和容器配置。目录与约定见仓库根目录 [PROJECT.md §6](../PROJECT.md)，清理边界见 [前端实现清理](../docs/design/前端实现清理设计.md)。
-
-当前仅可验证剩余工程配置：
+从仓库根目录的既有配置启动 Go API 后，在此目录运行：
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm exec eslint .
-pnpm exec prettier --check .
+LV_API_BASE_URL=http://127.0.0.1:8080 pnpm exec next dev --hostname 127.0.0.1 --port 3000
 ```
 
-Next.js 启动/构建、应用类型检查、Vitest、Playwright、生成客户端对比和前端镜像门禁在应用重建后恢复。`components.json`、`tsconfig.json`、测试和 API 生成器中的源码路径是保留的工程约定，当前目标尚不存在；它们不能作为应用可用的证据。
+本地工作区继续使用无登录的持久身份，模型管理遵循服务端权限。浏览器请求通过同源 `/api` 转发，生成客户端只消费后端在线 Swagger；不能以源项目的 Wails、本地数据库或供应商接口替换此链路。
 
-Prettier 保留 Tailwind 插件，但移除已删除的 `src/app/globals.css` 绑定；重建 Tailwind 4 样式入口后需重新指定 `tailwindStylesheet`。
+```bash
+LV_API_BASE_URL=http://127.0.0.1:8080 pnpm exec openapi2ts
+pnpm exec prettier --ignore-path /dev/null --write src/gen/api/*.ts
+pnpm exec eslint .
+pnpm exec prettier --check .
+pnpm exec next typegen
+pnpm exec tsc --noEmit
+pnpm exec vitest run
+pnpm exec next build
+```
 
-Go API、Worker、Relay、Swagger、SQL 迁移及项目/画布/媒体业务数据保留。历史前端实现可由 Git 提交 `bd17655b` 查阅，本轮旧验收只对应清理前提交，不表示当前存在前端服务。
+交互验收使用实际服务与浏览器；需要外部模型、费用、对象存储或工作流的能力分别保留真实证据。单元测试、类型检查与构建不能代替这些验收。目录与质量要求见 [PROJECT.md](../PROJECT.md) 和 [AGENTS.md](../AGENTS.md)；许可入口为 `/licenses`。

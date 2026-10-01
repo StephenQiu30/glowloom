@@ -1,0 +1,85 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "mesh.primitive.schema.json",
+    "title": "Mesh Primitive",
+    "type": "object",
+    "description": "Geometry to be rendered with the given material.",
+    "allOf": [ { "$ref": "glTFProperty.schema.json" } ],
+    "properties": {
+        "attributes": {
+            "type": "object",
+            "description": "A JSON object that maps attribute semantic names to the indices of accessors providing the corresponding data.",
+            "minProperties": 1,
+            "additionalProperties": {
+                "$ref": "glTFid.schema.json"
+            }
+        },
+        "indices": {
+            "allOf": [ { "$ref": "glTFid.schema.json" } ],
+            "description": "The index of the accessor that provides the vertex indices.",
+            "gltf_detailedDescription": "The index of the accessor that provides the vertex indices.  The accessor **MUST** have the `SCALAR` type and any of the _uint8_, _uint16_, or _uint32_ effective component types. When undefined, the primitive uses non-indexed geometry."
+        },
+        "material": {
+            "allOf": [ { "$ref": "glTFid.schema.json" } ],
+            "description": "The index of the material to apply to this primitive when rendering."
+        },
+        "mode": {
+            "description": "The topology type of primitives to render.",
+            "default": 4,
+            "anyOf": [
+                {
+                    "const": 0,
+                    "description": "POINTS",
+                    "type": "integer"
+                },
+                {
+                    "const": 1,
+                    "description": "LINES",
+                    "type": "integer"
+                },
+                {
+                    "const": 2,
+                    "description": "LINE_LOOP",
+                    "type": "integer"
+                },
+                {
+                    "const": 3,
+                    "description": "LINE_STRIP",
+                    "type": "integer"
+                },
+                {
+                    "const": 4,
+                    "description": "TRIANGLES",
+                    "type": "integer"
+                },
+                {
+                    "const": 5,
+                    "description": "TRIANGLE_STRIP",
+                    "type": "integer"
+                },
+                {
+                    "const": 6,
+                    "description": "TRIANGLE_FAN",
+                    "type": "integer"
+                },
+                {
+                    "type": "integer"
+                }
+            ]
+        },
+        "targets": {
+            "type": "array",
+            "description": "An array of morph targets.",
+            "items": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                    "$ref": "glTFid.schema.json"
+                },
+                "description": "A JSON object that maps attribute semantic names to the indices of accessors providing the corresponding morph target difference values."
+            },
+            "minItems": 1
+        }
+    },
+    "required": [ "attributes" ]
+}

@@ -11,18 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
 )
 
 var (
 	// ErrProviderKeyExists means another provider already uses the stable key.
-	ErrProviderKeyExists = errors.New("provider key already exists")
+	ErrProviderKeyExists = application.ErrProviderKeyExists
 	// ErrProviderNotFound means no non-deleted provider has the requested ID.
-	ErrProviderNotFound = errors.New("provider not found")
+	ErrProviderNotFound = application.ErrProviderNotFound
 	// ErrProviderUnavailable means a provider does not accept new credentials.
-	ErrProviderUnavailable = errors.New("provider unavailable")
+	ErrProviderUnavailable = application.ErrProviderUnavailable
 	// ErrCredentialNotFound means no current credential matches the provider.
-	ErrCredentialNotFound = errors.New("active credential not found")
+	ErrCredentialNotFound = application.ErrCredentialNotFound
 	// ErrRevisionConflict means provider settings changed after they were read.
 	ErrRevisionConflict = domain.ErrProviderRevisionConflict
 )

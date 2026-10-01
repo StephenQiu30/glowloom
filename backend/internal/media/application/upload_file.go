@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
 )
 
 const (
@@ -22,6 +24,8 @@ const (
 	MaxUploadVideoBytes int64 = 500 << 20
 	// MaxUploadAudioBytes is the local audio limit in bytes.
 	MaxUploadAudioBytes int64 = 100 << 20
+	// MaxUploadModelBytes is the self-contained GLB 2.0 model limit.
+	MaxUploadModelBytes int64 = domain.MaxModelBytes
 )
 
 // SafeUploadFileName accepts a bounded display name, never a filesystem path.
@@ -90,6 +94,9 @@ func ReadUpload(ctx context.Context, reader io.Reader, name string) (*Downloaded
 }
 
 func uploadType(magic []byte) (string, string, int64) {
+	if len(magic) >= 12 && string(magic[:4]) == "glTF" {
+		return "model/gltf-binary", "glb", MaxUploadModelBytes
+	}
 	mimeType := http.DetectContentType(magic)
 	switch mimeType {
 	case "image/jpeg":

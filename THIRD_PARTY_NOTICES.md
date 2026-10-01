@@ -1,15 +1,23 @@
 # 第三方代码声明
 
-## 历史 BeefTV 无限画布
+## 时间线算法的上游声明
 
-2026-10-01 按用户要求清空全部前端实现。以下记录清理前从 [glanderness/BeefTV](https://github.com/glanderness/BeefTV) 移植并适配的历史代码来源；对应代码已从当前工作区移除，保留许可文本与来源记录。
+BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline-snap.ts` 标明移植自 `yoqu/lingji-cut`。Lanverse 的 `frontend/src/components/canvas/timeline.ts` 改写其碰撞、间隙和吸附算法，使用自身 UUID、闭合输入和画布保存合同。保留该传递来源与修改声明，不将其视为 BeefTV 原创。
+
+- 原项目：[yoqu/lingji-cut](https://github.com/yoqu/lingji-cut)，Copyright 2026 yoqu。
+- 许可：Apache-2.0；2026-10-01 从公开固定提交 `59a2fc9f8bd00ca243b2b0d4c4e31b67eb6387d1` 保存原始许可全文至 [docs/licenses/lingji-cut.txt](docs/licenses/lingji-cut.txt)。该 SHA 是许可核验快照，BeefTV 未标明其算法移植时的确切源提交。
+- 运行时许可入口：`/licenses/lingji-cut.txt`。
+
+## BeefTV 无限画布与完整工作台迁移
+
+2026-10-01 清理全部旧前端后，用户授权完整迁移重建。以下画布核心现从历史 `bd17655b` 中恢复已适配 Next.js/shadcn 与正式 Go 合同的实现，来源继续为固定 BeefTV `0d9e9f48`。完整工作台能力参考固定 `1ae25027`；新增移植文件逐项追加登记，不把整个上游源码目录复制为第二套应用。首页/导航的功能组织参考 `web/src/pages/home/home-dashboard.tsx` 与 `components/layout/workspace-sidebar-nav.tsx`，改写为自身 App Router 和 shadcn 工作台。
 
 - 固定来源：`0d9e9f48d407570cd431ad9730cdd522b06810c0`，用户确认采用该仓库当前 `main` 后固定此提交。
-- 许可：MIT，完整版权与许可文本原字节迁至 [docs/licenses/beeftv.txt](docs/licenses/beeftv.txt)，原产品 `/licenses` 入口已移除。
+- 许可：MIT，完整版权与许可文本保留于 [docs/licenses/beeftv.txt](docs/licenses/beeftv.txt)，当前工作台恢复 `/licenses` 和 `/licenses/beeftv.txt` 入口。
 - 版权：2026 @beefnoode and BeefTV contributors；2026 basketikun；2026 ddcat。
 - 上游来源：BeefTV 的 `NOTICE` 声明其包含 Infinite Canvas v0.5.0（`568f0f1838df8de31fe885a4e130e2f346dd14ab`）的派生代码，并记录上游在 `890ba95858bbb13496d23978003716656109abb2` 改为 MIT 许可。
 
-下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；历史目标均相对于已删除的 Lanverse `frontend/src/components/canvas/`。
+下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；目标相对于 Lanverse `frontend/src/components/canvas/`。它们恢复了核心实现，不代表完整工具与生成迁移已经完成。
 
 | 目标文件                             | 源文件                                                                                                                                  | 适配范围                                                                       |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -40,7 +48,28 @@
 
 `model.ts`、`document.ts`、`store.ts`、`queries.ts`、`workspace.tsx`、`editor.tsx` 与节点内容曾负责 Lanverse 的正式领域适配：身份与权限、项目资源、服务端 revision、原子命令、持久幂等和媒体预览。历史移植范围见 [无限画布引入设计](docs/design/BeefTV能力引入设计.md) 和对应 Plan；当前状态以 [前端实现清理](docs/design/前端实现清理设计.md) 为准。
 
-BeefTV 的 Wails 桌面外壳、本地数据库、模型执行、插件、时间线、3D/深度工具及其资源未纳入本次移植。前端包依赖的许可仍由各依赖声明。
+当前完整工作台迁移还移植以下 MIT 算法与输入合同。源提交为 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`，目标均按 Lanverse UUID、服务端持久化、权限和关闭的输入范围改写；不保留源 Wails 外壳或本地数据库。未完成能力以正式设计清单为准，不能由许可登记推断已验收。
+
+| 目标（相对 `frontend/src/components/canvas/`）                                                                                        | 来源与改写内容                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `batch-table.ts`                                                                                                                      | BeefTV 批量表格行列、引用槽位、排序与编辑；改用 UUID 与服务端画布命令                               |
+| `image-tools.ts`、`subtitles.ts`                                                                                                      | 图片裁切、网格分割及字幕输入；改用私有媒体与正式保存合同                                            |
+| `image-mask.ts`、`image-mask-dialog.tsx`、`mask-draft.ts`                                                                             | `canvas-node-mask-edit-dialog.tsx` 的绘制、擦除和透明遮罩；改用正式素材上传、模型用途校验及画布草稿 |
+| `video-crop-geometry.ts`、`video-tools.ts`、`video-tools-dialog.tsx`                                                                  | `lib/canvas/video-crop-geometry.ts` 和视频工具的区域调整、截帧及裁切输入；改用正式素材与时间轴导出  |
+| `director/scene.ts`、`ground.ts`、`stage-transform.ts`、`aspect-ratio.ts`、`view-modes.ts`、`camera-binding.ts`、`prompt-compiler.ts` | 3D 场景、地面、变换、画幅、视图、机位绑定和提示词编译；接入闭合输入与正式资源引用                   |
+| `director/animation-semantics.ts`                                                                                                     | `director-animation-semantics.ts` 的动画增量与关键帧语义；保持自身类型和有限数值边界                |
+| `director/rig.ts`                                                                                                                     | `director-viewport.tsx` 的骨骼命名匹配；改为实际 GLB 骨骼扫描和纯函数映射                           |
+| `director/camera-presets.ts`、`modes.ts`、`camera-moves.ts`                                                                           | `director-camera-presets.ts`、导演模式和运镜预设；接入自身场景与机位合同                            |
+
+前端包依赖的许可仍由各依赖声明。
+
+## Khronos glTF 输入校验规范
+
+服务端 `backend/internal/media/adapter/gltf/schema/` 的 JSON Schema 原文来自 [KhronosGroup/glTF](https://github.com/KhronosGroup/glTF/tree/5decc120c95764c319c4f92e7f7ead026d926ef3)，固定提交 `5decc120c95764c319c4f92e7f7ead026d926ef3`，2026-10-01 获取。JSON Schema 保持原字节；适配和资源预算校验为 Lanverse 自身 Go 实现。
+
+- Copyright 2014–2021 The Khronos Group Inc.，源 `COPYING.adoc` 与 `LICENSE.adoc` 原文同目录保留，逐项来源见 `schema/PROVENANCE.md`。
+- 核心 Schema 使用 CC-BY-4.0；KHR 扩展规范遵循上游 Khronos Specification Copyright 原文复制条件。原文分别保存在 [CC-BY-4.0](docs/licenses/CC-BY-4.0.txt) 与 [Khronos Specification Copyright](docs/licenses/LicenseRef-KhronosSpecCopyright.txt)，运行时 `/licenses` 提供相同文本。
+- 本项目没有修改被复制的规范、附加规范认证或厂商背书；未引入需独立解码器或未核验许可的扩展 Schema。
 
 ## 历史界面参考
 

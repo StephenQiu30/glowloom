@@ -30,7 +30,11 @@ const (
 	KindVideo    Kind = "video"
 	KindAudio    Kind = "audio"
 	KindDocument Kind = "document"
+	KindModel    Kind = "model"
 )
+
+// MaxModelBytes bounds a local self-contained GLB 2.0 model asset.
+const MaxModelBytes int64 = 64 << 20
 
 // Origin identifies how an asset entered the media library.
 type Origin string
@@ -144,6 +148,10 @@ func (a MediaAsset) Validate() error {
 		}
 	} else if a.SourceOperationID != nil || a.ProviderKey != nil || a.ModelKey != nil || a.Region != nil ||
 		(a.Origin != OriginUpload && (a.Status == StatusUploading || a.UploadID != nil)) {
+		return ErrInvalidMediaAsset
+	}
+	if a.Kind == KindModel && (a.Origin != OriginUpload || a.MimeType != "model/gltf-binary" || a.ByteSize < 1 || a.ByteSize > MaxModelBytes ||
+		a.Codec == nil || *a.Codec != "glb2" || a.Width != nil || a.Height != nil || a.DurationMS != nil || a.FPS != nil || a.AudioChannels != nil) {
 		return ErrInvalidMediaAsset
 	}
 	if a.Status == StatusReady && a.ModerationStatus != ModerationPassed ||
@@ -280,7 +288,7 @@ func (r Rendition) Validate() error {
 
 func (k Kind) valid() bool {
 	switch k {
-	case KindImage, KindVideo, KindAudio, KindDocument:
+	case KindImage, KindVideo, KindAudio, KindDocument, KindModel:
 		return true
 	default:
 		return false

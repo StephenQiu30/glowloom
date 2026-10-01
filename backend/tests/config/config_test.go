@@ -66,6 +66,19 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestCredentialSealingConfigurationRequiresPublicKeyAndIdentity(t *testing.T) {
+	t.Setenv("LV_CREDENTIAL_PUBLIC_KEY_FILE", "/configured/public.pem")
+	t.Setenv("LV_CREDENTIAL_KEY_ID", "")
+	if _, err := config.Load(); !errors.Is(err, config.ErrInvalid) {
+		t.Fatalf("incomplete public key configuration accepted: %v", err)
+	}
+	t.Setenv("LV_CREDENTIAL_KEY_ID", "agent-key-1")
+	cfg, err := config.Load()
+	if err != nil || cfg.CredentialPublicKeyFile != "/configured/public.pem" || cfg.CredentialKeyID != "agent-key-1" {
+		t.Fatalf("public key configuration not loaded: %v", err)
+	}
+}
+
 func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("LV_ENV", "staging")
 	t.Setenv("LV_PUBLIC_ORIGIN", "https://lanverse.example")

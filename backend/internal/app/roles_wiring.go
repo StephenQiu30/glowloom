@@ -13,11 +13,13 @@ import (
 	auditevent "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/event"
 	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
 	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
+	catalogevent "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/event"
 	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
 	catalogflow "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/workflow"
 	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 	kafkainbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/kafka"
 	pginbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
+	inboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
 	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
 	maintenanceapp "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/application"
 	kafkaoutbox "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/adapter/kafka"
@@ -25,9 +27,11 @@ import (
 	outboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/application"
 	redisrealtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
+	mediastaged "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/staged"
 	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
 	operationevent "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/event"
 	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
+	operationstaging "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/staging"
 	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
@@ -87,7 +91,19 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
 		operationStore := pgoperation.NewStore(dbConn.DB)
 		finalizer := NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
-		operationflow.Register(queueWorker, operationflow.NewActivities(operationStore, finalizer))
+		var recovery operationflow.ProviderImageRecoverer
+		if cfg.ObjectStorageEndpoint != "" {
+			storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket,
+				cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
+			if err != nil {
+				return nil, fmt.Errorf("configure flow receipt storage: %w", err)
+			}
+			if err := storage.Ping(ctx); err != nil {
+				return nil, fmt.Errorf("connect flow receipt storage: %w", err)
+			}
+			recovery = operationapp.NewProviderStageService(operationstaging.NewObjects(storage), operationStore)
+		}
+		operationflow.Register(queueWorker, operationflow.NewActivitiesWithImageRecovery(operationStore, finalizer, operationStore, recovery))
 		operationflow.RegisterBatch(queueWorker, operationflow.NewBatchActivities(operationStore, finalizer))
 		operationflow.RegisterQuoteExpiry(queueWorker,
 			operationflow.NewQuoteExpiryActivities(operationapp.NewQuoteExpiryService(operationStore, 500)))
@@ -106,9 +122,10 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 				origins = append(origins, origin)
 			}
 		}
-		activities, err := mediaflow.NewActivities(dbConn.DB, storage, mediaflow.DownloadPolicy{
+		receiptService := operationapp.NewProviderStageService(operationstaging.NewObjects(storage), pgoperation.NewStore(dbConn.DB))
+		activities, err := mediaflow.NewActivitiesWithStaging(dbConn.DB, storage, mediaflow.DownloadPolicy{
 			AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS,
-		})
+		}, mediastaged.NewReader(receiptService))
 		if err != nil {
 			return nil, fmt.Errorf("configure media activities: %w", err)
 		}
@@ -161,8 +178,14 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		}
 		starterHandler := operationevent.NewWorkflowStarterHandler(processed,
 			pgoperation.NewStore(dbConn.DB), operationflow.NewStarter(temporalConn.Client))
+		controlHandler := operationevent.NewWorkflowControlHandler(processed,
+			pgoperation.NewStore(dbConn.DB), operationflow.NewControl(temporalConn.Client))
+		credentialHandler := catalogevent.NewCredentialTestHandler(processed,
+			pgcatalog.NewStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic}, starterHandler)
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic}, workflowDelivery{
+				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
+			})
 		if err != nil {
 			temporalConn.Close()
 			auditConsumer.Close()
@@ -186,4 +209,17 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		auditConsumer.Close()
 		realtimeConsumer.Close()
 	}, nil
+}
+
+// workflowDelivery dispatches distinct durable requests on the existing owned consumer.
+type workflowDelivery struct {
+	operations  inboxapp.Handler
+	credentials inboxapp.Handler
+}
+
+func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
+	if record.Topic == catalogevent.CredentialTestTopic {
+		return h.credentials.Handle(ctx, record)
+	}
+	return h.operations.Handle(ctx, record)
 }

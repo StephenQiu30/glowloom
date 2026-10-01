@@ -236,7 +236,14 @@ jobs:
           git diff --no-index --exit-code -- docs "$RUNNER_TEMP/swagger-contract/docs"
       - name: Verify production public route and Swagger contracts
         run: go test -race ./tests/app -run '^Test(PublicRouterSwaggerContract|PublicSwaggerRejectsContractDrift|PublicSwaggerNormalizesPathParameters|SwaggerRuntimeDefaultsDoNotHideNonEmptyDrift)$' -count=1 -v
-      - name: Verify the same-commit production API and online Swagger
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - run: npm install --global pnpm@12.4.2
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: frontend
+      - name: Verify the same-commit production API and fresh online client
         env:
           LV_ENV: local
           LV_ENV_FILE: ""
@@ -277,51 +284,94 @@ jobs:
             cat "$RUNNER_TEMP/public-contract-api.log" >&2
             exit 1
           fi
-          python3 <<'PY'
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          contract_root = Path(os.environ["RUNNER_TEMP"])
-          online = json.loads((contract_root / "swagger-online.json").read_text())
-          static_schema = json.loads((contract_root / "swagger-contract/docs/swagger.json").read_text())
-          if "host" not in static_schema and online.get("host") == "":
-              del online["host"]
-          if "schemes" not in static_schema and online.get("schemes") == []:
-              del online["schemes"]
-          if json.dumps(static_schema, sort_keys=True) != json.dumps(online, sort_keys=True):
-              raise SystemExit("production online Swagger differs from fresh artifacts")
-          paths = online.get("paths")
-          if online.get("swagger") != "2.0" or not isinstance(paths, dict) or not paths:
-              raise SystemExit("invalid or empty online Swagger")
-          methods = {"get", "post", "put", "patch", "delete", "head", "options"}
-          operation_ids = set()
-          for route, item in paths.items():
-              if not route.startswith("/api/") or re.search(r"/internal(?:/|$)|callback|webhook", route, re.IGNORECASE):
-                  raise SystemExit(f"non-public path {route}")
-              for method, operation in item.items():
-                  if method not in methods:
-                      continue
-                  operation_id = operation.get("operationId")
-                  if not isinstance(operation_id, str) or not operation_id.strip() or operation_id in operation_ids:
-                      raise SystemExit(f"invalid operationId for {method} {route}")
-                  operation_ids.add(operation_id)
-          if not operation_ids:
-              raise SystemExit("online Swagger has no operations")
-          print(f"Verified online Swagger with {len(operation_ids)} public operations.")
-          PY
+          export LANVERSE_CONTRACT_OUTPUT_ROOT="$(mktemp -d "$RUNNER_TEMP/lanverse-api-generated.XXXXXX")"
+          node <<'JS'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const { createRequire } = require("node:module");
+          const { isDeepStrictEqual } = require("node:util");
+          const frontend = path.join(process.env.GITHUB_WORKSPACE, "frontend");
+          const frontendRequire = createRequire(path.join(frontend, "package.json"));
+          const config = frontendRequire("./openapi2ts.config.cjs");
+          const { generateService } = frontendRequire("@umijs/openapi");
+          const ts = frontendRequire("typescript");
+          const outputRoot = process.env.LANVERSE_CONTRACT_OUTPUT_ROOT;
+          async function verify() {
+            const response = await fetch(config.schemaPath, { signal: AbortSignal.timeout(10000) });
+            if (!response.ok) throw new Error(`online Swagger status ${response.status}`);
+            const online = await response.json();
+            const staticSchema = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, "swagger-contract/docs/swagger.json"), "utf8"));
+            if (!Object.hasOwn(staticSchema, "host") && online.host === "") delete online.host;
+            if (!Object.hasOwn(staticSchema, "schemes") && Array.isArray(online.schemes) && online.schemes.length === 0) delete online.schemes;
+            if (!isDeepStrictEqual(staticSchema, online)) throw new Error("production online Swagger differs from fresh artifacts");
+            if (online.swagger !== "2.0" || !online.paths || Object.keys(online.paths).length === 0) throw new Error("invalid or empty online Swagger");
+            const methods = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+            const ids = new Set();
+            for (const [route, item] of Object.entries(online.paths)) {
+              if (!route.startsWith("/api/") || /\/internal(?:\/|$)|callback|webhook/i.test(route)) throw new Error(`non-public path ${route}`);
+              for (const [method, operation] of Object.entries(item)) {
+                if (!methods.has(method)) continue;
+                const id = operation.operationId;
+                if (typeof id !== "string" || !id.trim() || ids.has(id)) throw new Error(`invalid operationId for ${method} ${route}`);
+                ids.add(id);
+              }
+            }
+            if (ids.size === 0) throw new Error("online Swagger has no operations");
+            // The upstream CLI catches errors without failing. Generate into a
+            // new directory, propagate rejection, and require actual output.
+            await generateService({ ...config, serversPath: outputRoot, projectName: "api" });
+            const directory = path.join(outputRoot, "api");
+            for (const file of ["index.ts", "typings.d.ts"]) {
+              if (!fs.existsSync(path.join(directory, file)) || fs.statSync(path.join(directory, file)).size === 0) throw new Error(`missing generated ${file}`);
+            }
+            const exported = new Set();
+            for (const file of fs.readdirSync(directory).filter((file) => file.endsWith(".ts"))) {
+              const source = ts.createSourceFile(file, fs.readFileSync(path.join(directory, file), "utf8"), ts.ScriptTarget.Latest, true);
+              for (const statement of source.statements) {
+                if (ts.isFunctionDeclaration(statement) && statement.name && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) exported.add(statement.name.text);
+              }
+            }
+            for (const id of ids) if (!exported.has(id)) throw new Error(`missing generated operation ${id}`);
+            console.log(`Verified online Swagger with ${ids.size} public operations and fresh client output.`);
+          }
+          verify().catch((error) => {
+            console.error(error instanceof Error ? error.message : "contract generation failed");
+            process.exitCode = 1;
+          });
+          JS
+          pnpm --dir "$GITHUB_WORKSPACE/frontend" exec prettier --config "$GITHUB_WORKSPACE/frontend/.prettierrc.json" --write "$LANVERSE_CONTRACT_OUTPUT_ROOT/api/**/*.ts"
+          git diff --no-index --exit-code -- ../frontend/src/gen/api "$LANVERSE_CONTRACT_OUTPUT_ROOT/api"
           {
             echo '## Public contract gate'
             echo ''
-            echo 'Fresh Swagger, production online schema, and public route coverage match this commit.'
-            echo 'Frontend checks, generated-client comparison, and the frontend image are paused until the frontend is rebuilt.'
+            echo 'Fresh Swagger, production online schema, public route coverage, and fresh online client match this commit.'
             echo 'This gate does not probe /readyz or prove Temporal/object-storage readiness or product acceptance.'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - run: npm install --global pnpm@12.4.2
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm exec eslint .
+      - run: pnpm exec prettier --check .
+      - run: pnpm exec next typegen
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm exec vitest run
+      - run: pnpm exec next build
+
   images:
     runs-on: ubuntu-24.04
-    needs: [backend]
+    needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v7
       - run: docker build --file backend/Dockerfile --tag lanverse/backend:ci backend
+      - run: docker build --file frontend/Dockerfile --tag lanverse/frontend:ci frontend

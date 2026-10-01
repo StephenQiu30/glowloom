@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 )
 
 var (
@@ -28,9 +29,10 @@ var (
 
 // IngestInput is the stable Temporal activity payload.
 type IngestInput struct {
-	OperationID string `json:"operation_id"`
-	SeqNo       int    `json:"seq_no"`
-	URL         string `json:"url"`
+	OperationID string                        `json:"operation_id"`
+	SeqNo       int                           `json:"seq_no"`
+	URL         string                        `json:"url"`
+	Receipt     *operationapp.ProviderReceipt `json:"receipt,omitempty"`
 }
 
 // IngestOutput names the media and candidate records created for one result.
@@ -117,6 +119,13 @@ type Downloader interface {
 	Download(context.Context, string) (*Downloaded, error)
 }
 
+// StagedSource binds a private image to its durable provider receipt before
+// reading bounded bytes. It accepts no URL, path, or object key from a caller.
+type StagedSource interface {
+	ValidateReceipt(context.Context, operationapp.ProviderReceipt) error
+	Download(context.Context, operationapp.ProviderReceipt) (*Downloaded, error)
+}
+
 // Prober verifies the downloaded bytes and extracts media metadata.
 type Prober interface {
 	Probe(context.Context, *Downloaded) (ProbeResult, error)
@@ -139,6 +148,7 @@ type ObjectInfo struct {
 type IngestService struct {
 	repo       Repository
 	downloader Downloader
+	staged     StagedSource
 	prober     Prober
 	renderer   Renderer
 	objects    ObjectStore
@@ -150,15 +160,36 @@ func NewIngestService(repo Repository, downloader Downloader, prober Prober, ren
 	return &IngestService{repo: repo, downloader: downloader, prober: prober, renderer: renderer, objects: objects, now: time.Now}
 }
 
+// NewStagedIngestService injects the receipt boundary for private provider bytes.
+func NewStagedIngestService(repo Repository, source StagedSource, prober Prober, renderer Renderer, objects ObjectStore) *IngestService {
+	return &IngestService{repo: repo, staged: source, prober: prober, renderer: renderer, objects: objects, now: time.Now}
+}
+
 // Ingest transfers one result and atomically registers its media and output rows.
 func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOutput, error) {
 	opID, err := uuid.Parse(input.OperationID)
-	if err != nil || opID == uuid.Nil || input.SeqNo < 1 || input.SeqNo > 8 || input.URL == "" {
+	if err != nil || opID == uuid.Nil || input.SeqNo < 1 || input.SeqNo > 8 || (input.URL == "") == (input.Receipt == nil) {
+		return IngestOutput{}, ErrInvalidIngest
+	}
+	if input.Receipt != nil {
+		if s.staged == nil || input.Receipt.Validate() != nil || input.Receipt.Identity.OperationID != opID || input.Receipt.Outputs[0].Sequence != int32(input.SeqNo) {
+			return IngestOutput{}, ErrInvalidIngest
+		}
+		if err := s.staged.ValidateReceipt(ctx, *input.Receipt); err != nil {
+			return IngestOutput{}, fmt.Errorf("validate staged media receipt: %w", err)
+		}
+	} else if s.downloader == nil {
 		return IngestOutput{}, ErrInvalidIngest
 	}
 	if existing, found, err := s.repo.FindOutput(ctx, opID, input.SeqNo); err != nil {
 		return IngestOutput{}, fmt.Errorf("find media output: %w", err)
 	} else if found {
+		if input.Receipt != nil {
+			output := input.Receipt.Outputs[0]
+			if existing.Kind != string(domain.KindImage) || existing.ByteSize != output.SizeBytes || existing.MIMEType != output.MIMEType || existing.SHA256 != output.SHA256 {
+				return IngestOutput{}, ErrObjectMismatch
+			}
+		}
 		if err := s.verifyObject(ctx, existing.ObjectKey, existing.ByteSize, existing.MIMEType, existing.SHA256); err != nil {
 			return IngestOutput{}, err
 		}
@@ -189,9 +220,20 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 	if err != nil {
 		return IngestOutput{}, fmt.Errorf("load source operation: %w", err)
 	}
-	downloaded, err := s.downloader.Download(ctx, input.URL)
+	if input.Receipt != nil && input.Receipt.Identity.ProjectID != op.ProjectID {
+		return IngestOutput{}, ErrInvalidIngest
+	}
+	var downloaded *Downloaded
+	if input.Receipt != nil {
+		downloaded, err = s.staged.Download(ctx, *input.Receipt)
+	} else {
+		downloaded, err = s.downloader.Download(ctx, input.URL)
+	}
 	if err != nil {
 		return IngestOutput{}, fmt.Errorf("download media result: %w", err)
+	}
+	if downloaded == nil || downloaded.File == nil {
+		return IngestOutput{}, ErrInvalidIngest
 	}
 	defer func() { _ = downloaded.Close() }()
 	probe, err := s.prober.Probe(ctx, downloaded)

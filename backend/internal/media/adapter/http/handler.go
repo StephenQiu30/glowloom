@@ -32,7 +32,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Tags media
 // @Produce json
 // @Param pid path string true "项目UUID"
-// @Param kind query string false "image/video/audio"
+// @Param kind query string false "image/video/audio/model"
 // @Param cursor query string false "不透明游标"
 // @Param limit query integer false "1..200，默认50"
 // @Success 200 {object} application.AssetPage

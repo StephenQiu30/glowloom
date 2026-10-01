@@ -38,9 +38,13 @@ func (FFRenderer) Render(ctx context.Context, source *application.Downloaded, pr
 		}
 	case domain.KindVideo:
 		width, height := "1280", "720"
-		if aspectRatio == "9:16" {
+		switch aspectRatio {
+		case "9:16":
 			width, height = "720", "1280"
-		} else if aspectRatio != "16:9" {
+		case "1:1":
+			width, height = "720", "720"
+		case "16:9":
+		default:
 			return nil, ErrUnsupportedMedia
 		}
 		specs = []renderSpec{

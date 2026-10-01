@@ -18,6 +18,9 @@ import (
 // ErrInvalidModelCatalog means the internal request or stored page is invalid.
 var ErrInvalidModelCatalog = errors.New("invalid model catalog")
 
+// ErrModelCatalogProjectNotFound hides absent and out-of-organization projects.
+var ErrModelCatalogProjectNotFound = errors.New("model catalog project not found")
+
 // ModelCatalogCursor is an internal keyset position; API encoding is separate.
 type ModelCatalogCursor struct {
 	Key string
@@ -50,6 +53,7 @@ type ModelCatalogItem struct {
 	Key                  string
 	DisplayName          string
 	Capability           string
+	InputRoles           []string
 	Status               domain.ModelStatus
 	ProviderID           uuid.UUID
 	ProviderName         string

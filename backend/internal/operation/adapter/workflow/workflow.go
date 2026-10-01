@@ -124,6 +124,12 @@ func OperationWorkflow(ctx workflow.Context, input OperationInput) error {
 		}
 		return nil
 	}
+	if loaded.Provider.AdapterKey == "codex" {
+		if workflow.GetVersion(ctx, "operation-codex-image-v1", workflow.DefaultVersion, 1) == workflow.DefaultVersion {
+			return ErrUnsupportedOperation
+		}
+		return runCodexImage(ctx, flowCtx, loaded)
+	}
 	if loaded.Provider.AdapterKey != "mock" || loaded.Provider.Queue != "agent.mock" || !loaded.Provider.SupportsQuery {
 		return ErrUnsupportedOperation
 	}

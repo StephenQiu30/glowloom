@@ -12,6 +12,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
 )
 
 func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Size]byte, error) {
@@ -30,6 +31,7 @@ func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Si
 		Params          map[string]json.RawMessage        `json:"params"`
 		OutputCount     int32                             `json:"output_count"`
 		ForceRegenerate bool                              `json:"force_regenerate"`
+		Source          *domain.CanvasSource              `json:"source"`
 	}{
 		Kind:      "free_single",
 		ProjectID: input.ProjectID, ModelKey: input.ModelKey,
@@ -37,6 +39,7 @@ func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Si
 		MediaInputs: input.MediaInputs,
 		Params:      params, OutputCount: input.OutputCount,
 		ForceRegenerate: input.ForceRegenerate,
+		Source:          input.Source,
 	})
 	if err != nil {
 		return [sha256.Size]byte{}, fmt.Errorf("encode quote request fingerprint: %w", err)
@@ -54,6 +57,7 @@ func batchQuoteRequestFingerprint(input application.CreateBatchFreeQuoteInput) (
 		Params          json.RawMessage                   `json:"params"`
 		OutputCount     int32                             `json:"output_count"`
 		ForceRegenerate bool                              `json:"force_regenerate"`
+		Source          *domain.CanvasSource              `json:"source"`
 	}
 	items := make([]item, 0, len(input.Items))
 	for _, requested := range input.Items {
@@ -76,6 +80,7 @@ func batchQuoteRequestFingerprint(input application.CreateBatchFreeQuoteInput) (
 			ModelKey: requested.ModelKey, Capability: requested.Capability,
 			Mode: requested.Mode, Prompt: requested.Prompt, MediaInputs: requested.MediaInputs, Params: raw,
 			OutputCount: requested.OutputCount, ForceRegenerate: requested.ForceRegenerate,
+			Source: requested.Source,
 		})
 	}
 	encoded, err := json.Marshal(struct {

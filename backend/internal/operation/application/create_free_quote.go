@@ -26,6 +26,8 @@ var (
 	ErrFreeQuoteInputNotReady = errors.New("free quote input not ready")
 	// ErrQuoteKeyReused means one UUID names a different quote request.
 	ErrQuoteKeyReused = errors.New("quote idempotency key reused")
+	// ErrQuoteSourceStale means the generating canvas was changed after selection.
+	ErrQuoteSourceStale = errors.New("quote canvas source revision conflict")
 )
 
 // FreeQuoteItemInput describes one canvas request without project metadata.
@@ -38,6 +40,7 @@ type FreeQuoteItemInput struct {
 	OutputCount     int32
 	ForceRegenerate bool
 	MediaInputs     []FreeQuoteMediaInput
+	Source          *domain.CanvasSource
 }
 
 // FreeQuoteMediaInput names an ordered canvas asset and its model input role.
@@ -48,6 +51,9 @@ type FreeQuoteMediaInput struct {
 
 // Validate checks prompt, optional model selection and JSON bounds.
 func (i FreeQuoteItemInput) Validate() error {
+	if i.Source != nil && !i.Source.Valid() {
+		return ErrInvalidFreeQuote
+	}
 	if strings.TrimSpace(i.Capability) == "" || strings.TrimSpace(i.Mode) == "" ||
 		strings.TrimSpace(i.Prompt) == "" || len(i.Prompt) > 64*1024 ||
 		!utf8.ValidString(i.Prompt) || i.OutputCount < 1 || i.OutputCount > 8 ||
@@ -234,6 +240,7 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 		Capability: input.Capability, Mode: input.Mode,
 		ModelProfileVersionID: &versionID, PriceRuleVersionID: &priceID,
 		Params: input.Params, OutputCount: input.OutputCount,
+		Source:    input.Source,
 		InputHash: hash, Origin: "canvas", Status: domain.StatusQuoted,
 		QuoteMicros: &amount, QuoteDetail: quoteDetail, QuoteExpiresAt: &expires,
 		ReusedFromID: candidate, ForceRegenerate: input.ForceRegenerate,

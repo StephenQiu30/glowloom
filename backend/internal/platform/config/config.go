@@ -33,6 +33,8 @@ type Config struct {
 	ObjectStorageAccessKey    string
 	ObjectStorageSecretKey    string
 	ObjectStorageRegion       string
+	CredentialPublicKeyFile   string
+	CredentialKeyID           string
 	MediaResultAllowedOrigins string
 	MediaAllowTestLoopbackTLS bool
 	OTelEndpoint              string
@@ -79,6 +81,8 @@ func Load() (Config, error) {
 		ObjectStorageAccessKey:    v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
 		ObjectStorageSecretKey:    v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
 		ObjectStorageRegion:       strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
+		CredentialPublicKeyFile:   strings.TrimSpace(v.GetString("LV_CREDENTIAL_PUBLIC_KEY_FILE")),
+		CredentialKeyID:           strings.TrimSpace(v.GetString("LV_CREDENTIAL_KEY_ID")),
 		MediaResultAllowedOrigins: strings.TrimSpace(v.GetString("LV_MEDIA_RESULT_ALLOWED_ORIGINS")),
 		MediaAllowTestLoopbackTLS: v.GetBool("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
 		OTelEndpoint:              strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
@@ -90,6 +94,9 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if (c.CredentialPublicKeyFile == "") != (c.CredentialKeyID == "") || len(c.CredentialKeyID) > 128 {
+		return fmt.Errorf("%w: credential public key file and key ID must be configured together", ErrInvalid)
+	}
 	if c.MediaAllowTestLoopbackTLS && c.Env != "local" {
 		return fmt.Errorf("%w: LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS is local-only", ErrInvalid)
 	}

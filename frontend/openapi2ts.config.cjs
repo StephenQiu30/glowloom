@@ -13,6 +13,8 @@ module.exports = {
   hook: {
     // Swagger 2 x-nullable 经转换为 nullable；只扩展声明允许清空的字段。
     customType(schema, namespace, defaultGetType) {
+      if (schema?.type === "array" && schema?.["x-nullable-items"])
+        return `(${defaultGetType(schema.items, namespace)} | null)[]`;
       if (schema?.nullable || schema?.["x-nullable"])
         return `${defaultGetType(schema, namespace)} | null`;
     },
@@ -26,6 +28,8 @@ module.exports = {
         );
       const visit = (value) => {
         if (!value || typeof value !== "object") return;
+        if (value["x-nullable-items"] && value.items)
+          value.items.nullable = true;
         for (const [key, child] of Object.entries(value)) {
           if (
             key === "$ref" &&

@@ -385,7 +385,7 @@ func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal
 		if err := requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
-		query := `SELECT * FROM media.media_asset WHERE project_id=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND kind IN ('image','video','audio')`
+		query := `SELECT * FROM media.media_asset WHERE project_id=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND kind IN ('image','video','audio','model')`
 		args := []any{projectID}
 		if kind != "" {
 			query += ` AND kind=?`

@@ -22,8 +22,12 @@ var (
 
 // NodeConfig contains only user-editable, type-specific presentation data.
 type NodeConfig struct {
-	Text      *string `json:"text,omitempty"`
-	Collapsed *bool   `json:"collapsed,omitempty"`
+	Text       *string           `json:"text,omitempty"`
+	Collapsed  *bool             `json:"collapsed,omitempty"`
+	BatchTable *BatchTableConfig `json:"batch_table,omitempty"`
+	Timeline   *TimelineConfig   `json:"timeline,omitempty"`
+	Director   *DirectorConfig   `json:"director,omitempty"`
+	Generation *GenerationConfig `json:"generation,omitempty"`
 }
 
 // Viewport stores the document camera in world coordinates.
@@ -142,7 +146,7 @@ func Apply(document Document, commands []Command) (Document, error) {
 		if err := applyOne(&doc, c); err != nil {
 			return Document{}, &CommandError{Index: index, Cause: err}
 		}
-		if len(doc.Nodes) > 2000 || len(doc.Edges) > 4000 || !validParents(doc.Nodes) {
+		if len(doc.Nodes) > 2000 || len(doc.Edges) > 4000 || !validParents(doc.Nodes) || !validToolReferences(doc.Nodes) {
 			return Document{}, &CommandError{Index: index, Cause: ErrInvalidCommand}
 		}
 	}
@@ -278,7 +282,10 @@ func applyOne(doc *Document, c Command) error {
 				return ErrUnsupportedCommand
 			}
 		}
+		clearTimelineReferences(doc.Nodes, seen)
+		clearDirectorReferences(doc.Nodes, seen)
 		doc.Nodes = slices.DeleteFunc(doc.Nodes, func(n Node) bool { return seen[n.ID] })
+		clearBatchReferences(doc.Nodes, seen)
 		for i, n := range doc.Nodes {
 			if n.ParentID != nil && seen[*n.ParentID] {
 				if !editable(n) {
@@ -340,13 +347,19 @@ func editableIndex(doc *Document, id uuid.UUID, seen map[uuid.UUID]bool) (int, e
 	return i, nil
 }
 func editable(n Node) bool {
-	if n.NodeAction != "resource" || n.LastOperationID != nil {
+	if n.LastOperationID != nil {
+		return false
+	}
+	if n.NodeType == "batch_table" || n.NodeType == "timeline" || n.NodeType == "director" || n.NodeType == "generation" {
+		return n.NodeAction == "tool" && n.RefType == "" && n.RefID == nil
+	}
+	if n.NodeAction != "resource" {
 		return false
 	}
 	switch n.NodeType {
 	case "text", "group":
 		return n.RefType == "" && n.RefID == nil
-	case "image", "video", "audio":
+	case "image", "video", "audio", "model":
 		return n.RefType == "media_asset" && n.RefID != nil && *n.RefID != uuid.Nil
 	default:
 		return false
@@ -356,12 +369,30 @@ func annotation(e Edge) bool {
 	return e.EdgeType == "annotation" && e.Role == "" && len(e.Binding) == 0
 }
 func validConfig(kind string, c NodeConfig) bool {
+	if kind == "generation" {
+		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation != nil && validGeneration(*c.Generation)
+	}
+	if c.Generation != nil {
+		return false
+	}
+	if kind == "batch_table" {
+		return c.Text == nil && c.Collapsed == nil && c.Timeline == nil && c.Director == nil && c.BatchTable != nil && validBatchTable(*c.BatchTable)
+	}
+	if kind == "timeline" {
+		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Director == nil && c.Timeline != nil && validTimeline(*c.Timeline)
+	}
+	if kind == "director" {
+		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director != nil && validDirector(*c.Director)
+	}
+	if c.BatchTable != nil || c.Timeline != nil || c.Director != nil {
+		return false
+	}
 	switch kind {
 	case "text":
 		return c.Text != nil && c.Collapsed == nil && utf8.ValidString(*c.Text) && utf8.RuneCountInString(*c.Text) <= 10000
 	case "group":
 		return c.Text == nil && c.Collapsed != nil
-	case "image", "video", "audio":
+	case "image", "video", "audio", "model":
 		return c.Text == nil && c.Collapsed == nil
 	default:
 		return false

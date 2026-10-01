@@ -199,6 +199,8 @@ func validateReviewedUpload(actor identityapp.Principal, r application.UploadReq
 		required = []domain.RenditionKind{domain.RenditionPoster, domain.RenditionProxy720p}
 	case domain.KindAudio:
 		required = []domain.RenditionKind{domain.RenditionWaveform}
+	case domain.KindModel:
+		required = nil
 	default:
 		return application.ErrInvalidUpload
 	}

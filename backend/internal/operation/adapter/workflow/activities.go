@@ -33,8 +33,10 @@ type Finalizer interface {
 
 // Activities is the flow queue's database Activity adapter.
 type Activities struct {
-	store     Store
-	finalizer Finalizer
+	store         Store
+	finalizer     Finalizer
+	imageIdentity ProviderImageIdentityReader
+	imageRecovery ProviderImageRecoverer
 }
 
 // NewActivities injects the operation store and atomic terminal writer.
@@ -104,7 +106,11 @@ func (a *Activities) CheckManualNotExecuted(ctx context.Context, operationID str
 	if err != nil || id.String() != operationID {
 		return ErrInvalidOperationInput
 	}
-	return permanentActivityError(a.store.CheckManualNotExecuted(ctx, id))
+	err = a.store.CheckManualNotExecuted(ctx, id)
+	if errors.Is(err, application.ErrProviderCallConflict) {
+		return temporal.NewNonRetryableApplicationError("executed provider evidence rejects manual release", "manual_resolution_unverified", err)
+	}
+	return permanentActivityError(err)
 }
 
 func permanentActivityError(err error) error {
@@ -123,6 +129,9 @@ func permanentActivityError(err error) error {
 	if errors.Is(err, application.ErrManualResolutionUnverified) {
 		return temporal.NewNonRetryableApplicationError("administrator resolution has not been recorded", "manual_resolution_unverified", err)
 	}
+	if errors.Is(err, application.ErrProviderCostUnknown) {
+		return temporal.NewNonRetryableApplicationError("provider charge is not established", "provider_cost_unknown", err)
+	}
 	if errors.Is(err, domain.ErrIllegalTransition) || errors.Is(err, domain.ErrInvalidStatus) ||
 		errors.Is(err, domain.ErrInvalidOperation) || errors.Is(err, ErrInvalidOperationInput) ||
 		errors.Is(err, application.ErrInvalidTransitionInput) ||
@@ -131,8 +140,7 @@ func permanentActivityError(err error) error {
 		errors.Is(err, application.ErrInvalidWorkflowBatch) ||
 		errors.Is(err, application.ErrWorkflowModelUnavailable) ||
 		errors.Is(err, application.ErrInvalidProviderCall) ||
-		errors.Is(err, application.ErrProviderCallConflict) ||
-		errors.Is(err, application.ErrProviderCostUnknown) {
+		errors.Is(err, application.ErrProviderCallConflict) {
 		return temporal.NewNonRetryableApplicationError("invalid operation workflow state", "illegal_transition", err)
 	}
 	return err
@@ -150,4 +158,5 @@ func Register(w worker.Worker, activities *Activities) {
 	w.RegisterActivityWithOptions(activities.CompleteProviderCall, activity.RegisterOptions{Name: "flow.CompleteProviderCall"})
 	w.RegisterActivityWithOptions(activities.LoadProviderCost, activity.RegisterOptions{Name: "flow.LoadProviderCost"})
 	w.RegisterActivityWithOptions(activities.CheckManualNotExecuted, activity.RegisterOptions{Name: "flow.CheckManualNotExecuted"})
+	w.RegisterActivityWithOptions(activities.RecoverProviderImage, activity.RegisterOptions{Name: "flow.RecoverProviderImage"})
 }

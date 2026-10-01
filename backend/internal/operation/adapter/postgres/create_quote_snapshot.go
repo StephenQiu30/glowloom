@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -138,22 +139,30 @@ func validateQuoteSnapshot(batch *domain.Batch, items []QuoteItem) (uuid.UUID, e
 }
 
 func insertQuotedOperation(tx *gorm.DB, op domain.Operation) error {
+	var source any
+	if op.Source != nil {
+		body, err := json.Marshal(op.Source)
+		if err != nil {
+			return fmt.Errorf("encode canvas quote source: %w", err)
+		}
+		source = string(body)
+	}
 	result := tx.Exec(`
 		INSERT INTO operation.operation
 		  (id, project_id, batch_id, target_type, target_id, target_key,
 		   target_version_no, capability, mode, model_profile_version_id,
 		   price_rule_version_id, params, output_count, input_hash, origin,
 		   status, quote_micros, quote_detail, quote_expires_at, reused_from_id,
-		   force_regenerate, region, create_time)
+		   force_regenerate, region, create_time,source_context)
 		VALUES (?::uuid, ?::uuid, ?::uuid, NULLIF(?, ''), ?::uuid, ?,
 		        ?, ?, ?, ?::uuid, ?::uuid, ?::jsonb, ?, ?, ?,
-		        ?, ?, ?::jsonb, ?, ?::uuid, ?, ?, ?)
+		        ?, ?, ?::jsonb, ?, ?::uuid, ?, ?, ?,?::jsonb)
 	`, op.ID.String(), op.ProjectID.String(), op.BatchID, op.TargetType,
 		op.TargetID, op.TargetKey, op.TargetVersionNo, op.Capability, op.Mode,
 		op.ModelProfileVersionID, op.PriceRuleVersionID, string(op.Params),
 		op.OutputCount, op.InputHash, op.Origin, string(op.Status),
 		op.QuoteMicros, nullableJSON(op.QuoteDetail), op.QuoteExpiresAt,
-		op.ReusedFromID, op.ForceRegenerate, op.Region, op.CreateTime)
+		op.ReusedFromID, op.ForceRegenerate, op.Region, op.CreateTime, source)
 	if result.Error != nil {
 		return fmt.Errorf("insert quoted operation: %w", result.Error)
 	}

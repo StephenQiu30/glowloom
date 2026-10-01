@@ -97,7 +97,7 @@ func (c *PublishModelVersionCommand) Execute(ctx context.Context, actor identity
 		return PublishedModelVersion{}, fmt.Errorf("validate version metadata: %w", err)
 	}
 	if err := c.validator.Validate(version); err != nil {
-		return PublishedModelVersion{}, fmt.Errorf("validate version configuration: %w", err)
+		return PublishedModelVersion{}, fmt.Errorf("validate version configuration: %w: %w", ErrInvalidPublishModelVersion, err)
 	}
 	occurredAt := c.now().UTC()
 	if occurredAt.IsZero() {

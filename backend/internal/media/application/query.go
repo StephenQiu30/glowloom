@@ -73,7 +73,7 @@ func summary(a domain.MediaAsset) AssetSummary {
 	return AssetSummary{ID: a.ID, ProjectID: a.ProjectID, Kind: string(a.Kind), FileName: a.FileName, MIMEType: a.MimeType, ByteSize: a.ByteSize, Width: a.Width, Height: a.Height, DurationMS: a.DurationMS, Revision: a.Revision}
 }
 func eligible(a domain.MediaAsset) bool {
-	return !a.IsDelete && a.Status == domain.StatusReady && a.ModerationStatus == domain.ModerationPassed && (a.Kind == domain.KindImage || a.Kind == domain.KindVideo || a.Kind == domain.KindAudio)
+	return !a.IsDelete && a.Status == domain.StatusReady && a.ModerationStatus == domain.ModerationPassed && (a.Kind == domain.KindImage || a.Kind == domain.KindVideo || a.Kind == domain.KindAudio || a.Kind == domain.KindModel)
 }
 
 // Reference rechecks current project ownership and eligibility before a durable binding.
@@ -106,7 +106,7 @@ func (q *AssetQuery) List(ctx context.Context, a identityapp.Principal, p uuid.U
 	if q == nil || q.store == nil {
 		return AssetPage{}, ErrUnavailable
 	}
-	if p == uuid.Nil || limit < 1 || limit > 200 || (kind != "" && kind != "image" && kind != "video" && kind != "audio") {
+	if p == uuid.Nil || limit < 1 || limit > 200 || (kind != "" && kind != "image" && kind != "video" && kind != "audio" && kind != "model") {
 		return AssetPage{}, ErrInvalidQuery
 	}
 	var after uuid.UUID

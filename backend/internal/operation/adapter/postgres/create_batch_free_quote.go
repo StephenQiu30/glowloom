@@ -57,6 +57,10 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			return nil
 		}
 		now := time.Now().UTC()
+		batchScope, err := readBatchQuoteSourceScope(tx, input, project)
+		if err != nil {
+			return err
+		}
 		result = application.CreateBatchFreeQuoteResult{
 			ExpiresAt: now.Add(15 * time.Minute),
 			Items:     make([]application.BatchFreeQuoteItemResult, len(input.Items)),
@@ -107,7 +111,7 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			}
 			batch := domain.Batch{
 				ID: batchID, ProjectID: input.ProjectID, Kind: "mixed",
-				Scope: json.RawMessage(`{"origin":"canvas"}`), Status: domain.BatchStatusQuoted,
+				Scope: batchScope, Status: domain.BatchStatusQuoted,
 				TotalCount: int32(len(valid)), QuoteTotalMicros: result.TotalMicros,
 			}
 			if err := NewStore(tx).CreateQuoteSnapshot(ctx, actor, &batch, valid); err != nil {

@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async rewrites() {
     return {
-      // Retained project configuration; application routes await rebuilding.
+      // Browser API calls use the application-owned Go service through one origin.
       fallback: [
         { source: "/api/:path*", destination: `${apiBase.origin}/api/:path*` },
       ],

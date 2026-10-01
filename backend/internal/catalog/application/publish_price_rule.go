@@ -86,7 +86,7 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 		return PublishedPriceRule{}, fmt.Errorf("validate price metadata: %w", err)
 	}
 	if err := c.validator.Validate(price); err != nil {
-		return PublishedPriceRule{}, fmt.Errorf("validate price configuration: %w", err)
+		return PublishedPriceRule{}, fmt.Errorf("validate price configuration: %w: %w", ErrInvalidPublishPriceRule, err)
 	}
 	occurredAt := c.now().UTC()
 	if occurredAt.IsZero() {

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
 )
 
@@ -18,15 +19,15 @@ var (
 	// ErrCapabilityKeyExists means the stable capability key is already used.
 	ErrCapabilityKeyExists = errors.New("capability key already exists")
 	// ErrModelKeyExists means the stable model key is already used.
-	ErrModelKeyExists = errors.New("model key already exists")
+	ErrModelKeyExists = application.ErrModelKeyExists
 	// ErrModelNotFound means no non-deleted model has the requested ID.
-	ErrModelNotFound = errors.New("model not found")
+	ErrModelNotFound = application.ErrModelNotFound
 	// ErrModelSourceUnavailable means the provider or capability was deleted.
-	ErrModelSourceUnavailable = errors.New("model provider or capability unavailable")
+	ErrModelSourceUnavailable = application.ErrModelSourceUnavailable
 	// ErrModelVersionConflict means the next model version number was not supplied.
-	ErrModelVersionConflict = errors.New("model version conflict")
+	ErrModelVersionConflict = application.ErrModelVersionConflict
 	// ErrPriceVersionConflict means the next price version number was not supplied.
-	ErrPriceVersionConflict = errors.New("price version conflict")
+	ErrPriceVersionConflict = application.ErrPriceVersionConflict
 )
 
 // CreateCapabilityForAdmin adds a platform capability after checking the live administrator.

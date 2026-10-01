@@ -56,7 +56,13 @@
 
 ### 0.5 已核验缺口与连续实施
 
-当前公开 API 只有项目/风格、画布 CRUD/commands、媒体 list/preview/upload 共 12 项（`backend/internal/app/public_api.go`）。Operation Workflow 仍限 `mock/agent.mock`；确认仓储只支持 `target_type=free`；画布只允许 resource 节点和 annotation 边；媒体接管输入仍只接 URL。生成、镜头引用/提升、任务中心、费用、Agent、时间轴和 3D 等不能仅靠恢复页面接通。
+迁移启动时公开 API 只有项目/风格、画布 CRUD/commands、媒体 list/preview/upload 共 12 项（`backend/internal/app/public_api.go`）。当时 Operation Workflow 限 `mock/agent.mock`；确认仓储只支持 `target_type=free`；画布只允许 resource 节点和 annotation 边；媒体接管输入只接 URL。生成、镜头引用/提升、任务中心、费用、Agent、时间轴和 3D 等不能仅靠恢复页面接通。后续实施新增合同不表示真实执行已通过。
+
+工作台工具的可写数据采用 `node_action=tool` 和闭集 `config.batch_table`、`config.timeline`、`config.director`；不得写入任务结果、供应商回执或费用。批量配置保存模型 ID、模式、输出数、提示词、参数、参考列/行及并发数，500 行和六个参考列有界；每次报价最多 150 行。报价项可携带 `source={canvas_id,node_id,row_id?,revision}`，Operation 保存同一 `source_context`；报价事务锁定文档，验证项目归属、版本和已保存模型/参数/参考顺序，执行并发读取已保存配置。页面刷新按正式 Operation 来源恢复每行状态，不把浏览器任务 ID 列表当事实。
+
+表单式创作使用同一画布中的 `node_type=generation` 工具节点和 `config.generation`，保存版本、能力、模型 ID、模式、提示词、参数、输出数与有序参考素材/角色。表单页按画布/节点身份打开草稿，保存经相同命令、revision 和幂等回执；报价之前保存并绑定该版本。画布打开同一节点进入同一表单，禁止新增浏览器或独立表单数据库事实。此节点只保存输入，任务与结果仍由 Operation/source 读取，用户刷新未提交的表单也能恢复。
+
+导演台场景按有界、类型明确的对象/摄影机/灯光/分镜/关键帧保存，元素身份和引用需校验。模型引用只接受当前项目正式 `kind=model` 资产；GLB v2 上传实行 64 MiB 上限及结构/资源预算，要求缓冲区和贴图位于包内或符合预算的 data URI，拒绝外部 URI、未知执行扩展和异常引用，不从服务端路径或任意 URL 加载。模型上传沿用本地人工检查确认、幂等、私有对象存储和项目授权，不能假装由 ffprobe 探测模型或给不存在的缩略图返回成功。独立 glTF 多文件包由素材包合同承接。
 
 保存合同按原职责扩展：生成配置、Operation、候选和正式选定分别持久化，时间轴/导演场景使用类型明确的配置与 revision，不以任意 metadata 或完整源工作区快照覆盖业务。项目/资产包采用独立、有界的导入/导出合同，验证格式、文件数量/大小、路径与资源映射；不放松当前 `/media/uploads` 的媒体白名单。包导入失败可恢复原批次，不复制源资产 ID、本机路径、任务/费用记录或凭据。Next 下载与 Go API 替换 Wails 原生保存、`window.go` 与 loopback token，不照搬全局 fetch 注入。专用渲染/解析依赖只在实际消费者需要时引入，不更换已有工具链。
 
@@ -200,3 +206,40 @@ Next 页面保留 Server Component 与 Suspense；浏览器引擎在 Client Comp
 本设计替代把“F1 样例 → 备注画布 → 单条链路 PoC”当当前目标的旧表述。E-36-07/08 和 07dfd2d 检查点保留历史且标被替代，不追认完成。PRD-01/32、REQ-36 保留完整产品范围；DES-06/38/08 同步技术/节点合同；PROJECT 保持工程边界；PLN-01/32、BACKLOG 列核心迁移、正式接线与整项目 Demo 任务。
 
 source SHA/文件/许可、DTO/命令、真实依赖和 Demo 证据逐项验收。未完成生成业务、Agent、跨设备、目标机器不宣称通过；执行优先级不降低上线标准。
+
+
+## 8. 设置偏好持久保存合同（2026-10-01）
+
+### 8.1 固定来源与迁移范围
+
+固定源 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98` 的 `web/src/pages/settings/model-default-grid.tsx` 在渠道 pane 实际装配，按图片、视频、文本、音频选择默认模型，原来依赖浏览器配置存储。`prompt-preferences-pane.tsx` 及 `services/api/prompt-preferences.ts`、`backend/internal/prompts/prompt_template*.go` 提供九项提示词偏好的读取、inherit/append/rewrite、恢复基线、变量及只读输出契约；当前 settings 页面未装配该 pane。后者按源未开放页面能力登记，并在 Lanverse 实现可达页面与保存合同，不能声称源页面已验证运行。
+
+### 8.2 项目默认模型
+
+默认模型改为明确的当前项目设置，唯一事实继续使用既有 `workspace.project.default_models`（capability → model_key），沿用项目 revision、同组织项目隔离与归档只读，通过 workspace application 用例更新，catalog adapter 不写项目表。`GET/PATCH /api/projects/{project_id}/model-defaults` 返回 project_id、revision、default_models；PATCH 携带 expected_revision 与 UUID 幂等键，空映射表示清空默认选择。模型候选来自当前项目模型目录；保存时复核相同 capability、启用模型/渠道、当前配置、生效价格及项目地区限制，供应商凭据仅由生成门禁决定，不将偏好保存升级为供应商验证通过。明确草稿选择优先于默认；只有尚无模型选择的新草稿读取默认。后端报价既有默认模型选择与冻结合同继续复用，不额外建立工作区全局回退事实。
+
+### 8.3 工作区提示词偏好
+
+提示词偏好以当前持久工作区主体和组织为范围，admin/producer 均可管理自己的定制；不可编辑平台基线、受保护输出契约或他人偏好，管理渠道/模型仍返回原来的 403。新 `workspace.prompt_customization` 保存 operation、mode、content、base_template_id、revision 与更新人/时间；基线从固定来源改为 Go domain 内只读定义，保留全部九项模板、变量与契约，稳定模板 ID 随基线内容改变。rewrite 的基线 ID 变化时明确 outdated，读取不静默改写。
+
+`GET /api/settings/prompt-preferences` 返回只读定义/基线及当前定制；`PUT /api/settings/prompt-preferences/{operation}` 携带 expected_revision（首次为 0）、mode、content、base_template_id；恢复基线使用同一 PUT 的 inherit+空内容。非 inherit 必须非空且不超过 12,000 个字符，拒绝未知操作、未知或未闭合变量、错误基线、跨主体与 stale revision。保存使用 UUID 幂等键，同键同体返回首次回执，同键异体拒绝；修订、回执、审计与 Outbox 在一事务提交。审计只写 operation、mode、基线、revision 和内容哈希，不写个人提示词正文。
+
+Go 纯编译函数仅替换声明变量，按模式形成创作策略，并始终在后面追加服务端持有的项目/剧情/角色/资产上下文和输出契约；个人定制不能删除运行时强制层。配置保存、纯编译测试和具体生成消费分别验收。未接入的九项生成入口不得显示“已应用生成”；本轮默认模型可接已有新草稿与报价，提示词冻结进入对应正式生成消费者后才记消费完成，不能静默覆盖用户本次输入。
+
+### 8.4 失败与验证
+
+同源 Origin、UUID 幂等、实时主体/组织状态、项目范围、归档与 revision 均由 Go 复核；权限失败不触发升权。前端使用 Swagger 生成客户端、RHF/Zod、TanStack Query 与 shadcn，保留未确认草稿、冲突后明确载入/放弃操作，卸载与切换清理订阅。测试覆盖真实 PostgreSQL 重读、重试/异体、首次并发写、停用身份、跨组织项目、归档、不可用模型、提示词模式/变量/受保护层与 revision 变化。默认 producer 的 admin 403 与偏好可写分别验证；模拟供应商和浏览器 fixture 不计真实生成通过。
+
+## 9. 服务端时间轴导出与本地媒体处理合同（2026-10-01）
+
+固定源 `1ae25027` 的 `task_timeline.go`/`task_render.go` 将 timeline_render 与 timeline_transcription 作为本地后台任务，绕过模型渠道；前端另有 FFmpeg 规划、字幕 SRT 与有条件烧录。迁移保留这些能力，并改造成现有 Go／Temporal／私有媒体／Outbox 链。禁止为 FFmpeg 伪造 AI 模型、价格或 supplier 事实；已有 Operation 报价生成合同不承担本地渲染。正式 `media-tool.ExportJob` 负责本地执行事实，编辑配置仍由 canvas.timeline 持有，浏览器不维护任务真相。
+
+导出创建只接收已保存 `{canvas_id,node_id,revision}`，在命令事务中经消费方 `TimelineReader` 读取同项目 timeline 节点，在 document 锁内验证 revision、类型、唯一配置合同与素材 node/asset 双身份。媒体拥有自己的授权与读取端口，工具仓储不得直接读写 canvas/media 表。所有输入为 ready/passed 的正式项目资产，锁定 ID、revision、SHA256、字节数、检测类型和服务器选择的私有对象 key；原件只由 Worker 接管并再次校验内容，禁止浏览器直传 URL／服务器路径。canvas 节点删除或再次编辑不能改写已冻结的导出输入。
+
+POST `/api/projects/{pid}/media-exports` 创建后台事实与 Outbox；GET 项目列表按 canvas/node 查回，GET `/api/media-exports/{id}?project_id=...` 返回明确状态与进度。进度为 0..100 整数百分比，`queued`→`running`→`review_required`→`succeeded`；`failed` 保留失败码和 frozen input，`cancel_requested` 仅代表持久请求，只有执行退出／未取得执行权的证据才进入 `cancelled`。源固定身份随 job 保存，可在刷新后恢复。取消、失败重试和审核均使用 UUID 幂等键与 job revision，重复相同请求返回原 receipt，变体拒绝；任务 attempt 是取消／重试与旧 Worker 回写的 fence。每次状态、发布、审核与控制事实连同审计／必要 Outbox 在事务内提交。Temporal 启动采用 job/attempt 固定身份、先验数据库 receipt，重复消息不重复创建任务；已持久结果的重放直接核对结果，不再次渲染。
+
+真实渲染遵守保存的轨道可见／静音、片段起点与源裁切、空隙黑场、图片、视频与独立音频混合、音量／淡入淡出、横竖与方形比例、FPS、文本与字幕。使用受控本地 FFmpeg 参数与输入文件，不插入用户文本为滤镜语句。所有轨道和 1000 clip/24h 编辑边界保留；工作文件数量、输入／输出字节、解码尺寸与执行时间另设资源预算，超限明确失败，不默默截断输出或省掉轨道。字幕同时保留完整 SRT 下载。当前机器 FFmpeg 无 drawtext/libass；中文／混合字符／换行字幕由 Go x/image/font 和固定 OFL Noto Sans CJK SC 绘成透明帧，经实际 overlay 烧录，支持字体大小、色彩、位置、描边；仅引入一份服务端字体，禁止进入前端包。
+
+渲染结果沿用 media 的字节哈希、实际 ffprobe、真实 poster/proxy、私有对象检查与领域状态，产物为 `origin=system`、`processing/pending`，不能预先宣称未知输出已通过审核。`GET /api/media-exports/{id}/preview?project_id=...` 只对当前有权查看该 job 的操作者提供短签名原件与 `{job_id,revision,sha256,url,expires_at,asset}`；该临时查看不使资产进入普通 ready 列表。操作者实际查看后 POST `/api/media-exports/{id}/review` 提交 `{project_id,revision,sha256,local_review_confirmed:true}`，在锁内确认正是当前产生的文件，记录独立人工审核身份／时间／SHA 证据，事务内切换媒体 ready/passed 与 job succeeded。审核前不能作为其他任务输入或下载正式成片；取消不销毁未知提交，私有未通过产物按媒体保留／清理合同处理。归档保留只读 job／已通过预览，拒绝新执行与审核写入。
+
+源 frame／trim／audio／combine／captions 继续作为此本地媒体处理边界的实际消费者迁移，不能用空端点或样例文件代替。whisper.cpp transcription 必须配置与真实可用性验证后接入；当前未建立实际 Whisper 服务与可分发识别模型，转写明确 pending，不生成假段落或字幕。首个验收为真实授权素材→已保存 timeline→Outbox／Temporal 接管→实际 FFmpeg 文件→processing/pending→实际预览与人工审核→正式资产／下载及刷新恢复；单元／模拟 Workflow 验证不能替代这一验收。

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -94,9 +95,10 @@ func (s *Store) AcquireBatchLaunch(ctx context.Context, batchID, operationID uui
 			Status            string
 			PausedReason      *string
 			CancelRequestedAt *time.Time
+			Scope             string
 		}
 		read = tx.Raw(`
-			SELECT status, paused_reason, cancel_requested_at FROM operation.batch
+			SELECT status, paused_reason, cancel_requested_at,scope::text AS scope FROM operation.batch
 			WHERE id = ?::uuid AND project_id = ?::uuid AND NOT is_delete FOR UPDATE
 		`, batchID.String(), item.ProjectID.String()).Scan(&batch)
 		if read.Error != nil {
@@ -138,6 +140,25 @@ func (s *Store) AcquireBatchLaunch(ctx context.Context, batchID, operationID uui
 			}
 			acquired = true
 			return nil
+		}
+		var frozenScope struct {
+			NodeID      *uuid.UUID `json:"node_id"`
+			Concurrency int        `json:"concurrency"`
+		}
+		if err := json.Unmarshal([]byte(batch.Scope), &frozenScope); err != nil {
+			return application.ErrInvalidWorkflowBatch
+		}
+		if frozenScope.NodeID != nil {
+			if *frozenScope.NodeID == uuid.Nil || frozenScope.Concurrency < 1 || frozenScope.Concurrency > 32 {
+				return application.ErrInvalidWorkflowBatch
+			}
+			var activeBatch int64
+			if err := tx.Raw(`SELECT count(*) FROM operation.batch_launch WHERE batch_id=?::uuid AND state='active'`, batchID).Scan(&activeBatch).Error; err != nil {
+				return fmt.Errorf("count saved canvas batch capacity: %w", err)
+			}
+			if activeBatch >= int64(frozenScope.Concurrency) {
+				return nil
+			}
 		}
 		var activeProject int64
 		if err := tx.Raw(`

@@ -177,7 +177,7 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 		if doc.Revision >= math.MaxInt32 {
 			return domain.ErrInvalidCommand
 		}
-		if err := s.checkMediaReferences(ctx, tx, a, p, input.Commands); err != nil {
+		if err := s.checkMediaReferences(ctx, tx, a, p, input.Commands, updated); err != nil {
 			return err
 		}
 		updated.Revision++
@@ -315,7 +315,7 @@ func saveGraph(tx *gorm.DB, before, after domain.Document) error {
 		if previous, exists := previousNodes[n.ID]; exists && reflect.DeepEqual(previous, n) {
 			continue
 		}
-		if n.NodeAction != "resource" || n.LastOperationID != nil {
+		if (n.NodeAction != "resource" && n.NodeAction != "tool") || n.LastOperationID != nil {
 			continue
 		}
 		config, err := json.Marshal(n.Config)
@@ -324,7 +324,7 @@ func saveGraph(tx *gorm.DB, before, after domain.Document) error {
 		}
 		r := tx.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index)
  VALUES(?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,config=excluded.config,x=excluded.x,y=excluded.y,width=excluded.width,height=excluded.height,parent_id=excluded.parent_id,z_index=excluded.z_index,is_delete=false,update_time=now()
- WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action='resource' AND canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex)
+ WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action=excluded.node_action AND canvas.node.node_action IN ('resource','tool') AND canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex)
 		if r.Error != nil {
 			return r.Error
 		}
@@ -423,21 +423,127 @@ type identityConflict struct {
 
 func (e *identityConflict) Error() string { return "canvas identity unavailable" }
 func (e *identityConflict) Unwrap() error { return application.ErrNotFound }
-func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identityapp.Principal, p uuid.UUID, commands []domain.Command) error {
-	for index, c := range commands {
-		for _, n := range c.Nodes {
-			if n.RefType != "media_asset" || n.RefID == nil {
+func (s *Store) checkMediaReferences(ctx context.Context, tx *gorm.DB, a identityapp.Principal, p uuid.UUID, commands []domain.Command, document domain.Document) error {
+	checked := make(map[uuid.UUID]string)
+	check := func(id uuid.UUID, kind string, index int) error {
+		if previous, ok := checked[id]; ok {
+			if previous != kind {
+				return &domain.CommandError{Index: index, Cause: domain.ErrInvalidCommand}
+			}
+			return nil
+		}
+		if s.media == nil {
+			return fmt.Errorf("media query not configured")
+		}
+		asset, err := s.media(tx).Reference(ctx, a, p, id)
+		if err != nil {
+			return &domain.CommandError{Index: index, Cause: err}
+		}
+		if asset.Kind != kind {
+			return &domain.CommandError{Index: index, Cause: domain.ErrInvalidCommand}
+		}
+		checked[id] = kind
+		return nil
+	}
+	checkTimeline := func(config *domain.TimelineConfig, index int) error {
+		if config == nil {
+			return nil
+		}
+		for _, clip := range config.Clips {
+			assetID := clip.AssetID
+			if assetID == nil && clip.NodeID != nil {
+				for _, node := range document.Nodes {
+					if node.ID == *clip.NodeID {
+						assetID = node.RefID
+						break
+					}
+				}
+			}
+			if assetID != nil {
+				if err := check(*assetID, clip.Kind, index); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	checkDirector := func(config *domain.DirectorConfig, index int) error {
+		if config == nil {
+			return nil
+		}
+		if config.Panorama != nil {
+			if err := check(config.Panorama.AssetID, "image", index); err != nil {
+				return err
+			}
+		}
+		for _, object := range config.Objects {
+			assetID := object.AssetID
+			if assetID == nil && object.SourceNodeID != nil {
+				for _, node := range document.Nodes {
+					if node.ID == *object.SourceNodeID {
+						assetID = node.RefID
+						break
+					}
+				}
+			}
+			if assetID == nil {
 				continue
 			}
+			kind := "model"
+			if object.Kind == "billboard" {
+				kind = "image"
+			}
+			if err := check(*assetID, kind, index); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	checkGeneration := func(config *domain.GenerationConfig, index int) error {
+		if config == nil {
+			return nil
+		}
+		for _, input := range config.Inputs {
 			if s.media == nil {
 				return fmt.Errorf("media query not configured")
 			}
-			asset, err := s.media(tx).Reference(ctx, a, p, *n.RefID)
+			asset, err := s.media(tx).Reference(ctx, a, p, input.MediaAssetID)
 			if err != nil {
 				return &domain.CommandError{Index: index, Cause: err}
 			}
-			if asset.Kind != n.NodeType {
+			if asset.Kind != "image" && asset.Kind != "video" && asset.Kind != "audio" {
 				return &domain.CommandError{Index: index, Cause: domain.ErrInvalidCommand}
+			}
+		}
+		return nil
+	}
+	for index, c := range commands {
+		if c.Config != nil {
+			if err := checkGeneration(c.Config.Generation, index); err != nil {
+				return err
+			}
+			if err := checkDirector(c.Config.Director, index); err != nil {
+				return err
+			}
+			if err := checkTimeline(c.Config.Timeline, index); err != nil {
+				return err
+			}
+		}
+		for _, n := range c.Nodes {
+			if err := checkGeneration(n.Config.Generation, index); err != nil {
+				return err
+			}
+			if err := checkDirector(n.Config.Director, index); err != nil {
+				return err
+			}
+			if err := checkTimeline(n.Config.Timeline, index); err != nil {
+				return err
+			}
+			if n.RefType != "media_asset" || n.RefID == nil {
+				continue
+			}
+			if err := check(*n.RefID, n.NodeType, index); err != nil {
+				return err
 			}
 		}
 	}

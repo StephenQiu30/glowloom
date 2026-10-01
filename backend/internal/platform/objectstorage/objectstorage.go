@@ -148,6 +148,20 @@ func (c *Client) Stat(ctx context.Context, key string) (ObjectInfo, error) {
 	return ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: sha}, nil
 }
 
+// Get opens exact private bytes for a server-side owner. Callers must bound
+// reads, verify their expected metadata/digest, and close the returned object.
+// The SDK can defer network errors until the first read.
+func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	if c == nil || c.sdk == nil || !validKey(key) {
+		return nil, ErrInvalidObject
+	}
+	object, err := c.sdk.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("open private media object: %w", err)
+	}
+	return object, nil
+}
+
 // Remove deletes one exact object key. Callers must first establish ownership
 // of that key, for example when cleaning up a test-created or purged asset.
 func (c *Client) Remove(ctx context.Context, key string) error {

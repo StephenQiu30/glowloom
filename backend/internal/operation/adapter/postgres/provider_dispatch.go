@@ -78,6 +78,15 @@ func (s *Store) ClaimProviderDispatch(ctx context.Context, identity application.
 		if op.Status != "submitting" || len(call.ResponseSummary) != 0 {
 			return application.ErrProviderCallConflict
 		}
+		var cancelled bool
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM operation.operation_event
+			WHERE operation_id=?::uuid AND reason='user_cancel_requested' AND NOT is_delete)`,
+			identity.OperationID).Scan(&cancelled).Error; err != nil {
+			return fmt.Errorf("check dispatch cancellation: %w", err)
+		}
+		if cancelled {
+			return application.ErrProviderDispatchCancelled
+		}
 		var claimed struct{ DispatchStartedAt *time.Time }
 		result = tx.Raw(`
 			UPDATE operation.provider_call

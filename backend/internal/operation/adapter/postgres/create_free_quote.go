@@ -126,6 +126,9 @@ func prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor identityapp.Pr
 		return QuoteItem{}, "", err
 	}
 	input.ModelKey = modelKey
+	if _, err := readQuoteCanvasSource(tx, input.ProjectID, input.FreeQuoteItemInput); err != nil {
+		return QuoteItem{}, "", err
+	}
 	catalog, err := readFreeQuoteCatalog(tx, input, project.AllowOverseasModels, now)
 	if err != nil {
 		return QuoteItem{}, "", err

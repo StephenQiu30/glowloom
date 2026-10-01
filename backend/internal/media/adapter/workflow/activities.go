@@ -48,6 +48,7 @@ type RecordModerationOutput struct {
 // Activities adapts the media application service to the media task queue.
 type Activities struct {
 	ingest *application.IngestService
+	staged *application.IngestService
 	repo   *pgmedia.IngestRepository
 }
 
@@ -64,6 +65,20 @@ func NewActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPo
 	repo := pgmedia.NewIngestRepository(db)
 	service := application.NewIngestService(repo, downloader, FFProber{}, FFRenderer{}, objectStore{client: objects})
 	return &Activities{ingest: service, repo: repo}, nil
+}
+
+// NewActivitiesWithStaging accepts both existing result URLs and private receipts.
+// Both inputs use the same verification, rendering, and candidate repository.
+func NewActivitiesWithStaging(db *gorm.DB, objects *objectstorage.Client, policy DownloadPolicy, source application.StagedSource) (*Activities, error) {
+	if source == nil {
+		return nil, fmt.Errorf("configure staged media activity: %w", application.ErrInvalidIngest)
+	}
+	activities, err := NewActivities(db, objects, policy)
+	if err != nil {
+		return nil, err
+	}
+	activities.staged = application.NewStagedIngestService(activities.repo, source, FFProber{}, FFRenderer{}, objectStore{client: objects})
+	return activities, nil
 }
 
 // Register adds only the two media activities; the caller chooses the media queue.
@@ -92,7 +107,11 @@ func (a *Activities) Ingest(ctx context.Context, input IngestInput) (IngestOutpu
 		}
 	}()
 	defer func() { close(stop); <-done }()
-	output, err := a.ingest.Ingest(ctx, input)
+	service := a.ingest
+	if input.Receipt != nil && a.staged != nil {
+		service = a.staged
+	}
+	output, err := service.Ingest(ctx, input)
 	if err != nil {
 		return IngestOutput{}, classifyIngestError(err)
 	}

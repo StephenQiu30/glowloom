@@ -13,12 +13,13 @@ import (
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
 )
 
 var (
 	// ErrNotFound hides missing and out-of-project operation records.
-	ErrNotFound = errors.New("operation record not found")
+	ErrNotFound = application.ErrPublicNotFound
 	// ErrUnavailable means the store has no database handle.
 	ErrUnavailable = errors.New("operation store unavailable")
 )

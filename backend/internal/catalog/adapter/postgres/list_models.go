@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,7 +17,7 @@ import (
 )
 
 // ErrModelCatalogProjectNotFound also hides projects outside the actor's organization.
-var ErrModelCatalogProjectNotFound = errors.New("model catalog project not found")
+var ErrModelCatalogProjectNotFound = application.ErrModelCatalogProjectNotFound
 
 // ListModelsForProject reads a bounded page after locking the live actor,
 // organization, and project in the same transaction as the catalog query.
@@ -55,6 +54,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 		}
 		query := `
 			SELECT m.id, m.model_key, m.display_name, m.capability, m.status,
+			       to_jsonb(cap.input_roles)::text AS input_roles,
 			       p.id AS provider_id, p.name AS provider_name,
 			       p.region AS provider_region, p.status AS provider_status,
 			       (c.id IS NOT NULL) AS credential_present,
@@ -147,6 +147,7 @@ type modelCatalogRow struct {
 	ModelKey             string
 	DisplayName          string
 	Capability           string
+	InputRoles           string
 	Status               string
 	ProviderID           uuid.UUID
 	ProviderName         string
@@ -169,9 +170,14 @@ type modelCatalogRow struct {
 }
 
 func (row modelCatalogRow) item() (application.ModelCatalogItem, error) {
+	var roles []string
+	if err := json.Unmarshal([]byte(row.InputRoles), &roles); err != nil {
+		return application.ModelCatalogItem{}, fmt.Errorf("decode model input roles: %w", err)
+	}
 	item := application.ModelCatalogItem{
 		ID: row.ID, Key: row.ModelKey, DisplayName: row.DisplayName,
 		Capability: row.Capability, Status: domain.ModelStatus(row.Status),
+		InputRoles: roles,
 		ProviderID: row.ProviderID, ProviderName: row.ProviderName,
 		ProviderRegion:    domain.Region(row.ProviderRegion),
 		ProviderStatus:    domain.ProviderStatus(row.ProviderStatus),

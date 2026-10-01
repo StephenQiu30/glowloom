@@ -119,6 +119,7 @@ type Operation struct {
 	ModelProfileVersionID *uuid.UUID
 	PriceRuleVersionID    *uuid.UUID
 	Params                json.RawMessage
+	Source                *CanvasSource
 	OutputCount           int32
 	InputHash             string
 	Origin                string
@@ -151,6 +152,9 @@ func (o Operation) Validate() error {
 		(o.QuoteMicros != nil && *o.QuoteMicros < 0) ||
 		(len(o.QuoteDetail) > 0 && !jsonObject(o.QuoteDetail)) ||
 		(o.Region != nil && *o.Region != "domestic" && *o.Region != "overseas") {
+		return ErrInvalidOperation
+	}
+	if o.Source != nil && (!o.Source.Valid() || o.Origin != "canvas" || o.TargetType != "free") {
 		return ErrInvalidOperation
 	}
 	if o.Origin != "upload" && (o.Region == nil ||

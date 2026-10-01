@@ -244,12 +244,18 @@ func validUploadProbe(file *Downloaded, p ProbeResult) bool {
 	case domain.KindAudio:
 		return file.Size <= MaxUploadAudioBytes && p.DurationMS != nil && *p.DurationMS > 0 && p.AudioChannels != nil &&
 			(file.MIMEType == "audio/mpeg" && p.Extension == "mp3" || file.MIMEType == "audio/wave" && p.Extension == "wav" || file.MIMEType == "audio/mp4" && p.Extension == "m4a")
+	case domain.KindModel:
+		return file.Size <= MaxUploadModelBytes && file.MIMEType == "model/gltf-binary" && p.Extension == "glb" && *p.Codec == "glb2" &&
+			p.Width == nil && p.Height == nil && p.DurationMS == nil && p.FPS == nil && p.AudioChannels == nil
 	default:
 		return false
 	}
 }
 
 func completeUploadRendered(kind domain.Kind, files []RenditionFile) bool {
+	if kind == domain.KindModel {
+		return len(files) == 0
+	}
 	required := requiredRenditions(kind)
 	if kind == domain.KindAudio {
 		required = []domain.RenditionKind{domain.RenditionWaveform}
