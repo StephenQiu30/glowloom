@@ -59,7 +59,7 @@ func TestExportAudioRealHTTPPrivateM4AWaveformReviewAndDownload(t *testing.T) {
 	download := &mediaapp.Downloaded{File: file, Size: int64(len(data)), MIMEType: "video/mp4", SHA256: hex.EncodeToString(digest[:])}
 	defer func() { _ = download.Close() }()
 	mediaStore := mediapg.NewStore(db)
-	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.mp4"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)

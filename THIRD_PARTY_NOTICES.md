@@ -12,6 +12,8 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 
 导演台镜头图库与封面（2026-10-02）沿固定 `1ae25027` 的 `lib/canvas/director/director-session.ts`、`director-cover-write.ts` 和 `components/canvas/director/director-camera-screenshot-tabs.tsx` 改写到 `frontend/src/components/canvas/director/outputs.ts`。`gallery.tsx` 参考 `components/canvas/director/director-screenshot-gallery.tsx`，使用自身 shadcn/Radix；`capture-result.ts`、编辑器和节点内容通过正式审核资产、画布 CAS 与持久幂等关联，替换源应用本地路径和 Ant Design 调用。保留上述 MIT 来源与修改说明。
 
+白膜视频录制（2026-10-02）将固定 `1ae25027` 的 `components/canvas/director/director-viewport.tsx:1292–1395` 适配到 `frontend/src/components/canvas/director/recording.ts`；`viewport.tsx` 与 `workbench.tsx` 的录制流程参考 `components/canvas/canvas-director-workbench.tsx:833–866`。沿 MIT 保留来源，改为自身镜头身份、保存修订、有界录制、取消与资源清理；本地人工预览、结果核验、Go/FFmpeg WebM→MP4 规范化和正式媒体审核由 Lanverse 实现。
+
 2026-10-01 清理全部旧前端后，用户授权完整迁移重建。以下画布核心现从历史 `bd17655b` 中恢复已适配 Next.js/shadcn 与正式 Go 合同的实现，来源继续为固定 BeefTV `0d9e9f48`。完整工作台能力参考固定 `1ae25027`；新增移植文件逐项追加登记，不把整个上游源码目录复制为第二套应用。首页/导航的功能组织参考 `web/src/pages/home/home-dashboard.tsx` 与 `components/layout/workspace-sidebar-nav.tsx`，改写为自身 App Router 和 shadcn 工作台。
 
 - 固定来源：`0d9e9f48d407570cd431ad9730cdd522b06810c0`，用户确认采用该仓库当前 `main` 后固定此提交。

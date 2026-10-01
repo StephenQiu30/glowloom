@@ -98,7 +98,7 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := pgmedia.NewStore(database)
-	service := mediaapp.NewUploadService(store, mediaflow.NewUploadProber(validator), mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	service := mediaapp.NewUploadService(store, mediaflow.NewUploadProber(validator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	query := mediaapp.NewAssetQuery(store, objects)
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))

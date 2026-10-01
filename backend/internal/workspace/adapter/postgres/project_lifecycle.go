@@ -138,8 +138,8 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 			now = lockedAt.UTC()
 		}
 		blocking := false
-		if input.Action == "archive" || input.Action == "delete" {
-			if current.Project.IsDelete {
+		if input.Action == "archive" || input.Action == "delete" || input.Action == "unarchive" || input.Action == "restore" {
+			if current.Project.IsDelete && input.Action != "restore" {
 				return domain.ErrProjectStateConflict
 			}
 			if input.Action == "archive" {

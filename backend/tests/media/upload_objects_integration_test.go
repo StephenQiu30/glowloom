@@ -35,7 +35,7 @@ func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {
 		t.Fatal("private object store configuration invalid")
 	}
 	store := pgmedia.NewStore(database)
-	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	for _, tc := range []struct {
 		name, kind string
 		args       []string

@@ -126,7 +126,7 @@ func TestUploadPublishesOnlyExplicitReviewedVerifiedMedia(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, objects := &uploadRepoFake{}, &uploadObjectsFake{statErr: tc.statErr}
-			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 			in := uploadInput(t)
 			in.LocalReviewConfirmed = tc.review
 			result, err := service.Upload(t.Context(), in)
@@ -160,7 +160,7 @@ func TestUploadCleanupPreservesUnknownCommittedObjects(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &uploadRepoFake{commitErr: context.Canceled, exists: tc.exists, existsErr: tc.existsErr}
 			objects := &uploadObjectsFake{}
-			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 			_, err := service.Upload(t.Context(), uploadInput(t))
 			if !errors.Is(err, context.Canceled) || len(objects.items) != tc.wantObjects {
 				t.Fatalf("unknown commit cleanup: err=%v objects=%d want=%d", err, len(objects.items), tc.wantObjects)
@@ -210,7 +210,7 @@ func TestUploadRejectsVideoPastSixtySecondsBeforeRendering(t *testing.T) {
 	repo, objects := &uploadRepoFake{}, &uploadObjectsFake{}
 	in := uploadInput(t)
 	in.File.MIMEType = "video/mp4"
-	service := mediaapp.NewUploadService(repo, uploadLongVideoProbe{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaapp.NewUploadService(repo, uploadLongVideoProbe{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	if _, err := service.Upload(t.Context(), in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || repo.commits != 0 || len(objects.items) != 0 {
 		t.Fatalf("long video accepted: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestUploadDimensionsAreBoundedBeforeRendering(t *testing.T) {
 				if kind == domain.KindVideo {
 					in.File.MIMEType = "video/mp4"
 				}
-				service := mediaapp.NewUploadService(repo, uploadDimensionProbe{kind, tc.width, tc.height}, renderer, &uploadObjectsFake{}, time.Now)
+				service := mediaapp.NewUploadService(repo, uploadDimensionProbe{kind, tc.width, tc.height}, mediaflow.FFUploadNormalizer{}, renderer, &uploadObjectsFake{}, time.Now)
 				_, err := service.Upload(t.Context(), in)
 				if tc.reject {
 					if !errors.Is(err, mediaapp.ErrUnsupportedUpload) || renderer.calls != 0 {

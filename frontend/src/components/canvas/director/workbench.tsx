@@ -99,7 +99,11 @@ import {
   upsertDirectorBoneKeyframe,
 } from "./scene";
 import { DIRECTOR_VIEW_MODES, type DirectorViewMode } from "./view-modes";
-import { DirectorViewport, type DirectorCapture } from "./viewport";
+import {
+  DirectorViewport,
+  type DirectorCapture,
+  type DirectorRecord,
+} from "./viewport";
 
 const poses: DirectorPose[] = [
   "stand",
@@ -131,7 +135,11 @@ type Props = {
   readOnly: boolean;
   onClose: () => void;
   onSave: (scene: DirectorScene) => Promise<boolean>;
-  onCapture: (files: File[], context?: DirectorCaptureContext) => void;
+  onCapture: (
+    files: File[],
+    context?: DirectorCaptureContext,
+    outputKind?: "image" | "video",
+  ) => void;
   onPrompt: (prompt: string) => void;
   onGenerate: (prompt: string) => Promise<boolean>;
   modelControl?: (
@@ -175,6 +183,14 @@ export function DirectorWorkbench({
   const [playing, setPlaying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [captureReady, setCaptureReady] = useState(false);
+  const [recordReady, setRecordReady] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const record = useRef<DirectorRecord | null>(null);
+  const recordingController = useRef<AbortController | null>(null);
+  const currentScene = useRef(scene);
+  useEffect(() => {
+    currentScene.current = scene;
+  }, [scene]);
   const [error, setError] = useState("");
   const [history, setHistory] = useState<{
     past: DirectorScene[];
@@ -188,6 +204,7 @@ export function DirectorWorkbench({
     mounted.current = true;
     return () => {
       mounted.current = false;
+      recordingController.current?.abort();
     };
   }, []);
   const activeShot = scene.shots.find(
@@ -201,7 +218,7 @@ export function DirectorWorkbench({
   );
   const selectedLight = scene.lights.find((light) => light.id === selectedId);
   const selected = selectedObject ?? selectedCamera ?? selectedLight;
-  const disabled = readOnly || saving;
+  const disabled = readOnly || saving || recording;
   const prompt = compileDirectorPrompt(scene, activeShot);
   const viewScene = {
     ...scene,
@@ -347,6 +364,10 @@ export function DirectorWorkbench({
     capture.current = next;
     setCaptureReady(Boolean(next));
   }, []);
+  const registerRecord = useCallback((next: DirectorRecord | null) => {
+    record.current = next;
+    setRecordReady(Boolean(next));
+  }, []);
   useEffect(() => {
     if (!playing) return;
     const start = performance.now() - time * 1000;
@@ -403,6 +424,51 @@ export function DirectorWorkbench({
       if (mounted.current) {
         setRenderMode(renderMode);
         setSaving(false);
+      }
+    }
+  }
+  async function recordClayVideo() {
+    if (!record.current || disabled || captureBusy.current) return;
+    if (activeShot.duration < 0.25 || activeShot.duration > 60) {
+      setError("白膜录制时长须为 0.25～60 秒，请先调整当前分镜。");
+      return;
+    }
+    captureBusy.current = true;
+    const controller = new AbortController();
+    recordingController.current = controller;
+    try {
+      if (!(await save(false)) || !mounted.current || !record.current) return;
+      const context = createDirectorCaptureContext(scene);
+      setRecording(true);
+      setPlaying(false);
+      setRenderMode("clay");
+      const file = await record.current(
+        activeShot.duration,
+        activeShot.fps,
+        controller.signal,
+      );
+      if (!mounted.current || controller.signal.aborted) return;
+      const latest = createDirectorCaptureContext(currentScene.current);
+      if (
+        latest.sceneId !== context.sceneId ||
+        latest.shotId !== context.shotId ||
+        latest.renderKey !== context.renderKey
+      )
+        throw new Error("录制期间场景或镜头已改变，请重新录制。");
+      onCapture([file], context, "video");
+    } catch (failure) {
+      if (mounted.current)
+        setError(
+          failure instanceof Error ? failure.message : "白膜视频未完成。",
+        );
+    } finally {
+      controller.abort();
+      recordingController.current = null;
+      captureBusy.current = false;
+      if (mounted.current) {
+        setRecording(false);
+        setRenderMode(renderMode);
+        setTime(time);
       }
     }
   }
@@ -476,6 +542,9 @@ export function DirectorWorkbench({
     >
       <DialogContent
         className="flex h-[94dvh] w-[98vw] flex-col gap-3 overflow-y-auto sm:max-w-[1600px] [&>*]:shrink-0"
+        // R3F measures its initial WebGL viewport during dialog entry. A scale
+        // animation leaves a transient size until the next observer delivery.
+        style={{ animation: "none" }}
         onEscapeKeyDown={(event) => {
           if (saving) event.preventDefault();
         }}
@@ -867,6 +936,8 @@ export function DirectorWorkbench({
               onSelect={setSelectedId}
               onTransform={transform}
               onCaptureReady={registerCapture}
+              onRecordReady={registerRecord}
+              onRecordTime={setTime}
             />
           </main>
           <aside className="min-h-0 space-y-4 overflow-y-auto rounded border p-3">
@@ -2124,6 +2195,23 @@ export function DirectorWorkbench({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled || !recordReady}
+              onClick={() => void recordClayVideo()}
+            >
+              {recording ? "正在录制白膜…" : "录制白膜视频"}
+            </Button>
+            {recording && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => recordingController.current?.abort()}
+              >
+                取消录制
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

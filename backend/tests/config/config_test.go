@@ -135,6 +135,19 @@ func TestLoadMediaResultDownloadPolicy(t *testing.T) {
 	}
 }
 
+func TestLoadOptionalWhisperEndpoint(t *testing.T) {
+	t.Setenv("LV_WHISPER_ENDPOINT", "")
+	cfg, err := config.Load()
+	if err != nil || cfg.WhisperEndpoint != "" {
+		t.Fatalf("unconfigured speech endpoint must stay disabled: %v", err)
+	}
+	t.Setenv("LV_WHISPER_ENDPOINT", " http://127.0.0.1:19282 ")
+	cfg, err = config.Load()
+	if err != nil || cfg.WhisperEndpoint != "http://127.0.0.1:19282" {
+		t.Fatalf("speech endpoint was not trimmed and loaded: %v", err)
+	}
+}
+
 func TestLoadOTelEndpointFromEnv(t *testing.T) {
 	t.Setenv("LV_OTEL_ENDPOINT", "http://127.0.0.1:4318")
 	cfg, err := config.Load()

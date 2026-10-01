@@ -89,7 +89,7 @@ func TestUploadRejectsOversizedFFprobeDimensionsBeforeRenderer(t *testing.T) {
 		t.Fatalf("generated probe semantics changed: %+v err=%v", generated, err)
 	}
 	renderer := &uploadRenderSpy{}
-	service := mediaapp.NewUploadService(&uploadRepoFake{}, mediaflow.FFUploadProber{}, renderer, &uploadObjectsFake{}, time.Now)
+	service := mediaapp.NewUploadService(&uploadRepoFake{}, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, renderer, &uploadObjectsFake{}, time.Now)
 	if _, err := service.Upload(t.Context(), in); !errors.Is(err, mediaapp.ErrUnsupportedUpload) || renderer.calls != 0 {
 		t.Fatalf("untrusted oversized probe facts reached renderer: err=%v calls=%d", err, renderer.calls)
 	}
@@ -122,7 +122,7 @@ func TestUploadProbeUsesLongestContainerOrAVTrackDuration(t *testing.T) {
 		t.Fatalf("upload ignored longer audio/container duration: %+v err=%v", upload, err)
 	}
 	repo, objects := &uploadRepoFake{}, &uploadObjectsFake{}
-	service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.File = file
 	in.Request.FileName = "reference.mp4"

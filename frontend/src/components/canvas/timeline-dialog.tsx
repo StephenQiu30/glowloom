@@ -51,6 +51,7 @@ import {
 import { TimelinePreview } from "./timeline-preview";
 import { TimelineCropControl } from "./timeline-crop-control";
 import { MediaExportPanel } from "./media-export-panel";
+import { TranscriptionPanel } from "./transcription-panel";
 import type { ExportSource } from "./media-export-model";
 import type { MediaAsset } from "./queries";
 
@@ -101,6 +102,7 @@ export function TimelineDialog({
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  const [transcriptionBusy, setTranscriptionBusy] = useState(false);
   const [error, setError] = useState("");
   const [scale, setScale] = useState(0.04);
   const [newKind, setNewKind] = useState<TimelineTrack["kind"]>("video");
@@ -121,7 +123,8 @@ export function TimelineDialog({
   const selectedTrack = draft.tracks.find(
     (track) => track.id === selected?.trackId,
   );
-  const disabled = readOnly || saving || adding || exportBusy;
+  const disabled =
+    readOnly || saving || adding || exportBusy || transcriptionBusy;
   const available = nodes.filter((item) =>
     [
       CanvasNodeType.Image,
@@ -330,13 +333,13 @@ export function TimelineDialog({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !saving && !exportBusy) onClose();
+        if (!open && !saving && !exportBusy && !transcriptionBusy) onClose();
       }}
     >
       <DialogContent
         className="flex max-h-[94dvh] w-[98vw] flex-col overflow-y-auto sm:max-w-[1400px] [&>*]:shrink-0"
         onEscapeKeyDown={(event) => {
-          if (saving || exportBusy) event.preventDefault();
+          if (saving || exportBusy || transcriptionBusy) event.preventDefault();
         }}
       >
         <DialogHeader>
@@ -980,6 +983,17 @@ export function TimelineDialog({
             {error}
           </p>
         ) : null}
+        <TranscriptionPanel
+          projectId={projectId}
+          canvasId={canvasId}
+          nodes={nodes}
+          draft={draft}
+          source={source}
+          disabled={readOnly || saving || adding || exportBusy}
+          onPersist={onSave}
+          onApplied={setDraft}
+          onBusy={setTranscriptionBusy}
+        />
         <MediaExportPanel
           projectId={projectId}
           canvasId={canvasId}
@@ -994,7 +1008,7 @@ export function TimelineDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            disabled={saving || exportBusy}
+            disabled={saving || exportBusy || transcriptionBusy}
             onClick={onClose}
           >
             关闭

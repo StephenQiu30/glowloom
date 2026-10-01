@@ -99,6 +99,8 @@ func uploadType(magic []byte) (string, string, int64) {
 	}
 	mimeType := http.DetectContentType(magic)
 	switch mimeType {
+	case "video/webm":
+		return mimeType, "webm", MaxUploadVideoBytes
 	case "image/jpeg":
 		return mimeType, "jpg", MaxUploadImageBytes
 	case "image/png":

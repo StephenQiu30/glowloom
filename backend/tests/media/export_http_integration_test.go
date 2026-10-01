@@ -78,7 +78,7 @@ func TestExportRealHTTPFrozenCanvasPrivateRenderingReviewAndDownload(t *testing.
 	download := &mediaapp.Downloaded{File: file, Size: int64(imageBytes.Len()), MIMEType: "image/png", SHA256: hex.EncodeToString(hash[:])}
 	defer func() { _ = download.Close() }()
 	mediaStore := mediapg.NewStore(db)
-	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
+	upload := mediaapp.NewUploadService(mediaStore, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(objects), time.Now)
 	uploaded, err := upload.Upload(t.Context(), mediaapp.UploadInput{Actor: actor, Request: mediaapp.UploadRequest{ProjectID: project, Key: uuid.New(), RequestID: uuid.New(), FileName: "source.png"}, File: download, LocalReviewConfirmed: true})
 	if err != nil {
 		t.Fatal(err)

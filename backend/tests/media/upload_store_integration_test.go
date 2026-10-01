@@ -26,7 +26,7 @@ func TestUploadStorePersistsHumanEvidenceAndExactReplay(t *testing.T) {
 	actor, project := mediaStoreProject(t, database)
 	store := pgmedia.NewStore(database)
 	objects := &uploadObjectsFake{}
-	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaapp.NewUploadService(store, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project
@@ -75,7 +75,7 @@ func TestUploadStoreConcurrentKeysHaveOneOwnedObjectSet(t *testing.T) {
 			actor, project := mediaStoreProject(t, database)
 			gate := uploadBlockingProber{entered: make(chan struct{}, 2), release: make(chan struct{})}
 			objects := &uploadObjectsFake{}
-			service := mediaapp.NewUploadService(pgmedia.NewStore(database), gate, mediaflow.FFUploadRenderer{}, objects, time.Now)
+			service := mediaapp.NewUploadService(pgmedia.NewStore(database), gate, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 			inputs := []mediaapp.UploadInput{uploadInput(t), uploadInput(t)}
 			for i := range inputs {
 				inputs[i].Actor = actor
@@ -140,7 +140,7 @@ func TestUploadStoreRechecksArchiveAndRejectsForeignProject(t *testing.T) {
 	prober := archiveUploadProber{afterProbe: func() error {
 		return database.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, project).Error
 	}}
-	service := mediaapp.NewUploadService(store, prober, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaapp.NewUploadService(store, prober, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project
@@ -156,7 +156,7 @@ func TestUploadStoreRechecksArchiveAndRejectsForeignProject(t *testing.T) {
 func TestUploadStoreDifferentHashCannotRewriteReceipt(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
-	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
+	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project
@@ -225,7 +225,7 @@ func TestUploadCleanupWaitsForPendingRealCommit(t *testing.T) {
 	repo := &delayedUploadCommit{Store: pgmedia.NewStore(database), database: database, commitCtx: ctx, release: make(chan struct{}), pending: make(chan struct{}), checking: make(chan struct{}), finished: make(chan error, 1), done: make(chan struct{})}
 	var releaseOnce sync.Once
 	objects := &uploadObjectsFake{}
-	service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaapp.NewUploadService(repo, mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project
@@ -278,7 +278,7 @@ func TestUploadStoreAuditFailureRollsBackPublication(t *testing.T) {
 		}
 	})
 	objects := &uploadObjectsFake{}
-	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
+	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, objects, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project

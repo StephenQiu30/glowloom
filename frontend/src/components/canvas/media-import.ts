@@ -9,6 +9,10 @@ const formats: Record<string, { maximum: number; mime: readonly string[] }> = {
   jpeg: { maximum: 20 * mib, mime: ["image/jpeg"] },
   png: { maximum: 20 * mib, mime: ["image/png"] },
   webp: { maximum: 20 * mib, mime: ["image/webp"] },
+  webm: {
+    maximum: 500 * mib,
+    mime: ["video/webm", "video/webm;codecs=vp8", "video/webm;codecs=vp9"],
+  },
   mp4: { maximum: 500 * mib, mime: ["video/mp4"] },
   mov: { maximum: 500 * mib, mime: ["video/quicktime"] },
   mp3: { maximum: 100 * mib, mime: ["audio/mpeg", "audio/mp3"] },

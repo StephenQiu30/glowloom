@@ -1165,6 +1165,47 @@ definitions:
       sha256:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.TranscriptionCreateInput:
+    properties:
+      canvas_id:
+        type: string
+      language:
+        default: auto
+        type: string
+      node_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.TranscriptionPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionJob'
+        type: array
+      next_cursor:
+        type: string
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.TranscriptionResult:
+    properties:
+      draft:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Transcript'
+      job_id:
+        type: string
+      revision:
+        type: integer
+      sha256:
+        type: string
+      source_asset_id:
+        type: string
+      source_asset_revision:
+        type: integer
+      source_sha256:
+        type: string
+      srt:
+        type: string
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.ExportJob:
     properties:
       asset_id:
@@ -1238,6 +1279,84 @@ definitions:
     - Failed
     - CancelRequested
     - Cancelled
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.SubtitleSegment:
+    properties:
+      end_ms:
+        type: integer
+      start_ms:
+        type: integer
+      text:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Transcript:
+    properties:
+      duration_ms:
+        type: integer
+      language:
+        type: string
+      segments:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.SubtitleSegment'
+        type: array
+      version:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionJob:
+    properties:
+      attempt:
+        type: integer
+      created_at:
+        type: string
+      failure_code:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      language:
+        type: string
+      progress:
+        type: integer
+      project_id:
+        type: string
+      result_sha256:
+        type: string
+        x-nullable: true
+      revision:
+        type: integer
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionSource'
+      stage:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionStatus'
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionSource:
+    properties:
+      canvas_id:
+        type: string
+      node_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionStatus:
+    enum:
+    - queued
+    - running
+    - succeeded
+    - failed
+    - cancel_requested
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - TranscriptionQueued
+    - TranscriptionRunning
+    - TranscriptionSucceeded
+    - TranscriptionFailed
+    - TranscriptionCancelRequested
+    - TranscriptionCancelled
   github_com_StephenQiu30_lanverse_backend_internal_operation_application.BatchDetail:
     properties:
       cancel_requested_at:
@@ -2066,6 +2185,37 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.Status'
+      updated_at:
+        type: string
+    type: object
+  internal_mediatool_adapter_http.TranscriptionJobResponse:
+    properties:
+      attempt:
+        type: integer
+      created_at:
+        type: string
+      failure_code:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      language:
+        type: string
+      progress:
+        type: integer
+      project_id:
+        type: string
+      result_sha256:
+        type: string
+        x-nullable: true
+      revision:
+        type: integer
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionSource'
+      stage:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_domain.TranscriptionStatus'
       updated_at:
         type: string
     type: object
@@ -3583,6 +3733,238 @@ paths:
       summary: Download timeline subtitles as SRT
       tags:
       - media-exports
+  /api/media-transcriptions/{job_id}:
+    get:
+      operationId: getMediaTranscription
+      parameters:
+      - description: Transcription UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.TranscriptionJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Get local speech transcription
+      tags:
+      - media-transcriptions
+  /api/media-transcriptions/{job_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      operationId: cancelMediaTranscription
+      parameters:
+      - description: Transcription UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Current job revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.TranscriptionJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Cancel local speech transcription
+      tags:
+      - media-transcriptions
+  /api/media-transcriptions/{job_id}/result:
+    get:
+      operationId: getMediaTranscriptionResult
+      parameters:
+      - description: Transcription UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.TranscriptionResult'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Get local speech subtitle draft
+      tags:
+      - media-transcriptions
+  /api/media-transcriptions/{job_id}/retry:
+    post:
+      consumes:
+      - application/json
+      operationId: retryMediaTranscription
+      parameters:
+      - description: Transcription UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Current job revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.TranscriptionJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Retry failed or cancelled local speech transcription
+      tags:
+      - media-transcriptions
+  /api/media-transcriptions/{job_id}/subtitles:
+    get:
+      operationId: downloadMediaTranscriptionSubtitles
+      parameters:
+      - description: Transcription UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: Project UUID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/x-subrip
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Download recognized subtitle draft as SRT
+      tags:
+      - media-transcriptions
   /api/models:
     get:
       operationId: listProjectModels
@@ -4338,6 +4720,108 @@ paths:
       summary: Create local timeline export
       tags:
       - media-exports
+  /api/projects/{pid}/media-transcriptions:
+    get:
+      operationId: listMediaTranscriptions
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Canvas UUID
+        in: query
+        name: canvas_id
+        type: string
+      - description: Timeline node UUID
+        in: query
+        name: node_id
+        type: string
+      - description: 1..200, default 50
+        in: query
+        name: limit
+        type: integer
+      - description: Project and source bound cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.TranscriptionPage'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: List project media transcriptions
+      tags:
+      - media-transcriptions
+    post:
+      consumes:
+      - application/json
+      operationId: createMediaTranscription
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Command UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Saved source identity
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.TranscriptionCreateInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_mediatool_adapter_http.TranscriptionJobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: Create local speech transcription
+      tags:
+      - media-transcriptions
   /api/projects/{pid}/media/{asset_id}/preview:
     get:
       operationId: getMediaPreview
@@ -4394,7 +4878,7 @@ paths:
         name: Idempotency-Key
         required: true
         type: string
-      - description: 图片20MiB，视频500MiB且60秒，音频100MiB，包内GLB2模型64MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证
+      - description: 图片20MiB，视频500MiB且60秒（静音VP8/VP9 WebM实际转为MP4），音频100MiB，包内GLB2模型64MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证
         in: formData
         name: file
         required: true

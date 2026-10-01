@@ -6,7 +6,7 @@ Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发�
 >
 > **历史服务调整（2026-09-30）：** 按用户指令移除独立 Python `agent/` 服务及其 Compose/CI 入口，当时保留 Next.js 前端和现有 Go API、Worker、Relay。供应商、凭据测试、审核、Skill/Harness 的 Go 承接尚未实现；完整生成链仍待验证，见 [清理范围与后续能力](docs/design/Agent服务目录清理设计.md)。
 >
-> **当前前端清理（2026-10-01）：** 按用户指令清空现有前端源码、测试和展示素材，保留 Next.js、React、TypeScript、pnpm 的依赖、锁文件及工程配置，暂不创建替代页面。当前前端入口不可启动；旧页面、画布和浏览器验收仅证明清理前对应提交的历史状态。现有 Go API、Worker、Relay、公开契约、SQL 迁移和项目／画布／媒体数据保留，范围见 [前端实现清理](docs/design/前端实现清理设计.md)。
+> **当前完整迁移（2026-10-02）：** 按用户授权，将固定 BeefTV `1ae25027` 的页面和能力完整适配为自身 Next.js/shadcn 与 Go 合同。工作台、表单创作、无限画布、正式素材、音视频时间线导出、项目恢复和导演台截图图库已重新接通；字幕转写、白膜录制、完整复制及其余清单持续实施。完整目标尚未关闭，当前工程与真实浏览器证据见 [E37 验收进度](docs/acceptance/E37-BeefTV完整迁移验收进度.md)。前端清理记录保留为历史边界。
 
 ## 工作流
 
@@ -20,7 +20,7 @@ Lanverse 是一个 AI 短剧制作平台：以已有剧本为起点、以可发�
 ## 架构概览
 
 ```text
-Next.js（流水线视图 / 画布 / 审阅 /（V2）时间线）
+Next.js（工作台 / 表单创作 / 画布 / 审阅 / 时间线）
    │ REST + SSE
 Go backend-api（Gin · 命令层 · 领域模块）──启动 / 信号──→ Temporal
    │                                                  ├─ backend-worker（Go 工作流 · 写库 · FFmpeg）
@@ -38,53 +38,53 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 ## 技术栈
 
-| 层 | 技术 |
-| --- | --- |
-| 前端 | Next.js、TypeScript、Tailwind CSS、shadcn/ui、Radix UI、ESLint、Prettier、TanStack Query、Zustand；无限画布复用 BeefTV 的 DOM/SVG 交互核心 |
-| 后端 | Go：Gin、GORM、golang-migrate、Viper、Zap、Wire、swag、Temporal SDK、go-redis、franz-go、minio-go |
-| 工作流 | Temporal |
-| 中间件 | PostgreSQL、Redis、Kafka；对象存储开发用 MinIO、生产用火山引擎 TOS |
-| 媒体 | FFmpeg / ffprobe |
-| 可观测 | OpenTelemetry、Prometheus、Grafana、Loki |
+| 层     | 技术                                                                                                                                       |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 前端   | Next.js、TypeScript、Tailwind CSS、shadcn/ui、Radix UI、ESLint、Prettier、TanStack Query、Zustand；无限画布复用 BeefTV 的 DOM/SVG 交互核心 |
+| 后端   | Go：Gin、GORM、golang-migrate、Viper、Zap、Wire、swag、Temporal SDK、go-redis、franz-go、minio-go                                          |
+| 工作流 | Temporal                                                                                                                                   |
+| 中间件 | PostgreSQL、Redis、Kafka；对象存储开发用 MinIO、生产用火山引擎 TOS                                                                         |
+| 媒体   | FFmpeg / ffprobe                                                                                                                           |
+| 可观测 | OpenTelemetry、Prometheus、Grafana、Loki                                                                                                   |
 
 选型与各中间件职责见 [DES-08 技术选型决策](docs/design/08-技术选型决策.md)，工程约定见 [PROJECT.md](PROJECT.md)。
 
-当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。此前无限画布核心及对应设计的迁移范围、正式数据接入和历史验收见 [BeefTV 能力引入设计](docs/design/BeefTV能力引入设计.md)、[PLN-32](docs/plan/32-画布功能.md) 与 [第三方代码声明](THIRD_PARTY_NOTICES.md)。`/canvas` 和 `/projects/{UUID}/canvas` 已随前端实现清理，当前不可用；后续前端重建与产品验收另行确定。LibTV 与旧 infinite-canvas 的调研和验收记录保留为历史来源。
+当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，完整能力固定于 [1ae25027f7ea1c2178e1e4133c36a0f2995d0e98](https://github.com/glanderness/BeefTV/tree/1ae25027f7ea1c2178e1e4133c36a0f2995d0e98)，画布核心沿用已接受的 `0d9e9f48` 适配。迁移范围与正式服务端端口见 [BeefTV 能力引入设计](docs/design/BeefTV能力引入设计.md) 和 [第三方代码声明](THIRD_PARTY_NOTICES.md)。`/canvas` 提供项目入口，`/projects/{UUID}/canvas` 操作真实项目画布；LibTV 与旧 infinite-canvas 的调研保留为历史来源。
 
 ## 文档
 
-| 文件 | 内容 |
-| --- | --- |
-| [docs/README.md](docs/README.md) | 文档中心：按生命周期组织的全部文档、编号规则 |
-| [BACKLOG.md](BACKLOG.md) | 项目进度与待执行任务：P0、M1～M5 的任务、实现要点、涉及文件与状态 |
-| [PRD-01 产品需求文档](docs/prd/01-产品需求文档.md) | 产品目标、用户、场景、产品决策、版本规划、成功指标 |
-| [BeefTV 无限画布迁移设计](docs/design/BeefTV能力引入设计.md) | 当前主要参考项目、固定源码、核心与设计复用范围、正式服务端端口 |
-| [PRD-02 LibTV 历史能力调研](docs/prd/02-LibTV能力调研与核心能力评估.md) | 历史公开事实与已接受业务规则的来源；不作为当前画布选型依据 |
-| [REQ-01 功能需求总表](docs/requirement/01-功能需求总表.md) | 全部需求编号与优先级；功能文件 REQ-06～REQ-33、REQ-35～REQ-39（MVP）与 REQ-34（V2 需求池）写明用户故事、规则与验收标准；对应的功能设计为 DES-09～DES-41 |
-| [REQ-02 非功能需求规格](docs/requirement/02-非功能需求规格.md) | 性能、可靠性、安全、备份恢复、可观测、AI 质量、合规的可度量目标 |
-| [REQ-03 业务流程与用例模型](docs/requirement/03-业务流程与用例模型.md) | 参与者、用例、业务阶段、状态模型 |
-| [REQ-04 术语表](docs/requirement/04-术语表.md) · [REQ-05 界面与交互需求](docs/requirement/05-界面与交互需求.md) | 统一术语；信息架构、页面与关键交互 |
-| [DES-01 系统架构设计](docs/design/01-系统架构设计.md) | 顶层原则、领域模型、Operation、Temporal 工作流、Agent Harness、事件、画布、扩展点 |
-| [DES-08 技术选型决策](docs/design/08-技术选型决策.md) | 前端、后端、Agent、工作流、中间件、模型的明确选型 |
-| [PLN-01 实施路线与交付计划](docs/plan/01-实施路线与交付计划.md) | P0 与 M1–M5、验收、人力、风险 |
-| [PROJECT.md](PROJECT.md) | 仓库结构、目录与编码约定、质量门禁 |
-| [DESIGN.md](DESIGN.md) | 视觉与交互规范 |
-| [AGENTS.md](AGENTS.md) | 协作与 Git 规则 |
+| 文件                                                                                                            | 内容                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [docs/README.md](docs/README.md)                                                                                | 文档中心：按生命周期组织的全部文档、编号规则                                                                                                            |
+| [BACKLOG.md](BACKLOG.md)                                                                                        | 项目进度与待执行任务：P0、M1～M5 的任务、实现要点、涉及文件与状态                                                                                       |
+| [PRD-01 产品需求文档](docs/prd/01-产品需求文档.md)                                                              | 产品目标、用户、场景、产品决策、版本规划、成功指标                                                                                                      |
+| [BeefTV 无限画布迁移设计](docs/design/BeefTV能力引入设计.md)                                                    | 当前主要参考项目、固定源码、核心与设计复用范围、正式服务端端口                                                                                          |
+| [PRD-02 LibTV 历史能力调研](docs/prd/02-LibTV能力调研与核心能力评估.md)                                         | 历史公开事实与已接受业务规则的来源；不作为当前画布选型依据                                                                                              |
+| [REQ-01 功能需求总表](docs/requirement/01-功能需求总表.md)                                                      | 全部需求编号与优先级；功能文件 REQ-06～REQ-33、REQ-35～REQ-39（MVP）与 REQ-34（V2 需求池）写明用户故事、规则与验收标准；对应的功能设计为 DES-09～DES-41 |
+| [REQ-02 非功能需求规格](docs/requirement/02-非功能需求规格.md)                                                  | 性能、可靠性、安全、备份恢复、可观测、AI 质量、合规的可度量目标                                                                                         |
+| [REQ-03 业务流程与用例模型](docs/requirement/03-业务流程与用例模型.md)                                          | 参与者、用例、业务阶段、状态模型                                                                                                                        |
+| [REQ-04 术语表](docs/requirement/04-术语表.md) · [REQ-05 界面与交互需求](docs/requirement/05-界面与交互需求.md) | 统一术语；信息架构、页面与关键交互                                                                                                                      |
+| [DES-01 系统架构设计](docs/design/01-系统架构设计.md)                                                           | 顶层原则、领域模型、Operation、Temporal 工作流、Agent Harness、事件、画布、扩展点                                                                       |
+| [DES-08 技术选型决策](docs/design/08-技术选型决策.md)                                                           | 前端、后端、Agent、工作流、中间件、模型的明确选型                                                                                                       |
+| [PLN-01 实施路线与交付计划](docs/plan/01-实施路线与交付计划.md)                                                 | P0 与 M1–M5、验收、人力、风险                                                                                                                           |
+| [PROJECT.md](PROJECT.md)                                                                                        | 仓库结构、目录与编码约定、质量门禁                                                                                                                      |
+| [DESIGN.md](DESIGN.md)                                                                                          | 视觉与交互规范                                                                                                                                          |
+| [AGENTS.md](AGENTS.md)                                                                                          | 协作与 Git 规则                                                                                                                                         |
 
 ## 开发
 
-工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机当前可直接启动现有 Go 服务进程，连接已运行的本机中间件；前端仅保留工程配置，重建前不执行启动或应用构建。配置写在根目录 `.env`（键名样例见 `.env.example`）。
+工程底座及业务接线按 [BACKLOG](BACKLOG.md) 和完整迁移清单持续交付。本机直接运行 Go 与 Next.js，连接已运行的本机中间件。配置写在根目录 `.env`（键名样例见 `.env.example`），浏览器地址必须与 `LV_PUBLIC_ORIGIN` 一致。
 
-| 目录 | 技术栈 | 本地启动 | 健康检查 |
-| --- | --- | --- | --- |
-| `backend/` | Go 1.26 · Gin · Viper · Zap | `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
-| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix），配置保留 | 待重建，当前无应用入口 | 不适用 |
+| 目录        | 技术栈                                                                      | 本地启动                                                             | 健康检查            |
+| ----------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
+| `backend/`  | Go 1.26 · Gin · Viper · Zap                                                 | `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
+| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && pnpm exec next dev`                                  | `GET :3000/healthz` |
 
 原 `agent` / `agent.mock` 队列当前没有应用提供的执行 Worker；Go 工作流仍保留这些协议引用，相关任务可能等待或超时。API 健康/就绪检查不证明供应商执行可用；Go 承接完成前，不能将生成、凭据测试、审核或 Skill 运行计为验证通过。本地开发不启动 Compose。
 
-Go Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow,media`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。`flow` 注册基础设施维护、凭据测试、单项/批量 Operation 与报价过期 Workflow，`media` 注册媒体接管 Activity。Relay 投递 Outbox，投影已登记的项目/预算/Operation 事件，并按允许字段消费账号、注册表、项目和业务命令审计。公开 SSE、真实供应商及完整生成验收仍以对应 BACKLOG 任务为准。
+Go Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow,media`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。`flow` 编排已登记的工作流，`media` 执行私有媒体接管、FFmpeg 音视频导出与本机字幕转写 Activity。Relay 投递 Outbox，投影已登记事件并消费审核后的审计摘要；新环境须预建 OPS-01 列出的全部主题。公开 SSE、真实供应商及完整生成验收仍以对应 BACKLOG 任务为准。本机字幕服务固定来源、模型摘要与启动步骤见 [OPS-01 §6.1](docs/operation/01-环境与部署.md#61-本机字幕转写服务)。
 
-Go 继续提供单一工作区身份，复用既有组织和真实项目数据；公开 `/api/auth/*` 仍已移除，没有认证切换开关。前端清理前的项目列表、新建及画布流程见 [E-10 历史验证记录](docs/acceptance/E10-项目创建与画布入口验证.md)，其中浏览器证据不代表当前入口可用。重建前无法通过 `:3000/projects` 创建或编辑项目，现有服务端合同和业务数据保留。
+Go 继续提供单一工作区身份，复用既有组织和真实项目数据；公开 `/api/auth/*` 仍已移除，没有认证切换开关。当前可从 `:3000/projects` 创建、编辑、归档和恢复项目，并进入正式画布；对应当前闭环证据见 E37。角色与组织授权仍由服务端核验。
 
 Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_RELAY_HEALTH_ADDR` 提供 `GET /healthz`（样例端口 8081、8082）；该接口只表示进程正在运行，任务处理状况仍需检查 Temporal Worker 与 Outbox 积压。
 
@@ -102,6 +102,6 @@ temporal operator cluster health --address 127.0.0.1:7233
 "$(brew --prefix kafka)/bin/kafka-broker-api-versions" --bootstrap-server 127.0.0.1:9092
 ```
 
-各进程在独立终端执行上表命令。前置工具：Go 1.26、uv、Node.js 24 + Corepack / pnpm；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。后续容器化部署保留两份独立 Compose 文件：`docker-compose.yml` 定义应用，`docker-compose-env.yml` 完整定义 PostgreSQL、Redis、Kafka、MinIO、Temporal 及管理界面。本机开发使用服务管理器启动的本机依赖，不通过 Compose 启动环境。详细步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。
+各进程在独立终端执行上表命令。前置工具：Go 1.26、Node.js 24 + Corepack / pnpm、FFmpeg / ffprobe；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。后续容器化部署保留两份独立 Compose 文件：`docker-compose.yml` 定义应用，`docker-compose-env.yml` 完整定义 PostgreSQL、Redis、Kafka、MinIO、Temporal 及管理界面。本机开发使用服务管理器启动的本机依赖，不通过 Compose 启动环境。详细步骤见 [OPS-01](docs/operation/01-环境与部署.md#6-本地开发环境)。
 
 旧实现的代码与运行方式见标签 `legacy-2026-09`（如 `git show legacy-2026-09:README.md`）。

@@ -91,6 +91,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 	switch queue {
 	case "flow":
 		toolflow.RegisterWorkflow(queueWorker)
+		toolflow.RegisterTranscriptionWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
 		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
@@ -142,6 +143,17 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		exports := provideMediaExportStore(dbConn.DB)
 		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
 		toolflow.RegisterActivities(queueWorker, toolflow.NewActivities(exportWorker, exports, exports))
+		transcriber, err := provideTranscriber(cfg)
+		if err != nil {
+			return nil, err
+		}
+		audioPreprocessor, err := toolff.NewAudioPreprocessor(mediaflow.FFProber{})
+		if err != nil {
+			return nil, fmt.Errorf("configure speech audio preparation: %w", err)
+		}
+		transcriptions := provideMediaTranscriptionStore(dbConn.DB, transcriber != nil)
+		transcriptionWorker := toolapp.NewTranscriptionWorker(transcriptions, toolflow.NewObjects(storage), audioPreprocessor, transcriber)
+		toolflow.RegisterTranscriptionActivities(queueWorker, toolflow.NewTranscriptionActivities(transcriptionWorker, transcriptions))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
 	}
@@ -195,10 +207,11 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		credentialHandler := catalogevent.NewCredentialTestHandler(processed,
 			pgcatalog.NewStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
 		exportHandler := toolevent.NewHandler(processed, provideMediaExportStore(dbConn.DB), toolflow.NewStarter(temporalConn.Client))
+		transcriptionHandler := toolevent.NewTranscriptionHandler(processed, provideMediaTranscriptionStore(dbConn.DB, false), toolflow.NewTranscriptionStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic}, workflowDelivery{
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler,
+				exports: exportHandler, transcriptions: transcriptionHandler,
 			})
 		if err != nil {
 			temporalConn.Close()
@@ -227,9 +240,10 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 
 // workflowDelivery dispatches distinct durable requests on the existing owned consumer.
 type workflowDelivery struct {
-	operations  inboxapp.Handler
-	credentials inboxapp.Handler
-	exports     inboxapp.Handler
+	operations     inboxapp.Handler
+	credentials    inboxapp.Handler
+	exports        inboxapp.Handler
+	transcriptions inboxapp.Handler
 }
 
 func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
@@ -238,6 +252,9 @@ func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) er
 	}
 	if record.Topic == toolevent.Topic {
 		return h.exports.Handle(ctx, record)
+	}
+	if record.Topic == toolevent.TranscriptionTopic {
+		return h.transcriptions.Handle(ctx, record)
 	}
 	return h.operations.Handle(ctx, record)
 }

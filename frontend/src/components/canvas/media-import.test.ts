@@ -185,3 +185,17 @@ it("GLB 原件按 64MiB 初筛并只持久 model 资产身份", () => {
   expect(node.assetId).toBe(asset.id);
   expect(node.media).toBeUndefined();
 });
+
+it("静音WebM只作原件初筛，真实VP8/VP9及MP4规范化交给服务端", () => {
+  expect(
+    validateCanvasMediaFiles([file("白膜.webm", "video/webm", 500 * mib)])
+      .valid,
+  ).toBe(true);
+  expect(
+    validateCanvasMediaFiles([file("白膜.webm", "video/webm", 500 * mib + 1)])
+      .valid,
+  ).toBe(false);
+  expect(validateCanvasMediaFiles([file("白膜.mp4", "video/webm")]).valid).toBe(
+    false,
+  );
+});

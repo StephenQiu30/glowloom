@@ -68,16 +68,17 @@ type UploadInput struct {
 
 // UploadService validates local input and publishes it only after durable object checks.
 type UploadService struct {
-	repo     UploadRepository
-	prober   Prober
-	renderer Renderer
-	objects  UploadObjects
-	now      func() time.Time
+	repo       UploadRepository
+	prober     Prober
+	normalizer UploadNormalizer
+	renderer   Renderer
+	objects    UploadObjects
+	now        func() time.Time
 }
 
 // NewUploadService injects current permissions, real media tools and private storage.
-func NewUploadService(repo UploadRepository, prober Prober, renderer Renderer, objects UploadObjects, now func() time.Time) *UploadService {
-	return &UploadService{repo: repo, prober: prober, renderer: renderer, objects: objects, now: now}
+func NewUploadService(repo UploadRepository, prober Prober, normalizer UploadNormalizer, renderer Renderer, objects UploadObjects, now func() time.Time) *UploadService {
+	return &UploadService{repo: repo, prober: prober, normalizer: normalizer, renderer: renderer, objects: objects, now: now}
 }
 
 // Authorize rejects inaccessible or archived projects without reading the body.
@@ -92,7 +93,7 @@ func (s *UploadService) Authorize(ctx context.Context, actor identityapp.Princip
 // Upload performs the synchronous local-owner-reviewed ingest. Generated media
 // continues to use its separate operation and moderation pipeline.
 func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result UploadResult, err error) {
-	if s == nil || s.repo == nil || s.prober == nil || s.renderer == nil || s.objects == nil || s.now == nil {
+	if s == nil || s.repo == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || s.objects == nil || s.now == nil {
 		return result, ErrUnavailable
 	}
 	r := in.Request
@@ -109,6 +110,20 @@ func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result Uplo
 	}
 	if result, found, err := s.repo.FindUpload(ctx, in.Actor, r); err != nil || found {
 		return result, err
+	}
+	var normalization *UploadNormalization
+	if file.MIMEType == "video/webm" {
+		normalized, normalizeErr := s.normalizer.Normalize(ctx, file)
+		if normalizeErr != nil {
+			return result, normalizeErr
+		}
+		if normalized.File == nil || normalized.File == file || normalized.File.File == nil || normalized.File.File == file.File {
+			return result, ErrInvalidUpload
+		}
+		defer func() { _ = normalized.File.Close() }()
+		normalization = &UploadNormalization{Version: 1, Method: "webm_vp8_vp9_to_mp4_h264",
+			Source: UploadSourceFacts{SHA256: r.SHA256, FileName: r.FileName, ByteSize: r.ByteSize, MIMEType: file.MIMEType, Codec: normalized.SourceCodec}}
+		file, name = normalized.File, canonicalUploadName(name)
 	}
 	probe, err := s.prober.Probe(ctx, file)
 	if err != nil {
@@ -160,7 +175,14 @@ func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result Uplo
 		return result, err
 	}
 	sha := file.SHA256
-	review, err := json.Marshal(LocalUploadReview{Method: "local_workspace_owner_review", PrincipalID: in.Actor.ID, ReviewedAt: now, SHA256: sha, RightsConfirmed: true, NoAuthorizationRequiredRealPerson: true})
+	if normalization != nil {
+		if probe.Width == nil || probe.Height == nil || probe.DurationMS == nil || probe.Codec == nil {
+			return result, ErrInvalidUpload
+		}
+		normalization.Canonical = UploadCanonicalFacts{SHA256: file.SHA256, ByteSize: file.Size, MIMEType: file.MIMEType, Codec: *probe.Codec,
+			Width: *probe.Width, Height: *probe.Height, DurationMS: *probe.DurationMS}
+	}
+	review, err := json.Marshal(LocalUploadReview{Method: "local_workspace_owner_review", PrincipalID: in.Actor.ID, ReviewedAt: now, SHA256: r.SHA256, RightsConfirmed: true, NoAuthorizationRequiredRealPerson: true, Normalization: normalization})
 	if err != nil {
 		return result, err
 	}
@@ -195,12 +217,13 @@ func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result Uplo
 
 // LocalUploadReview records an explicit human declaration, never a machine check.
 type LocalUploadReview struct {
-	Method                            string    `json:"method"`
-	PrincipalID                       uuid.UUID `json:"principal_id"`
-	ReviewedAt                        time.Time `json:"reviewed_at"`
-	SHA256                            string    `json:"sha256"`
-	RightsConfirmed                   bool      `json:"rights_confirmed"`
-	NoAuthorizationRequiredRealPerson bool      `json:"no_authorization_required_real_person"`
+	Method                            string               `json:"method"`
+	PrincipalID                       uuid.UUID            `json:"principal_id"`
+	ReviewedAt                        time.Time            `json:"reviewed_at"`
+	SHA256                            string               `json:"sha256"`
+	RightsConfirmed                   bool                 `json:"rights_confirmed"`
+	NoAuthorizationRequiredRealPerson bool                 `json:"no_authorization_required_real_person"`
+	Normalization                     *UploadNormalization `json:"normalization,omitempty"`
 }
 
 func (s *UploadService) putUpload(ctx context.Context, key string, file *Downloaded) error {

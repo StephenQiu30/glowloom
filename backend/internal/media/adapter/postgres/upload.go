@@ -1,9 +1,11 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 
@@ -36,7 +38,7 @@ func authorizeUpload(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UU
 	if projectID == uuid.Nil {
 		return "", ErrNotFound
 	}
-	query := `SELECT status, aspect_ratio FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete`
+	query := `SELECT status, aspect_ratio FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete AND status IN ('active','archived')`
 	if lock {
 		query += ` FOR UPDATE`
 	} else {
@@ -132,7 +134,7 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 			return err
 		}
 		var existing assetRow
-		read := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND sha256=? AND origin='upload' AND status='ready' AND moderation_status='passed' AND NOT is_delete AND NOT contains_real_person AND moderation_detail->>'method'='local_workspace_owner_review' ORDER BY create_time,id LIMIT 1 FOR SHARE`, r.ProjectID, r.SHA256).Scan(&existing)
+		read := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND (sha256=? OR (? AND moderation_detail->'normalization'->'source'->>'sha256'=? AND moderation_detail->'normalization'->>'method'='webm_vp8_vp9_to_mp4_h264' AND moderation_detail->'normalization'->>'version'='1')) AND origin='upload' AND status='ready' AND moderation_status='passed' AND NOT is_delete AND NOT contains_real_person AND moderation_detail->>'method'='local_workspace_owner_review' ORDER BY create_time,id LIMIT 1 FOR SHARE`, r.ProjectID, *asset.SHA256, *asset.SHA256 != r.SHA256, r.SHA256).Scan(&existing)
 		if read.Error != nil {
 			return fmt.Errorf("find identical local upload: %w", read.Error)
 		}
@@ -184,12 +186,24 @@ func validateReviewedUpload(actor identityapp.Principal, r application.UploadReq
 	if err := asset.Validate(); err != nil {
 		return err
 	}
-	if asset.ProjectID != r.ProjectID || asset.Origin != domain.OriginUpload || asset.Status != domain.StatusReady || asset.ModerationStatus != domain.ModerationPassed || asset.IsDelete || asset.ContainsRealPerson || asset.ConsentRecordID != nil || asset.Revision != 1 || asset.SHA256 == nil || *asset.SHA256 != r.SHA256 || asset.ByteSize != r.ByteSize || asset.FileName != r.FileName {
+	if asset.ProjectID != r.ProjectID || asset.Origin != domain.OriginUpload || asset.Status != domain.StatusReady || asset.ModerationStatus != domain.ModerationPassed || asset.IsDelete || asset.ContainsRealPerson || asset.ConsentRecordID != nil || asset.Revision != 1 || asset.SHA256 == nil {
 		return application.ErrInvalidUpload
 	}
 	var review application.LocalUploadReview
-	if err := json.Unmarshal(asset.ModerationDetail, &review); err != nil || review.Method != "local_workspace_owner_review" || review.PrincipalID != actor.ID || !review.ReviewedAt.Equal(asset.CreateTime) || review.SHA256 != r.SHA256 || !review.RightsConfirmed || !review.NoAuthorizationRequiredRealPerson {
+	decoder := json.NewDecoder(bytes.NewReader(asset.ModerationDetail))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&review); err != nil || review.Method != "local_workspace_owner_review" || review.PrincipalID != actor.ID || !review.ReviewedAt.Equal(asset.CreateTime) || review.SHA256 != r.SHA256 || !review.RightsConfirmed || !review.NoAuthorizationRequiredRealPerson {
 		return application.ErrInvalidUpload
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return application.ErrInvalidUpload
+	}
+	if review.Normalization == nil {
+		if *asset.SHA256 != r.SHA256 || asset.ByteSize != r.ByteSize || asset.FileName != r.FileName {
+			return application.ErrInvalidUpload
+		}
+	} else if err := review.Normalization.Validate(r, asset); err != nil {
+		return err
 	}
 	var required []domain.RenditionKind
 	switch asset.Kind {

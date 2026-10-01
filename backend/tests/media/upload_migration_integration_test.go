@@ -53,7 +53,7 @@ func TestUploadMigrationUpDownUpAndReceiptRollbackGuard(t *testing.T) {
 		t.Fatalf("upload second up: %v", err)
 	}
 	actor, project := mediaStoreProject(t, database)
-	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
+	service := mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.FFUploadProber{}, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
 	in := uploadInput(t)
 	in.Actor = actor
 	in.Request.ProjectID = project

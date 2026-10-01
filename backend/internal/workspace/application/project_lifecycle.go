@@ -211,10 +211,16 @@ func PrepareProjectChange(actor identityapp.Principal, input ProjectChangeInput,
 		err = after.Archive(now, hasBlockingWork)
 	case "unarchive":
 		err = after.Unarchive()
+		if err == nil && hasBlockingWork {
+			err = domain.ErrProjectHasInflightOperations
+		}
 	case "delete":
 		err = after.Delete(now, hasBlockingWork)
 	case "restore":
 		err = after.Restore(now)
+		if err == nil && hasBlockingWork {
+			err = domain.ErrProjectHasInflightOperations
+		}
 	}
 	if err != nil {
 		return domain.Project{}, nil, err

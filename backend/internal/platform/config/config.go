@@ -37,6 +37,7 @@ type Config struct {
 	CredentialKeyID           string
 	MediaResultAllowedOrigins string
 	MediaAllowTestLoopbackTLS bool
+	WhisperEndpoint           string
 	OTelEndpoint              string
 }
 
@@ -85,6 +86,7 @@ func Load() (Config, error) {
 		CredentialKeyID:           strings.TrimSpace(v.GetString("LV_CREDENTIAL_KEY_ID")),
 		MediaResultAllowedOrigins: strings.TrimSpace(v.GetString("LV_MEDIA_RESULT_ALLOWED_ORIGINS")),
 		MediaAllowTestLoopbackTLS: v.GetBool("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
+		WhisperEndpoint:           strings.TrimSpace(v.GetString("LV_WHISPER_ENDPOINT")),
 		OTelEndpoint:              strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
 	}
 	if err := cfg.validate(); err != nil {

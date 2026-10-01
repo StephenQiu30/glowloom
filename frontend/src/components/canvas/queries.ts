@@ -1,3 +1,11 @@
+import * as transcriptions from "@/gen/api/mediaTranscriptions";
+import {
+  transcriptionJobSchema,
+  transcriptionResultSchema,
+  transcriptionSourceSchema,
+  type TranscriptionJob,
+  type TranscriptionSource,
+} from "./transcription-model";
 import {
   generationWireSchema,
   encodeGenerationConfig,
@@ -342,4 +350,131 @@ export async function uploadCanvasMedia(
   if (response.asset.project_id !== projectId)
     throw new ApiError(502, "invalid_response");
   return response.asset;
+}
+
+// Local speech jobs use the same generated request and project-scoped cache.
+export const MEDIA_TRANSCRIPTIONS_KEY = [
+  "canvas",
+  "media-transcriptions",
+] as const;
+function transcriptionJob(value: unknown, projectId: string, id?: string) {
+  const result = parse(transcriptionJobSchema, value);
+  if (result.project_id !== projectId || (id && result.id !== id))
+    throw new ApiError(502, "invalid_response");
+  return result;
+}
+export async function createMediaTranscription(
+  projectId: string,
+  source: TranscriptionSource,
+  language: string,
+  key: string,
+) {
+  const frozen = transcriptionSourceSchema.parse(source);
+  const value = transcriptionJob(
+    await transcriptions.createMediaTranscription(
+      { pid: projectId },
+      { ...frozen, language },
+      writeOptions(key),
+    ),
+    projectId,
+  );
+  if (
+    value.source.canvas_id !== frozen.canvas_id ||
+    value.source.node_id !== frozen.node_id ||
+    value.source.revision !== frozen.revision ||
+    value.language !== language
+  )
+    throw new ApiError(502, "invalid_response");
+  return value;
+}
+export async function listMediaTranscriptions(
+  projectId: string,
+  canvasId: string,
+  nodeId?: string,
+  cursor?: string,
+  signal?: AbortSignal,
+) {
+  const value = parse(
+    z.object({
+      items: z.array(transcriptionJobSchema).max(25),
+      next_cursor: z.string().nullable(),
+    }),
+    await transcriptions.listMediaTranscriptions(
+      {
+        pid: projectId,
+        canvas_id: canvasId,
+        ...(nodeId ? { node_id: nodeId } : {}),
+        limit: 25,
+        ...(cursor ? { cursor } : {}),
+      },
+      { signal },
+    ),
+  );
+  if (
+    value.items.some(
+      (item) =>
+        item.project_id !== projectId ||
+        item.source.canvas_id !== canvasId ||
+        (nodeId && item.source.node_id !== nodeId),
+    )
+  )
+    throw new ApiError(502, "invalid_response");
+  return value;
+}
+export async function getMediaTranscriptionResult(
+  job: TranscriptionJob,
+  signal?: AbortSignal,
+) {
+  const value = parse(
+    transcriptionResultSchema,
+    await transcriptions.getMediaTranscriptionResult(
+      { job_id: job.id, project_id: job.project_id },
+      { signal },
+    ),
+  );
+  if (
+    job.status !== "succeeded" ||
+    value.job_id !== job.id ||
+    value.revision !== job.revision ||
+    value.sha256 !== job.result_sha256
+  )
+    throw new ApiError(502, "invalid_response");
+  return value;
+}
+export async function controlMediaTranscription(
+  job: TranscriptionJob,
+  action: "cancel" | "retry",
+  key: string,
+) {
+  const invoke =
+    action === "cancel"
+      ? transcriptions.cancelMediaTranscription
+      : transcriptions.retryMediaTranscription;
+  return transcriptionJob(
+    await invoke(
+      { job_id: job.id },
+      { project_id: job.project_id, revision: job.revision },
+      writeOptions(key),
+    ),
+    job.project_id,
+    job.id,
+  );
+}
+export async function downloadMediaTranscriptionSubtitles(
+  job: TranscriptionJob,
+  signal?: AbortSignal,
+) {
+  const value: unknown =
+    await transcriptions.downloadMediaTranscriptionSubtitles(
+      { job_id: job.id, project_id: job.project_id },
+      { responseType: "blob", signal },
+    );
+  if (
+    !(value instanceof Blob) ||
+    value.size < 1 ||
+    value.size > 8 * 1024 * 1024 ||
+    !value.type.startsWith("application/x-subrip")
+  )
+    throw new ApiError(502, "invalid_response");
+  return value;
 }

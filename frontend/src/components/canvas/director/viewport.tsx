@@ -15,11 +15,14 @@ import {
   Group,
   MeshDepthMaterial,
   MeshNormalMaterial,
+  MeshStandardMaterial,
   PerspectiveCamera as ThreeCamera,
   Quaternion,
   Vector3,
 } from "three";
 import { AuthorizedModel, AuthorizedImage } from "./asset-view";
+import { recordDirectorCanvas } from "./recording";
+import { createDirectorCaptureContext } from "./outputs";
 import { cropDirectorCanvas } from "./aspect-ratio";
 import {
   directorPoseBoneDeltas,
@@ -47,6 +50,11 @@ import type {
 export type DirectorCapture = (
   mode: "beauty" | "depth" | "normal",
 ) => Promise<File>;
+export type DirectorRecord = (
+  duration: number,
+  fps: 24 | 25 | 30,
+  signal: AbortSignal,
+) => Promise<File>;
 type Props = {
   projectId: string;
   scene: DirectorScene;
@@ -67,6 +75,8 @@ type Props = {
     },
   ) => void;
   onCaptureReady: (capture: DirectorCapture | null) => void;
+  onRecordReady?: (record: DirectorRecord | null) => void;
+  onRecordTime?: (time: number) => void;
 };
 class ViewportBoundary extends Component<
   { children: ReactNode },
@@ -185,6 +195,17 @@ function Stage(props: Props) {
     : null;
   const assetsReady = useRef(new Map<string, boolean>());
   const committedRenderMode = useRef(renderMode);
+  const snapshots = useRef({ scene, time });
+  useEffect(() => {
+    snapshots.current = { scene, time };
+  }, [scene, time]);
+  const pendingRecordFrame = useRef<{
+    time: number;
+    frames: number;
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   const pendingCaptureFrame = useRef<{
     frames: number;
     resolve: () => void;
@@ -195,6 +216,19 @@ function Stage(props: Props) {
     committedRenderMode.current = renderMode;
   }, [renderMode]);
   useFrame(() => {
+    const recordFrame = pendingRecordFrame.current;
+    if (recordFrame) {
+      if (
+        committedRenderMode.current === "clay" &&
+        Math.abs(snapshots.current.time - recordFrame.time) < 1e-6
+      )
+        recordFrame.frames += 1;
+      if (recordFrame.frames >= 2) {
+        clearTimeout(recordFrame.timer);
+        pendingRecordFrame.current = null;
+        recordFrame.resolve();
+      } else get().invalidate();
+    }
     const pending = pendingCaptureFrame.current;
     if (!pending) return;
     if (committedRenderMode.current === "beauty") pending.frames += 1;
@@ -204,10 +238,6 @@ function Stage(props: Props) {
       pending.resolve();
     } else get().invalidate();
   });
-  const snapshots = useRef({ scene, time });
-  useEffect(() => {
-    snapshots.current = { scene, time };
-  }, [scene, time]);
   const onViewReady = props.onViewReady;
   useEffect(() => {
     onViewReady(() => {
@@ -325,6 +355,159 @@ function Stage(props: Props) {
       captureReady(null);
     };
   }, [captureReady, get, gl, threeScene, size.width, size.height]);
+  const recordReady = props.onRecordReady;
+  const recordTime = props.onRecordTime;
+  useEffect(() => {
+    if (!recordReady || !recordTime) return;
+    const lifecycle = new AbortController();
+    recordReady(async (duration, fps, signal) => {
+      if (lifecycle.signal.aborted || signal.aborted)
+        throw new Error("录制已取消。");
+      const active = new AbortController();
+      const abort = () => active.abort();
+      signal.addEventListener("abort", abort, { once: true });
+      lifecycle.signal.addEventListener("abort", abort, { once: true });
+      const originalScene = snapshots.current.scene;
+      const expected = createDirectorCaptureContext(originalScene);
+      const frameCanvas = document.createElement("canvas");
+      frameCanvas.width = gl.domElement.width;
+      frameCanvas.height = gl.domElement.height;
+      const frameContext = frameCanvas.getContext("2d");
+      const material = new MeshStandardMaterial({
+        color: "#aab2ba",
+        roughness: 0.8,
+      });
+      try {
+        if (!frameContext) throw new Error("无法创建白膜录制画布。");
+        const blob = await recordDirectorCanvas({
+          duration,
+          fps,
+          aspectRatio: originalScene.aspectRatio ?? "adaptive",
+          signal: active.signal,
+          renderFrame: async (seconds) => {
+            if (active.signal.aborted) throw new Error("录制已取消。");
+            recordTime(seconds);
+            await new Promise<void>((resolve, reject) => {
+              if (pendingRecordFrame.current) {
+                reject(new Error("已有录制帧正在等待视口。"));
+                return;
+              }
+              const timer = setTimeout(() => {
+                pendingRecordFrame.current = null;
+                reject(new Error("白膜动画帧尚未就绪，请重试。"));
+              }, 3000);
+              pendingRecordFrame.current = {
+                time: seconds,
+                frames: 0,
+                resolve,
+                reject,
+                timer,
+              };
+              get().invalidate();
+            });
+            if (active.signal.aborted || gl.getContext().isContextLost())
+              throw new Error("录制已取消或3D上下文已失效。");
+            const current = snapshots.current;
+            const actual = createDirectorCaptureContext(current.scene);
+            if (
+              actual.sceneId !== expected.sceneId ||
+              actual.shotId !== expected.shotId ||
+              actual.renderKey !== expected.renderKey
+            )
+              throw new Error("录制期间场景或镜头已改变，请重试。");
+            if (
+              gl.domElement.width !== frameCanvas.width ||
+              gl.domElement.height !== frameCanvas.height
+            )
+              throw new Error("录制期间视口尺寸已改变，请重试。");
+            if (
+              current.scene.objects.some(
+                (object) =>
+                  object.visible &&
+                  object.assetId &&
+                  !assetsReady.current.get(object.id),
+              )
+            )
+              throw new Error("场景素材仍在载入或读取失败，请待就绪后录制。");
+            const framing = resolveDirectorViewFraming({
+              scene: current.scene,
+              mode: "camera",
+              playhead: current.time,
+            });
+            if (!framing) throw new Error("当前摄影机取景无效。");
+            const camera = new ThreeCamera(
+              framing.fov,
+              size.width / size.height,
+              framing.near,
+              framing.far,
+            );
+            camera.position.set(...framing.position);
+            camera.up.set(...framing.up);
+            camera.lookAt(...framing.target);
+            camera.updateMatrixWorld();
+            const previous = threeScene.overrideMaterial;
+            const hidden: {
+              item: import("three").Object3D;
+              visible: boolean;
+            }[] = [];
+            threeScene.traverse((item) => {
+              if (
+                item.userData.directorEditorOnly ||
+                item.userData.directorPanorama
+              ) {
+                hidden.push({ item, visible: item.visible });
+                item.visible = false;
+              }
+            });
+            try {
+              threeScene.overrideMaterial = material;
+              gl.render(threeScene, camera);
+              frameContext.drawImage(gl.domElement, 0, 0);
+              return frameCanvas;
+            } finally {
+              threeScene.overrideMaterial = previous;
+              hidden.forEach(({ item, visible }) => {
+                item.visible = visible;
+              });
+              gl.render(threeScene, get().camera);
+              get().invalidate();
+            }
+          },
+        });
+        if (active.signal.aborted) throw new Error("录制已取消。");
+        const name =
+          Array.from(
+            originalScene.title.replace(/[\\/\x00-\x1f\x7f]/g, " ").trim(),
+          )
+            .slice(0, 32)
+            .join("") || "导演台";
+        return new File([blob], `${name}-白膜.webm`, { type: "video/webm" });
+      } finally {
+        active.abort();
+        signal.removeEventListener("abort", abort);
+        lifecycle.signal.removeEventListener("abort", abort);
+        const pending = pendingRecordFrame.current;
+        if (pending) {
+          clearTimeout(pending.timer);
+          pendingRecordFrame.current = null;
+          pending.reject(new Error("录制已结束。"));
+        }
+        material.dispose();
+      }
+    });
+    return () => {
+      lifecycle.abort();
+      const pending = pendingRecordFrame.current;
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingRecordFrame.current = null;
+        pending.reject(
+          new Error("录制视口已关闭或布局改变，请待视口稳定后重试。"),
+        );
+      }
+      recordReady(null);
+    };
+  }, [recordReady, recordTime, get, gl, threeScene, size.width, size.height]);
   useEffect(() => {
     const lost = (event: Event) => {
       event.preventDefault();
@@ -338,6 +521,7 @@ function Stage(props: Props) {
       <ambientLight intensity={scene.environmentIntensity * 0.4} />
       {scene.panorama ? (
         <group
+          userData={{ directorPanorama: true }}
           rotation={[
             0,
             ((scene.panorama.rotation + (scene.panoramaRotation ?? 0)) *

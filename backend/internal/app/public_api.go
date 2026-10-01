@@ -96,9 +96,14 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
 	}
-	mediahttp.NewUploadHandler(mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)).Register(protected)
+	mediahttp.NewUploadHandler(mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)).Register(protected)
 	exports := provideMediaExportStore(database)
 	toolhttp.NewHandler(exports, toolapp.NewExportQuery(exports, storage, storage)).Register(protected)
+	transcriber, err := provideTranscriber(cfg)
+	if err != nil {
+		return nil, err
+	}
+	toolhttp.NewTranscriptionHandler(provideMediaTranscriptionStore(database, transcriber != nil)).Register(protected)
 	catalogStore := pgcatalog.NewStore(database)
 	credentialSchema := credentialschema.NewRegistry()
 	parameterValidator, err := paramvalidation.NewValidator()

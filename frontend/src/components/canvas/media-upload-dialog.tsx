@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ApiError } from "@/lib/request";
+import { LocalUploadPreview } from "./local-upload-preview";
 import { validateCanvasMediaFiles } from "./media-import";
 import type { MediaAsset } from "./queries";
 export type CanvasMediaUpload = (
@@ -269,7 +270,7 @@ function MediaUploadSession({
               id={filesId}
               type="file"
               multiple
-              accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.mp3,.wav,.m4a,.glb"
+              accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.mp3,.wav,.m4a,.glb"
               disabled={busy || blocked || successful.length > 0}
               onChange={(event) => {
                 if (inFlight.current || successful.length) return;
@@ -280,9 +281,10 @@ function MediaUploadSession({
               }}
             />
             <FieldDescription>
-              图片 JPG/PNG/WebP ≤20 MiB；视频 MP4/MOV ≤500 MiB、≤60 秒；音频
-              MP3/WAV/M4A ≤100 MiB。图片和视频每边 ≤8192、总像素 ≤4000 万。 GLB
-              v2 ≤64 MiB，资源须在包内或嵌入 data
+              图片 JPG/PNG/WebP ≤20 MiB；视频 MP4/MOV 与静音 VP8/VP9 WebM ≤500
+              MiB、≤60 秒；WebM 将实际转换为 MP4。音频 MP3/WAV/M4A ≤100
+              MiB。图片和视频每边 ≤8192、总像素 ≤4000 万。 GLB v2 ≤64
+              MiB，资源须在包内或嵌入 data
               URI。服务端将检查真实格式、尺寸和时长。
             </FieldDescription>
             <FieldError
@@ -313,6 +315,7 @@ function MediaUploadSession({
                 <p className="truncate text-sm font-medium">
                   {entry.file.name}
                 </p>
+                <LocalUploadPreview file={entry.file} />
                 <Progress
                   value={entry.progress ?? null}
                   aria-label={`${entry.file.name} 上传进度`}

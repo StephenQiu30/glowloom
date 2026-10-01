@@ -33,7 +33,7 @@ func uploadHTTPRouter(repo *uploadRepoFake, prober mediaapp.Prober) *gin.Engine 
 		c.Set("principal", identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: identitydomain.RoleProducer})
 		c.Next()
 	})
-	service := mediaapp.NewUploadService(repo, prober, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
+	service := mediaapp.NewUploadService(repo, prober, mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, &uploadObjectsFake{}, time.Now)
 	mediahttp.NewUploadHandler(service).Register(group)
 	group.POST("/json", func(c *gin.Context) {
 		var input struct {
