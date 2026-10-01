@@ -39,7 +39,7 @@ func (s *Store) ListStylePresets(ctx context.Context, actor identityapp.Principa
 			var visible int
 			result := tx.Raw(`
 				SELECT 1 FROM workspace.project
-				WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete
+				WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete AND status IN ('active','archived')
 				FOR SHARE
 			`, projectID.String(), actor.OrgID.String()).Scan(&visible)
 			if result.Error != nil {

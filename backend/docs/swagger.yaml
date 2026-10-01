@@ -2417,6 +2417,89 @@ definitions:
     - default_models
     - expected_revision
     type: object
+  internal_workspace_adapter_http.ProjectCopyListResponse:
+    properties:
+      copies:
+        items:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyResponse'
+        type: array
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      next_cursor:
+        type: string
+        x-nullable: true
+    type: object
+  internal_workspace_adapter_http.ProjectCopyRequest:
+    properties:
+      expected_revision:
+        type: integer
+      target_name:
+        maxLength: 50
+        minLength: 1
+        type: string
+    required:
+    - expected_revision
+    type: object
+  internal_workspace_adapter_http.ProjectCopyResponse:
+    properties:
+      assets:
+        type: integer
+      attempt:
+        type: integer
+      cancellation_requested:
+        type: boolean
+      completed_assets:
+        type: integer
+      completed_documents:
+        type: integer
+      completed_renditions:
+        type: integer
+      documents:
+        type: integer
+      execution_unconfirmed:
+        type: boolean
+      failure_code:
+        type: string
+      id:
+        type: string
+      needs_reconciliation:
+        type: boolean
+      reconciliation_requested:
+        type: boolean
+      renditions:
+        type: integer
+      retryable:
+        type: boolean
+      revision:
+        type: integer
+      source_project_id:
+        type: string
+      source_revision:
+        type: integer
+      stage:
+        enum:
+        - media
+        - canvases
+        - finalizing
+        - cleanup
+        - complete
+        type: string
+      status:
+        enum:
+        - queued
+        - running
+        - failed
+        - cancel_requested
+        - cancelled
+        - succeeded
+        type: string
+      target_name:
+        type: string
+      target_project_id:
+        type: string
+    type: object
   internal_workspace_adapter_http.ProjectDetailResponse:
     properties:
       allow_overseas_models:
@@ -4160,6 +4243,197 @@ paths:
       summary: 确认单项报价并预留预算
       tags:
       - operations
+  /api/project-copies/{id}:
+    get:
+      operationId: getProjectCopy
+      parameters:
+      - description: 复制任务UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 读取项目复制状态
+      tags:
+      - projectCopies
+  /api/project-copies/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      operationId: cancelProjectCopy
+      parameters:
+      - description: 复制任务UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 任务修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 请求取消项目复制
+      tags:
+      - projectCopies
+  /api/project-copies/{id}/reconcile:
+    post:
+      consumes:
+      - application/json
+      operationId: reconcileProjectCopy
+      parameters:
+      - description: 复制任务UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 任务修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 核验原项目复制的未知结果
+      tags:
+      - projectCopies
+  /api/project-copies/{id}/retry:
+    post:
+      consumes:
+      - application/json
+      operationId: retryProjectCopy
+      parameters:
+      - description: 复制任务UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 任务修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectTransitionRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 重试已知失败的项目复制
+      tags:
+      - projectCopies
   /api/projects:
     get:
       operationId: listProjects
@@ -4519,6 +4793,100 @@ paths:
       summary: 创建画布
       tags:
       - canvases
+  /api/projects/{pid}/copies:
+    get:
+      operationId: listProjectCopies
+      parameters:
+      - description: 源项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 1至100，默认50
+        in: query
+        name: limit
+        type: integer
+      - description: 上一页next_cursor
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyListResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 分页恢复项目复制任务
+      tags:
+      - projectCopies
+    post:
+      consumes:
+      - application/json
+      operationId: createProjectCopy
+      parameters:
+      - description: 源项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 冻结修订与目标名称
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 创建完整项目内容副本
+      tags:
+      - projectCopies
   /api/projects/{pid}/free-operations:
     post:
       consumes:

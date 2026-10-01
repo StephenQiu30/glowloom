@@ -42,6 +42,11 @@ const ProjectManagementDialog = dynamic(() =>
     (module) => module.ProjectManagementDialog,
   ),
 );
+const ProjectCopyDialog = dynamic(
+  () =>
+    import("./project-copy-dialog").then((module) => module.ProjectCopyDialog),
+  { ssr: false },
+);
 export function ProjectsWorkspace() {
   const router = useRouter();
   const params = useSearchParams();
@@ -68,6 +73,8 @@ export function ProjectsWorkspace() {
     action: ProjectAction;
   } | null>(null);
   const creating = dialogOpen || params.get("create") === "true";
+  const copySource = params.get("copy_source");
+  const copyJob = params.get("copy_job") || undefined;
   const list = useQuery<Awaited<ReturnType<typeof listProjects>>>({
     queryKey: [...PROJECTS_KEY, { q: search, filter, cursor: cursors[page] }],
     queryFn: ({ signal }) =>
@@ -104,7 +111,8 @@ export function ProjectsWorkspace() {
     nextFilter: Filter,
     nextView: ProjectListView,
   ) {
-    const next = new URLSearchParams();
+    const next = new URLSearchParams(params.toString());
+    for (const key of ["q", "status", "deleted", "view"]) next.delete(key);
     if (nextSearch) next.set("q", nextSearch);
     if (nextFilter === "active" || nextFilter === "archived")
       next.set("status", nextFilter);
@@ -116,6 +124,33 @@ export function ProjectsWorkspace() {
   }
   return (
     <div id="projects-main" className="flex min-w-0 flex-col gap-7">
+      {copySource ? (
+        <ProjectCopyDialog
+          key={`${copySource}:${copyJob ?? ""}`}
+          sourceId={copySource}
+          jobId={copyJob}
+          onClose={() => {
+            const next = new URLSearchParams(params.toString());
+            next.delete("copy_source");
+            next.delete("copy_job");
+            router.replace(`/projects${next.size ? `?${next}` : ""}`, {
+              scroll: false,
+            });
+          }}
+          onJobSelected={(id) => {
+            const next = new URLSearchParams(params.toString());
+            next.set("copy_job", id);
+            router.replace(`/projects?${next}`, { scroll: false });
+          }}
+        />
+      ) : copyJob ? (
+        <Alert variant="destructive" className="border-0 bg-muted/40">
+          <AlertTitle>复制链接缺少来源项目</AlertTitle>
+          <AlertDescription>
+            请从来源项目的“复制任务”入口打开。
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {management && (
         <ProjectManagementDialog
           key={`${management.project.id}:${management.action}`}
@@ -278,6 +313,13 @@ export function ProjectsWorkspace() {
                 syncUrl(search, filter, value);
               }}
               onAction={(item, action) => {
+                if (action === "copy" || action === "copies") {
+                  const next = new URLSearchParams(params.toString());
+                  next.set("copy_source", item.id);
+                  next.delete("copy_job");
+                  router.replace(`/projects?${next}`, { scroll: false });
+                  return;
+                }
                 const project = list.data.items.find(
                   (entry) => entry.id === item.id,
                 );

@@ -361,6 +361,28 @@ export function CanvasWorkspace({
           </p>
         </div>
         <>
+          {project ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {hasUnsavedChanges ? (
+                <Button variant="ghost" disabled>
+                  复制完整项目
+                </Button>
+              ) : (
+                <Button variant="ghost" asChild>
+                  <Link
+                    href={`/projects?${new URLSearchParams({ copy_source: project.id })}`}
+                  >
+                    复制完整项目
+                  </Link>
+                </Button>
+              )}
+              {hasUnsavedChanges ? (
+                <p className="text-sm text-muted-foreground">
+                  请先保存当前画布和名称，再复制完整项目。
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <FieldGroup className="grid items-end gap-4 md:grid-cols-3">
             <Field>
               <FieldLabel htmlFor="canvas-project">项目</FieldLabel>

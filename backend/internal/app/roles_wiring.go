@@ -44,6 +44,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
+	workspaceevent "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/event"
+	workspaceflow "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/workflow"
 )
 
 func provideWorkerTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {
@@ -92,6 +94,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 	case "flow":
 		toolflow.RegisterWorkflow(queueWorker)
 		toolflow.RegisterTranscriptionWorkflow(queueWorker)
+		workspaceflow.RegisterProjectCopyWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
 		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
@@ -154,6 +157,8 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		transcriptions := provideMediaTranscriptionStore(dbConn.DB, transcriber != nil)
 		transcriptionWorker := toolapp.NewTranscriptionWorker(transcriptions, toolflow.NewObjects(storage), audioPreprocessor, transcriber)
 		toolflow.RegisterTranscriptionActivities(queueWorker, toolflow.NewTranscriptionActivities(transcriptionWorker, transcriptions))
+		copyWorker, copies := provideProjectCopyWorker(dbConn.DB, storage)
+		workspaceflow.RegisterProjectCopyActivities(queueWorker, workspaceflow.NewProjectCopyActivities(copyWorker, copies))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
 	}
@@ -208,10 +213,11 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 			pgcatalog.NewStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
 		exportHandler := toolevent.NewHandler(processed, provideMediaExportStore(dbConn.DB), toolflow.NewStarter(temporalConn.Client))
 		transcriptionHandler := toolevent.NewTranscriptionHandler(processed, provideMediaTranscriptionStore(dbConn.DB, false), toolflow.NewTranscriptionStarter(temporalConn.Client))
+		copyHandler := workspaceevent.NewProjectCopyHandler(processed, provideProjectCopyStore(dbConn.DB), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic}, workflowDelivery{
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, workspaceevent.ProjectCopyTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler, transcriptions: transcriptionHandler,
+				exports: exportHandler, transcriptions: transcriptionHandler, copies: copyHandler,
 			})
 		if err != nil {
 			temporalConn.Close()
@@ -244,9 +250,13 @@ type workflowDelivery struct {
 	credentials    inboxapp.Handler
 	exports        inboxapp.Handler
 	transcriptions inboxapp.Handler
+	copies         inboxapp.Handler
 }
 
 func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
+	if record.Topic == workspaceevent.ProjectCopyTopic {
+		return h.copies.Handle(ctx, record)
+	}
 	if record.Topic == catalogevent.CredentialTestTopic {
 		return h.credentials.Handle(ctx, record)
 	}

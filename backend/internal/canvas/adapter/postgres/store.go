@@ -48,7 +48,7 @@ func authorize(tx *gorm.DB, a identityapp.Principal, projectID uuid.UUID, write 
 	if r.RowsAffected != 1 {
 		return identityapp.ErrForbidden
 	}
-	query := `SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete`
+	query := `SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete AND status IN ('active','archived')`
 	if write {
 		query += ` AND status='active'`
 	}

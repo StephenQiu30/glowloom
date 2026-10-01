@@ -110,7 +110,7 @@ func (s *Store) FindAsset(ctx context.Context, actor identityapp.Principal, proj
 			FROM media.media_asset AS a
 			JOIN workspace.project AS p ON p.id = a.project_id
 			WHERE a.id = ?::uuid AND a.project_id = ?::uuid AND p.org_id = ?::uuid
-			  AND NOT a.is_delete AND NOT p.is_delete
+			  AND NOT a.is_delete AND NOT p.is_delete AND p.status IN ('active','archived')
 			FOR SHARE OF a, p
 		`, assetID.String(), projectID.String(), actor.OrgID.String()).Scan(&row)
 		if result.Error != nil {
@@ -252,7 +252,7 @@ func requireProject(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUI
 	var row struct{ Status string }
 	result := tx.Raw(`
 		SELECT status FROM workspace.project
-		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete
+		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete AND status IN ('active','archived')
 		FOR SHARE
 	`, projectID.String(), actor.OrgID.String()).Scan(&row)
 	if result.Error != nil {
@@ -276,7 +276,7 @@ func visibleAssetKey(tx *gorm.DB, actor identityapp.Principal, projectID, assetI
 		SELECT a.object_key FROM media.media_asset AS a
 		JOIN workspace.project AS p ON p.id = a.project_id
 		WHERE a.id = ?::uuid AND a.project_id = ?::uuid AND p.org_id = ?::uuid
-		  AND NOT a.is_delete AND NOT p.is_delete
+		  AND NOT a.is_delete AND NOT p.is_delete AND p.status IN ('active','archived')
 		FOR SHARE OF a, p
 	`, assetID.String(), projectID.String(), actor.OrgID.String()).Scan(&row)
 	if result.Error != nil {

@@ -29,6 +29,11 @@ declare namespace API {
     id: string;
   };
 
+  type cancelProjectCopyParams = {
+    /** 复制任务UUID */
+    id: string;
+  };
+
   type confirmBatchQuoteParams = {
     /** Batch UUID */
     id: string;
@@ -61,6 +66,11 @@ declare namespace API {
 
   type createMediaTranscriptionParams = {
     /** Project UUID */
+    pid: string;
+  };
+
+  type createProjectCopyParams = {
+    /** 源项目UUID */
     pid: string;
   };
 
@@ -157,6 +167,11 @@ declare namespace API {
     id: string;
     /** 项目UUID */
     project_id: string;
+  };
+
+  type getProjectCopyParams = {
+    /** 复制任务UUID */
+    id: string;
   };
 
   type getProjectModelDefaultsParams = {
@@ -1474,6 +1489,48 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type internalWorkspaceAdapterHttpProjectCopyListResponse = {
+    copies?: internalWorkspaceAdapterHttpProjectCopyResponse[];
+    current_actor_id?: string;
+    current_org_id?: string;
+    next_cursor?: string | null;
+  };
+
+  type internalWorkspaceAdapterHttpProjectCopyRequest = {
+    expected_revision: number;
+    target_name?: string;
+  };
+
+  type internalWorkspaceAdapterHttpProjectCopyResponse = {
+    assets?: number;
+    attempt?: number;
+    cancellation_requested?: boolean;
+    completed_assets?: number;
+    completed_documents?: number;
+    completed_renditions?: number;
+    documents?: number;
+    execution_unconfirmed?: boolean;
+    failure_code?: string;
+    id?: string;
+    needs_reconciliation?: boolean;
+    reconciliation_requested?: boolean;
+    renditions?: number;
+    retryable?: boolean;
+    revision?: number;
+    source_project_id?: string;
+    source_revision?: number;
+    stage?: "media" | "canvases" | "finalizing" | "cleanup" | "complete";
+    status?:
+      | "queued"
+      | "running"
+      | "failed"
+      | "cancel_requested"
+      | "cancelled"
+      | "succeeded";
+    target_name?: string;
+    target_project_id?: string;
+  };
+
   type internalWorkspaceAdapterHttpProjectDetailResponse = {
     allow_overseas_models?: boolean;
     archived_at?: string | null;
@@ -1581,6 +1638,15 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listProjectCopiesParams = {
+    /** 源项目UUID */
+    pid: string;
+    /** 1至100，默认50 */
+    limit?: number;
+    /** 上一页next_cursor */
+    cursor?: string;
+  };
+
   type listProjectModelsParams = {
     /** 项目UUID */
     project_id: string;
@@ -1658,6 +1724,11 @@ declare namespace API {
     id: string;
   };
 
+  type reconcileProjectCopyParams = {
+    /** 复制任务UUID */
+    id: string;
+  };
+
   type renameCanvasParams = {
     /** 画布UUID */
     id: string;
@@ -1681,6 +1752,11 @@ declare namespace API {
   type retryMediaTranscriptionParams = {
     /** Transcription UUID */
     job_id: string;
+  };
+
+  type retryProjectCopyParams = {
+    /** 复制任务UUID */
+    id: string;
   };
 
   type reviewMediaExportParams = {

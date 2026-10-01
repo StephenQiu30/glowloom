@@ -97,6 +97,24 @@ it("画布直接加载项目，没有登录或退出入口", async () => {
   expect(mocks.listProjects).toHaveBeenCalled();
   expect(mocks.replace).not.toHaveBeenCalled();
 });
+it("画布复制入口使用同源完整复制流程，未保存内容时禁用并提示保存", async () => {
+  open();
+  await screen.findByTestId("controlled-editor");
+  expect(
+    screen.getByRole("link", { name: "复制完整项目" }).getAttribute("href"),
+  ).toBe(`/projects?copy_source=${projectId}`);
+  fireEvent.change(screen.getByLabelText("画布名称"), {
+    target: { value: "尚未保存" },
+  });
+  expect(screen.queryByRole("link", { name: "复制完整项目" })).toBeNull();
+  expect(
+    (screen.getByRole("button", { name: "复制完整项目" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    screen.getByText("请先保存当前画布和名称，再复制完整项目。"),
+  ).toBeTruthy();
+});
 it("项目服务失败不显示旧画布，仍提供重试路径", async () => {
   mocks.listProjects.mockRejectedValue(
     new ApiError(503, "dependency_unavailable"),

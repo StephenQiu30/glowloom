@@ -434,7 +434,7 @@ whisper.cpp verbose_json 的 start／end 为秒，返回 language 是完整名�
 
 采用须人工选择对应冻结原件的现有 audio／video clip 与未锁定 subtitle track，复核／编辑各 cue 文本与时间并明确确认替换该字幕轨。只采用 cue 和 clip 原件区间 `[sourceStartMs, sourceStartMs+durationMs)` 的交集；时间换算为 `clip.startMs + cue.startMs - clip.sourceStartMs`，剪裁后短于 100ms、没有交集、越原件时长或最终超过 1000 clips 明确拒绝，保留旧时间线。采用前并行重读当前 Result 与媒体 preview，核对 job revision／draft SHA 和 source asset ID／revision，当前画布节点引用也必须一致。结果审核被撤销或节点被改用另一素材时不允许采纳；只通过既有 onSave/CAS 得到明确成功后更新本地 draft，不能把未知保存、checkbox 或识别成功当已保存。其余轨道与源 clip 不变，稿件和临时 preview URL 不写编辑配置；运行事实继续由 TranscriptionJob 提供。
 
-## 13. 当前完整项目内容复制的具体合同（技术审阅通过；实施中；全来源工程仍待补齐）
+## 13. 当前完整项目内容复制的具体合同（公开页面与真实运行闭环已验证；全来源工程仍待补齐）
 
 ### 13.1 来源与里程碑
 
@@ -457,7 +457,7 @@ LastOperationID 清除并在 receipt 记录实际清除数量；不复制 Operat
 
 ### 13.3 最小模块端口与持久化
 
-不新增普适任务框架。workspace 的专用 ProjectCopy 应用消费 canvas 的 `FreezeProjectCopy`/`CopyProjectDocuments`、media 的 `FreezeProjectCopy`/`CopyProjectAssets`/`CleanupProjectCopy` 和 billing 的 `CreateZeroProjectBudget`。这些由各拥有模块 application 定义并返回本模块 typed snapshot/ref/receipt；组合根在受理时绑定同一 GORM 事务，workspace adapter 不查询 canvas/media/billing/operation 的业务内容表。canvas/media 的私有 snapshot 留在各自 schema，workspace job 只记录模块 snapshot ID/hash/count 和阶段 receipt，公开 DTO 不包含原文件键、提示词快照或凭据。
+不新增普适任务框架。workspace 的专用 ProjectCopy 应用消费 canvas owner 的 `Freeze`/`Copy`/`Cleanup`、media owner 的 `Freeze`/`Objects`/`Register`/`FinishCleanup` 及受 fence 约束的单对象 intent/receipt 方法，billing owner 的 `CreateCopyTargetBudget`/`VerifyCopyTargetBudget`。消费方小接口定义于 workspace application；snapshot/binding/receipt 使用各拥有模块 application 的明确类型。组合根在受理与检查点绑定同一 GORM 事务，workspace adapter 不查询 canvas/media/billing/operation 的业务内容表。canvas/media 的私有 snapshot 留在各自 schema，workspace job 只记录模块 snapshot ID/hash/count 和阶段 receipt，公开 DTO 不包含原文件键、提示词快照或凭据。
 
 新增 `202610020020_project_copy` 迁移，避开字幕提取的 `202610020010`。workspace.project 增加 copying 合法状态，现有 status=active admission 继续阻止普通创建、编辑、生成、上传和导出；Project.Validate 能读取 copying，CanWrite 对其返回状态冲突，生命周期 archive/delete/restore 不替代复制控制。专用 workspace.project_copy_job 与所属模块冻结/持久 intent/receipt 保存真实恢复状态、hash 和唯一 job+源身份。当前稳定生命周期文件不重构；公开接线与生成 client 随此闭环统一更新。
 
@@ -467,7 +467,7 @@ LastOperationID 清除并在 receipt 记录实际清除数量；不复制 Operat
 
 ### 13.4 私有字节、审核与完成条件
 
-对象复制由 media owner 有界流式读取固定私有源键；不接受客户端 URL/路径，不经过供应商。原件沿现行 image/video/audio/model 上限，GLB 必须保持 model/gltf-binary、glb2、自包含属性；全部 rendition 不遗漏，waveform 也在内。源原件 SHA 存在则实际读回比对；缺失 SHA 或 rendition 没有 SHA 时先实际读回计算并持久固定 object intent 的 digest/字节，再以稳定目标键 PutIfAbsent 写入并读回核对。目标已存在只按 exact digest/字节核验恢复，冲突不能覆盖。ready 资源的源键遵守 owning 媒体不可变规则，复制 pin 保留原件及衍生物直到原任务结束；尚未实现的源 purge 不由本任务新增或宣称通过。
+对象复制由 media owner 有界流式读取固定私有源键；不接受客户端 URL/路径，不经过供应商。原件沿现行 image/video/audio/model 上限，GLB 必须保持 model/gltf-binary、glb2、自包含属性；全部 rendition 不遗漏，waveform 也在内。源原件 SHA 存在则实际读回比对；缺失 SHA 或 rendition 没有 SHA 时先实际读回计算并持久固定 object intent 的 digest/字节，再以稳定目标键 PutIfAbsent 写入并读回核对。目标已存在只按 exact digest/字节核验恢复，冲突不能覆盖。ready 资源的源键遵守 owning 媒体不可变规则；未结束 copy job 的 source/target 工作 guard 是当前持久保护，尚无独立 asset purge/pin 模块，源 purge 不由本任务新增或宣称通过。
 
 仅对已 passed 的完全相同字节继承审核结论，保留 AIGC/真人标记；不得将 pending/rejected 提升为 passed。generated 原件在目标成为独立 system 内容，清除源 Operation/provider/model/region 执行字段，保留内容/审核证据；GLB 原件按现行 domain 仍为 upload 类独立复制。media.consent_record 当前尚未迁移，含真人或 consent_record_id 的工程必须报 `consent_context_unavailable`；不能清除真人标记或沿用未经目标范围授权的 consent 来冒充通过，这仍是待迁移能力。
 
@@ -475,10 +475,14 @@ LastOperationID 清除并在 receipt 记录实际清除数量；不复制 Operat
 
 ### 13.5 失败、取消与验收
 
-公开沿 §11.4 的 POST `/projects/{pid}/copies`，GET `/project-copies/{id}`，POST 同 job 的 `/retry`、`/cancel`、`/reconcile`；控制 body 为 `{expected_revision}`，沿 UUID 幂等键/Origin/request_id。job 使用 queued/running/failed/cancel_requested/cancelled/succeeded；持久 stage 与 retryable/needs_reconciliation failure 明确区分。失败保留 copying，重试仅恢复原 manifest/身份和核对原 receipt，不重复已确认步骤。每次 Activity 复核发起主体/组织的当前权限及 job fencing，不通过伪造 admin principal 执行。
+公开沿 §11.4 的 POST `/projects/{pid}/copies`，GET 同源 `/projects/{pid}/copies` 分页，GET `/project-copies/{id}`，POST 同 job 的 `/retry`、`/cancel`、`/reconcile`；创建 body 为 `{expected_revision,target_name}`，控制 body 为 `{expected_revision}`，沿 UUID 幂等键/Origin/request_id。源项目当前授权与当前主体复核后的列表按不可变 create_time+UUID 倒序，limit 1–100；安全列表只含 jobs/next_cursor 与当前已认证 Principal 的 current_actor_id/current_org_id，不提供其他发起者身份。job 公开 source_revision、真实 counts/阶段/状态和恢复标记。刷新未知受理通过列表重新找到任务；未知原命令的精确重放仍按当前 actor+org+源作用域与原 UUID key/body，不能用名称猜任务或自动提交。job 使用 queued/running/failed/cancel_requested/cancelled/succeeded；持久 stage 与 retryable/needs_reconciliation failure 明确区分。失败保留 copying，重试仅恢复原 manifest/身份和核对原 receipt，不重复已确认步骤。每次 Activity 复核发起主体/组织的当前权限及 job fencing，不通过伪造 admin principal 执行。
 
-取消先记录 cancel_requested，并由拥有 worker 停止后续阶段；运行中的对象传输必须实际结束、核对持久 receipt，未知结果先恢复核验再清理。完成与取消由同 job 行锁决定唯一结果，succeeded 后不能再撤销正式项目。清理只允许此 job 所有、尚未正式发布的目标对象与内容，按 media intent 的确定性目标键和 digest/所有权核验，不读取源键作为删除目标；释放 source pins 与清理 receipt 完整后才 cancelled。失败/取消不能触发源项目、源素材或任意共享对象的不可逆 purge，也不能删除用户在其他工程的数据。
+取消先记录 cancel_requested，并由拥有 worker 停止后续阶段；运行中的对象传输必须实际结束、核对持久 receipt，未知结果先恢复核验再清理。完成与取消由同 job 行锁决定唯一结果，succeeded 后不能再撤销正式项目。清理只允许此 job 所有、尚未正式发布的目标对象与内容，按 media intent 的确定性目标键和 digest/所有权核验，不读取源键作为删除目标；清理 receipt 完整并转 cancelled 后 source/target 工作 guard 才解除。失败/取消不能触发源项目、源素材或任意共享对象的不可逆 purge，也不能删除用户在其他工程的数据。
 
 Red→Green 分别覆盖纯图的所有具体映射/不修改源/确定性、真实 PG actor/组织/CAS/幂等/Outbox 故障回滚与 copying admission、真实对象原件及全部衍生物 SHA/大小/独立键、冻结后源编辑不影响目标、重启/断线/目标已存在恢复、对象所有权冲突不覆盖或删除、取消竞态和清理失败。成功工程刷新后全部画布与图片/视频/音频/模型/导演图库和时间轴可访问；对象隔离测试仅用本任务合成对象，证明移除合成源键后副本仍可读，不以此宣称生产 purge 已实现。最后公开 Swagger/client 与实际复制页面/错误/加载/重试/取消/刷新单独留证。源 units/chat 等缺口继续记录，全来源复制不由本节提前验收。
 
 §13 的恢复控制明确增加 `project.copy_reconcile` 用户意图审计。只有已停止的失败尝试且 needs_reconciliation=true 才可受理；保持同 job/attempt、原冻结 manifest、原私有对象键与 digest，不重新冻结来源、不覆盖未知对象。Put 前通过当前 worker fence 持久记录 write_started；写入已开始但目标不存在时保留 object_absence_unknown，不能再次 Put 或报取消完成。已存在目标逐字节核验原 digest/大小后才记录旧结果；取消意图只转清理。Temporal 超时本身不证明活动退出：execution_unconfirmed 保留旧 worker，原同步调用实际退出并登记后才能解除；进程永久丢失而没有退出证据时仍需人工核验，不自动恢复执行。快照上限为画布 256 张/32MiB、素材 4096 个/32MiB 元数据、单个对象 2GiB；超限明确拒绝，不截断内容。
+
+2026-10-02 后端独立证据：隔离 PostgreSQL 17.11 与私有 MinIO 上真实上传 PNG、MP4、WAV、自包含 GLB 及全部衍生物，复制两张带 Director 截图/封面/全景与时间轴的正式画布；移除仅测试合成源键后目标原件/衍生物仍可读。真实 EOF、目标冲突、未知写入取消/核验、旧 worker fencing、Outbox 失败全事务回滚、HTTP 六入口与跨页刷新均有测试。Temporal SDK 测试使用真实 PG/对象活动并验证内部 WorkID 的组织传输，但这不替代独立真实 Temporal 服务/Worker/Relay 或浏览器验收。非拥有者 lanverse_app 实际复制通过；snapshot/receipt/永久 command 只授予 SELECT/INSERT，冻结 job 字段无 UPDATE、无复制表 DELETE，私有预设只新增 INSERT 与 rendition 只新增 is_delete/update_time 更新权。不可变快照不做需要 UPDATE 权限的行锁；mutable project/job/fence 仍有事务锁。发布会重读并比对真实目标项目规格/全部预设、媒体与图内容及零预算，不能以 receipt 存在冒充完成；清理也重新核对原 canvas snapshot digest。公开页面、正式服务装配和目标数据库迁移仍由后续运行证据确认。
+
+2026-10-02 正式装配证据：020 在核对原业务 PostgreSQL 实例及前置迁移后原子应用，API/Worker/Relay 同版本、公开六入口与 69 个 Swagger operationId 一致。合成项目完整复制 2 张画布、4 个原件、5 个衍生物，35 个具体身份映射闭合，源完整 SHA 保持；目标图片/视频/音频/模型、导演台与时间线实际可用。运行中暴露的两个真实缺陷经 Red→Green 修复：媒体回执比较先将同一时间统一 UTC，保持真实微秒变更拒绝；Temporal ExecuteWorkflow 显式启用 WorkflowExecutionErrorWhenAlreadyStarted，避免把已存在 handle 的 nil 误认作新执行成功而丢失重试信号。真实 Temporal 服务回归证明重试发送到原 run，不能仅用 fake AlreadyStarted 验证该合同。原合成任务的错误 Inbox 投递记录按精确实例/事件/任务与未执行信号事实撤销一次，再经 Kafka 重投原不可变事件完成 attempt 2；没有手工改项目、对象、job 或直接发送工作流信号。完整证据见 E37 第七阶段，units/chat/文件夹等缺口继续保留。

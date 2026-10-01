@@ -59,7 +59,7 @@ func readLifecycleProject(tx *gorm.DB, org, id uuid.UUID, write bool) (applicati
 	if write {
 		query += ` FOR UPDATE`
 	} else {
-		query += ` AND NOT is_delete FOR SHARE`
+		query += ` AND NOT is_delete AND status IN ('active','archived') FOR SHARE`
 	}
 	var row lifecycleProjectRow
 	read := tx.Raw(query, id, org).Scan(&row)

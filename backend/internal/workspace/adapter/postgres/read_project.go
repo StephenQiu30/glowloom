@@ -61,7 +61,7 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 		       status, archived_at, delete_time, purge_after, revision,
 		       create_time, update_time
 		FROM workspace.project
-		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete
+		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete AND status IN ('active','archived')
 	`, projectID.String(), orgID.String()).Scan(&row)
 	if result.Error != nil {
 		return domain.Project{}, fmt.Errorf("read project: %w", result.Error)

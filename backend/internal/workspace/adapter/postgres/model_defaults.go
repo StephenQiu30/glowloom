@@ -135,7 +135,7 @@ func (s *Store) SaveModelDefaults(ctx context.Context, actor identityapp.Princip
 
 func readDefaultsRow(tx *gorm.DB, orgID, projectID uuid.UUID, write bool) (defaultsRow, error) {
 	query := `SELECT id,revision,status,allow_overseas_models,default_models::text AS default_models
-	 FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete`
+	 FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete AND status IN ('active','archived')`
 	if write {
 		query += ` FOR UPDATE`
 	} else {

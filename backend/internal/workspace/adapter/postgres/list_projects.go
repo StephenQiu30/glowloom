@@ -35,7 +35,7 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 			       p.archived_at, p.delete_time, p.purge_after, p.revision,
 			       p.create_time, p.update_time
 			FROM workspace.project AS p
-			WHERE p.org_id = ?::uuid AND p.is_delete = ?
+			WHERE p.org_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
 		`
 		args := []any{actor.OrgID.String(), input.Deleted}
 		if input.Status != "" {

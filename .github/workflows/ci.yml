@@ -265,6 +265,12 @@ jobs:
           LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable&options=-c%20role%3Dlanverse_app
           LV_TEST_MEDIA_EXPORT_REQUIRE_ROLE: "1"
         run: go test -race ./tests/media -run '^Test(Export|GLB)' -count=1 -v
+      - name: Verify complete project copy with PostgreSQL and private objects
+        env:
+          LV_TEST_WORKSPACE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
+          LV_TEST_PROJECT_COPY_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
+        run: go test -race ./tests/workspace ./tests/canvas ./tests/media -run '^TestProjectCopy' -count=1 -v
       - name: Clean up isolated private contract storage
         if: always()
         run: |

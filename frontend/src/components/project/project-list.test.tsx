@@ -4,6 +4,7 @@ import {
   render,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
@@ -138,3 +139,37 @@ it("keeps long names intact and exposes native, focusable view buttons", () => {
   expect(nameCell.textContent).toBe(longName);
   expect(nameCell.className).toContain("break-words");
 });
+
+it.each(["cards", "table"] as const)(
+  "%s 菜单可复制完整项目和恢复复制任务，回收项目不提供复制",
+  async (view) => {
+    const onAction = vi.fn();
+    render(
+      <ProjectList
+        projects={projects}
+        view={view}
+        onViewChange={vi.fn()}
+        onAction={onAction}
+      />,
+    );
+    const menu = screen.getByRole("button", { name: "逆光的项目操作" });
+    menu.focus();
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "复制完整项目" }),
+    );
+    expect(onAction).toHaveBeenLastCalledWith(projects[0], "copy");
+    menu.focus();
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "复制任务" }));
+    expect(onAction).toHaveBeenLastCalledWith(projects[0], "copies");
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    const recycled = screen.getByRole("button", {
+      name: "回收中的作品的项目操作",
+    });
+    recycled.focus();
+    fireEvent.keyDown(recycled, { key: "ArrowDown" });
+    await screen.findByRole("menuitem", { name: "恢复项目" });
+    expect(screen.queryByRole("menuitem", { name: "复制完整项目" })).toBeNull();
+  },
+);

@@ -57,7 +57,7 @@ func (p Project) Validate() error {
 		!utf8.ValidString(p.Name) || utf8.RuneCountInString(p.Name) > 50 ||
 		(p.AspectRatio != "9:16" && p.AspectRatio != "16:9") ||
 		p.Resolution != "1080p" ||
-		(p.Status != "active" && p.Status != "archived") ||
+		(p.Status != "active" && p.Status != "archived" && p.Status != "copying") ||
 		p.Revision < 1 || p.Revision > math.MaxInt32 {
 		return ErrInvalidProject
 	}
@@ -78,9 +78,9 @@ func (p Project) Validate() error {
 	return nil
 }
 
-// CanWrite rejects mutations while a project is archived or in the recycle bin.
+// CanWrite rejects mutations before publication, during archival, or in the recycle bin.
 func (p Project) CanWrite() error {
-	if p.IsDelete || p.Status == "archived" {
+	if p.IsDelete || p.Status == "archived" || p.Status == "copying" {
 		return ErrProjectStateConflict
 	}
 	if p.Status != "active" {

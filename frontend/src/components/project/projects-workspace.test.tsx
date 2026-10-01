@@ -28,6 +28,26 @@ vi.mock("./queries", () => ({
   listStylePresets: ports.presets,
   createProject: ports.create,
 }));
+vi.mock("./project-copy-dialog", () => ({
+  ProjectCopyDialog: ({
+    sourceId,
+    jobId,
+    onClose,
+  }: {
+    sourceId: string;
+    jobId?: string;
+    onClose: () => void;
+  }) => (
+    <div
+      role="dialog"
+      aria-label="复制完整项目"
+      data-source={sourceId}
+      data-job={jobId}
+    >
+      <button onClick={onClose}>关闭复制任务</button>
+    </div>
+  ),
+}));
 const project = {
   id: "d77d3c2a-7092-4e30-bf41-a3c5d4d26418",
   name: "逆光",
@@ -190,4 +210,35 @@ it("创建失败保留草稿并能重试，不出现登录入口", async () => {
     expect(ports.push).toHaveBeenCalledWith(`/projects/${project.id}/canvas`),
   );
   expect(ports.create.mock.calls[0][1]).toBe(ports.create.mock.calls[1][1]);
+});
+
+it("复制 URL 刷新不依赖当前搜索页命中源项目，关闭只去除复制参数", async () => {
+  const jobId = "93021a72-3281-42b2-91cf-6a4413ee8956";
+  ports.searchParams = `q=没有命中&view=table&copy_source=${project.id}&copy_job=${jobId}`;
+  ports.list.mockResolvedValue({ items: [], next_cursor: null });
+  setup();
+  const dialog = await screen.findByRole("dialog", { name: "复制完整项目" });
+  expect(dialog.getAttribute("data-source")).toBe(project.id);
+  expect(dialog.getAttribute("data-job")).toBe(jobId);
+  fireEvent.click(screen.getByRole("button", { name: "关闭复制任务" }));
+  const next = new URL(ports.replace.mock.calls.at(-1)![0], "http://localhost");
+  expect(next.searchParams.get("q")).toBe("没有命中");
+  expect(next.searchParams.get("view")).toBe("table");
+  expect(next.searchParams.has("copy_source")).toBe(false);
+  expect(next.searchParams.has("copy_job")).toBe(false);
+});
+it("搜索与视图筛选保留复制恢复参数", async () => {
+  ports.searchParams = `copy_source=${project.id}&copy_job=93021a72-3281-42b2-91cf-6a4413ee8956`;
+  setup();
+  await screen.findByText("逆光");
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索项目" }), {
+    target: { value: "另一搜索" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+  const next = new URL(ports.replace.mock.calls.at(-1)![0], "http://localhost");
+  expect(next.searchParams.get("copy_source")).toBe(project.id);
+  expect(next.searchParams.get("copy_job")).toBe(
+    "93021a72-3281-42b2-91cf-6a4413ee8956",
+  );
+  expect(next.searchParams.get("q")).toBe("另一搜索");
 });

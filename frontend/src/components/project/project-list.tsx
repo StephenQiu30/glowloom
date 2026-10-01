@@ -54,11 +54,15 @@ export type ProjectListDisplayItem = Readonly<{
 export type ProjectListView = "cards" | "table";
 export type ProjectAction =
   "settings" | "archive" | "unarchive" | "delete" | "restore";
+export type ProjectListAction = ProjectAction | "copy" | "copies";
 type ProjectListProps = {
   projects: readonly ProjectListDisplayItem[];
   view: ProjectListView;
   onViewChange: (view: ProjectListView) => void;
-  onAction?: (project: ProjectListDisplayItem, action: ProjectAction) => void;
+  onAction?: (
+    project: ProjectListDisplayItem,
+    action: ProjectListAction,
+  ) => void;
 };
 function projectStatus(project: ProjectListDisplayItem) {
   if (project.isDeleted) return "回收中";
@@ -115,6 +119,12 @@ function ProjectActions({
             <>
               <DropdownMenuItem onSelect={() => onAction(project, "settings")}>
                 项目设置
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAction(project, "copy")}>
+                复制完整项目
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAction(project, "copies")}>
+                复制任务
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() =>

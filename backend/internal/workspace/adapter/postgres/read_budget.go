@@ -31,7 +31,7 @@ func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, pro
 			FROM billing.budget AS b
 			JOIN workspace.project AS p ON p.id = b.project_id
 			WHERE p.id = ?::uuid AND p.org_id = ?::uuid
-			  AND NOT p.is_delete AND NOT b.is_delete
+			  AND NOT p.is_delete AND NOT b.is_delete AND p.status IN ('active','archived')
 		`, projectID.String(), actor.OrgID.String()).Scan(&budget)
 		if result.Error != nil {
 			return fmt.Errorf("read project budget: %w", result.Error)

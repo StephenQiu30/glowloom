@@ -8,6 +8,7 @@ import * as canvases from "./canvases";
 import * as mediaExports from "./mediaExports";
 import * as mediaTranscriptions from "./mediaTranscriptions";
 import * as models from "./models";
+import * as projectCopies from "./projectCopies";
 import * as projects from "./projects";
 import * as media from "./media";
 export default {
@@ -17,6 +18,7 @@ export default {
   mediaExports,
   mediaTranscriptions,
   models,
+  projectCopies,
   projects,
   media,
 };
