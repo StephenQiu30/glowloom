@@ -4,15 +4,6 @@
 name: lanverse
 
 services:
-  frontend:
-    build:
-      context: ./frontend
-      args:
-        LV_API_BASE_URL: ${LV_API_BASE_URL:-http://backend-api:8080}
-    image: lanverse/frontend:local
-    ports:
-      - "${LV_FRONTEND_PORT:-3000}:3000"
-
   backend-api:
     build: ./backend
     image: lanverse/backend:local
