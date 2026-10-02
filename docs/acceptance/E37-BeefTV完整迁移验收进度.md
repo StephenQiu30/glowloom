@@ -199,3 +199,15 @@
 - 实际 Copy job `8059d40f-3604-4e61-ba04-5d7fb8238b16` 成功，目标 `8ce259fe-c2e7-483b-a17b-94bb20350f81` active/revision 2，独立主图 `bb304dce-40c6-5f0b-a189-a4e81068929f`。完整刷新后实际图片解码，正式私有读取和浏览器 WebCrypto 证明源/副本均为 B 的 960 字节/SHA；源 revision 11、主图和描述不变。
 
 冻结前端 21 文件与 84 条生成合同在独立 HEAD+allowlist 快照完成全树 ESLint（零警告）、Prettier、Next typegen、tsc、87 文件/436 测试（零失败/跳过）和 Next.js 生产构建。文件 SHA、真实原件/并发/未知响应/复制证据与八张截图保留在独立验收快照；没有用共享树中未完成的剧本组件替代本阶段验收。
+
+第十阶段提交 `7318beff4e088c85205f1a3f886dadc456ecd168` 已推送 main，CI `36948027647` 的 backend/frontend/images 全部完成且通过。
+
+## 第十一阶段：历史文档冻结与复制取消清理（2026-10-02）
+
+媒体 owner 新增 `FreezeWithReferences`，只扩展明确历史引用的同项目文档原件。已回收来源必须仍有完整 ready/passed 原件事实；普通读取、Reference 和文档导入仍拒绝回收来源。own manifest 保留原件删除时间、回收期限和原修订，复制为独立目标对象与 UUID，不改来源墓碑。缺失、重复、零 UUID、跨项目和非文档引用均拒绝；未传历史引用时旧 `29ce5664` 媒体 JSON 逐字保持。
+
+非 owner 完整取消测试发现既有 `FinishCleanup` 缺三列授权，不能标记已完成对象清理的目标媒体。独立 `202610020054_media_project_copy_cleanup` 只新增 `is_delete/delete_time/purge_after` 的 UPDATE，保持既有 revision/SHA 权限，仍拒绝物理 DELETE、project_id 和 object_key 改写。实际取消验证源媒体全部元数据与私有原件不变，target 对象移除后才软删除目标事实；054 up/down 在回滚的隔离事务中验证，未放宽归属权限。
+
+HEAD 加十个精确冻结文件在独立快照完成全树 goimports、vet、lint（0 issues）、Race（405 顶层通过、386 缺专用条件跳过、0 失败）、govulncheck（0 可达/导入包漏洞，一个未调用 required module 提示）和生产构建。Wire 经项目 goimports、84 条 Swag 重生均与 main 逐字相同；新增 CI 独立 `lanverse_library`，实际运行角色/私有对象的同范围八项 Race 全通过、0 跳过。历史文档在合成来源对象移除后仍可读取独立目标的相同原始 bytes；这项证据不替代整剧本历史、文件导入或页面验收。
+
+054 已在前阶段同一业务 PostgreSQL OID `345144296`、postmaster `2026-10-01T23:01:22.384635+08:00` 上应用，SQL SHA256 `015a22da1c57cd4685f7161984827d1274e4f747e0de2764ee919fd9a81675fa`。变更前后八组项目、媒体、衍生物、画布、复制任务、Operation、永久生命周期命令及 Outbox 行数保持，0 未收敛复制/上传/Operation；没有重置数据或应用未完成的050/053/055。

@@ -67,6 +67,26 @@ func copyMediaDigest(content application.ProjectMediaCopy, mapping map[uuid.UUID
 
 // Freeze records all live assets or fails on an unavailable item; it never drops one.
 func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time) (application.ProjectCopySnapshot, error) {
+	return s.freezeWithReferences(ctx, actor, binding, now, nil)
+}
+
+// FreezeWithReferences adds only explicitly referenced, retained historical
+// documents. Public reads and ordinary project references remain unchanged.
+func (s *ProjectCopyStore) FreezeWithReferences(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID) (application.ProjectCopySnapshot, error) {
+	if len(referenced) > 4096 {
+		return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+	}
+	seen := make(map[uuid.UUID]bool, len(referenced))
+	for _, id := range referenced {
+		if id == uuid.Nil || seen[id] {
+			return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+		}
+		seen[id] = true
+	}
+	return s.freezeWithReferences(ctx, actor, binding, now, referenced)
+}
+
+func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID) (application.ProjectCopySnapshot, error) {
 	if s == nil || s.db == nil {
 		return application.ProjectCopySnapshot{}, application.ErrUnavailable
 	}
@@ -78,14 +98,33 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 		return application.ProjectCopySnapshot{}, err
 	}
 	var rows []assetRow
-	if err := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND NOT is_delete ORDER BY id LIMIT 4097 FOR SHARE`, binding.SourceProjectID).Scan(&rows).Error; err != nil {
+	query := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND NOT is_delete ORDER BY id LIMIT 4097 FOR SHARE`, binding.SourceProjectID)
+	if len(referenced) != 0 {
+		query = tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND (NOT is_delete OR id IN ?) ORDER BY id LIMIT 4097 FOR SHARE`, binding.SourceProjectID, referenced)
+	}
+	if err := query.Scan(&rows).Error; err != nil {
 		return application.ProjectCopySnapshot{}, fmt.Errorf("freeze media assets: %w", err)
 	}
 	if len(rows) > 4096 {
 		return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
 	}
+	selected := make(map[uuid.UUID]assetRow, len(rows))
+	assetIDs := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		selected[row.ID], assetIDs = row, append(assetIDs, row.ID)
+	}
+	for _, id := range referenced {
+		row, present := selected[id]
+		if !present || row.Kind != string(domain.KindDocument) {
+			return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+		}
+	}
 	var renditions []renditionRow
-	if err := tx.Raw(`SELECT r.* FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE a.project_id=? AND NOT a.is_delete AND NOT r.is_delete ORDER BY r.media_asset_id,r.kind,r.id FOR SHARE OF a`, binding.SourceProjectID).Scan(&renditions).Error; err != nil {
+	renditionQuery := tx.Raw(`SELECT r.* FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE a.project_id=? AND NOT a.is_delete AND NOT r.is_delete ORDER BY r.media_asset_id,r.kind,r.id FOR SHARE OF a,r`, binding.SourceProjectID)
+	if len(referenced) != 0 {
+		renditionQuery = tx.Raw(`SELECT r.* FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE a.project_id=? AND a.id IN ? AND NOT r.is_delete ORDER BY r.media_asset_id,r.kind,r.id FOR SHARE OF a,r`, binding.SourceProjectID, assetIDs)
+	}
+	if err := renditionQuery.Scan(&renditions).Error; err != nil {
 		return application.ProjectCopySnapshot{}, fmt.Errorf("freeze media renditions: %w", err)
 	}
 	byAsset := make(map[uuid.UUID][]domain.Rendition)
@@ -94,7 +133,14 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 	}
 	sources := make([]application.ProjectCopySourceAsset, 0, len(rows))
 	for _, row := range rows {
-		sources = append(sources, application.ProjectCopySourceAsset{Asset: row.domain(), Renditions: byAsset[row.ID]})
+		source := application.ProjectCopySourceAsset{Asset: row.domain(), Renditions: byAsset[row.ID]}
+		if source.Asset.IsDelete {
+			if source.Asset.DeleteTime == nil || source.Asset.PurgeAfter == nil {
+				return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+			}
+			source.RetainedHistory = &application.RetainedHistoryProof{AssetID: source.Asset.ID, Revision: source.Asset.Revision, DeletedAt: *source.Asset.DeleteTime, PurgeAfter: *source.Asset.PurgeAfter}
+		}
+		sources = append(sources, source)
 	}
 	content, err := application.PrepareProjectMediaCopy(binding, sources, now)
 	if err != nil {

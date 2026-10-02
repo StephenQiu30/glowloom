@@ -36,8 +36,26 @@ func (b ProjectCopyBinding) Validate() error {
 
 // ProjectCopySourceAsset includes every live rendition owned by a source asset.
 type ProjectCopySourceAsset struct {
-	Asset      domain.MediaAsset
-	Renditions []domain.Rendition
+	Asset           domain.MediaAsset
+	Renditions      []domain.Rendition
+	RetainedHistory *RetainedHistoryProof `json:"retained_history,omitempty"`
+}
+
+// RetainedHistoryProof preserves the source's exact soft-deletion facts. Only
+// explicitly referenced historical documents receive this owning proof.
+type RetainedHistoryProof struct {
+	AssetID    uuid.UUID `json:"asset_id"`
+	Revision   int64     `json:"revision"`
+	DeletedAt  time.Time `json:"deleted_at"`
+	PurgeAfter time.Time `json:"purge_after"`
+}
+
+func validRetainedHistory(a domain.MediaAsset, p *RetainedHistoryProof) bool {
+	if !a.IsDelete {
+		return p == nil
+	}
+	return p != nil && a.Kind == domain.KindDocument && a.DeleteTime != nil && a.PurgeAfter != nil &&
+		p.AssetID == a.ID && p.Revision == a.Revision && p.DeletedAt.Equal(*a.DeleteTime) && p.PurgeAfter.Equal(*a.PurgeAfter)
 }
 
 // ProjectCopyObject binds one exact source object to one unpublished target object.
@@ -129,13 +147,14 @@ func PrepareProjectMediaCopy(binding ProjectCopyBinding, sources []ProjectCopySo
 		if original.ContainsRealPerson || original.ConsentRecordID != nil {
 			return ProjectMediaCopy{}, ErrProjectCopyConsentUnavailable
 		}
-		if original.Validate() != nil || original.ProjectID != binding.SourceProjectID || original.IsDelete || original.Status != domain.StatusReady || original.ModerationStatus != domain.ModerationPassed || original.ByteSize < 1 || original.ByteSize > 2<<30 || !copySHA(original.SHA256) || seen[original.ID] {
+		if original.Validate() != nil || original.ProjectID != binding.SourceProjectID || !validRetainedHistory(original, item.RetainedHistory) || original.Status != domain.StatusReady || original.ModerationStatus != domain.ModerationPassed || original.ByteSize < 1 || original.ByteSize > 2<<30 || !copySHA(original.SHA256) || seen[original.ID] {
 			return ProjectMediaCopy{}, ErrProjectCopyMediaUnavailable
 		}
 		seen[original.ID] = true
 		a := &item.Asset
 		a.ID = uuid.NewSHA1(binding.JobID, []byte("asset/"+original.ID.String()))
 		a.ProjectID = binding.TargetProjectID
+		a.IsDelete, a.DeleteTime, a.PurgeAfter = false, nil, nil
 		a.ObjectKey = fmt.Sprintf("projects/%s/%s/%04d/%02d/%s%s", binding.TargetProjectID, a.Kind, now.Year(), now.Month(), a.ID, path.Ext(original.ObjectKey))
 		a.SourceOperationID, a.ProviderKey, a.ModelKey, a.Region, a.UploadID = nil, nil, nil, nil, nil
 		if a.Origin == domain.OriginGenerated {

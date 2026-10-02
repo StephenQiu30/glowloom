@@ -345,6 +345,31 @@ jobs:
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## Document originals and project cover\n\n{counts['pass']} document container, real original-object upload/download/copy, permanent lifecycle receipt and image ownership contracts passed without skips. Browser acceptance runs separately.\n")
           PY
+      - name: Verify retained document copy and cancellation cleanup under the runtime role
+        shell: bash
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_library'
+          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_LIBRARY_OWNER_DB_DSN" -v ON_ERROR_STOP=1 -f
+          go test -race ./tests/media -run '^TestProjectCopy(Retained|HistoricalDocument|LibraryNilFields|MediaPreservesContentWithoutExecutionHistory|MediaRealObjectsRegistrationAndCleanup|Cleanup)' -count=1 -json | tee "$RUNNER_TEMP/retained-copy-pg.jsonl"
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          counts = collections.Counter()
+          for line in (Path(os.environ["RUNNER_TEMP"]) / "retained-copy-pg.jsonl").read_text().splitlines():
+              event = json.loads(line)
+              test = event.get("Test", "")
+              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
+                  counts[event["Action"]] += 1
+          assert counts["pass"] >= 8 and counts["fail"] == 0 and counts["skip"] == 0, counts
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n## Historical document copy and cancellation cleanup\n\n{counts['pass']} runtime-role PostgreSQL, independent private original bytes, legacy JSON and narrow cleanup permission contracts passed without skips. Full script history and browser acceptance run separately.\n")
+          PY
       - name: Clean up isolated private contract storage
         if: always()
         run: |
