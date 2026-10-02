@@ -370,6 +370,29 @@ jobs:
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## Historical document copy and cancellation cleanup\n\n{counts['pass']} runtime-role PostgreSQL, independent private original bytes, legacy JSON and narrow cleanup permission contracts passed without skips. Full script history and browser acceptance run separately.\n")
           PY
+      - name: Verify GIF animation and native GLB or JSON glTF under the runtime role
+        shell: bash
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
+        run: |
+          go test -race ./tests/media -run '^Test(GIF|GLTFJSON|GLB)' -count=1 -json | tee "$RUNNER_TEMP/media-format-pg.jsonl"
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          counts = collections.Counter()
+          for line in (Path(os.environ["RUNNER_TEMP"]) / "media-format-pg.jsonl").read_text().splitlines():
+              event = json.loads(line)
+              test = event.get("Test", "")
+              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
+                  counts[event["Action"]] += 1
+          assert counts["pass"] >= 11 and counts["fail"] == 0 and counts["skip"] == 0, counts
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n## GIF and native models\n\n{counts['pass']} bounded native-format, actual runtime-role PostgreSQL, private-original and independent-copy tests passed without skips. Browser acceptance runs separately.\n")
+          PY
       - name: Verify personal and project libraries, uploads, and verified attachments
         shell: bash
         env:
