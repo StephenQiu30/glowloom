@@ -35,6 +35,18 @@ func canonicalCopyMediaTime(value any) any {
 		item.CreateTime = item.CreateTime.UTC()
 		item.UpdateTime = item.UpdateTime.UTC()
 		return item
+	case domain.LibraryFolder:
+		item.CreatedAt = item.CreatedAt.UTC()
+		item.UpdatedAt = item.UpdatedAt.UTC()
+		return item
+	case domain.LibraryItem:
+		item.CreatedAt = item.CreatedAt.UTC()
+		item.UpdatedAt = item.UpdatedAt.UTC()
+		if item.TrashedAt != nil {
+			stamp := item.TrashedAt.UTC()
+			item.TrashedAt = &stamp
+		}
+		return item
 	case domain.Rendition:
 		item.CreateTime = item.CreateTime.UTC()
 		item.UpdateTime = item.UpdateTime.UTC()

@@ -41,20 +41,25 @@ type ProjectCopySourceAsset struct {
 	RetainedHistory *RetainedHistoryProof `json:"retained_history,omitempty"`
 }
 
-// RetainedHistoryProof preserves the source's exact soft-deletion facts. Only
-// explicitly referenced historical documents receive this owning proof.
+// RetainedHistoryProof preserves exact soft-deletion facts. Empty DeclaredBy
+// keeps historical Script document manifests byte-compatible; library marks
+// binary IDs declared by the complete owning project catalog.
 type RetainedHistoryProof struct {
 	AssetID    uuid.UUID `json:"asset_id"`
 	Revision   int64     `json:"revision"`
 	DeletedAt  time.Time `json:"deleted_at"`
 	PurgeAfter time.Time `json:"purge_after"`
+	DeclaredBy string    `json:"declared_by,omitempty"`
 }
 
 func validRetainedHistory(a domain.MediaAsset, p *RetainedHistoryProof) bool {
 	if !a.IsDelete {
 		return p == nil
 	}
-	return p != nil && a.Kind == domain.KindDocument && a.DeleteTime != nil && a.PurgeAfter != nil &&
+	if p == nil || p.DeclaredBy != "" && p.DeclaredBy != "library" || p.DeclaredBy == "" && a.Kind != domain.KindDocument {
+		return false
+	}
+	return a.DeleteTime != nil && a.PurgeAfter != nil &&
 		p.AssetID == a.ID && p.Revision == a.Revision && p.DeletedAt.Equal(*a.DeleteTime) && p.PurgeAfter.Equal(*a.PurgeAfter)
 }
 
@@ -77,6 +82,7 @@ type ProjectCopyObject struct {
 type ProjectMediaCopy struct {
 	Assets  []ProjectCopySourceAsset
 	Objects []ProjectCopyObject
+	Library *ProjectLibraryCopy `json:"library,omitempty"`
 }
 
 // ProjectCopySnapshot identifies one immutable media-owned source manifest.

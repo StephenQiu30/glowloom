@@ -37,6 +37,18 @@ func NewRecordedActionParser() *Parser {
 	fields["batch.cancel_requested"] = []string{"status"}
 	fields["batch.resume_requested"] = []string{"status"}
 	fields["media.uploaded"] = []string{"kind", "byte_size", "sha256", "review_method", "reused"}
+	for _, action := range []string{"media.library.create_folder", "media.library.update_folder", "media.library.delete_folder", "media.library.create_text", "media.library.update_item", "media.library.move_items", "media.library.recycle_items", "media.library.restore_items", "media.library.remove_items"} {
+		fields[action] = []string{"library_id", "revision", "count"}
+	}
+	for _, action := range []string{"script.source_create", "script.source_update", "script.source_delete", "script.source_import", "script.source_reorder"} {
+		fields[action] = []string{"script_revision", "project_revision", "version_id", "split_set_id", "source_count", "content_hash", "document_sha256", "source_manifest_sha256"}
+	}
+	for _, action := range []string{"script.rules_split_saved", "script.split_confirmed", "script.structure_saved", "script.structure_confirmed", "script.source_write_cancel", "script.source_write_reconcile", "script.version_adopted"} {
+		fields[action] = []string{"script_revision", "version_id", "episode_id"}
+	}
+	for _, action := range []string{"script.file_import_create", "script.file_import_cancel", "script.file_import_retry", "script.file_import_reconcile", "script.file_import_completed", "script.file_import_cancelled"} {
+		fields[action] = []string{"id", "revision", "attempt", "status", "stage", "file_count", "script_revision"}
+	}
 	for _, action := range []string{"media.export_requested", "media.export_cancel", "media.export_retry", "media.export_reviewed"} {
 		fields[action] = []string{"id", "project_id", "canvas_id", "node_id", "source_revision", "output_kind", "status", "stage", "progress", "attempt", "revision", "asset_id", "sha256", "failure_code", "created_at", "updated_at"}
 	}

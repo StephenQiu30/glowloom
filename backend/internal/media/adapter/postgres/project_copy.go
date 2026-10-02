@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -97,10 +98,37 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 	if err := requireProject(tx, actor, binding.SourceProjectID, false); err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
+	librarySource, err := readCopySourceLibrary(tx, actor, binding)
+	if err != nil {
+		return application.ProjectCopySnapshot{}, err
+	}
+	// Library declares every binary catalog row, including recycled/removed
+	// originals. Script's caller references remain restricted to documents below.
+	libraryRefs := make(map[uuid.UUID]bool, len(librarySource.items))
+	selectedRefs := append([]uuid.UUID(nil), referenced...)
+	seenRefs := make(map[uuid.UUID]bool, len(referenced))
+	for _, id := range referenced {
+		seenRefs[id] = true
+	}
+	for _, item := range librarySource.items {
+		if item.AssetID == nil {
+			continue
+		}
+		id := *item.AssetID
+		libraryRefs[id] = true
+		if !seenRefs[id] {
+			selectedRefs = append(selectedRefs, id)
+			seenRefs[id] = true
+		}
+	}
+	if len(selectedRefs) > 4096 {
+		return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+	}
+	slices.SortFunc(selectedRefs, func(a, b uuid.UUID) int { return bytes.Compare(a[:], b[:]) })
 	var rows []assetRow
 	query := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND NOT is_delete ORDER BY id LIMIT 4097 FOR SHARE`, binding.SourceProjectID)
-	if len(referenced) != 0 {
-		query = tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND (NOT is_delete OR id IN ?) ORDER BY id LIMIT 4097 FOR SHARE`, binding.SourceProjectID, referenced)
+	if len(selectedRefs) != 0 {
+		query = tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND (NOT is_delete OR id IN ?) ORDER BY id LIMIT 4097 FOR SHARE`, binding.SourceProjectID, selectedRefs)
 	}
 	if err := query.Scan(&rows).Error; err != nil {
 		return application.ProjectCopySnapshot{}, fmt.Errorf("freeze media assets: %w", err)
@@ -119,9 +147,14 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 			return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
 		}
 	}
+	for id := range libraryRefs {
+		if _, present := selected[id]; !present {
+			return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+		}
+	}
 	var renditions []renditionRow
 	renditionQuery := tx.Raw(`SELECT r.* FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE a.project_id=? AND NOT a.is_delete AND NOT r.is_delete ORDER BY r.media_asset_id,r.kind,r.id FOR SHARE OF a,r`, binding.SourceProjectID)
-	if len(referenced) != 0 {
+	if len(selectedRefs) != 0 {
 		renditionQuery = tx.Raw(`SELECT r.* FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE a.project_id=? AND a.id IN ? AND NOT r.is_delete ORDER BY r.media_asset_id,r.kind,r.id FOR SHARE OF a,r`, binding.SourceProjectID, assetIDs)
 	}
 	if err := renditionQuery.Scan(&renditions).Error; err != nil {
@@ -139,6 +172,9 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 				return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
 			}
 			source.RetainedHistory = &application.RetainedHistoryProof{AssetID: source.Asset.ID, Revision: source.Asset.Revision, DeletedAt: *source.Asset.DeleteTime, PurgeAfter: *source.Asset.PurgeAfter}
+			if libraryRefs[row.ID] {
+				source.RetainedHistory.DeclaredBy = "library"
+			}
 		}
 		sources = append(sources, source)
 	}
@@ -149,6 +185,10 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 	mapping := make(map[uuid.UUID]uuid.UUID, len(sources))
 	for i, source := range sources {
 		mapping[source.Asset.ID] = content.Assets[i].Asset.ID
+	}
+	content.Library, err = application.PrepareProjectLibraryCopy(binding, librarySource.row.ID, librarySource.row.Revision, librarySource.folders, librarySource.items, mapping, now)
+	if err != nil {
+		return application.ProjectCopySnapshot{}, err
 	}
 	digest, body, assetMap, err := copyMediaDigest(content, mapping)
 	if err != nil {
@@ -203,6 +243,9 @@ func (s *ProjectCopyStore) load(ctx context.Context, actor identityapp.Principal
 	var content application.ProjectMediaCopy
 	var mapping map[uuid.UUID]uuid.UUID
 	if strictCopyMedia(row.Content, &content) != nil || strictCopyMedia(row.AssetMapping, &mapping) != nil {
+		return application.ProjectMediaCopy{}, application.ErrProjectCopyMediaUnavailable
+	}
+	if content.Library != nil && content.Library.Validate(binding) != nil {
 		return application.ProjectMediaCopy{}, application.ErrProjectCopyMediaUnavailable
 	}
 	digest, _, _, err := copyMediaDigest(content, mapping)
@@ -323,7 +366,7 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 			r.ByteSize = object.ByteSize
 		}
 	}
-	body, err := json.Marshal(content.Assets)
+	body, err := copiedMediaContentBytes(content)
 	if err != nil {
 		return application.ProjectCopyReceipt{}, err
 	}
@@ -342,6 +385,9 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 			return application.ProjectCopyReceipt{}, application.ErrObjectMismatch
 		}
 		if err := verifyCopiedMedia(s.db.WithContext(ctx), content.Assets, binding.TargetProjectID); err != nil {
+			return application.ProjectCopyReceipt{}, err
+		}
+		if err := verifyCopiedLibrary(s.db.WithContext(ctx), actor, binding, content.Library); err != nil {
 			return application.ProjectCopyReceipt{}, err
 		}
 		return result, nil
@@ -363,6 +409,9 @@ func (s *ProjectCopyStore) Register(ctx context.Context, actor identityapp.Princ
 				return application.ProjectCopyReceipt{}, fmt.Errorf("register copied rendition: %w", err)
 			}
 		}
+	}
+	if err := registerCopiedLibrary(tx, actor, binding, content.Library); err != nil {
+		return application.ProjectCopyReceipt{}, err
 	}
 	if err := tx.Exec(`INSERT INTO media.project_copy_receipt(snapshot_id,content_sha256,asset_count,rendition_count) VALUES(?,?,?,?)`, snapshot.ID, result.ContentSHA256, result.Assets, result.Renditions).Error; err != nil {
 		return application.ProjectCopyReceipt{}, fmt.Errorf("record complete copied media: %w", err)

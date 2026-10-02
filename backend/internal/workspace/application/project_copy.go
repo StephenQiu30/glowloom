@@ -45,6 +45,12 @@ type ProjectCopyMediaOwner interface {
 	FinishCleanup(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) error
 }
 
+// ProjectCopyHistoricalMediaOwner freezes explicit retained document references.
+// Ordinary media reads and legacy admissions retain their original live scope.
+type ProjectCopyHistoricalMediaOwner interface {
+	FreezeWithReferences(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, time.Time, []uuid.UUID) (mediaapp.ProjectCopySnapshot, error)
+}
+
 // ProjectCopyCanvasOwner owns complete graph snapshots and private graph copies.
 type ProjectCopyCanvasOwner interface {
 	Freeze(context.Context, identityapp.Principal, canvasapp.ProjectCopyBinding, map[uuid.UUID]uuid.UUID) (canvasapp.ProjectCopySnapshot, error)

@@ -1077,6 +1077,314 @@ definitions:
       width:
         type: integer
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryAssetSummary:
+    properties:
+      byte_size:
+        type: integer
+      duration_ms:
+        type: integer
+        x-nullable: true
+      file_name:
+        type: string
+      height:
+        type: integer
+        x-nullable: true
+      id:
+        type: string
+      kind:
+        type: string
+      mime_type:
+        type: string
+      revision:
+        type: integer
+      width:
+        type: integer
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryCommand:
+    properties:
+      action:
+        type: string
+      expected_folder_revision:
+        type: integer
+      expected_item_revision:
+        type: integer
+      expected_revision:
+        type: integer
+      folder:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryFolderInput'
+        x-nullable: true
+      folder_id:
+        type: string
+        x-nullable: true
+      item_id:
+        type: string
+        x-nullable: true
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemRevision'
+        type: array
+      metadata:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryMetadata'
+        x-nullable: true
+      scope:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope'
+      target_folder_id:
+        type: string
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryFolderInput:
+    properties:
+      name:
+        type: string
+      parent_id:
+        type: string
+        x-nullable: true
+      style:
+        type: string
+      theme:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemChange:
+    properties:
+      asset_id:
+        type: string
+        x-nullable: true
+      catalog_state:
+        type: string
+      folder_id:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      kind:
+        type: string
+      revision:
+        type: integer
+      trashed_at:
+        type: string
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemDetail:
+    properties:
+      asset_id:
+        type: string
+        x-nullable: true
+      catalog_state:
+        type: string
+      category:
+        type: string
+      created_at:
+        type: string
+      favorite:
+        type: boolean
+      folder_id:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      kind:
+        type: string
+      media:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryAssetSummary'
+        x-nullable: true
+      note:
+        type: string
+      plain_text:
+        type: string
+        x-nullable: true
+      position:
+        type: integer
+      revision:
+        type: integer
+      source_label:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      trashed_at:
+        type: string
+        x-nullable: true
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemRevision:
+    properties:
+      id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemSummary:
+    properties:
+      asset_id:
+        type: string
+        x-nullable: true
+      catalog_state:
+        type: string
+      category:
+        type: string
+      created_at:
+        type: string
+      favorite:
+        type: boolean
+      folder_id:
+        type: string
+        x-nullable: true
+      id:
+        type: string
+      kind:
+        type: string
+      media:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryAssetSummary'
+        x-nullable: true
+      note:
+        type: string
+      position:
+        type: integer
+      revision:
+        type: integer
+      source_label:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      trashed_at:
+        type: string
+        x-nullable: true
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryMediaPreview:
+    properties:
+      asset:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryAssetSummary'
+      expires_at:
+        type: string
+      renditions:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryRenditionPreview'
+        type: array
+      url:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryMetadata:
+    properties:
+      category:
+        type: string
+      favorite:
+        type: boolean
+      folder_id:
+        type: string
+        x-nullable: true
+      note:
+        type: string
+      plain_text:
+        type: string
+        x-nullable: true
+      source_label:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryPage:
+    properties:
+      category_counts:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      folder_counts:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      folders:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryFolder'
+        type: array
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemSummary'
+        type: array
+      library_id:
+        type: string
+      page:
+        type: integer
+      page_size:
+        type: integer
+      revision:
+        type: integer
+      scope:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope'
+      total:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryReceipt:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      folder:
+        allOf:
+        - $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryFolder'
+        x-nullable: true
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemChange'
+        type: array
+      library_id:
+        type: string
+      project_revision:
+        type: integer
+        x-nullable: true
+      revision:
+        type: integer
+      scope:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryRenditionPreview:
+    properties:
+      expires_at:
+        type: string
+      height:
+        type: integer
+        x-nullable: true
+      kind:
+        type: string
+      url:
+        type: string
+      width:
+        type: integer
+        x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.PersonalUploadResult:
+    properties:
+      asset:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryAssetSummary'
+      duplicate_of:
+        type: string
+        x-nullable: true
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_media_application.Preview:
     properties:
       asset:
@@ -1092,6 +1400,48 @@ definitions:
         $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.AssetSummary'
       duplicate_of:
         type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryFolder:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      library_id:
+        type: string
+      library_kind:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryKind'
+      name:
+        type: string
+      parent_id:
+        type: string
+        x-nullable: true
+      position:
+        type: integer
+      revision:
+        type: integer
+      style:
+        type: string
+      theme:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryKind:
+    enum:
+    - project
+    - personal
+    type: string
+    x-enum-varnames:
+    - LibraryProject
+    - LibraryPersonal
+  github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope:
+    properties:
+      kind:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryKind'
+      project_id:
+        type: string
+        x-nullable: true
     type: object
   github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput:
     properties:
@@ -1990,6 +2340,808 @@ definitions:
       placeholder:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.AdoptReceipt:
+    properties:
+      changed:
+        type: boolean
+      duplicate:
+        type: boolean
+      episode_mappings:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.EpisodeMapping'
+        type: array
+      previous_version_id:
+        type: string
+      project_revision:
+        type: integer
+      script_revision:
+        type: integer
+      split_set_id:
+        type: string
+      version_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.ConfirmationPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ConfirmationSummary'
+        type: array
+      next_revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.ConfirmationSummary:
+    properties:
+      candidate_set_id:
+        type: string
+      created_at:
+        type: string
+      episode_count:
+        type: integer
+      formal_set_id:
+        type: string
+      id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.EpisodeMapping:
+    properties:
+      episode_id:
+        type: string
+      inherit_status:
+        type: string
+      previous_episode_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.EpisodeText:
+    properties:
+      content_hash:
+        type: string
+      episode_id:
+        type: string
+      script_version_id:
+        type: string
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+      text:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.EpisodeView:
+    properties:
+      candidate:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SplitSet'
+      episodes:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.Episode'
+        type: array
+      head:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionHead'
+      version_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.ExtractionWarning:
+    properties:
+      code:
+        type: string
+      count:
+        type: integer
+      paragraph:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportFile:
+    properties:
+      asset_id:
+        type: string
+      attempt:
+        type: integer
+      failure_code:
+        type: string
+      file_name:
+        type: string
+      position:
+        type: integer
+      source_id:
+        type: string
+      source_lineage_id:
+        type: string
+      status:
+        type: string
+      warnings:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ExtractionWarning'
+        type: array
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportJob:
+    properties:
+      active_io:
+        type: boolean
+      attempt:
+        type: integer
+      can_control:
+        type: boolean
+      cancellation_requested:
+        type: boolean
+      created_at:
+        type: string
+      expected_script_revision:
+        type: integer
+      failure_code:
+        type: string
+      files:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportFile'
+        type: array
+      id:
+        type: string
+      latest_script_revision:
+        type: integer
+      latest_version_id:
+        type: string
+      needs_reconciliation:
+        type: boolean
+      project_id:
+        type: string
+      reconciliation_requested:
+        type: boolean
+      retryable:
+        type: boolean
+      revision:
+        type: integer
+      stage:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportPage:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportJob'
+        type: array
+      next_after:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceChange:
+    properties:
+      new_source_id:
+        type: string
+      old_source_id:
+        type: string
+      source_lineage_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceControlReceipt:
+    properties:
+      accepted:
+        type: boolean
+      action:
+        type: string
+      intent_id:
+        type: string
+      revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceDetail:
+    properties:
+      char_count:
+        type: integer
+      content_hash:
+        type: string
+      document:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichDocument'
+      id:
+        type: string
+      media_asset_id:
+        type: string
+      origin:
+        type: string
+      plain_text:
+        type: string
+      position:
+        type: integer
+      previous_source_id:
+        type: string
+      provenance:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceProvenance'
+      rich_sha256:
+        type: string
+      source_kind:
+        type: string
+      source_lineage_id:
+        type: string
+      source_revision:
+        type: integer
+      source_span:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceSpan'
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceHistoryPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceSummary'
+        type: array
+      next_revision:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourcePage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceSummary'
+        type: array
+      next_position:
+        type: integer
+      version_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceReceipt:
+    properties:
+      changed:
+        type: boolean
+      duplicate:
+        type: boolean
+      project_revision:
+        type: integer
+      script_revision:
+        type: integer
+      source_mappings:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceChange'
+        type: array
+      split_set_id:
+        type: string
+      version_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceSnapshotDetail:
+    properties:
+      char_count:
+        type: integer
+      content_hash:
+        type: string
+      document:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichDocument'
+      id:
+        type: string
+      media_asset_id:
+        type: string
+      origin:
+        type: string
+      original_html:
+        type: string
+      plain_text:
+        type: string
+      position:
+        type: integer
+      previous_source_id:
+        type: string
+      provenance:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceProvenance'
+      rich_sha256:
+        type: string
+      source_kind:
+        type: string
+      source_lineage_id:
+        type: string
+      source_revision:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceSummary:
+    properties:
+      char_count:
+        type: integer
+      content_hash:
+        type: string
+      id:
+        type: string
+      media_asset_id:
+        type: string
+      origin:
+        type: string
+      position:
+        type: integer
+      previous_source_id:
+        type: string
+      rich_sha256:
+        type: string
+      source_kind:
+        type: string
+      source_lineage_id:
+        type: string
+      source_revision:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceWriteIntent:
+    properties:
+      action:
+        type: string
+      active_io:
+        type: boolean
+      base_version_id:
+        type: string
+      can_control:
+        type: boolean
+      cancellation_requested:
+        type: boolean
+      confirmed_object_count:
+        type: integer
+      created_at:
+        type: string
+      expected_script_revision:
+        type: integer
+      id:
+        type: string
+      needs_reconciliation:
+        type: boolean
+      object_count:
+        type: integer
+      revision:
+        type: integer
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceWritePage:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceWriteIntent'
+        type: array
+      next_after:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.SplitReceipt:
+    properties:
+      confirmation_id:
+        type: string
+      episode_mappings:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.EpisodeMapping'
+        type: array
+      episodes:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.Episode'
+        type: array
+      project_revision:
+        type: integer
+      renamed_episode_ids:
+        items:
+          type: string
+        type: array
+      script_revision:
+        type: integer
+      split_revision:
+        type: integer
+      split_set_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.StructurePage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.StructureSummary'
+        type: array
+      next_version_no:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.StructureReceipt:
+    properties:
+      episode_revision:
+        type: integer
+      project_revision:
+        type: integer
+      review_status:
+        type: string
+      script_revision:
+        type: integer
+      structure_id:
+        type: string
+      version_no:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.StructureSummary:
+    properties:
+      created_at:
+        type: string
+      episode_id:
+        type: string
+      id:
+        type: string
+      source_hash:
+        type: string
+      version_no:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionHead:
+    properties:
+      candidate_split_set_id:
+        type: string
+      confirmed_split_set_id:
+        type: string
+      split_revision:
+        type: integer
+      version_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionSummary'
+        type: array
+      next_version_no:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionSummary:
+    properties:
+      char_count:
+        type: integer
+      content_hash:
+        type: string
+      created_at:
+        type: string
+      document_sha256:
+        type: string
+      id:
+        type: string
+      source_count:
+        type: integer
+      source_manifest_sha256:
+        type: string
+      version_no:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionText:
+    properties:
+      content_hash:
+        type: string
+      script_version_id:
+        type: string
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+      text:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_application.WorkspaceView:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      state:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.ProjectState'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.Episode:
+    properties:
+      confirmed_structure_id:
+        type: string
+      current_structure_id:
+        type: string
+      id:
+        type: string
+      inherit_status:
+        type: string
+      is_delete:
+        type: boolean
+      org_id:
+        type: string
+      previous_episode_id:
+        type: string
+      project_id:
+        type: string
+      revision:
+        type: integer
+      script_version_id:
+        type: string
+      seq_no:
+        type: integer
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+      split_set_id:
+        type: string
+      title:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.EpisodeBoundary:
+    properties:
+      seq_no:
+        type: integer
+      source_lineage_id:
+        type: string
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+      title:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.EpisodeStructure:
+    properties:
+      actor_id:
+        type: string
+      created_at:
+        type: string
+      document:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.StructureDocument'
+      episode_id:
+        type: string
+      id:
+        type: string
+      org_id:
+        type: string
+      project_id:
+        type: string
+      source_hash:
+        type: string
+      version_no:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.MarkAttrs:
+    properties:
+      color:
+        type: string
+      href:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.ProjectState:
+    properties:
+      adopted_version_id:
+        type: string
+      draft_version_id:
+        type: string
+      org_id:
+        type: string
+      project_id:
+        type: string
+      revision:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichAttrs:
+    properties:
+      language:
+        type: string
+      level:
+        type: integer
+      start:
+        type: integer
+      text_align:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichDocument:
+    properties:
+      attrs:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichAttrs'
+      content:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichDocument'
+        type: array
+      marks:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichMark'
+        type: array
+      text:
+        type: string
+      type:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichMark:
+    properties:
+      attrs:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.MarkAttrs'
+      type:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.ScalarSpan:
+    properties:
+      end:
+        type: integer
+      start:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceExtractionWarning:
+    properties:
+      code:
+        type: string
+      count:
+        type: integer
+      paragraph:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceOriginMapping:
+    properties:
+      decoded_end:
+        type: integer
+      decoded_start:
+        type: integer
+      paragraph:
+        type: integer
+      part:
+        type: string
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceProvenance:
+    properties:
+      encoding:
+        type: string
+      external_id:
+        type: string
+      external_position:
+        type: integer
+      mapping:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceOriginMapping'
+        type: array
+      warnings:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceExtractionWarning'
+        type: array
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceSpan:
+    properties:
+      end:
+        type: integer
+      position:
+        type: integer
+      source_id:
+        type: string
+      source_lineage_id:
+        type: string
+      start:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.SplitConfirmation:
+    properties:
+      actor_id:
+        type: string
+      candidate_set_id:
+        type: string
+      created_at:
+        type: string
+      episodes:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.Episode'
+        type: array
+      formal_set_id:
+        type: string
+      id:
+        type: string
+      org_id:
+        type: string
+      preface:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.ScalarSpan'
+      project_id:
+        type: string
+      revision:
+        type: integer
+      version_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.SplitSet:
+    properties:
+      boundaries:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.EpisodeBoundary'
+        type: array
+      created_at:
+        type: string
+      id:
+        type: string
+      kind:
+        type: string
+      org_id:
+        type: string
+      origin:
+        type: string
+      preface:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.ScalarSpan'
+      project_id:
+        type: string
+      version_id:
+        type: string
+      warnings:
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.StructureDocument:
+    properties:
+      scenes:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.StructureScene'
+        type: array
+      unassigned_lines:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.UnassignedLine'
+        type: array
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.StructureItem:
+    properties:
+      character_id:
+        type: string
+      content:
+        type: string
+      emotion:
+        type: string
+      kind:
+        type: string
+      line_key:
+        type: string
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+      speaker_text:
+        type: string
+      type:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.StructureScene:
+    properties:
+      heading:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.StructureItem'
+        type: array
+      location_text:
+        type: string
+      scene_key:
+        type: string
+      seq_no:
+        type: integer
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+      time_of_day:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_script_domain.UnassignedLine:
+    properties:
+      content:
+        type: string
+      line_key:
+        type: string
+      span_end:
+        type: integer
+      span_start:
+        type: integer
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_workspace_application.CreatedProject:
     properties:
       allow_overseas_models:
@@ -2524,6 +3676,153 @@ definitions:
     - expected_revision
     - mode
     type: object
+  internal_script_adapter_http.AdoptVersionRequest:
+    properties:
+      ack_invalidate:
+        type: boolean
+      expected_revision:
+        type: integer
+      expected_split_revision:
+        type: integer
+    type: object
+  internal_script_adapter_http.FileImportControlRequest:
+    properties:
+      expected_revision:
+        type: integer
+    type: object
+  internal_script_adapter_http.FileImportRequest:
+    properties:
+      asset_ids:
+        items:
+          type: string
+        type: array
+      base_version_id:
+        type: string
+      expected_revision:
+        type: integer
+      rights_confirmed:
+        type: boolean
+    type: object
+  internal_script_adapter_http.SourceControlRequest:
+    properties:
+      expected_revision:
+        type: integer
+    type: object
+  internal_script_adapter_http.SourceDeleteRequest:
+    properties:
+      base_version_id:
+        type: string
+      expected_revision:
+        type: integer
+    type: object
+  internal_script_adapter_http.SourceImportItem:
+    properties:
+      document:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichDocument'
+      original_html:
+        type: string
+      provenance:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceProvenance'
+      source_kind:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_script_adapter_http.SourceImportRequest:
+    properties:
+      base_version_id:
+        type: string
+      expected_revision:
+        type: integer
+      rights_confirmed:
+        type: boolean
+      sources:
+        items:
+          $ref: '#/definitions/internal_script_adapter_http.SourceImportItem'
+        type: array
+    type: object
+  internal_script_adapter_http.SourceReorderRequest:
+    properties:
+      base_version_id:
+        type: string
+      expected_revision:
+        type: integer
+      source_lineage_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  internal_script_adapter_http.SourceWriteRequest:
+    properties:
+      base_version_id:
+        type: string
+      document:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.RichDocument'
+      expected_revision:
+        type: integer
+      original_html:
+        type: string
+      provenance:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SourceProvenance'
+      rights_confirmed:
+        type: boolean
+      source_kind:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_script_adapter_http.SplitReviewRequest:
+    properties:
+      ack_invalidate:
+        type: boolean
+      boundaries:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.EpisodeBoundary'
+        type: array
+      candidate_set_id:
+        type: string
+      expected_revision:
+        type: integer
+      expected_split_revision:
+        type: integer
+      preface:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.ScalarSpan'
+      version_id:
+        type: string
+    type: object
+  internal_script_adapter_http.StructureConfirmRequest:
+    properties:
+      ack_invalidate:
+        type: boolean
+      base_structure_version_no:
+        type: integer
+      expected_episode_revision:
+        type: integer
+      expected_revision:
+        type: integer
+    type: object
+  internal_script_adapter_http.StructureDetail:
+    properties:
+      episode:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.Episode'
+      structure:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.EpisodeStructure'
+    type: object
+  internal_script_adapter_http.StructureSaveRequest:
+    properties:
+      base_structure_version_no:
+        type: integer
+      document:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.StructureDocument'
+      expected_episode_revision:
+        type: integer
+      expected_revision:
+        type: integer
+    type: object
   internal_workspace_adapter_http.CreateProjectRequest:
     properties:
       aspect_ratio:
@@ -2650,6 +3949,8 @@ definitions:
         type: boolean
       revision:
         type: integer
+      script:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyScriptProgress'
       source_project_id:
         type: string
       source_revision:
@@ -2657,6 +3958,7 @@ definitions:
       stage:
         enum:
         - media
+        - script
         - canvases
         - finalizing
         - cleanup
@@ -2675,6 +3977,42 @@ definitions:
         type: string
       target_project_id:
         type: string
+    type: object
+  internal_workspace_adapter_http.ProjectCopyScriptCounts:
+    properties:
+      action_lines:
+        type: integer
+      dialogue_lines:
+        type: integer
+      episodes:
+        type: integer
+      objects:
+        type: integer
+      project_states:
+        type: integer
+      scenes:
+        type: integer
+      sources:
+        type: integer
+      split_confirmations:
+        type: integer
+      split_sets:
+        type: integer
+      structures:
+        type: integer
+      version_heads:
+        type: integer
+      version_sources:
+        type: integer
+      versions:
+        type: integer
+    type: object
+  internal_workspace_adapter_http.ProjectCopyScriptProgress:
+    properties:
+      completed_counts:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyScriptCounts'
+      counts:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyScriptCounts'
     type: object
   internal_workspace_adapter_http.ProjectDetailResponse:
     properties:
@@ -3781,6 +5119,176 @@ paths:
       summary: 提交画布命令批次
       tags:
       - canvases
+  /api/episodes/{eid}/source-text:
+    get:
+      operationId: getScriptEpisodeSourceText
+      parameters:
+      - description: 正式分集UUID
+        in: path
+        name: eid
+        required: true
+        type: string
+      - description: 包含起点，Unicode scalar
+        in: query
+        name: from
+        required: true
+        type: integer
+      - description: 不包含终点，最多65536scalar
+        in: query
+        name: to
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.EpisodeText'
+      summary: 读取分集规范正文区间
+      tags:
+      - script
+  /api/episodes/{eid}/structure:
+    get:
+      operationId: getScriptEpisodeStructure
+      parameters:
+      - description: 正式分集UUID
+        in: path
+        name: eid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_script_adapter_http.StructureDetail'
+      summary: 当前手工结构
+      tags:
+      - script
+    post:
+      consumes:
+      - application/json
+      operationId: saveScriptEpisodeStructure
+      parameters:
+      - description: 正式分集UUID
+        in: path
+        name: eid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 完整结构与两级CAS
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.StructureSaveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.StructureReceipt'
+      summary: 保存完整手工结构候选
+      tags:
+      - script
+  /api/episodes/{eid}/structure/confirm:
+    post:
+      consumes:
+      - application/json
+      operationId: confirmScriptEpisodeStructure
+      parameters:
+      - description: 正式分集UUID
+        in: path
+        name: eid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 当前结构CAS与影响确认
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.StructureConfirmRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.StructureReceipt'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 明确确认当前手工结构
+      tags:
+      - script
+  /api/episodes/{eid}/structure/versions:
+    get:
+      operationId: listScriptEpisodeStructureVersions
+      parameters:
+      - description: 正式分集UUID
+        in: path
+        name: eid
+        required: true
+        type: string
+      - description: 严格早于结构版本号
+        in: query
+        name: before_version_no
+        type: integer
+      - description: 1..100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.StructurePage'
+      summary: 手工结构全部版本
+      tags:
+      - script
+  /api/episodes/{eid}/structure/versions/{version}:
+    get:
+      operationId: getScriptEpisodeStructureVersion
+      parameters:
+      - description: 正式分集UUID
+        in: path
+        name: eid
+        required: true
+        type: string
+      - description: 结构版本号
+        in: path
+        name: version
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_script_adapter_http.StructureDetail'
+      summary: 指定历史手工结构
+      tags:
+      - script
   /api/media-depths/{job_id}:
     get:
       operationId: getMediaDepth
@@ -4674,6 +6182,323 @@ paths:
       summary: Download recognized subtitle draft as SRT
       tags:
       - media-transcriptions
+  /api/media/library:
+    get:
+      operationId: listMediaLibrary
+      parameters:
+      - description: personal/project；默认personal
+        in: query
+        name: scope
+        type: string
+      - description: project scope必要UUID
+        in: query
+        name: project_id
+        type: string
+      - description: 页码1..100000；默认1
+        in: query
+        name: page
+        type: integer
+      - description: 每页1..120；个人默认40/项目默认20
+        in: query
+        name: page_size
+        type: integer
+      - description: text/image/video/audio/document/model
+        in: query
+        name: kind
+        type: string
+      - description: character/environment/prop/material/other
+        in: query
+        name: category
+        type: string
+      - description: 当前库目录UUID
+        in: query
+        name: folder_id
+        type: string
+      - description: 只看未分类根目录
+        in: query
+        name: root_only
+        type: boolean
+      - description: 个人收藏
+        in: query
+        name: favorite_only
+        type: boolean
+      - description: 最近30日
+        in: query
+        name: recent_only
+        type: boolean
+      - description: active/trashed；默认active
+        in: query
+        name: catalog_state
+        type: string
+      - description: 完整库文字搜索
+        in: query
+        name: search
+        type: string
+      - description: updated_desc/updated_asc/name_asc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryPage'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 个人或项目完整素材库分页
+      tags:
+      - media
+  /api/media/library/commands:
+    post:
+      consumes:
+      - application/json
+      operationId: applyMediaLibraryCommand
+      parameters:
+      - description: UUID永久幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 闭合scope、revision及编辑动作
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryCommand'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryReceipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 修改素材库目录或元数据
+      tags:
+      - media
+  /api/media/library/items/{item_id}:
+    get:
+      operationId: getMediaLibraryItem
+      parameters:
+      - description: 条目UUID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: personal/project
+        in: query
+        name: scope
+        type: string
+      - description: project scope必要UUID
+        in: query
+        name: project_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemDetail'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 当前素材库条目详情
+      tags:
+      - media
+  /api/media/library/items/{item_id}/download:
+    get:
+      operationId: downloadLibraryMediaAsset
+      parameters:
+      - description: 二进制素材条目UUID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: personal/project；默认personal
+        in: query
+        name: scope
+        type: string
+      - description: project scope必要UUID
+        in: query
+        name: project_id
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: 原始附件
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 下载素材库原件附件
+      tags:
+      - media
+  /api/media/library/items/{item_id}/preview:
+    get:
+      operationId: previewLibraryMediaAsset
+      parameters:
+      - description: 二进制素材条目UUID
+        in: path
+        name: item_id
+        required: true
+        type: string
+      - description: personal/project；默认personal
+        in: query
+        name: scope
+        type: string
+      - description: project scope必要UUID
+        in: query
+        name: project_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryMediaPreview'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 获取个人或项目素材库媒体预览
+      tags:
+      - media
+  /api/media/library/uploads:
+    post:
+      consumes:
+      - multipart/form-data
+      operationId: uploadPersonalMediaAsset
+      parameters:
+      - description: UUID永久幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 与项目媒体相同的真实内容/容量门禁，单文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: 已确认内容和使用权限且不含需要授权的真人
+        in: formData
+        name: local_review_confirmed
+        required: true
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.PersonalUploadResult'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 上传人工确认的个人素材
+      tags:
+      - media
   /api/models:
     get:
       operationId: listProjectModels
@@ -5704,6 +7529,102 @@ paths:
       summary: 创建完整项目内容副本
       tags:
       - projectCopies
+  /api/projects/{pid}/episodes:
+    get:
+      operationId: listScriptEpisodes
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 剧本版本UUID
+        in: query
+        name: version_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.EpisodeView'
+      summary: 指定版本的候选与正式分集
+      tags:
+      - script
+  /api/projects/{pid}/episodes/split/confirm:
+    post:
+      consumes:
+      - application/json
+      operationId: confirmScriptEpisodeSplit
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 完整分集边界及影响确认
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SplitReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SplitReceipt'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 确认完整分集边界与身份映射
+      tags:
+      - script
+  /api/projects/{pid}/episodes/split/resplit:
+    post:
+      consumes:
+      - application/json
+      operationId: resplitScriptEpisodes
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 当前头与候选修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SplitReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SplitReceipt'
+      summary: 按正文标题规则重新生成候选分集
+      tags:
+      - script
   /api/projects/{pid}/folder:
     put:
       consumes:
@@ -6574,6 +8495,1016 @@ paths:
       summary: 恢复回收项目
       tags:
       - projects
+  /api/projects/{pid}/script-file-imports:
+    get:
+      operationId: listScriptFileImports
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - default: 0
+        description: Offset
+        in: query
+        name: after
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportPage'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - script
+    post:
+      consumes:
+      - application/json
+      operationId: createScriptFileImport
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Permanent UUID key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Ordered frozen originals
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.FileImportRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - script
+  /api/projects/{pid}/script-file-imports/{id}:
+    get:
+      operationId: getScriptFileImport
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Import UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - script
+  /api/projects/{pid}/script-file-imports/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      operationId: cancelScriptFileImport
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Import UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Observed job revision
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.FileImportControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - script
+  /api/projects/{pid}/script-file-imports/{id}/reconcile:
+    post:
+      consumes:
+      - application/json
+      operationId: reconcileScriptFileImport
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Import UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Observed job revision
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.FileImportControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - script
+  /api/projects/{pid}/script-file-imports/{id}/retry:
+    post:
+      consumes:
+      - application/json
+      operationId: retryScriptFileImport
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Import UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Observed job revision
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.FileImportControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ImportJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - script
+  /api/projects/{pid}/script-source-snapshots/{sid}:
+    get:
+      operationId: getScriptSourceSnapshot
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 来源快照UUID
+        in: path
+        name: sid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceSnapshotDetail'
+      summary: 读取指定不可变章节快照
+      tags:
+      - script
+  /api/projects/{pid}/script-source-writes:
+    get:
+      operationId: listScriptSourceWrites
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 分页位置
+        in: query
+        name: after
+        type: integer
+      - description: 1..100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceWritePage'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 未完成正文保存的安全分页
+      tags:
+      - script
+  /api/projects/{pid}/script-source-writes/{wid}:
+    get:
+      operationId: getScriptSourceWrite
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 保存意图UUID
+        in: path
+        name: wid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceWriteIntent'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 正文保存意图状态
+      tags:
+      - script
+  /api/projects/{pid}/script-source-writes/{wid}/cancel:
+    post:
+      consumes:
+      - application/json
+      operationId: cancelScriptSourceWrite
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 保存意图UUID
+        in: path
+        name: wid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 追踪UUID
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: 保存意图修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SourceControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceControlReceipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 明确取消未发布正文保存
+      tags:
+      - script
+  /api/projects/{pid}/script-source-writes/{wid}/reconcile:
+    post:
+      consumes:
+      - application/json
+      operationId: reconcileScriptSourceWrite
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 保存意图UUID
+        in: path
+        name: wid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 追踪UUID
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: 保存意图修订
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SourceControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceControlReceipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 核验原正文保存对象与停止证据
+      tags:
+      - script
+  /api/projects/{pid}/script-sources:
+    get:
+      operationId: listScriptSources
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 不可变历史版本UUID
+        in: query
+        name: version_id
+        type: string
+      - description: 下一个来源位置，须与返回version_id绑定
+        in: query
+        name: after
+        type: integer
+      - description: 1..100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourcePage'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 来源章节有序分页
+      tags:
+      - script
+    post:
+      consumes:
+      - application/json
+      operationId: createScriptSource
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 追踪UUID，缺省由服务端生成
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: 完整来源与版权确认
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SourceWriteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceReceipt'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 新增剧本来源
+      tags:
+      - script
+  /api/projects/{pid}/script-sources/{lineage}:
+    delete:
+      consumes:
+      - application/json
+      operationId: deleteScriptSource
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 稳定来源UUID
+        in: path
+        name: lineage
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 追踪UUID，缺省由服务端生成
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: 当前版本CAS
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SourceDeleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceReceipt'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 从新草稿移除来源
+      tags:
+      - script
+    get:
+      operationId: getScriptSource
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 稳定来源lineageUUID
+        in: path
+        name: lineage
+        required: true
+        type: string
+      - description: 历史版本UUID
+        in: query
+        name: version_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceDetail'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 来源富文本及规范原文
+      tags:
+      - script
+    put:
+      consumes:
+      - application/json
+      operationId: updateScriptSource
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 稳定来源UUID
+        in: path
+        name: lineage
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 追踪UUID，缺省由服务端生成
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: 完整来源及CAS
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SourceWriteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceReceipt'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 保存来源富文本新版本
+      tags:
+      - script
+  /api/projects/{pid}/script-sources/{lineage}/history:
+    get:
+      operationId: listScriptSourceHistory
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 稳定来源UUID
+        in: path
+        name: lineage
+        required: true
+        type: string
+      - description: 严格早于来源修订
+        in: query
+        name: before_revision
+        type: integer
+      - description: 1..100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceHistoryPage'
+      summary: 稳定章节身份的全部快照
+      tags:
+      - script
+  /api/projects/{pid}/script-sources/import:
+    post:
+      consumes:
+      - application/json
+      operationId: importScriptSources
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 追踪UUID，缺省由服务端生成
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: 1..2500来源
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SourceImportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceReceipt'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 原子导入完整章节批次
+      tags:
+      - script
+  /api/projects/{pid}/script-sources/reorder:
+    post:
+      consumes:
+      - application/json
+      operationId: reorderScriptSources
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: UUID
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 追踪UUID，缺省由服务端生成
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: 完整来源UUID顺序
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.SourceReorderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.SourceReceipt'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 完整来源集合重排
+      tags:
+      - script
+  /api/projects/{pid}/script-versions:
+    get:
+      operationId: listScriptVersions
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 严格早于版本号
+        in: query
+        name: before_version_no
+        type: integer
+      - description: 1..100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionPage'
+      summary: 完整剧本版本历史
+      tags:
+      - script
+  /api/projects/{pid}/script-versions/{vid}/adopt:
+    post:
+      consumes:
+      - application/json
+      operationId: adoptScriptVersion
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 不可变剧本版本UUID
+        in: path
+        name: vid
+        required: true
+        type: string
+      - description: 永久UUID请求键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 头修订及影响确认
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_script_adapter_http.AdoptVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.AdoptReceipt'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 采纳已确认分集的正式剧本版本
+      tags:
+      - script
+  /api/projects/{pid}/script-versions/{vid}/source-text:
+    get:
+      operationId: getScriptVersionSourceText
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 不可变剧本版本UUID
+        in: path
+        name: vid
+        required: true
+        type: string
+      - description: 包含起点，Unicode scalar
+        in: query
+        name: from
+        required: true
+        type: integer
+      - description: 不含终点，最多65536scalar
+        in: query
+        name: to
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.VersionText'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 候选与历史版本的规范正文片段
+      tags:
+      - script
+  /api/projects/{pid}/script-versions/{vid}/split-confirmations:
+    get:
+      operationId: listScriptSplitConfirmations
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 不可变剧本版本UUID
+        in: path
+        name: vid
+        required: true
+        type: string
+      - description: 严格早于确认修订
+        in: query
+        name: before_revision
+        type: integer
+      - description: 1..100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.ConfirmationPage'
+      summary: 分集确认的不可变历史
+      tags:
+      - script
+  /api/projects/{pid}/script-versions/{vid}/split-confirmations/{cid}:
+    get:
+      operationId: getScriptSplitConfirmation
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 不可变剧本版本UUID
+        in: path
+        name: vid
+        required: true
+        type: string
+      - description: 确认UUID
+        in: path
+        name: cid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_domain.SplitConfirmation'
+      summary: 指定分集确认的完整边界与身份结果
+      tags:
+      - script
+  /api/projects/{pid}/script-workspace:
+    get:
+      operationId: getScriptWorkspace
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_script_application.WorkspaceView'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 剧本工作区头与当前主体
+      tags:
+      - script
   /api/projects/{pid}/unarchive:
     post:
       consumes:

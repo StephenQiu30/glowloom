@@ -40,6 +40,7 @@ type UploadRequest struct {
 	FileName  string
 	ByteSize  int64
 	RequestID uuid.UUID
+	Personal  *domain.PersonalOwnership `json:"personal,omitempty"`
 }
 
 // UploadRepository authorizes before reading and atomically commits reviewed media.
@@ -69,6 +70,7 @@ type UploadInput struct {
 // UploadService validates local input and publishes it only after durable object checks.
 type UploadService struct {
 	repo       UploadRepository
+	personal   PersonalUploadRepository
 	prober     Prober
 	normalizer UploadNormalizer
 	renderer   Renderer
@@ -92,25 +94,59 @@ func (s *UploadService) Authorize(ctx context.Context, actor identityapp.Princip
 
 // Upload performs the synchronous local-owner-reviewed ingest. Generated media
 // continues to use its separate operation and moderation pipeline.
-func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result UploadResult, err error) {
-	if s == nil || s.repo == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || s.objects == nil || s.now == nil {
+func (s *UploadService) Upload(ctx context.Context, in UploadInput) (UploadResult, error) {
+	if s == nil || s.repo == nil {
+		return UploadResult{}, ErrUnavailable
+	}
+	if in.Request.ProjectID == uuid.Nil || in.Request.Personal != nil {
+		return UploadResult{}, ErrInvalidUpload
+	}
+	destination := uploadDestination{
+		authorize: func(ctx context.Context, r UploadRequest) (string, error) {
+			return s.repo.AuthorizeUpload(ctx, in.Actor, r.ProjectID)
+		},
+		replay: func(ctx context.Context, r UploadRequest) (uploadAccepted, bool, error) {
+			result, found, err := s.repo.FindUpload(ctx, in.Actor, r)
+			return uploadAccepted{ID: result.Asset.ID, Project: result}, found, err
+		},
+		commit: func(ctx context.Context, r UploadRequest, a domain.MediaAsset, rends []domain.Rendition) (uploadAccepted, error) {
+			result, err := s.repo.CommitUpload(ctx, in.Actor, r, a, rends)
+			if err == nil && (result.Asset.ProjectID != r.ProjectID || result.Asset.ID == uuid.Nil) {
+				return uploadAccepted{}, ErrUnavailable
+			}
+			return uploadAccepted{ID: result.Asset.ID, Project: result}, err
+		},
+		exists: func(ctx context.Context, r UploadRequest, id uuid.UUID) (bool, error) {
+			return s.repo.UploadAssetExists(ctx, r.ProjectID, id)
+		},
+	}
+	result, err := s.upload(ctx, in, destination)
+	return result.Project, err
+}
+
+// upload is the single local review, normalization and private object pipeline.
+func (s *UploadService) upload(ctx context.Context, in UploadInput, destination uploadDestination) (result uploadAccepted, err error) {
+	if s == nil || s.prober == nil || s.normalizer == nil || s.renderer == nil || s.objects == nil || s.now == nil {
 		return result, ErrUnavailable
 	}
 	r := in.Request
 	file := in.File
 	name, nameErr := SafeUploadFileName(r.FileName)
-	if !in.LocalReviewConfirmed || nameErr != nil || name != r.FileName || r.ProjectID == uuid.Nil || r.Key == uuid.Nil || r.RequestID == uuid.Nil ||
-		file == nil || file.File == nil || file.Size < 1 || len(file.SHA256) != 64 {
+	if !in.LocalReviewConfirmed || nameErr != nil || name != r.FileName || file == nil || file.File == nil {
 		return result, ErrInvalidUpload
 	}
 	r.SHA256, r.ByteSize = file.SHA256, file.Size
-	aspect, err := s.repo.AuthorizeUpload(ctx, in.Actor, r.ProjectID)
+	if err := ValidateUploadRequest(r); err != nil {
+		return result, err
+	}
+	aspect, err := destination.authorize(ctx, r)
 	if err != nil {
 		return result, err
 	}
-	if result, found, err := s.repo.FindUpload(ctx, in.Actor, r); err != nil || found {
+	if result, found, err := destination.replay(ctx, r); err != nil || found {
 		return result, err
 	}
+
 	var normalization *UploadNormalization
 	if file.MIMEType == "video/webm" {
 		normalized, normalizeErr := s.normalizer.Normalize(ctx, file)
@@ -151,17 +187,17 @@ func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result Uplo
 		return result, ErrUnavailable
 	}
 	id := uuid.New()
-	key := path.Join("projects", r.ProjectID.String(), string(probe.Kind), now.Format("2006"), now.Format("01"), id.String()+"."+probe.Extension)
+	key := uploadObjectKey(r, probe, now, id)
 	owned := make([]string, 0, len(rendered)+1)
 	commitAttempted := false
 	defer func() {
-		if err == nil && result.Asset.ID == id {
+		if err == nil && result.ID == id {
 			return
 		}
 		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if commitAttempted && err != nil {
-			present, checkErr := s.repo.UploadAssetExists(cleanCtx, r.ProjectID, id)
+			present, checkErr := destination.exists(cleanCtx, r, id)
 			if checkErr != nil || present {
 				return
 			} // An unknown commit never destroys a usable original.
@@ -186,7 +222,7 @@ func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result Uplo
 	if err != nil {
 		return result, err
 	}
-	asset := domain.MediaAsset{ID: id, ProjectID: r.ProjectID, Kind: probe.Kind, Origin: domain.OriginUpload, Status: domain.StatusReady,
+	asset := domain.MediaAsset{ID: id, ProjectID: r.ProjectID, Personal: r.Personal, Kind: probe.Kind, Origin: domain.OriginUpload, Status: domain.StatusReady,
 		ObjectKey: key, FileName: name, MimeType: file.MIMEType, ByteSize: file.Size, SHA256: &sha, Width: probe.Width, Height: probe.Height,
 		DurationMS: probe.DurationMS, FPS: probe.FPS, AudioChannels: probe.AudioChannels, Codec: probe.Codec,
 		ModerationStatus: domain.ModerationPassed, ModerationDetail: review, Revision: 1, CreateTime: now, UpdateTime: now}
@@ -205,12 +241,12 @@ func (s *UploadService) Upload(ctx context.Context, in UploadInput) (result Uplo
 			Width: &width, Height: &height, ByteSize: &size, CreateTime: now, UpdateTime: now})
 	}
 	commitAttempted = true
-	result, err = s.repo.CommitUpload(ctx, in.Actor, r, asset, rends)
+	result, err = destination.commit(ctx, r, asset, rends)
 	if err != nil {
-		return UploadResult{}, err
+		return uploadAccepted{}, err
 	}
-	if result.Asset.ProjectID != r.ProjectID || result.Asset.ID == uuid.Nil {
-		return UploadResult{}, ErrUnavailable
+	if result.ID == uuid.Nil {
+		return uploadAccepted{}, ErrUnavailable
 	}
 	return result, nil
 }
@@ -304,7 +340,7 @@ func UploadSummary(asset domain.MediaAsset) AssetSummary { return summary(asset)
 // ValidateUploadRequest enforces the durable receipt's bounded identity.
 func ValidateUploadRequest(r UploadRequest) error {
 	name, err := SafeUploadFileName(r.FileName)
-	if err != nil || name != r.FileName || r.ProjectID == uuid.Nil || r.Key == uuid.Nil || r.RequestID == uuid.Nil || r.ByteSize < 1 || r.ByteSize > MaxUploadVideoBytes || len(r.SHA256) != 64 {
+	if err != nil || name != r.FileName || !validUploadOwnership(r) || r.Key == uuid.Nil || r.RequestID == uuid.Nil || r.ByteSize < 1 || r.ByteSize > MaxUploadVideoBytes || len(r.SHA256) != 64 {
 		return ErrInvalidUpload
 	}
 	for _, c := range r.SHA256 {

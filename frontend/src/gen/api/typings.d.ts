@@ -1,4 +1,11 @@
 declare namespace API {
+  type adoptScriptVersionParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 不可变剧本版本UUID */
+    vid: string;
+  };
+
   type applyCanvasCommandsParams = {
     /** 画布UUID */
     id: string;
@@ -39,6 +46,20 @@ declare namespace API {
     id: string;
   };
 
+  type cancelScriptFileImportParams = {
+    /** Project UUID */
+    pid: string;
+    /** Import UUID */
+    id: string;
+  };
+
+  type cancelScriptSourceWriteParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 保存意图UUID */
+    wid: string;
+  };
+
   type confirmBatchQuoteParams = {
     /** Batch UUID */
     id: string;
@@ -47,6 +68,16 @@ declare namespace API {
   type confirmOperationQuoteParams = {
     /** Operation UUID */
     id: string;
+  };
+
+  type confirmScriptEpisodeSplitParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
+  type confirmScriptEpisodeStructureParams = {
+    /** 正式分集UUID */
+    eid: string;
   };
 
   type createCanvasParams = {
@@ -84,6 +115,16 @@ declare namespace API {
     pid: string;
   };
 
+  type createScriptFileImportParams = {
+    /** Project UUID */
+    pid: string;
+  };
+
+  type createScriptSourceParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
   type deleteCanvasParams = {
     /** 画布UUID */
     id: string;
@@ -92,6 +133,13 @@ declare namespace API {
   type deleteProjectParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type deleteScriptSourceParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 稳定来源UUID */
+    lineage: string;
   };
 
   type disableAdminCredentialParams = {
@@ -106,6 +154,15 @@ declare namespace API {
     pid: string;
     /** 文档素材UUID */
     asset_id: string;
+  };
+
+  type downloadLibraryMediaAssetParams = {
+    /** 二进制素材条目UUID */
+    item_id: string;
+    /** personal/project；默认personal */
+    scope?: string;
+    /** project scope必要UUID */
+    project_id?: string;
   };
 
   type downloadMediaDepthParams = {
@@ -165,6 +222,15 @@ declare namespace API {
     project_id: string;
   };
 
+  type getMediaLibraryItemParams = {
+    /** 条目UUID */
+    item_id: string;
+    /** personal/project */
+    scope?: string;
+    /** project scope必要UUID */
+    project_id?: string;
+  };
+
   type getMediaPreviewParams = {
     /** 项目UUID */
     pid: string;
@@ -211,6 +277,82 @@ declare namespace API {
   };
 
   type getProjectParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
+  type getScriptEpisodeSourceTextParams = {
+    /** 正式分集UUID */
+    eid: string;
+    /** 包含起点，Unicode scalar */
+    from: number;
+    /** 不包含终点，最多65536scalar */
+    to: number;
+  };
+
+  type getScriptEpisodeStructureParams = {
+    /** 正式分集UUID */
+    eid: string;
+  };
+
+  type getScriptEpisodeStructureVersionParams = {
+    /** 正式分集UUID */
+    eid: string;
+    /** 结构版本号 */
+    version: number;
+  };
+
+  type getScriptFileImportParams = {
+    /** Project UUID */
+    pid: string;
+    /** Import UUID */
+    id: string;
+  };
+
+  type getScriptSourceParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 稳定来源lineageUUID */
+    lineage: string;
+    /** 历史版本UUID */
+    version_id?: string;
+  };
+
+  type getScriptSourceSnapshotParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 来源快照UUID */
+    sid: string;
+  };
+
+  type getScriptSourceWriteParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 保存意图UUID */
+    wid: string;
+  };
+
+  type getScriptSplitConfirmationParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 不可变剧本版本UUID */
+    vid: string;
+    /** 确认UUID */
+    cid: string;
+  };
+
+  type getScriptVersionSourceTextParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 不可变剧本版本UUID */
+    vid: string;
+    /** 包含起点，Unicode scalar */
+    from: number;
+    /** 不含终点，最多65536scalar */
+    to: number;
+  };
+
+  type getScriptWorkspaceParams = {
     /** 项目UUID */
     pid: string;
   };
@@ -821,6 +963,165 @@ declare namespace API {
       width?: number;
     };
 
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryAssetSummary =
+    {
+      byte_size?: number;
+      duration_ms?: number | null;
+      file_name?: string;
+      height?: number | null;
+      id?: string;
+      kind?: string;
+      mime_type?: string;
+      revision?: number;
+      width?: number | null;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryCommand =
+    {
+      action?: string;
+      expected_folder_revision?: number;
+      expected_item_revision?: number;
+      expected_revision?: number;
+      folder?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryFolderInput | null;
+      folder_id?: string | null;
+      item_id?: string | null;
+      items?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemRevision[];
+      metadata?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryMetadata | null;
+      scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+      target_folder_id?: string | null;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryFolderInput =
+    {
+      name?: string;
+      parent_id?: string | null;
+      style?: string;
+      theme?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemChange =
+    {
+      asset_id?: string | null;
+      catalog_state?: string;
+      folder_id?: string | null;
+      id?: string;
+      kind?: string;
+      revision?: number;
+      trashed_at?: string | null;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemDetail =
+    {
+      asset_id?: string | null;
+      catalog_state?: string;
+      category?: string;
+      created_at?: string;
+      favorite?: boolean;
+      folder_id?: string | null;
+      id?: string;
+      kind?: string;
+      media?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryAssetSummary | null;
+      note?: string;
+      plain_text?: string | null;
+      position?: number;
+      revision?: number;
+      source_label?: string;
+      tags?: string[];
+      title?: string;
+      trashed_at?: string | null;
+      updated_at?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemRevision =
+    {
+      id?: string;
+      revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemSummary =
+    {
+      asset_id?: string | null;
+      catalog_state?: string;
+      category?: string;
+      created_at?: string;
+      favorite?: boolean;
+      folder_id?: string | null;
+      id?: string;
+      kind?: string;
+      media?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryAssetSummary | null;
+      note?: string;
+      position?: number;
+      revision?: number;
+      source_label?: string;
+      tags?: string[];
+      title?: string;
+      trashed_at?: string | null;
+      updated_at?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryMediaPreview =
+    {
+      asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryAssetSummary;
+      expires_at?: string;
+      renditions?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryRenditionPreview[];
+      url?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryMetadata =
+    {
+      category?: string;
+      favorite?: boolean;
+      folder_id?: string | null;
+      note?: string;
+      plain_text?: string | null;
+      source_label?: string;
+      tags?: string[];
+      title?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryPage =
+    {
+      category_counts?: Record<string, any>;
+      current_actor_id?: string;
+      current_org_id?: string;
+      folder_counts?: Record<string, any>;
+      folders?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryFolder[];
+      items?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemSummary[];
+      library_id?: string;
+      page?: number;
+      page_size?: number;
+      revision?: number;
+      scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+      total?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryReceipt =
+    {
+      current_actor_id?: string;
+      current_org_id?: string;
+      folder?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryFolder | null;
+      items?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemChange[];
+      library_id?: string;
+      project_revision?: number | null;
+      revision?: number;
+      scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryRenditionPreview =
+    {
+      expires_at?: string;
+      height?: number | null;
+      kind?: string;
+      url?: string;
+      width?: number | null;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationPersonalUploadResult =
+    {
+      asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryAssetSummary;
+      duplicate_of?: string | null;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalMediaApplicationPreview = {
     asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationAssetSummary;
     expires_at?: string;
@@ -832,6 +1133,28 @@ declare namespace API {
       asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationAssetSummary;
       duplicate_of?: string;
     };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryFolder = {
+    created_at?: string;
+    id?: string;
+    library_id?: string;
+    library_kind?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryKind;
+    name?: string;
+    parent_id?: string | null;
+    position?: number;
+    revision?: number;
+    style?: string;
+    theme?: string;
+    updated_at?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryKind =
+    "project" | "personal";
+
+  type githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope = {
+    kind?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryKind;
+    project_id?: string | null;
+  };
 
   type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationControlInput =
     {
@@ -1301,6 +1624,492 @@ declare namespace API {
     placeholder?: string;
   };
 
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationAdoptReceipt =
+    {
+      changed?: boolean;
+      duplicate?: boolean;
+      episode_mappings?: githubComStephenQiu30LanverseBackendInternalScriptApplicationEpisodeMapping[];
+      previous_version_id?: string;
+      project_revision?: number;
+      script_revision?: number;
+      split_set_id?: string;
+      version_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationConfirmationPage =
+    {
+      items?: githubComStephenQiu30LanverseBackendInternalScriptApplicationConfirmationSummary[];
+      next_revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationConfirmationSummary =
+    {
+      candidate_set_id?: string;
+      created_at?: string;
+      episode_count?: number;
+      formal_set_id?: string;
+      id?: string;
+      revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationEpisodeMapping =
+    {
+      episode_id?: string;
+      inherit_status?: string;
+      previous_episode_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationEpisodeText =
+    {
+      content_hash?: string;
+      episode_id?: string;
+      script_version_id?: string;
+      span_end?: number;
+      span_start?: number;
+      text?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationEpisodeView =
+    {
+      candidate?: githubComStephenQiu30LanverseBackendInternalScriptDomainSplitSet;
+      episodes?: githubComStephenQiu30LanverseBackendInternalScriptDomainEpisode[];
+      head?: githubComStephenQiu30LanverseBackendInternalScriptApplicationVersionHead;
+      version_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationExtractionWarning =
+    {
+      code?: string;
+      count?: number;
+      paragraph?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationImportFile =
+    {
+      asset_id?: string;
+      attempt?: number;
+      failure_code?: string;
+      file_name?: string;
+      position?: number;
+      source_id?: string;
+      source_lineage_id?: string;
+      status?: string;
+      warnings?: githubComStephenQiu30LanverseBackendInternalScriptApplicationExtractionWarning[];
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationImportJob =
+    {
+      active_io?: boolean;
+      attempt?: number;
+      can_control?: boolean;
+      cancellation_requested?: boolean;
+      created_at?: string;
+      expected_script_revision?: number;
+      failure_code?: string;
+      files?: githubComStephenQiu30LanverseBackendInternalScriptApplicationImportFile[];
+      id?: string;
+      latest_script_revision?: number;
+      latest_version_id?: string;
+      needs_reconciliation?: boolean;
+      project_id?: string;
+      reconciliation_requested?: boolean;
+      retryable?: boolean;
+      revision?: number;
+      stage?: string;
+      status?: string;
+      updated_at?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationImportPage =
+    {
+      current_actor_id?: string;
+      current_org_id?: string;
+      items?: githubComStephenQiu30LanverseBackendInternalScriptApplicationImportJob[];
+      next_after?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceChange =
+    {
+      new_source_id?: string;
+      old_source_id?: string;
+      source_lineage_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceControlReceipt =
+    {
+      accepted?: boolean;
+      action?: string;
+      intent_id?: string;
+      revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceDetail =
+    {
+      char_count?: number;
+      content_hash?: string;
+      document?: githubComStephenQiu30LanverseBackendInternalScriptDomainRichDocument;
+      id?: string;
+      media_asset_id?: string;
+      origin?: string;
+      plain_text?: string;
+      position?: number;
+      previous_source_id?: string;
+      provenance?: githubComStephenQiu30LanverseBackendInternalScriptDomainSourceProvenance;
+      rich_sha256?: string;
+      source_kind?: string;
+      source_lineage_id?: string;
+      source_revision?: number;
+      source_span?: githubComStephenQiu30LanverseBackendInternalScriptDomainSourceSpan;
+      status?: string;
+      title?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceHistoryPage =
+    {
+      items?: githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceSummary[];
+      next_revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourcePage =
+    {
+      items?: githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceSummary[];
+      next_position?: number;
+      version_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceReceipt =
+    {
+      changed?: boolean;
+      duplicate?: boolean;
+      project_revision?: number;
+      script_revision?: number;
+      source_mappings?: githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceChange[];
+      split_set_id?: string;
+      version_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceSnapshotDetail =
+    {
+      char_count?: number;
+      content_hash?: string;
+      document?: githubComStephenQiu30LanverseBackendInternalScriptDomainRichDocument;
+      id?: string;
+      media_asset_id?: string;
+      origin?: string;
+      original_html?: string;
+      plain_text?: string;
+      position?: number;
+      previous_source_id?: string;
+      provenance?: githubComStephenQiu30LanverseBackendInternalScriptDomainSourceProvenance;
+      rich_sha256?: string;
+      source_kind?: string;
+      source_lineage_id?: string;
+      source_revision?: number;
+      status?: string;
+      title?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceSummary =
+    {
+      char_count?: number;
+      content_hash?: string;
+      id?: string;
+      media_asset_id?: string;
+      origin?: string;
+      position?: number;
+      previous_source_id?: string;
+      rich_sha256?: string;
+      source_kind?: string;
+      source_lineage_id?: string;
+      source_revision?: number;
+      status?: string;
+      title?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceWriteIntent =
+    {
+      action?: string;
+      active_io?: boolean;
+      base_version_id?: string;
+      can_control?: boolean;
+      cancellation_requested?: boolean;
+      confirmed_object_count?: number;
+      created_at?: string;
+      expected_script_revision?: number;
+      id?: string;
+      needs_reconciliation?: boolean;
+      object_count?: number;
+      revision?: number;
+      status?: string;
+      updated_at?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceWritePage =
+    {
+      current_actor_id?: string;
+      current_org_id?: string;
+      items?: githubComStephenQiu30LanverseBackendInternalScriptApplicationSourceWriteIntent[];
+      next_after?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationSplitReceipt =
+    {
+      confirmation_id?: string;
+      episode_mappings?: githubComStephenQiu30LanverseBackendInternalScriptApplicationEpisodeMapping[];
+      episodes?: githubComStephenQiu30LanverseBackendInternalScriptDomainEpisode[];
+      project_revision?: number;
+      renamed_episode_ids?: string[];
+      script_revision?: number;
+      split_revision?: number;
+      split_set_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationStructurePage =
+    {
+      items?: githubComStephenQiu30LanverseBackendInternalScriptApplicationStructureSummary[];
+      next_version_no?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationStructureReceipt =
+    {
+      episode_revision?: number;
+      project_revision?: number;
+      review_status?: string;
+      script_revision?: number;
+      structure_id?: string;
+      version_no?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationStructureSummary =
+    {
+      created_at?: string;
+      episode_id?: string;
+      id?: string;
+      source_hash?: string;
+      version_no?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationVersionHead =
+    {
+      candidate_split_set_id?: string;
+      confirmed_split_set_id?: string;
+      split_revision?: number;
+      version_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationVersionPage =
+    {
+      items?: githubComStephenQiu30LanverseBackendInternalScriptApplicationVersionSummary[];
+      next_version_no?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationVersionSummary =
+    {
+      char_count?: number;
+      content_hash?: string;
+      created_at?: string;
+      document_sha256?: string;
+      id?: string;
+      source_count?: number;
+      source_manifest_sha256?: string;
+      version_no?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationVersionText =
+    {
+      content_hash?: string;
+      script_version_id?: string;
+      span_end?: number;
+      span_start?: number;
+      text?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptApplicationWorkspaceView =
+    {
+      current_actor_id?: string;
+      current_org_id?: string;
+      state?: githubComStephenQiu30LanverseBackendInternalScriptDomainProjectState;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainEpisode = {
+    confirmed_structure_id?: string;
+    current_structure_id?: string;
+    id?: string;
+    inherit_status?: string;
+    is_delete?: boolean;
+    org_id?: string;
+    previous_episode_id?: string;
+    project_id?: string;
+    revision?: number;
+    script_version_id?: string;
+    seq_no?: number;
+    span_end?: number;
+    span_start?: number;
+    split_set_id?: string;
+    title?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainEpisodeBoundary =
+    {
+      seq_no?: number;
+      source_lineage_id?: string;
+      span_end?: number;
+      span_start?: number;
+      title?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainEpisodeStructure =
+    {
+      actor_id?: string;
+      created_at?: string;
+      document?: githubComStephenQiu30LanverseBackendInternalScriptDomainStructureDocument;
+      episode_id?: string;
+      id?: string;
+      org_id?: string;
+      project_id?: string;
+      source_hash?: string;
+      version_no?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainMarkAttrs = {
+    color?: string;
+    href?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainProjectState = {
+    adopted_version_id?: string;
+    draft_version_id?: string;
+    org_id?: string;
+    project_id?: string;
+    revision?: number;
+    updated_at?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainRichAttrs = {
+    language?: string;
+    level?: number;
+    start?: number;
+    text_align?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainRichDocument = {
+    attrs?: githubComStephenQiu30LanverseBackendInternalScriptDomainRichAttrs;
+    content?: githubComStephenQiu30LanverseBackendInternalScriptDomainRichDocument[];
+    marks?: githubComStephenQiu30LanverseBackendInternalScriptDomainRichMark[];
+    text?: string;
+    type?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainRichMark = {
+    attrs?: githubComStephenQiu30LanverseBackendInternalScriptDomainMarkAttrs;
+    type?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainScalarSpan = {
+    end?: number;
+    start?: number;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainSourceExtractionWarning =
+    {
+      code?: string;
+      count?: number;
+      paragraph?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainSourceOriginMapping =
+    {
+      decoded_end?: number;
+      decoded_start?: number;
+      paragraph?: number;
+      part?: string;
+      span_end?: number;
+      span_start?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainSourceProvenance =
+    {
+      encoding?: string;
+      external_id?: string;
+      external_position?: number;
+      mapping?: githubComStephenQiu30LanverseBackendInternalScriptDomainSourceOriginMapping[];
+      warnings?: githubComStephenQiu30LanverseBackendInternalScriptDomainSourceExtractionWarning[];
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainSourceSpan = {
+    end?: number;
+    position?: number;
+    source_id?: string;
+    source_lineage_id?: string;
+    start?: number;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainSplitConfirmation =
+    {
+      actor_id?: string;
+      candidate_set_id?: string;
+      created_at?: string;
+      episodes?: githubComStephenQiu30LanverseBackendInternalScriptDomainEpisode[];
+      formal_set_id?: string;
+      id?: string;
+      org_id?: string;
+      preface?: githubComStephenQiu30LanverseBackendInternalScriptDomainScalarSpan;
+      project_id?: string;
+      revision?: number;
+      version_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainSplitSet = {
+    boundaries?: githubComStephenQiu30LanverseBackendInternalScriptDomainEpisodeBoundary[];
+    created_at?: string;
+    id?: string;
+    kind?: string;
+    org_id?: string;
+    origin?: string;
+    preface?: githubComStephenQiu30LanverseBackendInternalScriptDomainScalarSpan;
+    project_id?: string;
+    version_id?: string;
+    warnings?: string[];
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainStructureDocument =
+    {
+      scenes?: githubComStephenQiu30LanverseBackendInternalScriptDomainStructureScene[];
+      unassigned_lines?: githubComStephenQiu30LanverseBackendInternalScriptDomainUnassignedLine[];
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainStructureItem = {
+    character_id?: string;
+    content?: string;
+    emotion?: string;
+    kind?: string;
+    line_key?: string;
+    span_end?: number;
+    span_start?: number;
+    speaker_text?: string;
+    type?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainStructureScene =
+    {
+      heading?: string;
+      items?: githubComStephenQiu30LanverseBackendInternalScriptDomainStructureItem[];
+      location_text?: string;
+      scene_key?: string;
+      seq_no?: number;
+      span_end?: number;
+      span_start?: number;
+      time_of_day?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalScriptDomainUnassignedLine =
+    {
+      content?: string;
+      line_key?: string;
+      span_end?: number;
+      span_start?: number;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalWorkspaceApplicationCreatedProject =
     {
       allow_overseas_models?: boolean;
@@ -1340,6 +2149,11 @@ declare namespace API {
       asset_id?: string;
       project_id?: string;
     };
+
+  type importScriptSourcesParams = {
+    /** 项目UUID */
+    pid: string;
+  };
 
   type internalCanvasAdapterHttpListResponse = {
     items?: githubComStephenQiu30LanverseBackendInternalCanvasDomainDocument[];
@@ -1590,6 +2404,95 @@ declare namespace API {
     mode: githubComStephenQiu30LanverseBackendInternalPromptDomainMode;
   };
 
+  type internalScriptAdapterHttpAdoptVersionRequest = {
+    ack_invalidate?: boolean;
+    expected_revision?: number;
+    expected_split_revision?: number;
+  };
+
+  type internalScriptAdapterHttpFileImportControlRequest = {
+    expected_revision?: number;
+  };
+
+  type internalScriptAdapterHttpFileImportRequest = {
+    asset_ids?: string[];
+    base_version_id?: string;
+    expected_revision?: number;
+    rights_confirmed?: boolean;
+  };
+
+  type internalScriptAdapterHttpSourceControlRequest = {
+    expected_revision?: number;
+  };
+
+  type internalScriptAdapterHttpSourceDeleteRequest = {
+    base_version_id?: string;
+    expected_revision?: number;
+  };
+
+  type internalScriptAdapterHttpSourceImportItem = {
+    document?: githubComStephenQiu30LanverseBackendInternalScriptDomainRichDocument;
+    original_html?: string;
+    provenance?: githubComStephenQiu30LanverseBackendInternalScriptDomainSourceProvenance;
+    source_kind?: string;
+    status?: string;
+    title?: string;
+  };
+
+  type internalScriptAdapterHttpSourceImportRequest = {
+    base_version_id?: string;
+    expected_revision?: number;
+    rights_confirmed?: boolean;
+    sources?: internalScriptAdapterHttpSourceImportItem[];
+  };
+
+  type internalScriptAdapterHttpSourceReorderRequest = {
+    base_version_id?: string;
+    expected_revision?: number;
+    source_lineage_ids?: string[];
+  };
+
+  type internalScriptAdapterHttpSourceWriteRequest = {
+    base_version_id?: string;
+    document?: githubComStephenQiu30LanverseBackendInternalScriptDomainRichDocument;
+    expected_revision?: number;
+    original_html?: string;
+    provenance?: githubComStephenQiu30LanverseBackendInternalScriptDomainSourceProvenance;
+    rights_confirmed?: boolean;
+    source_kind?: string;
+    status?: string;
+    title?: string;
+  };
+
+  type internalScriptAdapterHttpSplitReviewRequest = {
+    ack_invalidate?: boolean;
+    boundaries?: githubComStephenQiu30LanverseBackendInternalScriptDomainEpisodeBoundary[];
+    candidate_set_id?: string;
+    expected_revision?: number;
+    expected_split_revision?: number;
+    preface?: githubComStephenQiu30LanverseBackendInternalScriptDomainScalarSpan;
+    version_id?: string;
+  };
+
+  type internalScriptAdapterHttpStructureConfirmRequest = {
+    ack_invalidate?: boolean;
+    base_structure_version_no?: number;
+    expected_episode_revision?: number;
+    expected_revision?: number;
+  };
+
+  type internalScriptAdapterHttpStructureDetail = {
+    episode?: githubComStephenQiu30LanverseBackendInternalScriptDomainEpisode;
+    structure?: githubComStephenQiu30LanverseBackendInternalScriptDomainEpisodeStructure;
+  };
+
+  type internalScriptAdapterHttpStructureSaveRequest = {
+    base_structure_version_no?: number;
+    document?: githubComStephenQiu30LanverseBackendInternalScriptDomainStructureDocument;
+    expected_episode_revision?: number;
+    expected_revision?: number;
+  };
+
   type internalWorkspaceAdapterHttpCreateProjectRequest = {
     aspect_ratio: "9:16" | "16:9";
     description?: string;
@@ -1644,9 +2547,11 @@ declare namespace API {
     renditions?: number;
     retryable?: boolean;
     revision?: number;
+    script?: internalWorkspaceAdapterHttpProjectCopyScriptProgress;
     source_project_id?: string;
     source_revision?: number;
-    stage?: "media" | "canvases" | "finalizing" | "cleanup" | "complete";
+    stage?:
+      "media" | "script" | "canvases" | "finalizing" | "cleanup" | "complete";
     status?:
       | "queued"
       | "running"
@@ -1656,6 +2561,27 @@ declare namespace API {
       | "succeeded";
     target_name?: string;
     target_project_id?: string;
+  };
+
+  type internalWorkspaceAdapterHttpProjectCopyScriptCounts = {
+    action_lines?: number;
+    dialogue_lines?: number;
+    episodes?: number;
+    objects?: number;
+    project_states?: number;
+    scenes?: number;
+    sources?: number;
+    split_confirmations?: number;
+    split_sets?: number;
+    structures?: number;
+    version_heads?: number;
+    version_sources?: number;
+    versions?: number;
+  };
+
+  type internalWorkspaceAdapterHttpProjectCopyScriptProgress = {
+    completed_counts?: internalWorkspaceAdapterHttpProjectCopyScriptCounts;
+    counts?: internalWorkspaceAdapterHttpProjectCopyScriptCounts;
   };
 
   type internalWorkspaceAdapterHttpProjectDetailResponse = {
@@ -1822,6 +2748,35 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listMediaLibraryParams = {
+    /** personal/project；默认personal */
+    scope?: string;
+    /** project scope必要UUID */
+    project_id?: string;
+    /** 页码1..100000；默认1 */
+    page?: number;
+    /** 每页1..120；个人默认40/项目默认20 */
+    page_size?: number;
+    /** text/image/video/audio/document/model */
+    kind?: string;
+    /** character/environment/prop/material/other */
+    category?: string;
+    /** 当前库目录UUID */
+    folder_id?: string;
+    /** 只看未分类根目录 */
+    root_only?: boolean;
+    /** 个人收藏 */
+    favorite_only?: boolean;
+    /** 最近30日 */
+    recent_only?: boolean;
+    /** active/trashed；默认active */
+    catalog_state?: string;
+    /** 完整库文字搜索 */
+    search?: string;
+    /** updated_desc/updated_asc/name_asc */
+    order?: string;
+  };
+
   type listMediaTranscriptionsParams = {
     /** Project UUID */
     pid: string;
@@ -1902,6 +2857,82 @@ declare namespace API {
     folder_id?: string;
   };
 
+  type listScriptEpisodesParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 剧本版本UUID */
+    version_id: string;
+  };
+
+  type listScriptEpisodeStructureVersionsParams = {
+    /** 正式分集UUID */
+    eid: string;
+    /** 严格早于结构版本号 */
+    before_version_no?: number;
+    /** 1..100 */
+    limit?: number;
+  };
+
+  type listScriptFileImportsParams = {
+    /** Project UUID */
+    pid: string;
+    /** Offset */
+    after?: number;
+    /** Page size */
+    limit?: number;
+  };
+
+  type listScriptSourceHistoryParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 稳定来源UUID */
+    lineage: string;
+    /** 严格早于来源修订 */
+    before_revision?: number;
+    /** 1..100 */
+    limit?: number;
+  };
+
+  type listScriptSourcesParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 不可变历史版本UUID */
+    version_id?: string;
+    /** 下一个来源位置，须与返回version_id绑定 */
+    after?: number;
+    /** 1..100 */
+    limit?: number;
+  };
+
+  type listScriptSourceWritesParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 分页位置 */
+    after?: number;
+    /** 1..100 */
+    limit?: number;
+  };
+
+  type listScriptSplitConfirmationsParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 不可变剧本版本UUID */
+    vid: string;
+    /** 严格早于确认修订 */
+    before_revision?: number;
+    /** 1..100 */
+    limit?: number;
+  };
+
+  type listScriptVersionsParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 严格早于版本号 */
+    before_version_no?: number;
+    /** 1..100 */
+    limit?: number;
+  };
+
   type listStylePresetsParams = {
     /** 风格类型 */
     style_type?: "realistic" | "stylized";
@@ -1916,6 +2947,15 @@ declare namespace API {
   type moveProjectToFolderParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type previewLibraryMediaAssetParams = {
+    /** 二进制素材条目UUID */
+    item_id: string;
+    /** personal/project；默认personal */
+    scope?: string;
+    /** project scope必要UUID */
+    project_id?: string;
   };
 
   type previewMediaDepthParams = {
@@ -1952,6 +2992,20 @@ declare namespace API {
     id: string;
   };
 
+  type reconcileScriptFileImportParams = {
+    /** Project UUID */
+    pid: string;
+    /** Import UUID */
+    id: string;
+  };
+
+  type reconcileScriptSourceWriteParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 保存意图UUID */
+    wid: string;
+  };
+
   type recycleProjectFolderParams = {
     /** 目录UUID */
     folder_id: string;
@@ -1960,6 +3014,16 @@ declare namespace API {
   type renameCanvasParams = {
     /** 画布UUID */
     id: string;
+  };
+
+  type reorderScriptSourcesParams = {
+    /** 项目UUID */
+    pid: string;
+  };
+
+  type resplitScriptEpisodesParams = {
+    /** 项目UUID */
+    pid: string;
   };
 
   type restoreProjectParams = {
@@ -1992,6 +3056,13 @@ declare namespace API {
     id: string;
   };
 
+  type retryScriptFileImportParams = {
+    /** Project UUID */
+    pid: string;
+    /** Import UUID */
+    id: string;
+  };
+
   type reviewMediaDepthParams = {
     /** Depth UUID */
     job_id: string;
@@ -2010,6 +3081,11 @@ declare namespace API {
   type savePromptPreferenceParams = {
     /** 只读目录中的操作标识 */
     operation: string;
+  };
+
+  type saveScriptEpisodeStructureParams = {
+    /** 正式分集UUID */
+    eid: string;
   };
 
   type setAdminCredentialParams = {
@@ -2047,6 +3123,13 @@ declare namespace API {
   type updateProjectParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type updateScriptSourceParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 稳定来源UUID */
+    lineage: string;
   };
 
   type uploadMediaAssetParams = {

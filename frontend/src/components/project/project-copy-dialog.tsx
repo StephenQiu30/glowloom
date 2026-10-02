@@ -77,11 +77,53 @@ const statusLabels: Record<CopyJob["status"], string> = {
 };
 const stageLabels: Record<CopyJob["stage"], string> = {
   media: "复制媒体与衍生物",
+  script: "复制剧本与全部历史",
   canvases: "重建全部画布",
   finalizing: "核验并发布副本",
   cleanup: "核验并清理未发布副本",
   complete: "已完成",
 };
+const scriptCountLabels: Record<
+  keyof NonNullable<CopyJob["script"]>["counts"],
+  string
+> = {
+  sources: "来源快照",
+  versions: "剧本版本",
+  version_sources: "版本来源",
+  project_states: "当前剧本",
+  version_heads: "版本状态",
+  split_sets: "分集方案",
+  split_confirmations: "分集确认",
+  episodes: "全部分集",
+  structures: "结构历史",
+  scenes: "场景",
+  dialogue_lines: "对白",
+  action_lines: "动作",
+  objects: "正文与原件",
+};
+function ScriptProgress({
+  script,
+}: {
+  script: NonNullable<CopyJob["script"]>;
+}) {
+  return (
+    <section aria-label="剧本与历史复制进度" className="flex flex-col gap-2">
+      <h3 className="text-sm font-medium">剧本与全部历史</h3>
+      <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+        {(
+          Object.keys(scriptCountLabels) as (keyof typeof scriptCountLabels)[]
+        ).map((key) => (
+          <div key={key} className="min-w-0">
+            <dt className="text-muted-foreground">{scriptCountLabels[key]}</dt>
+            <dd>
+              {script.completed_counts?.[key] ?? 0} / {script.counts[key]}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 const formSchema = z.object({ target_name: copyName });
 const subscribeOrigin = () => () => {};
 const browserOrigin = () => window.location.origin;
@@ -185,7 +227,7 @@ export function ProjectCopyDialog({
         <DialogHeader>
           <DialogTitle>复制完整项目</DialogTitle>
           <DialogDescription>
-            冻结当前项目内容，复制全部画布、素材原件与衍生物。副本预算为
+            冻结当前项目内容，复制全部画布、剧本历史、素材原件与衍生物。副本预算为
             ¥0，完成后才能打开。
           </DialogDescription>
         </DialogHeader>
@@ -707,6 +749,7 @@ function CopySession({
                 {job.completed_assets} / {job.assets} · 衍生物{" "}
                 {job.completed_renditions} / {job.renditions}
               </p>
+              {job.script ? <ScriptProgress script={job.script} /> : null}
               <p className="text-xs break-all text-muted-foreground">
                 任务：{job.id}
                 <br />
@@ -769,6 +812,17 @@ function CopySession({
                       tabIndex={disabled ? -1 : undefined}
                     >
                       打开副本画布
+                    </Link>
+                  </Button>
+                ) : null}
+                {job.status === "succeeded" && job.script ? (
+                  <Button asChild disabled={disabled} variant="secondary">
+                    <Link
+                      href={`/projects/${job.target_project_id}/script`}
+                      aria-disabled={disabled || undefined}
+                      tabIndex={disabled ? -1 : undefined}
+                    >
+                      打开副本剧本
                     </Link>
                   </Button>
                 ) : null}

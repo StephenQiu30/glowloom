@@ -22,14 +22,15 @@ var (
 
 // ProjectCopyManifest records owning-module snapshot identities, not their private contents.
 type ProjectCopyManifest struct {
-	WorkspaceSHA256  string    `json:"workspace_sha256"`
-	CanvasSnapshotID uuid.UUID `json:"canvas_snapshot_id"`
-	CanvasSHA256     string    `json:"canvas_sha256"`
-	Documents        int       `json:"documents"`
-	MediaSnapshotID  uuid.UUID `json:"media_snapshot_id"`
-	MediaSHA256      string    `json:"media_sha256"`
-	Assets           int       `json:"assets"`
-	Renditions       int       `json:"renditions"`
+	WorkspaceSHA256  string                     `json:"workspace_sha256"`
+	CanvasSnapshotID uuid.UUID                  `json:"canvas_snapshot_id"`
+	CanvasSHA256     string                     `json:"canvas_sha256"`
+	Documents        int                        `json:"documents"`
+	MediaSnapshotID  uuid.UUID                  `json:"media_snapshot_id"`
+	MediaSHA256      string                     `json:"media_sha256"`
+	Assets           int                        `json:"assets"`
+	Renditions       int                        `json:"renditions"`
+	Script           *ProjectCopyScriptSnapshot `json:"script,omitempty"`
 }
 
 // ProjectCopyReceipt binds exact counts and the resulting content to one frozen module.
@@ -59,6 +60,7 @@ type ProjectCopyJob struct {
 	Manifest                ProjectCopyManifest
 	MediaReceipt            *ProjectCopyReceipt
 	CanvasReceipt           *ProjectCopyReceipt
+	ScriptReceipt           *ProjectCopyScriptReceipt `json:",omitempty"`
 	FailureCode             string
 	Retryable               bool
 	NeedsReconciliation     bool
@@ -82,13 +84,16 @@ func (j ProjectCopyJob) Validate() error {
 	if j.ID == uuid.Nil || j.OrgID == uuid.Nil || j.ActorID == uuid.Nil || j.SourceProjectID == uuid.Nil || j.TargetProjectID == uuid.Nil || j.SourceProjectID == j.TargetProjectID || j.SourceRevision < 1 || j.SourceRevision > math.MaxInt32 || j.Revision < 1 || j.Revision > math.MaxInt32 || j.Attempt < 0 || j.Attempt > math.MaxInt32 || !utf8.ValidString(j.TargetName) || strings.TrimSpace(j.TargetName) == "" || utf8.RuneCountInString(j.TargetName) > 50 || strings.ContainsRune(j.TargetName, '\x00') || !copyDigest(m.WorkspaceSHA256) || !copyDigest(m.CanvasSHA256) || !copyDigest(m.MediaSHA256) || m.CanvasSnapshotID == uuid.Nil || m.MediaSnapshotID == uuid.Nil || m.Documents < 0 || m.Assets < 0 || m.Renditions < 0 {
 		return ErrInvalidProjectCopy
 	}
+	if err := j.validateScript(); err != nil {
+		return err
+	}
 	switch j.Status {
 	case "queued", "running", "failed", "cancel_requested", "cancelled", "succeeded":
 	default:
 		return ErrInvalidProjectCopy
 	}
 	switch j.Stage {
-	case "media", "canvases", "finalizing", "cleanup", "complete":
+	case "media", "script", "canvases", "finalizing", "cleanup", "complete":
 	default:
 		return ErrInvalidProjectCopy
 	}
@@ -196,6 +201,9 @@ func (j *ProjectCopyJob) AcceptMediaReceipt(worker uuid.UUID, receipt ProjectCop
 		return err
 	}
 	j.MediaReceipt, j.Stage = &receipt, "canvases"
+	if j.Manifest.Script != nil {
+		j.Stage = "script"
+	}
 	return nil
 }
 
@@ -204,7 +212,7 @@ func (j *ProjectCopyJob) AcceptCanvasReceipt(worker uuid.UUID, receipt ProjectCo
 	if err := j.worker(worker); err != nil {
 		return err
 	}
-	if j.Status != "running" || j.Stage != "canvases" || j.MediaReceipt == nil || j.CancellationRequested {
+	if j.Status != "running" || j.Stage != "canvases" || j.MediaReceipt == nil || j.CancellationRequested || j.Manifest.Script != nil && j.ScriptReceipt == nil {
 		return ErrProjectCopyStateConflict
 	}
 	if receipt.ManifestSHA256 != j.Manifest.CanvasSHA256 || !copyDigest(receipt.ContentSHA256) || receipt.PrimaryCount != j.Manifest.Documents || receipt.SecondaryCount < 0 {
@@ -222,7 +230,7 @@ func (j *ProjectCopyJob) Publish(worker uuid.UUID) error {
 	if err := j.worker(worker); err != nil {
 		return err
 	}
-	if j.Status != "running" || j.Stage != "finalizing" || j.MediaReceipt == nil || j.CanvasReceipt == nil || j.CancellationRequested || j.NeedsReconciliation {
+	if j.Status != "running" || j.Stage != "finalizing" || j.MediaReceipt == nil || j.CanvasReceipt == nil || j.CancellationRequested || j.NeedsReconciliation || j.Manifest.Script != nil && j.ScriptReceipt == nil {
 		return ErrProjectCopyStateConflict
 	}
 	if err := j.advance(); err != nil {

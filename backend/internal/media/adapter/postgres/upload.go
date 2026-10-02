@@ -189,7 +189,7 @@ func validateReviewedUpload(actor identityapp.Principal, r application.UploadReq
 	if err := asset.Validate(); err != nil {
 		return err
 	}
-	if asset.ProjectID != r.ProjectID || asset.Origin != domain.OriginUpload || asset.Status != domain.StatusReady || asset.ModerationStatus != domain.ModerationPassed || asset.IsDelete || asset.ContainsRealPerson || asset.ConsentRecordID != nil || asset.Revision != 1 || asset.SHA256 == nil {
+	if asset.ProjectID != r.ProjectID || !sameUploadOwnership(actor, r, asset) || asset.Origin != domain.OriginUpload || asset.Status != domain.StatusReady || asset.ModerationStatus != domain.ModerationPassed || asset.IsDelete || asset.ContainsRealPerson || asset.ConsentRecordID != nil || asset.Revision != 1 || asset.SHA256 == nil {
 		return application.ErrInvalidUpload
 	}
 	var review application.LocalUploadReview

@@ -9,6 +9,42 @@ export const copyUUID = z
   .uuid()
   .refine((value) => value !== "00000000-0000-0000-0000-000000000000");
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const scriptCount = z.number().int().nonnegative().max(2147483647);
+const scriptCountsSchema = z
+  .object({
+    sources: scriptCount,
+    versions: scriptCount,
+    version_sources: scriptCount,
+    project_states: scriptCount.max(1),
+    version_heads: scriptCount,
+    split_sets: scriptCount,
+    split_confirmations: scriptCount,
+    episodes: scriptCount,
+    structures: scriptCount,
+    scenes: scriptCount,
+    dialogue_lines: scriptCount,
+    action_lines: scriptCount,
+    objects: scriptCount,
+  })
+  .strict()
+  .refine((counts) => counts.version_heads === counts.versions);
+type ScriptCounts = z.infer<typeof scriptCountsSchema>;
+function sameScriptCounts(a: ScriptCounts, b: ScriptCounts) {
+  return (Object.keys(a) as (keyof ScriptCounts)[]).every(
+    (key) => a[key] === b[key],
+  );
+}
+const scriptProgressSchema = z
+  .object({
+    counts: scriptCountsSchema,
+    completed_counts: scriptCountsSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (script) =>
+      !script.completed_counts ||
+      sameScriptCounts(script.counts, script.completed_counts),
+  );
 const copyJobSchema = z
   .object({
     id: copyUUID,
@@ -24,7 +60,14 @@ const copyJobSchema = z
       "cancelled",
       "succeeded",
     ]),
-    stage: z.enum(["media", "canvases", "finalizing", "cleanup", "complete"]),
+    stage: z.enum([
+      "media",
+      "script",
+      "canvases",
+      "finalizing",
+      "cleanup",
+      "complete",
+    ]),
     revision: z.number().int().positive(),
     attempt: count,
     documents: count,
@@ -39,6 +82,7 @@ const copyJobSchema = z
     execution_unconfirmed: z.boolean(),
     cancellation_requested: z.boolean(),
     failure_code: z.string().max(200).optional(),
+    script: scriptProgressSchema.optional(),
   })
   .strict()
   .refine(
@@ -47,6 +91,10 @@ const copyJobSchema = z
       job.completed_documents <= job.documents &&
       job.completed_assets <= job.assets &&
       job.completed_renditions <= job.renditions &&
+      (job.stage !== "script" || !!job.script) &&
+      (!job.script ||
+        !["canvases", "finalizing", "complete"].includes(job.stage) ||
+        !!job.script.completed_counts) &&
       (job.status !== "succeeded" ||
         (job.stage === "complete" &&
           job.completed_documents === job.documents &&
@@ -135,7 +183,11 @@ export function newerCopy(current: CopyJob | undefined, incoming: CopyJob) {
     current?.id === incoming.id &&
     (current.source_project_id !== incoming.source_project_id ||
       current.target_project_id !== incoming.target_project_id ||
-      current.source_revision !== incoming.source_revision)
+      current.source_revision !== incoming.source_revision ||
+      !!current.script !== !!incoming.script ||
+      (current.script &&
+        incoming.script &&
+        !sameScriptCounts(current.script.counts, incoming.script.counts)))
   )
     throw new ApiError(502, "invalid_response");
   // A repeated 202 is the original admission receipt, often older than GET facts.

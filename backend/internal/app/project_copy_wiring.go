@@ -35,7 +35,7 @@ func (r copiedCanvasMedia) Reference(ctx context.Context, actor identityapp.Prin
 }
 
 func provideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
-	return pgworkspace.NewProjectCopyStore(database, provideProjectWorkGuard,
+	return pgworkspace.NewProjectCopyStoreWithScript(database, provideProjectWorkGuard,
 		func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 			media := pgmedia.NewProjectCopyStore(tx)
 			canvas := pgcanvas.NewProjectCopyStore(tx,
@@ -48,6 +48,8 @@ func provideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
 					}}
 				})
 			return workspaceapp.ProjectCopyOwners{Media: media, Canvas: canvas, Budget: pgbilling.NewStore(tx), Cover: projectCopyCoverOwner{tx: tx}}
+		}, func(tx *gorm.DB, authority workspaceapp.ProjectCopyAuthority) workspaceapp.ProjectCopyScriptOwner {
+			return projectCopyScriptOwner{store: provideScriptProjectCopyStore(tx, authority)}
 		})
 }
 
@@ -56,5 +58,5 @@ func provideProjectCopyWorker(database *gorm.DB, storage *objectstorage.Client) 
 	transfer := func(job workspacedomain.ProjectCopyJob, worker uuid.UUID, cleanup bool) *mediaapp.ProjectCopyTransfer {
 		return mediaapp.NewProjectCopyTransfer(pgworkspace.NewProjectCopyMediaObjects(store, job.ID, worker, cleanup), mediaobjects.NewProjectCopyObjects(storage), "")
 	}
-	return workspaceapp.NewProjectCopyWorker(store, transfer, time.Now), store
+	return workspaceapp.NewProjectCopyWorkerWithScript(store, transfer, provideProjectCopyScriptTransfer(database, storage), time.Now), store
 }

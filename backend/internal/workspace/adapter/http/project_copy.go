@@ -73,27 +73,55 @@ func (r *ProjectCopyRequest) UnmarshalJSON(body []byte) error {
 
 // ProjectCopyResponse carries safe progress facts without keys, workers or snapshots.
 type ProjectCopyResponse struct {
-	SourceRevision          int64     `json:"source_revision"`
-	ID                      uuid.UUID `json:"id"`
-	SourceProjectID         uuid.UUID `json:"source_project_id"`
-	TargetProjectID         uuid.UUID `json:"target_project_id"`
-	TargetName              string    `json:"target_name"`
-	Status                  string    `json:"status" enums:"queued,running,failed,cancel_requested,cancelled,succeeded"`
-	Stage                   string    `json:"stage" enums:"media,canvases,finalizing,cleanup,complete"`
-	Revision                int64     `json:"revision"`
-	Attempt                 int64     `json:"attempt"`
-	Documents               int       `json:"documents"`
-	Assets                  int       `json:"assets"`
-	Renditions              int       `json:"renditions"`
-	CompletedDocuments      int       `json:"completed_documents"`
-	CompletedAssets         int       `json:"completed_assets"`
-	CompletedRenditions     int       `json:"completed_renditions"`
-	Retryable               bool      `json:"retryable"`
-	NeedsReconciliation     bool      `json:"needs_reconciliation"`
-	ReconciliationRequested bool      `json:"reconciliation_requested"`
-	ExecutionUnconfirmed    bool      `json:"execution_unconfirmed"`
-	CancellationRequested   bool      `json:"cancellation_requested"`
-	FailureCode             string    `json:"failure_code,omitempty"`
+	SourceRevision          int64                      `json:"source_revision"`
+	ID                      uuid.UUID                  `json:"id"`
+	SourceProjectID         uuid.UUID                  `json:"source_project_id"`
+	TargetProjectID         uuid.UUID                  `json:"target_project_id"`
+	TargetName              string                     `json:"target_name"`
+	Status                  string                     `json:"status" enums:"queued,running,failed,cancel_requested,cancelled,succeeded"`
+	Stage                   string                     `json:"stage" enums:"media,script,canvases,finalizing,cleanup,complete"`
+	Revision                int64                      `json:"revision"`
+	Attempt                 int64                      `json:"attempt"`
+	Documents               int                        `json:"documents"`
+	Assets                  int                        `json:"assets"`
+	Renditions              int                        `json:"renditions"`
+	CompletedDocuments      int                        `json:"completed_documents"`
+	CompletedAssets         int                        `json:"completed_assets"`
+	CompletedRenditions     int                        `json:"completed_renditions"`
+	Retryable               bool                       `json:"retryable"`
+	NeedsReconciliation     bool                       `json:"needs_reconciliation"`
+	ReconciliationRequested bool                       `json:"reconciliation_requested"`
+	ExecutionUnconfirmed    bool                       `json:"execution_unconfirmed"`
+	CancellationRequested   bool                       `json:"cancellation_requested"`
+	FailureCode             string                     `json:"failure_code,omitempty"`
+	Script                  *ProjectCopyScriptProgress `json:"script,omitempty"`
+}
+
+// ProjectCopyScriptCounts exposes only complete owning history/object cardinalities.
+type ProjectCopyScriptCounts struct {
+	Sources            int `json:"sources"`
+	Versions           int `json:"versions"`
+	VersionSources     int `json:"version_sources"`
+	ProjectStates      int `json:"project_states"`
+	VersionHeads       int `json:"version_heads"`
+	SplitSets          int `json:"split_sets"`
+	SplitConfirmations int `json:"split_confirmations"`
+	Episodes           int `json:"episodes"`
+	Structures         int `json:"structures"`
+	Scenes             int `json:"scenes"`
+	DialogueLines      int `json:"dialogue_lines"`
+	ActionLines        int `json:"action_lines"`
+	Objects            int `json:"objects"`
+}
+
+// ProjectCopyScriptProgress distinguishes admitted history from a completed receipt.
+type ProjectCopyScriptProgress struct {
+	Counts          ProjectCopyScriptCounts  `json:"counts"`
+	CompletedCounts *ProjectCopyScriptCounts `json:"completed_counts,omitempty"`
+}
+
+func scriptCounts(c domain.ProjectCopyScriptCounts) ProjectCopyScriptCounts {
+	return ProjectCopyScriptCounts{Sources: c.Sources, Versions: c.Versions, VersionSources: c.VersionSources, ProjectStates: c.ProjectStates, VersionHeads: c.VersionHeads, SplitSets: c.SplitSets, SplitConfirmations: c.SplitConfirmations, Episodes: c.Episodes, Structures: c.Structures, Scenes: c.Scenes, DialogueLines: c.DialogueLines, ActionLines: c.ActionLines, Objects: c.Objects}
 }
 
 // ProjectCopyListResponse permits recovery after an unknown 202 response or refresh.
@@ -112,6 +140,13 @@ func copyResponse(j domain.ProjectCopyJob) ProjectCopyResponse {
 	}
 	if j.CanvasReceipt != nil {
 		r.CompletedDocuments = j.CanvasReceipt.PrimaryCount
+	}
+	if j.Manifest.Script != nil {
+		r.Script = &ProjectCopyScriptProgress{Counts: scriptCounts(j.Manifest.Script.Counts)}
+		if j.ScriptReceipt != nil {
+			counts := scriptCounts(j.ScriptReceipt.Counts)
+			r.Script.CompletedCounts = &counts
+		}
 	}
 	return r
 }

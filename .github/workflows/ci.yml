@@ -370,6 +370,79 @@ jobs:
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## Historical document copy and cancellation cleanup\n\n{counts['pass']} runtime-role PostgreSQL, independent private original bytes, legacy JSON and narrow cleanup permission contracts passed without skips. Full script history and browser acceptance run separately.\n")
           PY
+      - name: Verify personal and project libraries, uploads, and verified attachments
+        shell: bash
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
+        run: |
+          go test -race ./tests/media -run '^Test(Library|Personal|ProjectMediaNilPersonalJSON)' -count=1 -json | tee "$RUNNER_TEMP/library-pg.jsonl"
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          counts = collections.Counter()
+          for line in (Path(os.environ["RUNNER_TEMP"]) / "library-pg.jsonl").read_text().splitlines():
+              event = json.loads(line)
+              test = event.get("Test", "")
+              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
+                  counts[event["Action"]] += 1
+          assert counts["pass"] >= 26 and counts["fail"] == 0 and counts["skip"] == 0, counts
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n## Media library and personal originals\n\n{counts['pass']} runtime-role PostgreSQL, real private originals, immutable scope, permanent replay, unknown commit, signed preview and verified attachment tests passed without skips. Full Transfer/Package and browser acceptance run separately.\n")
+          PY
+      - name: Verify script copy coordination and current workspace authority
+        shell: bash
+        env:
+          LV_TEST_FOLDER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_FOLDER_OWNER_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
+        run: |
+          go test -race ./tests/workspace -run '^Test(ProjectCopyScript|ProjectCopyAccessPG|ScriptProjectAccessPG)' -count=1 -json | tee "$RUNNER_TEMP/script-workspace-pg.jsonl"
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          counts = collections.Counter()
+          for line in (Path(os.environ["RUNNER_TEMP"]) / "script-workspace-pg.jsonl").read_text().splitlines():
+              event = json.loads(line)
+              test = event.get("Test", "")
+              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
+                  counts[event["Action"]] += 1
+          assert counts["pass"] >= 8 and counts["fail"] == 0 and counts["skip"] == 0, counts
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n## Script workspace authority\n\n{counts['pass']} coordinator stage, complete receipt, current actor/worker fence and same-transaction project authority tests passed without skips. Actual Script history content is verified by its owning tests.\n")
+          PY
+      - name: Prepare isolated script contract database
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_script'
+          contract_dsn='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_script?sslmode=disable'
+          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+      - name: Verify complete script sources, review history, file import, and private copy
+        shell: bash
+        env:
+          LV_TEST_SCRIPT_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_script?sslmode=disable
+        run: |
+          go test -race ./tests/script -skip '^TestScriptFileImportRealTemporal' -count=1 -json | tee "$RUNNER_TEMP/script-pg.jsonl"
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          counts = collections.Counter()
+          for line in (Path(os.environ["RUNNER_TEMP"]) / "script-pg.jsonl").read_text().splitlines():
+              event = json.loads(line)
+              test = event.get("Test", "")
+              if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
+                  counts[event["Action"]] += 1
+          assert counts["pass"] >= 68 and counts["fail"] == 0 and counts["skip"] == 0, counts
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n## Script owning history and file import\n\n{counts['pass']} actual runtime-role PostgreSQL, private originals, Unicode/structured versions, ordered partial retry, recovery, immutable history and complete owning Copy tests passed without skips. Two real Temporal tests require the separately authorized service and are explicitly excluded here; local Temporal and browser evidence are separate.\n")
+          PY
       - name: Clean up isolated private contract storage
         if: always()
         run: |

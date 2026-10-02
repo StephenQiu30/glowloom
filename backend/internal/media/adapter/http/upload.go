@@ -35,6 +35,7 @@ func NewUploadHandler(service *application.UploadService) *UploadHandler {
 // Register installs only the explicit multipart route in the protected API group.
 func (h *UploadHandler) Register(group *gin.RouterGroup) {
 	group.POST("/projects/:pid/media/uploads", h.Upload)
+	group.POST("/media/library/uploads", h.UploadPersonal)
 }
 
 // Upload receives one local-owner-reviewed file and returns durable eligible media.
@@ -62,13 +63,26 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 	if !ok {
 		return
 	}
+	h.receiveUpload(c, project, false)
+}
+
+func (h *UploadHandler) receiveUpload(c *gin.Context, project uuid.UUID, personal bool) {
 	key, err := uuid.Parse(c.GetHeader("Idempotency-Key"))
 	if err != nil || key == uuid.Nil {
 		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
 		return
 	}
 	actor := identityhttp.Principal(c)
-	if err := h.service.Authorize(c.Request.Context(), actor, project); err != nil {
+	if h == nil || h.service == nil {
+		uploadError(c, application.ErrUnavailable)
+		return
+	}
+	if personal {
+		err = h.service.AuthorizePersonal(c.Request.Context(), actor)
+	} else {
+		err = h.service.Authorize(c.Request.Context(), actor, project)
+	}
+	if err != nil {
 		uploadError(c, err)
 		return
 	}
@@ -110,14 +124,24 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	result, err := h.service.Upload(ctx, application.UploadInput{Actor: actor,
-		Request: application.UploadRequest{ProjectID: project, Key: key, FileName: name, RequestID: requestID}, File: file, LocalReviewConfirmed: true})
-	if err != nil {
-		uploadError(c, err)
-		return
+	input := application.UploadInput{Actor: actor, Request: application.UploadRequest{ProjectID: project, Key: key, FileName: name, RequestID: requestID}, File: file, LocalReviewConfirmed: true}
+	if personal {
+		result, err := h.service.UploadPersonal(ctx, input)
+		if err != nil {
+			uploadError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "private, no-store")
+		c.JSON(201, result)
+	} else {
+		result, err := h.service.Upload(ctx, input)
+		if err != nil {
+			uploadError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "private, no-store")
+		c.JSON(201, result)
 	}
-	c.Header("Cache-Control", "private, no-store")
-	c.JSON(201, result)
 }
 
 func readMultipartUpload(c *gin.Context) (*application.Downloaded, string, error) {

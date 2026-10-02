@@ -36,6 +36,7 @@ type ProjectCopyExecutionStore interface {
 	Find(context.Context, identityapp.Principal, uuid.UUID) (domain.ProjectCopyJob, error)
 	Claim(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID, bool, time.Time) (domain.ProjectCopyJob, error)
 	CompleteMedia(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ProjectCopyJob, error)
+	CompleteScript(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ProjectCopyJob, error)
 	CompleteCanvases(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ProjectCopyJob, error)
 	Publish(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ProjectCopyJob, error)
 	FinishCancelled(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (domain.ProjectCopyJob, error)
@@ -50,12 +51,18 @@ type ProjectCopyTransferFactory func(job domain.ProjectCopyJob, worker uuid.UUID
 type ProjectCopyWorker struct {
 	store    ProjectCopyExecutionStore
 	transfer ProjectCopyTransferFactory
+	script   ProjectCopyScriptTransferFactory
 	now      func() time.Time
 }
 
 // NewProjectCopyWorker injects durable fences and the actual private transfer consumer.
 func NewProjectCopyWorker(store ProjectCopyExecutionStore, transfer ProjectCopyTransferFactory, now func() time.Time) *ProjectCopyWorker {
 	return &ProjectCopyWorker{store: store, transfer: transfer, now: now}
+}
+
+// NewProjectCopyWorkerWithScript injects the complete historical-byte consumer.
+func NewProjectCopyWorkerWithScript(store ProjectCopyExecutionStore, transfer ProjectCopyTransferFactory, script ProjectCopyScriptTransferFactory, now func() time.Time) *ProjectCopyWorker {
+	return &ProjectCopyWorker{store: store, transfer: transfer, script: script, now: now}
 }
 func copyMediaScope(j domain.ProjectCopyJob) (mediaapp.ProjectCopyBinding, mediaapp.ProjectCopySnapshot) {
 	return mediaapp.ProjectCopyBinding{JobID: j.ID, OrgID: j.OrgID, SourceProjectID: j.SourceProjectID, TargetProjectID: j.TargetProjectID}, mediaapp.ProjectCopySnapshot{ID: j.Manifest.MediaSnapshotID, ManifestSHA256: j.Manifest.MediaSHA256, Assets: j.Manifest.Assets, Renditions: j.Manifest.Renditions}
@@ -74,6 +81,11 @@ func (w *ProjectCopyWorker) finishFailure(ctx context.Context, actor identityapp
 	var transfer *mediaapp.ProjectCopyTransferError
 	if errors.As(cause, &transfer) {
 		code, unknown = transfer.Code, transfer.NeedsReconciliation
+		retryable = !unknown
+	}
+	var scriptTransfer *ProjectCopyScriptTransferError
+	if errors.As(cause, &scriptTransfer) {
+		code, unknown = scriptTransfer.Code, scriptTransfer.NeedsReconciliation
 		retryable = !unknown
 	}
 	if current.CancellationRequested && !unknown {
@@ -115,7 +127,7 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 	if err != nil {
 		return job, err
 	}
-	for steps := 0; steps < 5; steps++ {
+	for steps := 0; steps < 6; steps++ {
 		if ctx.Err() != nil {
 			return w.finishFailure(ctx, actor, id, ctx.Err())
 		}
@@ -140,6 +152,18 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 			}
 		case "canvases":
 			job, err = w.store.CompleteCanvases(ctx, actor, id.JobID, id.WorkerID)
+		case "script":
+			if w.script == nil || job.Manifest.Script == nil {
+				return w.finishFailure(ctx, actor, id, ErrProjectDependencyUnavailable)
+			}
+			transfer := w.script(job, id.WorkerID, false)
+			if transfer == nil {
+				return w.finishFailure(ctx, actor, id, ErrProjectDependencyUnavailable)
+			}
+			err = transfer.Transfer(ctx, actor, ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, *job.Manifest.Script)
+			if err == nil {
+				job, err = w.store.CompleteScript(ctx, actor, id.JobID, id.WorkerID)
+			}
 		case "finalizing":
 			job, err = w.store.Publish(ctx, actor, id.JobID, id.WorkerID)
 		case "cleanup":
@@ -148,6 +172,16 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 				return w.finishFailure(ctx, actor, id, ErrProjectDependencyUnavailable)
 			}
 			err = transfer.Cleanup(ctx, actor, binding, snapshot)
+			if err == nil && job.Manifest.Script != nil {
+				if w.script == nil {
+					return w.finishFailure(ctx, actor, id, ErrProjectDependencyUnavailable)
+				}
+				scriptTransfer := w.script(job, id.WorkerID, true)
+				if scriptTransfer == nil {
+					return w.finishFailure(ctx, actor, id, ErrProjectDependencyUnavailable)
+				}
+				err = scriptTransfer.Cleanup(ctx, actor, ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, *job.Manifest.Script)
+			}
 			if err == nil {
 				job, err = w.store.FinishCancelled(ctx, actor, id.JobID, id.WorkerID)
 			}
@@ -157,6 +191,8 @@ func (w *ProjectCopyWorker) Execute(ctx context.Context, id ProjectCopyWorkID) (
 		if err != nil {
 			var transfer *mediaapp.ProjectCopyTransferError
 			unknown := errors.As(err, &transfer) && transfer.NeedsReconciliation
+			var scriptTransfer *ProjectCopyScriptTransferError
+			unknown = unknown || errors.As(err, &scriptTransfer) && scriptTransfer.NeedsReconciliation
 			if !unknown && ctx.Err() == nil {
 				current, readErr := w.store.Find(ctx, actor, id.JobID)
 				if readErr == nil && current.Status == "cancel_requested" && current.WorkerID == id.WorkerID {

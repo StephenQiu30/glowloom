@@ -638,6 +638,138 @@ workspace 拥有 actor+org 范围的目录分类和放置，不改变项目业�
 
 取消目标清理在真实 private 对象全部确认移除、canvas/media owning 清理完成后，于 FinishCancelled 同事务将未发布 copying target 逻辑删除，保持原 admission/manifest、placement 与目录版本不变；不在持 project 锁时反向取得 library/folder 锁。旧目标终态重放不再清理、不增修订、不重复事件。Restore 只接受 active/archived 的已删除正式项目，copying 墓碑不可恢复；实际 pending object、failed→cancel、重复 Finish 及 library/folder/project 阻塞链已做 PostgreSQL Red→Green。目录回收排除已退休目标的 work，但清其分类；活跃 copying 目标仍阻挡全目录事务。项目自身封面仍是单独未完成能力，不用目录 cover 代替。
 
+## 16. 正式剧本章节、原文与完整历史迁移（技术审阅通过，连续实施中；2026-10-02）
+
+固定来源及全部迁移范围沿 §0/§15；本节在保留技术栈和所有实际页面能力的基础上明确新的 script owner，不以首个闭环删减后续 AI/角色/镜头/对话验收。
+
+### 16.1. 范围、来源事实与当前差距
+
+来源 ProjectUnit 是平铺章节/集：kind、title、HTML sourceText、wordCount、draft/ready/completed、0 基 position；无已装配章节父树。Tiptap 3.28.0 使用 StarterKit（heading 1..3）、CharacterCount、TextAlign、Color、Highlight、TextStyle；正文通过 getHTML()/setContent() 保存恢复。sourceText 任一 HTML 字节变化会使已有镜头产物 stale、selected=false，失效故事工作流并更新项目 revision；标题变化不触发此正文失效。来源删除清关联链接/镜头/候选，但保留画布本体；目标通过 owning ports 明确解绑/失效并保留历史，不照搬跨表硬删除。
+
+章节批量导入为 1..2500，全部预校验后原子写；重排为当前完整 ID 集，拒遗漏、重复、跨项目。来源删除后不压缩 position，后续按数量追加可能重复；目标统一有序位置，同时把原 position 留作 provenance。来源后端 wordCount 是去标签、实体解码、trim 后 rune 数，不插段落/BR 分隔；前端 Tiptap 与 JS UTF-16 计数又不同。目标不声明这些计数等价。
+
+本节实施前 Lanverse 无 script 持久模块、script schema 或正式 episode API；DES02 是未实施草案。媒体 domain/DDL 当时已声明 KindDocument，真实消费者当时只有 image/video/audio/model；随后文档原件上传、审核、列表、附件下载与复制已随 `7318beff` 接入，历史回收原件复制与窄权限清理随 `61ec787d` 接入。新的剧本模块、文件导入和完整剧本 Copy 仍需后续真实接线验收，不能由媒体接管证据代替。禁止复制来源本地数据库、通用 Unit/任意 JSON、任意路径/URL 或伪造模型执行。
+
+首个真实闭环为章节增删改/富文本保存/1..2500 原子导入/完整重排/原文与版本历史/规则分集/确认/手工结构版本/确认门禁，以及本模块历史完整 Copy owning 实现。DOCX/TXT 原件经正式媒体 owner 接管后做真实导入。未装配 AI 分集、episode parse、AI diff 不开放假成功入口；既有正式 Operation 报价/冻结/供应商合同另接。bible/storyboard/lineage 未装配不伪报零影响；剩余范围不删验收。
+
+### 16.2. 正式身份与不可变版本
+
+沿正式表名 script.script_source、script.script_version、script.episode、script.episode_structure、script.scene、script.dialogue_line、script.action_line；script.source 只是旧简称。新增小 script.project_state 头维护当前 draft_version_id、adopted_version_id 与 script revision；它不是 generic Unit 聚合。另设不可变 script.split_set 保存候选组、规则来源与 typed preface，script.split_confirmation 保存每次完整确认的 actor、revision、preface、边界与 episode ID 集合。当前头和首次固定 confirmed_split_set_id 不代替这些历史。
+
+script_source 为不可变输入快照，保存 source_lineage_id（首次 source.id）、previous_source_id、source_revision，以及 origin=file|manual|beeftv、source_kind=chapter|episode|document、title、编辑状态、版权主体/时间、可空 media_asset_id、原件私有 key/SHA 与 rich 私有 key/SHA、原来源 ID/position、typed 规范字符来源映射。外部 ID 与 draft/ready/completed 仅来源/编辑事实，不能当正式确认或执行状态。
+
+更新新增 source UUID 与新 version，lineage 稳定；页面按 lineage 定位，不悄悄把旧引用换成无关联 UUID。所有更新响应返回明确 old_source_id/new_source_id、lineage、previous/new episode 映射；旧 version 可按 version_id 读全旧来源。版本 source_ids 按顺序冻结，不指向可覆写正文。
+
+content_hash 仅规范正文；document_sha256 仅规范富文本语义；source_manifest_sha256 另冻结有序来源、lineage、元数据与来源快照。唯一约束为 project_id/source_manifest_sha256；正文/rich 各自普通索引，不能用其中一项代替其余事实。纯格式修改 plain hash 相同、rich hash 不同、新不可变版本；标题/状态/相同正文的不同来源/来源重排也留历史。文件重复判定须在正文与 rich 语义判定后明确返回已有 version 与原 lineage 映射，不覆盖原来源；相同请求键则无条件遵守首次永久回执（仍需当前授权）。
+
+### 16.3. 富文本闭集与唯一正文坐标
+
+正式 RichDocument 为闭合有序树，拒 RawMessage/map/未知属性：doc、paragraph、heading(level=1..3)、text、hardBreak、bulletList、orderedList(start)、listItem、blockquote、codeBlock(language)、horizontalRule。Marks 为 bold、italic、underline、strike、code、link(href)、textColor、highlight；对齐限 left/center/right/justify。保留嵌套关系、空段落/空标题、零宽 HR、列表起号、代码块和 links/color/highlight 参数。
+
+HTML 只在入口 adapter 解析；保留原始 HTML 私有原字节与 SHA，正式编辑输入/输出为 RichDocument。未知有意义 tag/attrs、危险 URI 或不支持 CSS 返回 422 与路径，不能 stripHTML 后静默成功。链接限经校验的允许 scheme/相对地址，不抓取链接、嵌入媒体或网络实体。
+
+规范 plainText 唯一算法：paragraph/heading 等块间 LF×2、hardBreak LF×1、list item 间 LF×1、codeblock 保原 LF；HR 为零宽 rich 结构，不凭空造可解析文字；不同非空 source 之间 LF×2。正文不 trim、不 NFC/NFKC、不合并空白，仅 CRLF/CR→LF、实体解码；拒无效 UTF-8、NUL、孤立 surrogate。正文保存 Go UnicodeScalar（rune）0 基 [start,end)，不是字节、UTF-16 或 grapheme。JS 根据 Array.from/明确 scalar 映射消费。
+
+空正文章节保持 draft、原 rich 节点与 lineage，但不生成零宽 candidate episode。source span 可零宽。非空 source 的分隔 LF 归前 episode，正式候选/确认区间必须无交叠、无遗漏、覆盖正文；preface 为独立 typed context span，绝不建 episode0。每个正式 episode.seq_no 从 1 起。原 HTML 无法恢复的原字符偏移不得伪造；TXT/DOCX 提取时另保可证明的来源段/规范 scalar 映射。
+
+### 16.4. 原始文件与 owning 端口
+
+两种输入预算不可混淆：章节批次 1..2500 且全校验原子；文件导入 1..200、每文件 ≤20MiB、总规范文本 ≤1,500,000 scalar，逐文件可失败，至少一个有效文件才产生版本。手工/富文本版本也受总 scalar 与有界序列化预算约束；每个 RichDocument/原HTML ≤8MiB，组合版本富文本 ≤32MiB，HTTP 包络 ≤36MiB；每文档节点 ≤200000、树深度 ≤64、正文总量 ≤150万 scalar。手工结构独立 ≤1MiB。上限全闭集验证，不静默截断；固定来源手工标题仅 trim/非空而无长度上限；自有标题明确 1..512 UnicodeScalar，超长返回 422，保留草稿与原件，不截断或静默丢项。TXT heading 识别的 120 scalar 是独立规则。
+
+media owner 复用既有 durable Upload 的本地 rights/review、私有 PutIfAbsent 与未知回执保护，扩展真实 TXT/DOCX 文档原件识别和审核，不新增平行上传体系。文档使用独立有界 ZIP/XML 容器校验分支，不进入 FFprobe/FFmpeg，没有伪 poster/proxy。新增 owning SourceReader、显式 kind=document 列表与正式原件附件下载；默认媒体列表、Reference/Preview/ReferenceCopiedAsset 及 Canvas 仍保持四种可渲染媒体闭集。media Copy 已遍历全部类型且允许无衍生物，新增实际 document Copy 回归，不借此更改 workspace Copy。
+
+script 的消费端口（所属正式类型为 mediaapp.DocumentSource）：
+
+```go
+type SourceAssetReader interface {
+    Freeze(context.Context, identityapp.Principal, uuid.UUID, []uuid.UUID) ([]mediaapp.DocumentSource, error)
+    Open(context.Context, identityapp.Principal, uuid.UUID, mediaapp.DocumentSource) (*mediaapp.Downloaded, error)
+}
+// DocumentSource: AssetID, ProjectID, Revision, SHA256, ByteSize, MIME, FileName。
+// 返回仅冻结事实；私有对象定位由媒体 reader 持有，不来自客户端。
+```
+
+script owning extractor 接管正文抽取与警告：TXT BOM UTF8/UTF16LE/UTF16BE，随后 strict UTF8→GB18030（拒错误替换）；DOCX 有界 ZIP/XML，正文段落/表格按顺序，支持闭集内格式；图片/无法表达的嵌入明确 warning/count 并保留原件。文件提取的 typed warnings 是正式 SourceProvenance 的可选内容事实，不能只存在不复制的 Import 执行结果中；服务器填写并参与来源摘要，手工编辑沿袭、历史 Copy 保留，nil 时旧 JSON/hash 逐字兼容。普通 Source8 不接受客户端填写 encoding/mapping/warnings。禁止运行宏、取外部关系/网络内容或接受本地路径。版权确认记录当前 actor 与时间，原件随项目保留。
+
+另需 workspace owner 的同事务 ProjectAccess.Authorize(ctx,actor,project,write)→ProjectContentAccess{ProjectID,OrgID,Revision} 与 TouchContent(ctx,actor,project,expectedProjectRevision)→revision，并在同事务写入既有 project_changed(change=updated) 安全 Outbox；该实时 consumer 已装配。script 只写具体业务审计，不另重复项目 invalidation。factory 接当前 GORM tx，持 project 锁、复核当前 active actor/org/role、active/archived 读语义及 active 写语义，拒 copying；script 不直接读写 identity/workspace/media 表。root 协调 workspace/media 所属新文件与正式类型，script 050 不跨 owner 修改。
+
+### 16.5. 分集、结构和正文变化影响
+
+章节保存/删除/重排产出新 draft version 与 candidate split_set，不直接覆盖 adopted version、旧 formal episode 或已确认结构。版本内 split:confirm 采用 DES15 的全量边界/CAS：候选不可变，确认另建 formal set；相同 seq/start/end 保 episode UUID、parse/current/confirmed structure，只有 title 改变时改标题/revision，返回 renamed IDs。每次确认另写不可变 split_confirmation，全量保留 preface、边界、当次 ID 映射与确认主体；首次 confirmed_split_set_id 固定，后续变化沿同一正式集合维护头，历史从独立 confirmation 读取。
+
+凡受影响 episode 有 confirmed_structure_id，即使当前 parse 失败也要 ack_invalidate；缺 ack 返回 409 confirmation_required、typed 影响清单且零业务写/零回执/零事件。对下游 existing shot/audio/link 的影响使用实际拥有模块的小 ImpactReader/Invalidator，缺必要 owner 则 context_unavailable，不猜零。
+
+跨版本 adopt 记录 previous_episode_id/inherit_status。不能把旧 episode 的 structure 指针直接挂新 episode；未做真实结构复制、span 平移与 owning 下游重绑前，不报告已完整继承。既有 inflight Operation 继续原冻结版本，禁止编辑流程把它悄悄迁移到新输入或自动取消。
+
+手工结构保存 ≤1MiB、closed scenes/dialogue/action/unassigned_lines，字段/稳定 scene_key/line_key/规范文本 span 全校验；每次保存新 immutable episode_structure，head CAS。结构历史可读；确认要求 current formal episode、当前结构、无 unassigned lines，与必要影响 ack/owner。来源章节 status 不替代该确认。AI parse/split/diff 接真实 Operation 前不开放伪执行。
+
+### 16.6. 公开 API 合同
+
+写请求统一当前授权、UUID Idempotency-Key/Request-ID、expected_revision 和 base_version_id；source 修改定位稳定 lineage，返回 script_revision、version_id、split_set_id、explicit mappings、changed/duplicate 信息。source 列表分页只返回摘要，正文按选中源懒读；typed rich/text 都是已授权私有数据，不放在日志/audit。GET 不因空项目写入 project_state，空头 revision=0，首次命令同事务初始化。
+
+| 方法/路径（均 project scoped）                                          | 合同                                                                    |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| GET /projects/:pid/script-workspace                                     | draft/adopted 头、script revision、安全 current_actor_id/current_org_id |
+| GET /projects/:pid/script-sources                                       | bounded cursor 摘要；version_id 可选，历史只读                          |
+| GET /projects/:pid/script-sources/:lineage                              | typed rich/plain/span/provenance；version_id 可选                       |
+| POST /projects/:pid/script-sources                                      | kind/title/document、明确版权；新 lineage                               |
+| PUT /projects/:pid/script-sources/:lineage                              | 完整 title/status/document；新不可变 source/version                     |
+| DELETE /projects/:pid/script-sources/:lineage                           | 从新 draft 组合移除，旧历史保留，影响遵守门禁                           |
+| POST /projects/:pid/script-sources/import                               | sources 1..2500 原子追加；可接明确 legacy HTML 入口                     |
+| POST /projects/:pid/script-sources/reorder                              | 完整当前 lineage UUID 列表，与 base version/CAS 绑定                    |
+| POST /projects/:pid/script-file-imports                                 | 有序 asset_ids、rights_confirmed、expected_revision/base_version_id；202 持久文件导入 |
+| GET /projects/:pid/script-file-imports、/:id                            | 当前 scope 分页恢复与逐文件结果、真实阶段、错误/警告                    |
+| POST /projects/:pid/script-file-imports/:id/cancel、retry、reconcile    | job expected_revision；原冻结输入/原 attempt/对象核验                   |
+| GET /projects/:pid/script-versions                                      | bounded immutable 历史、三种 SHA、来源摘要                              |
+| GET /projects/:pid/episodes                                             | version/splitset scoped candidates/formal，正式状态不混来源状态         |
+| POST /projects/:pid/episodes/split:resplit、split:confirm               | rules/full boundaries、split revision、必要 ack                         |
+| GET /episodes/:eid/source-text?from=&to=                                | 授权 scalar snippet，范围验证且有界                                     |
+| GET /episodes/:eid/structure、structure/versions、structure/versions/:n | 当前/不可变历史                                                         |
+| POST /episodes/:eid/structure、structure/confirm                        | 新 immutable 手工结构 / 显式确认、episode CAS                           |
+| POST /projects/:pid/script-versions/:id/adopt                           | 当前头 CAS、显式影响 ack 和必要 owner                                   |
+
+现 DES03 的 AI parse/retry、DES40 AI diff 入口待真实 Operation 合同后接；上述不声称它们完成。公开错误：404隐藏外来org/project；409 stale/readonly/同键异输入/确认需要；422 closed schema/invalid spans/完整ID集/预算；503必要 owner/对象事实不可取证。未知请求保留原 key/body，禁止自动新键重试。前端当前输入需要保留，409保差异。
+
+### 16.7. 私有对象、持久状态与并发
+
+一个 script schema，正式七表及 project_state、split_set、split_confirmation、永久 command/object intent、专用 import_job/import_state/import_file/import_attempt/import_file_result/import_publication/import_command、copy snapshot/objects。不可变 source/version/structure/永久命令与对象 key/SHA/bytes 只 INSERT；head/status 列只按明确允许列 UPDATE，业务 soft delete 留历史。全部 org/project scoped、内部 own FKs；跨模块事实经 owning port。050 由本任务独占，目录已独立使用051/052；不改 live DDL。
+
+新业务命令锁顺序与 root 最终 ProjectAccess 对齐：当前 actor/组织授权→request scoped advisory lock→workspace project lock→script head/episode lock。锁内 replay 原 receipt；新命令核 CAS、完整来源集合和必要 impact。先全校验合法来源，再冻结服务端唯一对象 key/SHA/bytes 与 command intent；在 SQL 外 PutIfAbsent/实际 Read 校验，再在新事务重查授权/CAS，提交完整 facts、workspace TouchContent、审计/必要 Outbox 与首次响应。对象存在但内容不符拒绝；Put/Read/commit未知保原 intent/fence，不覆写、不删除未知对象、不报告已保存。原键同输入恢复只能核验/继续原 key/digest；缺字节须原输入重放，不能重造源正文。新版本提交不能因失联重复递增。
+
+尚未发布的 source-write intent 不允许因创建者停用而自动消失或借另一主体权限发布。为恢复这个实际失败路径，script 自有 source-write 状态增加 revision/active I/O owner/实际退出证明和永久控制回执；GET `/projects/:pid/script-source-writes` 与 `/:id` 只返回当前项目的安全待处理元数据，POST `/:id/cancel`、`/:id/reconcile` 用当前主体、intent revision、UUID key 和既有 Origin/请求ID。当前仍获授权的原创建者可控制；当前组织管理员可明确取消并清理未发布自有对象，不能替创建者继续发布旧正文。已有 source 8 条编辑接口的原 key 恢复仍归原创建者。取消先持久意图，远程 I/O 尚未实际停止/结果未知时保持 fence；重放原控制、核验原 object intent/hash/大小和完整已有来源引用后，只有已证停止且未发布对象全部确切清理，才写 cancelled 并解除项目 pending 门禁。仅进程丢失、请求 timeout 或对象暂时不存在不能证明已停止；没有证据时明确待核验。不能扫删共享键、正文、历史 source/version，也不读取或复制无关配置。控制不递增正式 script/project 内容修订、不创建新的来源或自动采纳旧正文；已有原 actor 撤权、管理员取消、未知对象、并发 finalize/cancel、零行故障和终态重复均按真实 PG/私有对象验收。
+
+文件导入有独立 durable ScriptImportJob，冻结来源 asset/revision/SHA、版权、来源顺序、预期 script revision。真实阶段为 queued/extracting/normalizing/storing/committing/complete，逐文件失败/警告来自真实抽取。规范对象完成前不发布 version；当前头已改变不自动覆盖，保 frozen import 与可审阅结果并报冲突。状态至少 queued/running/succeeded/duplicate/partial/failed/cancel_requested/cancelled，needs_reconciliation 表达对象/commit未知，不能当 retryable；retry 仅已知失败、核验只原输入/原对象。取消本地 parser/read 必须实际停止+join，未知执行或清理继续 fence；终态不被旧投递倒退。所有权限在当前 actor（控制命令主体与创建者职责明确）下重查，不依赖冻结旧角色。
+
+一个 attempt 真实抽取本次冻结的文件；成功来源按原始顺序一次发布完整新 draft，所有失败文件保留明确错误与警告。成功和失败并存只能记 partial，全部失败不产生 version。显式 retry 只处理原失败文件，沿同 job、冻结原件、稳定 lineage 与逐项历史结果，不重导已成功来源；受理冻结本 job 上次发布的 revision 和完整来源映射，其他正文已修改时不覆盖，保留可审阅结果并报告冲突。取消不能删除此前已发布的成功来源或版本；未发布对象与未知执行继续按 owning 清理和核验收敛。进度只报告实际文件/阶段事实，不使用假百分比，也不将 partial 展示为全部成功。
+
+Import 内部 publication 的 source-write 不属于普通 Source8 的公开恢复空间。普通 SourceRecovery 的 list/get/control 排除这些命令；ImportWorker 通过独立 ImportRecoveryStore 与共享实际 source IO registry，只沿本任务的永久控制意图核验/清理。API 进程没有 media Worker 的 registry 不能证明停止，也不能独立取消一次内部发表而留下 Import 头未收敛。
+
+Temporal 使用 script-import/{id}、稳定 typed delivery/EventID/attempt。实际 starter 设置 WorkflowExecutionErrorWhenAlreadyStarted=true；已有 workflow 的 cancel/retry/reconcile 用真实 signal，不以拿到既有 handle 当新执行。脚本非终态/待对账加入 lifecycle own HasInflightWork guard，由 root 注册。事件仅生产真实消费的 import command 与现有 audit；DES15正式 split_confirmed 事实事件由 root 显式配置后发布，不造无消费者的自动下游成功。
+
+组合根在现有 API 装配 ImportService，在 flow 注册 FileImportWorkflow，在 media 注册一个共享 ImportWorker，并在既有 Relay 消费 `lanverse.script.import_command.v1`。admission 的 DocumentSources 使用当前 caller transaction 冻结事实；media worker 使用真正对象 reader/extractor。authority publication factory 使用 `NewSourceServiceSharingIO`，与 SourceRecovery 持同一 source IO registry；Import 自身同步 owner 始终覆盖提取及完整 publication 调用。取消须等实际 join、写入持久退出证明后才能回收未发布对象；退出更新失败只保实际结束证据供后续核验，丢失 registry 不证明零 IO。部署仍须完整冻结门禁、增量050、预建 topic、API/worker/relay 同组构建和页面实际验收，当前接线不等于发布完成。
+
+### 16.8. 完整历史 Copy owning 合同
+
+script app 暴露专用 ProjectCopyBinding、Freeze/Transfer/Register/Cleanup，不修改旧 Copy 文件。Freeze 同事务读取完整项目 script历史：全部来源快照（包括被新版本替代/删除而仍属项目）、versions、有序来源、candidate/formal splitsets、全部 split_confirmation 历史、episodes、全部 structures/scenes/dialogue/actions/preface、current draft/adopted头与原HTML/规范text/rich私有对象。版权和 source provenance保留，原文件 UUID 只用 media owner 冻结 mapping；缺映射/必要 owner 拒绝，不能发布部分内容。
+
+Snapshot 返回 own ID、manifest SHA、content SHA 与全部实体/对象计数；完整 ID mapping 保留在 owning private manifest。内部所有 UUID 由 job+旧ID确定性映射，lineage/scene/line稳定key映射保持新项目闭包，external BeefTV ID只来源标签。私有原 bytes按原 SHA/size经独立target key PutIfAbsent/Read证明；原 source content/rich hash不混新ID，target manifest因重映射另算。Register 在 copying fence下核全对象与引用闭包，返回精确 counts/manifest/content receipt；未全部完成不发布 target。
+
+workspace 只拥有自有 binding/authority 与复制任务阶段，不能反向依赖 script application。app 在边界显式转换 binding、13项历史计数和回执；workspace 发出的 trusted authority 固定 job/org/source/target/creator/source revision/worker/phase，每次 script SQL transaction 必须重新绑定它。freeze 使用 coordinator 已生成且持锁的 admission scope，目标已在同一事务创建、job 尚未 INSERT；后续 transfer/register/cleanup 必须重读实际 job、当前 actor 和 claimed worker，按 source/target UUID 排序保留 project 行锁后锁 job，不能用旧 snapshot 身份代替现时授权。普通 script 读写继续拒绝 copying，不复用宽松的 normal ProjectAccess。
+
+完整历史来源可能仍引用已回收的文档原件。admission 先经 script owner 的 ReferencedMedia 在同一可信 caller transaction 得到全部历史文档 UUID，再由 media owner 的 FreezeWithReferences 冻结通常可见媒体及明确历史引用；最后 script Freeze 使用完整媒体映射。历史扩展只接纳同源项目、仍具完整 ready/passed 原件事实和私有 bytes 的 document，保留 media own retained_history 删除/回收证据并复制为独立目标原件。普通读写、Reference 和文档冻结仍拒绝已回收来源；空引用沿旧 nil 快照逐字兼容。缺失、跨项目、非文档、未知对象或必要 owner 缺失必须拒绝完整 Copy，不能丢失旧文档后发布部分历史。
+
+202610020053 只扩 workspace 的可选 script snapshot/receipt 和阶段。新 job 的 media checkpoint 后先进入 script，拥有全部实体/对象与语义摘要一致的 script receipt 后才到 canvases/finalizing；publication 再向 owner 核验实际目标完整历史，cleanup 也等待 script own 对象与内容收敛。原 job 的 nil script manifest 按 omitempty 保持永久 admission JSON 和旧快照字节一致，仍走 media→canvases。生产装配必须提供真实 script owner；已含 script snapshot 的 job 在 owner 缺失时 fail closed，不得直接越过 script。事务中不执行对象 IO，worker 同步等待 transfer/cleanup 返回，未知结果保留既有 reconciliation fence。
+
+不复制 import执行 attempts、用户命令、Outbox、Operation任务/报价/财务历史；复制可编辑内容与历史事实。Cleanup 只此job未发布target、自有对象，先冻结归属/digest→实际read校验→remove→确认缺失；任何ownership/digest/read/remove未知保 fence，不删 source/其他任务/已发布asset。root 后续把本owner注册到原 Copy 后才可宣称包含剧本的完整 Copy 已完成；有script事实却owner未装配必须 unsupported_copy_content。
+
+### 16.9. 实施与实际验收
+
+本节技术审阅已通过，在用户已授权的连续迁移范围内开始实施。独占新 script domain/application/postgres/http/workflow/event、backend/tests/script、202610020050；root owns app/audit/Swagger/gen/旧Copy/sharedDesign/Git/live。media/workspace所属端口由 root 分配；不越界读取它们的表。
+
+Red→Green：typed rich完整闭集与未知字段/危险HTML；格式only保存/旧版本历史；emoji/组合字/中英/换行 scalar spans；零宽source与preface；1..2500原子与完整ID重排；源稳定lineage+返回映射；TXT/BOM/GB18030/DOCX多文件/图片警告；同键/CAS/当前撤权/跨org/copying/archived；split变更/标题only/确认409零写；结构历史与confirm；privateobjects Put未知/commit未知/原key恢复；真实 import Temporal信号/取消/故障；nonowner column ACL；所有历史非空script Copy映射、全部实际独立target对象与清理保护。
+
+使用独立 lanverse_script 测试DB（已有隔离PG17.11@25432，与CI18.4差异记录）、共享私有MinIO新UUID prefix、既有Temporal namespace唯一queues/workflow IDs。不读.env/不输出测试配置凭据、不碰业务volume/服务。跑 gofmt/goimports/vet/lint/race/govuln与适用真实HTTP/PG/objects/Temporal；条件skip与实际通过分开记录。最终精确文件SHA、命令、no-skip专项结果和未完成AI/owner接线事实交 root；不stage/commit/push。
+
 ## 17. 项目主图与完整复制（技术审阅通过，连续实施范围；2026-10-02）
 
 ### 17.1 来源和正式事实
@@ -659,3 +791,13 @@ workspace 拥有 actor+org 范围的目录分类和放置，不改变项目业�
 Copy 在原 admission 同事务冻结主图。当前项目媒体 owner 已冻结该图片与独立目标 UUID，workspace snapshot 将目标主图显式映射，引用不在正式 media mapping 或取证失败时拒绝。新增可空字段按 omitempty 编码，旧 nil snapshot/request/manifest golden逐字兼容；不得改写已接受旧快照。受理时只在永久 workspace snapshot 冻结目标主图 UUID，未发布目标数据库主图先保持 null；media 正式 Register 接管实际新 UUID 后，在同一受 fence 的 media checkpoint 事务中取证并绑定主图，保留正式 FK。不能因资产尚未存在而去掉 FK 或把源 asset_id 临时写入目标。发布重读实际目标主图/私有正式图片与全部内容，比对冻结身份和媒体 owning 回执，不以存有 asset_id 冒充真实可用。取消沿既有完整私有对象清理和不可恢复 copying 墓碑，不修改源主图或原媒体。
 
 实施先 Red→Green 验证领域设置/明确null、旧指纹/快照golden、nonowner PG同事务授权/行锁/CAS/撤权/同键/故障回滚、列表主图不可用与Copy真实目标独立对象；再通过app/Swagger/在线生成接口及实际浏览器上传/选择/移除/刷新/Copy。根协调共享app/audit/生成物和旧Copy接线，不与剧本owner互相反向依赖。沿现有项目审计只新增 cover_changed 安全bool，不记录文件名、正文、URL或对象键；不新增无实际消费者的topic。完整迁移清单继续保留个人/项目素材目录、素材转移及其余尚未完成项。
+
+## 18. 个人与项目素材库完整迁移（技术审阅通过，连续实施范围；2026-10-02）
+
+来源盘点、闭合归属、目录/描述、完整服务端分页排序、独立接管、回收与素材包合同见 [个人与项目素材库设计](18-个人与项目素材库迁移.md)。它属于 §0 既有完整范围，保留源页全部已装配操作并修正云端/分页事实；不能把当前项目媒体列表当作个人库完成。媒体 owning 数据和现有 UploadService 扩展 project/personal，普通项目引用保持严格；加入项目使用实际独立原件接管。命令/Copy 统一 project→media library→media 行锁顺序，与既有目录 placement 合同分开。
+
+本阶段不迁入源 Wails/Gin 栈、隐藏项目、浏览器 IndexedDB 持久层或任意外链。未知提交保原 key/fence，永久物理清理与包按真实对象/引用验收。新字段 nil 保持旧指纹/回执/Copy 字节；业务库增量待冻结完整 gate 后由根按同一实例保留数据应用。实现与产品验收未完成，仍保留正式角色/剧本/其他完整范围。
+
+## 19. 角色、主体、版本与声音完整接管（连续实施范围；2026-10-02）
+
+固定源码的稳定身份、不可变完整版本、造型、六种参考用途与 catalog/sample 声音能力按 [DES17 §12](17-设定集抽取与造型.md#12-完整角色与主体迁移合同2026-10-02) 适配为 Bible owning 模块。台词归属只能发布新 Script 结构，不能修改 050 的历史台词行；完整 Copy 必须提供全部正式身份映射。Bible 单独不能代替 storyboard/audio/lineage 的真实影响与失效证据，角色画布 current/pinned 投影、AI 抽取、形象生成及 TTS 继续按完整范围实施与验收。

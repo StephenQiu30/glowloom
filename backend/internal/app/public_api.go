@@ -44,6 +44,7 @@ import (
 	prompthttp "github.com/StephenQiu30/lanverse/backend/internal/prompt/adapter/http"
 	pgprompt "github.com/StephenQiu30/lanverse/backend/internal/prompt/adapter/postgres"
 	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
+	scripthttp "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/http"
 	workspacehttp "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/http"
 	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
@@ -96,11 +97,21 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)
 	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewStore(database), storage)).Register(protected)
 	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(database), storage)).Register(protected)
+	library := pgmedia.NewLibraryStore(database, provideMediaLibraryProjectAccess, time.Now)
+	mediahttp.NewLibraryHandler(library).Register(protected)
+	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(library, storage, storage)).Register(protected)
+	script := provideScriptServices(database, storage)
+	scripthttp.NewSourceHandler(script.sources).Register(protected)
+	scripthttp.NewSourceRecoveryHandler(script.recovery).Register(protected)
+	scripthttp.NewReviewHandler(script.episodes, script.history).Register(protected)
+	scripthttp.NewVersionHandler(script.history, script.adopt).Register(protected)
+	scripthttp.NewImportHandler(script.imports).Register(protected)
 	modelValidator, err := gltf.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
 	}
-	mediahttp.NewUploadHandler(mediaapp.NewUploadService(pgmedia.NewStore(database), mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)).Register(protected)
+	uploadStore := pgmedia.NewStore(database)
+	mediahttp.NewUploadHandler(mediaapp.NewScopedUploadService(uploadStore, uploadStore, mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)).Register(protected)
 	exports := provideMediaExportStore(database)
 	toolhttp.NewHandler(exports, toolapp.NewExportQuery(exports, storage, storage)).Register(protected)
 	transcriber, err := provideTranscriber(cfg)

@@ -14,7 +14,7 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
-const copyJobColumns = "request_id,id,org_id,actor_id,source_project_id,target_project_id,source_revision,revision,attempt,target_name,status,stage,failure_code,worker_id,started_at,manifest,media_receipt,canvas_receipt,retryable,needs_reconciliation,cancellation_requested,reconciliation_requested,execution_unconfirmed"
+const copyJobColumns = "request_id,id,org_id,actor_id,source_project_id,target_project_id,source_revision,revision,attempt,target_name,status,stage,failure_code,worker_id,started_at,manifest,media_receipt,canvas_receipt,script_receipt,retryable,needs_reconciliation,cancellation_requested,reconciliation_requested,execution_unconfirmed"
 
 type copyJobRow struct {
 	CreateTime                                            time.Time
@@ -25,6 +25,7 @@ type copyJobRow struct {
 	WorkerID                                              *uuid.UUID
 	StartedAt                                             *time.Time
 	Manifest, MediaReceipt, CanvasReceipt                 []byte
+	ScriptReceipt                                         []byte
 	Retryable, NeedsReconciliation, CancellationRequested bool
 	ReconciliationRequested, ExecutionUnconfirmed         bool
 }
@@ -41,6 +42,9 @@ func (r copyJobRow) job() (domain.ProjectCopyJob, error) {
 		return domain.ProjectCopyJob{}, domain.ErrInvalidProjectCopy
 	}
 	if len(r.CanvasReceipt) > 0 && copyJSON(r.CanvasReceipt, &j.CanvasReceipt) != nil {
+		return domain.ProjectCopyJob{}, domain.ErrInvalidProjectCopy
+	}
+	if len(r.ScriptReceipt) > 0 && copyJSON(r.ScriptReceipt, &j.ScriptReceipt) != nil {
 		return domain.ProjectCopyJob{}, domain.ErrInvalidProjectCopy
 	}
 	return j, j.Validate()
@@ -94,7 +98,7 @@ func saveCopyJob(tx *gorm.DB, before, after domain.ProjectCopyJob) error {
 	if after.Validate() != nil || after.Revision != before.Revision+1 {
 		return domain.ErrInvalidProjectCopy
 	}
-	var media, canvas any
+	var media, canvas, script any
 	if after.MediaReceipt != nil {
 		body, err := json.Marshal(after.MediaReceipt)
 		if err != nil {
@@ -109,11 +113,18 @@ func saveCopyJob(tx *gorm.DB, before, after domain.ProjectCopyJob) error {
 		}
 		canvas = string(body)
 	}
+	if after.ScriptReceipt != nil {
+		body, err := json.Marshal(after.ScriptReceipt)
+		if err != nil {
+			return err
+		}
+		script = string(body)
+	}
 	var worker any
 	if after.WorkerID != uuid.Nil {
 		worker = after.WorkerID
 	}
-	update := tx.Exec(`UPDATE workspace.project_copy_job SET status=?,stage=?,revision=?,attempt=?,worker_id=?,started_at=?,media_receipt=?::jsonb,canvas_receipt=?::jsonb,failure_code=?,retryable=?,needs_reconciliation=?,cancellation_requested=?,reconciliation_requested=?,execution_unconfirmed=?,update_time=statement_timestamp() WHERE id=? AND org_id=? AND revision=? AND worker_id IS NOT DISTINCT FROM ?::uuid`, after.Status, after.Stage, after.Revision, after.Attempt, worker, after.StartedAt, media, canvas, after.FailureCode, after.Retryable, after.NeedsReconciliation, after.CancellationRequested, after.ReconciliationRequested, after.ExecutionUnconfirmed, after.ID, after.OrgID, before.Revision, nullableCopyWorker(before.WorkerID))
+	update := tx.Exec(`UPDATE workspace.project_copy_job SET status=?,stage=?,revision=?,attempt=?,worker_id=?,started_at=?,media_receipt=?::jsonb,canvas_receipt=?::jsonb,script_receipt=?::jsonb,failure_code=?,retryable=?,needs_reconciliation=?,cancellation_requested=?,reconciliation_requested=?,execution_unconfirmed=?,update_time=statement_timestamp() WHERE id=? AND org_id=? AND revision=? AND worker_id IS NOT DISTINCT FROM ?::uuid`, after.Status, after.Stage, after.Revision, after.Attempt, worker, after.StartedAt, media, canvas, script, after.FailureCode, after.Retryable, after.NeedsReconciliation, after.CancellationRequested, after.ReconciliationRequested, after.ExecutionUnconfirmed, after.ID, after.OrgID, before.Revision, nullableCopyWorker(before.WorkerID))
 	if update.Error != nil {
 		return fmt.Errorf("persist project copy checkpoint: %w", update.Error)
 	}
@@ -304,6 +315,9 @@ func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Princi
 		if before.MediaReceipt == nil || before.CanvasReceipt == nil || media.ContentSHA256 != before.MediaReceipt.ContentSHA256 || canvas.ContentSHA256 != before.CanvasReceipt.ContentSHA256 {
 			return domain.ErrInvalidProjectCopy
 		}
+		if err := s.verifyScript(ctx, tx, actor, before, worker); err != nil {
+			return err
+		}
 		if err := owners.Budget.VerifyCopyTargetBudget(ctx, actor, before.TargetProjectID); err != nil {
 			return err
 		}
@@ -371,6 +385,9 @@ func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityap
 			return err
 		}
 		if err := owners.Canvas.Cleanup(ctx, actor, copyCanvasBinding(before), copyCanvasSnapshot(before)); err != nil {
+			return err
+		}
+		if err := s.finishScriptCleanup(ctx, tx, actor, before, worker); err != nil {
 			return err
 		}
 		saved = before

@@ -94,12 +94,14 @@ const (
 
 const mediaRetention = 30 * 24 * time.Hour
 
-// MediaAsset is project-scoped. Its nullable fields mirror media.media_asset.
+// MediaAsset has one closed project or personal owner. Its nullable fields mirror
+// media.media_asset; personal assets never authorize project references.
 // Consent status and references live in other contexts and must be checked by
 // the application before allowing a reference or deletion.
 type MediaAsset struct {
 	ID                 uuid.UUID
 	ProjectID          uuid.UUID
+	Personal           *PersonalOwnership `json:"personal,omitempty"`
 	Kind               Kind
 	Origin             Origin
 	Status             Status
@@ -136,7 +138,7 @@ type MediaAsset struct {
 // Validate checks only facts available in the asset itself. It does not prove
 // that linked consent remains active or that the operation belongs to the project.
 func (a MediaAsset) Validate() error {
-	if a.ID == uuid.Nil || a.ProjectID == uuid.Nil || !a.Kind.valid() ||
+	if a.ID == uuid.Nil || !a.validOwnership() || !a.Kind.valid() ||
 		!a.Origin.valid() || !a.Status.valid() || !a.ModerationStatus.valid() ||
 		!validAssetObjectKey(a) || strings.TrimSpace(a.MimeType) == "" ||
 		a.ByteSize < 0 || a.Revision < 1 || a.Revision > math.MaxInt32 ||
@@ -215,7 +217,7 @@ func (a MediaAsset) validDocumentFacts() bool {
 // CanReference applies the local gate. The application must additionally
 // verify linked consent is active and that project access is authorized.
 func (a MediaAsset) CanReference() bool {
-	return a.Validate() == nil && !a.IsDelete && a.Status == StatusReady &&
+	return a.Personal == nil && a.ProjectID != uuid.Nil && a.Validate() == nil && !a.IsDelete && a.Status == StatusReady &&
 		a.ModerationStatus == ModerationPassed &&
 		(!a.ContainsRealPerson || a.ConsentRecordID != nil)
 }
@@ -392,18 +394,28 @@ func optionalText(value *string) string {
 // project's object, a nested key, or a traversal-shaped key.
 func validAssetObjectKey(a MediaAsset) bool {
 	parts := strings.Split(a.ObjectKey, "/")
-	if len(parts) != 6 || parts[0] != "projects" ||
-		parts[1] != a.ProjectID.String() || parts[2] != string(a.Kind) ||
-		len(parts[3]) != 4 || len(parts[4]) != 2 ||
-		parts[4] < "01" || parts[4] > "12" {
+	prefix := []string{"projects", a.ProjectID.String()}
+	if a.Personal != nil {
+		prefix = []string{"personal", a.Personal.OrgID.String(), a.Personal.ActorID.String()}
+	}
+	if len(parts) != len(prefix)+4 {
 		return false
 	}
-	for _, digit := range parts[3] + parts[4] {
+	for index, value := range prefix {
+		if parts[index] != value {
+			return false
+		}
+	}
+	parts = parts[len(prefix):]
+	if parts[0] != string(a.Kind) || len(parts[1]) != 4 || len(parts[2]) != 2 || parts[2] < "01" || parts[2] > "12" {
+		return false
+	}
+	for _, digit := range parts[1] + parts[2] {
 		if digit < '0' || digit > '9' {
 			return false
 		}
 	}
-	extension, ok := strings.CutPrefix(parts[5], a.ID.String()+".")
+	extension, ok := strings.CutPrefix(parts[3], a.ID.String()+".")
 	if !ok || len(extension) == 0 || len(extension) > 16 {
 		return false
 	}
@@ -417,4 +429,12 @@ func validAssetObjectKey(a MediaAsset) bool {
 		}
 	}
 	return true
+}
+
+func (a MediaAsset) validOwnership() bool {
+	if a.Personal == nil {
+		return a.ProjectID != uuid.Nil
+	}
+	return a.ProjectID == uuid.Nil && a.Personal.OrgID != uuid.Nil && a.Personal.ActorID != uuid.Nil &&
+		a.Origin != OriginGenerated && a.SourceOperationID == nil && a.ProviderKey == nil && a.ModelKey == nil && a.Region == nil
 }

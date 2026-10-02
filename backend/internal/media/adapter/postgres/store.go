@@ -296,44 +296,56 @@ func nullableJSON(value json.RawMessage) any {
 }
 
 type assetRow struct {
-	ID                 uuid.UUID
-	ProjectID          uuid.UUID
-	Kind               string
-	Origin             string
-	Status             string
-	ObjectKey          string
-	FileName           string
-	MimeType           string
-	ByteSize           int64
-	SHA256             *string
-	Width              *int32
-	Height             *int32
-	DurationMS         *int32
-	FPS                *float64
-	AudioChannels      *int32
-	Codec              *string
-	SourceOperationID  *uuid.UUID
-	ProviderKey        *string
-	ModelKey           *string
-	Region             *string
-	ModerationStatus   string
-	ModerationDetail   []byte
-	AIGCMarked         bool
-	ContainsRealPerson bool
-	ConsentRecordID    *uuid.UUID
-	UploadID           *string
-	FailureReason      *string
-	DeleteTime         *time.Time
-	PurgeAfter         *time.Time
-	Revision           int64
-	CreateTime         time.Time
-	UpdateTime         time.Time
-	IsDelete           bool
+	ID                 uuid.UUID  `json:"id"`
+	ProjectID          uuid.UUID  `json:"project_id"`
+	PersonalOrgID      *uuid.UUID `json:"personal_org_id"`
+	PersonalActorID    *uuid.UUID `json:"personal_actor_id"`
+	Kind               string     `json:"kind"`
+	Origin             string     `json:"origin"`
+	Status             string     `json:"status"`
+	ObjectKey          string     `json:"object_key"`
+	FileName           string     `json:"file_name"`
+	MimeType           string     `json:"mime_type"`
+	ByteSize           int64      `json:"byte_size"`
+	SHA256             *string    `json:"sha256"`
+	Width              *int32     `json:"width"`
+	Height             *int32     `json:"height"`
+	DurationMS         *int32     `json:"duration_ms"`
+	FPS                *float64   `json:"fps"`
+	AudioChannels      *int32     `json:"audio_channels"`
+	Codec              *string    `json:"codec"`
+	SourceOperationID  *uuid.UUID `json:"source_operation_id"`
+	ProviderKey        *string    `json:"provider_key"`
+	ModelKey           *string    `json:"model_key"`
+	Region             *string    `json:"region"`
+	ModerationStatus   string     `json:"moderation_status"`
+	ModerationDetail   []byte     `json:"moderation_detail"`
+	AIGCMarked         bool       `json:"aigc_marked"`
+	ContainsRealPerson bool       `json:"contains_real_person"`
+	ConsentRecordID    *uuid.UUID `json:"consent_record_id"`
+	UploadID           *string    `json:"upload_id"`
+	FailureReason      *string    `json:"failure_reason"`
+	DeleteTime         *time.Time `json:"delete_time"`
+	PurgeAfter         *time.Time `json:"purge_after"`
+	Revision           int64      `json:"revision"`
+	CreateTime         time.Time  `json:"create_time"`
+	UpdateTime         time.Time  `json:"update_time"`
+	IsDelete           bool       `json:"is_delete"`
 }
 
 func (r assetRow) domain() domain.MediaAsset {
+	var personal *domain.PersonalOwnership
+	if r.PersonalOrgID != nil || r.PersonalActorID != nil {
+		personal = &domain.PersonalOwnership{}
+		if r.PersonalOrgID != nil {
+			personal.OrgID = *r.PersonalOrgID
+		}
+		if r.PersonalActorID != nil {
+			personal.ActorID = *r.PersonalActorID
+		}
+	}
 	return domain.MediaAsset{
-		ID: r.ID, ProjectID: r.ProjectID, Kind: domain.Kind(r.Kind),
+		ID: r.ID, ProjectID: r.ProjectID, Personal: personal, Kind: domain.Kind(r.Kind),
 		Origin: domain.Origin(r.Origin), Status: domain.Status(r.Status),
 		ObjectKey: r.ObjectKey, FileName: r.FileName, MimeType: r.MimeType,
 		ByteSize: r.ByteSize, SHA256: r.SHA256, Width: r.Width, Height: r.Height,

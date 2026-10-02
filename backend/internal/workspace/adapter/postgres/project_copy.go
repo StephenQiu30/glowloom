@@ -23,16 +23,27 @@ import (
 // ProjectCopyOwnersFactory binds all copy owners to the same admission/fenced transaction.
 type ProjectCopyOwnersFactory func(*gorm.DB) application.ProjectCopyOwners
 
+// ProjectCopyScriptOwnerFactory rebinds the owning module to the exact trusted phase.
+type ProjectCopyScriptOwnerFactory func(*gorm.DB, application.ProjectCopyAuthority) application.ProjectCopyScriptOwner
+
 // ProjectCopyStore owns one concrete project's admission, worker fence and publication.
 type ProjectCopyStore struct {
-	db     *gorm.DB
-	work   ProjectWorkFactory
-	owners ProjectCopyOwnersFactory
+	db         *gorm.DB
+	work       ProjectWorkFactory
+	owners     ProjectCopyOwnersFactory
+	script     ProjectCopyScriptOwnerFactory
+	withScript bool
 }
 
 // NewProjectCopyStore injects persistence, work admission and the actual owner ports.
 func NewProjectCopyStore(db *gorm.DB, work ProjectWorkFactory, owners ProjectCopyOwnersFactory) *ProjectCopyStore {
 	return &ProjectCopyStore{db: db, work: work, owners: owners}
+}
+
+// NewProjectCopyStoreWithScript requires the actual historical owner for new admission.
+// Existing permanently admitted nil-script jobs retain their original scope.
+func NewProjectCopyStoreWithScript(db *gorm.DB, work ProjectWorkFactory, owners ProjectCopyOwnersFactory, script ProjectCopyScriptOwnerFactory) *ProjectCopyStore {
+	return &ProjectCopyStore{db: db, work: work, owners: owners, script: script, withScript: true}
 }
 
 type copyWorkspaceSnapshot struct {
@@ -267,7 +278,19 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
-		media, err := owners.Media.Freeze(ctx, actor, copyMediaBinding(saved), now)
+		var script application.ProjectCopyScriptOwner
+		var references []uuid.UUID
+		if s.withScript {
+			script, err = s.scriptOwner(tx, saved, uuid.Nil, "freeze")
+			if err != nil {
+				return err
+			}
+			references, err = script.ReferencedMedia(ctx, actor, copyBinding(saved))
+			if err != nil {
+				return err
+			}
+		}
+		media, err := freezeProjectCopyMedia(ctx, actor, owners.Media, copyMediaBinding(saved), now, references)
 		if err != nil {
 			return err
 		}
@@ -302,6 +325,13 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		saved.Manifest = domain.ProjectCopyManifest{WorkspaceSHA256: digest, MediaSnapshotID: media.ID, MediaSHA256: media.ManifestSHA256, Assets: media.Assets, Renditions: media.Renditions, CanvasSnapshotID: canvas.ID, CanvasSHA256: canvas.ManifestSHA256, Documents: canvas.Documents}
+		if s.withScript {
+			snapshot, err := script.Freeze(ctx, actor, copyBinding(saved), media.AssetMapping, now)
+			if err != nil {
+				return err
+			}
+			saved.Manifest.Script = &snapshot
+		}
 		if saved.Validate() != nil {
 			return domain.ErrInvalidProjectCopy
 		}

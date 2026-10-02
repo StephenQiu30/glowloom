@@ -44,6 +44,8 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
+	scriptevent "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/event"
+	scriptflow "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/workflow"
 	workspaceevent "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/event"
 	workspaceflow "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/workflow"
 )
@@ -96,6 +98,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		toolflow.RegisterTranscriptionWorkflow(queueWorker)
 		toolflow.RegisterDepthWorkflow(queueWorker)
 		workspaceflow.RegisterProjectCopyWorkflow(queueWorker)
+		scriptflow.RegisterImportWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
 		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
@@ -165,6 +168,8 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		toolflow.RegisterDepthActivities(queueWorker, toolflow.NewDepthActivities(depthWorker, depths))
 		copyWorker, copies := provideProjectCopyWorker(dbConn.DB, storage)
 		workspaceflow.RegisterProjectCopyActivities(queueWorker, workspaceflow.NewProjectCopyActivities(copyWorker, copies))
+		importWorker, imports := provideScriptImportWorker(dbConn.DB, storage)
+		scriptflow.RegisterImportActivities(queueWorker, scriptflow.NewImportActivities(importWorker, imports))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
 	}
@@ -221,10 +226,11 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		transcriptionHandler := toolevent.NewTranscriptionHandler(processed, provideMediaTranscriptionStore(dbConn.DB, false), toolflow.NewTranscriptionStarter(temporalConn.Client))
 		depthHandler := toolevent.NewDepthHandler(processed, provideMediaDepthStore(dbConn.DB, false), toolflow.NewDepthStarter(temporalConn.Client))
 		copyHandler := workspaceevent.NewProjectCopyHandler(processed, provideProjectCopyStore(dbConn.DB), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
+		importHandler := scriptevent.NewImportHandler(processed, provideScriptImportStore(dbConn.DB), scriptflow.NewImportStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic}, workflowDelivery{
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler,
+				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler,
 			})
 		if err != nil {
 			temporalConn.Close()
@@ -259,9 +265,13 @@ type workflowDelivery struct {
 	transcriptions inboxapp.Handler
 	depths         inboxapp.Handler
 	copies         inboxapp.Handler
+	imports        inboxapp.Handler
 }
 
 func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
+	if record.Topic == scriptevent.ImportTopic {
+		return h.imports.Handle(ctx, record)
+	}
 	if record.Topic == workspaceevent.ProjectCopyTopic {
 		return h.copies.Handle(ctx, record)
 	}
