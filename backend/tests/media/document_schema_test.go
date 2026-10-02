@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,25 +15,29 @@ import (
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 )
 
-func TestDocumentMigrationPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *testing.T) {
+func TestDocumentSchemaPreservesLegacyRowsButAllOwningReadsAndCopyFailClosed(t *testing.T) {
 	db, owner := documentTestDB(t)
 	actor, project := mediaStoreProject(t, owner)
 	id := uuid.New()
-	migration, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202610020051_media_document.up.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Reproduce an existing legacy row before applying the actual NOT VALID DDL.
+	// Recover the actual schema constraint instead of retaining a second DDL source.
+	// The transaction prevents other sessions from observing the relaxed fixture.
 	if err := owner.Transaction(func(tx *gorm.DB) error {
+		var definition string
+		if err := tx.Raw(`SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='media.media_asset'::regclass AND conname='media_asset_document_facts_check'`).Scan(&definition).Error; err != nil {
+			return err
+		}
+		if definition == "" || !strings.HasSuffix(definition, " NOT VALID") {
+			return errors.New("legacy fixture requires the schema document NOT VALID constraint")
+		}
 		if err := tx.Exec(`ALTER TABLE media.media_asset DROP CONSTRAINT media_asset_document_facts_check`).Error; err != nil {
 			return err
 		}
 		if err := tx.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,moderation_status) VALUES(?,?,'document','upload','ready',?,'legacy.pdf','application/pdf',1,'passed')`, id, project, "projects/"+project.String()+"/document/2026/10/"+id.String()+".pdf").Error; err != nil {
 			return err
 		}
-		return tx.Exec(string(migration)).Error
+		return tx.Exec(`ALTER TABLE media.media_asset ADD CONSTRAINT media_asset_document_facts_check ` + definition).Error
 	}); err != nil {
-		t.Fatal("apply actual legacy-compatible document migration", err)
+		t.Fatal("restore schema document constraint around legacy fixture", err)
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

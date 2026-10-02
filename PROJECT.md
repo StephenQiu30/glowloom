@@ -26,7 +26,7 @@
 
 业务范围以 `docs/prd/` 与 `docs/requirement/` 为准，架构决策以 `docs/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改需求或设计文档并评审，再同步本文。
 
-2026-09-30 用户进一步明确：按上线标准实现完整 Lanverse，当前优先跑通整项目验证和 Demo；画布直接复用 BeefTV 固定提交 0d9e9f48 的 DOM/SVG/rAF InfiniteCanvas 核心及对应设计，替换现有实现（见 BeefTV 引入设计、DES-06/38）。当时只接正式 text/image/video/audio/group 资源节点与 Go/PostgreSQL 合同，2026-10-01 后续已扩大为完整工作台迁移；源 provider/3D/插件/时间轴的用户能力按新设计逐项适配。本项目不保留独立 PoC 产品入口、旧 live/creation 引擎或双状态。完整生成/参考/选定/Agent 仍按产品范围验收，单次 Demo 不等于 MVP 完成。现有 SQL/业务历史保留，字段演进追加迁移。用户随后明确要求先清理独立 Python `agent/` 服务，范围见 [Agent 服务目录清理](docs/design/Agent服务目录清理设计.md)；其执行能力尚未由 Go 承接，M1-12 继续评估和实施。
+2026-09-30 用户进一步明确：按上线标准实现完整 Lanverse，当前优先跑通整项目验证和 Demo；画布直接复用 BeefTV 固定提交 0d9e9f48 的 DOM/SVG/rAF InfiniteCanvas 核心及对应设计，替换现有实现（见 BeefTV 引入设计、DES-06/38）。当时只接正式 text/image/video/audio/group 资源节点与 Go/PostgreSQL 合同，2026-10-01 后续已扩大为完整工作台迁移；源 provider/3D/插件/时间轴的用户能力按新设计逐项适配。本项目不保留独立 PoC 产品入口、旧 live/creation 引擎或双状态。完整生成/参考/选定/Agent 仍按产品范围验收，单次 Demo 不等于 MVP 完成。现有业务历史保留，字段演进更新 `backend/db/schema.sql`，既有库另行审阅增量升级。用户随后明确要求先清理独立 Python `agent/` 服务，范围见 [Agent 服务目录清理](docs/design/Agent服务目录清理设计.md)；其执行能力尚未由 Go 承接，M1-12 继续评估和实施。
 
 2026-09-30 用户明确当前先保证 PoC 页面和服务可用，不需要登录认证。用户随后指定直接清理登录功能，不保留兼容分支或免登录开关；单一工作区复用正式项目/画布持久化，消费者认证后置。配置、身份、写入和失败边界见 BeefTV 引入设计 §4.1。
 
@@ -72,7 +72,7 @@ Lanverse/
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 前端     | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier                                                                                                          |
 | 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、BeefTV InfiniteCanvas 核心、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、`@umijs/openapi` + Axios；CopilotKit（AG-UI） |
-| 后端     | Go、Gin、GORM（pgx 驱动）、golang-migrate、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator                                                                                                                          |
+| 后端     | Go、Gin、GORM（pgx 驱动）、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator                                                                                                                          |
 | 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go                                                                                                                                      |
 | 工作流   | Temporal（自建，PostgreSQL 持久化）                                                                                                                                                                                               |
 | 中间件   | PostgreSQL、Redis、Kafka（KRaft）、对象存储（开发 MinIO，生产火山引擎 TOS，均为 S3 协议）                                                                                                                                         |
@@ -102,14 +102,14 @@ backend/
         event/                   # 本上下文的 Kafka 消费者（按需）
     platform/                    # config(Viper) log(Zap) db(GORM) redis kafka minio temporal ffmpeg otel auth
   tests/<模块>/                  # 按模块集中存放外部测试包与集成测试
-  db/migrations/                 # golang-migrate 版本化 SQL（唯一 Schema 来源）
+  db/schema.sql                  # 当前已实现数据库结构的唯一事实源，最终态 DDL
   docs/                          # swag 从注解生成的 Swagger 规范，禁止手改；由 backend-api 在线提供
 ```
 
 1. 依赖方向 `adapter → application → domain`；`domain` 不依赖 Gin、GORM、Temporal、Kafka、Redis 或任何 SDK。
 2. 上下文之间只调用对方 `application` 暴露的接口，不读写对方的表。
 3. Gin Handler 只做参数绑定与校验、调用用例、映射响应；用例不接收 `*gin.Context`，而是 `context.Context`。
-4. GORM 模型只在 `adapter/postgres`；领域对象、GORM 模型、API DTO 显式转换。生产禁止 `AutoMigrate`，Schema 只由 `db/migrations` 演进。
+4. GORM 模型只在 `adapter/postgres`；领域对象、GORM 模型、API DTO 显式转换。生产禁止 `AutoMigrate`，当前已实现结构只由 `db/schema.sql` 定义；不追加 up/down 文件或维护第二份 DDL。
 5. 一个用例一个事务；需要异步的后续动作写 Outbox，由 relay 投递到 Kafka。
 6. 所有写操作经命令层：权限、幂等键、`expected_version`（不匹配返回 409）、审计。
 7. 所有业务表带 `org_id` / `project_id`，仓储查询强制带项目条件。
@@ -181,12 +181,13 @@ frontend/
 | --------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
 | 公共 REST | Gin Handler 的 swag 注解 + DTO                                                 | `backend/docs`（生成的 Swagger 2.0）→ 后端在线 `/swagger/doc.json` → `@umijs/openapi` → `frontend/src/gen/api` |
 | Activity  | 现有 Go 类型；DES-03 §7.1 表格为字段的唯一权威描述，原 Python 执行端待 Go 承接 | —                                                                                                              |
-| 数据库    | `backend/db/migrations/`                                                       | —                                                                                                              |
+| 数据库    | `backend/db/schema.sql`                                                       | —                                                                                                              |
 | 事件      | Go 结构体，按主题版本号 `.v<N>` 手写，生产者与消费者各自维护                   | —                                                                                                              |
 
 1. REST：改 Handler / DTO 与注解 → 运行 swag 自动生成 → 启动后端并从在线 `/swagger/doc.json` 运行 `@umijs/openapi` → 改前端实现。生成器配置 `schemaPath` 为在线地址、`requestImportStatement` 为 `@/lib/request` 的导入语句；Swagger 文档与前端 API 文件均禁止手改。后端未启动或在线规范不可用时生成失败，不以旧文件代替。
 2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 契约测试。Temporal 载荷由现有 Go 类型实现，兼容性样例内联在 `backend/tests/<模块>/` 的测试中，不再维护根目录 `contracts/` 或独立 JSON 规范文件；公共 HTTP 接口统一走上面的 Swagger 链路。M1-12 承接旧执行端时还须验证历史输入输出与队列兼容性，不把未注册的内部 Activity 伪装成公共 HTTP 端点。
 3. 不兼容变更升级版本号（Activity 名称或事件主题后缀 `.v<N>`）；旧版本在仍有在途工作流或未消费事件时保留。
+4. 数据库：直接更新 `backend/db/schema.sql` 的表、列、索引、约束、函数、触发器、权限与动态分区最终态，同步 owning 模块与结构合同测试。Schema 只描述已实现能力；概念规划留在 DES-02，不预建对象。新空业务库由独立表所有者在单事务内初始化，预置 `lanverse_app NOLOGIN NOSUPERUSER`；既有业务库依据实例与目标 Schema 审阅增量升级，不自动覆盖、重建或重跑初始化。旧迁移脚本从 Git 历史检索，不再作为当前结构来源。
 
 Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，再执行 `goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go`；`wire_gen.go` 仅由工具生成和格式化，CI 重复这两条命令并比较文件，不设脚本或 Makefile。
 

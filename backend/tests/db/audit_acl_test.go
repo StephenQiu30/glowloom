@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -34,32 +33,24 @@ func TestAuditApplicationRoleOnlyAppendsThroughParent(t *testing.T) {
 		t.Fatalf("get PostgreSQL pool: %v", err)
 	}
 
-	// The role, schema, grants and records are all created inside this transaction.
-	// Rollback cleans them up without touching another database's role or grants.
+	// The schema and role come from schema.sql. Only fixture partitions and
+	// records live in this transaction, so rollback preserves the deployed ACL.
 	tx, err := pool.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatalf("begin ACL test transaction: %v", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-
-	var roleExists bool
-	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'lanverse_app')").Scan(&roleExists); err != nil {
-		t.Fatalf("check application role: %v", err)
+	// The audit partition contract uses this database from another package.
+	if _, err := tx.ExecContext(ctx, "LOCK TABLE audit.audit_log IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatalf("isolate audit ACL fixtures: %v", err)
 	}
-	if !roleExists {
-		if _, err := tx.ExecContext(ctx, "CREATE ROLE lanverse_app NOLOGIN"); err != nil {
-			t.Fatalf("create test application role (requires CREATEROLE): %v", err)
-		}
-	}
-	applyAuditACLMigration(ctx, t, tx, "202609270930_create_audit_log.up.sql")
-	applyAuditACLMigration(ctx, t, tx, "202609271040_grant_audit_app_role.up.sql")
 
-	var canLogin bool
-	if err := tx.QueryRowContext(ctx, "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'lanverse_app'").Scan(&canLogin); err != nil {
+	var canLogin, superuser bool
+	if err := tx.QueryRowContext(ctx, "SELECT rolcanlogin, rolsuper FROM pg_roles WHERE rolname = 'lanverse_app'").Scan(&canLogin, &superuser); err != nil {
 		t.Fatalf("read application role attributes: %v", err)
 	}
-	if canLogin {
-		t.Fatal("lanverse_app must be NOLOGIN")
+	if canLogin || superuser {
+		t.Fatal("lanverse_app must be NOLOGIN NOSUPERUSER")
 	}
 
 	now := time.Now().UTC()
@@ -147,29 +138,6 @@ func TestAuditApplicationRoleOnlyAppendsThroughParent(t *testing.T) {
 	}
 	if _, err := tx.ExecContext(ctx, "RESET ROLE"); err != nil {
 		t.Fatalf("restore migration role: %v", err)
-	}
-	applyAuditACLMigration(ctx, t, tx, "202609271040_grant_audit_app_role.down.sql")
-	if err := tx.QueryRowContext(ctx, `
-		SELECT
-		  has_schema_privilege('lanverse_app', 'audit', 'USAGE'),
-		  has_table_privilege('lanverse_app', 'audit.audit_log', 'INSERT'),
-		  has_table_privilege('lanverse_app', 'audit.audit_log', 'SELECT')
-	`).Scan(&canUseSchema, &canInsert, &canSelect); err != nil {
-		t.Fatalf("read rolled back audit privileges: %v", err)
-	}
-	if canUseSchema || canInsert || canSelect {
-		t.Fatalf("ACL down left privileges: schema=%t insert=%t select=%t", canUseSchema, canInsert, canSelect)
-	}
-}
-
-func applyAuditACLMigration(ctx context.Context, t *testing.T, tx *sql.Tx, filename string) {
-	t.Helper()
-	contents, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", filename))
-	if err != nil {
-		t.Fatalf("read audit migration %s: %v", filename, err)
-	}
-	if _, err := tx.ExecContext(ctx, string(contents)); err != nil {
-		t.Fatalf("apply audit migration %s: %v", filename, err)
 	}
 }
 

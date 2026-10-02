@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
-	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
@@ -21,7 +18,6 @@ import (
 	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 )
 
 func seedDispatchCall(t *testing.T, database *gorm.DB, dispatchRequired bool) (application.ProviderDispatchIdentity, *pgoperation.Store) {
@@ -552,53 +548,18 @@ func TestM1CompletedReceiptTerminalReplayIsReadOnly(t *testing.T) {
 	}
 }
 
-func TestM1DispatchMigrationUpDownUpRetainsEvidence(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_PROVIDER_DISPATCH_MIGRATION_DB_DSN")
-	if dsn == "" {
-		t.Skip("set LV_TEST_PROVIDER_DISPATCH_MIGRATION_DB_DSN to a disposable database migrated through 202609300011")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
-	defer cancel()
-	conn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
-	if err != nil {
-		t.Fatalf("open provider dispatch migration database: %v", err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	database := conn.DB.WithContext(ctx)
-	var before struct {
-		Name         string
-		Calls        int64
-		NewFields    int64
-		BusinessRows bool
-	}
+func TestM1DispatchSchemaDefaultsAndRetainsEvidence(t *testing.T) {
+	database := operationStoreDB(t)
+	var nullableColumns int64
 	if err := database.Raw(`
-		SELECT current_database() AS name,
-		       (SELECT count(*) FROM operation.provider_call) AS calls,
-		       (SELECT count(*) FROM information_schema.columns
-		        WHERE table_schema = 'operation' AND table_name = 'provider_call'
-		          AND column_name IN ('dispatch_started_at', 'receipt')) AS new_fields,
-		       (EXISTS (SELECT 1 FROM workspace.project)
-		        OR EXISTS (SELECT 1 FROM operation.operation)
-		        OR EXISTS (SELECT 1 FROM catalog.provider)
-		        OR EXISTS (SELECT 1 FROM identity."user")) AS business_rows
-	`).Scan(&before).Error; err != nil {
-		t.Fatal(err)
-	}
-	if before.Name == "postgres" || before.Name == "template0" || before.Name == "template1" || before.Calls != 0 || before.NewFields != 0 || before.BusinessRows {
-		t.Fatal("migration test requires an unused disposable operation database without dispatch fields")
-	}
-	up, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202610010010_provider_dispatch_receipt.up.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	down, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202610010010_provider_dispatch_receipt.down.sql"))
-	if err != nil {
-		t.Fatal(err)
+		SELECT count(*) FROM information_schema.columns
+		WHERE table_schema='operation' AND table_name='provider_call'
+		  AND column_name IN ('dispatch_started_at','receipt')
+		  AND is_nullable='YES' AND column_default IS NULL
+	`).Scan(&nullableColumns).Error; err != nil || nullableColumns != 2 {
+		t.Fatalf("dispatch evidence nullable columns = %d, error = %v, want 2 with NULL defaults", nullableColumns, err)
 	}
 	legacy, _ := seedDispatchCall(t, database, false)
-	if err := database.Exec(string(up)).Error; err != nil {
-		t.Fatalf("migration up: %v", err)
-	}
 	var legacyState struct {
 		DispatchStartedAt *time.Time
 		Receipt           []byte
@@ -610,36 +571,24 @@ func TestM1DispatchMigrationUpDownUpRetainsEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if legacyState.DispatchStartedAt != nil || len(legacyState.Receipt) != 0 || legacyState.Outcome != "unknown" {
-		t.Fatalf("migration invented legacy execution evidence: %+v", legacyState)
-	}
-	if err := database.Exec(string(down)).Error; err != nil {
-		t.Fatalf("unused migration down: %v", err)
-	}
-	if err := database.Exec(string(up)).Error; err != nil {
-		t.Fatalf("migration reapply up: %v", err)
+		t.Fatalf("schema invented execution evidence for an unclaimed call: %+v", legacyState)
 	}
 	identity, store := seedDispatchCall(t, database, true)
 	claimed, err := store.ClaimProviderDispatch(t.Context(), identity)
 	if err != nil || !claimed.Claimed {
-		t.Fatalf("claim after migration: %+v, %v", claimed, err)
-	}
-	if err := database.Exec(string(down)).Error; err == nil {
-		t.Fatal("migration down erased a sent request")
+		t.Fatalf("claim provider dispatch: %+v, %v", claimed, err)
 	}
 	receipt := dispatchReceipt(identity)
 	if err := store.CompleteProviderCall(t.Context(), application.CompleteProviderCallInput{
 		OperationID: identity.OperationID, Action: "submit", Attempt: 1,
 		Outcome: "ok", State: "completed", Receipt: &receipt,
 	}); err != nil {
-		t.Fatalf("persist receipt after refused rollback: %v", err)
-	}
-	if err := database.Exec(string(down)).Error; err == nil {
-		t.Fatal("migration down erased a completed receipt")
+		t.Fatalf("persist provider receipt: %v", err)
 	}
 	replayed, err := store.ClaimProviderDispatch(t.Context(), identity)
 	if err != nil || replayed.Claimed || replayed.Receipt == nil || replayed.DispatchStartedAt == nil ||
 		!replayed.DispatchStartedAt.Equal(*claimed.DispatchStartedAt) {
-		t.Fatalf("refused rollback changed dispatch evidence: %+v, %v", replayed, err)
+		t.Fatalf("replay changed durable dispatch evidence: %+v, %v", replayed, err)
 	}
 }
 

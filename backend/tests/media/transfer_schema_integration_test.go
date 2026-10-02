@@ -2,11 +2,9 @@ package media_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"gorm.io/gorm"
 )
 
 func TestMediaTransferRuntimeCannotRewriteOwnershipFrozenBytesKeysOrReceipts(t *testing.T) {
@@ -35,15 +33,7 @@ func TestMediaTransferRuntimeCannotRewriteOwnershipFrozenBytesKeysOrReceipts(t *
 	if !errors.As(err, &failure) || failure.Code != "42501" {
 		t.Fatal("permanent receipts were mutable even by fixture owner", err)
 	}
-	data, err := os.ReadFile("../../db/migrations/202610020057_media_transfer.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = owner.Transaction(func(tx *gorm.DB) error { return tx.Exec(string(data)).Error })
-	if !errors.As(err, &failure) || failure.Code != "55000" {
-		t.Fatal("migration rollback erased retained transfer evidence", err)
-	}
 	if _, err := f.repo.GetTransfer(t.Context(), f.actor, f.job.ID); err != nil {
-		t.Fatal("failed rollback changed current ownership proof", err)
+		t.Fatal("rejected writes changed current ownership proof", err)
 	}
 }

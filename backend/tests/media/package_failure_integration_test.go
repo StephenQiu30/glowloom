@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -97,7 +95,7 @@ func TestMediaPackageRejectedCompleteBatchNeverWritesAnArchiveOrPartialAsset(t *
 	}
 }
 
-func TestMediaPackageFrozenSQLAndTerminalCommandAreImmutableAndRollbackIsGuarded(t *testing.T) {
+func TestMediaPackageSchemaFrozenSQLAndTerminalCommandAreImmutable(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
 	objects := mediaobjects.NewProjectCopyObjects(glbTestObjects(t))
@@ -121,23 +119,8 @@ func TestMediaPackageFrozenSQLAndTerminalCommandAreImmutableAndRollbackIsGuarded
 	if err := owner.Exec(`UPDATE media.package_command SET response='{}'::bytea WHERE actor_id=? AND idem_key=?`, actor.ID, in.Key).Error; err == nil {
 		t.Fatal("permanent command trigger absent")
 	}
-	down, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202610020059_media_package.down.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx := owner.Begin()
-	if tx.Error != nil {
-		t.Fatal(tx.Error)
-	}
-	if err := tx.Exec(string(down)).Error; err == nil || !strings.Contains(err.Error(), "cannot remove retained media package batches") {
-		_ = tx.Rollback().Error
-		t.Fatal("retained private source and intents downgrade guard was not reached", err)
-	}
-	if err := tx.Rollback().Error; err != nil {
-		t.Fatal(err)
-	}
 	if current, err := service.Get(t.Context(), actor, job.ID); err != nil || current.ID != job.ID {
-		t.Fatal("guarded downgrade damaged package owner", current, err)
+		t.Fatal("rejected writes damaged package owner", current, err)
 	}
 	if _, err := service.Import(t.Context(), actor, in, packageDownloaded(t, ownPackageZIP(t))); !errors.Is(err, mediaapp.ErrPackageConflict) {
 		t.Fatal("different retained source ZIP shared same command", err)

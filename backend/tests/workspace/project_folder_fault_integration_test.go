@@ -2,7 +2,6 @@ package workspace_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -65,25 +64,11 @@ func TestProjectFolderPGWriteFaultsCannotCommitPartialRecycle(t *testing.T) {
 	}
 }
 
-func TestProjectFolderPGMigrationDownUpRestoresNarrowGrants(t *testing.T) {
+func TestProjectFolderPGSchemaEnforcesNarrowGrants(t *testing.T) {
 	ctx, _, owner := folderTestDB(t)
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
-	up, err := os.ReadFile("../../db/migrations/202610020040_workspace_project_folder.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	down, err := os.ReadFile("../../db/migrations/202610020040_workspace_project_folder.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
 	rollback := errors.New("DDL verification rollback")
-	err = owner.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(string(down)).Error; err != nil {
-			return err
-		}
-		if err := tx.Exec(string(up)).Error; err != nil {
-			return err
-		}
+	err := owner.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SET LOCAL ROLE lanverse_app`).Error; err != nil {
 			return err
 		}
@@ -95,7 +80,7 @@ func TestProjectFolderPGMigrationDownUpRestoresNarrowGrants(t *testing.T) {
 			t.Fatalf("receipt grants %+v", grants)
 		}
 		in := folderCommand("create")
-		name := "原DDL重建"
+		name := "Schema 权限验证"
 		in.Name = &name
 		if _, err := workspaceapp.NewProjectFolders(folderStore(tx), time.Now).Change(ctx, actor, in); err != nil {
 			return err

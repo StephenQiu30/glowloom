@@ -195,16 +195,9 @@ func TestGLBUploadRealHTTPPrivateStorageReplayAndAuthorization(t *testing.T) {
 	if err := database.Exec(`UPDATE media.media_asset SET origin='generated' WHERE id=?`, asset.ID).Error; err == nil {
 		t.Fatal("SQL accepted fake generated model provenance")
 	}
-	down, err := os.ReadFile("../../db/migrations/202610010050_media_model.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Exec(string(down)).Error; err == nil {
-		t.Fatal("migration discarded the model contract while model assets remain")
-	}
 	var constraints int
 	if err := database.Raw(`SELECT count(*) FROM pg_constraint WHERE conrelid='media.media_asset'::regclass AND conname IN ('media_asset_kind_check','media_asset_model_facts_check')`).Scan(&constraints).Error; err != nil || constraints != 2 {
-		t.Fatalf("failed downgrade changed the formal model contract: count=%d err=%v", constraints, err)
+		t.Fatalf("schema lacks the formal model contract: count=%d err=%v", constraints, err)
 	}
 	if err := database.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, project).Error; err != nil {
 		t.Fatal(err)

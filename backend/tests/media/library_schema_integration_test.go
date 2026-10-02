@@ -2,16 +2,14 @@ package media_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func TestLibraryMigrationPersonalOwnershipAndRollbackSafety(t *testing.T) {
+func TestLibrarySchemaPersonalOwnershipAndRuntimeAuthority(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	owner := libraryOwnerDB(t)
 	actor, project := mediaStoreProject(t, db)
 	foreign, _ := mediaStoreProject(t, db)
 	asset := uuid.New()
@@ -33,16 +31,5 @@ func TestLibraryMigrationPersonalOwnershipAndRollbackSafety(t *testing.T) {
 		if !errors.As(err, &databaseError) || databaseError.Code != "42501" {
 			t.Fatal("runtime can rewrite immutable ownership", column, err)
 		}
-	}
-	down, err := os.ReadFile("../../db/migrations/202610020055_media_library.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx := owner.Begin()
-	defer func() { _ = tx.Rollback().Error }()
-	err = tx.Exec(string(down)).Error
-	var databaseError *pgconn.PgError
-	if !errors.As(err, &databaseError) || databaseError.Code != "55000" {
-		t.Fatal("rollback discarded a held personal original", err)
 	}
 }

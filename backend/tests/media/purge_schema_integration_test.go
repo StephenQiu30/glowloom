@@ -2,12 +2,10 @@ package media_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"gorm.io/gorm"
 
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
 )
@@ -45,15 +43,7 @@ func TestMediaPurgeRuntimeCannotRewriteOwnershipFrozenKeysOrPermanentReceipts(t 
 	if !errors.As(err, &failure) || failure.Code != "42501" {
 		t.Fatal("permanent purge receipt was mutable even by fixture owner", err)
 	}
-	data, err := os.ReadFile("../../db/migrations/202610020058_media_purge.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = owner.Transaction(func(tx *gorm.DB) error { return tx.Exec(string(data)).Error })
-	if !errors.As(err, &failure) || failure.Code != "55000" {
-		t.Fatal("rollback erased retained permanent cleanup evidence", err)
-	}
 	if _, err := repo.GetPurge(t.Context(), actor, job.ID); err != nil {
-		t.Fatal("failed schema rollback changed current permanent job", err)
+		t.Fatal("rejected writes changed current permanent job", err)
 	}
 }

@@ -3,7 +3,6 @@ package audit_test
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -28,18 +27,17 @@ func TestAuditEnsurePartitionsMovesDefaultRowsWithoutChangingRecords(t *testing.
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 
-	// The migration, test roles, records and partitions live only in this transaction.
+	// Validate schema.sql's audit objects; fixture roles, records and partitions
+	// live only in this transaction.
 	tx := conn.DB.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		t.Fatalf("begin partition test transaction: %v", tx.Error)
 	}
 	defer func() { _ = tx.Rollback().Error }()
-	migration, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202609270930_create_audit_log.up.sql"))
-	if err != nil {
-		t.Fatalf("read audit migration: %v", err)
-	}
-	if err := tx.Exec(string(migration)).Error; err != nil {
-		t.Fatalf("apply audit migration: %v", err)
+	// Other packages verify audit ACLs in this same disposable database.
+	// Serialize partition DDL before fixture inserts take weaker table locks.
+	if err := tx.Exec("LOCK TABLE audit.audit_log IN ACCESS EXCLUSIVE MODE").Error; err != nil {
+		t.Fatalf("isolate audit partition fixtures: %v", err)
 	}
 
 	now := time.Now().UTC()
@@ -162,7 +160,7 @@ func TestAuditEnsurePartitionsMovesDefaultRowsWithoutChangingRecords(t *testing.
 func TestAuditEnsurePartitionsSerializesConcurrentMaintainers(t *testing.T) {
 	dsn := os.Getenv("LV_TEST_AUDIT_PARTITION_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_AUDIT_PARTITION_DB_DSN to a new disposable PostgreSQL database")
+		t.Skip("set LV_TEST_AUDIT_PARTITION_DB_DSN to a disposable PostgreSQL database initialized with schema.sql and no business or audit rows")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
@@ -179,46 +177,24 @@ func TestAuditEnsurePartitionsSerializesConcurrentMaintainers(t *testing.T) {
 		t.Fatal("LV_TEST_AUDIT_PARTITION_DB_DSN must not point to a PostgreSQL maintenance database")
 	}
 
-	// This test commits DDL so two other connections can maintain the same
-	// partitions. Refuse a database that already holds audit or other user data.
+	// Concurrent connections need committed fixtures. Refuse a populated audit
+	// database, and retain all evidence in this dedicated disposable database.
 	var existing struct {
-		AuditSchema bool
-		UserTables  bool
+		AuditRows    int64
+		BusinessRows bool
 	}
 	if err := conn.DB.WithContext(ctx).Raw(`
-		SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'audit') AS audit_schema,
-		       EXISTS (
-		         SELECT 1 FROM pg_class AS c
-		         JOIN pg_namespace AS n ON n.oid = c.relnamespace
-		         WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
-		           AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
-		       ) AS user_tables
+		SELECT (SELECT count(*) FROM audit.audit_log) AS audit_rows,
+		       (EXISTS (SELECT 1 FROM workspace.project)
+		        OR EXISTS (SELECT 1 FROM operation.operation)
+		        OR EXISTS (SELECT 1 FROM catalog.provider)
+		        OR EXISTS (SELECT 1 FROM identity."user")) AS business_rows
 	`).Scan(&existing).Error; err != nil {
-		t.Fatalf("check isolated database is empty: %v", err)
+		t.Fatalf("check initialized audit database is empty: %v", err)
 	}
-	if existing.AuditSchema || existing.UserTables {
-		t.Fatal("LV_TEST_AUDIT_PARTITION_DB_DSN must point to a new disposable database without audit schema or user tables")
+	if existing.AuditRows != 0 || existing.BusinessRows {
+		t.Fatal("LV_TEST_AUDIT_PARTITION_DB_DSN must point to a disposable database initialized with schema.sql and no business or audit rows")
 	}
-	up, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202609270930_create_audit_log.up.sql"))
-	if err != nil {
-		t.Fatalf("read audit up migration: %v", err)
-	}
-	down, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", "202609270930_create_audit_log.down.sql"))
-	if err != nil {
-		t.Fatalf("read audit down migration: %v", err)
-	}
-	if err := conn.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.Exec(string(up)).Error
-	}); err != nil {
-		t.Fatalf("apply committed audit migration: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cleanupCancel()
-		if err := conn.DB.WithContext(cleanupCtx).Exec(string(down)).Error; err != nil {
-			t.Errorf("remove audit objects created by concurrent partition test: %v", err)
-		}
-	})
 
 	firstConn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
 	if err != nil {

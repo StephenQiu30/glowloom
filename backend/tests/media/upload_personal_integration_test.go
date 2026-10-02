@@ -6,14 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
 	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
@@ -111,17 +109,6 @@ func TestPersonalUploadActualPrivateObjectsClosedScopeAndPermanentReplay(t *test
 	req.ByteSize = in.File.Size
 	if _, _, err := store.FindPersonalUpload(t.Context(), foreign, req); !errors.Is(err, mediaapp.ErrInvalidUpload) {
 		t.Fatal("foreign identity can replay personal receipt", err)
-	}
-	down, err := os.ReadFile("../../db/migrations/202610020056_media_personal_upload.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx := libraryOwnerDB(t).Begin()
-	defer func() { _ = tx.Rollback().Error }()
-	err = tx.Exec(string(down)).Error
-	var pe *pgconn.PgError
-	if !errors.As(err, &pe) || pe.Code != "55000" {
-		t.Fatal("personal receipt rollback lost permanent ownership", err)
 	}
 	payload, _ := json.Marshal(first)
 	if strings.Contains(string(payload), "project_id") || strings.Contains(string(payload), "object_key") {

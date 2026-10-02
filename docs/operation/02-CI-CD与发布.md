@@ -42,7 +42,7 @@ PR / push 到分支
 | Race Detector | 是 | AGENTS.md |
 | 漏洞扫描（高危） | 是 | govulncheck、pnpm audit、Trivy |
 | 生成物一致（wire、swag、在线 Swagger、`@umijs/openapi` API）及公开路由覆盖 | 是 | REQ-02 MNT-03 |
-| 迁移可在空库与上一版本库执行 | 是 | DES-02 §10 |
+| 单一 Schema 可初始化空库；既有库增量升级另行验证 | 是 | DES-02 §10；空库通过不替代数据保留与升级验收 |
 | Secret 扫描 | 是 | DES-07 §13 |
 | 文档编号与链接校验 | 是（docs 变更时） | PLN-02 §4.2 |
 | AI 评测门禁 | 是（Skill / 模型变更时） | TST-03 §6 |
@@ -68,7 +68,7 @@ CI 运行时长目标：PR 全部检查 ≤ 20 分钟（依赖缓存：Go module
 共同的流程缺口是提交前检查与 CI 门禁、依赖环境没有完全对齐。处理要求：
 
 1. 提交前核对本次文件白名单、测试目录、格式、静态检查和受影响测试；按 `.github/workflows/ci.yml` 的固定版本使用工具，并核验 ffmpeg/ffprobe 等系统依赖。
-2. 数据库测试使用专用临时库，应用所需迁移；需要故障注入或空库的账号用例单独建库。提供实际 `LV_TEST_*` 条件并记录跳过项，禁止把无环境变量时的绿色结果当作集成验收。
+2. 数据库测试使用专用临时空库，初始化同一份 `backend/db/schema.sql`；需要故障注入或空库的账号用例单独建库。提供实际 `LV_TEST_*` 条件并记录跳过项，禁止把无环境变量时的绿色结果当作集成验收。
 3. 推送后按本次 SHA 查找 run，等待 backend、agent、frontend、images 全部结束。失败时先执行 `gh run view <run-id> --log-failed`，修复首个可操作错误、运行针对性回归，再推送修复；只在确认外部临时故障且源码无须变更时重跑。
 4. 交付必须给出远端 SHA、最终 CI 链接与结论、工作区状态和未执行门禁；CI 运行中、仅本地通过或镜像 job 被跳过时，不能报告 CI 全绿。直接推送 main 仅在用户明确授权时执行。
 
@@ -78,7 +78,7 @@ CI 运行时长目标：PR 全部检查 ≤ 20 分钟（依赖缓存：Go module
 | --- | --- | --- |
 | 容器镜像 | `<仓库>/lanverse/<服务>:<git-sha>`；发布时追加 `:<版本号>` | 火山引擎镜像仓库（CR）【待核实】 |
 | SBOM | `sbom-<服务>-<sha>.json` | 随镜像（OCI artifact） |
-| 迁移 | `backend/migrations/*.sql`（打包进 backend 镜像） | 镜像内 |
+| 数据库结构 | `backend/db/schema.sql`（最终态唯一事实源，与应用固定同一 Git SHA） | Git；部署使用同一 SHA 的文件，当前无自动升级入口 |
 | Skill 包 | 打包进 agent 镜像，`skills/index.json` | 镜像内 |
 | 前端 | Next.js standalone 输出打包进镜像 | 镜像内 |
 
@@ -88,15 +88,15 @@ CI 运行时长目标：PR 全部检查 ≤ 20 分钟（依赖缓存：Go module
 
 ### 4.1 staging（自动）
 
-合并到 `main` 后：拉取新镜像 → 执行迁移（`lanverse migrate up`）→ 滚动更新（先 worker、relay，再 api、frontend）→ 冒烟（登录、创建报价、模拟供应商完成一次生成、渲染 2 镜头）→ 结果通知。
+合并到 `main` 后：拉取新镜像 → 准备数据库结构（新空库初始化 Schema；既有库执行已审阅实例增量）→ 滚动更新（先 worker、relay，再 api、frontend）→ 冒烟（登录、创建报价、模拟供应商完成一次生成、渲染 2 镜头）→ 结果通知。
 
 ### 4.2 production（人工批准）
 
 ```text
 1. 研发在 GitHub Actions 发起 “deploy-production”，选择已在 staging 验证的镜像 sha
 2. 产品负责人在 Environment 审批中批准（GitHub Environments required reviewers）
-3. 预检查：staging 冒烟通过；无进行中的 S1 事件；迁移在 staging 已执行；数据库备份 < 24 小时
-4. 执行迁移（只允许向前兼容的 expand 类迁移，见 §5）
+3. 预检查：staging 冒烟通过；无进行中的 S1 事件；实例增量在 staging/隔离副本已验证；数据库备份 < 24 小时
+4. 执行已审阅实例增量（只允许向前兼容的 expand 类升级，见 §5；禁止在既有库重跑 Schema）
 5. 滚动更新（每个服务先起新实例、健康后停旧实例；backend-api 2 实例保证不中断）
 6. 发布后冒烟 + 观察 30 分钟（错误率、延迟、队列积压、unknown 数；OPS-03 看板）
 7. 记录发布：版本、sha、迁移、执行人、结果（GitHub Release 或部署记录）
@@ -104,7 +104,9 @@ CI 运行时长目标：PR 全部检查 ≤ 20 分钟（依赖缓存：Go module
 
 发布窗口：工作日 10:00–17:00，避开批量生成高峰；计划停机类变更按 REQ-02 AVL-02 提前 24 小时通知。
 
-## 5. 数据库迁移与发布顺序
+## 5. Schema、既有库升级与发布顺序
+
+当前已实现结构唯一来源是 `backend/db/schema.sql`；直接维护最终态表、索引、约束、函数、触发器和授权，不追加 up/down 文件。新空库由独立表所有者按 OPS-01 §7 在一个事务中初始化，管理员预置 `lanverse_app NOLOGIN NOSUPERUSER`。既有库依据实际实例与目标 Schema 审阅增量 SQL，单独记录前置结构、备份、执行内容和数据保留证据；该增量不成为另一套常驻结构事实源。旧脚本和历史验收从 Git 检索，当前 `lanverse` CLI 没有自动迁移命令。
 
 采用 **expand / contract** 两阶段：
 
@@ -135,7 +137,7 @@ CI 运行时长目标：PR 全部检查 ≤ 20 分钟（依赖缓存：Go module
 | 场景 | 动作 | 目标时长 |
 | --- | --- | --- |
 | 应用缺陷 | 重新部署上一版本镜像 sha（迁移已保证兼容） | ≤ 15 分钟 |
-| 迁移导致问题 | 优先前滚修复；必要时执行对应 down 迁移（仅限 expand 类且无数据丢失） | 视情况 |
+| 迁移导致问题 | 优先前滚修复；需要撤销时先审阅特定实例的无损逆向调整，不执行历史 down 或重跑 Schema | 视情况 |
 | 工作流逻辑缺陷 | 回滚 Worker 镜像；已按新逻辑运行的在途执行通过 `GetVersion` 分支保持一致；必要时对受影响执行发送信号或人工处理 | ≤ 30 分钟 |
 | 数据损坏 | 按 OPS-04 恢复流程 | RTO ≤ 4 小时 |
 

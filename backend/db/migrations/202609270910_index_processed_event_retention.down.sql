@@ -1,1 +1,0 @@
-DROP INDEX CONCURRENTLY infra.ix_processed_event_create_time;

@@ -22,7 +22,7 @@ func mediaStoreDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := os.Getenv("LV_TEST_MEDIA_STORE_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_MEDIA_STORE_DB_DSN to an isolated migrated PostgreSQL database")
+		t.Skip("set LV_TEST_MEDIA_STORE_DB_DSN to an isolated PostgreSQL database initialized from db/schema.sql")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)

@@ -74,6 +74,18 @@ jobs:
       - name: Install media probe tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: command -v ffmpeg && command -v ffprobe
+      - name: Require one database schema source
+        run: test "$(find db -type f -name '*.sql' -print)" = 'db/schema.sql'
+      - name: Provision schema role and load complete PostgreSQL contract schema
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE ROLE lanverse_app NOLOGIN NOSUPERUSER'
+          psql "$LV_TEST_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+      - name: Verify schema loads atomically into an empty database
+        env:
+          LV_TEST_SCHEMA_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_schema_gate_test?sslmode=disable
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_schema_gate_test'
+          go test -race ./tests/db -run '^TestSchema' -count=1 -v
       - name: Run backend Race tests
         shell: bash
         run: go test -race -count=1 -json ./... | tee "$RUNNER_TEMP/backend-tests.jsonl"
@@ -113,10 +125,8 @@ jobs:
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_identity_gate_test'
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_identity_bootstrap_test'
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271010_create_identity_user.up.sql
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609270435_create_outbox.up.sql
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271010_create_identity_user.up.sql
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271020_create_organization.up.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_gate_test?sslmode=disable' -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_bootstrap_test?sslmode=disable' -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Verify identity PostgreSQL and Redis contracts
         env:
           LV_TEST_IDENTITY_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_identity_gate_test?sslmode=disable
@@ -129,23 +139,17 @@ jobs:
       - name: Prepare isolated provider contract database
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_catalog_provider_gate_test'
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609270435_create_outbox.up.sql
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271010_create_identity_user.up.sql
-          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -v ON_ERROR_STOP=1 -f db/migrations/202609271100_create_provider_credentials.up.sql
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable' -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Verify provider PostgreSQL and administrator contracts
         env:
           LV_TEST_CATALOG_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable
         run: go test -race ./tests/catalog -run '^Test(ProviderRejectsInvalidSettingsAndDisablesOnce|CredentialKeepsCiphertextOutOfJSONAndValidatesTestOutcome|ProviderCredentialsWithRealPostgres|ConcurrentCredentialReplacementKeepsOneActive|CreateProviderCommitsAuditAndRejectsStaleAdminOnLocalPostgres|UpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres|SetCredentialCommitsSealedDataAndEventsOnLocalPostgres|DisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure|ProviderDetailReadsSafeMetadataWithCurrentAdminOnLocalPostgres)$' -count=1 -v
-      - name: Prepare PostgreSQL contract databases
-        run: psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE ROLE lanverse_app'
-      - name: Apply migrations for PostgreSQL contract tests
-        run: find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -f
       - name: Prepare isolated canvas contract databases
         run: |
           for database in lanverse_canvas_store_test lanverse_canvas_http_test; do
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
-            find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+            psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           done
       - name: Verify canvas persistence and public HTTP contracts
         env:
@@ -169,9 +173,7 @@ jobs:
             database="lanverse_identity_command_${index}"
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
-            for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
-              psql "$contract_dsn" -v ON_ERROR_STOP=1 -f "$migration"
-            done
+            psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
             LV_TEST_IDENTITY_DB_DSN="$contract_dsn" \
             LV_TEST_ACCOUNT_LIFECYCLE_DB_DSN="$contract_dsn" \
             LV_TEST_ACCOUNT_DIRECTORY_DB_DSN="$contract_dsn" \
@@ -183,9 +185,7 @@ jobs:
             database="lanverse_${package}_contract"
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
-            for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
-              psql "$contract_dsn" -v ON_ERROR_STOP=1 -f "$migration"
-            done
+            psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
             LV_TEST_CATALOG_DB_DSN="$contract_dsn" \
             LV_TEST_MODEL_CATALOG_DB_DSN="$contract_dsn" \
             LV_TEST_BILLING_DB_DSN="$contract_dsn" \
@@ -194,19 +194,14 @@ jobs:
           done
       - name: Verify operation PostgreSQL contracts
         run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -skip '^TestOperationMediaReferenceGuard' -count=1
-      - name: Prepare isolated media migration database
+      - name: Prepare isolated media schema database
         run: |
-          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_media_migration_test'
-          for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
-            case "$migration" in
-              *202609271180_create_media_asset.up.sql) break ;;
-            esac
-            psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_migration_test?sslmode=disable' -v ON_ERROR_STOP=1 -f "$migration"
-          done
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_media_schema_test'
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_schema_test?sslmode=disable' -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Verify media PostgreSQL contracts
         run: |
           LV_TEST_MEDIA_STORE_DB_DSN="$LV_TEST_DB_DSN" \
-          LV_TEST_MEDIA_MIGRATION_DB_DSN='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_migration_test?sslmode=disable' \
+          LV_TEST_MEDIA_SCHEMA_DB_DSN='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_schema_test?sslmode=disable' \
           go test -race ./tests/media -skip '^Test(MediaToolRetained|MediaPackage(Personal|ReplayAndAdmissionUseCommandBeforeProjectLock$|ReplayKeepsOriginalReceiptAndCurrentAuthority$))' -count=1
       - name: Prepare private receipt and export contract storage
         env:
@@ -255,7 +250,7 @@ jobs:
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_receipt'
           contract_dsn='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable'
-          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+          psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Verify template quotes and private provider receipts
         env:
           LV_TEST_OPERATION_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
@@ -327,7 +322,7 @@ jobs:
           LV_TEST_FOLDER_OWNER_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_cover'
-          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_COVER_OWNER_DSN" -v ON_ERROR_STOP=1 -f
+          psql "$LV_TEST_COVER_OWNER_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           go test -race -p 1 ./tests/media ./tests/workspace -run '^Test(Document|ProjectCover|ProjectCopy(Cover|Document))' -count=1 -json | tee "$RUNNER_TEMP/cover-document-pg.jsonl"
           python3 - <<'PY'
           import collections
@@ -352,7 +347,7 @@ jobs:
           LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_library'
-          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$LV_TEST_LIBRARY_OWNER_DB_DSN" -v ON_ERROR_STOP=1 -f
+          psql "$LV_TEST_LIBRARY_OWNER_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           go test -race ./tests/media -run '^TestProjectCopy(Retained|HistoricalDocument|LibraryNilFields|MediaPreservesContentWithoutExecutionHistory|MediaRealObjectsRegistrationAndCleanup|Cleanup)' -count=1 -json | tee "$RUNNER_TEMP/retained-copy-pg.jsonl"
           python3 - <<'PY'
           import collections
@@ -476,12 +471,12 @@ jobs:
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_reference'
           contract_dsn='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable'
-          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+          psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Prepare isolated script contract database
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_script'
           contract_dsn='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_script?sslmode=disable'
-          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+          psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Verify complete script sources, review history, file import, and private copy
         shell: bash
         env:
@@ -510,7 +505,7 @@ jobs:
           for database in lanverse_bible lanverse_voice; do
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
-            find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+            psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           done
       - name: Verify complete Bible history and workspace copy recovery
         shell: bash
@@ -597,7 +592,7 @@ jobs:
           for database in lanverse_composition_package_guard lanverse_composition_package_lock_ci lanverse_composition_package_router; do
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
-            find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+            psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           done
       - name: Verify personal unknown Package blocks Purge under current authority
         shell: bash
@@ -680,9 +675,7 @@ jobs:
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE ROLE lanverse_runtime_test LOGIN INHERIT PASSWORD 'ci-only'"
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'GRANT lanverse_app TO lanverse_runtime_test'
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_audit_role_test'
-          for migration in $(find db/migrations -maxdepth 1 -name '*.up.sql' | sort); do
-            psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_audit_role_test?sslmode=disable' -v ON_ERROR_STOP=1 -f "$migration"
-          done
+          psql 'postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_audit_role_test?sslmode=disable' -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
       - name: Verify audit contracts with a real restricted login
         env:
           LV_TEST_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_audit_role_test?sslmode=disable

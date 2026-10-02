@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
@@ -140,7 +141,7 @@ func TestProjectCoverPermanentLegacyClosedPayloadRejectsWithoutPromotion(t *test
 	}
 }
 
-func TestProjectCoverPermanentHTTPKeyMismatchIsConflictAndMigrationRetention(t *testing.T) {
+func TestProjectCoverPermanentHTTPKeyMismatchIsConflictAndSchemaRetention(t *testing.T) {
 	ctx, db, owner := coverTestDB(t)
 	actor, project := lifecycleActorProject(ctx, t, owner)
 	path := "/api/projects/" + project.String()
@@ -153,21 +154,30 @@ func TestProjectCoverPermanentHTTPKeyMismatchIsConflictAndMigrationRetention(t *
 	if conflict.Code != 409 {
 		t.Fatal("permanent HTTP key reuse must conflict", conflict.Code, conflict.Body.String())
 	}
-	down, err := os.ReadFile("../../db/migrations/202610020052_workspace_project_cover.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
 	tx := owner.Begin()
 	defer rollbackLifecycleTest(t, tx)
-	if err := tx.Exec(string(down)).Error; err == nil {
-		t.Fatal("migration erased retained permanent receipts")
-	}
-	if err := tx.Rollback().Error; err != nil {
-		t.Fatal(err)
+	for _, statement := range []string{
+		`UPDATE workspace.project_change_command SET response_body='{}'::jsonb WHERE actor_id=? AND idem_key=?`,
+		`DELETE FROM workspace.project_change_command WHERE actor_id=? AND idem_key=?`,
+	} {
+		if err := tx.Exec(`SAVEPOINT project_change_mutation_probe`).Error; err != nil {
+			t.Fatal(err)
+		}
+		mutationErr := tx.Exec(statement, actor.ID, uuid.MustParse(key)).Error
+		if err := tx.Exec(`ROLLBACK TO SAVEPOINT project_change_mutation_probe`).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Exec(`RELEASE SAVEPOINT project_change_mutation_probe`).Error; err != nil {
+			t.Fatal(err)
+		}
+		var pgErr *pgconn.PgError
+		if !errors.As(mutationErr, &pgErr) || pgErr.Code != "42501" {
+			t.Fatalf("permanent receipt mutation returned %v, want append-only denial", mutationErr)
+		}
 	}
 	var exists bool
 	if err := db.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.project_change_command WHERE actor_id=? AND idem_key=?)`, actor.ID, uuid.MustParse(key)).Scan(&exists).Error; err != nil || !exists {
-		t.Fatal("rollback guard did not retain receipt", err)
+		t.Fatal("schema did not retain receipt", err)
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -174,7 +173,7 @@ func TestGLTFJSONActualHTTPPrivateOriginalAndIndependentProjectCopy(t *testing.T
 	}
 }
 
-func TestGLTFJSONSQLFactsAndRetainedOriginalDowngradeGuard(t *testing.T) {
+func TestGLTFJSONSchemaFactsAndRetainedOriginalContract(t *testing.T) {
 	db := libraryRuntimeDB(t)
 	owner := libraryOwnerDB(t)
 	objects := glbTestObjects(t)
@@ -203,15 +202,8 @@ func TestGLTFJSONSQLFactsAndRetainedOriginalDowngradeGuard(t *testing.T) {
 			t.Fatal("owner constraint accepted fake JSON model facts", sql)
 		}
 	}
-	down, err := os.ReadFile("../../db/migrations/202610020063_media_gltf.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := owner.Transaction(func(tx *gorm.DB) error { return tx.Exec(string(down)).Error }); err == nil {
-		t.Fatal("downgrade erased a retained JSON original contract")
-	}
 	var definition string
 	if err := db.Raw(`SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='media.media_asset'::regclass AND conname='media_asset_model_facts_check'`).Scan(&definition).Error; err != nil || !bytes.Contains([]byte(definition), []byte("model/gltf+json")) {
-		t.Fatal("failed downgrade changed formal facts", err)
+		t.Fatal("schema constraint lost formal JSON model facts", err)
 	}
 }

@@ -1,9 +1,7 @@
 package media_test
 
 import (
-	"context"
 	"errors"
-	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -94,9 +92,8 @@ func TestPersonalUploadRechecksRevocationBeforePublishing(t *testing.T) {
 	}
 }
 
-func TestPersonalUploadReceiptMigrationKeepsOwnershipAndRuntimeACLClosed(t *testing.T) {
+func TestPersonalUploadReceiptSchemaKeepsOwnershipAndRuntimeACLClosed(t *testing.T) {
 	db := libraryRuntimeDB(t)
-	owner := libraryOwnerDB(t)
 	actor, project := mediaStoreProject(t, db)
 	foreign, _ := mediaStoreProject(t, db)
 	original := uuid.New()
@@ -122,31 +119,8 @@ func TestPersonalUploadReceiptMigrationKeepsOwnershipAndRuntimeACLClosed(t *test
 			t.Fatal("runtime can rewrite permanent receipt or immutable source", err)
 		}
 	}
-	// Exercise down/up restoration in a rollback-only owner transaction without
-	// losing fixture receipts from previous real tests.
-	down, err := os.ReadFile("../../db/migrations/202610020056_media_personal_upload.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	up, err := os.ReadFile("../../db/migrations/202610020056_media_personal_upload.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	tx := owner.WithContext(ctx).Begin()
-	defer func() { _ = tx.Rollback().Error }()
-	if err := tx.Exec(`DELETE FROM media.upload_request WHERE project_id IS NULL`).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Exec(string(down)).Error; err != nil {
-		t.Fatal("isolated down", err)
-	}
-	if err := tx.Exec(string(up)).Error; err != nil {
-		t.Fatal("isolated up", err)
-	}
 	var nullAllowed bool
-	if err := tx.Raw(`SELECT is_nullable='YES' FROM information_schema.columns WHERE table_schema='media' AND table_name='upload_request' AND column_name='project_id'`).Scan(&nullAllowed).Error; err != nil || !nullAllowed {
-		t.Fatal("scope ddl not restored", err)
+	if err := db.Raw(`SELECT is_nullable='YES' FROM information_schema.columns WHERE table_schema='media' AND table_name='upload_request' AND column_name='project_id'`).Scan(&nullAllowed).Error; err != nil || !nullAllowed {
+		t.Fatal("schema no longer supports closed personal receipt scope", err)
 	}
 }

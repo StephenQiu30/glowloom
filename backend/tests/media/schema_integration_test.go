@@ -16,47 +16,22 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
 )
 
-const mediaMigration = "202609271180_create_media_asset"
-
-// This test owns a disposable database migrated through the operation migration,
-// but not yet through the media migration. It deliberately applies up/down/up.
-func TestMediaMigrationUpDownUp(t *testing.T) {
-	dsn := os.Getenv("LV_TEST_MEDIA_MIGRATION_DB_DSN")
+// The fixture database must be initialized from db/schema.sql before this test.
+func TestMediaSchemaRelationships(t *testing.T) {
+	dsn := os.Getenv("LV_TEST_MEDIA_SCHEMA_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_MEDIA_MIGRATION_DB_DSN to a disposable PostgreSQL database migrated through 202609271170")
+		t.Skip("set LV_TEST_MEDIA_SCHEMA_DB_DSN to a disposable PostgreSQL database initialized from db/schema.sql")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	conn, err := db.Open(ctx, dsn, noop.NewTracerProvider())
 	if err != nil {
-		t.Fatalf("open media migration test database: %v", err)
+		t.Fatalf("open media schema test database: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	database := conn.DB.WithContext(ctx)
-
-	applyMediaMigration(t, database, "up")
 	assertMediaSchema(t, database)
 	assertMediaRelationships(t, database)
-	applyMediaMigration(t, database, "down")
-	for _, name := range []string{"media.media_asset", "media.rendition"} {
-		if relationExists(t, database, name) {
-			t.Fatalf("%s survived down migration", name)
-		}
-	}
-	applyMediaMigration(t, database, "up")
-	assertMediaSchema(t, database)
-}
-
-func applyMediaMigration(t *testing.T, database *gorm.DB, direction string) {
-	t.Helper()
-	path := "../../db/migrations/" + mediaMigration + "." + direction + ".sql"
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s migration: %v", direction, err)
-	}
-	if err := database.Exec(string(contents)).Error; err != nil {
-		t.Fatalf("apply %s migration: %v", direction, err)
-	}
 }
 
 func relationExists(t *testing.T, database *gorm.DB, relation string) bool {
@@ -72,7 +47,7 @@ func assertMediaSchema(t *testing.T, database *gorm.DB) {
 	t.Helper()
 	for _, name := range []string{"media.media_asset", "media.rendition"} {
 		if !relationExists(t, database, name) {
-			t.Fatalf("%s missing after up migration", name)
+			t.Fatalf("%s missing from initialized schema", name)
 		}
 	}
 	for name, want := range map[string][]string{
