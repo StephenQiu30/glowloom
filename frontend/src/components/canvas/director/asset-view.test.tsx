@@ -148,9 +148,12 @@ it("材质预览关闭先恢复原材质，再释放原件所有资源", async (
   owner.parse.mockResolvedValue(own.gltf);
   const view = mount(undefined, "clay");
   await waitFor(() => expect(view.loaded).toHaveBeenCalledOnce());
-  const mesh = own.gltf.scene.children[0] as Mesh,
-    replacement = vi.spyOn(mesh.material as MeshStandardMaterial, "dispose");
-  expect(mesh.material).not.toBe(own.material);
+  const mesh = own.gltf.scene.children[0] as Mesh;
+  await waitFor(() => expect(mesh.material).not.toBe(own.material));
+  const replacement = vi.spyOn(
+    mesh.material as MeshStandardMaterial,
+    "dispose",
+  );
   view.unmount();
   expect(material).toHaveBeenCalledOnce();
   expect(geometry).toHaveBeenCalledOnce();

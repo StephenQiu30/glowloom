@@ -133,7 +133,11 @@ func TestProjectCopyLibraryRetainedImagePreservesTrashAndIndependentBytes(t *tes
 	if err != nil || page.Total != 0 {
 		t.Fatal("trash became ordinary visible catalog content", page, err)
 	}
-	target, err := store.FindAsset(t.Context(), actor, binding.TargetProjectID, targetID)
+	if _, err := store.FindAsset(t.Context(), actor, binding.TargetProjectID, targetID); !errors.Is(err, mediaapp.ErrNotFound) {
+		t.Fatal("copied trash formed a new ordinary binding", err)
+	}
+	retainedTarget, err := library.FindLibraryMedia(t.Context(), actor, targetScope, targetID)
+	target := retainedTarget.Asset
 	if err != nil || target.IsDelete || target.SHA256 == nil || *target.SHA256 != *source.SHA256 || target.ObjectKey == source.ObjectKey {
 		t.Fatal("independent retained target facts", target, err)
 	}
