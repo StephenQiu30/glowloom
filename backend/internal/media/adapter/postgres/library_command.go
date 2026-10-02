@@ -282,8 +282,11 @@ func (r libraryItemRow) item() (domain.LibraryItem, error) {
 }
 
 func lockLibraryItems(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, library uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]domain.LibraryItem, error) {
+	if err := requireNoPurgeReservation(tx, ids); err != nil {
+		return nil, err
+	}
 	var rows []libraryItemRow
-	if err := tx.Raw(`SELECT * FROM media.library_item WHERE library_id=? AND id IN ? ORDER BY id FOR UPDATE`, library, ids).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(`SELECT * FROM media.library_item WHERE library_id=? AND id IN ? AND purged_at IS NULL ORDER BY id FOR UPDATE`, library, ids).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	items := make(map[uuid.UUID]domain.LibraryItem, len(ids))

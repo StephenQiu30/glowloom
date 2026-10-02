@@ -45,6 +45,17 @@ import type { LibraryEditFrame } from "./library-command-dialog";
 import { loadLibraryUploads } from "./library-upload-intent";
 import { loadTransferIntent } from "@/components/library/transfer-intent";
 import type { TransferSelection } from "@/components/library/transfer-form";
+import { LibraryStorageMeter } from "./library-storage-meter";
+import { usePurgeWriter } from "./library-purge-writer";
+import type { PurgeFrame } from "./library-purge-dialog";
+import type { PurgeJob } from "./library-purge-model";
+const PurgeDialog = dynamic(
+  () =>
+    import("./library-purge-dialog").then(
+      (module) => module.LibraryPurgeDialog,
+    ),
+  { ssr: false },
+);
 const TransferDialog = dynamic(
   () =>
     import("@/components/library/transfer-dialog").then(
@@ -102,6 +113,8 @@ export function LibraryBrowser({
     [uploadLocked, setUploadLocked] = useState(false),
     [transferOpen, setTransferOpen] = useState(false),
     [transferSelection, setTransferSelection] = useState<TransferSelection>(),
+    [purgeFrame, setPurgeFrame] = useState<PurgeFrame>(),
+    [purgeAccepted, setPurgeAccepted] = useState<PurgeJob>(),
     [reading, setReading] = useState(false),
     [notice, setNotice] = useState<string>();
   const chooser = useInfiniteQuery({
@@ -184,6 +197,25 @@ export function LibraryBrowser({
         : []),
     ]);
   });
+  const purgeWriter = usePurgeWriter(identity, async (job) => {
+    setPurgeAccepted(job);
+    setPurgeFrame({ mode: "history" });
+    setSelection([]);
+    await Promise.all([
+      cache.invalidateQueries({ queryKey: libraryKey(identity) }),
+      refreshContext(),
+      ...(identity.scope.kind === "project"
+        ? [
+            cache.invalidateQueries({
+              queryKey: ["project", identity.scope.project_id],
+            }),
+            cache.invalidateQueries({
+              queryKey: ["canvas", "media", identity.scope.project_id],
+            }),
+          ]
+        : []),
+    ]);
+  });
   const readOnly =
     identity.scope.kind === "project" &&
     (!project.data ||
@@ -192,6 +224,8 @@ export function LibraryBrowser({
       project.data.is_delete);
   const blocked =
     writer.locked ||
+    purgeWriter.locked ||
+    Boolean(purgeFrame) ||
     !uploadRecovery.isFetchedAfterMount ||
     uploadRecovery.isError ||
     hasUploadRecovery ||
@@ -348,7 +382,18 @@ export function LibraryBrowser({
         identity.scope.kind === "personal" ? "个人素材库" : "项目素材库"
       }
     >
+      <LibraryStorageMeter identity={identity} />
       <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          disabled={blocked}
+          onClick={() => {
+            setPurgeAccepted(undefined);
+            setPurgeFrame({ mode: "history" });
+          }}
+        >
+          查看永久清理记录
+        </Button>
         <Button
           variant="outline"
           disabled={blocked}
@@ -664,15 +709,42 @@ export function LibraryBrowser({
                       )}
                     </>
                   ) : (
-                    <Button
-                      variant="outline"
-                      disabled={blocked}
-                      onClick={() => batch("restore_items")}
-                    >
-                      恢复所选素材
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        disabled={blocked}
+                        onClick={() => batch("restore_items")}
+                      >
+                        恢复所选素材
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        disabled={blocked}
+                        onClick={() => {
+                          setPurgeAccepted(undefined);
+                          setPurgeFrame({
+                            mode: "selected",
+                            items: selection.map((item) => ({ ...item })),
+                          });
+                        }}
+                      >
+                        永久删除所选素材
+                      </Button>
+                    </>
                   )}
                 </>
+              )}
+              {filter.catalog_state === "trashed" && !readOnly && (
+                <Button
+                  variant="destructive"
+                  disabled={blocked}
+                  onClick={() => {
+                    setPurgeAccepted(undefined);
+                    setPurgeFrame({ mode: "all" });
+                  }}
+                >
+                  清空整个回收站
+                </Button>
               )}
             </div>
             {current.items.length ? (
@@ -783,9 +855,49 @@ export function LibraryBrowser({
           onCloseAutoFocus={restoreDialogFocus}
         />
       )}
+      {(purgeFrame ||
+        purgeWriter.intent ||
+        purgeWriter.plan ||
+        purgeWriter.storageError) &&
+        !writer.intent &&
+        !writer.storageError &&
+        !hasUploadRecovery &&
+        !hasTransferRecovery && (
+          <PurgeDialog
+            key={
+              purgeWriter.intent?.key ??
+              `${purgeFrame?.mode ?? "recovery"}:${purgeAccepted?.id ?? "new"}`
+            }
+            identity={identity}
+            frame={purgeFrame}
+            writer={purgeWriter}
+            accepted={purgeAccepted}
+            readOnly={readOnly}
+            onClose={() => {
+              setPurgeFrame(undefined);
+              setPurgeAccepted(undefined);
+            }}
+            onCloseAutoFocus={restoreDialogFocus}
+            onObserved={async () => {
+              await Promise.all([
+                cache.invalidateQueries({
+                  queryKey: [...libraryKey(identity), "page"],
+                }),
+                cache.invalidateQueries({
+                  queryKey: [...libraryKey(identity), "storage-usage"],
+                }),
+                refreshContext(),
+              ]);
+            }}
+          />
+        )}
       {(transferOpen || hasTransferRecovery) &&
         !writer.intent &&
         !writer.storageError &&
+        !purgeFrame &&
+        !purgeWriter.intent &&
+        !purgeWriter.plan &&
+        !purgeWriter.storageError &&
         !hasUploadRecovery && (
           <TransferDialog
             identity={identity}
@@ -829,6 +941,10 @@ export function LibraryBrowser({
         !frame &&
         !writer.intent &&
         !writer.storageError &&
+        !purgeFrame &&
+        !purgeWriter.intent &&
+        !purgeWriter.plan &&
+        !purgeWriter.storageError &&
         transferRecovery.isFetchedAfterMount &&
         !transferRecovery.isError &&
         !transferOpen &&
@@ -851,7 +967,11 @@ export function LibraryBrowser({
         )}
       {(uploadOpen || hasUploadRecovery) &&
         !writer.intent &&
-        !writer.storageError && (
+        !writer.storageError &&
+        !purgeFrame &&
+        !purgeWriter.intent &&
+        !purgeWriter.plan &&
+        !purgeWriter.storageError && (
           <UploadDialog
             identity={identity}
             onBusyChange={setUploadLocked}

@@ -4,17 +4,29 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"unicode/utf8"
 )
 
 // DecodeClosedJSON rejects duplicate names, deep input and fields outside a typed contract.
 func DecodeClosedJSON(data []byte, out any) error {
-	if len(data) == 0 || len(data) > MaxVersionBytes {
+	return decodeClosedJSON(data, out, MaxVersionBytes, true)
+}
+
+// DecodeClosedJSONDocument checks a complete retained document under its caller's
+// byte contract. Complete Copy history has no per-version depth or node budget;
+// each contained version is validated separately by its owning reader.
+func DecodeClosedJSONDocument(data []byte, out any, maxBytes int) error {
+	return decodeClosedJSON(data, out, maxBytes, false)
+}
+
+func decodeClosedJSON(data []byte, out any, maxBytes int, versionBudget bool) error {
+	if len(data) == 0 || len(data) > maxBytes || !utf8.Valid(data) {
 		return ErrInvalidContent
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	nodes := 0
-	if err := jsonValue(decoder, 0, &nodes); err != nil {
+	if err := jsonValue(decoder, 0, &nodes, versionBudget); err != nil {
 		return err
 	}
 	if _, err := decoder.Token(); err != io.EOF {
@@ -28,9 +40,9 @@ func DecodeClosedJSON(data []byte, out any) error {
 	return nil
 }
 
-func jsonValue(d *json.Decoder, depth int, nodes *int) error {
+func jsonValue(d *json.Decoder, depth int, nodes *int, versionBudget bool) error {
 	*nodes++
-	if depth > 64 || *nodes > 200000 {
+	if versionBudget && (depth > 64 || *nodes > 200000) {
 		return ErrInvalidContent
 	}
 	token, err := d.Token()
@@ -54,7 +66,7 @@ func jsonValue(d *json.Decoder, depth int, nodes *int) error {
 				return ErrInvalidContent
 			}
 			keys[key] = true
-			if err := jsonValue(d, depth+1, nodes); err != nil {
+			if err := jsonValue(d, depth+1, nodes, versionBudget); err != nil {
 				return err
 			}
 		}
@@ -64,7 +76,7 @@ func jsonValue(d *json.Decoder, depth int, nodes *int) error {
 		}
 	case '[':
 		for d.More() {
-			if err := jsonValue(d, depth+1, nodes); err != nil {
+			if err := jsonValue(d, depth+1, nodes, versionBudget); err != nil {
 				return err
 			}
 		}

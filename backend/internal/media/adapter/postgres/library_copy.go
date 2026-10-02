@@ -32,13 +32,20 @@ func readCopySourceLibrary(tx *gorm.DB, actor identityapp.Principal, binding app
 		return copySourceLibrary{}, err
 	}
 	var rows []libraryItemRow
-	if err := tx.Raw(`SELECT * FROM media.library_item WHERE library_id=? ORDER BY id LIMIT 8193 FOR SHARE`, row.ID).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(`SELECT * FROM media.library_item WHERE library_id=? AND purged_at IS NULL ORDER BY id LIMIT 8193 FOR SHARE`, row.ID).Scan(&rows).Error; err != nil {
 		return copySourceLibrary{}, fmt.Errorf("freeze complete library items: %w", err)
 	}
 	if len(rows) > 8192 {
 		return copySourceLibrary{}, application.ErrProjectCopyMediaUnavailable
 	}
 	items := make([]domain.LibraryItem, 0, len(rows))
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	if err := requireNoPurgeReservation(tx, ids); err != nil {
+		return copySourceLibrary{}, err
+	}
 	for _, row := range rows {
 		item, err := row.item()
 		if err != nil {

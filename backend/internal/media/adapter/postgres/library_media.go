@@ -37,6 +37,9 @@ func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor identityapp.P
 		if _, err := entry.detail(library.ID); err != nil {
 			return err
 		}
+		if err := requireNoNewMediaPurge(tx, []uuid.UUID{id}); err != nil {
+			return err
+		}
 		var a assetRow
 		read = tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND NOT contains_real_person AND consent_record_id IS NULL FOR SHARE`, id).Scan(&a)
 		if read.Error != nil {

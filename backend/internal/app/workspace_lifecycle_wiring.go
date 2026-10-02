@@ -50,5 +50,7 @@ func provideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 		provideMediaDepthStore(tx, false),
 		provideScriptSourceStore(tx),
 		provideMediaTransferStore(tx),
+		provideMediaPurgeStore(tx),
+		mediaPackageWorkGuard{store: provideMediaPackageStore(tx)},
 	}}
 }

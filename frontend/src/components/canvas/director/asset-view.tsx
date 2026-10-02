@@ -112,21 +112,31 @@ export function AuthorizedModel({
   }, [onMetadata, onStatus, onLoaded]);
   const [loaded, setLoaded] = useState<{
     identity: string;
+    authorization: NonNullable<typeof authorized>;
     gltf: GLTF;
     mixer: AnimationMixer;
     bones: Map<string, { bone: Bone; rest: Quaternion }>;
   }>();
   const [error, setError] = useState("");
+  const restoreMaterials = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
-    if (!loaded) return;
-    const replacements: { item: Mesh; original: Material | Material[] }[] = [];
+    if (
+      !loaded ||
+      loaded.identity !== authorizationId ||
+      loaded.authorization !== authorized
+    )
+      return;
+    const replacements: {
+      item: Mesh;
+      original: Material | Material[];
+      replacement: Material;
+    }[] = [];
     loaded.gltf.scene.traverse((item) => {
       if (!(item instanceof Mesh)) return;
       item.castShadow = object?.castShadow ?? true;
       item.receiveShadow = object?.receiveShadow ?? true;
       if (mode === "beauty" && object?.kind !== "actor") return;
-      replacements.push({ item, original: item.material });
-      item.material =
+      const replacement =
         mode === "normal"
           ? new MeshNormalMaterial()
           : mode === "depth"
@@ -140,14 +150,28 @@ export function AuthorizedModel({
                       : "#aab2ba",
                 roughness: 0.8,
               });
+      replacements.push({ item, original: item.material, replacement });
+      item.material = replacement;
     });
-    return () =>
-      replacements.forEach(({ item, original }) => {
-        (item.material as Material).dispose();
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      replacements.forEach(({ item, original, replacement }) => {
+        replacement.dispose();
         item.material = original;
       });
+    };
+    restoreMaterials.current = restore;
+    return () => {
+      restore();
+      if (restoreMaterials.current === restore)
+        restoreMaterials.current = undefined;
+    };
   }, [
     loaded,
+    authorized,
+    authorizationId,
     mode,
     object?.castShadow,
     object?.receiveShadow,
@@ -196,6 +220,7 @@ export function AuthorizedModel({
       setError("");
       setLoaded({
         identity: authorizationId,
+        authorization: authorized,
         gltf,
         mixer: new AnimationMixer(gltf.scene),
         bones,
@@ -216,11 +241,20 @@ export function AuthorizedModel({
     return () => {
       status.current?.(false);
       controller.abort();
-      if (current) disposeDirectorModel(current);
+      if (current) {
+        restoreMaterials.current?.();
+        disposeDirectorModel(current);
+      }
     };
   }, [authorized, authorizationId]);
   useFrame(() => {
-    if (!loaded || loaded.identity !== authorizationId || !object) return;
+    if (
+      !loaded ||
+      loaded.identity !== authorizationId ||
+      loaded.authorization !== authorized ||
+      !object
+    )
+      return;
     const motion = object.motionClips?.find(
       (clip) => clip.id === object.activeMotionClipId,
     );
@@ -276,7 +310,10 @@ export function AuthorizedModel({
         </p>
       </Html>
     );
-  return loaded && authorized && loaded.identity === authorizationId ? (
+  return loaded &&
+    authorized &&
+    loaded.identity === authorizationId &&
+    loaded.authorization === authorized ? (
     <primitive object={loaded.gltf.scene} dispose={null} />
   ) : (
     <Html center>正在载入项目模型…</Html>

@@ -73,7 +73,7 @@ func (b *bound) LoadVersion(ctx context.Context, kind domain.Kind, id uuid.UUID)
 	v := domain.Version{ID: row.ID, OrgID: row.OrgID, ProjectID: row.ProjectID, EntryID: row.EntryID, Kind: kind, Number: row.VersionNo, PreviousID: row.PreviousID, ActorID: row.ActorID, CreatedAt: row.CreatedAt, Origin: row.Origin, ContentSHA256: row.ContentSHA256}
 	if row.ResultSource != nil {
 		var source domain.ResultSource
-		if err := json.Unmarshal([]byte(*row.ResultSource), &source); err != nil {
+		if err := domain.DecodeClosedJSON([]byte(*row.ResultSource), &source); err != nil {
 			return v, domain.ErrCorruptHistory
 		}
 		v.Result = &source
@@ -206,7 +206,7 @@ func (b *bound) verifyCharacterRows(ctx context.Context, v domain.Version) error
 			return domain.ErrCorruptHistory
 		}
 		var scopes []domain.LookScope
-		if row.AppliesTo != nil && json.Unmarshal([]byte(*row.AppliesTo), &scopes) != nil {
+		if row.AppliesTo != nil && domain.DecodeClosedJSON([]byte(*row.AppliesTo), &scopes) != nil {
 			return domain.ErrCorruptHistory
 		}
 		a, err := json.Marshal(scopes)
@@ -256,7 +256,7 @@ func (b *bound) verifyCharacterRows(ctx context.Context, v domain.Version) error
 		return domain.ErrCorruptHistory
 	}
 	var actual domain.VoiceContent
-	if json.Unmarshal([]byte(voiceRows[0].Content), &actual) != nil || actual.Validate() != nil {
+	if domain.DecodeClosedJSON([]byte(voiceRows[0].Content), &actual) != nil || actual.Validate() != nil {
 		return domain.ErrCorruptHistory
 	}
 	encoded, err := json.Marshal(actual)

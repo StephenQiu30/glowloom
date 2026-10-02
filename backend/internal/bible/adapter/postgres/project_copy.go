@@ -172,7 +172,7 @@ func readBibleManifest(tx *gorm.DB, b application.ProjectCopyBinding, snapshot a
 		return application.CopyManifest{}, domain.ErrCorruptHistory
 	}
 	var m application.CopyManifest
-	if json.Unmarshal([]byte(row.Manifest), &m) != nil {
+	if domain.DecodeClosedJSONDocument([]byte(row.Manifest), &m, len(row.Manifest)) != nil {
 		return m, domain.ErrCorruptHistory
 	}
 	proof, err := bibleCopySnapshot(m)

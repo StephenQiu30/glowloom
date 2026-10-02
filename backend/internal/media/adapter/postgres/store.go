@@ -87,6 +87,12 @@ func (s *Store) CreateAsset(ctx context.Context, actor identityapp.Principal, as
 // FindAsset returns one visible asset after rechecking the current actor and
 // project. A caller cannot discover another project's asset by its ID.
 func (s *Store) FindAsset(ctx context.Context, actor identityapp.Principal, projectID, assetID uuid.UUID) (domain.MediaAsset, error) {
+	return s.findAsset(ctx, actor, projectID, assetID, true)
+}
+
+// findAsset keeps the original current-facts reader available only to owning
+// consumers of already frozen evidence. Ordinary public reads require visibility.
+func (s *Store) findAsset(ctx context.Context, actor identityapp.Principal, projectID, assetID uuid.UUID, newBinding bool) (domain.MediaAsset, error) {
 	if s == nil || s.db == nil {
 		return domain.MediaAsset{}, ErrUnavailable
 	}
@@ -96,6 +102,17 @@ func (s *Store) FindAsset(ctx context.Context, actor identityapp.Principal, proj
 	var row assetRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := requireCurrentActor(tx, actor); err != nil {
+			return err
+		}
+		if newBinding {
+			library, err := projectMediaLibrary(tx, actor, projectID)
+			if err != nil {
+				return err
+			}
+			if err := requireNewMediaVisible(tx, library.ID, []uuid.UUID{assetID}); err != nil {
+				return err
+			}
+		} else if err := requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`
@@ -271,6 +288,13 @@ func visibleAssetKey(tx *gorm.DB, actor identityapp.Principal, projectID, assetI
 	if projectID == uuid.Nil || assetID == uuid.Nil {
 		return "", ErrNotFound
 	}
+	library, err := projectMediaLibrary(tx, actor, projectID)
+	if err != nil {
+		return "", err
+	}
+	if err := requireNewMediaVisible(tx, library.ID, []uuid.UUID{assetID}); err != nil {
+		return "", err
+	}
 	var row struct{ ObjectKey string }
 	result := tx.Raw(`
 		SELECT a.object_key FROM media.media_asset AS a
@@ -397,13 +421,19 @@ func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal
 		if err := requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
-		query := `SELECT * FROM media.media_asset WHERE project_id=? AND NOT is_delete AND status='ready' AND moderation_status='passed'`
+		library, err := readLibrary(tx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &projectID}, false)
+		if err != nil {
+			return err
+		}
+		query := `SELECT * FROM media.media_asset a WHERE project_id=? AND NOT is_delete AND status='ready' AND moderation_status='passed'
+		 AND NOT EXISTS(SELECT 1 FROM media.library_item i WHERE i.library_id=? AND i.id=a.id AND (i.catalog_state<>'active' OR i.purged_at IS NOT NULL))
+		 AND NOT EXISTS(SELECT 1 FROM media.purge_item i WHERE i.item_id=a.id AND i.status IN ('queued','running','needs_reconciliation','succeeded'))`
 		if kind == "document" {
 			query += ` AND kind='document'`
 		} else {
 			query += ` AND kind IN ('image','video','audio','model')`
 		}
-		args := []any{projectID}
+		args := []any{projectID, library.ID}
 		if kind != "" {
 			query += ` AND kind=?`
 			args = append(args, kind)
@@ -412,7 +442,7 @@ func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal
 			query += ` AND id<?`
 			args = append(args, after)
 		}
-		query += ` ORDER BY id DESC LIMIT ?`
+		query += ` ORDER BY id DESC LIMIT ? FOR SHARE OF a`
 		args = append(args, limit)
 		return tx.Raw(query, args...).Scan(&rows).Error
 	})

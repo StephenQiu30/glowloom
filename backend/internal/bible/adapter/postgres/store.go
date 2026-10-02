@@ -150,7 +150,7 @@ func (b *bound) Replay(ctx context.Context, actor identityapp.Principal, c appli
 		return nil, application.ErrIdempotencyConflict
 	}
 	var result application.Receipt
-	if json.Unmarshal([]byte(row.Response), &result) != nil || result.EntryID == uuid.Nil || result.VersionID == uuid.Nil || result.Kind != c.Kind || result.Revision < 1 {
+	if domain.DecodeClosedJSON([]byte(row.Response), &result) != nil || result.EntryID == uuid.Nil || result.VersionID == uuid.Nil || result.Kind != c.Kind || result.Revision < 1 {
 		return nil, domain.ErrCorruptHistory
 	}
 	return &result, nil

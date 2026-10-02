@@ -101,6 +101,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		workspaceflow.RegisterProjectCopyWorkflow(queueWorker)
 		scriptflow.RegisterImportWorkflow(queueWorker)
 		mediaflow.RegisterTransferWorkflow(queueWorker)
+		mediaflow.RegisterPurgeWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
 		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
@@ -174,6 +175,8 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		scriptflow.RegisterImportActivities(queueWorker, scriptflow.NewImportActivities(importWorker, imports))
 		transferWorker, transfers := provideMediaTransferWorker(dbConn.DB, storage)
 		mediaflow.RegisterTransferActivities(queueWorker, mediaflow.NewTransferActivities(transferWorker, transfers))
+		purgeWorker, purges := provideMediaPurgeWorker(dbConn.DB, storage)
+		mediaflow.RegisterPurgeActivities(queueWorker, mediaflow.NewPurgeActivities(purgeWorker, purges))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
 	}
@@ -232,10 +235,11 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		copyHandler := workspaceevent.NewProjectCopyHandler(processed, provideProjectCopyStore(dbConn.DB), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
 		importHandler := scriptevent.NewImportHandler(processed, provideScriptImportStore(dbConn.DB), scriptflow.NewImportStarter(temporalConn.Client))
 		transferHandler := mediaevent.NewTransferHandler(processed, provideMediaTransferStore(dbConn.DB), mediaflow.NewTransferStarter(temporalConn.Client))
+		purgeHandler := mediaevent.NewPurgeHandler(processed, provideMediaPurgeStore(dbConn.DB), mediaflow.NewPurgeStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic, mediaevent.TransferTopic}, workflowDelivery{
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic, mediaevent.TransferTopic, mediaevent.PurgeTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler, transfers: transferHandler,
+				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler, transfers: transferHandler, purges: purgeHandler,
 			})
 		if err != nil {
 			temporalConn.Close()
@@ -272,9 +276,13 @@ type workflowDelivery struct {
 	copies         inboxapp.Handler
 	imports        inboxapp.Handler
 	transfers      inboxapp.Handler
+	purges         inboxapp.Handler
 }
 
 func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
+	if record.Topic == mediaevent.PurgeTopic {
+		return h.purges.Handle(ctx, record)
+	}
 	if record.Topic == mediaevent.TransferTopic {
 		return h.transfers.Handle(ctx, record)
 	}

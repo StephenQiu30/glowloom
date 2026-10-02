@@ -36,11 +36,13 @@ func libraryEntries(actor identityapp.Principal, scope domain.LibraryScope, id u
  COALESCE(i.create_time,a.create_time) AS create_time,COALESCE(i.update_time,a.update_time) AS update_time,
  a.mime_type,to_jsonb(a) AS asset_facts
  FROM media.media_asset a LEFT JOIN media.library_item i ON i.library_id=? AND i.asset_id=a.id
- WHERE ` + ownership + ` AND NOT a.is_delete AND a.status='ready' AND a.moderation_status='passed'
+ WHERE ` + ownership + ` AND NOT a.is_delete AND a.status='ready' AND a.moderation_status='passed' AND i.purged_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM media.purge_item p WHERE p.item_id=a.id AND p.status IN ('queued','running','needs_reconciliation','succeeded'))
  UNION ALL
  SELECT i.id,NULL::uuid,i.folder_id,i.plain_text,'text',i.title,i.category,i.tags,i.source_label,i.note,
  i.favorite,i.catalog_state,i.trashed_at,i.position,i.revision,i.create_time,i.update_time,''::text,NULL::jsonb
- FROM media.library_item i WHERE i.library_id=? AND i.asset_id IS NULL)
+ FROM media.library_item i WHERE i.library_id=? AND i.asset_id IS NULL AND i.purged_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM media.purge_item p WHERE p.item_id=i.id AND p.status IN ('queued','running','needs_reconciliation','succeeded')))
  `
 	return query, args
 }

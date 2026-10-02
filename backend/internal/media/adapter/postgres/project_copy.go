@@ -183,6 +183,9 @@ func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor i
 	for _, row := range rows {
 		selected[row.ID], assetIDs = row, append(assetIDs, row.ID)
 	}
+	if err := requireNoPurgeReservation(tx, assetIDs); err != nil {
+		return application.ProjectCopySnapshot{}, err
+	}
 	for _, id := range referenced {
 		row, present := selected[id]
 		if !present || row.Kind != string(domain.KindDocument) {

@@ -43,6 +43,12 @@ func NewRecordedActionParser() *Parser {
 	for _, action := range []string{"media.transfer.create", "media.transfer.cancel", "media.transfer.retry", "media.transfer.reconcile"} {
 		fields[action] = []string{"id", "revision", "status", "count"}
 	}
+	for _, action := range []string{"media.purge.create", "media.purge.cancel", "media.purge.reconcile"} {
+		fields[action] = []string{"id", "revision", "status", "count"}
+	}
+	for _, action := range []string{"media.package.imported", "media.package.cancelled"} {
+		fields[action] = []string{"revision", "status", "item_count", "folder_count"}
+	}
 	for _, kind := range []string{"character", "location", "prop"} {
 		for _, action := range []string{"create", "update", "confirm", "delete", "restore", "adopt_result", "create_result"} {
 			fields["bible."+kind+"_"+action] = []string{"revision", "project_revision", "version_id", "content_sha256"}

@@ -20,6 +20,15 @@ func NewDocumentSourceStore(db *gorm.DB) *DocumentSourceStore {
 	return &DocumentSourceStore{Store: NewStore(db)}
 }
 
+// FindAsset reads an existing exact frozen original. Catalog hiding does not
+// invalidate immutable source bytes; new source admission uses Freeze below.
+func (s *DocumentSourceStore) FindAsset(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (domain.MediaAsset, error) {
+	if s == nil || s.Store == nil {
+		return domain.MediaAsset{}, ErrUnavailable
+	}
+	return s.findAsset(ctx, actor, project, id, false)
+}
+
 // FreezeDocumentSources rechecks current actor/project and locks all source assets.
 func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor identityapp.Principal, project uuid.UUID, ids []uuid.UUID) ([]domain.MediaAsset, error) {
 	if s == nil || s.Store == nil || s.db == nil {
@@ -41,6 +50,13 @@ func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor i
 			return err
 		}
 		if err := requireProject(tx, actor, project, false); err != nil {
+			return err
+		}
+		library, err := readLibrary(tx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, false)
+		if err != nil {
+			return err
+		}
+		if err := requireNewMediaVisible(tx, library.ID, ids); err != nil {
 			return err
 		}
 		read := tx.Raw(`SELECT * FROM media.media_asset WHERE project_id=? AND id IN ? ORDER BY id FOR SHARE`, project, ids).Scan(&rows)

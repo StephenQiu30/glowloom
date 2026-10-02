@@ -30,6 +30,9 @@ func (s *LibraryStore) ReadReferenceFactSource(ctx context.Context, actor identi
 		if read.RowsAffected == 1 && state != "active" {
 			return application.ErrNotFound
 		}
+		if err := requireNoNewMediaPurge(tx, []uuid.UUID{id}); err != nil {
+			return err
+		}
 		var row assetRow
 		read = tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND personal_actor_id IS NULL AND personal_org_id IS NULL AND kind=? AND NOT is_delete AND status='ready' AND moderation_status='passed' AND NOT contains_real_person AND consent_record_id IS NULL FOR SHARE`, id, project, string(kind)).Scan(&row)
 		if read.Error != nil {
