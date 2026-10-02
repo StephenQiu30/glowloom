@@ -1,5 +1,405 @@
 basePath: /
 definitions:
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.CharacterInput:
+    properties:
+      aliases:
+        items:
+          type: string
+        type: array
+      definition:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.CharacterDefinition'
+      description:
+        type: string
+      name:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.Detail:
+    properties:
+      current:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Version'
+      head:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Head'
+      resolved_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.ImpactProof:
+    properties:
+      revision:
+        type: integer
+      sha256:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.LookInput:
+    properties:
+      applies_to:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LookScope'
+        type: array
+      default:
+        type: boolean
+      description:
+        type: string
+      name:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt:
+    properties:
+      confirmed_version_id:
+        type: string
+      content_sha256:
+        type: string
+      created_entry_id:
+        type: string
+      created_version_id:
+        type: string
+      entry_id:
+        type: string
+      kind:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Kind'
+      project_revision:
+        type: integer
+      redirect_id:
+        type: string
+      revision:
+        type: integer
+      version_id:
+        type: string
+      version_number:
+        type: integer
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.ReferenceInput:
+    properties:
+      asset_id:
+        type: string
+      role:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.ImageRole'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.SampleInput:
+    properties:
+      asset_id:
+        type: string
+      name:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.Summary:
+    properties:
+      content_sha256:
+        type: string
+      head:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Head'
+      name:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.VoiceChoice:
+    properties:
+      display_name:
+        type: string
+      model_key:
+        type: string
+      model_version:
+        type: integer
+      voice_key:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.VoiceInput:
+    properties:
+      catalog:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.VoiceSelection'
+      instructions:
+        type: string
+      kind:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceKind'
+      sample:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.SampleInput'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_application.VoiceSelection:
+    properties:
+      expected_model_version:
+        type: integer
+      model_key:
+        type: string
+      params:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceParams'
+      voice_key:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.CatalogVoice:
+    properties:
+      model_key:
+        type: string
+      model_version:
+        type: integer
+      model_version_id:
+        type: string
+      param_schema_sha256:
+        type: string
+      params:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceParams'
+      voice_key:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.CharacterContent:
+    properties:
+      aliases:
+        items:
+          type: string
+        type: array
+      definition:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.CharacterDefinition'
+      description:
+        type: string
+      looks:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LookContent'
+        type: array
+      name:
+        type: string
+      voice:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceContent'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.CharacterDefinition:
+    properties:
+      appearance:
+        type: string
+      clothing:
+        type: string
+      consistency_prompt:
+        type: string
+      multi_view_prompt:
+        type: string
+      personality:
+        type: string
+      physique:
+        type: string
+      props:
+        type: string
+      role:
+        type: string
+      voice_age:
+        type: string
+      voice_language:
+        type: string
+      voice_timbre:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Head:
+    properties:
+      confirmed_version_id:
+        type: string
+      created_at:
+        type: string
+      current_version_id:
+        type: string
+      deleted:
+        type: boolean
+      id:
+        type: string
+      kind:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Kind'
+      org_id:
+        type: string
+      project_id:
+        type: string
+      redirect_id:
+        type: string
+      revision:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.ImageReference:
+    properties:
+      media:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.MediaFact'
+      role:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.ImageRole'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.ImageRole:
+    enum:
+    - primary
+    - front
+    - side
+    - back
+    - turnaround_sheet
+    - expression_sheet
+    type: string
+    x-enum-varnames:
+    - RolePrimary
+    - RoleFront
+    - RoleSide
+    - RoleBack
+    - RoleTurnaround
+    - RoleExpression
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Kind:
+    enum:
+    - character
+    - location
+    - prop
+    type: string
+    x-enum-varnames:
+    - KindCharacter
+    - KindLocation
+    - KindProp
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LocationContent:
+    properties:
+      aliases:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      name:
+        type: string
+      prompt:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LookContent:
+    properties:
+      applies_to:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LookScope'
+        type: array
+      default:
+        type: boolean
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      references:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.ImageReference'
+        type: array
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LookScope:
+    properties:
+      episode_id:
+        type: string
+      scene_key:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.MediaFact:
+    properties:
+      asset_id:
+        type: string
+      byte_size:
+        type: integer
+      kind:
+        type: string
+      rendition_id:
+        type: string
+      rendition_sha256:
+        type: string
+      revision:
+        type: integer
+      sha256:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.PropContent:
+    properties:
+      aliases:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      name:
+        type: string
+      prompt:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.ResultSource:
+    properties:
+      input_sha256:
+        type: string
+      operation_id:
+        type: string
+      output_id:
+        type: string
+      output_sha256:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.SampleVoice:
+    properties:
+      media:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.MediaFact'
+      name:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Version:
+    properties:
+      actor_id:
+        type: string
+      character:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.CharacterContent'
+      content_sha256:
+        type: string
+      created_at:
+        type: string
+      entry_id:
+        type: string
+      id:
+        type: string
+      kind:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Kind'
+      location:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LocationContent'
+      number:
+        type: integer
+      org_id:
+        type: string
+      origin:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VersionOrigin'
+      previous_id:
+        type: string
+      project_id:
+        type: string
+      prop:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.PropContent'
+      result:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.ResultSource'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VersionOrigin:
+    enum:
+    - manual
+    - ai
+    type: string
+    x-enum-varnames:
+    - OriginManual
+    - OriginAI
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceContent:
+    properties:
+      catalog:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.CatalogVoice'
+      instructions:
+        type: string
+      kind:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceKind'
+      sample:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.SampleVoice'
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceKind:
+    enum:
+    - catalog
+    - sample
+    type: string
+    x-enum-varnames:
+    - VoiceCatalog
+    - VoiceSample
+  github_com_StephenQiu30_lanverse_backend_internal_bible_domain.VoiceParams:
+    properties:
+      emotion:
+        type: string
+      language:
+        type: string
+      pitch:
+        type: number
+      speed:
+        type: number
+      volume:
+        type: number
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_canvas_application.CommandResult:
     properties:
       ok:
@@ -1394,6 +1794,28 @@ definitions:
       url:
         type: string
     type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_application.TransferInput:
+    properties:
+      expected_folder_revision:
+        type: integer
+      expected_project_revision:
+        type: integer
+      expected_source_revision:
+        type: integer
+      expected_target_revision:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.LibraryItemRevision'
+        type: array
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope'
+      target:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope'
+      target_folder_id:
+        type: string
+        x-nullable: true
+    type: object
   github_com_StephenQiu30_lanverse_backend_internal_media_application.UploadResult:
     properties:
       asset:
@@ -1442,6 +1864,61 @@ definitions:
       project_id:
         type: string
         x-nullable: true
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferItemResult:
+    properties:
+      failure_code:
+        type: string
+        x-nullable: true
+      index:
+        type: integer
+      source_item_id:
+        type: string
+      status:
+        type: string
+      target_asset_id:
+        type: string
+        x-nullable: true
+      target_item_id:
+        type: string
+    type: object
+  github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferJob:
+    properties:
+      attempt:
+        type: integer
+      cancellation_requested:
+        type: boolean
+      created_at:
+        type: string
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      execution_unconfirmed:
+        type: boolean
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferItemResult'
+        type: array
+      needs_reconciliation:
+        type: boolean
+      revision:
+        type: integer
+      source:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope'
+      stage:
+        type: string
+      status:
+        type: string
+      target:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.LibraryScope'
+      target_folder_id:
+        type: string
+        x-nullable: true
+      updated_at:
+        type: string
     type: object
   github_com_StephenQiu30_lanverse_backend_internal_mediatool_application.ControlInput:
     properties:
@@ -3093,6 +3570,8 @@ definitions:
     properties:
       character_id:
         type: string
+      character_version_id:
+        type: string
       content:
         type: string
       emotion:
@@ -3203,6 +3682,105 @@ definitions:
         type: string
       project_id:
         type: string
+    type: object
+  internal_bible_adapter_http.ContentRequest:
+    properties:
+      character:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.CharacterInput'
+      expected_revision:
+        type: integer
+      location:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.LocationContent'
+      prop:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.PropContent'
+    type: object
+  internal_bible_adapter_http.ControlRequest:
+    properties:
+      acknowledged_impact:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.ImpactProof'
+      expected_revision:
+        type: integer
+    type: object
+  internal_bible_adapter_http.HistoryResponse:
+    properties:
+      next_cursor:
+        type: string
+      versions:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Version'
+        type: array
+    type: object
+  internal_bible_adapter_http.LookRequest:
+    properties:
+      expected_revision:
+        type: integer
+      look:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.LookInput'
+    type: object
+  internal_bible_adapter_http.MergeRequest:
+    properties:
+      acknowledged_impact:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.ImpactProof'
+      expected_revision:
+        type: integer
+      expected_target_revision:
+        type: integer
+      target_id:
+        type: string
+    type: object
+  internal_bible_adapter_http.PageResponse:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      entries:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Summary'
+        type: array
+      next_cursor:
+        type: string
+    type: object
+  internal_bible_adapter_http.ReferencesRequest:
+    properties:
+      expected_revision:
+        type: integer
+      references:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.ReferenceInput'
+        type: array
+    type: object
+  internal_bible_adapter_http.ResultRequest:
+    properties:
+      expected_revision:
+        type: integer
+      operation_id:
+        type: string
+      output_id:
+        type: string
+    type: object
+  internal_bible_adapter_http.SplitRequest:
+    properties:
+      character:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.CharacterInput'
+      expected_revision:
+        type: integer
+    type: object
+  internal_bible_adapter_http.VoiceRequest:
+    properties:
+      expected_revision:
+        type: integer
+      voice:
+        $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.VoiceInput'
+    type: object
+  internal_bible_adapter_http.VoiceResponse:
+    properties:
+      next_cursor:
+        type: string
+      voices:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.VoiceChoice'
+        type: array
     type: object
   internal_canvas_adapter_http.ListResponse:
     properties:
@@ -3414,6 +3992,26 @@ definitions:
         type: integer
       status:
         $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_catalog_domain.ProviderStatus'
+    type: object
+  internal_media_adapter_http.TransferControlRequest:
+    properties:
+      revision:
+        type: integer
+    type: object
+  internal_media_adapter_http.TransferPage:
+    properties:
+      current_actor_id:
+        type: string
+      current_org_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferJob'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
     type: object
   internal_mediatool_adapter_http.DepthJobResponse:
     properties:
@@ -3877,6 +4475,46 @@ definitions:
     - default_models
     - expected_revision
     type: object
+  internal_workspace_adapter_http.ProjectCopyBibleCounts:
+    properties:
+      character_confirmations:
+        type: integer
+      character_versions:
+        type: integer
+      characters:
+        type: integer
+      location_confirmations:
+        type: integer
+      location_versions:
+        type: integer
+      locations:
+        type: integer
+      look_versions:
+        type: integer
+      looks:
+        type: integer
+      prop_confirmations:
+        type: integer
+      prop_versions:
+        type: integer
+      props:
+        type: integer
+      redirects:
+        type: integer
+      references:
+        type: integer
+      splits:
+        type: integer
+      voices:
+        type: integer
+    type: object
+  internal_workspace_adapter_http.ProjectCopyBibleProgress:
+    properties:
+      completed_counts:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyBibleCounts'
+      counts:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyBibleCounts'
+    type: object
   internal_workspace_adapter_http.ProjectCopyListResponse:
     properties:
       copies:
@@ -3923,6 +4561,8 @@ definitions:
         type: integer
       attempt:
         type: integer
+      bible:
+        $ref: '#/definitions/internal_workspace_adapter_http.ProjectCopyBibleProgress'
       cancellation_requested:
         type: boolean
       completed_assets:
@@ -3958,6 +4598,7 @@ definitions:
       stage:
         enum:
         - media
+        - bible
         - script
         - canvases
         - finalizing
@@ -6440,6 +7081,289 @@ paths:
       summary: 获取个人或项目素材库媒体预览
       tags:
       - media
+  /api/media/library/transfers:
+    get:
+      operationId: listMediaTransfers
+      parameters:
+      - description: personal/project；默认personal
+        in: query
+        name: scope
+        type: string
+      - description: project scope必要UUID
+        in: query
+        name: project_id
+        type: string
+      - description: 1..10000；默认1
+        in: query
+        name: page
+        type: integer
+      - description: 1..100；默认20
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_media_adapter_http.TransferPage'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 素材转移记录分页
+      tags:
+      - media
+    post:
+      consumes:
+      - application/json
+      operationId: createMediaTransfer
+      parameters:
+      - description: 永久UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 闭合双scope、全部条目CAS和目标目录
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_application.TransferInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 在个人库与项目库间独立转移素材
+      tags:
+      - media
+  /api/media/library/transfers/{job_id}:
+    get:
+      operationId: getMediaTransfer
+      parameters:
+      - description: 转移UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 素材转移状态与逐行结果
+      tags:
+      - media
+  /api/media/library/transfers/{job_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      operationId: cancelMediaTransfer
+      parameters:
+      - description: 转移UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: 永久UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 已观察revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_media_adapter_http.TransferControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 取消素材转移
+      tags:
+      - media
+  /api/media/library/transfers/{job_id}/reconcile:
+    post:
+      consumes:
+      - application/json
+      operationId: reconcileMediaTransfer
+      parameters:
+      - description: 转移UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: 永久UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 已观察revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_media_adapter_http.TransferControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 对账素材转移未知结果
+      tags:
+      - media
+  /api/media/library/transfers/{job_id}/retry:
+    post:
+      consumes:
+      - application/json
+      operationId: retryMediaTransfer
+      parameters:
+      - description: 转移UUID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      - description: 永久UUID幂等键
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: 已观察revision
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_media_adapter_http.TransferControlRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_media_domain.TransferJob'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 重试已清理失败行
+      tags:
+      - media
   /api/media/library/uploads:
     post:
       consumes:
@@ -7353,6 +8277,1311 @@ paths:
       summary: 归档项目
       tags:
       - projects
+  /api/projects/{pid}/bible-voices:
+    get:
+      operationId: listBibleVoices
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Page size, maximum 200
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque page cursor
+        in: query
+        name: cursor
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_bible_adapter_http.VoiceResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}:
+    get:
+      operationId: listBibleEntries
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Page size, maximum 200
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque page cursor
+        in: query
+        name: cursor
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_bible_adapter_http.PageResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+    post:
+      consumes:
+      - application/json
+      operationId: createBibleEntry
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ContentRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}:
+    delete:
+      consumes:
+      - application/json
+      operationId: deleteBibleEntry
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ControlRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+    get:
+      operationId: getBibleEntry
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Detail'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+    put:
+      consumes:
+      - application/json
+      operationId: updateBibleEntry
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ContentRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/adopt-result:
+    post:
+      consumes:
+      - application/json
+      operationId: adoptBibleResult
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ResultRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/confirm:
+    post:
+      consumes:
+      - application/json
+      operationId: confirmBibleEntry
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ControlRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/looks:
+    post:
+      consumes:
+      - application/json
+      operationId: createBibleLook
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.LookRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/looks/{look}:
+    delete:
+      consumes:
+      - application/json
+      operationId: deleteBibleLook
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Appearance UUID
+        in: path
+        name: look
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ControlRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+    put:
+      consumes:
+      - application/json
+      operationId: updateBibleLook
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Appearance UUID
+        in: path
+        name: look
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.LookRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/looks/{look}/default:
+    post:
+      consumes:
+      - application/json
+      operationId: setBibleDefaultLook
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Appearance UUID
+        in: path
+        name: look
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ControlRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/looks/{look}/references:
+    put:
+      consumes:
+      - application/json
+      operationId: replaceBibleReferences
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Appearance UUID
+        in: path
+        name: look
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ReferencesRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/merge:
+    post:
+      consumes:
+      - application/json
+      operationId: mergeBibleCharacter
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Character kind
+        enum:
+        - character
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Source character UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Both CAS heads and impact acknowledgment
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.MergeRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/restore:
+    post:
+      consumes:
+      - application/json
+      operationId: restoreBibleEntry
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ControlRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/split:
+    post:
+      consumes:
+      - application/json
+      operationId: splitBibleCharacter
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Character kind
+        enum:
+        - character
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Parent character UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Parent CAS and independent child definition
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.SplitRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/versions:
+    get:
+      operationId: listBibleVersions
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page size, maximum 50
+        in: query
+        name: limit
+        type: integer
+      - description: Opaque page cursor
+        in: query
+        name: cursor
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_bible_adapter_http.HistoryResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/versions/{version}:
+    get:
+      operationId: getBibleVersion
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Version UUID
+        in: path
+        name: version
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_domain.Version'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/{id}/voice:
+    delete:
+      consumes:
+      - application/json
+      operationId: unbindBibleVoice
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ControlRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+    put:
+      consumes:
+      - application/json
+      operationId: bindBibleVoice
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Identity UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Closed command fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.VoiceRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
+  /api/projects/{pid}/bible/{kind}/adopt-result:
+    post:
+      consumes:
+      - application/json
+      operationId: createBibleEntryFromResult
+      parameters:
+      - description: Project UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: Identity kind
+        enum:
+        - character
+        - location
+        - prop
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: Permanent UUID command key
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Authorized successful output
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_bible_adapter_http.ResultRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_bible_application.Receipt'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      tags:
+      - bible
   /api/projects/{pid}/canvases:
     get:
       operationId: listCanvases

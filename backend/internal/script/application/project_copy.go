@@ -63,6 +63,7 @@ type ProjectCopyDialogue struct {
 	SeqNo                                        int
 	Kind, Speaker, Content, Emotion, ContentHash string
 	CharacterID                                  *uuid.UUID
+	CharacterVersionID                           *uuid.UUID `json:"character_version_id,omitempty"`
 	Start, End                                   int
 }
 
@@ -107,12 +108,13 @@ type ProjectCopyObject struct {
 
 // ProjectCopyManifest contains private typed history and its complete immutable transfers.
 type ProjectCopyManifest struct {
-	Binding       ProjectCopyBinding  `json:"binding"`
-	Source        ProjectCopyHistory  `json:"source"`
-	Target        ProjectCopyHistory  `json:"target"`
-	Objects       []ProjectCopyObject `json:"objects"`
-	Counts        ScriptCopyCounts    `json:"counts"`
-	ContentSHA256 string              `json:"content_sha256"`
+	Binding       ProjectCopyBinding            `json:"binding"`
+	Source        ProjectCopyHistory            `json:"source"`
+	Target        ProjectCopyHistory            `json:"target"`
+	Objects       []ProjectCopyObject           `json:"objects"`
+	Counts        ScriptCopyCounts              `json:"counts"`
+	ContentSHA256 string                        `json:"content_sha256"`
+	Characters    []ProjectCopyCharacterMapping `json:"characters,omitempty"`
 }
 
 // ProjectCopyStore owns every copy intent and rechecks the current worker between I/O.

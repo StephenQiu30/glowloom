@@ -43,6 +43,15 @@ import { LibraryFolderCard } from "./library-folder-card";
 import { useLibraryWriter } from "./use-library-writer";
 import type { LibraryEditFrame } from "./library-command-dialog";
 import { loadLibraryUploads } from "./library-upload-intent";
+import { loadTransferIntent } from "@/components/library/transfer-intent";
+import type { TransferSelection } from "@/components/library/transfer-form";
+const TransferDialog = dynamic(
+  () =>
+    import("@/components/library/transfer-dialog").then(
+      (module) => module.TransferDialog,
+    ),
+  { ssr: false },
+);
 const CommandDialog = dynamic(
   () =>
     import("./library-command-dialog").then(
@@ -91,6 +100,8 @@ export function LibraryBrowser({
     [frame, setFrame] = useState<LibraryEditFrame>(),
     [uploadOpen, setUploadOpen] = useState(false),
     [uploadLocked, setUploadLocked] = useState(false),
+    [transferOpen, setTransferOpen] = useState(false),
+    [transferSelection, setTransferSelection] = useState<TransferSelection>(),
     [reading, setReading] = useState(false),
     [notice, setNotice] = useState<string>();
   const chooser = useInfiniteQuery({
@@ -131,6 +142,18 @@ export function LibraryBrowser({
     refetchOnWindowFocus: false,
   });
   const hasUploadRecovery = Boolean(uploadRecovery.data?.length);
+  const transferRecovery = useQuery({
+    queryKey: [...libraryKey(identity), "transfer-recovery"],
+    queryFn: async ({ signal }) => {
+      await freshLibrary(identity, signal);
+      return loadTransferIntent(sessionStorage, identity);
+    },
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const hasTransferRecovery = Boolean(transferRecovery.data);
   useEffect(() => {
     if (!hasUploadRecovery) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -175,6 +198,10 @@ export function LibraryBrowser({
     Boolean(frame) ||
     uploadLocked ||
     uploadOpen ||
+    transferOpen ||
+    hasTransferRecovery ||
+    !transferRecovery.isFetchedAfterMount ||
+    transferRecovery.isError ||
     reading;
   const change = (
     changes: Record<string, string | undefined>,
@@ -322,6 +349,13 @@ export function LibraryBrowser({
       }
     >
       <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          disabled={blocked}
+          onClick={() => setTransferOpen(true)}
+        >
+          查看素材迁移任务
+        </Button>
         <div className="w-full sm:max-w-md">
           <LibrarySelect
             label="素材库范围"
@@ -521,6 +555,17 @@ export function LibraryBrowser({
           {notice}
         </p>
       )}
+      {transferRecovery.isError && (
+        <Alert variant="destructive">
+          <AlertTitle>迁移原意图暂时不能恢复</AlertTitle>
+          <AlertDescription>
+            <p>{transferRecovery.error.message}</p>
+            <Button variant="outline" onClick={() => setTransferOpen(true)}>
+              打开迁移恢复
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       {page.isPending ? (
         <p role="status">正在读取完整素材库分页…</p>
       ) : page.isError ? (
@@ -573,6 +618,23 @@ export function LibraryBrowser({
               <span className="text-sm">
                 已选择 {selection.length} 项 / 最多200项
               </span>
+              {selection.length > 0 && filter.catalog_state === "active" && (
+                <Button
+                  variant="outline"
+                  disabled={blocked}
+                  onClick={() => {
+                    setTransferSelection({
+                      items: selection.map((item) => ({ ...item })),
+                      sourceRevision: current.revision,
+                    });
+                    setTransferOpen(true);
+                  }}
+                >
+                  {identity.scope.kind === "personal"
+                    ? "加入项目素材库"
+                    : "保存到个人素材库"}
+                </Button>
+              )}
               {selection.length > 0 && !readOnly && (
                 <>
                   {filter.catalog_state === "active" ? (
@@ -721,23 +783,72 @@ export function LibraryBrowser({
           onCloseAutoFocus={restoreDialogFocus}
         />
       )}
-      {selected && !frame && !writer.intent && !writer.storageError && (
-        <DetailDialog
-          key={selected}
-          identity={identity}
-          id={selected}
-          readOnly={readOnly}
-          onClose={() => change({ asset_id: undefined }, false)}
-          onCloseAutoFocus={restoreDialogFocus}
-          onEdit={(detail: LibraryDetail) =>
-            setFrame({
-              action: "update_item",
-              revision: current?.revision ?? initial.revision,
-              detail,
-            })
-          }
-        />
-      )}
+      {(transferOpen || hasTransferRecovery) &&
+        !writer.intent &&
+        !writer.storageError &&
+        !hasUploadRecovery && (
+          <TransferDialog
+            identity={identity}
+            selection={transferSelection}
+            projects={projects}
+            hasMoreProjects={Boolean(chooser.hasNextPage)}
+            projectsLoading={chooser.isFetchingNextPage}
+            onMoreProjects={() => {
+              void chooser.fetchNextPage();
+            }}
+            onClose={() => {
+              setTransferOpen(false);
+              setTransferSelection(undefined);
+              void transferRecovery.refetch();
+              void Promise.all([
+                cache.invalidateQueries({ queryKey: libraryKey(identity) }),
+                refreshContext(),
+              ]);
+            }}
+            onCloseAutoFocus={restoreDialogFocus}
+            onChanged={async () => {
+              setSelection([]);
+              await Promise.all([
+                cache.invalidateQueries({
+                  queryKey: [
+                    "media-library",
+                    identity.origin,
+                    identity.actorId,
+                    identity.orgId,
+                  ],
+                }),
+                cache.invalidateQueries({ queryKey: ["projects"] }),
+                cache.invalidateQueries({ queryKey: ["project"] }),
+                cache.invalidateQueries({ queryKey: ["canvas", "media"] }),
+                refreshContext(),
+              ]);
+            }}
+          />
+        )}
+      {selected &&
+        !frame &&
+        !writer.intent &&
+        !writer.storageError &&
+        transferRecovery.isFetchedAfterMount &&
+        !transferRecovery.isError &&
+        !transferOpen &&
+        !hasTransferRecovery && (
+          <DetailDialog
+            key={selected}
+            identity={identity}
+            id={selected}
+            readOnly={readOnly}
+            onClose={() => change({ asset_id: undefined }, false)}
+            onCloseAutoFocus={restoreDialogFocus}
+            onEdit={(detail: LibraryDetail) =>
+              setFrame({
+                action: "update_item",
+                revision: current?.revision ?? initial.revision,
+                detail,
+              })
+            }
+          />
+        )}
       {(uploadOpen || hasUploadRecovery) &&
         !writer.intent &&
         !writer.storageError && (

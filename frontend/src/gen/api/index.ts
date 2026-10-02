@@ -13,6 +13,7 @@ import * as media from "./media";
 import * as models from "./models";
 import * as projectCopies from "./projectCopies";
 import * as projects from "./projects";
+import * as bible from "./bible";
 export default {
   settings,
   operations,
@@ -25,4 +26,5 @@ export default {
   models,
   projectCopies,
   projects,
+  bible,
 };

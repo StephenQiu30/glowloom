@@ -232,6 +232,32 @@ HEAD 加十个精确冻结文件在独立快照完成全树 goimports、vet、li
 
 前端 Source/Import 以正式生成接口覆盖来源编辑、版权确认、原件选择/上传/下载、有序多文件导入、实际 job分页/阶段/部分失败、历史、分集与结构确认、首次采纳、原key未知恢复及明确冲突。审查发现旧 workspace cache 可能在 fresh principal 尚未确认前挂载正文；新增四项 Red→Green，挂载后只在当前 GET 成功且 scope 可证时显示私有子树，403/404或身份变化不沿旧body cache。最终冻结全树128套553项测试、ESLint、Prettier、Next typegen/tsc和Next生产构建通过。jsdom的媒体 pause/load 未实现提示不算真实媒体产品证据；冻结依赖独立离线安装后构建，未用共享 node_modules 链接的失败 standalone tracing 当作通过。
 
-050 up SHA `31d5411ada51f63a4e849184bfd0b920fdffa5158756f8b722715f533cbbee19`、053 `866411304acd53e90bca675cf192b8d4951b517fe3f85d990291edb61df04b0a`、055 `a21521e00f0fb06c5b5acd29cf3de371673fcbf74c12dd3ecd17417faa33104f`、056 `05ef1ffc4e2ac3aec326ac363064160eca6c9b71abdbcf5266341df9a95e513c`。当前只在隔离测试数据库验证，正式业务库应用、同构建roles升级、Script浏览器与完整历史Copy端到端仍待根执行；后续记录实际结果再改变状态。
+050 up SHA `31d5411ada51f63a4e849184bfd0b920fdffa5158756f8b722715f533cbbee19`、053 `866411304acd53e90bca675cf192b8d4951b517fe3f85d990291edb61df04b0a`、055 `a21521e00f0fb06c5b5acd29cf3de371673fcbf74c12dd3ecd17417faa33104f`、056 `05ef1ffc4e2ac3aec326ac363064160eca6c9b71abdbcf5266341df9a95e513c`。已在隔离测试数据库完成验证。2026-10-02 11:57，根协调者核对固定业务 PostgreSQL OID `345144296` 与原 postmaster 后，在同一事务中应用这四份逐SHA相同的DDL；31个Script表和4个Library表已安装，八组原业务行数及054清理权限逐项不变，0未收敛任务，没有数据重置。随后用 main `52478934bacc4cebb24b44e6c7343088fecf40c7` 的冻结构建替换三个角色，API readyz、worker/relay healthz 均200，正式Swagger为124个唯一operationId。API首次启动因未恢复原loopback/browser-origin覆盖而退出，补回 `127.0.0.1:8080`/`http://localhost:3000` 后健康；没有修改产品安全限制。新建实际本地Kafka主题 `lanverse.script.import_command.v1`，其余服务继续复用。Script浏览器与完整历史Copy端到端仍在执行，角色/转移/包仍未完成。
 
 首次采纳可用，替换已采纳版本/已确认结构的下游失效证据、非空角色绑定及含正式角色历史的Copy仍明确缺少Bible/storyboard/audio/lineage owning 实现而503。角色/主体完整版本与声音已转入 DES17§12 连续实施，素材库新页面及Transfer/包仍在推进。此阶段不关闭完整迁移，也不将手工结构、条件通过或文件入库宣称为AI抽取/真实供应商生成通过。
+
+main `52478934` 的 CI `36961645064` 已终态成功：backend、frontend、images 均通过。浏览器验收期间共享开发树的未完成资产页引发全局构建遮罩，根协调者将自己的3000开发服务替换为同 main 的冻结 Next 生产构建，仍使用原本同源 Go rewrite 与loopback监听，避免并行WIP干扰验收；不改Library owner正在编写的页面。
+
+同 main 的真实 Chrome 页面创建合成项目 `eda7f3f1-911d-4154-8d95-aa007c3a2aa3`，来源“夜航者 · 完整来源😀”稳定 lineage `80454e38-651b-541a-8d79-75a3eec1a7af`。完成三次真实保存及刷新恢复，不可变正文分别97/115/99 Unicode scalar；第3版实际9段、1空段、8段粗体，历史对话框仍能逐字读取第1版97 scalar原文（正文SHA `81d08c6e809fbdfa2268f47d9f32b626bdaffc5bc2c9b541d50f5d27a2a364eb`，格式SHA `32d5e24c5940f02b9f87720a491588a8dc275d4fc7bfdad1c09dbb50d4ee162c`）。富文本规范段落分隔为双换行，因此初始输入的单换行长度不能冒充已保存规范正文长度。第2版自动化光标定位未按预期移动，新增尾声实际位于开头，仍作为真实历史编辑保留；未保存的后来草稿不算版本证据。
+
+仅对已完整审阅的合成 TXT 原件执行真实本地选择、版权确认与上传，`script-unicode-original.txt` 为169 bytes，SHA `2482da2c8802ff0ae117dbbf9833b7eb0d68a04da2f20fc4fd6136cff654215d`；页面显示已确认原件且未直接添加章节。浏览器扩展因 file URL 权限关闭而拒绝程序文件选择，首次合成TXT通过原生选择器完成；后续用户前台操作与文档选择交错，未知私人文档保留，不读取、导入或计入合成验收。完整多文件导入、失败重试、正式分集/结构确认和整项目历史 Copy 的浏览器验收继续执行，此段不表示Script完整产品验收通过。证据截图 `/tmp/lanverse-script-history-original-20261002.jpg`、fixture清单 `/tmp/lanverse-script-fixture-20261002/original-files.json`，均为本机临时证据，不提交私有对象或原件。
+
+后续仅选中上述169 byte合成原件，真实导入任务 `72380340-de85-551c-ac66-606bdcea63c2` completed/revision7，1/1已发布、已提取1、失败0，发布不可变剧本 `d0b0b0c3-bf03-50f5-ac42-0b3967fc166a`（第4版）与来源 `c4c626b3-6316-5b15-af26-b00741a96308`。导入正文64 Unicode scalar，CRLF按规范换行、空段落、组合字符与双空格保留；原先99字符/粗体来源仍在。整版165字符/SHA `6a15ae8660eb9a07436fc53ca4f4b7e02b2ecec4f30246249c403144c517b9d4` 全文经页面实际阅读后确认两个来源边界分集 `[0,101)`/`[101,165)`，正式集合 `606322d1-0b24-5029-8507-dba27d4f46f2`、第1集身份 `bd1d40d4-6396-548c-a907-c710876b679e`。分集确认推进可变脚本修订至5，没有新增不可变正文第5版；发现前端把CAS revision标为“脚本版本”，已在后续候选修正为“脚本修订”。此时结构确认/采纳尚未验收，不能据此关闭剧本完整验收。导入页面证据 `/tmp/lanverse-script-txt-import-20261002.jpg`。
+
+同一合成项目随后经正式浏览器保存手工结构版本 `e7ec0991-632a-50c5-a10d-2a91cc5120b4`、明确阅读并人工确认，正式集修订3，当前候选与已确认结构分别保留。场景稳定键 `3bcd70a3-3124-4c2e-b1ae-7b437a437db3`、完整范围 `[0,101)`，台词“林舟：最后一班车还没来。😀 é”保留 `[23,39)`，行动“雨水顺着站牌滴落。”保留 `[41,50)`，稳定行键、说话者与情绪均经页面核对。随后首次采纳第4版正文成功，已采纳版本显示 `d0b0b0c3-bf03-50f5-ac42-0b3967fc166a`，可变脚本修订8；第二集尚无已确认结构，不把首次采纳等同于全剧解析、AI抽取或替换已有采纳的下游失效验收。截图 `/tmp/lanverse-script-structure-confirmed-20261002.jpg`。
+
+Library29 focus 修正以 manifest `f7f1e1177b6f39d3913d0c46214dcb5d8dd81bcc2951163e0ab7ce1c37010ca1` 重新捕获，与4项 Script CAS 文案构成冻结33文件候选。全树139文件/594项测试/0跳过、ESLint、Prettier、Next typegen/tsc及生产构建全部通过。仅替换根拥有的3000冻结前端，保留8080正式124条API与原同源rewrite；未将角色、Transfer或其他并行WIP暴露为已完成。Library已进入真实合成目录/文字/元数据、刷新、分页、回收恢复的浏览器验收，完整素材库能力继续未关闭。
+
+
+### 素材库正式页面与角色、迁移候选接续（2026-10-02）
+
+素材库33文件实现已以 main `4b47c00507304ad89b7b683b7fd227af501bb11c` 推送，CI `36970025929` 终态成功。正式3000使用该提交的独立生产构建，8080仍为124条API。真实合成验收完成个人目录创建/重命名、原始Unicode文字及空白保留、元数据、根目录移动、回收后刷新/恢复；项目目录8层与拒绝第9层、6种style/4种theme、41条实际文字分页20/20/1、跨页筛选/选择/批量移动/目录往返、390视口与键盘关闭后的按钮焦点恢复。证明为 `/tmp/lanverse-library-fixture-20261002/browser-formal-core-proof.json`；未执行永久删除最终按钮，未把binary上传与播放算作本闭环通过。
+
+下一冻结合同为151条唯一operationId，新增Bible21与Transfer6；Bible保存角色/场景/道具的完整定义、不可变历史/确认/造型/六图引用/声音绑定，并为完整Copy保存全部身份、历史pin及15项真实计数。新增061仅扩展Bible回执与阶段，062用可空 execution_actor_id区分永久创建者和当前授权执行者；授权撤销后同步执行返回的准确worker停止无需再次读取私有正文，管理员只能接管取消和保留取消意图的对账，普通重试/发布不能借管理员身份。Bible cleanup使用调用方SQL事务，旧nil-Bible回执与历史JSON不改写。
+
+后端冻结快照通过全树Race（479顶层通过、488缺专用条件跳过、0失败）、vet、lint零问题和govulncheck零可达/导入包漏洞（仍有一个未调用required module提示）；专门真实非owner PostgreSQL/MinIO/Temporal的Bible30、Media34、Voice6共70顶层通过且零跳过，实际公共router/audit/domain9项通过。另冻结Transfer生命周期2项真实非owner检查：两方向进行中、执行未确认和取消未停止均拒绝项目归档/删除且无永久成功回执，真实终态才释放。Root正式DI已安装Transfer owning work guard。当前这些证据分别证明隔离实际owner行为、生产组合与静态合同；尚不替代正式业务浏览器验证。
+
+角色前端最终27文件（包含redirect严格校验与精确保留历史文案）已加入候选；冻结完整前端148个实际测试文件/644项测试/0跳过、全树ESLint/Prettier、Next typegen/tsc和生产构建通过。生成客户端从实际Go BusinessRouter在线Swagger生成，151个函数和14个文件经显式格式化后重复生成逐字相同；Wire规范化重生也与现main逐字相同。Transfer完整页面候选正在合入，不以没有页面入口的API宣称交付。主业务库只读预检已核对同一OID/postmaster、74组既有owner行数和零未收敛工作；057/060/061/062尚待精确事务应用。058永久清理、引用保护聚合、容量/内容包、Bible回收发现、Impacts/GeneratedResults与下游完整业务仍继续，完整迁移未完成。
+
+
+151整包最终前端候选纳入Transfer16及新增恢复焦点测试。未知Transfer恢复与 asset_id URL详情、未知Bible恢复与 version_id历史均先确切Red复现双Dialog，再验证scopefresh后单一恢复Dialog、保留原UUID/正文/URL、解决后详情和焦点恢复；没有自动POST。最终155个实际测试文件/670项测试/0失败/0跳过，全树ESLint/Prettier、typegen、tsc及同生产源码Next构建通过。生产构建后仅新增focus回归测试，重新运行适用静态门禁和全树Vitest，不把早期外部node_modules symlink构建失败算作通过。Transfer实际源/目标任务投递、未知物理写入、正式六图/音频与完整历史Copy浏览器仍待新运行环境验证。

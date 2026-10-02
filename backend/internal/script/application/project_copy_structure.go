@@ -55,7 +55,7 @@ func validateCopyStructures(h ProjectCopyHistory) error {
 				key := itemIdentity{row.ID, item.Key}
 				if item.Type == "line" {
 					line, exists := dialogue[key]
-					if !exists || line.SeqNo != i+1 || line.Kind != item.Kind || line.Content != item.Content || line.Speaker != item.Speaker || line.Emotion != item.Emotion || line.Start != item.Start || line.End != item.End || line.ContentHash != domain.ContentSHA([]byte(item.Content)) || !sameStructureCharacter(line.CharacterID, item.CharacterID) {
+					if !exists || line.SeqNo != i+1 || line.Kind != item.Kind || line.Content != item.Content || line.Speaker != item.Speaker || line.Emotion != item.Emotion || line.Start != item.Start || line.End != item.End || line.ContentHash != domain.ContentSHA([]byte(item.Content)) || !sameStructureCharacter(line.CharacterID, item.CharacterID) || !sameStructureCharacter(line.CharacterVersionID, item.CharacterVersionID) {
 						return ErrObjectMismatch
 					}
 					delete(dialogue, key)

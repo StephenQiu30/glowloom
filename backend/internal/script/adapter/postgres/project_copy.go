@@ -19,13 +19,22 @@ type ProjectCopyAccessFactory func(*gorm.DB) application.ProjectCopyAccess
 
 // ProjectCopyStore owns immutable full-history snapshots and exact object proof state.
 type ProjectCopyStore struct {
-	db     *gorm.DB
-	access ProjectCopyAccessFactory
+	db         *gorm.DB
+	access     ProjectCopyAccessFactory
+	characters ProjectCopyCharacterFactory
 }
 
 // NewProjectCopyStore injects caller-owned SQL for Freeze/Register or a pool for transfer.
 func NewProjectCopyStore(db *gorm.DB, access ProjectCopyAccessFactory) *ProjectCopyStore {
 	return &ProjectCopyStore{db: db, access: access}
+}
+
+// ProjectCopyCharacterFactory binds exact frozen Bible identities to caller-owned admission SQL.
+type ProjectCopyCharacterFactory func(*gorm.DB) application.ProjectCopyCharacters
+
+// NewProjectCopyStoreWithCharacters requires the real Bible owner for non-nil historical references.
+func NewProjectCopyStoreWithCharacters(db *gorm.DB, access ProjectCopyAccessFactory, characters ProjectCopyCharacterFactory) *ProjectCopyStore {
+	return &ProjectCopyStore{db: db, access: access, characters: characters}
 }
 
 func (s *ProjectCopyStore) authorize(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, b application.ProjectCopyBinding) error {
@@ -83,7 +92,17 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
-		manifest, err := application.RemapProjectHistory(b, history, assets)
+		var characters []application.ProjectCopyCharacterMapping
+		if refs := application.ProjectHistoryCharacterReferences(history); len(refs) > 0 {
+			if s.characters == nil || s.characters(tx) == nil {
+				return application.ErrContextUnavailable
+			}
+			characters, err = s.characters(tx).FreezeCharacters(ctx, actor, b, refs)
+			if err != nil {
+				return err
+			}
+		}
+		manifest, err := application.RemapProjectHistoryWithCharacters(b, history, assets, characters)
 		if err != nil {
 			return err
 		}

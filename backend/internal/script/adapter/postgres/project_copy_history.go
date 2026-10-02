@@ -45,6 +45,14 @@ func readCopyHistory(tx *gorm.DB, org, project uuid.UUID) (application.ProjectCo
 		}
 		result.Versions = append(result.Versions, record)
 	}
+	var characterVersionColumn bool
+	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='script' AND table_name='dialogue_line' AND column_name='character_version_id')`).Scan(&characterVersionColumn).Error; err != nil {
+		return result, err
+	}
+	characterColumns := ""
+	if characterVersionColumn {
+		characterColumns = ",character_version_id"
+	}
 	for _, query := range []struct {
 		sql string
 		out any
@@ -53,7 +61,7 @@ func readCopyHistory(tx *gorm.DB, org, project uuid.UUID) (application.ProjectCo
 		{`SELECT version_id,split_revision,candidate_split_set_id AS candidate_set_id,confirmed_split_set_id AS confirmed_set_id FROM script.version_head WHERE org_id=? AND project_id=? ORDER BY version_id`, &result.VersionHeads},
 		{`SELECT ` + episodeColumns + ` FROM script.episode WHERE org_id=? AND project_id=? ORDER BY script_version_id,seq_no,id`, &result.Episodes},
 		{`SELECT id,org_id,project_id,episode_structure_id AS structure_id,scene_key,seq_no,heading,location_text,time_of_day,span_start AS start,span_end AS "end" FROM script.scene WHERE org_id=? AND project_id=? ORDER BY episode_structure_id,seq_no,id`, &result.Scenes},
-		{`SELECT id,org_id,project_id,scene_id,line_key,seq_no,kind,speaker_text AS speaker,content,emotion,content_hash,character_id,span_start AS start,span_end AS "end" FROM script.dialogue_line WHERE org_id=? AND project_id=? ORDER BY scene_id,seq_no,id`, &result.Dialogue},
+		{`SELECT id,org_id,project_id,scene_id,line_key,seq_no,kind,speaker_text AS speaker,content,emotion,content_hash,character_id` + characterColumns + `,span_start AS start,span_end AS "end" FROM script.dialogue_line WHERE org_id=? AND project_id=? ORDER BY scene_id,seq_no,id`, &result.Dialogue},
 		{`SELECT id,org_id,project_id,scene_id,line_key,seq_no,content,span_start AS start,span_end AS "end" FROM script.action_line WHERE org_id=? AND project_id=? ORDER BY scene_id,seq_no,id`, &result.Actions},
 	} {
 		if err := tx.Raw(query.sql, org, project).Scan(query.out).Error; err != nil {

@@ -79,7 +79,7 @@ type ProjectCopyResponse struct {
 	TargetProjectID         uuid.UUID                  `json:"target_project_id"`
 	TargetName              string                     `json:"target_name"`
 	Status                  string                     `json:"status" enums:"queued,running,failed,cancel_requested,cancelled,succeeded"`
-	Stage                   string                     `json:"stage" enums:"media,script,canvases,finalizing,cleanup,complete"`
+	Stage                   string                     `json:"stage" enums:"media,bible,script,canvases,finalizing,cleanup,complete"`
 	Revision                int64                      `json:"revision"`
 	Attempt                 int64                      `json:"attempt"`
 	Documents               int                        `json:"documents"`
@@ -95,6 +95,7 @@ type ProjectCopyResponse struct {
 	CancellationRequested   bool                       `json:"cancellation_requested"`
 	FailureCode             string                     `json:"failure_code,omitempty"`
 	Script                  *ProjectCopyScriptProgress `json:"script,omitempty"`
+	Bible                   *ProjectCopyBibleProgress  `json:"bible,omitempty"`
 }
 
 // ProjectCopyScriptCounts exposes only complete owning history/object cardinalities.
@@ -124,6 +125,35 @@ func scriptCounts(c domain.ProjectCopyScriptCounts) ProjectCopyScriptCounts {
 	return ProjectCopyScriptCounts{Sources: c.Sources, Versions: c.Versions, VersionSources: c.VersionSources, ProjectStates: c.ProjectStates, VersionHeads: c.VersionHeads, SplitSets: c.SplitSets, SplitConfirmations: c.SplitConfirmations, Episodes: c.Episodes, Structures: c.Structures, Scenes: c.Scenes, DialogueLines: c.DialogueLines, ActionLines: c.ActionLines, Objects: c.Objects}
 }
 
+// ProjectCopyBibleCounts exposes every complete historical set without private content.
+type ProjectCopyBibleCounts struct {
+	Characters             int `json:"characters"`
+	CharacterVersions      int `json:"character_versions"`
+	CharacterConfirmations int `json:"character_confirmations"`
+	Locations              int `json:"locations"`
+	LocationVersions       int `json:"location_versions"`
+	LocationConfirmations  int `json:"location_confirmations"`
+	Props                  int `json:"props"`
+	PropVersions           int `json:"prop_versions"`
+	PropConfirmations      int `json:"prop_confirmations"`
+	Looks                  int `json:"looks"`
+	LookVersions           int `json:"look_versions"`
+	References             int `json:"references"`
+	Voices                 int `json:"voices"`
+	Redirects              int `json:"redirects"`
+	Splits                 int `json:"splits"`
+}
+
+// ProjectCopyBibleProgress separates admission evidence from registered completion.
+type ProjectCopyBibleProgress struct {
+	Counts          ProjectCopyBibleCounts  `json:"counts"`
+	CompletedCounts *ProjectCopyBibleCounts `json:"completed_counts,omitempty"`
+}
+
+func bibleCounts(c domain.ProjectCopyBibleCounts) ProjectCopyBibleCounts {
+	return ProjectCopyBibleCounts{Characters: c.Characters, CharacterVersions: c.CharacterVersions, CharacterConfirmations: c.CharacterConfirmations, Locations: c.Locations, LocationVersions: c.LocationVersions, LocationConfirmations: c.LocationConfirmations, Props: c.Props, PropVersions: c.PropVersions, PropConfirmations: c.PropConfirmations, Looks: c.Looks, LookVersions: c.LookVersions, References: c.References, Voices: c.Voices, Redirects: c.Redirects, Splits: c.Splits}
+}
+
 // ProjectCopyListResponse permits recovery after an unknown 202 response or refresh.
 type ProjectCopyListResponse struct {
 	CurrentActorID uuid.UUID             `json:"current_actor_id"`
@@ -146,6 +176,13 @@ func copyResponse(j domain.ProjectCopyJob) ProjectCopyResponse {
 		if j.ScriptReceipt != nil {
 			counts := scriptCounts(j.ScriptReceipt.Counts)
 			r.Script.CompletedCounts = &counts
+		}
+	}
+	if j.Manifest.Bible != nil {
+		r.Bible = &ProjectCopyBibleProgress{Counts: bibleCounts(j.Manifest.Bible.Counts)}
+		if j.BibleReceipt != nil {
+			counts := bibleCounts(j.BibleReceipt.Counts)
+			r.Bible.CompletedCounts = &counts
 		}
 	}
 	return r

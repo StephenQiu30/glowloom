@@ -1,4 +1,13 @@
 declare namespace API {
+  type adoptBibleResultParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+  };
+
   type adoptScriptVersionParams = {
     /** 项目UUID */
     pid: string;
@@ -16,6 +25,15 @@ declare namespace API {
     pid: string;
   };
 
+  type bindBibleVoiceParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+  };
+
   type cancelMediaDepthParams = {
     /** Depth UUID */
     job_id: string;
@@ -28,6 +46,11 @@ declare namespace API {
 
   type cancelMediaTranscriptionParams = {
     /** Transcription UUID */
+    job_id: string;
+  };
+
+  type cancelMediaTransferParams = {
+    /** 转移UUID */
     job_id: string;
   };
 
@@ -65,6 +88,15 @@ declare namespace API {
     id: string;
   };
 
+  type confirmBibleEntryParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+  };
+
   type confirmOperationQuoteParams = {
     /** Operation UUID */
     id: string;
@@ -78,6 +110,29 @@ declare namespace API {
   type confirmScriptEpisodeStructureParams = {
     /** 正式分集UUID */
     eid: string;
+  };
+
+  type createBibleEntryFromResultParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+  };
+
+  type createBibleEntryParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+  };
+
+  type createBibleLookParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
   };
 
   type createCanvasParams = {
@@ -123,6 +178,26 @@ declare namespace API {
   type createScriptSourceParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type deleteBibleEntryParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+  };
+
+  type deleteBibleLookParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+    /** Appearance UUID */
+    look: string;
   };
 
   type deleteCanvasParams = {
@@ -203,6 +278,26 @@ declare namespace API {
     id: string;
   };
 
+  type getBibleEntryParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+  };
+
+  type getBibleVersionParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+    /** Version UUID */
+    version: string;
+  };
+
   type getCanvasParams = {
     /** 画布UUID */
     id: string;
@@ -250,6 +345,11 @@ declare namespace API {
     job_id: string;
     /** Project UUID */
     project_id: string;
+  };
+
+  type getMediaTransferParams = {
+    /** 转移UUID */
+    job_id: string;
   };
 
   type getOperationBatchParams = {
@@ -355,6 +455,243 @@ declare namespace API {
   type getScriptWorkspaceParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationCharacterInput =
+    {
+      aliases?: string[];
+      definition?: githubComStephenQiu30LanverseBackendInternalBibleDomainCharacterDefinition;
+      description?: string;
+      name?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationDetail = {
+    current?: githubComStephenQiu30LanverseBackendInternalBibleDomainVersion;
+    head?: githubComStephenQiu30LanverseBackendInternalBibleDomainHead;
+    resolved_id?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationImpactProof =
+    {
+      revision?: number;
+      sha256?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationLookInput = {
+    applies_to?: githubComStephenQiu30LanverseBackendInternalBibleDomainLookScope[];
+    default?: boolean;
+    description?: string;
+    name?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationReceipt = {
+    confirmed_version_id?: string;
+    content_sha256?: string;
+    created_entry_id?: string;
+    created_version_id?: string;
+    entry_id?: string;
+    kind?: githubComStephenQiu30LanverseBackendInternalBibleDomainKind;
+    project_revision?: number;
+    redirect_id?: string;
+    revision?: number;
+    version_id?: string;
+    version_number?: number;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationReferenceInput =
+    {
+      asset_id?: string;
+      role?: githubComStephenQiu30LanverseBackendInternalBibleDomainImageRole;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationSampleInput =
+    {
+      asset_id?: string;
+      name?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationSummary = {
+    content_sha256?: string;
+    head?: githubComStephenQiu30LanverseBackendInternalBibleDomainHead;
+    name?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationVoiceChoice =
+    {
+      display_name?: string;
+      model_key?: string;
+      model_version?: number;
+      voice_key?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationVoiceInput =
+    {
+      catalog?: githubComStephenQiu30LanverseBackendInternalBibleApplicationVoiceSelection;
+      instructions?: string;
+      kind?: githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceKind;
+      sample?: githubComStephenQiu30LanverseBackendInternalBibleApplicationSampleInput;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleApplicationVoiceSelection =
+    {
+      expected_model_version?: number;
+      model_key?: string;
+      params?: githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceParams;
+      voice_key?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainCatalogVoice = {
+    model_key?: string;
+    model_version?: number;
+    model_version_id?: string;
+    param_schema_sha256?: string;
+    params?: githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceParams;
+    voice_key?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainCharacterContent =
+    {
+      aliases?: string[];
+      definition?: githubComStephenQiu30LanverseBackendInternalBibleDomainCharacterDefinition;
+      description?: string;
+      looks?: githubComStephenQiu30LanverseBackendInternalBibleDomainLookContent[];
+      name?: string;
+      voice?: githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceContent;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainCharacterDefinition =
+    {
+      appearance?: string;
+      clothing?: string;
+      consistency_prompt?: string;
+      multi_view_prompt?: string;
+      personality?: string;
+      physique?: string;
+      props?: string;
+      role?: string;
+      voice_age?: string;
+      voice_language?: string;
+      voice_timbre?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainHead = {
+    confirmed_version_id?: string;
+    created_at?: string;
+    current_version_id?: string;
+    deleted?: boolean;
+    id?: string;
+    kind?: githubComStephenQiu30LanverseBackendInternalBibleDomainKind;
+    org_id?: string;
+    project_id?: string;
+    redirect_id?: string;
+    revision?: number;
+    updated_at?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainImageReference = {
+    media?: githubComStephenQiu30LanverseBackendInternalBibleDomainMediaFact;
+    role?: githubComStephenQiu30LanverseBackendInternalBibleDomainImageRole;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainImageRole =
+    | "primary"
+    | "front"
+    | "side"
+    | "back"
+    | "turnaround_sheet"
+    | "expression_sheet";
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainKind =
+    "character" | "location" | "prop";
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainLocationContent =
+    {
+      aliases?: string[];
+      description?: string;
+      name?: string;
+      prompt?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainLookContent = {
+    applies_to?: githubComStephenQiu30LanverseBackendInternalBibleDomainLookScope[];
+    default?: boolean;
+    description?: string;
+    id?: string;
+    name?: string;
+    references?: githubComStephenQiu30LanverseBackendInternalBibleDomainImageReference[];
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainLookScope = {
+    episode_id?: string;
+    scene_key?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainMediaFact = {
+    asset_id?: string;
+    byte_size?: number;
+    kind?: string;
+    rendition_id?: string;
+    rendition_sha256?: string;
+    revision?: number;
+    sha256?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainPropContent = {
+    aliases?: string[];
+    description?: string;
+    name?: string;
+    prompt?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainResultSource = {
+    input_sha256?: string;
+    operation_id?: string;
+    output_id?: string;
+    output_sha256?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainSampleVoice = {
+    media?: githubComStephenQiu30LanverseBackendInternalBibleDomainMediaFact;
+    name?: string;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainVersion = {
+    actor_id?: string;
+    character?: githubComStephenQiu30LanverseBackendInternalBibleDomainCharacterContent;
+    content_sha256?: string;
+    created_at?: string;
+    entry_id?: string;
+    id?: string;
+    kind?: githubComStephenQiu30LanverseBackendInternalBibleDomainKind;
+    location?: githubComStephenQiu30LanverseBackendInternalBibleDomainLocationContent;
+    number?: number;
+    org_id?: string;
+    origin?: githubComStephenQiu30LanverseBackendInternalBibleDomainVersionOrigin;
+    previous_id?: string;
+    project_id?: string;
+    prop?: githubComStephenQiu30LanverseBackendInternalBibleDomainPropContent;
+    result?: githubComStephenQiu30LanverseBackendInternalBibleDomainResultSource;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainVersionOrigin =
+    "manual" | "ai";
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceContent = {
+    catalog?: githubComStephenQiu30LanverseBackendInternalBibleDomainCatalogVoice;
+    instructions?: string;
+    kind?: githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceKind;
+    sample?: githubComStephenQiu30LanverseBackendInternalBibleDomainSampleVoice;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceKind =
+    "catalog" | "sample";
+
+  type githubComStephenQiu30LanverseBackendInternalBibleDomainVoiceParams = {
+    emotion?: string;
+    language?: string;
+    pitch?: number;
+    speed?: number;
+    volume?: number;
   };
 
   type githubComStephenQiu30LanverseBackendInternalCanvasApplicationCommandResult =
@@ -1128,6 +1465,18 @@ declare namespace API {
     url?: string;
   };
 
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationTransferInput =
+    {
+      expected_folder_revision?: number;
+      expected_project_revision?: number;
+      expected_source_revision?: number;
+      expected_target_revision?: number;
+      items?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemRevision[];
+      source?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+      target?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+      target_folder_id?: string | null;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalMediaApplicationUploadResult =
     {
       asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationAssetSummary;
@@ -1154,6 +1503,35 @@ declare namespace API {
   type githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope = {
     kind?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryKind;
     project_id?: string | null;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaDomainTransferItemResult =
+    {
+      failure_code?: string | null;
+      index?: number;
+      source_item_id?: string;
+      status?: string;
+      target_asset_id?: string | null;
+      target_item_id?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaDomainTransferJob = {
+    attempt?: number;
+    cancellation_requested?: boolean;
+    created_at?: string;
+    current_actor_id?: string;
+    current_org_id?: string;
+    execution_unconfirmed?: boolean;
+    id?: string;
+    items?: githubComStephenQiu30LanverseBackendInternalMediaDomainTransferItemResult[];
+    needs_reconciliation?: boolean;
+    revision?: number;
+    source?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+    stage?: string;
+    status?: string;
+    target?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+    target_folder_id?: string | null;
+    updated_at?: string;
   };
 
   type githubComStephenQiu30LanverseBackendInternalMediatoolApplicationControlInput =
@@ -2080,6 +2458,7 @@ declare namespace API {
 
   type githubComStephenQiu30LanverseBackendInternalScriptDomainStructureItem = {
     character_id?: string;
+    character_version_id?: string;
     content?: string;
     emotion?: string;
     kind?: string;
@@ -2153,6 +2532,68 @@ declare namespace API {
   type importScriptSourcesParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type internalBibleAdapterHttpContentRequest = {
+    character?: githubComStephenQiu30LanverseBackendInternalBibleApplicationCharacterInput;
+    expected_revision?: number;
+    location?: githubComStephenQiu30LanverseBackendInternalBibleDomainLocationContent;
+    prop?: githubComStephenQiu30LanverseBackendInternalBibleDomainPropContent;
+  };
+
+  type internalBibleAdapterHttpControlRequest = {
+    acknowledged_impact?: githubComStephenQiu30LanverseBackendInternalBibleApplicationImpactProof;
+    expected_revision?: number;
+  };
+
+  type internalBibleAdapterHttpHistoryResponse = {
+    next_cursor?: string;
+    versions?: githubComStephenQiu30LanverseBackendInternalBibleDomainVersion[];
+  };
+
+  type internalBibleAdapterHttpLookRequest = {
+    expected_revision?: number;
+    look?: githubComStephenQiu30LanverseBackendInternalBibleApplicationLookInput;
+  };
+
+  type internalBibleAdapterHttpMergeRequest = {
+    acknowledged_impact?: githubComStephenQiu30LanverseBackendInternalBibleApplicationImpactProof;
+    expected_revision?: number;
+    expected_target_revision?: number;
+    target_id?: string;
+  };
+
+  type internalBibleAdapterHttpPageResponse = {
+    current_actor_id?: string;
+    current_org_id?: string;
+    entries?: githubComStephenQiu30LanverseBackendInternalBibleApplicationSummary[];
+    next_cursor?: string;
+  };
+
+  type internalBibleAdapterHttpReferencesRequest = {
+    expected_revision?: number;
+    references?: githubComStephenQiu30LanverseBackendInternalBibleApplicationReferenceInput[];
+  };
+
+  type internalBibleAdapterHttpResultRequest = {
+    expected_revision?: number;
+    operation_id?: string;
+    output_id?: string;
+  };
+
+  type internalBibleAdapterHttpSplitRequest = {
+    character?: githubComStephenQiu30LanverseBackendInternalBibleApplicationCharacterInput;
+    expected_revision?: number;
+  };
+
+  type internalBibleAdapterHttpVoiceRequest = {
+    expected_revision?: number;
+    voice?: githubComStephenQiu30LanverseBackendInternalBibleApplicationVoiceInput;
+  };
+
+  type internalBibleAdapterHttpVoiceResponse = {
+    next_cursor?: string;
+    voices?: githubComStephenQiu30LanverseBackendInternalBibleApplicationVoiceChoice[];
   };
 
   type internalCanvasAdapterHttpListResponse = {
@@ -2266,6 +2707,18 @@ declare namespace API {
     expected_revision?: number;
     rate_limit_per_min?: number;
     status?: githubComStephenQiu30LanverseBackendInternalCatalogDomainProviderStatus;
+  };
+
+  type internalMediaAdapterHttpTransferControlRequest = {
+    revision?: number;
+  };
+
+  type internalMediaAdapterHttpTransferPage = {
+    current_actor_id?: string;
+    current_org_id?: string;
+    items?: githubComStephenQiu30LanverseBackendInternalMediaDomainTransferJob[];
+    page?: number;
+    page_size?: number;
   };
 
   type internalMediatoolAdapterHttpDepthJobResponse = {
@@ -2512,6 +2965,29 @@ declare namespace API {
     expected_revision: number;
   };
 
+  type internalWorkspaceAdapterHttpProjectCopyBibleCounts = {
+    character_confirmations?: number;
+    character_versions?: number;
+    characters?: number;
+    location_confirmations?: number;
+    location_versions?: number;
+    locations?: number;
+    look_versions?: number;
+    looks?: number;
+    prop_confirmations?: number;
+    prop_versions?: number;
+    props?: number;
+    redirects?: number;
+    references?: number;
+    splits?: number;
+    voices?: number;
+  };
+
+  type internalWorkspaceAdapterHttpProjectCopyBibleProgress = {
+    completed_counts?: internalWorkspaceAdapterHttpProjectCopyBibleCounts;
+    counts?: internalWorkspaceAdapterHttpProjectCopyBibleCounts;
+  };
+
   type internalWorkspaceAdapterHttpProjectCopyListResponse = {
     copies?: internalWorkspaceAdapterHttpProjectCopyResponse[];
     current_actor_id?: string;
@@ -2534,6 +3010,7 @@ declare namespace API {
   type internalWorkspaceAdapterHttpProjectCopyResponse = {
     assets?: number;
     attempt?: number;
+    bible?: internalWorkspaceAdapterHttpProjectCopyBibleProgress;
     cancellation_requested?: boolean;
     completed_assets?: number;
     completed_documents?: number;
@@ -2551,7 +3028,13 @@ declare namespace API {
     source_project_id?: string;
     source_revision?: number;
     stage?:
-      "media" | "script" | "canvases" | "finalizing" | "cleanup" | "complete";
+      | "media"
+      | "bible"
+      | "script"
+      | "canvases"
+      | "finalizing"
+      | "cleanup"
+      | "complete";
     status?:
       | "queued"
       | "running"
@@ -2706,6 +3189,39 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listBibleEntriesParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Page size, maximum 200 */
+    limit?: number;
+    /** Opaque page cursor */
+    cursor?: string;
+  };
+
+  type listBibleVersionsParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+    /** Page size, maximum 50 */
+    limit?: number;
+    /** Opaque page cursor */
+    cursor?: string;
+  };
+
+  type listBibleVoicesParams = {
+    /** Project UUID */
+    pid: string;
+    /** Page size, maximum 200 */
+    limit?: number;
+    /** Opaque page cursor */
+    cursor?: string;
+  };
+
   type listCanvasesParams = {
     /** 项目UUID */
     pid: string;
@@ -2788,6 +3304,17 @@ declare namespace API {
     limit?: number;
     /** Project and source bound cursor */
     cursor?: string;
+  };
+
+  type listMediaTransfersParams = {
+    /** personal/project；默认personal */
+    scope?: string;
+    /** project scope必要UUID */
+    project_id?: string;
+    /** 1..10000；默认1 */
+    page?: number;
+    /** 1..100；默认20 */
+    page_size?: number;
   };
 
   type listProjectCopiesParams = {
@@ -2944,6 +3471,15 @@ declare namespace API {
     cursor?: string;
   };
 
+  type mergeBibleCharacterParams = {
+    /** Project UUID */
+    pid: string;
+    /** Character kind */
+    kind: "character";
+    /** Source character UUID */
+    id: string;
+  };
+
   type moveProjectToFolderParams = {
     /** 项目UUID */
     pid: string;
@@ -2987,6 +3523,11 @@ declare namespace API {
     job_id: string;
   };
 
+  type reconcileMediaTransferParams = {
+    /** 转移UUID */
+    job_id: string;
+  };
+
   type reconcileProjectCopyParams = {
     /** 复制任务UUID */
     id: string;
@@ -3021,9 +3562,29 @@ declare namespace API {
     pid: string;
   };
 
+  type replaceBibleReferencesParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+    /** Appearance UUID */
+    look: string;
+  };
+
   type resplitScriptEpisodesParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type restoreBibleEntryParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
   };
 
   type restoreProjectParams = {
@@ -3048,6 +3609,11 @@ declare namespace API {
 
   type retryMediaTranscriptionParams = {
     /** Transcription UUID */
+    job_id: string;
+  };
+
+  type retryMediaTransferParams = {
+    /** 转移UUID */
     job_id: string;
   };
 
@@ -3098,6 +3664,26 @@ declare namespace API {
     id: string;
   };
 
+  type setBibleDefaultLookParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+    /** Appearance UUID */
+    look: string;
+  };
+
+  type splitBibleCharacterParams = {
+    /** Project UUID */
+    pid: string;
+    /** Character kind */
+    kind: "character";
+    /** Parent character UUID */
+    id: string;
+  };
+
   type testAdminCredentialParams = {
     /** 渠道UUID */
     id: string;
@@ -3110,9 +3696,38 @@ declare namespace API {
     pid: string;
   };
 
+  type unbindBibleVoiceParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+  };
+
   type updateAdminProviderParams = {
     /** 渠道UUID */
     id: string;
+  };
+
+  type updateBibleEntryParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+  };
+
+  type updateBibleLookParams = {
+    /** Project UUID */
+    pid: string;
+    /** Identity kind */
+    kind: "character" | "location" | "prop";
+    /** Identity UUID */
+    id: string;
+    /** Appearance UUID */
+    look: string;
   };
 
   type updateProjectFolderParams = {

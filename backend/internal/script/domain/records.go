@@ -182,15 +182,16 @@ var ErrInvalidStructure = errors.New("invalid episode structure")
 
 // StructureItem preserves the source scene's ordered action/dialogue interleaving.
 type StructureItem struct {
-	Type        string     `json:"type"`
-	Key         uuid.UUID  `json:"line_key"`
-	Kind        string     `json:"kind,omitempty"`
-	Speaker     string     `json:"speaker_text,omitempty"`
-	CharacterID *uuid.UUID `json:"character_id,omitempty"`
-	Content     string     `json:"content"`
-	Emotion     string     `json:"emotion,omitempty"`
-	Start       int        `json:"span_start"`
-	End         int        `json:"span_end"`
+	Type               string     `json:"type"`
+	Key                uuid.UUID  `json:"line_key"`
+	Kind               string     `json:"kind,omitempty"`
+	Speaker            string     `json:"speaker_text,omitempty"`
+	CharacterID        *uuid.UUID `json:"character_id,omitempty"`
+	CharacterVersionID *uuid.UUID `json:"character_version_id,omitempty"`
+	Content            string     `json:"content"`
+	Emotion            string     `json:"emotion,omitempty"`
+	Start              int        `json:"span_start"`
+	End                int        `json:"span_end"`
 }
 
 // StructureScene retains formal scene metadata and the exact item order.

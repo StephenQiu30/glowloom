@@ -43,7 +43,8 @@ type ProjectCopySourceAsset struct {
 
 // RetainedHistoryProof preserves exact soft-deletion facts. Empty DeclaredBy
 // keeps historical Script document manifests byte-compatible; library marks
-// binary IDs declared by the complete owning project catalog.
+// binary IDs declared by the complete owning project catalog. Reference marks
+// closed, immutable entity facts supplied by the trusted owning copy bridge.
 type RetainedHistoryProof struct {
 	AssetID    uuid.UUID `json:"asset_id"`
 	Revision   int64     `json:"revision"`
@@ -56,7 +57,7 @@ func validRetainedHistory(a domain.MediaAsset, p *RetainedHistoryProof) bool {
 	if !a.IsDelete {
 		return p == nil
 	}
-	if p == nil || p.DeclaredBy != "" && p.DeclaredBy != "library" || p.DeclaredBy == "" && a.Kind != domain.KindDocument {
+	if p == nil || p.DeclaredBy != "" && p.DeclaredBy != "library" && p.DeclaredBy != "reference" || p.DeclaredBy == "" && a.Kind != domain.KindDocument || p.DeclaredBy == "reference" && a.Kind != domain.KindImage && a.Kind != domain.KindAudio {
 		return false
 	}
 	return a.DeleteTime != nil && a.PurgeAfter != nil &&

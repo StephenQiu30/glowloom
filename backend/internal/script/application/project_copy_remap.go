@@ -13,10 +13,19 @@ import (
 // RemapProjectHistory prepares every historical identity and independent object key.
 // It never reads remote bytes or admits access; the owning store supplies authority.
 func RemapProjectHistory(binding ProjectCopyBinding, history ProjectCopyHistory, mediaMapping map[uuid.UUID]uuid.UUID) (ProjectCopyManifest, error) {
+	return RemapProjectHistoryWithCharacters(binding, history, mediaMapping, nil)
+}
+
+// RemapProjectHistoryWithCharacters consumes only exact owning historical Bible identity/version mappings.
+func RemapProjectHistoryWithCharacters(binding ProjectCopyBinding, history ProjectCopyHistory, mediaMapping map[uuid.UUID]uuid.UUID, characters []ProjectCopyCharacterMapping) (ProjectCopyManifest, error) {
 	if binding.JobID == uuid.Nil || binding.OrgID == uuid.Nil || binding.SourceProjectID == uuid.Nil || binding.TargetProjectID == uuid.Nil || binding.SourceProjectID == binding.TargetProjectID {
 		return ProjectCopyManifest{}, domain.ErrInvalidSource
 	}
 	if err := validateCopyHistory(binding, history); err != nil {
+		return ProjectCopyManifest{}, err
+	}
+	characterMapping, err := copyCharacterMap(history, characters)
+	if err != nil {
 		return ProjectCopyManifest{}, err
 	}
 	target, err := cloneCopyHistory(history)
@@ -25,7 +34,7 @@ func RemapProjectHistory(binding ProjectCopyBinding, history ProjectCopyHistory,
 	}
 	ids := copyHistoryIdentities(history)
 	for old := range ids {
-		ids[old] = uuid.NewSHA1(binding.JobID, []byte("script/"+old.String()))
+		ids[old] = projectCopyIdentity(binding.JobID, old)
 	}
 	objects := make([]ProjectCopyObject, 0)
 	facts := make(map[string]domain.ObjectFact)
@@ -39,7 +48,7 @@ func RemapProjectHistory(binding ProjectCopyBinding, history ProjectCopyHistory,
 		objects = append(objects, ProjectCopyObject{Source: fact, Target: mapped})
 		return mapped
 	}
-	if err := transformCopyHistory(&target, binding.TargetProjectID, binding.OrgID, ids, mediaMapping, replaceObject); err != nil {
+	if err := transformCopyHistory(&target, binding.TargetProjectID, binding.OrgID, ids, mediaMapping, replaceObject, characterMapping); err != nil {
 		return ProjectCopyManifest{}, err
 	}
 	records := make(map[uuid.UUID]domain.SourceRecord, len(target.Sources))
@@ -66,7 +75,7 @@ func RemapProjectHistory(binding ProjectCopyBinding, history ProjectCopyHistory,
 	if history.State != nil {
 		counts.ProjectStates = 1
 	}
-	return ProjectCopyManifest{Binding: binding, Source: history, Target: target, Objects: objects, Counts: counts, ContentSHA256: content}, nil
+	return ProjectCopyManifest{Binding: binding, Source: history, Target: target, Objects: objects, Counts: counts, ContentSHA256: content, Characters: characters}, nil
 }
 
 func cloneCopyHistory(history ProjectCopyHistory) (ProjectCopyHistory, error) {
@@ -159,7 +168,7 @@ func ProjectHistoryContentSHA(history ProjectCopyHistory) (string, error) {
 		fact.Key = key
 		return fact
 	}
-	if err := transformCopyHistory(&canonical, uuid.Nil, uuid.Nil, copyHistoryIdentities(history), mediaIDs, object); err != nil {
+	if err := transformCopyHistory(&canonical, uuid.Nil, uuid.Nil, copyHistoryIdentities(history), mediaIDs, object, canonicalCharacterMapping(history)); err != nil {
 		return "", err
 	}
 	for i := range canonical.Versions {
@@ -172,7 +181,7 @@ func ProjectHistoryContentSHA(history ProjectCopyHistory) (string, error) {
 	return domain.ContentSHA(data), nil
 }
 
-func transformCopyHistory(h *ProjectCopyHistory, project, org uuid.UUID, ids, media map[uuid.UUID]uuid.UUID, object func(domain.ObjectFact) domain.ObjectFact) error {
+func transformCopyHistory(h *ProjectCopyHistory, project, org uuid.UUID, ids, media map[uuid.UUID]uuid.UUID, object func(domain.ObjectFact) domain.ObjectFact, characters map[characterCopyKey]ProjectCopyCharacterReference) error {
 	ptr := func(id **uuid.UUID) {
 		if *id != nil {
 			mapped := ids[**id]
@@ -256,8 +265,8 @@ func transformCopyHistory(h *ProjectCopyHistory, project, org uuid.UUID, ids, me
 			for k := range scene.Items {
 				item := &scene.Items[k]
 				item.Key = ids[item.Key]
-				if item.CharacterID != nil {
-					return ErrContextUnavailable
+				if err := remapStructureCharacter(&item.CharacterID, &item.CharacterVersionID, characters); err != nil {
+					return err
 				}
 			}
 		}
@@ -272,8 +281,8 @@ func transformCopyHistory(h *ProjectCopyHistory, project, org uuid.UUID, ids, me
 	for i := range h.Dialogue {
 		s := &h.Dialogue[i]
 		s.ID, s.OrgID, s.ProjectID, s.SceneID, s.LineKey = ids[s.ID], org, project, ids[s.SceneID], ids[s.LineKey]
-		if s.CharacterID != nil {
-			return ErrContextUnavailable
+		if err := remapStructureCharacter(&s.CharacterID, &s.CharacterVersionID, characters); err != nil {
+			return err
 		}
 	}
 	for i := range h.Actions {

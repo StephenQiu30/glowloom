@@ -49,5 +49,6 @@ func provideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 		pgworkspace.NewProjectCopyStore(tx, nil, nil),
 		provideMediaDepthStore(tx, false),
 		provideScriptSourceStore(tx),
+		provideMediaTransferStore(tx),
 	}}
 }

@@ -14,24 +14,24 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
-const copyJobColumns = "request_id,id,org_id,actor_id,source_project_id,target_project_id,source_revision,revision,attempt,target_name,status,stage,failure_code,worker_id,started_at,manifest,media_receipt,canvas_receipt,script_receipt,retryable,needs_reconciliation,cancellation_requested,reconciliation_requested,execution_unconfirmed"
+const copyJobColumns = "request_id,id,org_id,actor_id,execution_actor_id,source_project_id,target_project_id,source_revision,revision,attempt,target_name,status,stage,failure_code,worker_id,started_at,manifest,media_receipt,canvas_receipt,script_receipt,bible_receipt,retryable,needs_reconciliation,cancellation_requested,reconciliation_requested,execution_unconfirmed"
 
 type copyJobRow struct {
-	CreateTime                                            time.Time
-	RequestID                                             string
-	ID, OrgID, ActorID, SourceProjectID, TargetProjectID  uuid.UUID
-	SourceRevision, Revision, Attempt                     int64
-	TargetName, Status, Stage, FailureCode                string
-	WorkerID                                              *uuid.UUID
-	StartedAt                                             *time.Time
-	Manifest, MediaReceipt, CanvasReceipt                 []byte
-	ScriptReceipt                                         []byte
-	Retryable, NeedsReconciliation, CancellationRequested bool
-	ReconciliationRequested, ExecutionUnconfirmed         bool
+	CreateTime                                                             time.Time
+	RequestID                                                              string
+	ID, OrgID, ActorID, ExecutionActorID, SourceProjectID, TargetProjectID uuid.UUID
+	SourceRevision, Revision, Attempt                                      int64
+	TargetName, Status, Stage, FailureCode                                 string
+	WorkerID                                                               *uuid.UUID
+	StartedAt                                                              *time.Time
+	Manifest, MediaReceipt, CanvasReceipt                                  []byte
+	ScriptReceipt, BibleReceipt                                            []byte
+	Retryable, NeedsReconciliation, CancellationRequested                  bool
+	ReconciliationRequested, ExecutionUnconfirmed                          bool
 }
 
 func (r copyJobRow) job() (domain.ProjectCopyJob, error) {
-	j := domain.ProjectCopyJob{RequestID: r.RequestID, ID: r.ID, OrgID: r.OrgID, ActorID: r.ActorID, SourceProjectID: r.SourceProjectID, TargetProjectID: r.TargetProjectID, SourceRevision: r.SourceRevision, Revision: r.Revision, Attempt: r.Attempt, TargetName: r.TargetName, Status: r.Status, Stage: r.Stage, FailureCode: r.FailureCode, StartedAt: r.StartedAt, Retryable: r.Retryable, NeedsReconciliation: r.NeedsReconciliation, CancellationRequested: r.CancellationRequested, ReconciliationRequested: r.ReconciliationRequested, ExecutionUnconfirmed: r.ExecutionUnconfirmed}
+	j := domain.ProjectCopyJob{RequestID: r.RequestID, ID: r.ID, OrgID: r.OrgID, ActorID: r.ActorID, ExecutionActorID: r.ExecutionActorID, SourceProjectID: r.SourceProjectID, TargetProjectID: r.TargetProjectID, SourceRevision: r.SourceRevision, Revision: r.Revision, Attempt: r.Attempt, TargetName: r.TargetName, Status: r.Status, Stage: r.Stage, FailureCode: r.FailureCode, StartedAt: r.StartedAt, Retryable: r.Retryable, NeedsReconciliation: r.NeedsReconciliation, CancellationRequested: r.CancellationRequested, ReconciliationRequested: r.ReconciliationRequested, ExecutionUnconfirmed: r.ExecutionUnconfirmed}
 	if r.WorkerID != nil {
 		j.WorkerID = *r.WorkerID
 	}
@@ -45,6 +45,9 @@ func (r copyJobRow) job() (domain.ProjectCopyJob, error) {
 		return domain.ProjectCopyJob{}, domain.ErrInvalidProjectCopy
 	}
 	if len(r.ScriptReceipt) > 0 && copyJSON(r.ScriptReceipt, &j.ScriptReceipt) != nil {
+		return domain.ProjectCopyJob{}, domain.ErrInvalidProjectCopy
+	}
+	if len(r.BibleReceipt) > 0 && copyJSON(r.BibleReceipt, &j.BibleReceipt) != nil {
 		return domain.ProjectCopyJob{}, domain.ErrInvalidProjectCopy
 	}
 	return j, j.Validate()
@@ -98,7 +101,7 @@ func saveCopyJob(tx *gorm.DB, before, after domain.ProjectCopyJob) error {
 	if after.Validate() != nil || after.Revision != before.Revision+1 {
 		return domain.ErrInvalidProjectCopy
 	}
-	var media, canvas, script any
+	var media, canvas, script, bible any
 	if after.MediaReceipt != nil {
 		body, err := json.Marshal(after.MediaReceipt)
 		if err != nil {
@@ -120,11 +123,18 @@ func saveCopyJob(tx *gorm.DB, before, after domain.ProjectCopyJob) error {
 		}
 		script = string(body)
 	}
+	if after.BibleReceipt != nil {
+		body, err := json.Marshal(after.BibleReceipt)
+		if err != nil {
+			return err
+		}
+		bible = string(body)
+	}
 	var worker any
 	if after.WorkerID != uuid.Nil {
 		worker = after.WorkerID
 	}
-	update := tx.Exec(`UPDATE workspace.project_copy_job SET status=?,stage=?,revision=?,attempt=?,worker_id=?,started_at=?,media_receipt=?::jsonb,canvas_receipt=?::jsonb,script_receipt=?::jsonb,failure_code=?,retryable=?,needs_reconciliation=?,cancellation_requested=?,reconciliation_requested=?,execution_unconfirmed=?,update_time=statement_timestamp() WHERE id=? AND org_id=? AND revision=? AND worker_id IS NOT DISTINCT FROM ?::uuid`, after.Status, after.Stage, after.Revision, after.Attempt, worker, after.StartedAt, media, canvas, script, after.FailureCode, after.Retryable, after.NeedsReconciliation, after.CancellationRequested, after.ReconciliationRequested, after.ExecutionUnconfirmed, after.ID, after.OrgID, before.Revision, nullableCopyWorker(before.WorkerID))
+	update := tx.Exec(`UPDATE workspace.project_copy_job SET execution_actor_id=?::uuid,status=?,stage=?,revision=?,attempt=?,worker_id=?,started_at=?,media_receipt=?::jsonb,canvas_receipt=?::jsonb,script_receipt=?::jsonb,bible_receipt=?::jsonb,failure_code=?,retryable=?,needs_reconciliation=?,cancellation_requested=?,reconciliation_requested=?,execution_unconfirmed=?,update_time=statement_timestamp() WHERE id=? AND org_id=? AND revision=? AND worker_id IS NOT DISTINCT FROM ?::uuid`, nullableCopyWorker(after.ExecutionActorID), after.Status, after.Stage, after.Revision, after.Attempt, worker, after.StartedAt, media, canvas, script, bible, after.FailureCode, after.Retryable, after.NeedsReconciliation, after.CancellationRequested, after.ReconciliationRequested, after.ExecutionUnconfirmed, after.ID, after.OrgID, before.Revision, nullableCopyWorker(before.WorkerID))
 	if update.Error != nil {
 		return fmt.Errorf("persist project copy checkpoint: %w", update.Error)
 	}
@@ -147,7 +157,7 @@ func copyChanged(tx *gorm.DB, job domain.ProjectCopyJob, action string, now time
 	if action == "requested" || action == "retry" || action == "cancel" || action == "reconcile" {
 		topic = "lanverse.workspace.project_copy_requested.v1"
 	}
-	payload, err := json.Marshal(map[string]any{"event_id": id, "event_type": topic, "occurred_at": now.UTC(), "org_id": job.OrgID, "project_id": job.SourceProjectID, "actor": map[string]any{"kind": "user", "id": job.ActorID}, "aggregate": map[string]any{"type": "project_copy", "id": job.ID, "revision": job.Revision}, "data": map[string]any{"copy_job_id": job.ID, "source_project_id": job.SourceProjectID, "target_project_id": job.TargetProjectID, "status": job.Status, "stage": job.Stage, "revision": job.Revision, "action": action}})
+	payload, err := json.Marshal(map[string]any{"event_id": id, "event_type": topic, "occurred_at": now.UTC(), "org_id": job.OrgID, "project_id": job.SourceProjectID, "actor": map[string]any{"kind": "user", "id": job.ExecutionActor()}, "aggregate": map[string]any{"type": "project_copy", "id": job.ID, "revision": job.Revision}, "data": map[string]any{"copy_job_id": job.ID, "source_project_id": job.SourceProjectID, "target_project_id": job.TargetProjectID, "status": job.Status, "stage": job.Stage, "revision": job.Revision, "action": action}})
 	if err != nil {
 		return err
 	}
@@ -171,6 +181,9 @@ func (s *ProjectCopyStore) Claim(ctx context.Context, actor identityapp.Principa
 		before, err := readCopyJob(tx, actor, id, true)
 		if err != nil {
 			return err
+		}
+		if before.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
 		}
 		saved = before
 		if reconcile {
@@ -202,6 +215,9 @@ func (s *ProjectCopyStore) UseAttempt(ctx context.Context, actor identityapp.Pri
 		job, err := readCopyJob(tx, actor, id, true)
 		if err != nil {
 			return err
+		}
+		if job.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
 		}
 		if job.WorkerID != worker {
 			return domain.ErrProjectCopyWorkerConflict
@@ -236,6 +252,9 @@ func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.
 		before, err := readCopyJob(tx, actor, id, true)
 		if err != nil {
 			return err
+		}
+		if before.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
 		}
 		if before.WorkerID != worker || worker == uuid.Nil {
 			return domain.ErrProjectCopyWorkerConflict
@@ -290,6 +309,9 @@ func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
+		if before.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
+		}
 		saved = before
 		if err := saved.Publish(worker); err != nil {
 			return err
@@ -316,6 +338,9 @@ func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Princi
 			return domain.ErrInvalidProjectCopy
 		}
 		if err := s.verifyScript(ctx, tx, actor, before, worker); err != nil {
+			return err
+		}
+		if err := s.verifyBible(ctx, tx, actor, before, worker); err != nil {
 			return err
 		}
 		if err := owners.Budget.VerifyCopyTargetBudget(ctx, actor, before.TargetProjectID); err != nil {
@@ -347,6 +372,9 @@ func (s *ProjectCopyStore) Fail(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return err
 		}
+		if before.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
+		}
 		saved = before
 		if err := saved.Fail(worker, code, retryable, unknown); err != nil {
 			return err
@@ -370,6 +398,9 @@ func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityap
 		if err != nil {
 			return err
 		}
+		if before.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
+		}
 		if before.Status == "cancelled" && worker != uuid.Nil {
 			saved = before
 			return nil
@@ -388,6 +419,9 @@ func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityap
 			return err
 		}
 		if err := s.finishScriptCleanup(ctx, tx, actor, before, worker); err != nil {
+			return err
+		}
+		if err := s.finishBibleCleanup(ctx, tx, actor, before, worker); err != nil {
 			return err
 		}
 		saved = before

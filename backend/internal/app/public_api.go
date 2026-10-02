@@ -16,6 +16,8 @@ import (
 
 	// Generated docs register the public Swagger schema with swag at initialization.
 	_ "github.com/StephenQiu30/lanverse/backend/docs"
+	biblehttp "github.com/StephenQiu30/lanverse/backend/internal/bible/adapter/http"
+	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
 	canvashttp "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/http"
 	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
 	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
@@ -92,6 +94,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
 	workspacehttp.NewProjectCopyHandler(workspaceapp.NewProjectCopyService(provideProjectCopyStore(database), time.Now)).Register(protected)
+	mediahttp.NewTransferHandler(provideMediaTransferStore(database)).Register(protected)
 	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(provideProjectFolderStore(database), time.Now)).Register(protected)
 	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) }
 	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)
@@ -127,6 +130,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure model parameter validation: %w", err)
 	}
+	biblehttp.NewHandler(bibleapp.NewService(provideBibleStore(database, storage, parameterValidator), time.Now)).Register(protected)
 	priceValidator, err := pricevalidation.NewValidator()
 	if err != nil {
 		return nil, fmt.Errorf("configure model price validation: %w", err)

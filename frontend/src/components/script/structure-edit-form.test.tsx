@@ -29,6 +29,65 @@ const line = {
   span_start: 1,
   span_end: 3,
 };
+it.each(["unchanged", "changed", "cleared"])(
+  "角色版本pin在%s身份编辑中保持正确",
+  async (change) => {
+    const submit = vi.fn();
+    const character = "33333333-3333-4333-8333-333333333333";
+    const pin = "44444444-4444-4444-8444-444444444444";
+    const next = "55555555-5555-4555-8555-555555555555";
+    render(
+      <StructureEditForm
+        base={base}
+        episodeStart={0}
+        episodeEnd={9}
+        initialDocument={{
+          scenes: [
+            {
+              ...scene,
+              items: [
+                {
+                  ...line,
+                  type: "line",
+                  kind: "dialogue",
+                  character_id: character,
+                  character_version_id: pin,
+                },
+              ],
+            },
+          ],
+          unassigned_lines: [],
+        }}
+        locked={false}
+        onDirty={vi.fn()}
+        onSubmit={submit}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "场景1标题" }), {
+      target: { value: "新场名" },
+    });
+    if (change !== "unchanged")
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "场景1行1正式角色UUID（可空）" }),
+        { target: { value: change === "changed" ? next : "" } },
+      );
+    fireEvent.click(screen.getByRole("button", { name: "保存手工结构候选" }));
+    await waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    const saved = submit.mock.calls[0][0].document.scenes[0].items[0];
+    expect(saved.character_id).toBe(
+      change === "unchanged"
+        ? character
+        : change === "changed"
+          ? next
+          : undefined,
+    );
+    expect(saved.character_version_id).toBe(
+      change === "unchanged" ? pin : undefined,
+    );
+    expect(saved.line_key).toBe(line.line_key);
+    expect(saved.content).toBe(line.content);
+  },
+);
 it("未归属行显式分配仍保持稳定身份与原坐标，保存完整结构和原CAS", async () => {
   const submit = vi.fn();
   render(

@@ -4,10 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/google/uuid"
 
@@ -90,68 +88,21 @@ func copyObjectBytes(ctx context.Context, reader io.Reader, output io.Writer, ex
 }
 
 func (s *ProjectCopyTransfer) verifyTarget(ctx context.Context, object ProjectCopyObject) error {
-	if object.SHA256 == nil || object.ByteSize == nil || !object.SourceVerified {
-		return ErrObjectMismatch
-	}
-	reader, err := s.objects.Get(ctx, object.TargetObjectKey)
-	if err != nil {
-		return err
-	}
-	_, _, verifyErr := copyObjectBytes(ctx, reader, io.Discard, object.ByteSize, object.SHA256)
-	return errors.Join(verifyErr, reader.Close())
+	return verifyTransferredObject(ctx, s.objects, object)
 }
 
-func (s *ProjectCopyTransfer) transferObject(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, object ProjectCopyObject) (resultErr error) {
-	if object.Status == "verified" {
-		if err := s.verifyTarget(ctx, object); err != nil {
-			return &ProjectCopyTransferError{Code: "object_readback_unverified", NeedsReconciliation: true, Cause: err}
-		}
-		return nil
-	}
-	if object.Status != "pending" {
-		return ErrProjectCopyMediaUnavailable
-	}
-	if object.WriteStarted {
-		if err := s.verifyTarget(ctx, object); err != nil {
-			return &ProjectCopyTransferError{Code: "object_readback_unverified", NeedsReconciliation: true, Cause: err}
-		}
-		return s.repo.ConfirmObject(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind, *object.SHA256, *object.ByteSize)
-	}
-	reader, err := s.objects.Get(ctx, object.SourceObjectKey)
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, reader.Close()) }()
-	file, err := os.CreateTemp(s.tempDir, "lanverse-copy-*")
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, file.Close(), os.Remove(file.Name())) }()
-	size, digest, err := copyObjectBytes(ctx, reader, file, object.ByteSize, object.SHA256)
-	if err != nil {
-		return err
-	}
-	if err := s.repo.RecordObjectDigest(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind, digest, size); err != nil {
-		return err
-	}
-	object.SHA256, object.ByteSize, object.SourceVerified = &digest, &size, true
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	if err := s.repo.BeginObjectWrite(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind); err != nil {
-		return err
-	}
-	err = s.objects.PutIfAbsent(ctx, object.TargetObjectKey, file, size, object.ContentType, digest)
-	if err != nil && !errors.Is(err, ErrObjectAlreadyExists) {
-		return &ProjectCopyTransferError{Code: "object_write_unknown", NeedsReconciliation: true, Cause: err}
-	}
-	if err := s.verifyTarget(ctx, object); err != nil {
-		return &ProjectCopyTransferError{Code: "object_readback_unverified", NeedsReconciliation: true, Cause: err}
-	}
-	if err := s.repo.ConfirmObject(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind, digest, size); err != nil {
-		return &ProjectCopyTransferError{Code: "object_receipt_unknown", NeedsReconciliation: true, Cause: err}
-	}
-	return nil
+func (s *ProjectCopyTransfer) transferObject(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, object ProjectCopyObject) error {
+	return transferPrivateObject(ctx, s.objects, s.tempDir, object,
+		func(sha string, size int64) error {
+			return s.repo.RecordObjectDigest(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind, sha, size)
+		},
+		func() error {
+			return s.repo.BeginObjectWrite(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind)
+		},
+		func(sha string, size int64) error {
+			return s.repo.ConfirmObject(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind, sha, size)
+		},
+	)
 }
 
 // Transfer copies the entire frozen object set with receipt-before-write ordering.

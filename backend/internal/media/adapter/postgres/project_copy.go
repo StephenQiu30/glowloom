@@ -88,6 +88,40 @@ func (s *ProjectCopyStore) FreezeWithReferences(ctx context.Context, actor ident
 }
 
 func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID) (application.ProjectCopySnapshot, error) {
+	return s.freezeWithReferenceFacts(ctx, actor, binding, now, referenced, nil)
+}
+
+// FreezeWithReferenceFacts adds trusted immutable image/audio bindings to the
+// complete copy. It must run in the owning admission transaction: all validation
+// failures roll back its snapshot/intents along with the outer command.
+// External Script references remain restricted to documents.
+func (s *ProjectCopyStore) FreezeWithReferenceFacts(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID, facts []application.ReferenceFact) (application.ProjectCopySnapshot, error) {
+	if len(referenced) > 4096 || len(facts) > 4096 {
+		return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+	}
+	seen := make(map[uuid.UUID]bool, len(referenced))
+	for _, id := range referenced {
+		if id == uuid.Nil || seen[id] {
+			return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+		}
+		seen[id] = true
+	}
+	for _, fact := range facts {
+		if err := application.ValidateCopyReferenceFact(fact); err != nil {
+			return application.ProjectCopySnapshot{}, err
+		}
+	}
+	snapshot, err := s.freezeWithReferenceFacts(ctx, actor, binding, now, referenced, facts)
+	if err != nil {
+		return application.ProjectCopySnapshot{}, err
+	}
+	if _, err := application.NewProjectCopyReferenceQuery(s, nil).FreezeReferences(ctx, actor, binding, snapshot, facts); err != nil {
+		return application.ProjectCopySnapshot{}, err
+	}
+	return snapshot, nil
+}
+
+func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, now time.Time, referenced []uuid.UUID, facts []application.ReferenceFact) (application.ProjectCopySnapshot, error) {
 	if s == nil || s.db == nil {
 		return application.ProjectCopySnapshot{}, application.ErrUnavailable
 	}
@@ -109,6 +143,14 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 	seenRefs := make(map[uuid.UUID]bool, len(referenced))
 	for _, id := range referenced {
 		seenRefs[id] = true
+	}
+	referenceRefs := make(map[uuid.UUID]bool, len(facts))
+	for _, fact := range facts {
+		referenceRefs[fact.AssetID] = true
+		if !seenRefs[fact.AssetID] {
+			selectedRefs = append(selectedRefs, fact.AssetID)
+			seenRefs[fact.AssetID] = true
+		}
 	}
 	for _, item := range librarySource.items {
 		if item.AssetID == nil {
@@ -152,6 +194,11 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 			return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
 		}
 	}
+	for id := range referenceRefs {
+		if _, present := selected[id]; !present {
+			return application.ProjectCopySnapshot{}, application.ErrProjectCopyMediaUnavailable
+		}
+	}
 	var renditions []renditionRow
 	renditionQuery := tx.Raw(`SELECT r.* FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE a.project_id=? AND NOT a.is_delete AND NOT r.is_delete ORDER BY r.media_asset_id,r.kind,r.id FOR SHARE OF a,r`, binding.SourceProjectID)
 	if len(selectedRefs) != 0 {
@@ -174,6 +221,8 @@ func (s *ProjectCopyStore) freezeWithReferences(ctx context.Context, actor ident
 			source.RetainedHistory = &application.RetainedHistoryProof{AssetID: source.Asset.ID, Revision: source.Asset.Revision, DeletedAt: *source.Asset.DeleteTime, PurgeAfter: *source.Asset.PurgeAfter}
 			if libraryRefs[row.ID] {
 				source.RetainedHistory.DeclaredBy = "library"
+			} else if referenceRefs[row.ID] {
+				source.RetainedHistory.DeclaredBy = "reference"
 			}
 		}
 		sources = append(sources, source)

@@ -58,9 +58,9 @@ func projectCopyScriptError(err error) error {
 }
 
 func provideScriptProjectCopyStore(database *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *pgscript.ProjectCopyStore {
-	return pgscript.NewProjectCopyStore(database, func(tx *gorm.DB) scriptapp.ProjectCopyAccess {
+	return pgscript.NewProjectCopyStoreWithCharacters(database, func(tx *gorm.DB) scriptapp.ProjectCopyAccess {
 		return projectCopyScriptAccess{store: pgworkspace.NewProjectCopyAccessStore(tx, authority)}
-	})
+	}, func(tx *gorm.DB) scriptapp.ProjectCopyCharacters { return provideProjectCopyCharacters(tx, authority) })
 }
 
 type projectCopyScriptOwner struct{ store *pgscript.ProjectCopyStore }
@@ -108,7 +108,7 @@ func provideProjectCopyScriptTransfer(database *gorm.DB, storage *objectstorage.
 		if cleanup {
 			phase = "cleanup"
 		}
-		authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, ActorID: job.ActorID, WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase}
+		authority := workspaceapp.ProjectCopyAuthority{Binding: workspaceapp.ProjectCopyBinding{JobID: job.ID, OrgID: job.OrgID, SourceProjectID: job.SourceProjectID, TargetProjectID: job.TargetProjectID}, ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase, Bible: job.Manifest.Bible}
 		return projectCopyScriptTransfer{owner: scriptapp.NewProjectCopy(provideScriptProjectCopyStore(database, authority), scriptobjects.NewStorage(storage))}
 	}
 }

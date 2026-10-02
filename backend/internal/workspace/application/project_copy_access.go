@@ -1,6 +1,10 @@
 package application
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+)
 
 // ProjectCopyBinding identifies one workspace-owned source and unpublished target.
 type ProjectCopyBinding struct {
@@ -15,4 +19,5 @@ type ProjectCopyAuthority struct {
 	WorkerID       uuid.UUID
 	SourceRevision int64
 	Phase          string
+	Bible          *domain.ProjectCopyBibleSnapshot
 }

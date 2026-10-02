@@ -92,6 +92,113 @@ export async function previewLibraryMediaAsset(
   );
 }
 
+/** 素材转移记录分页 GET /api/media/library/transfers */
+export async function listMediaTransfers(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listMediaTransfersParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  return request<API.internalMediaAdapterHttpTransferPage>(
+    "/api/media/library/transfers",
+    {
+      method: "GET",
+      params: {
+        ...params,
+      },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 在个人库与项目库间独立转移素材 POST /api/media/library/transfers */
+export async function createMediaTransfer(
+  body: API.githubComStephenQiu30LanverseBackendInternalMediaApplicationTransferInput,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  return request<any>("/api/media/library/transfers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 素材转移状态与逐行结果 GET /api/media/library/transfers/${param0} */
+export async function getMediaTransfer(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getMediaTransferParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<API.githubComStephenQiu30LanverseBackendInternalMediaDomainTransferJob>(
+    `/api/media/library/transfers/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 取消素材转移 POST /api/media/library/transfers/${param0}/cancel */
+export async function cancelMediaTransfer(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.cancelMediaTransferParams,
+  body: API.internalMediaAdapterHttpTransferControlRequest,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<any>(`/api/media/library/transfers/${param0}/cancel`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 对账素材转移未知结果 POST /api/media/library/transfers/${param0}/reconcile */
+export async function reconcileMediaTransfer(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.reconcileMediaTransferParams,
+  body: API.internalMediaAdapterHttpTransferControlRequest,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<any>(`/api/media/library/transfers/${param0}/reconcile`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 重试已清理失败行 POST /api/media/library/transfers/${param0}/retry */
+export async function retryMediaTransfer(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.retryMediaTransferParams,
+  body: API.internalMediaAdapterHttpTransferControlRequest,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<any>(`/api/media/library/transfers/${param0}/retry`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 上传人工确认的个人素材 POST /api/media/library/uploads */
 export async function uploadPersonalMediaAsset(
   body: {

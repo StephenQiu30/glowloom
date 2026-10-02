@@ -86,6 +86,12 @@ func insertStructure(tx *gorm.DB, s domain.EpisodeStructure) error {
 		for i, item := range scene.Items {
 			lineID := uuid.NewSHA1(s.ID, []byte("line/"+scene.Key.String()+"/"+item.Key.String()))
 			if item.Type == "line" {
+				if item.CharacterVersionID != nil {
+					if err := exactlyOne(tx.Exec(`INSERT INTO script.dialogue_line(id,org_id,project_id,scene_id,line_key,seq_no,kind,content,speaker_text,character_id,character_version_id,emotion,content_hash,span_start,span_end) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, lineID, s.OrgID, s.ProjectID, id, item.Key, i+1, item.Kind, item.Content, item.Speaker, item.CharacterID, item.CharacterVersionID, item.Emotion, domain.ContentSHA([]byte(item.Content)), item.Start, item.End)); err != nil {
+						return err
+					}
+					continue
+				}
 				if err := exactlyOne(tx.Exec(`INSERT INTO script.dialogue_line(id,org_id,project_id,scene_id,line_key,seq_no,kind,content,speaker_text,character_id,emotion,content_hash,span_start,span_end) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, lineID, s.OrgID, s.ProjectID, id, item.Key, i+1, item.Kind, item.Content, item.Speaker, item.CharacterID, item.Emotion, domain.ContentSHA([]byte(item.Content)), item.Start, item.End)); err != nil {
 					return err
 				}
@@ -123,12 +129,8 @@ func (s *SourceStore) SaveStructure(ctx context.Context, actor identityapp.Princ
 		if err := input.Document.Validate(episode.Start, episode.End); err != nil {
 			return err
 		}
-		for _, scene := range input.Document.Scenes {
-			for _, item := range scene.Items {
-				if item.CharacterID != nil {
-					return application.ErrContextUnavailable
-				}
-			}
+		if err := s.freezeStructureCharacters(ctx, tx, actor, input.ProjectID, &input.Document, false); err != nil {
+			return err
 		}
 		currentVersion := int64(0)
 		if episode.CurrentStructureID != nil {
@@ -202,6 +204,9 @@ func (s *SourceStore) ConfirmStructure(ctx context.Context, actor identityapp.Pr
 		}
 		if len(structure.Document.Unassigned) != 0 {
 			return domain.ErrInvalidStructure
+		}
+		if err := s.freezeStructureCharacters(ctx, tx, actor, input.ProjectID, &structure.Document, true); err != nil {
+			return err
 		}
 		if episode.ConfirmedStructureID != nil && *episode.ConfirmedStructureID != structure.ID {
 			return &application.ImpactError{Affected: []application.AffectedEpisode{{EpisodeID: episode.ID, ConfirmedStructureID: *episode.ConfirmedStructureID, Reason: "structure_replaced"}}, NeedsAck: !input.AckInvalidate}

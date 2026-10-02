@@ -394,3 +394,55 @@ it("失败取消意图需要核验后清理，不能作为普通重试", async (
   await waitFor(() => expect(ports.run).toHaveBeenCalledOnce());
   expect(ports.run.mock.calls[0][0].action).toBe("reconcile");
 });
+
+it("设定集阶段展示全部历史凭证，完整成功后开放副本设定集", async () => {
+  const counts = {
+    characters: 2,
+    character_versions: 5,
+    character_confirmations: 3,
+    locations: 1,
+    location_versions: 2,
+    location_confirmations: 1,
+    props: 1,
+    prop_versions: 3,
+    prop_confirmations: 2,
+    looks: 4,
+    look_versions: 6,
+    references: 7,
+    voices: 2,
+    redirects: 1,
+    splits: 1,
+  };
+  ports.get.mockResolvedValueOnce({
+    ...job,
+    status: "running",
+    stage: "bible",
+    bible: { counts },
+  });
+  open(job.id);
+  await screen.findByText("正在复制 · 复制角色与设定历史");
+  const section = screen.getByRole("region", {
+    name: "角色与设定历史复制进度",
+  });
+  expect(section.textContent).toContain("参考版本0 / 7");
+  expect(section.textContent).toContain("造型版本0 / 6");
+  expect(section.textContent).toContain("角色版本0 / 5");
+  expect(screen.queryByRole("link", { name: "打开副本设定集" })).toBeNull();
+  ports.get.mockResolvedValue({
+    ...job,
+    revision: 5,
+    status: "succeeded",
+    stage: "complete",
+    completed_documents: job.documents,
+    completed_assets: job.assets,
+    completed_renditions: job.renditions,
+    bible: { counts, completed_counts: counts },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "刷新任务状态" }));
+  expect(
+    (await screen.findByRole("link", { name: "打开副本设定集" })).getAttribute(
+      "href",
+    ),
+  ).toBe(`/projects/${job.target_project_id}/bible`);
+  expect(section.textContent).toContain("参考版本7 / 7");
+});

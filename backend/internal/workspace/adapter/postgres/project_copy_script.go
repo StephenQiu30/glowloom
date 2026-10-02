@@ -20,7 +20,7 @@ func (s *ProjectCopyStore) scriptOwner(tx *gorm.DB, job domain.ProjectCopyJob, w
 	if s.script == nil {
 		return nil, application.ErrProjectDependencyUnavailable
 	}
-	owner := s.script(tx, application.ProjectCopyAuthority{Binding: copyBinding(job), ActorID: job.ActorID, WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase})
+	owner := s.script(tx, application.ProjectCopyAuthority{Binding: copyBinding(job), ActorID: job.ExecutionActor(), WorkerID: worker, SourceRevision: job.SourceRevision, Phase: phase, Bible: job.Manifest.Bible})
 	if owner == nil {
 		return nil, application.ErrProjectDependencyUnavailable
 	}
@@ -40,6 +40,9 @@ func (s *ProjectCopyStore) CompleteScript(ctx context.Context, actor identityapp
 		before, err := readCopyJob(tx, actor, id, true)
 		if err != nil {
 			return err
+		}
+		if before.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
 		}
 		if worker == uuid.Nil || before.WorkerID != worker {
 			return domain.ErrProjectCopyWorkerConflict

@@ -280,6 +280,7 @@ const lineSchema = z
     kind: z.enum(["dialogue", "voiceover", "inner"]),
     speaker_text: scriptScalarText.optional(),
     character_id: scriptUUID.optional(),
+    character_version_id: scriptUUID.optional(),
     emotion: scriptScalarText.optional(),
   })
   .strict();
@@ -322,7 +323,19 @@ export const structureDocumentSchema = z
       .nullable()
       .transform((items) => items ?? []),
   })
-  .strict();
+  .strict()
+  .refine(
+    (document) =>
+      document.scenes.every((scene) =>
+        scene.items.every(
+          (item) =>
+            item.type !== "line" ||
+            !item.character_version_id ||
+            !!item.character_id,
+        ),
+      ),
+    "角色版本必须与正式角色身份一并保留。",
+  );
 export type StructureDocument = z.infer<typeof structureDocumentSchema>;
 export function parseStructureDocument(
   value: unknown,

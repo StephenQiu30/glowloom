@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
@@ -23,15 +24,11 @@ func (s *ProjectCopyStore) VerifyDelivery(ctx context.Context, d application.Pro
 
 // Interrupt records timeout uncertainty while retaining the unacknowledged original worker.
 func (s *ProjectCopyStore) Interrupt(ctx context.Context, id application.ProjectCopyWorkID) error {
-	actor, err := s.WorkerActor(ctx, id.OrgID, id.JobID)
-	if err != nil {
-		return err
+	if s == nil || s.db == nil || id.OrgID == uuid.Nil || id.JobID == uuid.Nil || id.WorkerID == uuid.Nil {
+		return domain.ErrInvalidProjectCopy
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		before, err := readCopyJob(tx, actor, id.JobID, true)
+		before, err := readCopyJob(tx, identityapp.Principal{OrgID: id.OrgID}, id.JobID, true)
 		if err != nil {
 			return err
 		}

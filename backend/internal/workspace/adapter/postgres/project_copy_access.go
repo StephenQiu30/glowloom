@@ -73,13 +73,25 @@ func (s *ProjectCopyAccessStore) Authorize(ctx context.Context, actor identityap
 	if err != nil {
 		return err
 	}
-	if job.OrgID != binding.OrgID || job.ActorID != a.ActorID || job.SourceProjectID != binding.SourceProjectID || job.TargetProjectID != binding.TargetProjectID || job.SourceRevision != a.SourceRevision {
+	if job.OrgID != binding.OrgID || job.ExecutionActor() != a.ActorID || job.SourceProjectID != binding.SourceProjectID || job.TargetProjectID != binding.TargetProjectID || job.SourceRevision != a.SourceRevision {
 		return domain.ErrInvalidProjectCopy
 	}
 	if job.WorkerID != a.WorkerID {
 		return domain.ErrProjectCopyWorkerConflict
 	}
 	switch a.Phase {
+	case "bible_transfer":
+		if job.Status == "running" && !job.CancellationRequested && job.Stage == "bible" && job.Manifest.Bible != nil {
+			return nil
+		}
+	case "bible_register":
+		if job.Status == "running" && !job.CancellationRequested && (job.Stage == "bible" || job.Stage == "finalizing") && job.Manifest.Bible != nil {
+			return nil
+		}
+	case "bible_verify":
+		if job.Status == "running" && !job.CancellationRequested && job.Stage == "finalizing" && job.Manifest.Bible != nil && job.BibleReceipt != nil {
+			return nil
+		}
 	case "transfer":
 		if job.Status == "running" && !job.CancellationRequested && job.Stage == "script" {
 			return nil

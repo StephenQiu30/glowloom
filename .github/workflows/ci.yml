@@ -443,6 +443,52 @@ jobs:
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## Script owning history and file import\n\n{counts['pass']} actual runtime-role PostgreSQL, private originals, Unicode/structured versions, ordered partial retry, recovery, immutable history and complete owning Copy tests passed without skips. Two real Temporal tests require the separately authorized service and are explicitly excluded here; local Temporal and browser evidence are separate.\n")
           PY
+      - name: Prepare isolated Bible and voice contract databases
+        run: |
+          for database in lanverse_bible lanverse_voice; do
+            psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+            contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
+            find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+          done
+      - name: Verify complete Bible history and workspace copy recovery
+        shell: bash
+        env:
+          LV_TEST_BIBLE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_bible?sslmode=disable
+        run: go test -race ./tests/bible -count=1 -json | tee "$RUNNER_TEMP/bible-pg.jsonl"
+      - name: Verify configured catalog voice parameters and current authority
+        shell: bash
+        env:
+          LV_TEST_MODEL_CATALOG_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_voice?sslmode=disable
+        run: go test -race ./tests/catalog -run '^TestVoiceCatalog' -count=1 -json | tee "$RUNNER_TEMP/voice-pg.jsonl"
+      - name: Verify independent media transfer and frozen reference proof
+        shell: bash
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
+        run: |
+          go test -race ./tests/media -run '^Test(MediaTransfer|ProjectCopyTypedHistoricalReferences|ProjectCopyFrozenReferences)' -skip '^TestMediaTransferActualTemporal' -count=1 -json | tee "$RUNNER_TEMP/transfer-pg.jsonl"
+      - name: Require complete Bible, voice and transfer contracts without skips
+        run: |
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          summaries = []
+          for file, minimum in (("bible-pg", 30), ("voice-pg", 6), ("transfer-pg", 20)):
+              counts = collections.Counter()
+              for line in (root / (file + ".jsonl")).read_text().splitlines():
+                  event = json.loads(line)
+                  test = event.get("Test", "")
+                  if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
+                      counts[event["Action"]] += 1
+              assert counts["pass"] >= minimum and counts["fail"] == 0 and counts["skip"] == 0, (file, counts)
+              summaries.append(f"{file}: {counts['pass']} passed, zero failures and skips.")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write("\n## Bible, configured voices and independent media transfer\n\n" + "\n\n".join(summaries) + "\n\nRuntime role PostgreSQL and actual private objects are required here. The real Temporal transfer test is explicitly excluded from CI and has separate local evidence. Browser and provider generation acceptance are separate.\n")
+          PY
       - name: Clean up isolated private contract storage
         if: always()
         run: |

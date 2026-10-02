@@ -9,6 +9,64 @@ import {
 const a = "11111111-1111-4111-8111-111111111111";
 const b = "22222222-2222-4222-8222-222222222222";
 const c = "33333333-3333-4333-8333-333333333333";
+it("历史角色版本pin完整保留，拒绝无角色的孤立pin与行动伪pin", () => {
+  const item = {
+    type: "line",
+    kind: "dialogue",
+    line_key: b,
+    content: "台词",
+    span_start: 0,
+    span_end: 2,
+    character_id: a,
+    character_version_id: c,
+  };
+  const scene = {
+    scene_key: a,
+    seq_no: 1,
+    heading: "",
+    location_text: "",
+    time_of_day: "",
+    span_start: 0,
+    span_end: 2,
+    items: [item],
+  };
+  const document = { scenes: [scene], unassigned_lines: [] };
+  expect(parseStructureDocument(document, 0, 2)).toEqual(document);
+  expect(() =>
+    parseStructureDocument(
+      {
+        scenes: [{ ...scene, items: [{ ...item, character_id: undefined }] }],
+        unassigned_lines: [],
+      },
+      0,
+      2,
+    ),
+  ).toThrow();
+  expect(() =>
+    parseStructureDocument(
+      {
+        scenes: [
+          {
+            ...scene,
+            items: [
+              {
+                type: "action",
+                line_key: b,
+                content: "台词",
+                span_start: 0,
+                span_end: 2,
+                character_version_id: c,
+              },
+            ],
+          },
+        ],
+        unassigned_lines: [],
+      },
+      0,
+      2,
+    ),
+  ).toThrow();
+});
 it("完整分集严格Unicode坐标、preface和无遗漏边界，拒假episode0/间隙/重叠", () => {
   const boundaries = [
     { seq_no: 1, title: "集😀", span_start: 2, span_end: 4 },

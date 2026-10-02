@@ -32,3 +32,22 @@ func freezeProjectCopyMedia(ctx context.Context, actor identityapp.Principal, ow
 	}
 	return historical.FreezeWithReferences(ctx, actor, binding, at, references)
 }
+
+func freezeProjectCopyMediaFacts(ctx context.Context, actor identityapp.Principal, owner application.ProjectCopyMediaOwner, binding mediaapp.ProjectCopyBinding, at time.Time, documents []uuid.UUID, facts []mediaapp.ReferenceFact) (mediaapp.ProjectCopySnapshot, error) {
+	if len(facts) == 0 {
+		return freezeProjectCopyMedia(ctx, actor, owner, binding, at, documents)
+	}
+	if len(facts) > 4096 || len(documents) > 4096 {
+		return mediaapp.ProjectCopySnapshot{}, domain.ErrInvalidProjectCopy
+	}
+	for _, fact := range facts {
+		if err := mediaapp.ValidateCopyReferenceFact(fact); err != nil {
+			return mediaapp.ProjectCopySnapshot{}, err
+		}
+	}
+	references, ok := owner.(application.ProjectCopyReferenceMediaOwner)
+	if !ok {
+		return mediaapp.ProjectCopySnapshot{}, application.ErrProjectDependencyUnavailable
+	}
+	return references.FreezeWithReferenceFacts(ctx, actor, binding, at, documents, facts)
+}

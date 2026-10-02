@@ -197,3 +197,36 @@ it("可写项目提供移动入口，归档与回收项目禁用或省略", asyn
     ),
   ).toBe("true");
 });
+
+it.each(["cards", "table"] as const)(
+  "%s 菜单保留剧本/复制入口并提供当前项目设定集，回收项目不暴露入口",
+  async (view) => {
+    render(
+      <ProjectList
+        projects={projects}
+        view={view}
+        onViewChange={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "逆光的项目操作" }), {
+      key: "ArrowDown",
+    });
+    expect(
+      await screen.findByRole("menuitem", { name: "设定集工作区" }),
+    ).toHaveProperty(
+      "href",
+      "http://localhost:3000/projects/active-project/bible",
+    );
+    expect(screen.getByRole("menuitem", { name: "剧本工作区" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "复制完整项目" })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: "回收中的作品的项目操作" }),
+      { key: "ArrowDown" },
+    );
+    await screen.findByRole("menuitem", { name: "恢复项目" });
+    expect(screen.queryByRole("menuitem", { name: "设定集工作区" })).toBeNull();
+  },
+);

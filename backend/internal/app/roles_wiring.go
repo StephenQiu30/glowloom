@@ -27,6 +27,7 @@ import (
 	outboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/application"
 	redisrealtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/redis"
 	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
+	mediaevent "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/event"
 	mediastaged "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/staged"
 	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
 	toolevent "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/event"
@@ -99,6 +100,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		toolflow.RegisterDepthWorkflow(queueWorker)
 		workspaceflow.RegisterProjectCopyWorkflow(queueWorker)
 		scriptflow.RegisterImportWorkflow(queueWorker)
+		mediaflow.RegisterTransferWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
 		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
@@ -170,6 +172,8 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		workspaceflow.RegisterProjectCopyActivities(queueWorker, workspaceflow.NewProjectCopyActivities(copyWorker, copies))
 		importWorker, imports := provideScriptImportWorker(dbConn.DB, storage)
 		scriptflow.RegisterImportActivities(queueWorker, scriptflow.NewImportActivities(importWorker, imports))
+		transferWorker, transfers := provideMediaTransferWorker(dbConn.DB, storage)
+		mediaflow.RegisterTransferActivities(queueWorker, mediaflow.NewTransferActivities(transferWorker, transfers))
 	default:
 		return nil, fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, queue)
 	}
@@ -227,10 +231,11 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 		depthHandler := toolevent.NewDepthHandler(processed, provideMediaDepthStore(dbConn.DB, false), toolflow.NewDepthStarter(temporalConn.Client))
 		copyHandler := workspaceevent.NewProjectCopyHandler(processed, provideProjectCopyStore(dbConn.DB), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
 		importHandler := scriptevent.NewImportHandler(processed, provideScriptImportStore(dbConn.DB), scriptflow.NewImportStarter(temporalConn.Client))
+		transferHandler := mediaevent.NewTransferHandler(processed, provideMediaTransferStore(dbConn.DB), mediaflow.NewTransferStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
-			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic}, workflowDelivery{
+			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic, mediaevent.TransferTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,
-				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler,
+				exports: exportHandler, transcriptions: transcriptionHandler, depths: depthHandler, copies: copyHandler, imports: importHandler, transfers: transferHandler,
 			})
 		if err != nil {
 			temporalConn.Close()
@@ -266,9 +271,13 @@ type workflowDelivery struct {
 	depths         inboxapp.Handler
 	copies         inboxapp.Handler
 	imports        inboxapp.Handler
+	transfers      inboxapp.Handler
 }
 
 func (h workflowDelivery) Handle(ctx context.Context, record inboxapp.Record) error {
+	if record.Topic == mediaevent.TransferTopic {
+		return h.transfers.Handle(ctx, record)
+	}
 	if record.Topic == scriptevent.ImportTopic {
 		return h.imports.Handle(ctx, record)
 	}

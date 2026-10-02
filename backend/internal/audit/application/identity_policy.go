@@ -40,6 +40,17 @@ func NewRecordedActionParser() *Parser {
 	for _, action := range []string{"media.library.create_folder", "media.library.update_folder", "media.library.delete_folder", "media.library.create_text", "media.library.update_item", "media.library.move_items", "media.library.recycle_items", "media.library.restore_items", "media.library.remove_items"} {
 		fields[action] = []string{"library_id", "revision", "count"}
 	}
+	for _, action := range []string{"media.transfer.create", "media.transfer.cancel", "media.transfer.retry", "media.transfer.reconcile"} {
+		fields[action] = []string{"id", "revision", "status", "count"}
+	}
+	for _, kind := range []string{"character", "location", "prop"} {
+		for _, action := range []string{"create", "update", "confirm", "delete", "restore", "adopt_result", "create_result"} {
+			fields["bible."+kind+"_"+action] = []string{"revision", "project_revision", "version_id", "content_sha256"}
+		}
+	}
+	for _, action := range []string{"merge", "split", "look_create", "look_update", "look_delete", "look_default", "references", "voice_bind", "voice_unbind"} {
+		fields["bible.character_"+action] = []string{"revision", "project_revision", "version_id", "content_sha256"}
+	}
 	for _, action := range []string{"script.source_create", "script.source_update", "script.source_delete", "script.source_import", "script.source_reorder"} {
 		fields[action] = []string{"script_revision", "project_revision", "version_id", "split_set_id", "source_count", "content_hash", "document_sha256", "source_manifest_sha256"}
 	}

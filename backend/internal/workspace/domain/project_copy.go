@@ -31,6 +31,7 @@ type ProjectCopyManifest struct {
 	Assets           int                        `json:"assets"`
 	Renditions       int                        `json:"renditions"`
 	Script           *ProjectCopyScriptSnapshot `json:"script,omitempty"`
+	Bible            *ProjectCopyBibleSnapshot  `json:"bible,omitempty"`
 }
 
 // ProjectCopyReceipt binds exact counts and the resulting content to one frozen module.
@@ -47,6 +48,7 @@ type ProjectCopyJob struct {
 	ID                      uuid.UUID
 	OrgID                   uuid.UUID
 	ActorID                 uuid.UUID
+	ExecutionActorID        uuid.UUID `json:"-"`
 	SourceProjectID         uuid.UUID
 	SourceRevision          int64
 	TargetProjectID         uuid.UUID
@@ -61,12 +63,21 @@ type ProjectCopyJob struct {
 	MediaReceipt            *ProjectCopyReceipt
 	CanvasReceipt           *ProjectCopyReceipt
 	ScriptReceipt           *ProjectCopyScriptReceipt `json:",omitempty"`
+	BibleReceipt            *ProjectCopyBibleReceipt  `json:",omitempty"`
 	FailureCode             string
 	Retryable               bool
 	NeedsReconciliation     bool
 	CancellationRequested   bool
 	ReconciliationRequested bool
 	ExecutionUnconfirmed    bool
+}
+
+// ExecutionActor preserves old creator-only jobs while following authorized control commands.
+func (j ProjectCopyJob) ExecutionActor() uuid.UUID {
+	if j.ExecutionActorID != uuid.Nil {
+		return j.ExecutionActorID
+	}
+	return j.ActorID
 }
 
 func copyDigest(value string) bool {
@@ -87,13 +98,16 @@ func (j ProjectCopyJob) Validate() error {
 	if err := j.validateScript(); err != nil {
 		return err
 	}
+	if err := j.validateBible(); err != nil {
+		return err
+	}
 	switch j.Status {
 	case "queued", "running", "failed", "cancel_requested", "cancelled", "succeeded":
 	default:
 		return ErrInvalidProjectCopy
 	}
 	switch j.Stage {
-	case "media", "script", "canvases", "finalizing", "cleanup", "complete":
+	case "media", "bible", "script", "canvases", "finalizing", "cleanup", "complete":
 	default:
 		return ErrInvalidProjectCopy
 	}
@@ -204,6 +218,9 @@ func (j *ProjectCopyJob) AcceptMediaReceipt(worker uuid.UUID, receipt ProjectCop
 	if j.Manifest.Script != nil {
 		j.Stage = "script"
 	}
+	if j.Manifest.Bible != nil {
+		j.Stage = "bible"
+	}
 	return nil
 }
 
@@ -237,6 +254,27 @@ func (j *ProjectCopyJob) Publish(worker uuid.UUID) error {
 		return err
 	}
 	j.Status, j.Stage, j.WorkerID = "succeeded", "complete", uuid.Nil
+	return nil
+}
+
+// RequestCancelBy binds an authorized cancellation command without restarting execution.
+func (j *ProjectCopyJob) RequestCancelBy(actor uuid.UUID) error {
+	if actor == uuid.Nil {
+		return ErrInvalidProjectCopy
+	}
+	before := j.Revision
+	if err := j.RequestCancel(); err != nil {
+		return err
+	}
+	if j.ExecutionActor() == actor {
+		return nil
+	}
+	if before == j.Revision {
+		if err := j.advance(); err != nil {
+			return err
+		}
+	}
+	j.ExecutionActorID = actor
 	return nil
 }
 

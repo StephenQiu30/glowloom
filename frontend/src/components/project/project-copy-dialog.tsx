@@ -77,6 +77,7 @@ const statusLabels: Record<CopyJob["status"], string> = {
 };
 const stageLabels: Record<CopyJob["stage"], string> = {
   media: "复制媒体与衍生物",
+  bible: "复制角色与设定历史",
   script: "复制剧本与全部历史",
   canvases: "重建全部画布",
   finalizing: "核验并发布副本",
@@ -117,6 +118,48 @@ function ScriptProgress({
             <dt className="text-muted-foreground">{scriptCountLabels[key]}</dt>
             <dd>
               {script.completed_counts?.[key] ?? 0} / {script.counts[key]}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+const bibleCountLabels: Record<
+  keyof NonNullable<CopyJob["bible"]>["counts"],
+  string
+> = {
+  characters: "角色",
+  character_versions: "角色版本",
+  character_confirmations: "角色确认",
+  locations: "地点",
+  location_versions: "地点版本",
+  location_confirmations: "地点确认",
+  props: "道具",
+  prop_versions: "道具版本",
+  prop_confirmations: "道具确认",
+  looks: "造型",
+  look_versions: "造型版本",
+  references: "参考版本",
+  voices: "声音版本",
+  redirects: "角色合并",
+  splits: "角色拆分",
+};
+function BibleProgress({ bible }: { bible: NonNullable<CopyJob["bible"]> }) {
+  return (
+    <section
+      aria-label="角色与设定历史复制进度"
+      className="flex flex-col gap-2"
+    >
+      <h3 className="text-sm font-medium">角色与设定历史</h3>
+      <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+        {(
+          Object.keys(bibleCountLabels) as (keyof typeof bibleCountLabels)[]
+        ).map((key) => (
+          <div key={key} className="min-w-0">
+            <dt className="text-muted-foreground">{bibleCountLabels[key]}</dt>
+            <dd>
+              {bible.completed_counts?.[key] ?? 0} / {bible.counts[key]}
             </dd>
           </div>
         ))}
@@ -749,6 +792,7 @@ function CopySession({
                 {job.completed_assets} / {job.assets} · 衍生物{" "}
                 {job.completed_renditions} / {job.renditions}
               </p>
+              {job.bible ? <BibleProgress bible={job.bible} /> : null}
               {job.script ? <ScriptProgress script={job.script} /> : null}
               <p className="text-xs break-all text-muted-foreground">
                 任务：{job.id}
@@ -823,6 +867,17 @@ function CopySession({
                       tabIndex={disabled ? -1 : undefined}
                     >
                       打开副本剧本
+                    </Link>
+                  </Button>
+                ) : null}
+                {job.status === "succeeded" && job.bible?.completed_counts ? (
+                  <Button asChild disabled={disabled} variant="secondary">
+                    <Link
+                      href={`/projects/${job.target_project_id}/bible`}
+                      aria-disabled={disabled || undefined}
+                      tabIndex={disabled ? -1 : undefined}
+                    >
+                      打开副本设定集
                     </Link>
                   </Button>
                 ) : null}

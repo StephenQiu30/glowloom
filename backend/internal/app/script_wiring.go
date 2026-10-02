@@ -16,7 +16,7 @@ import (
 )
 
 func provideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {
-	return pgscript.NewSourceStore(database, provideScriptProjectAccess)
+	return pgscript.NewSourceStoreWithCharacters(database, provideScriptProjectAccess, provideScriptCharacterReferences)
 }
 
 func provideScriptProjectAccess(tx *gorm.DB) scriptapp.ProjectAccess {

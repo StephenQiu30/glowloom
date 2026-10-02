@@ -26,11 +26,20 @@ type SourceStore struct {
 	access          ProjectAccessFactory
 	importAuthority *application.ImportAuthority
 	importRecovery  bool
+	characters      CharacterReferenceFactory
 }
 
 // NewSourceStore injects the own database and the workspace transaction factory.
 func NewSourceStore(db *gorm.DB, access ProjectAccessFactory) *SourceStore {
 	return &SourceStore{db: db, access: access}
+}
+
+// CharacterReferenceFactory binds confirmed Bible facts to the exact script transaction.
+type CharacterReferenceFactory func(*gorm.DB) application.CharacterReferences
+
+// NewSourceStoreWithCharacters injects the own confirmed-character consumer without changing old nil contracts.
+func NewSourceStoreWithCharacters(db *gorm.DB, access ProjectAccessFactory, characters CharacterReferenceFactory) *SourceStore {
+	return &SourceStore{db: db, access: access, characters: characters}
 }
 
 func (s *SourceStore) transaction(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool, f func(*gorm.DB, application.ProjectAccess, workspaceapp.ProjectContentAccess) error) error {

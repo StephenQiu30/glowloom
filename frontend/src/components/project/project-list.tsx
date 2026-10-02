@@ -126,6 +126,9 @@ function ProjectActions({
               <DropdownMenuItem asChild>
                 <Link href={`/projects/${project.id}/script`}>剧本工作区</Link>
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={`/projects/${project.id}/bible`}>设定集工作区</Link>
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onAction(project, "settings")}>
                 项目设置
               </DropdownMenuItem>

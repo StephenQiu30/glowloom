@@ -54,14 +54,14 @@ func (s *ProjectCopyStore) List(ctx context.Context, actor identityapp.Principal
 	return page, err
 }
 
-// WorkerActor restores only the job's initiating current account, never a synthesized role.
+// WorkerActor restores only the job's current command-bound account, never a synthesized role.
 func (s *ProjectCopyStore) WorkerActor(ctx context.Context, org, id uuid.UUID) (identityapp.Principal, error) {
 	if s == nil || s.db == nil || org == uuid.Nil || id == uuid.Nil {
 		return identityapp.Principal{}, application.ErrProjectDependencyUnavailable
 	}
 	var actor identityapp.Principal
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		result := tx.Raw(`SELECT u.id,u.org_id,u.role,u.must_change_password FROM identity."user" u JOIN workspace.project_copy_job j ON j.actor_id=u.id AND j.org_id=u.org_id WHERE j.id=? AND j.org_id=? AND NOT u.is_delete AND u.status='active'`, id, org).Scan(&actor)
+		result := tx.Raw(`SELECT u.id,u.org_id,u.role,u.must_change_password FROM identity."user" u JOIN workspace.project_copy_job j ON COALESCE(j.execution_actor_id,j.actor_id)=u.id AND j.org_id=u.org_id WHERE j.id=? AND j.org_id=? AND NOT u.is_delete AND u.status='active'`, id, org).Scan(&actor)
 		if result.Error != nil {
 			return result.Error
 		}

@@ -99,7 +99,11 @@ func insertCopyHistory(tx *gorm.DB, h application.ProjectCopyHistory) error {
 		}
 	}
 	for _, s := range h.Dialogue {
-		if err := copyInsert(tx, "script.dialogue_line", map[string]any{"id": s.ID, "org_id": s.OrgID, "project_id": s.ProjectID, "scene_id": s.SceneID, "line_key": s.LineKey, "seq_no": s.SeqNo, "kind": s.Kind, "speaker_text": s.Speaker, "content": s.Content, "emotion": s.Emotion, "content_hash": s.ContentHash, "character_id": s.CharacterID, "span_start": s.Start, "span_end": s.End}); err != nil {
+		fields := map[string]any{"id": s.ID, "org_id": s.OrgID, "project_id": s.ProjectID, "scene_id": s.SceneID, "line_key": s.LineKey, "seq_no": s.SeqNo, "kind": s.Kind, "speaker_text": s.Speaker, "content": s.Content, "emotion": s.Emotion, "content_hash": s.ContentHash, "character_id": s.CharacterID, "span_start": s.Start, "span_end": s.End}
+		if s.CharacterVersionID != nil {
+			fields["character_version_id"] = s.CharacterVersionID
+		}
+		if err := copyInsert(tx, "script.dialogue_line", fields); err != nil {
 			return err
 		}
 	}

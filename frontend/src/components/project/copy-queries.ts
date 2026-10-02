@@ -45,6 +45,42 @@ const scriptProgressSchema = z
       !script.completed_counts ||
       sameScriptCounts(script.counts, script.completed_counts),
   );
+const bibleCountsSchema = z
+  .object({
+    characters: scriptCount,
+    character_versions: scriptCount,
+    character_confirmations: scriptCount,
+    locations: scriptCount,
+    location_versions: scriptCount,
+    location_confirmations: scriptCount,
+    props: scriptCount,
+    prop_versions: scriptCount,
+    prop_confirmations: scriptCount,
+    looks: scriptCount,
+    look_versions: scriptCount,
+    references: scriptCount,
+    voices: scriptCount,
+    redirects: scriptCount,
+    splits: scriptCount,
+  })
+  .strict();
+type BibleCounts = z.infer<typeof bibleCountsSchema>;
+function sameBibleCounts(a: BibleCounts, b: BibleCounts) {
+  return (Object.keys(a) as (keyof BibleCounts)[]).every(
+    (key) => a[key] === b[key],
+  );
+}
+const bibleProgressSchema = z
+  .object({
+    counts: bibleCountsSchema,
+    completed_counts: bibleCountsSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (bible) =>
+      !bible.completed_counts ||
+      sameBibleCounts(bible.counts, bible.completed_counts),
+  );
 const copyJobSchema = z
   .object({
     id: copyUUID,
@@ -62,6 +98,7 @@ const copyJobSchema = z
     ]),
     stage: z.enum([
       "media",
+      "bible",
       "script",
       "canvases",
       "finalizing",
@@ -83,6 +120,7 @@ const copyJobSchema = z
     cancellation_requested: z.boolean(),
     failure_code: z.string().max(200).optional(),
     script: scriptProgressSchema.optional(),
+    bible: bibleProgressSchema.optional(),
   })
   .strict()
   .refine(
@@ -92,7 +130,13 @@ const copyJobSchema = z
       job.completed_assets <= job.assets &&
       job.completed_renditions <= job.renditions &&
       (job.stage !== "script" || !!job.script) &&
+      (job.stage !== "bible" || !!job.bible) &&
+      (!job.bible ||
+        job.status === "cancelled" ||
+        !["script", "canvases", "finalizing", "complete"].includes(job.stage) ||
+        !!job.bible.completed_counts) &&
       (!job.script ||
+        job.status === "cancelled" ||
         !["canvases", "finalizing", "complete"].includes(job.stage) ||
         !!job.script.completed_counts) &&
       (job.status !== "succeeded" ||
@@ -184,6 +228,10 @@ export function newerCopy(current: CopyJob | undefined, incoming: CopyJob) {
     (current.source_project_id !== incoming.source_project_id ||
       current.target_project_id !== incoming.target_project_id ||
       current.source_revision !== incoming.source_revision ||
+      !!current.bible !== !!incoming.bible ||
+      (current.bible &&
+        incoming.bible &&
+        !sameBibleCounts(current.bible.counts, incoming.bible.counts)) ||
       !!current.script !== !!incoming.script ||
       (current.script &&
         incoming.script &&

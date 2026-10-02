@@ -43,6 +43,9 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
+		if action != "cancel" && (action != "reconcile" || !before.CancellationRequested) && before.ExecutionActor() != actor.ID {
+			return identityapp.ErrForbidden
+		}
 		var recorded struct {
 			RequestSHA256 string
 			ResponseBody  []byte
@@ -70,7 +73,7 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 		saved = before
 		switch action {
 		case "cancel":
-			err = saved.RequestCancel()
+			err = saved.RequestCancelBy(actor.ID)
 		case "retry":
 			err = saved.Retry()
 		case "reconcile":
@@ -80,6 +83,7 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		if saved.Revision != before.Revision {
+			saved.ExecutionActorID = actor.ID
 			if err := saveCopyJob(tx, before, saved); err != nil {
 				return err
 			}

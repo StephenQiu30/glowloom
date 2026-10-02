@@ -273,3 +273,75 @@ it("同一复制任务的剧本冻结计数不能随新响应变化或消失", (
     }),
   ).toThrow(ApiError);
 });
+
+const bibleCounts = {
+  characters: 2,
+  character_versions: 5,
+  character_confirmations: 3,
+  locations: 1,
+  location_versions: 2,
+  location_confirmations: 1,
+  props: 1,
+  prop_versions: 3,
+  prop_confirmations: 2,
+  looks: 4,
+  look_versions: 6,
+  references: 7,
+  voices: 2,
+  redirects: 1,
+  splits: 1,
+};
+it("接受设定集全部十五项历史；未获回执不得越过设定集阶段", async () => {
+  const admitted = {
+    ...job,
+    status: "running",
+    stage: "bible",
+    bible: { counts: bibleCounts },
+  };
+  api.get.mockResolvedValueOnce(admitted);
+  await expect(getCopy(sourceId, job.id)).resolves.toEqual(admitted);
+  for (const invalid of [
+    { stage: "bible" },
+    {
+      stage: "script",
+      script: { counts: scriptCounts },
+      bible: { counts: bibleCounts },
+    },
+    { bible: { counts: { ...bibleCounts, splits: 2147483648 } } },
+    { bible: { counts: { ...bibleCounts, object_key: "private" } } },
+    {
+      bible: {
+        counts: bibleCounts,
+        completed_counts: { ...bibleCounts, references: 6 },
+      },
+    },
+  ]) {
+    api.get.mockResolvedValueOnce({ ...job, ...invalid });
+    await expect(getCopy(sourceId, job.id)).rejects.toMatchObject({
+      code: "invalid_response",
+    });
+  }
+});
+it("未发布副本取消后完整阶段仍可保留未完成的冻结历史", async () => {
+  const cancelled = {
+    ...job,
+    status: "cancelled",
+    stage: "complete",
+    cancellation_requested: true,
+    script: { counts: scriptCounts },
+    bible: { counts: bibleCounts },
+  };
+  api.get.mockResolvedValueOnce(cancelled);
+  await expect(getCopy(sourceId, job.id)).resolves.toEqual(cancelled);
+});
+it("同一任务的十五项设定集冻结计数不能变化或消失", () => {
+  const current = { ...job, bible: { counts: bibleCounts } };
+  expect(() => newerCopy(current, { ...job, revision: 2 })).toThrow(ApiError);
+  expect(() =>
+    newerCopy(current, {
+      ...current,
+      revision: 2,
+      bible: { counts: { ...bibleCounts, character_versions: 6 } },
+    }),
+  ).toThrow(ApiError);
+});

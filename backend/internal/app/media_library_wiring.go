@@ -21,6 +21,24 @@ type mediaLibraryProjectAccess struct {
 	store *pgworkspace.ProjectContentAccessStore
 }
 
+// mediaLibraryWorkGuards retains every installed owner's transaction-bound
+// admission check; an unreadable owner never becomes an idle project.
+type mediaLibraryWorkGuards struct {
+	guard workspaceapp.ProjectWorkGuard
+}
+
+func provideMediaLibraryWorkGuards(tx *gorm.DB) mediaapp.LibraryWorkGuards {
+	return mediaLibraryWorkGuards{guard: provideProjectWorkGuard(tx)}
+}
+
+func (g mediaLibraryWorkGuards) HasInflightProjectWork(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (bool, error) {
+	if g.guard == nil {
+		return false, mediaapp.ErrUnavailable
+	}
+	active, err := g.guard.HasInflightWork(ctx, actor, projectID)
+	return active, mediaLibraryProjectError(err)
+}
+
 func provideMediaLibraryProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
 	return mediaLibraryProjectAccess{store: pgworkspace.NewProjectContentAccessStore(tx)}
 }

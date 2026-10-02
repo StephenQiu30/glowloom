@@ -364,6 +364,17 @@ function SceneItems({
                   id={`${id}-character-${n}`}
                   {...form.register(`scenes.${index}.items.${n}.character_id`, {
                     setValueAs: (value: string) => value || undefined,
+                    onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+                      if (
+                        (event.target.value || undefined) !== item.character_id
+                      ) {
+                        form.setValue(
+                          `scenes.${index}.items.${n}.character_version_id`,
+                          undefined,
+                          { shouldDirty: true },
+                        );
+                      }
+                    },
                   })}
                 />
                 <Label htmlFor={`${id}-emotion-${n}`}>{label}情绪</Label>
