@@ -217,7 +217,10 @@ func (b *bound) verifyCharacterRows(ctx context.Context, v domain.Version) error
 		if err != nil {
 			return err
 		}
-		if string(a) != string(expected) {
+		// Canonical LookContent omits both nil and empty applies_to slices. The
+		// separately retained row may still contain the client's explicit [].
+		// Preserve both immutable representations while comparing their meaning.
+		if string(a) != string(expected) && (len(scopes) != 0 || len(look.AppliesTo) != 0) {
 			return domain.ErrCorruptHistory
 		}
 		var refs []refRow
