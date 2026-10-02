@@ -59,7 +59,7 @@ export function SourceIntentRecovery({
       {intent && (
         <>
           <p className="text-sm break-all">
-            {action} · 原脚本版本 {intent.body.expected_revision} · 原键{" "}
+            {action} · 原脚本修订 {intent.body.expected_revision} · 原键{" "}
             {intent.key}
           </p>
           {intent.action === "import" && (

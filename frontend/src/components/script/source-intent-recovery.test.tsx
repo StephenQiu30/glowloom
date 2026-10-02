@@ -49,7 +49,7 @@ it("未知转移焦点到原键核验，不换CAS/key且busy禁止重放", () =>
   expect(document.activeElement).toBe(button);
   fireEvent.click(button);
   expect(replay).toHaveBeenCalledTimes(1);
-  expect(screen.getByText(/原脚本版本 4/)).toBeTruthy();
+  expect(screen.getByText(/原脚本修订 4/)).toBeTruthy();
   rerender(
     <SourceIntentRecovery
       intent={intent}

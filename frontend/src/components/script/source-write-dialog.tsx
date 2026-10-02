@@ -181,7 +181,7 @@ export function SourceWriteDialog({
                 </p>
                 <p className="text-xs break-all">保存身份：{item.id}</p>
                 <p>
-                  原脚本版本 {item.expected_script_revision}；已核对{" "}
+                  原脚本修订 {item.expected_script_revision}；已核对{" "}
                   {item.confirmed_object_count} / {item.object_count} 个对象。
                 </p>
                 <p>

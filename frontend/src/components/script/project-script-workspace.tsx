@@ -615,7 +615,7 @@ function ScopedScriptWorkspace({
           {latest && (
             <>
               <p>
-                当前脚本版本 {latest.workspace.state.revision}；原请求版本{" "}
+                当前脚本修订 {latest.workspace.state.revision}；原请求修订{" "}
                 {writer.rejected?.intent.body.expected_revision}。
               </p>
               {latest.source && (
@@ -761,7 +761,7 @@ function ScopedScriptWorkspace({
         )}
       </div>
       <p className="text-sm text-muted-foreground">
-        脚本版本 {head.state.revision}
+        脚本修订 {head.state.revision}
         {historical ? " · 正在只读查看不可变历史版本" : ""}
         {readOnly ? " · 项目只读" : ""}
       </p>
@@ -773,7 +773,7 @@ function ScopedScriptWorkspace({
       )}
       {confirmation && (
         <p role="status">
-          原保存已确认：脚本版本 {confirmation.script_revision}
+          原保存已确认：脚本修订 {confirmation.script_revision}
           。当前显示的工作区头来自重新读取。
         </p>
       )}
