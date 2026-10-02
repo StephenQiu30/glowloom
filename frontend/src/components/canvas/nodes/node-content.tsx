@@ -33,7 +33,7 @@ export function NodeContent(props: Props) {
   if (node.type === "model")
     return (
       <div className="space-y-3 p-5 text-xs text-muted-foreground">
-        <p>3D 模型 · GLB</p>
+        <p>3D 模型 · GLB / glTF</p>
         <Button variant="outline" size="sm" onClick={props.onPreview}>
           预览模型
         </Button>

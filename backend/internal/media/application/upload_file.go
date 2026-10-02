@@ -66,6 +66,10 @@ func ReadUpload(ctx context.Context, reader io.Reader, name string) (*Downloaded
 	if strings.EqualFold(path.Ext(name), ".docx") && n >= 4 && bytes.Equal(magic[:4], []byte{'P', 'K', 3, 4}) {
 		mimeType, extension, limit = domain.MIMEDOCX, "docx", MaxUploadDocumentBytes
 	}
+	jsonStart := bytes.TrimSpace(magic[:n])
+	if strings.EqualFold(path.Ext(name), ".gltf") && n > 0 && (len(jsonStart) == 0 || jsonStart[0] == '{') {
+		mimeType, extension, limit = "model/gltf+json", "gltf", MaxUploadModelBytes
+	}
 	extensionMatches := strings.EqualFold(path.Ext(name), "."+extension) || extension == "jpg" && strings.EqualFold(path.Ext(name), ".jpeg")
 	if mimeType == "" || !extensionMatches {
 		return nil, ErrUnsupportedUpload
@@ -115,6 +119,8 @@ func uploadType(magic []byte) (string, string, int64) {
 		return mimeType, "png", MaxUploadImageBytes
 	case "image/webp":
 		return mimeType, "webp", MaxUploadImageBytes
+	case "image/gif":
+		return mimeType, "gif", MaxUploadImageBytes
 	case "audio/mpeg":
 		return mimeType, "mp3", MaxUploadAudioBytes
 	case "audio/wave", "audio/x-wav":

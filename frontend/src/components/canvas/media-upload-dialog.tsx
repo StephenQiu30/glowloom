@@ -291,8 +291,8 @@ function MediaUploadSession({
               multiple={maximumFiles > 1}
               accept={
                 folderCover
-                  ? ".jpg,.jpeg,.png,.webp"
-                  : ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.mp3,.wav,.m4a,.glb"
+                  ? ".jpg,.jpeg,.png,.webp,.gif"
+                  : ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm,.mp3,.wav,.m4a,.glb,.gltf"
               }
               disabled={busy || blocked || successful.length > 0}
               onChange={(event) => {
@@ -305,14 +305,16 @@ function MediaUploadSession({
             />
             <FieldDescription>
               {folderCover ? (
-                "图片 JPG/PNG/WebP ≤20 MiB，每边 ≤8192、总像素 ≤4000 万。服务端将检查真实格式和尺寸。"
+                "图片 JPG/PNG/WebP/GIF ≤20 MiB，每边 ≤8192、总像素 ≤4000 万。GIF 保留完整动画，缩略图显示首帧；服务端核验全部帧，最多1000帧、累计解码像素1.28亿。"
               ) : (
                 <>
-                  图片 JPG/PNG/WebP ≤20 MiB；视频 MP4/MOV 与静音 VP8/VP9 WebM
-                  ≤500 MiB、≤60 秒；WebM 将实际转换为 MP4。音频 MP3/WAV/M4A ≤100
-                  MiB。图片和视频每边 ≤8192、总像素 ≤4000 万。 GLB v2 ≤64
-                  MiB，资源须在包内或嵌入 data
-                  URI。服务端将检查真实格式、尺寸和时长。
+                  图片 JPG/PNG/WebP/GIF ≤20 MiB；GIF
+                  保留完整动画，缩略图显示首帧；服务端核验全部帧，最多1000帧、累计解码像素1.28亿。视频
+                  MP4/MOV 与静音 VP8/VP9 WebM ≤500 MiB、≤60 秒；WebM
+                  将实际转换为 MP4。音频 MP3/WAV/M4A ≤100 MiB。图片和视频每边
+                  ≤8192、总像素 ≤4000 万。 GLB v2 / glTF 2.0 JSON ≤64
+                  MiB；glTF须为自包含原件，资源仅使用嵌入data
+                  URI，GLB资源可在包内。服务端将检查真实格式、尺寸和时长。
                 </>
               )}
             </FieldDescription>

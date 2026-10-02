@@ -25,7 +25,7 @@ import { useLibraryUpload } from "./use-library-upload";
 import { formatBytes } from "./library-items";
 
 const accept =
-  ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.mp3,.wav,.m4a,.glb,.txt,.docx";
+  ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm,.mp3,.wav,.m4a,.glb,.gltf,.txt,.docx";
 export function LibraryUploadDialog({
   identity,
   onBusyChange,
@@ -141,7 +141,9 @@ export function LibraryUploadDialog({
                   }}
                 />
                 <FieldDescription>
-                  图片20MiB、视频500MiB、音频100MiB、GLB模型64MiB、TXT/DOCX文档20MiB。服务端核验完整内容并生成正式素材。
+                  图片20MiB、视频500MiB、音频100MiB、GLB/glTF模型64MiB、TXT/DOCX文档20MiB。GIF
+                  保留完整动画，缩略图显示首帧；服务端核验全部帧，最多1000帧、累计解码像素1.28亿。glTF
+                  2.0须为自包含JSON，资源仅使用嵌入data URI；GLB资源可在包内。
                 </FieldDescription>
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">

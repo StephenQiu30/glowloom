@@ -1,4 +1,4 @@
-// Package gltf validates bounded, self-contained GLB 2.0 uploads before storage.
+// Package gltf validates bounded, self-contained glTF 2.0 uploads before storage.
 package gltf
 
 import (
@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// MaxBytes bounds the original GLB and all of its contained resources.
+	// MaxBytes bounds the original model and all of its contained resources.
 	MaxBytes          int64 = 64 << 20
 	maxJSONBytes            = 4 << 20
 	maxNodes                = 4096
@@ -32,8 +32,8 @@ const (
 	schemaBase              = "https://lanverse.local/gltf/"
 )
 
-// ErrInvalidModel identifies an unsupported or malformed uploaded GLB.
-var ErrInvalidModel = errors.New("invalid or unsupported GLB model")
+// ErrInvalidModel identifies an unsupported or malformed uploaded glTF model.
+var ErrInvalidModel = errors.New("invalid or unsupported glTF model")
 
 //go:embed schema/*.json
 var schemas embed.FS
@@ -97,6 +97,29 @@ func (v *Validator) Validate(ctx context.Context, reader io.ReaderAt, size int64
 	if err != nil {
 		return err
 	}
+	return v.validateDocument(ctx, js, bin)
+}
+
+// ValidateJSON checks an original JSON glTF with embedded resources. Relative
+// and remote resources are not fetched; a model package must close them first.
+func (v *Validator) ValidateJSON(ctx context.Context, reader io.ReaderAt, size int64) error {
+	if v == nil || v.root == nil || reader == nil || size < 1 || size > MaxBytes {
+		return ErrInvalidModel
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	js := make([]byte, size)
+	if _, err := reader.ReadAt(js, 0); err != nil {
+		return invalid("JSON original bytes")
+	}
+	return v.validateDocument(ctx, js, nil)
+}
+
+func (v *Validator) validateDocument(ctx context.Context, js, bin []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	value, err := decodeUniqueJSON(js)
 	if err != nil || v.root.Validate(value) != nil {
 		return invalid("JSON schema")
@@ -128,7 +151,10 @@ func (v *Validator) Validate(ctx context.Context, reader io.ReaderAt, size int64
 	if err := doc.validateGeometry(values); err != nil {
 		return err
 	}
-	return doc.validateScene(values)
+	if err := doc.validateScene(values); err != nil {
+		return err
+	}
+	return ctx.Err()
 }
 
 func readContainer(reader io.ReaderAt, size int64) ([]byte, []byte, error) {

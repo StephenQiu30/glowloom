@@ -21,6 +21,33 @@ export type CanvasClipboard = {
   connections: CanvasConnection[];
 };
 
+/** Prefer a supplied GIF original over a browser-generated still image. */
+export async function readCanvasClipboardImages(
+  items: readonly ClipboardItem[],
+): Promise<File[]> {
+  const files = await Promise.all(
+    items.map(async (item) => {
+      const mime = item.types.includes("image/gif")
+        ? "image/gif"
+        : item.types.find((type) =>
+            ["image/png", "image/jpeg", "image/webp"].includes(type),
+          );
+      if (!mime) return null;
+      const original = await item.getType(mime).catch((cause: unknown) => {
+        throw new Error("读取剪贴板图片失败，请重新复制图片后重试。", {
+          cause,
+        });
+      });
+      return new File(
+        [original],
+        `粘贴图片-${Date.now()}.${mime === "image/jpeg" ? "jpg" : mime.split("/")[1]}`,
+        { type: mime },
+      );
+    }),
+  );
+  return files.filter((file) => file !== null);
+}
+
 const FORMAT = "lanverse.canvas";
 export const MAX_CANVAS_CLIPBOARD_BYTES = 1 << 20;
 const uuid = z

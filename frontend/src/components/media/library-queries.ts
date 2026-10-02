@@ -166,6 +166,8 @@ export async function previewLibrary(
     result.data.asset.id !== asset.id ||
     result.data.asset.kind !== asset.kind ||
     result.data.asset.revision !== asset.revision ||
+    result.data.asset.mime_type !== asset.mime_type ||
+    result.data.asset.byte_size !== asset.byte_size ||
     new Set(result.data.renditions.map((rend) => rend.kind)).size !==
       result.data.renditions.length
   )

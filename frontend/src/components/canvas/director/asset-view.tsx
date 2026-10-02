@@ -10,7 +10,6 @@ import {
   Vector3,
   Bone,
   DoubleSide,
-  LoadingManager,
   Mesh,
   MeshDepthMaterial,
   MeshNormalMaterial,
@@ -21,10 +20,14 @@ import {
   type Material,
   type Texture,
 } from "three";
-import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
+import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { getMediaPreview } from "../queries";
 import { resolveDirectorBoneRotation } from "./animation-semantics";
-import { validateDirectorGLB } from "./glb";
+import {
+  parseDirectorModel,
+  readModelOriginal,
+  disposeDirectorModel,
+} from "./model-file";
 import type { DirectorHumanoidBone, DirectorObject } from "./model";
 import { directorPoseBoneDeltas } from "./scene";
 
@@ -69,58 +72,6 @@ function useAssetLease(
   }, [data, refetch]);
   return query;
 }
-function disposeModel(gltf: GLTF) {
-  const textures = new Set<Texture>(),
-    materials = new Set<Material>();
-  gltf.scene.traverse((item) => {
-    if (!(item instanceof Mesh)) return;
-    item.geometry.dispose();
-    for (const material of Array.isArray(item.material)
-      ? item.material
-      : [item.material]) {
-      materials.add(material);
-      Object.values(material).forEach((value) => {
-        if (value && typeof value === "object" && "isTexture" in value)
-          textures.add(value as Texture);
-      });
-    }
-  });
-  textures.forEach((texture) => {
-    if (
-      typeof ImageBitmap !== "undefined" &&
-      texture.image instanceof ImageBitmap
-    )
-      texture.image.close();
-    texture.dispose();
-  });
-  materials.forEach((material) => material.dispose());
-}
-async function readBounded(response: Response, signal: AbortSignal) {
-  if (!response.ok || !response.body) throw new Error("模型原件读取失败。");
-  const reader = response.body.getReader(),
-    parts: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (true) {
-      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      const result = await reader.read();
-      if (result.done) break;
-      length += result.value.byteLength;
-      if (length > 64 * 1024 * 1024) throw new Error("模型原件超过 64 MiB。");
-      parts.push(result.value);
-    }
-  } finally {
-    await reader.cancel();
-    reader.releaseLock();
-  }
-  const data = new Uint8Array(length);
-  let offset = 0;
-  parts.forEach((part) => {
-    data.set(part, offset);
-    offset += part.byteLength;
-  });
-  return data.buffer;
-}
 export function AuthorizedModel({
   projectId,
   assetId,
@@ -144,6 +95,13 @@ export function AuthorizedModel({
   }) => void;
 }) {
   const lease = useAssetLease(projectId, assetId, "model");
+  const authorized =
+    lease.isSuccess && lease.isFetchedAfterMount && !lease.isFetching
+      ? lease.data
+      : undefined;
+  const authorizationId = authorized
+    ? `${lease.dataUpdatedAt}:${authorized.url}`
+    : "";
   const metadata = useRef(onMetadata),
     status = useRef(onStatus),
     modelLoaded = useRef(onLoaded);
@@ -159,76 +117,6 @@ export function AuthorizedModel({
     bones: Map<string, { bone: Bone; rest: Quaternion }>;
   }>();
   const [error, setError] = useState("");
-  useEffect(() => {
-    if (!lease.data) return;
-    status.current?.(false);
-    const controller = new AbortController();
-    let current: GLTF | undefined;
-    void (async () => {
-      const data = await readBounded(
-        await fetch(lease.data.url, {
-          signal: controller.signal,
-          credentials: "omit",
-          redirect: "error",
-        }),
-        controller.signal,
-      );
-      validateDirectorGLB(data);
-      const manager = new LoadingManager();
-      manager.setURLModifier((url) => {
-        if (!url.startsWith("data:") && !url.startsWith("blob:"))
-          throw new Error("模型引用包外资源。");
-        return url;
-      });
-      const gltf = await new GLTFLoader(manager).parseAsync(data, "");
-      current = gltf;
-      if (controller.signal.aborted) {
-        disposeModel(gltf);
-        current = undefined;
-        return;
-      }
-      const bones = new Map<string, { bone: Bone; rest: Quaternion }>();
-      gltf.scene.traverse((item) => {
-        if (item instanceof Bone)
-          bones.set(item.name, { bone: item, rest: item.quaternion.clone() });
-      });
-      gltf.scene.updateMatrixWorld(true);
-      const bounds = new Box3().setFromObject(gltf.scene, true),
-        size = bounds.getSize(new Vector3());
-      gltf.scene.scale.multiplyScalar(
-        2 / Math.max(size.x, size.y, size.z, 0.001),
-      );
-      gltf.scene.updateMatrixWorld(true);
-      const centered = new Box3().setFromObject(gltf.scene, true),
-        center = centered.getCenter(new Vector3());
-      gltf.scene.position.sub(center);
-      gltf.scene.position.y -= centered.min.y - center.y;
-      setError("");
-      setLoaded({
-        identity: lease.data.url,
-        gltf,
-        mixer: new AnimationMixer(gltf.scene),
-        bones,
-      });
-      status.current?.(true);
-      modelLoaded.current?.(gltf.scene);
-      metadata.current?.({
-        boneNames: [...bones.keys()],
-        animations: gltf.animations.map((animation) => ({
-          name: animation.name,
-          duration: animation.duration,
-        })),
-      });
-    })().catch((reason: unknown) => {
-      if (!controller.signal.aborted)
-        setError(reason instanceof Error ? reason.message : "模型加载失败。");
-    });
-    return () => {
-      status.current?.(false);
-      controller.abort();
-      if (current) disposeModel(current);
-    };
-  }, [lease.data]);
   useEffect(() => {
     if (!loaded) return;
     const replacements: { item: Mesh; original: Material | Material[] }[] = [];
@@ -266,8 +154,73 @@ export function AuthorizedModel({
     object?.kind,
     object?.color,
   ]);
+  useEffect(() => {
+    if (!authorized) return;
+    status.current?.(false);
+    const controller = new AbortController();
+    let current: GLTF | undefined;
+    void (async () => {
+      const data = await readModelOriginal(
+        await fetch(authorized.url, {
+          signal: controller.signal,
+          credentials: "omit",
+          redirect: "error",
+        }),
+        authorized.asset.byte_size,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      const gltf = await parseDirectorModel(data, authorized.asset.mime_type);
+      current = gltf;
+      if (controller.signal.aborted) {
+        disposeDirectorModel(gltf);
+        current = undefined;
+        return;
+      }
+      const bones = new Map<string, { bone: Bone; rest: Quaternion }>();
+      gltf.scene.traverse((item) => {
+        if (item instanceof Bone)
+          bones.set(item.name, { bone: item, rest: item.quaternion.clone() });
+      });
+      gltf.scene.updateMatrixWorld(true);
+      const bounds = new Box3().setFromObject(gltf.scene, true),
+        size = bounds.getSize(new Vector3());
+      gltf.scene.scale.multiplyScalar(
+        2 / Math.max(size.x, size.y, size.z, 0.001),
+      );
+      gltf.scene.updateMatrixWorld(true);
+      const centered = new Box3().setFromObject(gltf.scene, true),
+        center = centered.getCenter(new Vector3());
+      gltf.scene.position.sub(center);
+      gltf.scene.position.y -= centered.min.y - center.y;
+      setError("");
+      setLoaded({
+        identity: authorizationId,
+        gltf,
+        mixer: new AnimationMixer(gltf.scene),
+        bones,
+      });
+      status.current?.(true);
+      modelLoaded.current?.(gltf.scene);
+      metadata.current?.({
+        boneNames: [...bones.keys()],
+        animations: gltf.animations.map((animation) => ({
+          name: animation.name,
+          duration: animation.duration,
+        })),
+      });
+    })().catch((reason: unknown) => {
+      if (!controller.signal.aborted)
+        setError(reason instanceof Error ? reason.message : "模型加载失败。");
+    });
+    return () => {
+      status.current?.(false);
+      controller.abort();
+      if (current) disposeDirectorModel(current);
+    };
+  }, [authorized, authorizationId]);
   useFrame(() => {
-    if (!loaded || !object) return;
+    if (!loaded || loaded.identity !== authorizationId || !object) return;
     const motion = object.motionClips?.find(
       (clip) => clip.id === object.activeMotionClipId,
     );
@@ -323,7 +276,7 @@ export function AuthorizedModel({
         </p>
       </Html>
     );
-  return loaded && loaded.identity === lease.data?.url ? (
+  return loaded && authorized && loaded.identity === authorizationId ? (
     <primitive object={loaded.gltf.scene} dispose={null} />
   ) : (
     <Html center>正在载入项目模型…</Html>

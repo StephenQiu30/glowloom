@@ -209,6 +209,11 @@ function DetailBody({
           </dd>
         </div>
       </dl>
+      {detail.media?.mime_type === "image/gif" && (
+        <p className="text-sm text-muted-foreground">
+          GIF 原件预览保留动画；素材列表缩略图显示首帧。
+        </p>
+      )}
       {detail.kind === "text" ? (
         <pre
           data-testid="library-plain-text"
@@ -350,7 +355,12 @@ function PreviewSource({
   );
   if (asset.kind === "model")
     return (
-      <ModelPreview url={url} byteSize={asset.byte_size} onError={onError} />
+      <ModelPreview
+        url={url}
+        byteSize={asset.byte_size}
+        mimeType={asset.mime_type}
+        onError={onError}
+      />
     );
   if (asset.kind === "video")
     return (

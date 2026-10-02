@@ -296,7 +296,7 @@ func validUploadProbe(file *Downloaded, p ProbeResult) bool {
 	switch p.Kind {
 	case domain.KindImage:
 		return file.Size <= MaxUploadImageBytes && p.Width != nil && p.Height != nil && *p.Width > 0 && *p.Height > 0 &&
-			(file.MIMEType == "image/png" && p.Extension == "png" || file.MIMEType == "image/jpeg" && p.Extension == "jpg" || file.MIMEType == "image/webp" && p.Extension == "webp")
+			(file.MIMEType == "image/png" && p.Extension == "png" || file.MIMEType == "image/jpeg" && p.Extension == "jpg" || file.MIMEType == "image/webp" && p.Extension == "webp" || file.MIMEType == "image/gif" && p.Extension == "gif" && *p.Codec == "gif")
 	case domain.KindVideo:
 		return file.Size <= MaxUploadVideoBytes && p.DurationMS != nil && *p.DurationMS > 0 && *p.DurationMS <= 60000 && p.Width != nil && p.Height != nil &&
 			(file.MIMEType == "video/mp4" && p.Extension == "mp4" || file.MIMEType == "video/quicktime" && p.Extension == "mov")
@@ -304,7 +304,8 @@ func validUploadProbe(file *Downloaded, p ProbeResult) bool {
 		return file.Size <= MaxUploadAudioBytes && p.DurationMS != nil && *p.DurationMS > 0 && p.AudioChannels != nil &&
 			(file.MIMEType == "audio/mpeg" && p.Extension == "mp3" || file.MIMEType == "audio/wave" && p.Extension == "wav" || file.MIMEType == "audio/mp4" && p.Extension == "m4a")
 	case domain.KindModel:
-		return file.Size <= MaxUploadModelBytes && file.MIMEType == "model/gltf-binary" && p.Extension == "glb" && *p.Codec == "glb2" &&
+		format := file.MIMEType == "model/gltf-binary" && p.Extension == "glb" && *p.Codec == "glb2" || file.MIMEType == "model/gltf+json" && p.Extension == "gltf" && *p.Codec == "gltf2"
+		return file.Size <= MaxUploadModelBytes && format &&
 			p.Width == nil && p.Height == nil && p.DurationMS == nil && p.FPS == nil && p.AudioChannels == nil
 	case domain.KindDocument:
 		return file.Size >= 1 && file.Size <= MaxUploadDocumentBytes && p.Width == nil && p.Height == nil && p.DurationMS == nil && p.FPS == nil && p.AudioChannels == nil &&

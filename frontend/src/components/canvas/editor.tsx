@@ -120,6 +120,7 @@ import {
   copySelection,
   pasteSelection,
   readCanvasClipboard,
+  readCanvasClipboardImages,
   writeCanvasClipboard,
   decodeCanvasClipboard,
 } from "./engine/clipboard";
@@ -864,26 +865,8 @@ export function CanvasEditor({
           throw new Error("读取系统剪贴板失败，请允许剪贴板权限后重试。");
         }
         if (!mounted.current || interactionLocked.current) return;
-        const files: File[] = [];
-        for (const item of items) {
-          const mime = item.types.find((type) =>
-            ["image/png", "image/jpeg", "image/webp"].includes(type),
-          );
-          if (mime)
-            files.push(
-              new File(
-                [
-                  await item.getType(mime).catch(() => {
-                    throw new Error(
-                      "读取剪贴板图片失败，请重新复制图片后重试。",
-                    );
-                  }),
-                ],
-                `粘贴图片-${Date.now()}.${mime === "image/jpeg" ? "jpg" : mime.split("/")[1]}`,
-                { type: mime },
-              ),
-            );
-        }
+        const files = await readCanvasClipboardImages(items);
+        if (!mounted.current || interactionLocked.current) return;
         if (files.length) {
           openUpload(files);
           return;

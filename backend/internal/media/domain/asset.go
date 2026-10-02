@@ -163,8 +163,9 @@ func (a MediaAsset) Validate() error {
 		(a.Origin != OriginUpload && (a.Status == StatusUploading || a.UploadID != nil)) {
 		return ErrInvalidMediaAsset
 	}
-	if a.Kind == KindModel && (a.Origin != OriginUpload || a.MimeType != "model/gltf-binary" || a.ByteSize < 1 || a.ByteSize > MaxModelBytes ||
-		a.Codec == nil || *a.Codec != "glb2" || a.Width != nil || a.Height != nil || a.DurationMS != nil || a.FPS != nil || a.AudioChannels != nil) {
+	modelFormat := a.Codec != nil && (a.MimeType == "model/gltf-binary" && *a.Codec == "glb2" || a.MimeType == "model/gltf+json" && *a.Codec == "gltf2")
+	if a.Kind == KindModel && (a.Origin != OriginUpload || !modelFormat || a.ByteSize < 1 || a.ByteSize > MaxModelBytes ||
+		a.Width != nil || a.Height != nil || a.DurationMS != nil || a.FPS != nil || a.AudioChannels != nil) {
 		return ErrInvalidMediaAsset
 	}
 	if a.Kind == KindDocument && !a.validDocumentFacts() {

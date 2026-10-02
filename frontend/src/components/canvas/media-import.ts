@@ -5,10 +5,12 @@ import type { MediaAsset } from "./queries";
 const mib = 1024 * 1024;
 const formats: Record<string, { maximum: number; mime: readonly string[] }> = {
   glb: { maximum: 64 * mib, mime: ["model/gltf-binary"] },
+  gltf: { maximum: 64 * mib, mime: ["model/gltf+json", "application/json"] },
   jpg: { maximum: 20 * mib, mime: ["image/jpeg"] },
   jpeg: { maximum: 20 * mib, mime: ["image/jpeg"] },
   png: { maximum: 20 * mib, mime: ["image/png"] },
   webp: { maximum: 20 * mib, mime: ["image/webp"] },
+  gif: { maximum: 20 * mib, mime: ["image/gif"] },
   webm: {
     maximum: 500 * mib,
     mime: ["video/webm", "video/webm;codecs=vp8", "video/webm;codecs=vp9"],
@@ -56,7 +58,7 @@ export function validateCanvasMediaFiles(
       ? formats[extension]
       : undefined;
     const mime = file.type.toLowerCase();
-    if (imageOnly && !["jpg", "jpeg", "png", "webp"].includes(extension))
+    if (imageOnly && !["jpg", "jpeg", "png", "webp", "gif"].includes(extension))
       errors.push(
         `${file.name}：${imageOnly === "project-cover" ? "项目主图" : "目录封面"}只支持图片。`,
       );

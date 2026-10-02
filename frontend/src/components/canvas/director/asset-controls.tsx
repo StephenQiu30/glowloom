@@ -68,7 +68,7 @@ export function DirectorAssetControls({
         <SelectContent>
           {assets.map((item) => (
             <SelectItem key={item.id} value={item.id}>
-              {item.title} · {item.type === "model" ? "GLB" : "图片"}
+              {item.title} · {item.type === "model" ? "3D 模型" : "图片"}
             </SelectItem>
           ))}
         </SelectContent>
@@ -124,7 +124,7 @@ export function DirectorAssetControls({
       ) : null}
       {!assets.length ? (
         <p className="text-xs text-muted-foreground">
-          先在画布上传 GLB 或图片。
+          先在画布上传 GLB / glTF 或图片。
         </p>
       ) : null}
     </div>

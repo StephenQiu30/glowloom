@@ -1,6 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import dynamic from "next/dynamic";
+const ModelPreview = dynamic(
+  () =>
+    import("@/components/media/library-model-preview").then(
+      (module) => module.LibraryModelPreview,
+    ),
+  { ssr: false },
+);
 
 /** Local preview leases exist only while the user opens this file. */
 export function LocalUploadPreview({ file }: { file: File }) {
@@ -10,9 +18,11 @@ export function LocalUploadPreview({ file }: { file: File }) {
     ? "video"
     : ["wav", "mp3", "m4a"].includes(extension)
       ? "audio"
-      : ["jpg", "jpeg", "png", "webp"].includes(extension)
+      : ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)
         ? "image"
-        : undefined;
+        : ["glb", "gltf"].includes(extension)
+          ? "model"
+          : undefined;
   if (!kind) return null;
   return (
     <div>
@@ -25,8 +35,34 @@ export function LocalUploadPreview({ file }: { file: File }) {
       >
         {open ? "收起本地预览" : "预览本地文件"}
       </Button>
-      {open && <PreviewSource file={file} kind={kind} />}
+      {open &&
+        (kind === "model" ? (
+          <LocalModelSource file={file} />
+        ) : (
+          <PreviewSource file={file} kind={kind} />
+        ))}
     </div>
+  );
+}
+function LocalModelSource({ file }: { file: File }) {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        本地模型无法预览，请检查完整原件与嵌入资源后重试。
+      </p>
+    );
+  return (
+    <section aria-label={`${file.name} 本地预览`}>
+      <ModelPreview
+        file={file}
+        byteSize={file.size}
+        mimeType={
+          /\.gltf$/i.test(file.name) ? "model/gltf+json" : "model/gltf-binary"
+        }
+        onError={() => setFailed(true)}
+      />
+    </section>
   );
 }
 function PreviewSource({
@@ -41,6 +77,7 @@ function PreviewSource({
   >(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
+    if (failed) return;
     const element = elementRef.current;
     if (!element) return;
     const current = URL.createObjectURL(file);
@@ -51,7 +88,7 @@ function PreviewSource({
       if (element instanceof HTMLMediaElement) element.load();
       URL.revokeObjectURL(current);
     };
-  }, [file, kind]);
+  }, [file, kind, failed]);
   if (failed)
     return (
       <p role="alert" className="text-sm text-destructive">

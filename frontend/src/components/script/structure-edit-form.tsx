@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CharacterBindingPicker } from "./character-binding-picker";
+import type { ScriptScope } from "./source-intent";
 import {
   parseStructureDocument,
   type StructureDocument,
@@ -21,6 +23,7 @@ export type StructureBase = {
   base_structure_version_no: number;
 };
 export function StructureEditForm({
+  scope,
   base,
   initialDocument,
   episodeStart,
@@ -29,6 +32,7 @@ export function StructureEditForm({
   onDirty,
   onSubmit,
 }: {
+  scope: ScriptScope;
   base: StructureBase;
   initialDocument: StructureDocument;
   episodeStart: number;
@@ -41,13 +45,14 @@ export function StructureEditForm({
 }) {
   const id = useId();
   const [error, setError] = useState<string>();
+  const [bindingPending, setBindingPending] = useState(false);
   const form = useForm<StructureDocument>({ defaultValues: initialDocument });
   const scenes = useFieldArray({ control: form.control, name: "scenes" });
   const unassigned = useFieldArray({
     control: form.control,
     name: "unassigned_lines",
   });
-  const busy = locked || form.formState.isSubmitting;
+  const busy = locked || form.formState.isSubmitting || bindingPending;
   function changed() {
     onDirty(true);
     setError(undefined);
@@ -70,6 +75,7 @@ export function StructureEditForm({
       className="space-y-4"
       onChange={changed}
       onSubmit={form.handleSubmit(async (document) => {
+        if (busy) return;
         try {
           const checked = parseStructureDocument(
             document,
@@ -149,7 +155,14 @@ export function StructureEditForm({
                 />
               </div>
             </div>
-            <SceneItems form={form} index={index} changed={changed} />
+            <SceneItems
+              scope={scope}
+              form={form}
+              index={index}
+              changed={changed}
+              locked={locked || form.formState.isSubmitting}
+              onPendingChange={setBindingPending}
+            />
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -264,13 +277,19 @@ export function StructureEditForm({
   );
 }
 function SceneItems({
+  scope,
   form,
   index,
   changed,
+  locked,
+  onPendingChange,
 }: {
+  scope: ScriptScope;
   form: UseFormReturn<StructureDocument>;
   index: number;
   changed: () => void;
+  locked: boolean;
+  onPendingChange: (pending: boolean) => void;
 }) {
   const id = useId();
   const rows = useFieldArray({
@@ -357,25 +376,32 @@ function SceneItems({
                     setValueAs: (value: string) => value || undefined,
                   })}
                 />
-                <Label htmlFor={`${id}-character-${n}`}>
-                  {label}正式角色UUID（可空）
-                </Label>
-                <Input
-                  id={`${id}-character-${n}`}
-                  {...form.register(`scenes.${index}.items.${n}.character_id`, {
-                    setValueAs: (value: string) => value || undefined,
-                    onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
-                      if (
-                        (event.target.value || undefined) !== item.character_id
-                      ) {
-                        form.setValue(
-                          `scenes.${index}.items.${n}.character_version_id`,
-                          undefined,
-                          { shouldDirty: true },
-                        );
-                      }
-                    },
-                  })}
+                <CharacterBindingPicker
+                  scope={scope}
+                  label={label}
+                  binding={
+                    item.character_id
+                      ? {
+                          character_id: item.character_id,
+                          character_version_id: item.character_version_id,
+                        }
+                      : undefined
+                  }
+                  locked={locked}
+                  onPendingChange={onPendingChange}
+                  onChange={(binding) => {
+                    form.setValue(
+                      `scenes.${index}.items.${n}.character_id`,
+                      binding?.character_id,
+                      { shouldDirty: true },
+                    );
+                    form.setValue(
+                      `scenes.${index}.items.${n}.character_version_id`,
+                      binding?.character_version_id,
+                      { shouldDirty: true },
+                    );
+                    changed();
+                  }}
                 />
                 <Label htmlFor={`${id}-emotion-${n}`}>{label}情绪</Label>
                 <Input

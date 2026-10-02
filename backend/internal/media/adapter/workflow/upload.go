@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/animation"
 	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/document"
-
 	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gltf"
-
 	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
@@ -16,22 +15,31 @@ import (
 // FFUploadProber exposes malformed input as a stable upload validation error.
 type FFUploadProber struct{ model *gltf.Validator }
 
-// NewUploadProber injects the offline GLB validator alongside real AV probing.
+// NewUploadProber injects the offline glTF validator alongside real AV probing.
 func NewUploadProber(model *gltf.Validator) FFUploadProber { return FFUploadProber{model: model} }
 
 // Probe verifies real streams and maps invalid input to the upload boundary error.
 func (p FFUploadProber) Probe(ctx context.Context, file *application.Downloaded) (application.ProbeResult, error) {
+	if file != nil && file.MIMEType == "image/gif" {
+		return animation.ProbeGIF(ctx, file)
+	}
 	if file != nil && (file.MIMEType == domain.MIMEText || file.MIMEType == domain.MIMEDOCX) {
 		return document.Probe(ctx, file)
 	}
-	if file != nil && file.MIMEType == "model/gltf-binary" {
+	if file != nil && (file.MIMEType == "model/gltf-binary" || file.MIMEType == "model/gltf+json") {
 		if p.model == nil {
 			return application.ProbeResult{}, application.ErrUnavailable
 		}
 		if file.File == nil {
 			return application.ProbeResult{}, application.ErrInvalidUpload
 		}
-		if err := p.model.Validate(ctx, file.File, file.Size); err != nil {
+		ext, codec := "glb", "glb2"
+		validate := p.model.Validate
+		if file.MIMEType == "model/gltf+json" {
+			validate = p.model.ValidateJSON
+			ext, codec = "gltf", "gltf2"
+		}
+		if err := validate(ctx, file.File, file.Size); err != nil {
 			if errors.Is(err, gltf.ErrDecoderUnavailable) {
 				return application.ProbeResult{}, application.ErrUnavailable
 			}
@@ -40,8 +48,7 @@ func (p FFUploadProber) Probe(ctx context.Context, file *application.Downloaded)
 			}
 			return application.ProbeResult{}, err
 		}
-		codec := "glb2"
-		return application.ProbeResult{Kind: domain.KindModel, Extension: "glb", Codec: &codec}, nil
+		return application.ProbeResult{Kind: domain.KindModel, Extension: ext, Codec: &codec}, nil
 	}
 	result, err := probeFile(ctx, file, true)
 	if errors.Is(err, ErrUnsupportedMedia) {

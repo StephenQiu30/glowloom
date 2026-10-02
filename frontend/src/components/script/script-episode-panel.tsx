@@ -805,6 +805,7 @@ function EpisodeStructure({
           </p>
           <StructureEditForm
             key={body.id}
+            scope={scope}
             base={base}
             initialDocument={body.document}
             episodeStart={episode.span_start}
@@ -892,6 +893,7 @@ function EpisodeStructure({
             {edit && (
               <StructureEditForm
                 key={edit.key}
+                scope={scope}
                 base={edit.base}
                 initialDocument={edit.document}
                 episodeStart={episode.span_start}

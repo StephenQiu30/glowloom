@@ -72,16 +72,29 @@ export async function uploadLibraryOriginal(
   const expected =
     extension && ["txt", "docx"].includes(extension)
       ? "document"
-      : extension && ["png", "jpg", "jpeg", "webp"].includes(extension)
+      : extension && ["png", "jpg", "jpeg", "webp", "gif"].includes(extension)
         ? "image"
         : extension && ["mp4", "mov", "webm"].includes(extension)
           ? "video"
           : extension && ["mp3", "wav", "m4a"].includes(extension)
             ? "audio"
-            : extension === "glb"
+            : extension && ["glb", "gltf"].includes(extension)
               ? "model"
               : undefined;
   if (asset.kind !== expected) throw new ApiError(502, "invalid_response");
+  const originalMIME =
+    extension === "gltf"
+      ? "model/gltf+json"
+      : extension === "glb"
+        ? "model/gltf-binary"
+        : extension === "gif"
+          ? "image/gif"
+          : undefined;
+  if (
+    originalMIME &&
+    (asset.mime_type !== originalMIME || asset.byte_size !== intent.byteSize)
+  )
+    throw new ApiError(502, "invalid_response");
   if (
     /\.(txt|docx)$/i.test(intent.fileName) &&
     (asset.kind !== "document" || asset.byte_size !== intent.byteSize)
