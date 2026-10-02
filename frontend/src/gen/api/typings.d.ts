@@ -44,6 +44,16 @@ declare namespace API {
     job_id: string;
   };
 
+  type cancelMediaLibraryPackageParams = {
+    /** 批次UUID */
+    job_id: string;
+  };
+
+  type cancelMediaPurgeParams = {
+    /** 清理UUID */
+    job_id: string;
+  };
+
   type cancelMediaTranscriptionParams = {
     /** Transcription UUID */
     job_id: string;
@@ -268,6 +278,13 @@ declare namespace API {
     project_id: string;
   };
 
+  type exportMediaLibraryPackageParams = {
+    /** personal/project */
+    scope?: string;
+    /** 项目UUID */
+    project_id?: string;
+  };
+
   type getAdminModelParams = {
     /** 模型UUID */
     id: string;
@@ -326,11 +343,28 @@ declare namespace API {
     project_id?: string;
   };
 
+  type getMediaLibraryPackageParams = {
+    /** 导入批次UUID */
+    job_id: string;
+  };
+
+  type getMediaLibraryStorageUsageParams = {
+    /** personal/project；默认personal */
+    scope?: string;
+    /** project scope必要UUID */
+    project_id?: string;
+  };
+
   type getMediaPreviewParams = {
     /** 项目UUID */
     pid: string;
     /** 媒体UUID */
     asset_id: string;
+  };
+
+  type getMediaPurgeParams = {
+    /** 清理UUID */
+    job_id: string;
   };
 
   type getMediaTranscriptionParams = {
@@ -1453,6 +1487,43 @@ declare namespace API {
       width?: number | null;
     };
 
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageControl =
+    {
+      expected_revision?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageJob =
+    {
+      created_at?: string;
+      folder_count?: number;
+      id?: string;
+      item_count?: number;
+      library_revision?: number;
+      project_revision?: number;
+      revision?: number;
+      scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+      status?: string;
+      updated_at?: string;
+      warnings?: githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageWarning[];
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationPackagePage =
+    {
+      current_actor_id?: string;
+      current_org_id?: string;
+      jobs?: githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageJob[];
+      page?: number;
+      page_size?: number;
+      scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+      total?: number;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageWarning =
+    {
+      code?: string;
+      item_id?: string;
+    };
+
   type githubComStephenQiu30LanverseBackendInternalMediaApplicationPersonalUploadResult =
     {
       asset?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryAssetSummary;
@@ -1464,6 +1535,27 @@ declare namespace API {
     expires_at?: string;
     url?: string;
   };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationPurgeInput =
+    {
+      expected_project_revision?: number;
+      expected_revision?: number;
+      items?: githubComStephenQiu30LanverseBackendInternalMediaApplicationLibraryItemRevision[];
+      permanent_delete_confirmed?: boolean;
+      scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaApplicationStorageUsage =
+    {
+      calculated_at?: string;
+      current_actor_id?: string;
+      current_org_id?: string;
+      library_id?: string;
+      limit_bytes?: number | null;
+      object_count?: number;
+      scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+      used_bytes?: number;
+    };
 
   type githubComStephenQiu30LanverseBackendInternalMediaApplicationTransferInput =
     {
@@ -1503,6 +1595,32 @@ declare namespace API {
   type githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope = {
     kind?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryKind;
     project_id?: string | null;
+  };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaDomainPurgeItemResult =
+    {
+      asset_id?: string | null;
+      failure_code?: string | null;
+      index?: number;
+      item_id?: string;
+      status?: string;
+    };
+
+  type githubComStephenQiu30LanverseBackendInternalMediaDomainPurgeJob = {
+    attempt?: number;
+    cancellation_requested?: boolean;
+    created_at?: string;
+    current_actor_id?: string;
+    current_org_id?: string;
+    execution_unconfirmed?: boolean;
+    id?: string;
+    items?: githubComStephenQiu30LanverseBackendInternalMediaDomainPurgeItemResult[];
+    needs_reconciliation?: boolean;
+    revision?: number;
+    scope?: githubComStephenQiu30LanverseBackendInternalMediaDomainLibraryScope;
+    stage?: string;
+    status?: string;
+    updated_at?: string;
   };
 
   type githubComStephenQiu30LanverseBackendInternalMediaDomainTransferItemResult =
@@ -2709,6 +2827,18 @@ declare namespace API {
     status?: githubComStephenQiu30LanverseBackendInternalCatalogDomainProviderStatus;
   };
 
+  type internalMediaAdapterHttpPurgeControlRequest = {
+    revision?: number;
+  };
+
+  type internalMediaAdapterHttpPurgePage = {
+    current_actor_id?: string;
+    current_org_id?: string;
+    items?: githubComStephenQiu30LanverseBackendInternalMediaDomainPurgeJob[];
+    page?: number;
+    page_size?: number;
+  };
+
   type internalMediaAdapterHttpTransferControlRequest = {
     revision?: number;
   };
@@ -3264,6 +3394,17 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listMediaLibraryPackagesParams = {
+    /** personal/project */
+    scope?: string;
+    /** 项目UUID */
+    project_id?: string;
+    /** 页码1..100000 */
+    page?: number;
+    /** 每页1..120 */
+    page_size?: number;
+  };
+
   type listMediaLibraryParams = {
     /** personal/project；默认personal */
     scope?: string;
@@ -3291,6 +3432,17 @@ declare namespace API {
     search?: string;
     /** updated_desc/updated_asc/name_asc */
     order?: string;
+  };
+
+  type listMediaPurgesParams = {
+    /** personal/project；默认personal */
+    scope?: string;
+    /** project scope必要UUID */
+    project_id?: string;
+    /** 1..10000；默认1 */
+    page?: number;
+    /** 1..100；默认20 */
+    page_size?: number;
   };
 
   type listMediaTranscriptionsParams = {
@@ -3520,6 +3672,16 @@ declare namespace API {
 
   type reconcileMediaDepthParams = {
     /** Depth UUID */
+    job_id: string;
+  };
+
+  type reconcileMediaLibraryPackageParams = {
+    /** 批次UUID */
+    job_id: string;
+  };
+
+  type reconcileMediaPurgeParams = {
+    /** 清理UUID */
     job_id: string;
   };
 

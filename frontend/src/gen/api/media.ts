@@ -92,6 +92,245 @@ export async function previewLibraryMediaAsset(
   );
 }
 
+/** 下载完整素材库ZIP GET /api/media/library/packages/export */
+export async function exportMediaLibraryPackage(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.exportMediaLibraryPackageParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  return request<string>("/api/media/library/packages/export", {
+    method: "GET",
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
+/** 素材包导入历史分页 GET /api/media/library/packages/imports */
+export async function listMediaLibraryPackages(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listMediaLibraryPackagesParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  return request<API.githubComStephenQiu30LanverseBackendInternalMediaApplicationPackagePage>(
+    "/api/media/library/packages/imports",
+    {
+      method: "GET",
+      params: {
+        ...params,
+      },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 导入完整素材包及目录与正文 POST /api/media/library/packages/imports */
+export async function importMediaLibraryPackage(
+  body: {
+    /** 首个part：PackageImportRequest闭合JSON，含scope、expected_revision、expected_project_revision、local_review_confirmed */
+    request: string;
+  },
+  file?: File,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const formData = new FormData();
+
+  if (file) {
+    formData.append("file", file);
+  }
+
+  Object.keys(body).forEach((ele) => {
+    const item = (body as any)[ele];
+
+    if (item !== undefined && item !== null) {
+      if (typeof item === "object" && !(item instanceof File)) {
+        if (item instanceof Array) {
+          item.forEach((f) => formData.append(ele, f || ""));
+        } else {
+          formData.append(
+            ele,
+            new Blob([JSON.stringify(item)], { type: "application/json" }),
+          );
+        }
+      } else {
+        formData.append(ele, item);
+      }
+    }
+  });
+
+  return request<any>("/api/media/library/packages/imports", {
+    method: "POST",
+    data: formData,
+    requestType: "form",
+    ...(options || {}),
+  });
+}
+
+/** 当前素材包导入状态 GET /api/media/library/packages/imports/${param0} */
+export async function getMediaLibraryPackage(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getMediaLibraryPackageParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<API.githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageJob>(
+    `/api/media/library/packages/imports/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 取消未发布素材包并核验清理 POST /api/media/library/packages/imports/${param0}/cancel */
+export async function cancelMediaLibraryPackage(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.cancelMediaLibraryPackageParams,
+  body: API.githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageControl,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<any>(`/api/media/library/packages/imports/${param0}/cancel`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 核验并恢复素材包导入 POST /api/media/library/packages/imports/${param0}/reconcile */
+export async function reconcileMediaLibraryPackage(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.reconcileMediaLibraryPackageParams,
+  body: API.githubComStephenQiu30LanverseBackendInternalMediaApplicationPackageControl,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<any>(
+    `/api/media/library/packages/imports/${param0}/reconcile`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      params: { ...queryParams },
+      data: body,
+      ...(options || {}),
+    },
+  );
+}
+
+/** 永久清理记录分页 GET /api/media/library/purges */
+export async function listMediaPurges(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.listMediaPurgesParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  return request<API.internalMediaAdapterHttpPurgePage>(
+    "/api/media/library/purges",
+    {
+      method: "GET",
+      params: {
+        ...params,
+      },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 明确确认后永久清理回收素材 POST /api/media/library/purges */
+export async function createMediaPurge(
+  body: API.githubComStephenQiu30LanverseBackendInternalMediaApplicationPurgeInput,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  return request<any>("/api/media/library/purges", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 永久清理状态与逐行结果 GET /api/media/library/purges/${param0} */
+export async function getMediaPurge(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getMediaPurgeParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<API.githubComStephenQiu30LanverseBackendInternalMediaDomainPurgeJob>(
+    `/api/media/library/purges/${param0}`,
+    {
+      method: "GET",
+      params: { ...queryParams },
+      ...(options || {}),
+    },
+  );
+}
+
+/** 取消永久清理 POST /api/media/library/purges/${param0}/cancel */
+export async function cancelMediaPurge(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.cancelMediaPurgeParams,
+  body: API.internalMediaAdapterHttpPurgeControlRequest,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<any>(`/api/media/library/purges/${param0}/cancel`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 对账永久清理未知结果 POST /api/media/library/purges/${param0}/reconcile */
+export async function reconcileMediaPurge(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.reconcileMediaPurgeParams,
+  body: API.internalMediaAdapterHttpPurgeControlRequest,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  const { job_id: param0, ...queryParams } = params;
+  return request<any>(`/api/media/library/purges/${param0}/reconcile`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    params: { ...queryParams },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 当前素材库实际私有存储用量 GET /api/media/library/storage-usage */
+export async function getMediaLibraryStorageUsage(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getMediaLibraryStorageUsageParams,
+  options?: import("@/lib/request").RequestOptions,
+) {
+  return request<API.githubComStephenQiu30LanverseBackendInternalMediaApplicationStorageUsage>(
+    "/api/media/library/storage-usage",
+    {
+      method: "GET",
+      params: {
+        ...params,
+      },
+      ...(options || {}),
+    },
+  );
+}
+
 /** 素材转移记录分页 GET /api/media/library/transfers */
 export async function listMediaTransfers(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
