@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -259,17 +260,21 @@ func TestUploadCleanupWaitsForPendingRealCommit(t *testing.T) {
 func TestUploadStoreAuditFailureRollsBackPublication(t *testing.T) {
 	database := mediaStoreDB(t)
 	actor, project := mediaStoreProject(t, database)
+	fixtureDB := database
+	if os.Getenv("LV_TEST_LIBRARY_OWNER_DB_DSN") != "" {
+		fixtureDB = libraryOwnerDB(t)
+	}
 	function := "reject_upload_audit_" + strings.ReplaceAll(project.String(), "-", "")
-	if err := database.Exec(`CREATE FUNCTION audit.` + function + `() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture audit unavailable'; END $$`).Error; err != nil {
+	if err := fixtureDB.Exec(`CREATE FUNCTION audit.` + function + `() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture audit unavailable'; END $$`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.Exec(`CREATE TRIGGER ` + function + ` BEFORE INSERT ON audit.audit_log FOR EACH ROW WHEN (NEW.project_id='` + project.String() + `'::uuid) EXECUTE FUNCTION audit.` + function + `()`).Error; err != nil {
+	if err := fixtureDB.Exec(`CREATE TRIGGER ` + function + ` BEFORE INSERT ON audit.audit_log FOR EACH ROW WHEN (NEW.project_id='` + project.String() + `'::uuid) EXECUTE FUNCTION audit.` + function + `()`).Error; err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		cleanupDB := database.WithContext(cleanCtx)
+		cleanupDB := fixtureDB.WithContext(cleanCtx)
 		if err := cleanupDB.Exec(`DROP TRIGGER ` + function + ` ON audit.audit_log`).Error; err != nil {
 			t.Error(err)
 		}

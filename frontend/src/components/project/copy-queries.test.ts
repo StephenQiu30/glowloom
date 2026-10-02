@@ -58,6 +58,21 @@ const intent: CopyIntent = {
   key: "511054be-4f0d-4a9a-b9ad-2a6af5a3979f",
   body: { expected_revision: 7, target_name: "完整副本" },
 };
+const scriptCounts = {
+  sources: 4,
+  versions: 3,
+  version_sources: 7,
+  project_states: 1,
+  version_heads: 3,
+  split_sets: 5,
+  split_confirmations: 2,
+  episodes: 6,
+  structures: 8,
+  scenes: 9,
+  dialogue_lines: 11,
+  action_lines: 12,
+  objects: 15,
+};
 beforeEach(() => {
   vi.resetAllMocks();
   api.list.mockResolvedValue({
@@ -191,4 +206,70 @@ it("取消竞态以服务端事实为准；重试、核验和执行未退出各�
       cancellation_requested: true,
     }).cancel,
   ).toBe(false);
+});
+
+it("接受正式剧本阶段与全部十三种历史计数，原任务仍可省略剧本", async () => {
+  const admitted = {
+    ...job,
+    stage: "script",
+    script: { counts: scriptCounts },
+  };
+  api.get.mockResolvedValueOnce(admitted);
+  await expect(getCopy(sourceId, job.id)).resolves.toEqual(admitted);
+  await expect(getCopy(sourceId, job.id)).resolves.toEqual(job);
+});
+
+it.each([
+  { stage: "script" },
+  { script: { counts: { ...scriptCounts, project_states: 2 } } },
+  { script: { counts: { ...scriptCounts, version_heads: 2 } } },
+  { script: { counts: { ...scriptCounts, objects: 2147483648 } } },
+  { script: { counts: { ...scriptCounts, object_key: "private-key" } } },
+  {
+    script: {
+      counts: scriptCounts,
+      completed_counts: { ...scriptCounts, action_lines: 11 },
+    },
+  },
+  { stage: "canvases", script: { counts: scriptCounts } },
+])("拒绝不完整、越界或提前越过剧本的进度 %j", async (invalid) => {
+  api.get.mockResolvedValueOnce({ ...job, ...invalid });
+  await expect(getCopy(sourceId, job.id)).rejects.toMatchObject({
+    code: "invalid_response",
+  });
+});
+
+it("完整十三计数回执后才接受后续阶段，缺一项不得宣称复制成功", async () => {
+  const completed = {
+    ...job,
+    status: "succeeded",
+    stage: "complete",
+    completed_documents: job.documents,
+    completed_assets: job.assets,
+    completed_renditions: job.renditions,
+    script: { counts: scriptCounts, completed_counts: scriptCounts },
+  };
+  api.get.mockResolvedValueOnce(completed);
+  await expect(getCopy(sourceId, job.id)).resolves.toEqual(completed);
+  api.get.mockResolvedValueOnce({
+    ...completed,
+    script: { counts: scriptCounts },
+  });
+  await expect(getCopy(sourceId, job.id)).rejects.toMatchObject({
+    code: "invalid_response",
+  });
+});
+
+it("同一复制任务的剧本冻结计数不能随新响应变化或消失", () => {
+  const withScript = { ...job, script: { counts: scriptCounts } };
+  expect(() => newerCopy(withScript, { ...job, revision: 2 })).toThrow(
+    ApiError,
+  );
+  expect(() =>
+    newerCopy(withScript, {
+      ...withScript,
+      revision: 2,
+      script: { counts: { ...scriptCounts, sources: 5 } },
+    }),
+  ).toThrow(ApiError);
 });

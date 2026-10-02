@@ -105,6 +105,56 @@ it("源项目与作用域读取并行，未成功目标隐藏，只展示真实�
   expect(screen.queryByRole("link", { name: "打开副本画布" })).toBeNull();
   expect(screen.queryByRole("progressbar")).toBeNull();
 });
+it("剧本阶段列出全部历史事实，只有正式成功后才开放副本剧本", async () => {
+  const counts = {
+    sources: 4,
+    versions: 3,
+    version_sources: 7,
+    project_states: 1,
+    version_heads: 3,
+    split_sets: 5,
+    split_confirmations: 2,
+    episodes: 6,
+    structures: 8,
+    scenes: 9,
+    dialogue_lines: 11,
+    action_lines: 12,
+    objects: 15,
+  };
+  ports.get.mockResolvedValueOnce({
+    ...job,
+    status: "running",
+    stage: "script",
+    script: { counts },
+  });
+  open(job.id);
+  await screen.findByText("正在复制 · 复制剧本与全部历史");
+  expect(screen.getByText("对白")).toBeTruthy();
+  expect(screen.getByText("动作")).toBeTruthy();
+  expect(screen.getByText("0 / 11")).toBeTruthy();
+  expect(screen.getByText("0 / 12")).toBeTruthy();
+  expect(screen.getByText("0 / 15")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "打开副本剧本" })).toBeNull();
+  ports.get.mockResolvedValue({
+    ...job,
+    revision: 5,
+    status: "succeeded",
+    stage: "complete",
+    completed_documents: job.documents,
+    completed_assets: job.assets,
+    completed_renditions: job.renditions,
+    script: { counts, completed_counts: counts },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "刷新任务状态" }));
+  expect(
+    (await screen.findByRole("link", { name: "打开副本剧本" })).getAttribute(
+      "href",
+    ),
+  ).toBe(`/projects/${job.target_project_id}/script`);
+  expect(screen.getByText("11 / 11")).toBeTruthy();
+  expect(screen.getByText("12 / 12")).toBeTruthy();
+  expect(screen.getByText("15 / 15")).toBeTruthy();
+});
 it("本次安全读取完成前不复用其他页面或主体的来源详情缓存", async () => {
   cache.setQueryData(["projects", "detail", sourceId], {
     id: sourceId,
