@@ -115,6 +115,9 @@ func TestProjectCopyRetainedDocumentActualPrivateBytesAndOrdinaryReadFence(t *te
 
 func TestProjectCopyRetainedReferencesMissingForeignAndDuplicateFailAtomically(t *testing.T) {
 	database := mediaStoreDB(t)
+	// This contract runs in its isolated runtime-role gate, alongside the other
+	// retained-document fixtures; the ordinary media database is not its scope.
+	_ = libraryOwnerDB(t)
 	var name, role string
 	if err := database.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "lanverse_library" || role != "lanverse_app" {
 		t.Fatal("retained reference test requires isolated library DB and runtime role", name, role, err)

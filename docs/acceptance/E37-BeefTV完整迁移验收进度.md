@@ -211,3 +211,5 @@
 HEAD 加十个精确冻结文件在独立快照完成全树 goimports、vet、lint（0 issues）、Race（405 顶层通过、386 缺专用条件跳过、0 失败）、govulncheck（0 可达/导入包漏洞，一个未调用 required module 提示）和生产构建。Wire 经项目 goimports、84 条 Swag 重生均与 main 逐字相同；新增 CI 独立 `lanverse_library`，实际运行角色/私有对象的同范围八项 Race 全通过、0 跳过。历史文档在合成来源对象移除后仍可读取独立目标的相同原始 bytes；这项证据不替代整剧本历史、文件导入或页面验收。
 
 054 已在前阶段同一业务 PostgreSQL OID `345144296`、postmaster `2026-10-01T23:01:22.384635+08:00` 上应用，SQL SHA256 `015a22da1c57cd4685f7161984827d1274e4f747e0de2764ee919fd9a81675fa`。变更前后八组项目、媒体、衍生物、画布、复制任务、Operation、永久生命周期命令及 Outbox 行数保持，0 未收敛复制/上传/Operation；没有重置数据或应用未完成的050/053/055。
+
+该阶段实现已以 `61ec787d297dd798e6c070f712f0a43e7a2e6e9b` 推送 main，同一运行环境已更换为冻结构建 SHA256 `999125e0be5c310560952a75c0cb28cbc3b49b9f3aaa60c72fe91f9e5b8fe24e`；API readyz、worker/relay healthz 均 200，正式 Swagger 仍为84条。CI `36953731113` 的 frontend 成功，backend 在较早的普通媒体数据库检查失败：新增的历史引用拒绝测试先断言专用运行角色，未先检查专用环境，因而错误进入普通 owner 数据库。修复仅补入既有隔离 library fixture 入口；实际普通入口为1项条件跳过，专门运行角色/私有对象入口仍为八项 Race 通过、0跳过。此修复待新的 main CI 终态，不把此前失败记录为通过。
