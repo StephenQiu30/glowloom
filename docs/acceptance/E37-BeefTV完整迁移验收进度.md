@@ -261,3 +261,16 @@ Library29 focus 修正以 manifest `f7f1e1177b6f39d3913d0c46214dcb5d8dd81bcc2951
 
 
 151整包最终前端候选纳入Transfer16及新增恢复焦点测试。未知Transfer恢复与 asset_id URL详情、未知Bible恢复与 version_id历史均先确切Red复现双Dialog，再验证scopefresh后单一恢复Dialog、保留原UUID/正文/URL、解决后详情和焦点恢复；没有自动POST。最终155个实际测试文件/670项测试/0失败/0跳过，全树ESLint/Prettier、typegen、tsc及同生产源码Next构建通过。生产构建后仅新增focus回归测试，重新运行适用静态门禁和全树Vitest，不把早期外部node_modules symlink构建失败算作通过。Transfer实际源/目标任务投递、未知物理写入、正式六图/音频与完整历史Copy浏览器仍待新运行环境验证。
+
+
+### 当前 main 交付与空造型范围读取修复（2026-10-02）
+
+151接口整包已以 `4e9464ff92de142426c312a910a5f45787ab92a8` 推送 main，CI `36977343871` 的 backend、frontend、images 已终态成功。业务库057/060/061/062已按冻结SQL在同一事务中安装；固定OID/postmaster、74组原owner行数和权限保留，没有数据重置。冻结API/worker/relay健康检查均200，正式接口151条；3000前端已使用同候选生产构建。这是当时运行升级的已记录证据，不替代全部页面与供应商验收。
+
+正式浏览器已完成文字素材个人→项目→个人双向迁移、源修订不变、跨页选择、实际取消、双标签CAS冲突、刷新恢复和390视口/键盘焦点检查。合成PNG完成正式上传、双向独立目标、实际解码及收到的下载字节核对（91294 bytes，SHA `8dc52256959a0f1ef6ad334789283b03e2d96065688bf471e3074224dba04383`）。独立私有object key与原件/缩略图的owner核验，以及操作系统最终落盘文件仍未证明；不能由浏览器收到字节推断这两项通过。临时证据为 `/tmp/lanverse-transfer-browser-proof-20261002.json` 和 `/tmp/lanverse-transfer-png-browser-proof-20261002.json`。
+
+角色页面真实新增第二造型时，显式 `applies_to: []` 在不可变规范正文中因omitempty被省略，但逐行历史仍保留 `[]`；读取器将其与解码后的nil进行字面比较，错误返回503。修复只比较空集合语义，非空差异仍拒绝为损坏历史，不更新正文、SHA、逐行内容或任何既有版本。新增真实非owner PostgreSQL/HTTP回归先复现503，再证明列表、当前详情和新旧历史均200，读取前后原历史字节与SHA保持一致。
+
+冻结main加两文件的完整Bible Race检查：31顶层通过、0失败、0跳过，使用既有隔离PG17与真实私有MinIO。首轮12项文件相关失败来自19000测试MinIO停止；恢复同一独立测试服务后全套重跑通过，失败记录未被覆盖。适用goimports、全树vet、golangci-lint（0 issues）和主CLI构建通过；govulncheck为0可达/导入包漏洞、1个未调用required module提示。只读代码审查确认非空历史保护保持。
+
+本次提交仅包含上述读取修复、回归测试和本记录。工作区中的引用保护聚合、永久清理、容量、GIF/glTF、素材包及剧本角色选择器等后续实现尚未完成组合验证，保留在工作区且不作为本次交付；完整迁移仍未完成。
