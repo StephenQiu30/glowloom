@@ -312,3 +312,7 @@ Library29 focus 修正以 manifest `f7f1e1177b6f39d3913d0c46214dcb5d8dd81bcc2951
 前端最终组合相对 `c91d61ee` 准确24项改动（22源文件与2项实际有差异的自动生成物），全部14项生成客户端与实际163接口一致，依赖/锁文件没有改动。169文件、775项测试0失败/0跳过，ESLint、Prettier、Next typegen/tsc、默认Turbopack生产构建全部通过。恢复审阅另复现已结束的 running/cancel_requested 作业在终态提交失败后 `needs_reconciliation=false` 导致对账按钮锁死；最小两文件修补仅开放沿原作业/修订/键的明确人工对账，由服务端核验 processEnded 与当前权限，execution_unconfirmed 仍禁用，409保留原键正文，刷新不自动请求。模型预览授权切换的原材质/texture泄漏已按单一恢复/销毁 owner 修复，真实 React/Query/Three 受控授权回归通过；这些组件测试不代替正式WebGL、对象或永久清理浏览器验收。
 
 CI拆分强制 reference 库、普通Bible37/materialized5、Package15/个人guard2/锁序2、生产组合5与真实Temporal lane；普通Script68及Bible/Voice/Transfer汇总前增加全事件校验，顶层或子用例跳过、包失败和未收敛测试都会拒绝。YAML、72个shell语法块、actionlint与子Skip失败回归通过；ShellCheck未执行，远端Linux CI结果由推送后的实际终态单独确认。完整迁移和运行环境产品验收仍未完成，不以此次代码提交关闭。
+
+该组合已以 `8e57078da0686ab47278eff1eefaf53dd8a337de` 推送 main。CI `37003290062` 的 frontend 全部成功，backend 在个人/项目素材库 lane 实际29项通过、2项失败、0跳过，后续检查未运行、images跳过。两个旧测试仍把普通 `FindAsset`/`AssetQuery.Reference` 当成历史读取入口，要求回收项继续可读，和已接受的普通新引用拒绝、owning冻结历史保留合同冲突。此前55项专用组合没有选择这两项，整树 Race 中它们只是缺外部条件跳过；不能以这些旧证据宣称完整31项已通过。
+
+最小修复只修改两个旧测试：普通读取明确拒绝回收项，回收预览核验原件及全部衍生物事实不变，恢复后普通原件事实一致；首次成功的正式 fact 独立保留，回收后通过既有 `VerifyFrozenReference` 在 owning事务中核验实际私有字节。未放宽生产读取、CI选择式、31项门槛或零跳过要求。同独立非owner `lanverse_library`/MinIO实际复现2项RED后，远端精确选择式的31项Race全部通过，所有顶层/子用例0失败、0跳过；修改范围的gofmt/goimports、go vet与golangci-lint 0 issues通过。补交后的远端CI仍须独立确认终态，业务运行环境未部署。

@@ -84,6 +84,7 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	if err := query(); err != nil || fact.AssetID != asset.ID || fact.SHA256 != *asset.SHA256 || fact.ByteSize != asset.ByteSize || fact.RenditionID == nil || fact.RenditionSHA256 == nil {
 		t.Fatal("actual formal proof", fact, err)
 	}
+	frozen := fact
 	var rendition domain.Rendition
 	for _, r := range rends {
 		if r.ID == *fact.RenditionID {
@@ -129,8 +130,13 @@ func TestLibraryNewBindingActualOriginalAndDistinctRenditionProof(t *testing.T) 
 	if err := query(); !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatal("recycled catalog formed a new entity binding", err)
 	}
-	// Catalog hiding does not revoke an existing business owner's historical read.
-	if _, err := mediaapp.NewAssetQuery(store, nil).Reference(t.Context(), actor, project, asset.ID); err != nil {
-		t.Fatal("new binding rule silently changed historical eligibility", err)
+	if _, err := mediaapp.NewAssetQuery(store, nil).Reference(t.Context(), actor, project, asset.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+		t.Fatal("ordinary reference bypassed catalog trash", err)
+	}
+	// Existing evidence is verified through its owning reader and actual bytes.
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		return mediaapp.NewReferenceFactQuery(pgmedia.NewLibraryStore(tx, libraryTestAccess, time.Now), objects).VerifyFrozenReference(t.Context(), actor, project, frozen)
+	}); err != nil {
+		t.Fatal("catalog trash invalidated the unchanged frozen proof", err)
 	}
 }

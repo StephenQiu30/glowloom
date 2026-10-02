@@ -3,6 +3,7 @@ package media_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/png"
 	"reflect"
@@ -71,10 +72,18 @@ func TestLibraryActualReviewedProjectImageUsesLegacyIdentityAndSeparateMetadata(
 	if err != nil || trashed.Total != 1 || trashed.Items[0].TrashedAt == nil {
 		t.Fatal("trash page lost original", trashed, err)
 	}
-	if _, err := media.FindAsset(t.Context(), actor, project, before.ID); err != nil {
-		t.Fatal("catalog trash destroyed historic business media", err)
+	if _, err := media.FindAsset(t.Context(), actor, project, before.ID); !errors.Is(err, mediaapp.ErrNotFound) {
+		t.Fatal("catalog trash remained available for ordinary binding", err)
+	}
+	retained, err := store.FindLibraryMedia(t.Context(), actor, scope, before.ID)
+	if err != nil || !reflect.DeepEqual(before, retained.Asset) || !reflect.DeepEqual(rends, retained.Renditions) {
+		t.Fatal("catalog trash changed retained original or rendition facts", err)
 	}
 	if _, err := store.ApplyLibraryCommand(t.Context(), actor, mediaapp.LibraryCommand{Scope: scope, Key: uuid.New(), ExpectedRevision: 2, Action: "restore_items", Items: []mediaapp.LibraryItemRevision{{ID: before.ID, Revision: 2}}}); err != nil {
 		t.Fatal("restore catalog", err)
+	}
+	restored, err := media.FindAsset(t.Context(), actor, project, before.ID)
+	if err != nil || !reflect.DeepEqual(before, restored) {
+		t.Fatal("catalog restore did not release the unchanged original", err)
 	}
 }
