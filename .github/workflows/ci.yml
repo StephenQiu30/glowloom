@@ -152,7 +152,7 @@ jobs:
           LV_TEST_CANVAS_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_canvas_store_test?sslmode=disable
           LV_TEST_CANVAS_HTTP_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_canvas_http_test?sslmode=disable
           LV_TEST_CANVAS_REDIS_URL: redis://127.0.0.1:6379/13
-        run: go test -race ./tests/canvas -count=1 -v
+        run: go test -race ./tests/canvas -skip '^TestCanvasMediaReferenceGuard' -count=1 -v
       - name: Verify identity commands in isolated databases
         env:
           LV_TEST_IDENTITY_REDIS_URL: redis://127.0.0.1:6379/14
@@ -190,10 +190,10 @@ jobs:
             LV_TEST_MODEL_CATALOG_DB_DSN="$contract_dsn" \
             LV_TEST_BILLING_DB_DSN="$contract_dsn" \
             LV_TEST_WORKSPACE_DB_DSN="$contract_dsn" \
-            go test -race "./tests/$package" -count=1 -v
+            go test -race "./tests/$package" -skip '^TestWorkspaceMediaReferenceGuard' -count=1 -v
           done
       - name: Verify operation PostgreSQL contracts
-        run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -count=1
+        run: LV_TEST_OPERATION_SCHEMA_DB_DSN="$LV_TEST_DB_DSN" LV_TEST_OPERATION_STORE_DB_DSN="$LV_TEST_DB_DSN" go test -race ./tests/operation -skip '^TestOperationMediaReferenceGuard' -count=1
       - name: Prepare isolated media migration database
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_media_migration_test'
@@ -207,7 +207,7 @@ jobs:
         run: |
           LV_TEST_MEDIA_STORE_DB_DSN="$LV_TEST_DB_DSN" \
           LV_TEST_MEDIA_MIGRATION_DB_DSN='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_media_migration_test?sslmode=disable' \
-          go test -race ./tests/media -count=1
+          go test -race ./tests/media -skip '^Test(MediaToolRetained|MediaPackage(Personal|ReplayAndAdmissionUseCommandBeforeProjectLock$|ReplayKeepsOriginalReceiptAndCurrentAuthority$))' -count=1
       - name: Prepare private receipt and export contract storage
         env:
           CI_STORAGE_ACCESS_KEY: lanverse-ci-only
@@ -259,7 +259,7 @@ jobs:
       - name: Verify template quotes and private provider receipts
         env:
           LV_TEST_OPERATION_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable
-        run: go test -race ./tests/prompt ./tests/operation -count=1 -v
+        run: go test -race ./tests/prompt ./tests/operation -skip '^TestOperationMediaReferenceGuard' -count=1 -v
       - name: Verify actual private media exports and GLB under the runtime role
         env:
           LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_receipt?sslmode=disable&options=-c%20role%3Dlanverse_app
@@ -393,6 +393,38 @@ jobs:
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## GIF and native models\n\n{counts['pass']} bounded native-format, actual runtime-role PostgreSQL, private-original and independent-copy tests passed without skips. Browser acceptance runs separately.\n")
           PY
+      - name: Prepare zero-skip contract result checker
+        run: |
+          cat > "$RUNNER_TEMP/require-contract-results.py" <<'PY'
+          import collections
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          log = Path(os.environ["RUNNER_TEMP"]) / sys.argv[1]
+          required = dict(argument.split("=", 1) for argument in sys.argv[2:])
+          started, passed, rejected = set(), set(), []
+          for line in log.read_text().splitlines():
+              event = json.loads(line)
+              action, test = event["Action"], event.get("Test", "")
+              key = (event["Package"], test)
+              if action in ("fail", "skip"):
+                  rejected.append((action, key))
+              if test and "/" not in test:
+                  if action == "run":
+                      started.add(key)
+                  elif action == "pass":
+                      passed.add(key)
+          assert not rejected, (log.name, rejected)
+          assert started == passed, (log.name, "unsettled tests", started - passed)
+          counts = collections.Counter(package.rsplit("/", 1)[-1] for package, test in passed)
+          for package, minimum in required.items():
+              assert counts[package] >= int(minimum), (log.name, package, counts)
+          assert set(counts) == set(required), (log.name, "unexpected packages", counts)
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"\n{log.stem}: {dict(counts)} passed; zero package, test or subtest failures/skips.\n")
+          PY
       - name: Verify personal and project libraries, uploads, and verified attachments
         shell: bash
         env:
@@ -412,10 +444,11 @@ jobs:
               test = event.get("Test", "")
               if test and "/" not in test and event["Action"] in ("pass", "fail", "skip"):
                   counts[event["Action"]] += 1
-          assert counts["pass"] >= 26 and counts["fail"] == 0 and counts["skip"] == 0, counts
+          assert counts["pass"] >= 31 and counts["fail"] == 0 and counts["skip"] == 0, counts
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## Media library and personal originals\n\n{counts['pass']} runtime-role PostgreSQL, real private originals, immutable scope, permanent replay, unknown commit, signed preview and verified attachment tests passed without skips. Full Transfer/Package and browser acceptance run separately.\n")
           PY
+          python3 "$RUNNER_TEMP/require-contract-results.py" library-pg.jsonl media=31
       - name: Verify script copy coordination and current workspace authority
         shell: bash
         env:
@@ -439,6 +472,11 @@ jobs:
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write(f"\n## Script workspace authority\n\n{counts['pass']} coordinator stage, complete receipt, current actor/worker fence and same-transaction project authority tests passed without skips. Actual Script history content is verified by its owning tests.\n")
           PY
+      - name: Prepare isolated historical reference contract database
+        run: |
+          psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_reference'
+          contract_dsn='postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable'
+          find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
       - name: Prepare isolated script contract database
         run: |
           psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE lanverse_script'
@@ -449,7 +487,8 @@ jobs:
         env:
           LV_TEST_SCRIPT_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_script?sslmode=disable
         run: |
-          go test -race ./tests/script -skip '^TestScriptFileImportRealTemporal' -count=1 -json | tee "$RUNNER_TEMP/script-pg.jsonl"
+          go test -race ./tests/script -skip '^TestScript(FileImportRealTemporal|MediaReferenceGuardPG)' -count=1 -json | tee "$RUNNER_TEMP/script-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" script-pg.jsonl script=68
           python3 - <<'PY'
           import collections
           import json
@@ -464,7 +503,7 @@ jobs:
                   counts[event["Action"]] += 1
           assert counts["pass"] >= 68 and counts["fail"] == 0 and counts["skip"] == 0, counts
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write(f"\n## Script owning history and file import\n\n{counts['pass']} actual runtime-role PostgreSQL, private originals, Unicode/structured versions, ordered partial retry, recovery, immutable history and complete owning Copy tests passed without skips. Two real Temporal tests require the separately authorized service and are explicitly excluded here; local Temporal and browser evidence are separate.\n")
+              summary.write(f"\n## Script owning history and file import\n\n{counts['pass']} actual runtime-role PostgreSQL, private originals, Unicode/structured versions, ordered partial retry, recovery, immutable history and complete owning Copy tests passed without skips. Four historical reference guards run in lanverse_reference and two real Temporal tests run against the isolated CI service in dedicated steps. Browser acceptance is separate.\n")
           PY
       - name: Prepare isolated Bible and voice contract databases
         run: |
@@ -477,7 +516,28 @@ jobs:
         shell: bash
         env:
           LV_TEST_BIBLE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_bible?sslmode=disable
-        run: go test -race ./tests/bible -count=1 -json | tee "$RUNNER_TEMP/bible-pg.jsonl"
+        run: |
+          go test -race ./tests/bible -skip '^Test(BibleMaterializedClosedPG|BibleMediaReferencePG|BibleScriptMediaReferencePG|ScriptMediaReferencePG)' -count=1 -json | tee "$RUNNER_TEMP/bible-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" bible-pg.jsonl bible=37
+      - name: Verify closed materialized Bible history in the reference database
+        shell: bash
+        env:
+          LV_TEST_BIBLE_CLOSED_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
+        run: |
+          go test -race ./tests/bible -run '^TestBibleMaterializedClosedPG' -count=1 -json | tee "$RUNNER_TEMP/bible-closed-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" bible-closed-pg.jsonl bible=5
+      - name: Verify all owning historical references and retained tool objects
+        shell: bash
+        env:
+          LV_TEST_CANVAS_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
+          LV_TEST_WORKSPACE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
+          LV_TEST_OPERATION_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
+          LV_TEST_SCRIPT_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
+          LV_TEST_REFERENCE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_reference?sslmode=disable
+        run: |
+          go test -race -p 1 ./tests/canvas ./tests/workspace ./tests/operation ./tests/script ./tests/bible ./tests/media -run '^Test(CanvasMediaReferenceGuard|WorkspaceMediaReferenceGuard|OperationMediaReferenceGuard|ScriptMediaReferenceGuardPG|BibleMediaReferencePG|BibleScriptMediaReferencePG|ScriptMediaReferencePG|MediaToolRetained)' -count=1 -json | tee "$RUNNER_TEMP/media-reference-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-reference-pg.jsonl canvas=5 workspace=6 operation=3 script=4 bible=7 media=7
       - name: Verify configured catalog voice parameters and current authority
         shell: bash
         env:
@@ -492,6 +552,9 @@ jobs:
           go test -race ./tests/media -run '^Test(MediaTransfer|ProjectCopyTypedHistoricalReferences|ProjectCopyFrozenReferences)' -skip '^TestMediaTransferActualTemporal' -count=1 -json | tee "$RUNNER_TEMP/transfer-pg.jsonl"
       - name: Require complete Bible, voice and transfer contracts without skips
         run: |
+          python3 "$RUNNER_TEMP/require-contract-results.py" bible-pg.jsonl bible=37
+          python3 "$RUNNER_TEMP/require-contract-results.py" voice-pg.jsonl catalog=6
+          python3 "$RUNNER_TEMP/require-contract-results.py" transfer-pg.jsonl media=22
           python3 - <<'PY'
           import collections
           import json
@@ -500,7 +563,7 @@ jobs:
 
           root = Path(os.environ["RUNNER_TEMP"])
           summaries = []
-          for file, minimum in (("bible-pg", 30), ("voice-pg", 6), ("transfer-pg", 20)):
+          for file, minimum in (("bible-pg", 37), ("voice-pg", 6), ("transfer-pg", 22)):
               counts = collections.Counter()
               for line in (root / (file + ".jsonl")).read_text().splitlines():
                   event = json.loads(line)
@@ -510,8 +573,102 @@ jobs:
               assert counts["pass"] >= minimum and counts["fail"] == 0 and counts["skip"] == 0, (file, counts)
               summaries.append(f"{file}: {counts['pass']} passed, zero failures and skips.")
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write("\n## Bible, configured voices and independent media transfer\n\n" + "\n\n".join(summaries) + "\n\nRuntime role PostgreSQL and actual private objects are required here. The real Temporal transfer test is explicitly excluded from CI and has separate local evidence. Browser and provider generation acceptance are separate.\n")
+              summary.write("\n## Bible, configured voices and independent media transfer\n\n" + "\n\n".join(summaries) + "\n\nRuntime role PostgreSQL and actual private objects are required here. The real Temporal transfer test runs in the isolated CI service step. Browser and provider generation acceptance are separate.\n")
           PY
+      - name: Verify physical Purge, complete usage and reference visibility
+        shell: bash
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
+        run: |
+          go test -race ./tests/media -run '^Test(MediaPurge|MediaGenericReference|MediaDocumentNewFreeze|MediaStorageUsage)' -skip '^TestMediaPurgeActualTemporal' -count=1 -json | tee "$RUNNER_TEMP/media-purge-usage-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-purge-usage-pg.jsonl media=28
+      - name: Verify complete source ZIP and native Package lifecycle
+        shell: bash
+        env:
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
+        run: |
+          go test -race ./tests/media -run '^TestMediaPackage' -skip '^TestMediaPackage(Personal|ReplayAndAdmissionUseCommandBeforeProjectLock$|ReplayKeepsOriginalReceiptAndCurrentAuthority$)' -count=1 -json | tee "$RUNNER_TEMP/media-package-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-pg.jsonl media=15
+      - name: Prepare separate Package guard, lock and production route databases
+        run: |
+          # 个人 guard 的多组织 fixture 与生产 Router 的单组织 bootstrap 必须分库。
+          for database in lanverse_composition_package_guard lanverse_composition_package_lock_ci lanverse_composition_package_router; do
+            psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
+            contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
+            find db/migrations -maxdepth 1 -name '*.up.sql' -print0 | sort -z | xargs -0 -n1 psql "$contract_dsn" -v ON_ERROR_STOP=1 -f
+          done
+      - name: Verify personal unknown Package blocks Purge under current authority
+        shell: bash
+        env:
+          LV_TEST_MEDIA_PACKAGE_GUARD_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_guard?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_MEDIA_PACKAGE_GUARD_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_guard?sslmode=disable
+        run: |
+          go test -race ./tests/media -run '^TestMediaPackagePersonal' -count=1 -json | tee "$RUNNER_TEMP/media-package-guard-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-guard-pg.jsonl media=2
+      - name: Verify actual Package command-before-project locking and immutable replay
+        shell: bash
+        env:
+          LV_TEST_MEDIA_PACKAGE_LOCK_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_lock_ci?sslmode=disable&options=-c%20role%3Dlanverse_app
+        run: |
+          go test -race ./tests/media -run '^TestMediaPackage(ReplayAndAdmissionUseCommandBeforeProjectLock|ReplayKeepsOriginalReceiptAndCurrentAuthority)$' -count=1 -json | tee "$RUNNER_TEMP/media-package-lock-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-package-lock-pg.jsonl media=2
+      - name: Verify production routes, Package retention and closed physical usage
+        shell: bash
+        env:
+          LV_TEST_MEDIA_COMPOSITION_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_router?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_MEDIA_COMPOSITION_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_composition_package_router?sslmode=disable
+        run: |
+          go test -race ./tests/app -run '^TestMedia(PackageProduction|LibraryComposition)' -count=1 -json | tee "$RUNNER_TEMP/media-production-pg.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-production-pg.jsonl app=5
+      - name: Prepare pinned isolated Temporal contract service
+        run: |
+          mkdir -p "$RUNNER_TEMP/temporal-contract-bin"
+          archive="$RUNNER_TEMP/temporal_cli_1.8.2_linux_amd64.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/temporalio/cli/releases/download/v1.8.2/temporal_cli_1.8.2_linux_amd64.tar.gz \
+            --output "$archive"
+          echo "d8421bda989e6514b4bdb4d63a9012a8a05a806892e881a5aad8510496349a94  $archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP/temporal-contract-bin" temporal
+          temporal_bin="$RUNNER_TEMP/temporal-contract-bin/temporal"
+          "$temporal_bin" --version
+          "$temporal_bin" --disable-config-env --disable-config-file server start-dev \
+            --ip 127.0.0.1 --port 17233 --headless --namespace lanverse-ci \
+            >"$RUNNER_TEMP/temporal-contract.log" 2>&1 &
+          echo "LV_CI_TEMPORAL_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 40); do
+            if "$temporal_bin" --disable-config-env --disable-config-file \
+              --address 127.0.0.1:17233 --command-timeout 2s operator cluster health && \
+              "$temporal_bin" --disable-config-env --disable-config-file \
+              --address 127.0.0.1:17233 --namespace lanverse-ci --command-timeout 2s \
+              operator namespace describe >/dev/null; then
+              break
+            fi
+            sleep 0.5
+          done
+          "$temporal_bin" --disable-config-env --disable-config-file \
+            --address 127.0.0.1:17233 --command-timeout 5s operator cluster health
+          "$temporal_bin" --disable-config-env --disable-config-file \
+            --address 127.0.0.1:17233 --namespace lanverse-ci --command-timeout 5s \
+            operator namespace describe >/dev/null
+      - name: Verify actual Temporal Script import, Transfer and Purge recovery
+        shell: bash
+        env:
+          LV_TEST_TEMPORAL_ADDR: 127.0.0.1:17233
+          LV_TEST_TEMPORAL_NAMESPACE: lanverse-ci
+          LV_TEST_SCRIPT_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_script?sslmode=disable
+          LV_TEST_MEDIA_STORE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable&options=-c%20role%3Dlanverse_app
+          LV_TEST_LIBRARY_OWNER_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_library?sslmode=disable
+        run: |
+          go test -race -p 1 ./tests/script ./tests/media -run '^Test(ScriptFileImportRealTemporal|MediaTransferActualTemporal|MediaPurgeActualTemporal)' -count=1 -json | tee "$RUNNER_TEMP/media-script-temporal.jsonl"
+          python3 "$RUNNER_TEMP/require-contract-results.py" media-script-temporal.jsonl script=2 media=2
+      - name: Clean up isolated Temporal contract service
+        if: always()
+        run: |
+          if [[ "${LV_CI_TEMPORAL_PID:-}" =~ ^[0-9]+$ ]]; then
+            kill "$LV_CI_TEMPORAL_PID" 2>/dev/null || true
+          fi
       - name: Clean up isolated private contract storage
         if: always()
         run: |
