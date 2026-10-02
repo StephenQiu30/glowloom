@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validateDirectorGLB } from "./glb";
+import { validateDirectorGLB, validateDirectorModel } from "./glb";
+import { triangleDocument, triangleJSON } from "./model-test-fixtures";
 function glb(json: object) {
   const text = new TextEncoder().encode(JSON.stringify(json));
   const length = Math.ceil(text.length / 4) * 4;
@@ -55,4 +56,34 @@ describe("授权模型的封闭资源检查", () => {
       validateDirectorGLB(new ArrayBuffer(64 * 1024 * 1024 + 1)),
     ).toThrow();
   });
+});
+it("原生JSONglTF与canonicalMIME一致，保留GLB且不能互相改名伪装", () => {
+  expect(() =>
+    validateDirectorModel(triangleJSON(), "model/gltf+json"),
+  ).not.toThrow();
+  expect(() =>
+    validateDirectorModel(triangleJSON(), "model/gltf-binary"),
+  ).toThrow();
+  expect(() =>
+    validateDirectorModel(
+      glb({ asset: { version: "2.0" } }),
+      "model/gltf+json",
+    ),
+  ).toThrow();
+  expect(() =>
+    validateDirectorModel(triangleJSON(), "application/json"),
+  ).toThrow();
+});
+it.each([
+  { asset: { version: "1.0" } },
+  { extensionsRequired: ["KHR_draco_mesh_compression"] },
+  { images: [{ uri: "texture.png" }] },
+  { images: [{ uri: "data:image/svg+xml;base64,PHN2Zy8+" }] },
+])("JSONglTF拒绝异常版本/外部纹理/解码扩展 %j", (change) => {
+  expect(() =>
+    validateDirectorModel(
+      triangleJSON({ ...triangleDocument(), ...change }),
+      "model/gltf+json",
+    ),
+  ).toThrow();
 });

@@ -1,3 +1,5 @@
+import { animatedGIFBytes, animatedGIFFile } from "./gif-test-fixtures";
+import { triangleJSON } from "@/components/canvas/director/model-test-fixtures";
 import { expect, it } from "vitest";
 import {
   loadLibraryUploads,
@@ -55,6 +57,32 @@ it("按origin/currentActor/org/library隔离，仅原key/file fingerprint持久�
   ).rejects.toThrow("SHA");
   await requireOriginalUpload(file, intent);
 });
+it("JSONglTF原件沿整件SHA与同key意图持久化恢复，不存JSON或预览URL", async () => {
+  sessionStorage.clear();
+  const original = new File([triangleJSON()], "triangle.gltf", {
+    type: "model/gltf+json",
+  });
+  const intent = {
+    key: crypto.randomUUID(),
+    ...(await uploadFingerprint(original)),
+    local_review_confirmed: true as const,
+  };
+  saveLibraryUploads(sessionStorage, identity, [intent]);
+  const restored = loadLibraryUploads(sessionStorage, identity)[0];
+  await requireOriginalUpload(original, restored);
+  await expect(
+    requireOriginalUpload(
+      new File([triangleJSON().slice(0, -1)], original.name, {
+        type: original.type,
+      }),
+      restored,
+    ),
+  ).rejects.toThrow("SHA");
+  expect(loadLibraryUploads(sessionStorage, identity)).toEqual([intent]);
+  expect(sessionStorage.getItem(Object.keys(sessionStorage)[0])).not.toMatch(
+    /blob:|buffers|data:|asset/,
+  );
+});
 it("真实25文件/700MiB与4类加TXT-DOCX容量限制，路径和不支持格式不送DML", () => {
   expect(validateLibraryFiles([new File(["x"], "source.txt")]).valid).toBe(
     true,
@@ -65,10 +93,36 @@ it("真实25文件/700MiB与4类加TXT-DOCX容量限制，路径和不支持格�
   expect(
     validateLibraryFiles([new File(["x"], "raw.gif", { type: "image/gif" })])
       .valid,
-  ).toBe(false);
+  ).toBe(true);
   expect(
     validateLibraryFiles(
       Array.from({ length: 26 }, () => new File(["x"], "a.png")),
     ).valid,
   ).toBe(false);
+});
+
+it("GIF未知请求只按完整原件SHA及原键恢复，原件截断不能重放", async () => {
+  sessionStorage.clear();
+  const file = animatedGIFFile();
+  const intent = {
+    key: crypto.randomUUID(),
+    ...(await uploadFingerprint(file)),
+    local_review_confirmed: true as const,
+  };
+  saveLibraryUploads(sessionStorage, identity, [intent]);
+  const restored = loadLibraryUploads(sessionStorage, identity)[0];
+  expect(restored).toEqual(intent);
+  await requireOriginalUpload(file, restored);
+  await expect(
+    requireOriginalUpload(
+      new File([animatedGIFBytes().slice(0, -1)], file.name, {
+        type: file.type,
+      }),
+      restored,
+    ),
+  ).rejects.toThrow("SHA");
+  expect(loadLibraryUploads(sessionStorage, identity)[0].key).toBe(intent.key);
+  expect(sessionStorage.getItem(Object.keys(sessionStorage)[0])).not.toMatch(
+    /blob:|GIF89a|first frame/,
+  );
 });

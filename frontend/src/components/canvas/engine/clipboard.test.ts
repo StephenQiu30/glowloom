@@ -2,10 +2,42 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createNode } from "../document";
 import { CanvasNodeType } from "../model";
 import * as clipboard from "./clipboard";
+import { animatedGIFFile } from "../../media/gif-test-fixtures";
 
 const projectId = "cdad8ff4-c265-4c1d-ab65-9413f8dc051b";
 const otherProject = "9590a20d-1893-40c1-a8ae-a501d2186cfb";
 afterEach(() => vi.unstubAllGlobals());
+
+it("剪贴板同时有PNG和GIF时优先完整GIF原件，不转换或丢掉动画帧", async () => {
+  const original = animatedGIFFile();
+  const getType = vi.fn(async () => original);
+  const files = await clipboard.readCanvasClipboardImages([
+    { types: ["image/png", "image/gif"], getType } as unknown as ClipboardItem,
+  ]);
+  expect(getType).toHaveBeenCalledExactlyOnceWith("image/gif");
+  expect(files).toHaveLength(1);
+  expect(files[0].type).toBe("image/gif");
+  expect(files[0].name).toMatch(/\.gif$/);
+  expect(await files[0].arrayBuffer()).toEqual(await original.arrayBuffer());
+});
+
+it("剪贴板GIF读取失败不得退回PNG，非图片仍留给图及纯文本粘贴", async () => {
+  const getType = vi.fn().mockRejectedValue(new Error("permission denied"));
+  await expect(
+    clipboard.readCanvasClipboardImages([
+      {
+        types: ["image/png", "image/gif"],
+        getType,
+      } as unknown as ClipboardItem,
+    ]),
+  ).rejects.toThrow("读取剪贴板图片失败");
+  expect(getType).toHaveBeenCalledExactlyOnceWith("image/gif");
+  expect(
+    await clipboard.readCanvasClipboardImages([
+      { types: ["text/plain"], getType } as unknown as ClipboardItem,
+    ]),
+  ).toEqual([]);
+});
 function graph() {
   const group = createNode(CanvasNodeType.Frame, { x: 20, y: 30 });
   const text = createNode(CanvasNodeType.Text, { x: 70, y: 80 });

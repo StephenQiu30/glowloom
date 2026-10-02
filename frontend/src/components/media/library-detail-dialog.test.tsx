@@ -69,6 +69,56 @@ function mount(
     </QueryClientProvider>,
   );
 }
+
+it("GIF详情使用完整原件而非首帧PNG，当前授权失败不挂原件，关闭释放来源", async () => {
+  const media = {
+    id,
+    kind: "image" as const,
+    file_name: "three-colors.gif",
+    mime_type: "image/gif",
+    byte_size: 339,
+    width: 64,
+    height: 64,
+    duration_ms: null,
+    revision: 1,
+  };
+  vi.mocked(queries.getLibraryDetail).mockResolvedValue({
+    ...detail,
+    kind: "image",
+    asset_id: id,
+    media,
+    plain_text: undefined,
+  });
+  const expires = new Date(Date.now() + 60000).toISOString();
+  vi.mocked(queries.previewLibrary).mockResolvedValue({
+    asset: media,
+    url: "https://private.invalid/whole.gif",
+    expires_at: expires,
+    renditions: [
+      {
+        kind: "thumb_256",
+        url: "https://private.invalid/first-frame.png",
+        expires_at: expires,
+        width: 64,
+        height: 64,
+      },
+    ],
+  });
+  const view = mount();
+  const image = await screen.findByRole("img", { name: detail.title });
+  expect(image.getAttribute("src")).toBe("https://private.invalid/whole.gif");
+  expect(image.getAttribute("crossorigin")).toBe("anonymous");
+  expect(screen.getByText(/GIF 原件预览保留动画/)).toBeTruthy();
+  expect(queries.freshLibrary).toHaveBeenCalledTimes(2);
+  view.unmount();
+  expect(image.hasAttribute("src")).toBe(false);
+  vi.mocked(queries.freshLibrary).mockRejectedValue(
+    new ApiError(403, "forbidden"),
+  );
+  mount();
+  await screen.findByRole("button", { name: "重新读取素材详情" });
+  expect(screen.queryByRole("img")).toBeNull();
+});
 it("选中正文懒读保留空白，无文本二进制预览或下载", async () => {
   mount();
   await waitFor(() =>

@@ -77,6 +77,23 @@ it("真实图片解码失败提供有界重新授权，成功重试后替换原�
   expect(original.hasAttribute("src")).toBe(false);
 });
 
+it("GIF画布完整预览使用原件来源并在关闭后释放，不播放首帧缩略图", async () => {
+  preview.mockResolvedValueOnce({
+    asset: { ...asset, mime_type: "image/gif" },
+    url: "https://media.example/whole.gif",
+    expires_at: new Date(Date.now() + 600000).toISOString(),
+    renditions: [
+      { kind: "thumb_256", url: "https://media.example/first-frame.png" },
+    ],
+  });
+  const view = show();
+  const image = await screen.findByRole("img", { name: node.title });
+  expect(image.getAttribute("src")).toBe("https://media.example/whole.gif");
+  expect(image.getAttribute("crossorigin")).toBe("anonymous");
+  view.unmount();
+  expect(image.hasAttribute("src")).toBe(false);
+});
+
 it("关闭完整视频预览释放播放与授权来源", async () => {
   preview.mockResolvedValueOnce({
     asset: { ...asset, kind: "video" },

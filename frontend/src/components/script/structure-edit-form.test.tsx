@@ -7,7 +7,49 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { StructureEditForm } from "./structure-edit-form";
+vi.mock("./character-binding-picker", () => ({
+  CharacterBindingPicker: ({
+    label,
+    binding,
+    locked,
+    onChange,
+  }: {
+    label: string;
+    binding?: { character_id: string; character_version_id?: string };
+    locked: boolean;
+    onChange: (
+      binding:
+        { character_id: string; character_version_id?: string } | undefined,
+    ) => void;
+  }) => (
+    <select
+      aria-label={`${label}正式确认角色`}
+      disabled={locked}
+      value={binding?.character_id ?? ""}
+      onChange={(event) =>
+        onChange(
+          event.target.value
+            ? {
+                character_id: event.target.value,
+                character_version_id: "66666666-6666-4666-8666-666666666666",
+              }
+            : undefined,
+        )
+      }
+    >
+      <option value="">清除角色绑定</option>
+      <option value="33333333-3333-4333-8333-333333333333">原角色</option>
+      <option value="55555555-5555-4555-8555-555555555555">新确认角色</option>
+    </select>
+  ),
+}));
 afterEach(cleanup);
+const scope = {
+  origin: window.location.origin,
+  actorId: "77777777-7777-4777-8777-777777777777",
+  orgId: "88888888-8888-4888-8888-888888888888",
+  projectId: "99999999-9999-4999-8999-999999999999",
+};
 const base = {
   expected_revision: 8,
   expected_episode_revision: 3,
@@ -38,6 +80,7 @@ it.each(["unchanged", "changed", "cleared"])(
     const next = "55555555-5555-4555-8555-555555555555";
     render(
       <StructureEditForm
+        scope={scope}
         base={base}
         episodeStart={0}
         episodeEnd={9}
@@ -68,7 +111,7 @@ it.each(["unchanged", "changed", "cleared"])(
     });
     if (change !== "unchanged")
       fireEvent.change(
-        screen.getByRole("textbox", { name: "场景1行1正式角色UUID（可空）" }),
+        screen.getByRole("combobox", { name: "场景1行1正式确认角色" }),
         { target: { value: change === "changed" ? next : "" } },
       );
     fireEvent.click(screen.getByRole("button", { name: "保存手工结构候选" }));
@@ -82,7 +125,11 @@ it.each(["unchanged", "changed", "cleared"])(
           : undefined,
     );
     expect(saved.character_version_id).toBe(
-      change === "unchanged" ? pin : undefined,
+      change === "unchanged"
+        ? pin
+        : change === "changed"
+          ? "66666666-6666-4666-8666-666666666666"
+          : undefined,
     );
     expect(saved.line_key).toBe(line.line_key);
     expect(saved.content).toBe(line.content);
@@ -92,6 +139,7 @@ it("未归属行显式分配仍保持稳定身份与原坐标，保存完整结�
   const submit = vi.fn();
   render(
     <StructureEditForm
+      scope={scope}
       base={base}
       episodeStart={0}
       episodeEnd={9}
@@ -120,6 +168,7 @@ it("未归属行显式分配仍保持稳定身份与原坐标，保存完整结�
 it("场景区间错误不发送且保留输入；unknown禁用全部写入", async () => {
   const submit = vi.fn();
   const props = {
+    scope,
     base,
     episodeStart: 0,
     episodeEnd: 9,

@@ -5,6 +5,7 @@ import {
   validateCanvasMediaFiles,
 } from "./media-import";
 import type { MediaAsset } from "./queries";
+import { CanvasNodeType } from "./model";
 
 const mib = 1024 * 1024;
 const project = "bd60f9a4-7d27-4c61-acdd-0e49ac5b1bb4";
@@ -180,7 +181,7 @@ it("GLB 原件按 64MiB 初筛并只持久 model 资产身份", () => {
   ).toBe(false);
   expect(
     validateCanvasMediaFiles([file("actor.gltf", "model/gltf+json")]).valid,
-  ).toBe(false);
+  ).toBe(true);
   const node = mediaAssetsToCanvasNodes(
     [
       {
@@ -211,4 +212,71 @@ it("静音WebM只作原件初筛，真实VP8/VP9及MP4规范化交给服务端",
   expect(validateCanvasMediaFiles([file("白膜.mp4", "video/webm")]).valid).toBe(
     false,
   );
+});
+
+it("GIF整件适用图片预算及封面初筛，不混用PNG类型", () => {
+  for (const mime of ["image/gif", "", "application/octet-stream"]) {
+    const original = file("动画.GIF", mime, 20 * mib);
+    expect(validateCanvasMediaFiles([original]).valid).toBe(true);
+    expect(validateCanvasMediaFiles([original], 1, 1, true).valid).toBe(true);
+    expect(
+      validateCanvasMediaFiles([original], 1, 1, "project-cover").valid,
+    ).toBe(true);
+  }
+  for (const invalid of [
+    file("动画.gif", "image/png"),
+    file("动画.png", "image/gif"),
+    file("动画.gif", "image/gif", 20 * mib + 1),
+    file("动画.gif", "image/gif", 0),
+  ])
+    expect(validateCanvasMediaFiles([invalid]).valid).toBe(false);
+  const nodes = mediaAssetsToCanvasNodes(
+    [{ ...asset, mime_type: "image/gif", file_name: "动画.gif" }],
+    { x: 0, y: 0 },
+  );
+  expect(nodes[0].type).toBe(CanvasNodeType.Image);
+  expect(nodes[0].assetId).toBe(asset.id);
+  expect(nodes[0].media).toBeUndefined();
+});
+it("JSONglTF按原格式64MiB初筛，封面不受理模型，节点只保留正式身份", () => {
+  for (const mime of [
+    "model/gltf+json",
+    "application/json",
+    "",
+    "application/octet-stream",
+  ])
+    expect(
+      validateCanvasMediaFiles([file("角色.GLTF", mime, 64 * mib)]).valid,
+    ).toBe(true);
+  for (const invalid of [
+    file("角色.gltf", "image/png"),
+    file("角色.gltf", "model/gltf+json", 64 * mib + 1),
+    file("角色.gltf", "model/gltf+json", 0),
+  ])
+    expect(validateCanvasMediaFiles([invalid]).valid).toBe(false);
+  expect(
+    validateCanvasMediaFiles(
+      [file("角色.gltf", "model/gltf+json")],
+      1,
+      1,
+      "project-cover",
+    ).valid,
+  ).toBe(false);
+  const node = mediaAssetsToCanvasNodes(
+    [
+      {
+        ...asset,
+        kind: "model",
+        file_name: "角色.gltf",
+        mime_type: "model/gltf+json",
+        width: undefined,
+        height: undefined,
+      },
+    ],
+    { x: 0, y: 0 },
+  )[0];
+  expect(node.type).toBe(CanvasNodeType.Model);
+  expect(node.assetId).toBe(asset.id);
+  expect(node.media).toBeUndefined();
+  expect(node.metadata).toEqual({});
 });

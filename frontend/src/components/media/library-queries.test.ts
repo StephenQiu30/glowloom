@@ -9,6 +9,7 @@ import {
   downloadLibraryOriginal,
 } from "./library-queries";
 import { defaultLibraryFilter } from "./library-model";
+import { animatedGIFBytes } from "./gif-test-fixtures";
 const sdk = vi.hoisted(() => ({
   download: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }));
@@ -42,6 +43,59 @@ const page = {
   folder_counts: {},
 };
 beforeEach(() => vi.resetAllMocks());
+
+it("GIF原件预览及下载保持全动画身份，首帧PNG只在renditions，不借同ID偷换内容", async () => {
+  const bytes = animatedGIFBytes();
+  const asset = {
+    id: identity.actorId,
+    kind: "image" as const,
+    file_name: "three-colors.gif",
+    mime_type: "image/gif",
+    byte_size: bytes.length,
+    width: 64,
+    height: 64,
+    duration_ms: null,
+    revision: 1,
+  };
+  const expires = new Date(Date.now() + 60000).toISOString();
+  const body = {
+    asset,
+    url: "https://private.invalid/whole.gif",
+    expires_at: expires,
+    renditions: [
+      {
+        kind: "thumb_256" as const,
+        url: "https://private.invalid/first-frame.png",
+        expires_at: expires,
+        width: 64,
+        height: 64,
+      },
+    ],
+  };
+  vi.mocked(api.previewLibraryMediaAsset).mockResolvedValue(body);
+  const preview = await previewLibrary(identity, asset);
+  expect(preview.url).toBe(body.url);
+  expect(preview.renditions[0].url).toBe(body.renditions[0].url);
+  for (const changed of [
+    { mime_type: "image/png" },
+    { byte_size: bytes.length - 1 },
+  ]) {
+    vi.mocked(api.previewLibraryMediaAsset).mockResolvedValue({
+      ...body,
+      asset: { ...asset, ...changed },
+    });
+    await expect(previewLibrary(identity, asset)).rejects.toMatchObject({
+      status: 502,
+    });
+  }
+  sdk.download.mockResolvedValue(new Blob([bytes], { type: "image/gif" }));
+  const download = await downloadLibraryOriginal(identity, asset);
+  expect(download.blob.size).toBe(339);
+  expect(download.blob.type).toBe("image/gif");
+  expect(download.sha256).toBe(
+    "1c39e96ef7998d8b8f507f95b74b9028cabcd19532ced0331e493a1301b9bba1",
+  );
+});
 it("完整filter在服务端分页前提交，query缓存含origin/actor/org/library", async () => {
   vi.mocked(api.listMediaLibrary).mockResolvedValue(page);
   const query = {

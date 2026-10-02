@@ -1,3 +1,4 @@
+import { animatedGIFFile } from "../media/gif-test-fixtures";
 import {
   act,
   cleanup,
@@ -69,6 +70,51 @@ function confirm() {
 function start() {
   fireEvent.click(screen.getByRole("button", { name: "开始上传" }));
 }
+it("JSONglTF原件按人工review上传正式model并绑定一次，封面入口仍拒绝模型", async () => {
+  const original = new File(["actual original"], "模型.gltf", {
+    type: "model/gltf+json",
+  });
+  const model: MediaAsset = {
+    ...asset,
+    kind: "model",
+    file_name: original.name,
+    mime_type: original.type,
+    byte_size: original.size,
+  };
+  const view = setup({
+    files: [original],
+    upload: vi.fn<CanvasMediaUpload>().mockResolvedValue(model),
+  });
+  expect(
+    screen
+      .getByLabelText("选择本地媒体文件")
+      .getAttribute("accept")
+      ?.split(","),
+  ).toContain(".gltf");
+  expect(screen.getByRole("button", { name: "开始上传" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(view.upload).not.toHaveBeenCalled();
+  confirm();
+  start();
+  await waitFor(() =>
+    expect(view.imported).toHaveBeenCalledExactlyOnceWith([model]),
+  );
+  expect(view.upload.mock.calls[0][0]).toBe(original);
+  view.unmount();
+  setup({ files: [original], target: "folder-cover", remainingSlots: 1 });
+  expect(screen.getByRole("button", { name: "开始上传" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(
+    screen
+      .getByLabelText("选择本地媒体文件")
+      .getAttribute("accept")
+      ?.split(","),
+  ).not.toContain(".gltf");
+});
 
 it("必须显式本地人工确认，没有自动审核和预览URL", async () => {
   const view = setup();
@@ -89,7 +135,7 @@ it("目录封面只受理图片并确认使用权，上传后选素材而不显�
   const view = setup({ target: "folder-cover", remainingSlots: 1 });
   expect(screen.getByRole("dialog", { name: "上传目录封面" })).toBeTruthy();
   expect(screen.getByLabelText("选择本地媒体文件").getAttribute("accept")).toBe(
-    ".jpg,.jpeg,.png,.webp",
+    ".jpg,.jpeg,.png,.webp,.gif",
   );
   expect(screen.queryByText(/加入画布|当前可添加/)).toBeNull();
   confirm();
@@ -103,7 +149,7 @@ it("项目主图沿图片人工确认管线，只选择正式素材，不创建�
   const view = setup({ target: "project-cover", remainingSlots: 1 });
   expect(screen.getByRole("dialog", { name: "上传项目主图" })).toBeTruthy();
   expect(screen.getByLabelText("选择本地媒体文件").getAttribute("accept")).toBe(
-    ".jpg,.jpeg,.png,.webp",
+    ".jpg,.jpeg,.png,.webp,.gif",
   );
   expect(screen.queryByText(/目录封面|加入画布|当前可添加/)).toBeNull();
   confirm();
@@ -111,6 +157,36 @@ it("项目主图沿图片人工确认管线，只选择正式素材，不创建�
   await waitFor(() =>
     expect(view.imported).toHaveBeenCalledExactlyOnceWith([asset]),
   );
+});
+
+it("画布GIF整件必须人工确认，文件初筛不代替正式全帧审核", async () => {
+  const gif = animatedGIFFile();
+  const gifAsset = {
+    ...asset,
+    file_name: gif.name,
+    mime_type: gif.type,
+    byte_size: gif.size,
+  };
+  const upload = vi.fn<CanvasMediaUpload>().mockResolvedValue(gifAsset);
+  const view = setup({ files: [gif], upload });
+  expect(
+    screen
+      .getByLabelText("选择本地媒体文件")
+      .getAttribute("accept")
+      ?.split(","),
+  ).toContain(".gif");
+  expect(screen.getByText(/GIF.*保留完整动画/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "开始上传" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(view.upload).not.toHaveBeenCalled();
+  confirm();
+  start();
+  await waitFor(() =>
+    expect(view.imported).toHaveBeenCalledExactlyOnceWith([gifAsset]),
+  );
+  expect(view.upload.mock.calls[0][0]).toBe(gif);
 });
 it("项目主图明确拒绝视频和多文件，不发送上传", async () => {
   const view = setup({

@@ -43,6 +43,57 @@ beforeEach(() => {
     {} as Awaited<ReturnType<typeof queries.freshLibrary>>,
   );
 });
+it.each([
+  ["模型.gltf", "model/gltf+json", "model"],
+  ["模型.glb", "model/gltf-binary", "model"],
+  ["动画.gif", "image/gif", "image"],
+])(
+  "%s真实上传回执按原格式与整件字节校验，原File和key不改写",
+  async (name, mime, kind) => {
+    const original = new File(["original bytes"], name, { type: mime });
+    const input = { ...intent, fileName: name, byteSize: original.size };
+    const result = {
+      ...asset,
+      kind,
+      mime_type: mime,
+      file_name: name,
+      byte_size: original.size,
+    };
+    sdk.personal.mockResolvedValue({ asset: result, duplicate_of: null });
+    expect(
+      await uploadLibraryOriginal(
+        identity,
+        original,
+        input,
+        new AbortController().signal,
+        vi.fn(),
+      ),
+    ).toEqual(result);
+    expect(sdk.personal).toHaveBeenCalledWith(
+      { local_review_confirmed: true },
+      original,
+      expect.objectContaining({
+        headers: { "Idempotency-Key": input.key, Origin: identity.origin },
+      }),
+    );
+    for (const invalid of [
+      { ...result, byte_size: original.size - 1 },
+      { ...result, mime_type: "image/png" },
+      { ...result, kind: "document" },
+    ]) {
+      sdk.personal.mockResolvedValue({ asset: invalid, duplicate_of: null });
+      await expect(
+        uploadLibraryOriginal(
+          identity,
+          original,
+          input,
+          new AbortController().signal,
+          vi.fn(),
+        ),
+      ).rejects.toMatchObject({ status: 502 });
+    }
+  },
+);
 it("个人上传不用伪项目，原key/Origin/review与原文件送正式generated SDK", async () => {
   vi.mocked(media.uploadPersonalMediaAsset).mockResolvedValue({
     asset,

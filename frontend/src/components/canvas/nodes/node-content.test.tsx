@@ -83,6 +83,34 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("授权媒体节点生命周期", () => {
+  it("GIF资源节点挂完整动画原件，离屏清除来源，重入仍为同正式资产", async () => {
+    preview.mockResolvedValue({
+      asset: {
+        id: node.assetId,
+        project_id: "owned-project",
+        kind: "image",
+        mime_type: "image/gif",
+      },
+      url: "https://media.example/whole.gif",
+      expires_at: new Date(Date.now() + 600000).toISOString(),
+      renditions: [
+        { kind: "thumb_256", url: "https://media.example/first-frame.png" },
+      ],
+    });
+    view();
+    const image = await screen.findByAltText(node.title);
+    expect(image.getAttribute("src")).toBe("https://media.example/whole.gif");
+    act(() => VisibleObserver.instances.at(-1)!.show(false));
+    expect(image.hasAttribute("src")).toBe(false);
+    act(() => VisibleObserver.instances.at(-1)!.show(true));
+    expect((await screen.findByAltText(node.title)).getAttribute("src")).toBe(
+      "https://media.example/whole.gif",
+    );
+    expect(preview.mock.calls[0].slice(0, 2)).toEqual([
+      "owned-project",
+      node.assetId,
+    ]);
+  });
   it.each([CanvasNodeType.Image, CanvasNodeType.Video, CanvasNodeType.Audio])(
     "StrictMode重复setup后%s仍挂有效src",
     async (type) => {
