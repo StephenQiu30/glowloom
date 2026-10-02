@@ -132,6 +132,17 @@ func runNative(ctx context.Context, exe string, args []string, rss int64, onLine
 				case <-ticker.C:
 					value, err := processGroupRSS(owned, cmd.Process.Pid)
 					if err != nil {
+						// The stream validator or caller may have cancelled while
+						// ps was in flight. Preserve that original result; a
+						// cancelled observation is not a runtime failure.
+						if owned.Err() != nil {
+							return
+						}
+						select {
+						case <-finished:
+							return
+						default:
+						}
 						memoryErr = application.ErrDepthRuntimeUnavailable
 						cancel()
 						return
