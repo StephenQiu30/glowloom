@@ -286,3 +286,29 @@ Library29 focus 修正以 manifest `f7f1e1177b6f39d3913d0c46214dcb5d8dd81bcc2951
 冻结40文件组合的全树ESLint、Prettier、Next typegen/tsc与161文件/738项测试全部通过、零跳过。首次生产构建因临时目录外部node_modules软链接被Turbopack拒绝而失败；复制同一已安装依赖到独立候选后，默认Turbopack生产构建通过，没有修改工程配置、依赖或锁文件。此前各切片单独通过不代替本次组合结果。
 
 本段记录代码与隔离实际合同验证。063尚未在业务库安装，当前正式8080/3000仍运行前一151接口构建；GIF/glTF新上传与角色选择器的正式浏览器验收继续，不能从上述检查推断已部署或全部页面完成。永久清理、引用保护、容量与素材包仍在连续实施中，未纳入本次格式/角色组合提交；完整迁移继续未完成。
+
+该54文件组合已按测试、实现、CI及文档分别提交，最终 main 为 `c91d61eeedec2d19114cbbc6be14d80906c7dc2c`，已推送 origin/main。CI `36994899628` 的 backend、frontend、images 全部终态成功。工作区后续片保留，未把未完成接线混入此提交。
+
+### 设定集历史与完整复制清单的严格读取（2026-10-02）
+
+后续六文件冻结组合补齐 materialized result_source、造型 applies_to、声音绑定、完整复制清单和永久命令回执的严格JSON入口。实际非owner PG先证明未知字段被旧reader接受，再验证未知字段、重复键、尾随数据与非法UTF8拒绝；不更新历史正文、SHA或回执。单版本继续保留4MiB、64层和200000节点上限，完整Source+Target清单沿原大小合同使用同一严格解析器，不把单版本预算错误施加到完整历史。真实4742982字节合法清单完成Transfer/Register/Verify，原字节和SHA保持。
+
+独立 `c91d61ee` 加六文件候选的新增与正常回归合计32个实际PG/MinIO顶层Race测试通过、0失败、0跳过。各片全树Race与Go质量门禁通过，其中durable四文件候选为486通过、497缺专用外部条件跳过；跳过不计实际验收。CI为materialized入口增加独立reference数据库，普通Bible真实门禁继续包含全部新增用例并要求零跳过。该修补不新增普通reader历史数量/字节限制，也不改变完整迁移尚未完成的状态。
+
+
+### 素材包、物理清理、容量与完整历史保护的同栈组合（2026-10-02）
+
+本批沿既有 Go/PostgreSQL/Temporal 与 Next/React/TypeScript 工具链接管完整素材 ZIP 导入/导出、永久清理和容量。Package 接入全部六条生产接口，真实探测/渲染、私有原件与衍生物写入/回读、目录与正文原子发布、永久回执、原键未知恢复和取消已闭环；完整源 ZIP 单独保留 provenance，不能把源 URL、旧身份或导出声明视为目标审核事实。个人与项目容量同时装配 Transfer、Package、完整 Copy 和 mediatool 的真实 owning 对象事实，按实际物理对象去重计量，不提供未定义的配额。
+
+永久清理沿正式持久作业、独立 Temporal 执行与媒体原件/衍生物 owner 接线；当前与历史引用、活动/未知任务、不可读 owner 和撤权都阻断受理。前端提供逐项真实状态与回收站全部分页计划，保留原键和完整 CAS，后台/卸载/未知结果停止，刷新须明确核查与继续。计划及原意图合计 UTF8 JSON 限制1MiB，超过预算拒绝整个计划并保留原值。恢复计划期间关闭、Escape和外部点击明确锁定，须先核实原作业并结束原计划。上述页面测试使用受控 API，并不表示已点击业务永久删除。
+
+组合审查先实际复现 Package 并发重放/受理的 PostgreSQL 40P01，随后统一 command→project 锁序，永久回执和当前权限保护保留。Workspace 历史保护原本先载入全部 JSON 再拒绝超限；两历史 family 各3次实际 allocation 与空基线证明2MiB单件、64MiB以上总量和100001行会在拒绝前扩大分配。修复保留原每 family 100000行、合计64MiB、单件1MiB合同，采用 SQL 预算预检、单件 CASE 上限和逐行读取；18次实际拒绝分配约0.44–0.85MiB，不改普通页面读取或完整 Copy manifest 合同。该证据是 owning PostgreSQL/客户端分配证明，不是媒体原件证明。
+
+最终 backend V6 准确109文件候选：全部 Package 19项和所有历史引用32项实际 Race 通过，包含真实非owner PostgreSQL、Package 私有 MinIO、锁序与完整历史预算，所有顶层/子用例0失败、0跳过。整树 Race 为507顶层通过、572顶层缺外部条件跳过、0失败，另有134个子用例条件跳过；条件跳过不算实际验收。前一同源组合另完成普通 Bible37、Purge/Usage28、真实格式11、Temporal实际清理、生产路由5和独立对象 inventory4的零跳过验证；V6 只改变上述两个 owning reader 的锁序/预算及新增策略测试，整树及受影响家族另行重跑；全新58份正式up迁移的独立生产路由库中5项实际组合也重跑通过，0失败、0跳过。gofmt/goimports、vet、golangci-lint 0 issues、govulncheck 0可达/导入包漏洞和主 CLI 构建通过；1个未调用 required-module 提示不计为可达漏洞。
+
+同 V6 源码重新生成正式163个唯一 operationId；Swagger 生成与 Wire+项目 goimports 格式化后逐字确定，Wire没有新增差异。在线 API 的空 host/schemes 仅按已有 Swagger 模板默认规范化，paths/definitions 全部相同。客户端完全由该实际在线合同生成，AST163个导出无遗漏/语法错误，第二次生成与显式格式化后逐字相同；未手写自动客户端。058/059只在独立测试库验证，业务8080/3000仍为前一151接口运行构建，业务库未安装058/059/063。本批提交和技术门禁不等于已部署，完整素材包页面、实际163页面/对象验收及其余源能力仍在迁移中，完整迁移没有关闭。
+
+
+前端最终组合相对 `c91d61ee` 准确24项改动（22源文件与2项实际有差异的自动生成物），全部14项生成客户端与实际163接口一致，依赖/锁文件没有改动。169文件、775项测试0失败/0跳过，ESLint、Prettier、Next typegen/tsc、默认Turbopack生产构建全部通过。恢复审阅另复现已结束的 running/cancel_requested 作业在终态提交失败后 `needs_reconciliation=false` 导致对账按钮锁死；最小两文件修补仅开放沿原作业/修订/键的明确人工对账，由服务端核验 processEnded 与当前权限，execution_unconfirmed 仍禁用，409保留原键正文，刷新不自动请求。模型预览授权切换的原材质/texture泄漏已按单一恢复/销毁 owner 修复，真实 React/Query/Three 受控授权回归通过；这些组件测试不代替正式WebGL、对象或永久清理浏览器验收。
+
+CI拆分强制 reference 库、普通Bible37/materialized5、Package15/个人guard2/锁序2、生产组合5与真实Temporal lane；普通Script68及Bible/Voice/Transfer汇总前增加全事件校验，顶层或子用例跳过、包失败和未收敛测试都会拒绝。YAML、72个shell语法块、actionlint与子Skip失败回归通过；ShellCheck未执行，远端Linux CI结果由推送后的实际终态单独确认。完整迁移和运行环境产品验收仍未完成，不以此次代码提交关闭。
