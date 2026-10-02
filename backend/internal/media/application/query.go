@@ -101,12 +101,12 @@ func (q *AssetQuery) reference(ctx context.Context, a identityapp.Principal, p, 
 	return asset, nil
 }
 
-// List returns only available media that can be added to this project's canvas.
+// List defaults to canvas media; documents require the explicit document filter.
 func (q *AssetQuery) List(ctx context.Context, a identityapp.Principal, p uuid.UUID, kind, cursor string, limit int) (AssetPage, error) {
 	if q == nil || q.store == nil {
 		return AssetPage{}, ErrUnavailable
 	}
-	if p == uuid.Nil || limit < 1 || limit > 200 || (kind != "" && kind != "image" && kind != "video" && kind != "audio" && kind != "model") {
+	if p == uuid.Nil || limit < 1 || limit > 200 || (kind != "" && kind != "image" && kind != "video" && kind != "audio" && kind != "model" && kind != "document") {
 		return AssetPage{}, ErrInvalidQuery
 	}
 	var after uuid.UUID
@@ -128,7 +128,11 @@ func (q *AssetQuery) List(ctx context.Context, a identityapp.Principal, p uuid.U
 		rows = rows[:limit]
 	}
 	for _, row := range rows {
-		if row.ProjectID != p || !eligible(row) {
+		allowed := eligible(row)
+		if kind == "document" {
+			allowed = row.Kind == domain.KindDocument && row.CanReference() && !row.ContainsRealPerson && row.ConsentRecordID == nil
+		}
+		if row.ProjectID != p || !allowed || kind != "" && string(row.Kind) != kind {
 			return AssetPage{}, ErrUnavailable
 		}
 		page.Items = append(page.Items, summary(row))

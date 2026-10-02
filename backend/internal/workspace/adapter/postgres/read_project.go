@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	"github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
 )
 
@@ -27,7 +28,17 @@ func (s *Store) FindProject(ctx context.Context, actor identityapp.Principal, pr
 		}
 		var err error
 		project, err = readProjectInTx(tx, actor.OrgID, projectID)
-		return err
+		if err != nil {
+			return err
+		}
+		unavailable, err := s.projectCoverUnavailable(ctx, tx, actor, project)
+		if err != nil {
+			return err
+		}
+		if unavailable {
+			return application.ErrProjectCoverUnavailable
+		}
+		return nil
 	})
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("find project: %w", err)
@@ -45,6 +56,7 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 		StyleType           string
 		StyleSubtype        *string
 		StylePresetID       *uuid.UUID
+		CoverAssetID        *uuid.UUID
 		Resolution          string
 		AllowOverseasModels bool
 		Status              string
@@ -57,7 +69,7 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 	}
 	result := tx.Raw(`
 		SELECT id, org_id, name, description, aspect_ratio, style_type,
-		       style_subtype, style_preset_id, resolution, allow_overseas_models,
+		       style_subtype, style_preset_id, cover_asset_id, resolution, allow_overseas_models,
 		       status, archived_at, delete_time, purge_after, revision,
 		       create_time, update_time
 		FROM workspace.project
@@ -74,7 +86,7 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 		AspectRatio: row.AspectRatio, StyleType: row.StyleType, Resolution: row.Resolution,
 		AllowOverseasModels: row.AllowOverseasModels, Status: row.Status,
 		ArchivedAt: row.ArchivedAt, DeleteTime: row.DeleteTime,
-		PurgeAfter: row.PurgeAfter, Revision: row.Revision,
+		CoverAssetID: row.CoverAssetID, PurgeAfter: row.PurgeAfter, Revision: row.Revision,
 		CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
 	}
 	if row.StyleSubtype != nil {

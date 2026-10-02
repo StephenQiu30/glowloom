@@ -9,6 +9,7 @@ import (
 
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	pgmediatool "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
 	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
 	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
@@ -37,7 +38,9 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 }
 
 func provideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
-	return pgworkspace.NewStoreWithProjectWorkGuard(database, provideProjectWorkGuard)
+	return pgworkspace.NewStoreWithProjectCover(database, provideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
+		return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil)
+	})
 }
 
 func provideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {

@@ -37,7 +37,7 @@ function setup({
   imported = vi.fn().mockResolvedValue(undefined),
   remainingSlots = 20,
   disabled = false,
-  target = "canvas" as "canvas" | "folder-cover",
+  target = "canvas" as "canvas" | "folder-cover" | "project-cover",
 } = {}) {
   const changed = vi.fn();
   const busy = vi.fn();
@@ -57,7 +57,7 @@ function setup({
         onBusyChange={busy}
         disabled={disabled}
         target={target}
-        maximumFiles={target === "folder-cover" ? 1 : undefined}
+        maximumFiles={target !== "canvas" ? 1 : undefined}
       />
     );
   }
@@ -98,6 +98,30 @@ it("目录封面只受理图片并确认使用权，上传后选素材而不显�
     expect(view.imported).toHaveBeenCalledExactlyOnceWith([asset]),
   );
   expect(view.upload).toHaveBeenCalledTimes(1);
+});
+it("项目主图沿图片人工确认管线，只选择正式素材，不创建画布节点", async () => {
+  const view = setup({ target: "project-cover", remainingSlots: 1 });
+  expect(screen.getByRole("dialog", { name: "上传项目主图" })).toBeTruthy();
+  expect(screen.getByLabelText("选择本地媒体文件").getAttribute("accept")).toBe(
+    ".jpg,.jpeg,.png,.webp",
+  );
+  expect(screen.queryByText(/目录封面|加入画布|当前可添加/)).toBeNull();
+  confirm();
+  start();
+  await waitFor(() =>
+    expect(view.imported).toHaveBeenCalledExactlyOnceWith([asset]),
+  );
+});
+it("项目主图明确拒绝视频和多文件，不发送上传", async () => {
+  const view = setup({
+    target: "project-cover",
+    files: [new File(["movie"], "片段.mp4", { type: "video/mp4" }), image],
+    remainingSlots: 1,
+  });
+  expect(screen.getByText(/项目主图只支持图片/)).toBeTruthy();
+  confirm();
+  start();
+  expect(view.upload).not.toHaveBeenCalled();
 });
 it("逐文件上传，可见真实发送进度，全部成功只保存一次", async () => {
   let finish: (asset: MediaAsset) => void = () => {};

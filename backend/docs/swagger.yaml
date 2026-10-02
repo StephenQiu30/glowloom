@@ -1996,6 +1996,8 @@ definitions:
         type: boolean
       aspect_ratio:
         type: string
+      cover_asset_id:
+        type: string
       create_time:
         type: string
       description:
@@ -2683,6 +2685,11 @@ definitions:
         x-nullable: true
       aspect_ratio:
         type: string
+      cover_asset_id:
+        type: string
+        x-nullable: true
+      cover_unavailable:
+        type: boolean
       create_time:
         type: string
       default_models:
@@ -2822,6 +2829,11 @@ definitions:
         x-nullable: true
       aspect_ratio:
         type: string
+      cover_asset_id:
+        type: string
+        x-nullable: true
+      cover_unavailable:
+        type: boolean
       delete_time:
         type: string
         x-nullable: true
@@ -2857,6 +2869,9 @@ definitions:
     properties:
       allow_overseas_models:
         type: boolean
+      cover_asset_id:
+        type: string
+        x-nullable: true
       description:
         type: string
       expected_revision:
@@ -5802,7 +5817,7 @@ paths:
         name: pid
         required: true
         type: string
-      - description: image/video/audio/model
+      - description: image/video/audio/model/document；默认仅可渲染媒体
         in: query
         name: kind
         type: string
@@ -6146,6 +6161,50 @@ paths:
       summary: Create local speech transcription
       tags:
       - media-transcriptions
+  /api/projects/{pid}/media/{asset_id}/download:
+    get:
+      operationId: downloadDocumentAsset
+      parameters:
+      - description: 项目UUID
+        in: path
+        name: pid
+        required: true
+        type: string
+      - description: 文档素材UUID
+        in: path
+        name: asset_id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: 原始TXT/DOCX附件
+          schema:
+            type: file
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem'
+      summary: 下载正式文档原件
+      tags:
+      - media
   /api/projects/{pid}/media/{asset_id}/preview:
     get:
       operationId: getMediaPreview
@@ -6202,7 +6261,7 @@ paths:
         name: Idempotency-Key
         required: true
         type: string
-      - description: 图片20MiB，视频500MiB且60秒（静音VP8/VP9 WebM实际转为MP4），音频100MiB，包内GLB2模型64MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证
+      - description: 图片20MiB，视频500MiB且60秒（静音VP8/VP9 WebM实际转为MP4），音频100MiB，包内GLB2模型64MiB，TXT/DOCX原件20MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证
         in: formData
         name: file
         required: true

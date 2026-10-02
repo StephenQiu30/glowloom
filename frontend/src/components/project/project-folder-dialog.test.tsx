@@ -211,6 +211,8 @@ it("项目详情之后写入前重新确认scope，变化时冻结原3项CAS且�
   const project = {
     id: "322f64a1-6ce2-40aa-bf94-6f1f85b8bba4",
     name: "待移动项目",
+    cover_asset_id: null,
+    cover_unavailable: false,
     status: "active" as const,
     revision: 8,
     folder_id: folder.id,

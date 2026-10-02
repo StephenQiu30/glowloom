@@ -137,7 +137,7 @@ func TestProjectLifecycleConcurrentCASAndDurableNoop(t *testing.T) {
 		}
 	}
 	var counts struct{ Events, Receipts int64 }
-	if err := db.Raw(`SELECT (SELECT count(*) FROM infra.outbox WHERE partition_key=?) AS events,(SELECT count(*) FROM infra.idempotency_record WHERE actor_id=?) AS receipts`, project.String(), actor.ID).Scan(&counts).Error; err != nil {
+	if err := db.Raw(`SELECT (SELECT count(*) FROM infra.outbox WHERE partition_key=?) AS events,(SELECT count(*) FROM workspace.project_change_command WHERE actor_id=?) AS receipts`, project.String(), actor.ID).Scan(&counts).Error; err != nil {
 		t.Fatal(err)
 	}
 	if counts.Events != 2 || counts.Receipts != 1 {
@@ -184,7 +184,7 @@ func TestProjectLifecycleRuntimeRoleAndAtomicFaults(t *testing.T) {
 	if _, err := service.Change(ctx, actor, projectChange(project, 2, "unarchive")); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"infra.outbox", "infra.idempotency_record"} {
+	for _, table := range []string{"infra.outbox", "workspace.project_change_command"} {
 		input := projectChange(project, 3, "delete")
 		rollback := errors.New("test rollback")
 		err := db.Transaction(func(tx *gorm.DB) error {
@@ -207,7 +207,7 @@ func TestProjectLifecycleRuntimeRoleAndAtomicFaults(t *testing.T) {
 			t.Fatalf("fault leaked state %+v %v", saved, err)
 		}
 		var count int64
-		if err := db.Raw(`SELECT count(*) FROM infra.idempotency_record WHERE actor_id=? AND idem_key=?`, actor.ID, input.IdempotencyKey.String()).Scan(&count).Error; err != nil {
+		if err := db.Raw(`SELECT count(*) FROM workspace.project_change_command WHERE actor_id=? AND idem_key=?`, actor.ID, input.IdempotencyKey.String()).Scan(&count).Error; err != nil {
 			t.Fatal(err)
 		}
 		if count != 0 {

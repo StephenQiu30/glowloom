@@ -181,3 +181,21 @@
 - 真实发送前 abort 后刷新保留相同 scope/key/body，键盘 Enter 以原 key `035d7772-ea9c-48db-ac9d-92a362afe880` 人工核验成功；此证据不冒充服务端成功后丢响应，提交后未知回执由后端实际测试另证明。额外 25 个独占空目录实际跨页、带 cursor 刷新、末页目录进入/面包屑与清 cursor 通过，全部仅页面回收清理；390×844 页面宽度390，Dialog 的 Tab/Escape 与精确触发按钮焦点恢复通过。
 
 固定前端 22 文件与正式在线生成客户端在独立 HEAD+allowlist 快照完成全树 ESLint（零警告）、全树 Prettier、Next typegen、tsc、82 文件/415 测试及 Next.js 生产构建。首次共享树运行旧 Copy beforeunload 断言失败（414/415）保留记录；旧 Copy 定向 12/12、第二次共享树 415/415 和根协调者独立冻结快照 415/415 均通过，没有更改该断言、超时或 Copy 代码。实际 390px Dialog 连续八次 Tab 保持内部、Escape 回精确目录菜单；axe 无 violation，仍有背景对比度/遮挡计算 incomplete，经实际截图和焦点核验，未报告为自动全部完成。录像停止工具因 daemon 重试失败，JSON/截图/键盘证据保留，不报告完整录像。目录切片不关闭项目自身封面、个人/项目素材分类、正式剧本/分集/镜头、对话及内容包的剩余范围。
+
+第九阶段提交 `93be9b330efcf7da6d13121f866b8b995876536b` 已推送 main，CI `36940184637` 的 backend/frontend/images 全部完成且通过。
+
+## 第十阶段：项目主图、永久设置回执与文档原件（2026-10-02）
+
+本阶段完成项目主图的上传、项目图片选择、替换、移除、卡片/设置预览和完整复制，并将 TXT/DOCX 原件接入既有正式媒体生命周期。个人素材库、剧本文件导入、全部剧本历史和其 Copy 仍持续实施；文档原件通过不等于剧本抽取或完整迁移完成。
+
+- `051_media_document` 与 `052_workspace_project_cover` 在原业务 PostgreSQL OID 345144296、相同实例启动时间下，核验冻结 SQL SHA、040 前置结构及全部真实 owner 无进行中任务后，单事务应用；既有业务计数不变，没有重置数据或修改用户角色。051 up SHA256 `0951e3dea3907c4ef555021ce356207af68ef8666e792ba00084e1bb99945f23`、052 up SHA256 `b982fc171fc1f25104ccbe024681bf6b226ef857cf00611e69c900749cd0d175`。050/053 剧本增量尚未应用于业务库。
+- 文档只接受真实 TXT/DOCX、完整 SHA 与大小证明；DOCX ZIP CRC、部件数量/解压大小和 XML 深度/节点均有界，不运行宏或外部关系。1..20 MiB 私有原件沿用版权、审核、durable upload 和独立复制，不执行音视频探测。下载重新核实际原件 SHA/大小，使用 attachment/private-no-store/nosniff，不向 DTO 暴露对象 key。NOT VALID 保留旧行，后续 owning 读/写/复制仍严格核验，不把旧数据保留当作合格证明。
+- 主图 nullable FK 只绑定当前项目有效、已审核图片；PATCH omitted 保持、null 明确清除、zero UUID 拒绝。当前授权/CAS、归档只读和媒体证明共享事务行锁。项目修改、归档、取消归档、回收和恢复统一永久 command owner；重放先核当前授权，再返回原始 JSON 字节。仍保留的旧回执按原 typed/raw bytes 提升；已经过期删除或覆写的旧历史无法恢复，create/defaults 的既有 24 小时合同不因本阶段改变。
+- Copy 冻结主图身份及目标映射，只有 media owner 注册实际独立目标图片后才绑定目标 FK；发布重新核绑定与媒体证明。实际 PostgreSQL/私有对象测试核验后续源清除不改变冻结副本，撤销审核/缺失绑定阻止发布、修复后在原 worker fence 继续，并在只移除合成源对象后证明目标原件独立。文档复制也覆盖 UTF-16 TXT/DOCX 独立原件、源对象移除后的目标读取。
+- 冻结后端 63 文件完成 goimports、全树 vet、lint（0 issues）、Race（403 顶层通过、382 缺专用环境跳过、0 失败）、govulncheck（无可达/导入包漏洞，一个未调用 required module 提示）和生产构建。独立 workspace/Copy 61 通过、1 条 Temporal 因该进程未配置而跳过；另用真实 Temporal 单独 1 通过、0 跳过。CI 同范围 `^Test(Document|ProjectCover|ProjectCopy(Cover|Document))` 实际 36 顶层通过、0 跳过。首次 helper 错用 Cover 数据库名导致 14 个保护断言失败，修正 DSN 后通过，没有放松保护或断言。
+- API/worker/relay 已使用同一冻结二进制 SHA256 `5284c0f378c070cc524449938e3031395d688f8d1671811c57b1ed76566f761c`；API readyz=200、正式 Router/在线 Swagger 为 84 个 operationId，Wire 和 Swag 重生逐字相同。84 条在线合同生成客户端经显式格式化；生成器自身格式警告未被算作格式通过。剧本临时生成合同与未完成实现不在本提交中。
+- 真实浏览器源项目 `8d4c9375-9add-4e0c-abf1-ec57e41b7e71` 完成 A 上传保存、B 替换、明确移除、项目媒体选择、原始刷新恢复；B 资产 `c5f6bf08-8300-46e2-a961-97124f8d8199` 为 320×180/960 字节，SHA256 `572bf5b72cdc9b8c904c6128e6fef410836b9d50894b13e9cdc4dfb52df7f11d`。真正服务端已提交 HTTP200 后、Axios 回调前破坏响应，刷新未自动重发；人工原 key `f68b52cf-598a-4f48-8d63-eaf1e9cdfbbe` 核验返回原 revision 6，实际后续 revision 7 的描述保持。早期两次没有成功破坏响应的注入未算入该证据。
+- 真实 409 保留脏名称/主图，明确获取最新后只合并未修改字段，再以新 key 保存；归档 revision 10 禁止修改，取消归档 revision 11 保留 B。390×844 页面宽度390、Dialog 宽358，图片选择关闭返回精确触发器，设置关闭回项目动作，Tab/Escape 和刷新均验证。
+- 实际 Copy job `8059d40f-3604-4e61-ba04-5d7fb8238b16` 成功，目标 `8ce259fe-c2e7-483b-a17b-94bb20350f81` active/revision 2，独立主图 `bb304dce-40c6-5f0b-a189-a4e81068929f`。完整刷新后实际图片解码，正式私有读取和浏览器 WebCrypto 证明源/副本均为 B 的 960 字节/SHA；源 revision 11、主图和描述不变。
+
+冻结前端 21 文件与 84 条生成合同在独立 HEAD+allowlist 快照完成全树 ESLint（零警告）、Prettier、Next typegen、tsc、87 文件/436 测试（零失败/跳过）和 Next.js 生产构建。文件 SHA、真实原件/并发/未知响应/复制证据与八张截图保留在独立验收快照；没有用共享树中未完成的剧本组件替代本阶段验收。

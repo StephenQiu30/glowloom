@@ -21,7 +21,7 @@ func NewRecordedActionParser() *Parser {
 	fields["model.disabled"] = []string{"status", "revision"}
 	fields["price.published"] = []string{"version_id", "version_no", "unit", "currency", "effective_from", "revision"}
 	fields["project.created"] = []string{"aspect_ratio", "style_type", "style_subtype", "style_preset_id", "status", "revision"}
-	fields["project.updated"] = []string{"revision", "style_preset_id", "allow_overseas_models", "name_changed", "description_changed"}
+	fields["project.updated"] = []string{"revision", "style_preset_id", "allow_overseas_models", "name_changed", "description_changed", "cover_changed"}
 	for _, action := range []string{"project.archived", "project.unarchived", "project.deleted", "project.restored"} {
 		fields[action] = []string{"revision", "status", "is_delete", "archived_at", "delete_time", "purge_after"}
 	}
@@ -36,6 +36,7 @@ func NewRecordedActionParser() *Parser {
 	fields["operation.cancel_requested"] = []string{"status"}
 	fields["batch.cancel_requested"] = []string{"status"}
 	fields["batch.resume_requested"] = []string{"status"}
+	fields["media.uploaded"] = []string{"kind", "byte_size", "sha256", "review_method", "reused"}
 	for _, action := range []string{"media.export_requested", "media.export_cancel", "media.export_retry", "media.export_reviewed"} {
 		fields[action] = []string{"id", "project_id", "canvas_id", "node_id", "source_revision", "output_kind", "status", "stage", "progress", "attempt", "revision", "asset_id", "sha256", "failure_code", "created_at", "updated_at"}
 	}

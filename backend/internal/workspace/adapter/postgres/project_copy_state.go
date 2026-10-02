@@ -242,6 +242,9 @@ func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.
 			if err != nil {
 				return err
 			}
+			if err := bindCopyProjectCover(ctx, tx, actor, before, owners.Cover); err != nil {
+				return err
+			}
 			if err := saved.AcceptMediaReceipt(worker, domain.ProjectCopyReceipt{ManifestSHA256: receipt.ManifestSHA256, ContentSHA256: receipt.ContentSHA256, PrimaryCount: receipt.Assets, SecondaryCount: receipt.Renditions}); err != nil {
 				return err
 			}
@@ -289,6 +292,9 @@ func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Princi
 		}
 		media, err := owners.Media.Register(ctx, actor, copyMediaBinding(before), copyMediaSnapshot(before))
 		if err != nil {
+			return err
+		}
+		if err := verifyCopyProjectCover(ctx, tx, actor, before, owners.Cover); err != nil {
 			return err
 		}
 		canvas, err := owners.Canvas.Copy(ctx, actor, copyCanvasBinding(before), copyCanvasSnapshot(before))

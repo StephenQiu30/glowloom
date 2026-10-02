@@ -42,7 +42,7 @@ func projectCopyStore(db *gorm.DB) *workspacepg.ProjectCopyStore {
 		return owningProjectWork{operationpg.NewStore(tx), mediapg.NewStore(tx), toolpg.NewStore(tx, nil, nil), toolpg.NewTranscriptionStore(tx, nil, nil), toolpg.NewDepthStore(tx, nil, nil), workspacepg.NewProjectCopyStore(tx, nil, nil)}
 	}, func(tx *gorm.DB) workspaceapp.ProjectCopyOwners {
 		return workspaceapp.ProjectCopyOwners{
-			Media: mediapg.NewProjectCopyStore(tx), Budget: billingpg.NewStore(tx),
+			Media: mediapg.NewProjectCopyStore(tx), Budget: billingpg.NewStore(tx), Cover: actualProjectCopyCoverOwner{tx: tx},
 			Canvas: canvaspg.NewProjectCopyStore(tx, func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(mediapg.NewStore(tx), nil) }, func(tx *gorm.DB, b canvasapp.ProjectCopyBinding) canvasapp.MediaReader {
 				return privateCopyReference{owner: mediapg.NewProjectCopyStore(tx), binding: mediaapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}}
 			}),

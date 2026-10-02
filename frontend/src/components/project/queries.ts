@@ -18,6 +18,11 @@ const projectBase = z.object({
   status: z.enum(["active", "archived"]),
   is_delete: z.boolean(),
   revision: z.number().int().positive(),
+  cover_asset_id: z
+    .uuid()
+    .refine((id) => id !== "00000000-0000-0000-0000-000000000000")
+    .nullable(),
+  cover_unavailable: z.boolean(),
   archived_at: z.iso.datetime({ offset: true }).nullable().optional(),
   delete_time: z.iso.datetime({ offset: true }).nullable().optional(),
   purge_after: z.iso.datetime({ offset: true }).nullable().optional(),

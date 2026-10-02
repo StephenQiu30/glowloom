@@ -44,10 +44,24 @@ import {
   type ProjectSummary,
 } from "./queries";
 import { matchesPreset, type StylePreset } from "./creation";
+import {
+  type FolderScope,
+  unknownFolderWrite,
+  sameFolderScope,
+} from "./folder-intent";
+import { listFolders, requireFolderScope } from "./folder-queries";
+import {
+  clearProjectCoverIntent,
+  loadProjectCoverIntent,
+  saveProjectCoverIntent,
+  projectSettingsChangeSchema,
+} from "./project-cover-intent";
+import { ProjectCoverField } from "./project-cover-field";
 
 type Props = {
   project: ProjectSummary;
   action: ProjectAction;
+  scope: FolderScope;
   onClose: () => void;
   onChanged: () => void;
 };
@@ -81,20 +95,53 @@ const labels = {
 export function ProjectManagementDialog({
   project,
   action,
+  scope,
   onClose,
   onChanged,
 }: Props) {
+  const [openedScope] = useState(() => ({ ...scope }));
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [unknown, setUnknown] = useState(false);
+  const [recovery] = useState(() => {
+    if (action !== "settings") return { intent: null, error: null };
+    try {
+      return {
+        intent: loadProjectCoverIntent(sessionStorage, scope, project.id),
+        error: null,
+      };
+    } catch (error) {
+      return { intent: null, error };
+    }
+  });
+  const [error, setError] = useState<unknown>(
+    recovery.intent
+      ? new Error("已恢复尚未核验的原设置请求。")
+      : recovery.error,
+  );
+  const [unknown, setUnknown] = useState(Boolean(recovery.intent));
+  const [storageError, setStorageError] = useState(Boolean(recovery.error));
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const inFlight = useRef(false);
-  const attempt = useRef<{ key: string; body: ProjectChange } | null>(null);
+  const mounted = useRef(false);
+  const attempt = useRef<{ key: string; body: ProjectChange } | null>(
+    recovery.intent,
+  );
   const detail = useQuery({
-    queryKey: [...PROJECTS_KEY, "detail", project.id],
+    queryKey: [
+      ...PROJECTS_KEY,
+      scope.origin,
+      scope.actorId,
+      scope.orgId,
+      "detail",
+      project.id,
+    ],
     queryFn: ({ signal }) => getProject(project.id, signal),
     enabled: action === "settings",
     retry: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: 0,
+    gcTime: 0,
   });
   const presets = useInfiniteQuery({
     queryKey: [...PROJECTS_KEY, "style-presets"],
@@ -106,26 +153,55 @@ export function ProjectManagementDialog({
     refetchOnWindowFocus: false,
   });
   useEffect(() => {
-    if (!pending && !unknown) return;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!pending && !unknown && !coverBusy) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [pending, unknown]);
+  }, [pending, unknown, coverBusy]);
   async function submit(body: ProjectChange) {
-    if (inFlight.current) return;
+    if (inFlight.current || storageError) return;
     inFlight.current = true;
     setPending(true);
     setError(null);
-    if (!attempt.current)
-      attempt.current = {
-        key: crypto.randomUUID(),
-        body: structuredClone(body),
-      };
-    const frozen = attempt.current;
+    const wasUnknown = unknown;
     try {
+      if (!sameFolderScope(openedScope, scope))
+        throw new ApiError(409, "scope_changed");
+      if (!attempt.current) {
+        const next = {
+          key: crypto.randomUUID(),
+          body: structuredClone(body),
+        };
+        if (action === "settings") {
+          try {
+            saveProjectCoverIntent(sessionStorage, {
+              ...scope,
+              projectId: project.id,
+              version: 1,
+              key: next.key,
+              body: projectSettingsChangeSchema.parse(next.body),
+            });
+          } catch (failure) {
+            setStorageError(true);
+            throw failure;
+          }
+        }
+        attempt.current = next;
+      }
+      const frozen = attempt.current;
+      if (window.location.origin !== scope.origin)
+        throw new ApiError(409, "scope_changed");
+      requireFolderScope(await listFolders(), scope);
+      if (!mounted.current) return;
       if (action === "settings")
         await updateProject(project.id, frozen.body, frozen.key);
       else
@@ -135,24 +211,49 @@ export function ProjectManagementDialog({
           frozen.body.expected_revision!,
           frozen.key,
         );
+      if (!mounted.current) return;
+      if (action === "settings")
+        clearProjectCoverIntent(sessionStorage, scope, project.id);
       attempt.current = null;
       setUnknown(false);
       onChanged();
       onClose();
     } catch (failure) {
+      if (!mounted.current) return;
       const unresolved =
-        !(failure instanceof ApiError) ||
-        failure.status === 0 ||
-        failure.status >= 500;
+        Boolean(attempt.current) &&
+        (unknownFolderWrite(failure) ||
+          (wasUnknown &&
+            failure instanceof ApiError &&
+            [401, 403, 404].includes(failure.status)) ||
+          (wasUnknown &&
+            failure instanceof ApiError &&
+            failure.code === "scope_changed"));
       setUnknown(unresolved);
       setError(failure);
-      if (!unresolved) attempt.current = null;
+      if (!unresolved && attempt.current) {
+        try {
+          if (action === "settings")
+            clearProjectCoverIntent(sessionStorage, scope, project.id);
+          attempt.current = null;
+        } catch (storageFailure) {
+          setStorageError(true);
+          setError(storageFailure);
+          setUnknown(true);
+        }
+      }
+      if (
+        !unresolved &&
+        failure instanceof ApiError &&
+        ["revision_conflict", "state_conflict"].includes(failure.code)
+      )
+        setConflict(true);
     } finally {
       inFlight.current = false;
-      setPending(false);
+      if (mounted.current) setPending(false);
     }
   }
-  const locked = pending || unknown;
+  const locked = pending || unknown || storageError || coverBusy;
   const [title, submitLabel, description] = labels[action];
   return (
     <Dialog
@@ -177,16 +278,43 @@ export function ProjectManagementDialog({
               {unknown ? "修改结果尚未确认" : "项目操作未完成"}
             </AlertTitle>
             <AlertDescription>
-              {unknown
-                ? "请保持此窗口，核验原请求。重试会使用同一份修改内容。"
-                : error instanceof Error
-                  ? error.message
-                  : "服务暂时不可用。"}
+              {error instanceof ApiError && error.code === "scope_changed"
+                ? "身份或组织已变化，请回到原身份和组织后核验原请求。"
+                : unknown
+                  ? "请保持此窗口，核验原请求。重试会使用同一份修改内容。"
+                  : error instanceof Error
+                    ? error.message
+                    : "服务暂时不可用。"}
               {error instanceof ApiError && error.requestId && (
                 <p>请求编号：{error.requestId}</p>
               )}
             </AlertDescription>
           </Alert>
+        )}
+        {storageError && (
+          <Button
+            disabled={pending}
+            variant="outline"
+            onClick={() => {
+              try {
+                const stored = loadProjectCoverIntent(
+                  sessionStorage,
+                  scope,
+                  project.id,
+                );
+                attempt.current = stored;
+                setUnknown(Boolean(stored));
+                setStorageError(false);
+                setError(
+                  stored ? new Error("已恢复原设置请求，请核验结果。") : null,
+                );
+              } catch (failure) {
+                setError(failure);
+              }
+            }}
+          >
+            重试读取原请求记录
+          </Button>
         )}
         {!locked &&
           error instanceof ApiError &&
@@ -195,29 +323,42 @@ export function ProjectManagementDialog({
             <Button
               variant="outline"
               onClick={() => {
-                onChanged();
-                onClose();
+                if (action === "settings") void detail.refetch();
+                else {
+                  onChanged();
+                  onClose();
+                }
               }}
             >
-              读取最新项目列表
+              {action === "settings"
+                ? "读取最新设置，保留草稿"
+                : "读取最新项目列表"}
             </Button>
           )}
         {action === "settings" ? (
-          detail.isPending ? (
-            <p role="status">正在读取项目设置…</p>
-          ) : detail.error ? (
-            <Alert variant="destructive">
-              <AlertTitle>项目设置未能读取</AlertTitle>
-              <AlertDescription>{detail.error.message}</AlertDescription>
-              <Button variant="outline" onClick={() => void detail.refetch()}>
-                重试读取设置
-              </Button>
-            </Alert>
-          ) : (
-            detail.data && (
+          <>
+            {detail.isPending && <p role="status">正在读取项目设置…</p>}
+            {detail.error && (
+              <Alert variant="destructive">
+                <AlertTitle>项目设置未能读取</AlertTitle>
+                <AlertDescription>{detail.error.message}</AlertDescription>
+                <Button variant="outline" onClick={() => void detail.refetch()}>
+                  重试读取设置
+                </Button>
+              </Alert>
+            )}
+            {detail.data && (
               <ProjectSettingsForm
-                key={`${detail.data.id}:${detail.data.revision}`}
+                key={detail.data.id}
                 project={detail.data}
+                scope={scope}
+                conflict={conflict}
+                onResolveConflict={() => {
+                  setConflict(false);
+                  setError(null);
+                }}
+                onCoverBusyChange={setCoverBusy}
+                previewAllowed={!detail.error && !detail.isFetching}
                 presets={
                   presets.data?.pages.flatMap((page) => page.items) ?? []
                 }
@@ -228,11 +369,15 @@ export function ProjectManagementDialog({
                   if (presets.error) void presets.refetch();
                   else void presets.fetchNextPage();
                 }}
-                disabled={locked || detail.data.status === "archived"}
+                disabled={
+                  locked ||
+                  detail.data.status === "archived" ||
+                  Boolean(detail.error)
+                }
                 onSubmit={submit}
               />
-            )
-          )
+            )}
+          </>
         ) : (
           <p className="text-sm">
             {project.name}
@@ -278,9 +423,15 @@ type Settings = {
   description: string;
   preset: string;
   overseas: boolean;
+  cover: string | null;
 };
 function ProjectSettingsForm({
-  project,
+  project: latest,
+  scope,
+  conflict,
+  onResolveConflict,
+  onCoverBusyChange,
+  previewAllowed,
   presets,
   presetsPending,
   presetsError,
@@ -290,6 +441,11 @@ function ProjectSettingsForm({
   onSubmit,
 }: {
   project: ProjectDetail;
+  scope: FolderScope;
+  conflict: boolean;
+  onResolveConflict: () => void;
+  onCoverBusyChange: (busy: boolean) => void;
+  previewAllowed: boolean;
   presets: readonly StylePreset[];
   presetsPending: boolean;
   presetsError: Error | null;
@@ -298,6 +454,7 @@ function ProjectSettingsForm({
   disabled: boolean;
   onSubmit: (body: ProjectChange) => Promise<void>;
 }) {
+  const [project, setBaseline] = useState(latest);
   const id = useId();
   const form = useForm<Settings>({
     defaultValues: {
@@ -305,8 +462,10 @@ function ProjectSettingsForm({
       description: project.description,
       preset: project.style_preset_id ?? "none",
       overseas: project.allow_overseas_models,
+      cover: project.cover_asset_id,
     },
   });
+  const dirtyFields = form.formState.dirtyFields;
   const available = presets.filter((preset) =>
     matchesPreset(
       {
@@ -319,6 +478,7 @@ function ProjectSettingsForm({
   const storedPresetMissing =
     project.style_preset_id &&
     !available.some((preset) => preset.id === project.style_preset_id);
+  const changedRevision = latest.revision !== project.revision;
   return (
     <form
       aria-label="项目设置表单"
@@ -334,10 +494,88 @@ function ProjectSettingsForm({
             preset ?? "00000000-0000-0000-0000-000000000000";
         if (values.overseas !== project.allow_overseas_models)
           body.allow_overseas_models = values.overseas;
+        if (values.cover !== project.cover_asset_id)
+          body.cover_asset_id = values.cover;
         if (Object.keys(body).length > 1) await onSubmit(body);
       })}
     >
       <FieldGroup>
+        {(conflict || changedRevision) && (
+          <Alert>
+            <AlertTitle>草稿已保留，需要核对最新设置</AlertTitle>
+            <AlertDescription>
+              {changedRevision ? (
+                <>
+                  <p>
+                    当前修订 {latest.revision}；草稿来自修订 {project.revision}
+                    。
+                  </p>
+                  <dl className="space-y-1 break-words">
+                    <dt>已保存名称</dt>
+                    <dd>{latest.name}</dd>
+                    <dt>已保存描述</dt>
+                    <dd className="max-h-32 overflow-y-auto whitespace-pre-wrap">
+                      {latest.description || "无"}
+                    </dd>
+                    <dt>已保存主图</dt>
+                    <dd className="break-all">
+                      {latest.cover_asset_id ?? "未设置"}
+                      {latest.cover_unavailable ? "（不可用）" : ""}
+                    </dd>
+                    <dt>已保存风格预设</dt>
+                    <dd className="break-all">
+                      {latest.style_preset_id ?? "不使用预设"}
+                    </dd>
+                    <dt>已保存海外模型设置</dt>
+                    <dd>{latest.allow_overseas_models ? "允许" : "不允许"}</dd>
+                  </dl>
+                </>
+              ) : (
+                "请先读取最新设置。尚未发送新的修改。"
+              )}
+            </AlertDescription>
+            {changedRevision && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled || latest.status !== "active"}
+                onClick={() => {
+                  form.reset(
+                    {
+                      name: latest.name,
+                      description: latest.description,
+                      preset: latest.style_preset_id ?? "none",
+                      overseas: latest.allow_overseas_models,
+                      cover: latest.cover_asset_id,
+                    },
+                    { keepDirtyValues: Object.keys(dirtyFields).length > 0 },
+                  );
+                  setBaseline(latest);
+                  onResolveConflict();
+                }}
+              >
+                已核对最新设置，保留草稿继续保存
+              </Button>
+            )}
+          </Alert>
+        )}
+        <Controller
+          name="cover"
+          control={form.control}
+          render={({ field }) => (
+            <ProjectCoverField
+              projectId={project.id}
+              scope={scope}
+              value={field.value}
+              savedAssetId={latest.cover_asset_id}
+              unavailable={latest.cover_unavailable}
+              previewAllowed={previewAllowed}
+              disabled={disabled}
+              onChange={field.onChange}
+              onBusyChange={onCoverBusyChange}
+            />
+          )}
+        />
         <Field data-invalid={Boolean(form.formState.errors.name)}>
           <FieldLabel htmlFor={`${id}-name`}>项目名称</FieldLabel>
           <Input
@@ -438,7 +676,12 @@ function ProjectSettingsForm({
             项目已归档，取消归档后可修改设置。
           </p>
         )}
-        <Button type="submit" disabled={disabled || !form.formState.isDirty}>
+        <Button
+          type="submit"
+          disabled={
+            disabled || conflict || changedRevision || !form.formState.isDirty
+          }
+        >
           保存项目设置
         </Button>
       </FieldGroup>

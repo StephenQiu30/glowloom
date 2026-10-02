@@ -26,6 +26,8 @@ const (
 	MaxUploadAudioBytes int64 = 100 << 20
 	// MaxUploadModelBytes is the self-contained GLB 2.0 model limit.
 	MaxUploadModelBytes int64 = domain.MaxModelBytes
+	// MaxUploadDocumentBytes bounds each unmodified script source file.
+	MaxUploadDocumentBytes int64 = domain.MaxDocumentBytes
 )
 
 // SafeUploadFileName accepts a bounded display name, never a filesystem path.
@@ -58,6 +60,12 @@ func ReadUpload(ctx context.Context, reader io.Reader, name string) (*Downloaded
 		return nil, err
 	}
 	mimeType, extension, limit := uploadType(magic[:n])
+	if strings.EqualFold(path.Ext(name), ".txt") && mimeType == "" {
+		mimeType, extension, limit = domain.MIMEText, "txt", MaxUploadDocumentBytes
+	}
+	if strings.EqualFold(path.Ext(name), ".docx") && n >= 4 && bytes.Equal(magic[:4], []byte{'P', 'K', 3, 4}) {
+		mimeType, extension, limit = domain.MIMEDOCX, "docx", MaxUploadDocumentBytes
+	}
 	extensionMatches := strings.EqualFold(path.Ext(name), "."+extension) || extension == "jpg" && strings.EqualFold(path.Ext(name), ".jpeg")
 	if mimeType == "" || !extensionMatches {
 		return nil, ErrUnsupportedUpload

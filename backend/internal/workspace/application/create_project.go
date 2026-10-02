@@ -56,6 +56,7 @@ type CreateProjectInput struct {
 
 // CreatedProject is the safe application result of project registration.
 type CreatedProject struct {
+	CoverAssetID        *uuid.UUID `json:"cover_asset_id,omitempty"`
 	ID                  uuid.UUID  `json:"id"`
 	OrgID               uuid.UUID  `json:"org_id"`
 	Name                string     `json:"name"`

@@ -1,0 +1,5 @@
+{
+  "fingerprint_sha256": "aa316f7569e2227847e6d6c812add171be9d45b04c80c63d04acd98cfd1dd319",
+  "input_bytes": "{\"Action\":\"patch\",\"IdempotencyKey\":\"00000000-0000-4000-8000-000000000004\",\"Patch\":{\"ProjectID\":\"00000000-0000-4000-8000-000000000001\",\"ExpectedRevision\":7,\"Name\":\"固定设置\",\"Description\":null,\"StylePresetID\":null,\"AllowOverseasModels\":false,\"RequestID\":\"00000000-0000-4000-8000-000000000005\"}}",
+  "response_bytes": "{\"Project\":{\"ID\":\"00000000-0000-4000-8000-000000000001\",\"OrgID\":\"00000000-0000-4000-8000-000000000003\",\"Name\":\"固定设置\",\"Description\":\"原始说明\",\"AspectRatio\":\"16:9\",\"StyleType\":\"realistic\",\"StyleSubtype\":\"\",\"StylePresetID\":\"00000000-0000-0000-0000-000000000000\",\"Resolution\":\"1080p\",\"AllowOverseasModels\":false,\"Status\":\"active\",\"ArchivedAt\":null,\"IsDelete\":false,\"DeleteTime\":null,\"PurgeAfter\":null,\"Revision\":8,\"CreateTime\":\"2026-10-02T00:00:00Z\",\"UpdateTime\":\"2026-10-02T00:00:00Z\"},\"DefaultModels\":{\"image.generate\":\"fixed-image\"}}"
+}

@@ -28,7 +28,7 @@ export function validateCanvasMediaFiles(
   files: readonly File[],
   remainingSlots = 20,
   maximumFiles = 20,
-  imageOnly = false,
+  imageOnly: boolean | "project-cover" = false,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   if (!files.length) errors.push("请先选择本地媒体文件。");
@@ -44,7 +44,11 @@ export function validateCanvasMediaFiles(
     remainingSlots < 0 ||
     files.length > remainingSlots
   )
-    errors.push("文件数量超过画布剩余节点容量。");
+    errors.push(
+      imageOnly === "project-cover"
+        ? "项目主图只支持选择一个文件。"
+        : "文件数量超过画布剩余节点容量。",
+    );
   let total = 0;
   for (const file of files) {
     const extension = file.name.split(".").at(-1)?.toLowerCase() ?? "";
@@ -53,7 +57,9 @@ export function validateCanvasMediaFiles(
       : undefined;
     const mime = file.type.toLowerCase();
     if (imageOnly && !["jpg", "jpeg", "png", "webp"].includes(extension))
-      errors.push(`${file.name}：目录封面只支持图片。`);
+      errors.push(
+        `${file.name}：${imageOnly === "project-cover" ? "项目主图" : "目录封面"}只支持图片。`,
+      );
     if (
       !format ||
       (mime &&

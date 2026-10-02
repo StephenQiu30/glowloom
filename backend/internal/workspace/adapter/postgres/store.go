@@ -27,8 +27,9 @@ var (
 
 // Store keeps project persistence behind an explicitly injected database handle.
 type Store struct {
-	db   *gorm.DB
-	work ProjectWorkFactory
+	db    *gorm.DB
+	work  ProjectWorkFactory
+	cover ProjectCoverFactory
 }
 
 // NewStore creates a project store using the caller's database handle.
@@ -46,11 +47,11 @@ func requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
 		FROM identity."user" AS u
 		JOIN workspace.organization AS o ON o.id = u.org_id
 		WHERE u.id = ?::uuid AND u.org_id = ?::uuid
-		  AND u.role IN ('admin', 'producer')
+		  AND u.role IN ('admin', 'producer') AND u.role = ?
 		  AND u.status = 'active' AND NOT u.is_delete AND NOT u.must_change_password
 		  AND o.status = 'active' AND NOT o.is_delete
 		FOR SHARE OF u, o
-	`, actor.ID.String(), actor.OrgID.String()).Scan(&present)
+	`, actor.ID.String(), actor.OrgID.String(), string(actor.Role)).Scan(&present)
 	if result.Error != nil {
 		return fmt.Errorf("check current project actor: %w", result.Error)
 	}

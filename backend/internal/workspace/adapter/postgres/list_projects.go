@@ -41,7 +41,7 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 		}
 		query := `
 			SELECT p.id, p.org_id, p.name, p.aspect_ratio, p.style_type,
-			       p.style_subtype, p.style_preset_id, p.resolution,
+			       p.style_subtype, p.style_preset_id, p.cover_asset_id, p.resolution,
 			       p.allow_overseas_models, p.status, p.is_delete,
 			       p.archived_at, p.delete_time, p.purge_after, p.revision,
 			       p.create_time, p.update_time, f.id AS folder_id,
@@ -85,7 +85,13 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 		}
 		page.Projects = make([]application.ProjectListItem, 0, len(rows))
 		for _, row := range rows {
-			page.Projects = append(page.Projects, row.item())
+			item := row.item()
+			var err error
+			item.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, domain.Project{ID: item.ID, CoverAssetID: item.CoverAssetID})
+			if err != nil {
+				return err
+			}
+			page.Projects = append(page.Projects, item)
 		}
 		if more {
 			last := page.Projects[len(page.Projects)-1]
@@ -100,6 +106,7 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 }
 
 type projectListRow struct {
+	CoverAssetID        *uuid.UUID
 	ID                  uuid.UUID
 	OrgID               uuid.UUID
 	Name                string
@@ -122,7 +129,7 @@ type projectListRow struct {
 }
 
 func (row projectListRow) item() application.ProjectListItem {
-	item := application.ProjectListItem{
+	item := application.ProjectListItem{CoverAssetID: row.CoverAssetID,
 		ID: row.ID, OrgID: row.OrgID, Name: row.Name,
 		AspectRatio: row.AspectRatio, StyleType: row.StyleType,
 		StylePresetID: row.StylePresetID, Resolution: row.Resolution,

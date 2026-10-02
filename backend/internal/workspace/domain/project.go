@@ -48,6 +48,7 @@ type Project struct {
 	Revision            int64
 	CreateTime          time.Time
 	UpdateTime          time.Time
+	CoverAssetID        *uuid.UUID `json:"CoverAssetID,omitempty"`
 }
 
 // Validate checks the core project specifications before persistence.
@@ -58,7 +59,8 @@ func (p Project) Validate() error {
 		(p.AspectRatio != "9:16" && p.AspectRatio != "16:9") ||
 		p.Resolution != "1080p" ||
 		(p.Status != "active" && p.Status != "archived" && p.Status != "copying") ||
-		p.Revision < 1 || p.Revision > math.MaxInt32 {
+		p.Revision < 1 || p.Revision > math.MaxInt32 ||
+		(p.CoverAssetID != nil && *p.CoverAssetID == uuid.Nil) {
 		return ErrInvalidProject
 	}
 	switch p.StyleType {

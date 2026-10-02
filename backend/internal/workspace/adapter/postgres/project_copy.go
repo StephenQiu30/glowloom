@@ -138,6 +138,7 @@ func copyPresets(tx *gorm.DB, source domain.Project, job uuid.UUID, target uuid.
 func createCopyTarget(tx *gorm.DB, source domain.Project, target uuid.UUID, name string, now time.Time) (domain.Project, error) {
 	p := source
 	p.ID, p.Name, p.StylePresetID = target, name, uuid.Nil
+	p.CoverAssetID = nil
 	p.Status, p.ArchivedAt, p.Revision = "copying", nil, 1
 	p.CreateTime, p.UpdateTime = now, now
 	if p.Validate() != nil || p.IsDelete {
@@ -175,7 +176,14 @@ func persistCopySettings(tx *gorm.DB, snapshot copyWorkspaceSnapshot) error {
 	if snapshot.Target.StylePresetID != uuid.Nil {
 		preset = snapshot.Target.StylePresetID
 	}
-	return tx.Exec(`UPDATE workspace.project SET style_preset_id=?,default_models=?::jsonb,aigc_mark_style=?::jsonb WHERE id=? AND org_id=? AND status='copying' AND NOT is_delete`, preset, string(defaults), string(snapshot.AIGCMarkStyle), snapshot.Target.ID, snapshot.Target.OrgID).Error
+	write := tx.Exec(`UPDATE workspace.project SET style_preset_id=?,default_models=?::jsonb,aigc_mark_style=?::jsonb WHERE id=? AND org_id=? AND status='copying' AND NOT is_delete`, preset, string(defaults), string(snapshot.AIGCMarkStyle), snapshot.Target.ID, snapshot.Target.OrgID)
+	if write.Error != nil {
+		return fmt.Errorf("copy project settings: %w", write.Error)
+	}
+	if write.RowsAffected != 1 {
+		return domain.ErrProjectCopyStateConflict
+	}
+	return nil
 }
 
 // Create atomically freezes every owner and records one invisible target with a zero budget.
@@ -260,6 +268,18 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		media, err := owners.Media.Freeze(ctx, actor, copyMediaBinding(saved), now)
+		if err != nil {
+			return err
+		}
+		if source.Project.CoverAssetID != nil {
+			if owners.Cover == nil {
+				return application.ErrProjectDependencyUnavailable
+			}
+			if err := owners.Cover.Freeze(ctx, actor, source.Project.ID, source.Project.CoverAssetID); err != nil {
+				return err
+			}
+		}
+		target.CoverAssetID, err = application.MapProjectCover(source.Project.CoverAssetID, media.AssetMapping)
 		if err != nil {
 			return err
 		}

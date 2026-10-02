@@ -70,6 +70,9 @@ func (s *Store) UpdateProjectWithEvents(ctx context.Context, actor identityapp.P
 			current.AspectRatio != before.AspectRatio || current.Resolution != before.Resolution {
 			return domain.ErrProjectRevisionConflict
 		}
+		if err := s.requireProjectCover(ctx, tx, actor, after); err != nil {
+			return err
+		}
 		if err := requireUsablePreset(tx, after); err != nil {
 			return err
 		}
@@ -79,11 +82,11 @@ func (s *Store) UpdateProjectWithEvents(ctx context.Context, actor identityapp.P
 		}
 		result = tx.Exec(`
 			UPDATE workspace.project
-			SET name = ?, description = ?, style_preset_id = ?::uuid,
+			SET name = ?, description = ?, style_preset_id = ?::uuid, cover_asset_id = ?::uuid,
 			    allow_overseas_models = ?, revision = revision + 1
 			WHERE id = ?::uuid AND org_id = ?::uuid AND revision = ?
 			  AND status = 'active' AND NOT is_delete
-		`, after.Name, after.Description, presetID, after.AllowOverseasModels,
+		`, after.Name, after.Description, presetID, after.CoverAssetID, after.AllowOverseasModels,
 			after.ID.String(), actor.OrgID.String(), before.Revision)
 		if result.Error != nil {
 			return fmt.Errorf("update project settings: %w", result.Error)
@@ -115,7 +118,7 @@ func (s *Store) UpdateProjectWithEvents(ctx context.Context, actor identityapp.P
 func sameStoredProjectSettings(left, right domain.Project) bool {
 	return left.Name == right.Name && left.Description == right.Description &&
 		left.StylePresetID == right.StylePresetID &&
-		left.AllowOverseasModels == right.AllowOverseasModels
+		left.AllowOverseasModels == right.AllowOverseasModels && application.SameProjectCover(left.CoverAssetID, right.CoverAssetID)
 }
 
 type projectUpdatedAuditData struct {
@@ -193,6 +196,9 @@ func expectedProjectUpdateSummaries(before, after domain.Project) (map[string]an
 	if before.AllowOverseasModels != after.AllowOverseasModels {
 		old["allow_overseas_models"] = before.AllowOverseasModels
 		afterSummary["allow_overseas_models"] = after.AllowOverseasModels
+	}
+	if !application.SameProjectCover(before.CoverAssetID, after.CoverAssetID) {
+		afterSummary["cover_changed"] = true
 	}
 	if before.Name != after.Name {
 		afterSummary["name_changed"] = true

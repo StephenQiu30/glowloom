@@ -104,13 +104,16 @@ func replayUpload(tx *gorm.DB, actor identityapp.Principal, r application.Upload
 	if err := json.Unmarshal(row.Response, &result); err != nil || result.Asset.ID != row.AssetID || result.Asset.ProjectID != r.ProjectID {
 		return result, false, ErrUnavailable
 	}
-	var available int
-	read = tx.Raw(`SELECT 1 FROM media.media_asset WHERE id=? AND project_id=? AND origin='upload' AND status='ready' AND moderation_status='passed' AND NOT is_delete AND NOT contains_real_person FOR SHARE`, row.AssetID, r.ProjectID).Scan(&available)
+	var available assetRow
+	read = tx.Raw(`SELECT * FROM media.media_asset WHERE id=? AND project_id=? AND origin='upload' AND status='ready' AND moderation_status='passed' AND NOT is_delete AND NOT contains_real_person FOR SHARE`, row.AssetID, r.ProjectID).Scan(&available)
 	if read.Error != nil {
 		return application.UploadResult{}, false, read.Error
 	}
 	if read.RowsAffected != 1 {
 		return application.UploadResult{}, false, application.ErrUploadConflict
+	}
+	if available.domain().Validate() != nil {
+		return application.UploadResult{}, false, ErrUnavailable
 	}
 	return result, true, nil
 }
@@ -213,7 +216,7 @@ func validateReviewedUpload(actor identityapp.Principal, r application.UploadReq
 		required = []domain.RenditionKind{domain.RenditionPoster, domain.RenditionProxy720p}
 	case domain.KindAudio:
 		required = []domain.RenditionKind{domain.RenditionWaveform}
-	case domain.KindModel:
+	case domain.KindModel, domain.KindDocument:
 		required = nil
 	default:
 		return application.ErrInvalidUpload

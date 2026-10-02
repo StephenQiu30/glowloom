@@ -41,10 +41,12 @@ import { ProjectFolderCard, type FolderAction } from "./project-folder-card";
 import type { FolderSelection } from "./project-folder-dialog";
 
 type Filter = "all" | "active" | "archived" | "deleted";
-const ProjectManagementDialog = dynamic(() =>
-  import("./project-management-dialog").then(
-    (module) => module.ProjectManagementDialog,
-  ),
+const ProjectManagementDialog = dynamic(
+  () =>
+    import("./project-management-dialog").then(
+      (module) => module.ProjectManagementDialog,
+    ),
+  { ssr: false },
 );
 const ProjectCopyDialog = dynamic(
   () =>
@@ -306,12 +308,24 @@ function ProjectsWorkspaceContent() {
           </AlertDescription>
         </Alert>
       ) : null}
-      {management && (
+      {management && scope && (
         <ProjectManagementDialog
-          key={`${management.project.id}:${management.action}`}
+          key={`${scope.origin}:${scope.actorId}:${scope.orgId}:${management.project.id}:${management.action}`}
           project={management.project}
           action={management.action}
-          onClose={() => setManagement(null)}
+          scope={scope}
+          onClose={() => {
+            const id = management.project.id;
+            setManagement(null);
+            window.requestAnimationFrame(() => {
+              const target = document.querySelector<HTMLElement>(
+                `[data-project-actions="${id}"]`,
+              );
+              (
+                target ?? document.getElementById("projects-library-heading")
+              )?.focus();
+            });
+          }}
           onChanged={() => {
             void Promise.all([
               cache.invalidateQueries({ queryKey: PROJECTS_KEY }),
@@ -631,8 +645,11 @@ function ProjectsWorkspaceContent() {
                   styleType: project.style_type,
                   status: project.status,
                   isDeleted: project.is_delete,
+                  coverAssetId: project.cover_asset_id,
+                  coverUnavailable: project.cover_unavailable,
                 }))}
                 view={view}
+                scope={scope}
                 onViewChange={(value) => {
                   setView(value);
                   syncUrl(

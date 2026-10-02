@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/document"
+
 	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gltf"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
@@ -19,6 +21,9 @@ func NewUploadProber(model *gltf.Validator) FFUploadProber { return FFUploadProb
 
 // Probe verifies real streams and maps invalid input to the upload boundary error.
 func (p FFUploadProber) Probe(ctx context.Context, file *application.Downloaded) (application.ProbeResult, error) {
+	if file != nil && (file.MIMEType == domain.MIMEText || file.MIMEType == domain.MIMEDOCX) {
+		return document.Probe(ctx, file)
+	}
 	if file != nil && file.MIMEType == "model/gltf-binary" {
 		if p.model == nil {
 			return application.ProbeResult{}, application.ErrUnavailable
@@ -51,7 +56,7 @@ type FFUploadRenderer struct{}
 
 // Render creates the existing image/video previews or a decoded audio waveform.
 func (FFUploadRenderer) Render(ctx context.Context, file *application.Downloaded, probe application.ProbeResult, aspect string) ([]application.RenditionFile, error) {
-	if probe.Kind == domain.KindModel {
+	if probe.Kind == domain.KindModel || probe.Kind == domain.KindDocument {
 		return nil, ctx.Err()
 	}
 	if probe.Kind != domain.KindAudio {

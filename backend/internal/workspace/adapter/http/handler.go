@@ -33,6 +33,8 @@ func NewHandler(list *application.ListProjectsQuery, create *application.CreateP
 
 // ProjectResponse exposes safe project-list fields needed for navigation.
 type ProjectResponse struct {
+	CoverAssetID      *uuid.UUID `json:"cover_asset_id" extensions:"x-nullable"`
+	CoverUnavailable  bool       `json:"cover_unavailable"`
 	ID                uuid.UUID  `json:"id"`
 	Name              string     `json:"name"`
 	Status            string     `json:"status"`
@@ -150,7 +152,7 @@ func (h *Handler) List(c *gin.Context) {
 	}
 	response := ListResponse{Items: make([]ProjectResponse, 0, len(page.Projects))}
 	for _, p := range page.Projects {
-		response.Items = append(response.Items, ProjectResponse{ID: p.ID, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, FolderID: p.FolderID, PlacementRevision: p.PlacementRevision})
+		response.Items = append(response.Items, ProjectResponse{CoverAssetID: p.CoverAssetID, CoverUnavailable: p.CoverUnavailable, ID: p.ID, Name: p.Name, Status: p.Status, Revision: p.Revision, AspectRatio: p.AspectRatio, StyleType: p.StyleType, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, FolderID: p.FolderID, PlacementRevision: p.PlacementRevision})
 	}
 	if page.Next != nil {
 		body, _ := json.Marshal(cursor{ID: page.Next.ID, Time: page.Next.UpdateTime, Binding: binding})

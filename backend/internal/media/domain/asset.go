@@ -2,12 +2,16 @@
 package domain
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"path"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -35,6 +39,13 @@ const (
 
 // MaxModelBytes bounds a local self-contained GLB 2.0 model asset.
 const MaxModelBytes int64 = 64 << 20
+
+// Document MIME types describe original TXT and ordinary, non-macro OOXML files.
+const (
+	MIMEText               = "text/plain"
+	MIMEDOCX               = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	MaxDocumentBytes int64 = 20 << 20
+)
 
 // Origin identifies how an asset entered the media library.
 type Origin string
@@ -154,6 +165,9 @@ func (a MediaAsset) Validate() error {
 		a.Codec == nil || *a.Codec != "glb2" || a.Width != nil || a.Height != nil || a.DurationMS != nil || a.FPS != nil || a.AudioChannels != nil) {
 		return ErrInvalidMediaAsset
 	}
+	if a.Kind == KindDocument && !a.validDocumentFacts() {
+		return ErrInvalidMediaAsset
+	}
 	if a.Status == StatusReady && a.ModerationStatus != ModerationPassed ||
 		a.Status == StatusRejected && a.ModerationStatus != ModerationRejected ||
 		a.Status == StatusUploading && a.ModerationStatus != ModerationPending ||
@@ -173,6 +187,29 @@ func (a MediaAsset) Validate() error {
 		return ErrInvalidMediaAsset
 	}
 	return nil
+}
+
+func (a MediaAsset) validDocumentFacts() bool {
+	if a.Origin == OriginGenerated || a.ByteSize < 1 || a.ByteSize > MaxDocumentBytes ||
+		a.SHA256 == nil || a.Codec == nil || a.Width != nil || a.Height != nil ||
+		a.DurationMS != nil || a.FPS != nil || a.AudioChannels != nil ||
+		a.FileName == "" || strings.TrimSpace(a.FileName) != a.FileName || len(a.FileName) > 255 ||
+		!utf8.ValidString(a.FileName) || strings.ContainsAny(a.FileName, "/\\") {
+		return false
+	}
+	for _, r := range a.FileName {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	hash, err := hex.DecodeString(*a.SHA256)
+	if err != nil || len(hash) != 32 || *a.SHA256 != strings.ToLower(*a.SHA256) {
+		return false
+	}
+	ext := strings.ToLower(path.Ext(a.FileName))
+	objectExt := path.Ext(a.ObjectKey)
+	return a.MimeType == MIMEText && *a.Codec == "txt" && ext == ".txt" && objectExt == ".txt" ||
+		a.MimeType == MIMEDOCX && *a.Codec == "docx" && ext == ".docx" && objectExt == ".docx"
 }
 
 // CanReference applies the local gate. The application must additionally

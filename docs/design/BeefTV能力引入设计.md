@@ -410,6 +410,8 @@ CopyJob 后续单独验证跨多画布全部内容、各 UUID/媒体对象映射
 
 在独立 PostgreSQL 17.11 数据库 `lanverse_workspace_lifecycle`（40 项 up SQL 至 090）实际通过：闭合 HTTP 与安全详情、更新/归档/回收/恢复及刷新回执；主体失效、跨组织、修订和恢复期限；同键 8 并发仅一次变更与回执、异键 CAS 单赢家、后续修改后的 no-op 原结果重放；SET LOCAL ROLE lanverse_app 的实际生命周期读写；Outbox 和幂等回执插入触发故障时全回滚；Operation 全部阻塞状态、上传/处理中媒体、排队/运行/取消中的导出；软删恢复前后原 canvas/node/media/operation/budget/export 行逐字不变。通过 pg_blocking_pids 实际观察生成确认、媒体 StoreDerived、正式时间轴 export Create 的项目锁，任务提交后生命周期重新读到进行中事实并拒绝；归档/删除后这些拥有模块拒绝新 admission。
 
+当前实现的生命周期回执仍使用 `infra.idempotency_record` 的 24 小时 TTL，过期记录可被复用；本节早期验证只证明有效期内的持久重放，不证明永久幂等。§17 将生命周期命令统一迁入 workspace 自有永久回执，保留可取证的旧编码与原请求指纹；缺失或被覆盖的历史不能补造。
+
 当前后端 `go test -race ./tests/workspace -count=1`（上述真实库）、公开 Router Swagger 合同、`go vet ./...` 和 `golangci-lint run ./...` 均通过；govulncheck 没有可达或导入包漏洞，仍提示一个未调用的 required-module 漏洞。上述合成业务数据和非 owner 探针不等于当前在线运行身份、PostgreSQL 18.4、真实供应商、对象 purge 或完整项目复制验收。正式页面与浏览器生命周期闭环由前端继续验证，完整 CopyJob、文件夹与彻底清理仍未实现。
 
 ### 9.4 Whisper 字幕提取与字幕稿合同（2026-10-02）
@@ -635,3 +637,25 @@ workspace 拥有 actor+org 范围的目录分类和放置，不改变项目业�
 建议自有 PG helper（在同 workspace adapter 内，消费方 Copy 不引入新跨模块框架）：`FreezeCopyPlacement(ctx,tx,actor,sourceProjectID,expect *CopyPlacementExpectation) -> CopyPlacementFreeze{folder_id,folder_revision,source_placement_revision}`；`AttachCopyPlacement(ctx,tx,actor,targetProjectID,freeze,now) -> FolderPlacement`。两者仅接受调用者现有事务，前者在 actor lock后且 source project锁前，后者在 target INSERT后；不能以独立事务“补挂”目录。无需新增REST、topic、数据库或任务表。
 
 取消目标清理在真实 private 对象全部确认移除、canvas/media owning 清理完成后，于 FinishCancelled 同事务将未发布 copying target 逻辑删除，保持原 admission/manifest、placement 与目录版本不变；不在持 project 锁时反向取得 library/folder 锁。旧目标终态重放不再清理、不增修订、不重复事件。Restore 只接受 active/archived 的已删除正式项目，copying 墓碑不可恢复；实际 pending object、failed→cancel、重复 Finish 及 library/folder/project 阻塞链已做 PostgreSQL Red→Green。目录回收排除已退休目标的 work，但清其分类；活跃 copying 目标仍阻挡全目录事务。项目自身封面仍是单独未完成能力，不用目录 cover 代替。
+
+## 17. 项目主图与完整复制（技术审阅通过，连续实施范围；2026-10-02）
+
+### 17.1 来源和正式事实
+
+固定源 `pages/projects/detail/settings.tsx:35–100,137–139` 已装配当前主图、项目/个人图片选择、本地上传、替换和移除；`backend/internal/app/project.go:344–358` 验证当前用户 ready image 后保存 `CoverResourceID`。它与个人目录 cover 和导演台节点 cover 不同，三者不得互相代替。本增量前目标无项目主图持久字段；本节接入正式字段、项目卡片与设置，真实验收见 E37 第十阶段。
+
+复用 workspace.project 新增 nullable `cover_asset_id`，迁移 `202610020052_workspace_project_cover`，不创建第二个项目设置聚合。保存主图时媒体必须是当前项目正式 ready/passed image，经 media owning Reference factory 在同一事务持锁和当前授权。个人图片沿后续正式个人素材转移 owner 接管到目标项目后绑定，不把来源全局 resource UUID 或 URL 直接当目标资产；个人库/转移范围仍单独开放，当前项目主图闭环不能关闭它。
+
+### 17.2 保存、读取和失败
+
+既有 PATCH `/projects/:pid` 增加 `cover_asset_id?:UUID|null`，省略保持，null 清除，零 UUID/未知字段拒绝。复用当前 project revision、永久 Idempotency-Key、Origin、当前主体/组织授权、active 写与 archived 只读、Outbox 原子提交。主图是项目设置内容，改变递增 project revision；相同绑定的有效重放不重复递增，不能靠个人 placement revision 写入。原有未包含 cover 的命令指纹与仍存历史回执编码保持逐字兼容。既有生命周期命令（patch/archive/unarchive/delete/restore，包含无变化保存）统一使用 `workspace.project_change_command` 永久 INSERT-only 回执，不建立 cover 专用第二套回执。按当前 actor/key 唯一绑定 org/project/action/request_hash 和首个原始 response_body；授权在重放前检查，重放不得依赖已过期 CAS 或现状态重新执行。052 同时创建这一本模块表并授予仅 SELECT/INSERT。旧 infra 记录只有当前输入指纹匹配、status=200、闭合 lifecycle payload 与作用域可证时，才在同一事务逐字接纳到永久表；包括仍保留但 TTL 已过期的有效旧结果。不得迁入其它模块/创建/默认模型回执，不扫描复制无关载荷，不重编码旧响应、不合成已删除或覆盖的历史。新命令只写永久表；保留 infra 的其它用途及旧记录。永久表或旧接纳 INSERT 故障（包括零行）必须回滚项目与事件；同键异输入永远409。现有创建项目与默认模型的 24 小时策略保持其独立历史合同，不能把本节升级宣称为所有 workspace 写入永久化。
+
+详情和服务端分页列表返回正式可空 cover_asset_id 与 cover_unavailable；只在当前 owning reader 可证明图片仍可查看时允许短期 preview。不可用绑定不展示旧签名 URL，读取保留明确不可用事实且不修改项目；不能把瞬时 owner 故障解释为空主图。未授权项目404，陈旧/只读/不可用主图409，类型/字段422，必要 owner 取证失败503。禁止在幂等重放中重新绑定当前选择或自动新键恢复。
+
+设置内按需图片选择与单图片本地 Upload 复用已有媒体管线，上传成功只关联正式资产，不追加画布节点。RHF/Query 保存草稿、原键未知恢复和409差异；项目卡片直接消费列表的 safe 主图事实，图片短租约按需请求，不为每张卡片请求整页 project detail。封面清除、历史主图不可用、归档只读及390px键盘实际验证。
+
+### 17.3 Copy、历史与验证
+
+Copy 在原 admission 同事务冻结主图。当前项目媒体 owner 已冻结该图片与独立目标 UUID，workspace snapshot 将目标主图显式映射，引用不在正式 media mapping 或取证失败时拒绝。新增可空字段按 omitempty 编码，旧 nil snapshot/request/manifest golden逐字兼容；不得改写已接受旧快照。受理时只在永久 workspace snapshot 冻结目标主图 UUID，未发布目标数据库主图先保持 null；media 正式 Register 接管实际新 UUID 后，在同一受 fence 的 media checkpoint 事务中取证并绑定主图，保留正式 FK。不能因资产尚未存在而去掉 FK 或把源 asset_id 临时写入目标。发布重读实际目标主图/私有正式图片与全部内容，比对冻结身份和媒体 owning 回执，不以存有 asset_id 冒充真实可用。取消沿既有完整私有对象清理和不可恢复 copying 墓碑，不修改源主图或原媒体。
+
+实施先 Red→Green 验证领域设置/明确null、旧指纹/快照golden、nonowner PG同事务授权/行锁/CAS/撤权/同键/故障回滚、列表主图不可用与Copy真实目标独立对象；再通过app/Swagger/在线生成接口及实际浏览器上传/选择/移除/刷新/Copy。根协调共享app/audit/生成物和旧Copy接线，不与剧本owner互相反向依赖。沿现有项目审计只新增 cover_changed 安全bool，不记录文件名、正文、URL或对象键；不新增无实际消费者的topic。完整迁移清单继续保留个人/项目素材目录、素材转移及其余尚未完成项。

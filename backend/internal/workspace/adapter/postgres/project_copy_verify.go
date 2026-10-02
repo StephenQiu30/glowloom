@@ -29,22 +29,30 @@ func copyWorkspaceDigest(snapshot copyWorkspaceSnapshot) (string, []byte, error)
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:]), body, nil
 }
-func verifyCopyWorkspace(tx *gorm.DB, job domain.ProjectCopyJob) error {
+func readFrozenCopyWorkspace(tx *gorm.DB, job domain.ProjectCopyJob) (copyWorkspaceSnapshot, error) {
 	var row struct{ WorkspaceSnapshot []byte }
 	read := tx.Raw(`SELECT workspace_snapshot FROM workspace.project_copy_job WHERE id=? AND org_id=? FOR SHARE`, job.ID, job.OrgID).Scan(&row)
 	if read.Error != nil {
-		return read.Error
+		return copyWorkspaceSnapshot{}, read.Error
 	}
 	if read.RowsAffected != 1 {
-		return domain.ErrInvalidProjectCopy
+		return copyWorkspaceSnapshot{}, domain.ErrInvalidProjectCopy
 	}
 	var frozen copyWorkspaceSnapshot
 	if copyJSON(row.WorkspaceSnapshot, &frozen) != nil {
-		return domain.ErrInvalidProjectCopy
+		return copyWorkspaceSnapshot{}, domain.ErrInvalidProjectCopy
 	}
 	digest, _, err := copyWorkspaceDigest(frozen)
 	if err != nil || digest != job.Manifest.WorkspaceSHA256 || frozen.SourceProjectID != job.SourceProjectID || frozen.SourceRevision != job.SourceRevision || frozen.Target.ID != job.TargetProjectID || frozen.Target.OrgID != job.OrgID {
-		return domain.ErrInvalidProjectCopy
+		return copyWorkspaceSnapshot{}, domain.ErrInvalidProjectCopy
+	}
+	return frozen, nil
+}
+
+func verifyCopyWorkspace(tx *gorm.DB, job domain.ProjectCopyJob) error {
+	frozen, err := readFrozenCopyWorkspace(tx, job)
+	if err != nil {
+		return err
 	}
 	if frozen.Placement != nil {
 		if err := verifyCopyPlacement(tx, job, *frozen.Placement); err != nil {
@@ -52,7 +60,7 @@ func verifyCopyWorkspace(tx *gorm.DB, job domain.ProjectCopyJob) error {
 		}
 	}
 	var actual domain.Project
-	read = tx.Raw(`SELECT id,org_id,name,description,aspect_ratio,style_type,COALESCE(style_subtype,'') AS style_subtype,COALESCE(style_preset_id,'00000000-0000-0000-0000-000000000000'::uuid) AS style_preset_id,resolution,allow_overseas_models,status,revision,is_delete FROM workspace.project WHERE id=? AND org_id=? FOR SHARE`, job.TargetProjectID, job.OrgID).Scan(&actual)
+	read := tx.Raw(`SELECT id,org_id,name,description,aspect_ratio,style_type,COALESCE(style_subtype,'') AS style_subtype,COALESCE(style_preset_id,'00000000-0000-0000-0000-000000000000'::uuid) AS style_preset_id,cover_asset_id,resolution,allow_overseas_models,status,revision,is_delete FROM workspace.project WHERE id=? AND org_id=? FOR SHARE`, job.TargetProjectID, job.OrgID).Scan(&actual)
 	if read.Error != nil {
 		return read.Error
 	}

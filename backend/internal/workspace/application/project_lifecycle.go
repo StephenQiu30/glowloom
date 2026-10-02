@@ -32,8 +32,9 @@ type ProjectWorkGuard interface {
 // ProjectSnapshot is an authorized project's settings and lifecycle facts.
 // Defaults remain owned by workspace and are read at the same project revision.
 type ProjectSnapshot struct {
-	Project       domain.Project
-	DefaultModels map[string]string
+	Project          domain.Project
+	DefaultModels    map[string]string
+	CoverUnavailable bool `json:"CoverUnavailable,omitempty"`
 }
 
 // ProjectChangeInput reuses the mutable patch contract for all project changes.
@@ -51,7 +52,7 @@ func (i ProjectChangeInput) Validate() error {
 	if p.ProjectID == uuid.Nil || p.ExpectedRevision < 1 || p.ExpectedRevision >= math.MaxInt32 || i.IdempotencyKey == uuid.Nil || err != nil || requestID == uuid.Nil || requestID.String() != p.RequestID {
 		return ErrInvalidProjectChange
 	}
-	hasPatch := p.Name != nil || p.Description != nil || p.StylePresetID != nil || p.AllowOverseasModels != nil
+	hasPatch := p.Name != nil || p.Description != nil || p.StylePresetID != nil || p.AllowOverseasModels != nil || p.SetCover || p.CoverAssetID != nil
 	switch i.Action {
 	case "patch":
 		if !hasPatch || !validProjectPatch(p) {
@@ -133,7 +134,7 @@ func (s *ProjectLifecycle) Change(ctx context.Context, actor identityapp.Princip
 // Validate rejects incomplete or inconsistent persisted lifecycle facts.
 func (s ProjectSnapshot) Validate() error {
 	p := s.Project
-	if p.Validate() != nil || p.CreateTime.IsZero() || p.UpdateTime.IsZero() || !validDefaultModels(s.DefaultModels) {
+	if (s.CoverUnavailable && p.CoverAssetID == nil) || p.Validate() != nil || p.CreateTime.IsZero() || p.UpdateTime.IsZero() || !validDefaultModels(s.DefaultModels) {
 		return ErrProjectDependencyUnavailable
 	}
 	if (p.Status == "archived" && (p.ArchivedAt == nil || p.ArchivedAt.IsZero())) || (p.Status == "active" && p.ArchivedAt != nil) {
@@ -154,6 +155,9 @@ func validProjectSnapshot(s ProjectSnapshot, actor identityapp.Principal, id uui
 }
 
 func validProjectPatch(input UpdateProjectInput) bool {
+	if (!input.SetCover && input.CoverAssetID != nil) || (input.CoverAssetID != nil && *input.CoverAssetID == uuid.Nil) {
+		return false
+	}
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)
 		if name == "" || !utf8.ValidString(name) || utf8.RuneCountInString(name) > 50 || strings.ContainsRune(name, 0) {
@@ -165,6 +169,13 @@ func validProjectPatch(input UpdateProjectInput) bool {
 
 func applyProjectPatch(before domain.Project, input UpdateProjectInput) domain.Project {
 	after := before
+	if input.SetCover {
+		after.CoverAssetID = nil
+		if input.CoverAssetID != nil {
+			id := *input.CoverAssetID
+			after.CoverAssetID = &id
+		}
+	}
 	if input.Name != nil {
 		after.Name = strings.TrimSpace(*input.Name)
 	}

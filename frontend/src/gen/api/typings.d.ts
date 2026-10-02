@@ -101,6 +101,13 @@ declare namespace API {
     credential_id: string;
   };
 
+  type downloadDocumentAssetParams = {
+    /** 项目UUID */
+    pid: string;
+    /** 文档素材UUID */
+    asset_id: string;
+  };
+
   type downloadMediaDepthParams = {
     /** Depth UUID */
     job_id: string;
@@ -1298,6 +1305,7 @@ declare namespace API {
     {
       allow_overseas_models?: boolean;
       aspect_ratio?: string;
+      cover_asset_id?: string;
       create_time?: string;
       description?: string;
       id?: string;
@@ -1654,6 +1662,8 @@ declare namespace API {
     allow_overseas_models?: boolean;
     archived_at?: string | null;
     aspect_ratio?: string;
+    cover_asset_id?: string | null;
+    cover_unavailable?: boolean;
     create_time?: string;
     default_models?: Record<string, any>;
     delete_time?: string | null;
@@ -1724,6 +1734,8 @@ declare namespace API {
   type internalWorkspaceAdapterHttpProjectResponse = {
     archived_at?: string | null;
     aspect_ratio?: string;
+    cover_asset_id?: string | null;
+    cover_unavailable?: boolean;
     delete_time?: string | null;
     folder_id?: string | null;
     id?: string;
@@ -1742,6 +1754,7 @@ declare namespace API {
 
   type internalWorkspaceAdapterHttpProjectUpdateRequest = {
     allow_overseas_models?: boolean;
+    cover_asset_id?: string | null;
     description?: string;
     expected_revision: number;
     name?: string;
@@ -1775,7 +1788,7 @@ declare namespace API {
   type listMediaAssetsParams = {
     /** 项目UUID */
     pid: string;
-    /** image/video/audio/model */
+    /** image/video/audio/model/document；默认仅可渲染媒体 */
     kind?: string;
     /** 不透明游标 */
     cursor?: string;

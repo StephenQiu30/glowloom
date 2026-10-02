@@ -44,7 +44,7 @@ export type MediaUploadDialogProps = {
   onBusyChange?: (busy: boolean) => void;
   disabled?: boolean;
   readOnly?: boolean;
-  target?: "canvas" | "folder-cover";
+  target?: "canvas" | "folder-cover" | "project-cover";
 };
 type Entry = {
   file: File;
@@ -96,12 +96,13 @@ function MediaUploadSession({
   const reviewId = useId();
   const busy = phase !== "idle";
   const blocked = disabled || readOnly;
-  const folderCover = target === "folder-cover";
+  const folderCover = target !== "canvas";
+  const coverLabel = target === "project-cover" ? "项目主图" : "目录封面";
   const validation = validateCanvasMediaFiles(
     entries.map((entry) => entry.file),
     remainingSlots,
     maximumFiles,
-    folderCover,
+    target === "project-cover" ? "project-cover" : folderCover,
   );
   const successful = entries.flatMap((entry) =>
     entry.asset ? [entry.asset] : [],
@@ -264,11 +265,15 @@ function MediaUploadSession({
       >
         <DialogHeader>
           <DialogTitle>
-            {folderCover ? "上传目录封面" : "上传媒体到画布"}
+            {folderCover ? `上传${coverLabel}` : "上传媒体到画布"}
           </DialogTitle>
           <DialogDescription>
             {folderCover ? (
-              "上传一张图片到选中的来源项目。完成后选择正式素材作为封面草稿，再明确保存目录封面。"
+              target === "project-cover" ? (
+                "上传一张图片到当前项目。完成后选择正式素材作为主图草稿，再明确保存项目设置。"
+              ) : (
+                "上传一张图片到选中的来源项目。完成后选择正式素材作为封面草稿，再明确保存目录封面。"
+              )
             ) : (
               <>
                 每批最多 {maximumFiles} 个文件、总计 700 MiB；当前可添加{" "}
@@ -354,7 +359,7 @@ function MediaUploadSession({
                       ? `${entry.progress === undefined ? "正在上传" : `正在上传 ${entry.progress}%`}，完成后由服务端校验`
                       : entry.status === "ready"
                         ? folderCover
-                          ? "已上传，等待选择为目录封面"
+                          ? `已上传，等待选择为${coverLabel}`
                           : "已上传，等待加入画布"
                         : entry.status === "cancelled"
                           ? "已取消，可用原请求重试"
@@ -398,7 +403,9 @@ function MediaUploadSession({
             </AlertTitle>
             <AlertDescription>
               {folderCover
-                ? "请选择当前可编辑的来源项目后再上传封面。"
+                ? target === "project-cover"
+                  ? "请在当前可编辑的项目内上传主图。"
+                  : "请选择当前可编辑的来源项目后再上传封面。"
                 : "请退出只读状态后再上传和添加素材。"}
             </AlertDescription>
           </Alert>
@@ -406,7 +413,7 @@ function MediaUploadSession({
         {phase === "saving" && (
           <p role="status" className="text-sm text-muted-foreground">
             {folderCover
-              ? "正在选择目录封面，请等待结果。"
+              ? `正在选择${coverLabel}，请等待结果。`
               : "正在加入画布，请等待保存结果。"}
           </p>
         )}
@@ -431,7 +438,7 @@ function MediaUploadSession({
                   onClick={saveSuccessful}
                 >
                   {folderCover
-                    ? "重试选择目录封面"
+                    ? `重试选择${coverLabel}`
                     : saveError
                       ? "重试加入画布"
                       : `将成功的 ${successful.length} 个加入画布`}

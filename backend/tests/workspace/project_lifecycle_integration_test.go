@@ -113,7 +113,7 @@ func TestProjectLifecycleRejectsMissingWorkEvidenceAndStaleCAS(t *testing.T) {
 		t.Fatalf("CAS %v", err)
 	}
 	var count int64
-	if err := db.Raw(`SELECT count(*) FROM infra.idempotency_record WHERE actor_id=?`, actor.ID).Scan(&count).Error; err != nil {
+	if err := db.Raw(`SELECT count(*) FROM workspace.project_change_command WHERE actor_id=?`, actor.ID).Scan(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {

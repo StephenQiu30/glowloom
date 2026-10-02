@@ -58,11 +58,18 @@ type ProjectCopyBudgetOwner interface {
 	VerifyCopyTargetBudget(context.Context, identityapp.Principal, uuid.UUID) error
 }
 
+// ProjectCopyCoverOwner proves source and private target images through media ownership.
+type ProjectCopyCoverOwner interface {
+	Freeze(context.Context, identityapp.Principal, uuid.UUID, *uuid.UUID) error
+	Verify(context.Context, identityapp.Principal, mediaapp.ProjectCopyBinding, *uuid.UUID, *uuid.UUID) error
+}
+
 // ProjectCopyOwners are concrete owning-module application boundaries on one transaction.
 type ProjectCopyOwners struct {
 	Media  ProjectCopyMediaOwner
 	Canvas ProjectCopyCanvasOwner
 	Budget ProjectCopyBudgetOwner
+	Cover  ProjectCopyCoverOwner
 }
 
 // ProjectCopyAdmissionStore owns authorization, atomic freezing and safe job reads.

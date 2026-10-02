@@ -28,6 +28,8 @@ type ProjectListCursor struct {
 
 // ProjectListItem contains the fields needed by the project list and recycle bin.
 type ProjectListItem struct {
+	CoverAssetID        *uuid.UUID
+	CoverUnavailable    bool
 	ID                  uuid.UUID
 	OrgID               uuid.UUID
 	Name                string
@@ -113,7 +115,7 @@ func (q *ListProjectsQuery) Execute(ctx context.Context, actor identityapp.Princ
 		return ProjectListPage{}, ErrInvalidProjectList
 	}
 	for _, project := range page.Projects {
-		if project.ID == uuid.Nil || project.OrgID != actor.OrgID || project.IsDelete != input.Deleted ||
+		if (project.CoverAssetID != nil && *project.CoverAssetID == uuid.Nil) || (project.CoverAssetID == nil && project.CoverUnavailable) || project.ID == uuid.Nil || project.OrgID != actor.OrgID || project.IsDelete != input.Deleted ||
 			project.Name == "" || project.Revision < 1 || project.UpdateTime.IsZero() ||
 			(project.Status != "active" && project.Status != "archived") ||
 			(input.Status != "" && project.Status != input.Status) {

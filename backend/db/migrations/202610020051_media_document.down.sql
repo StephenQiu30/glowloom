@@ -1,0 +1,1 @@
+ALTER TABLE media.media_asset DROP CONSTRAINT media_asset_document_facts_check;

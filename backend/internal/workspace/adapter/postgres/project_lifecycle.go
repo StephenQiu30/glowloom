@@ -25,6 +25,7 @@ func NewStoreWithProjectWorkGuard(db *gorm.DB, work ProjectWorkFactory) *Store {
 }
 
 type lifecycleProjectRow struct {
+	CoverAssetID                                                  *uuid.UUID
 	ID, OrgID                                                     uuid.UUID
 	Name, Description, AspectRatio, StyleType, Resolution, Status string
 	StyleSubtype                                                  *string
@@ -37,7 +38,7 @@ type lifecycleProjectRow struct {
 }
 
 func (r lifecycleProjectRow) snapshot() (application.ProjectSnapshot, error) {
-	p := domain.Project{ID: r.ID, OrgID: r.OrgID, Name: r.Name, Description: r.Description, AspectRatio: r.AspectRatio, StyleType: r.StyleType, Resolution: r.Resolution, Status: r.Status, AllowOverseasModels: r.AllowOverseasModels, IsDelete: r.IsDelete, ArchivedAt: r.ArchivedAt, DeleteTime: r.DeleteTime, PurgeAfter: r.PurgeAfter, Revision: r.Revision, CreateTime: r.CreateTime, UpdateTime: r.UpdateTime}
+	p := domain.Project{CoverAssetID: r.CoverAssetID, ID: r.ID, OrgID: r.OrgID, Name: r.Name, Description: r.Description, AspectRatio: r.AspectRatio, StyleType: r.StyleType, Resolution: r.Resolution, Status: r.Status, AllowOverseasModels: r.AllowOverseasModels, IsDelete: r.IsDelete, ArchivedAt: r.ArchivedAt, DeleteTime: r.DeleteTime, PurgeAfter: r.PurgeAfter, Revision: r.Revision, CreateTime: r.CreateTime, UpdateTime: r.UpdateTime}
 	if r.StyleSubtype != nil {
 		p.StyleSubtype = *r.StyleSubtype
 	}
@@ -55,7 +56,7 @@ func (r lifecycleProjectRow) snapshot() (application.ProjectSnapshot, error) {
 }
 
 func readLifecycleProject(tx *gorm.DB, org, id uuid.UUID, write bool) (application.ProjectSnapshot, error) {
-	query := `SELECT id,org_id,name,description,aspect_ratio,style_type,style_subtype,style_preset_id,resolution,allow_overseas_models,status,is_delete,archived_at,delete_time,purge_after,revision,create_time,update_time,default_models::text AS default_models FROM workspace.project WHERE id=? AND org_id=?`
+	query := `SELECT id,org_id,name,description,aspect_ratio,style_type,style_subtype,style_preset_id,cover_asset_id,resolution,allow_overseas_models,status,is_delete,archived_at,delete_time,purge_after,revision,create_time,update_time,default_models::text AS default_models FROM workspace.project WHERE id=? AND org_id=?`
 	if write {
 		query += ` FOR UPDATE`
 	} else {
@@ -84,6 +85,10 @@ func (s *Store) ReadProjectSnapshot(ctx context.Context, actor identityapp.Princ
 		}
 		var err error
 		saved, err = readLifecycleProject(tx, actor.OrgID, id, false)
+		if err != nil {
+			return err
+		}
+		saved.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, saved.Project)
 		return err
 	})
 	if err != nil {
@@ -109,7 +114,12 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 		return application.ProjectSnapshot{}, err
 	}
 	var saved application.ProjectSnapshot
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) (err error) {
+		defer func() {
+			if err == nil {
+				saved.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, saved.Project)
+			}
+		}()
 		if err := requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
@@ -121,7 +131,7 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
-		found, err := replayProjectChange(tx, actor, input.IdempotencyKey, fingerprint, &saved)
+		found, err := replayProjectChange(tx, actor, input, fingerprint, &saved)
 		if err != nil || found {
 			return err
 		}
@@ -163,9 +173,14 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
+		if input.Patch.SetCover {
+			if err := s.requireProjectCover(ctx, tx, actor, after); err != nil {
+				return err
+			}
+		}
 		if len(events) == 0 {
 			saved = current
-			return recordProjectChange(tx, actor, input.IdempotencyKey, fingerprint, saved)
+			return recordProjectChange(tx, actor, input, fingerprint, saved)
 		}
 		if input.Action == "patch" {
 			if err := requireUsablePreset(tx, after); err != nil {
@@ -176,7 +191,7 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 		if after.StylePresetID != uuid.Nil {
 			preset = after.StylePresetID
 		}
-		write := tx.Exec(`UPDATE workspace.project SET name=?,description=?,style_preset_id=?,allow_overseas_models=?,status=?,is_delete=?,archived_at=?,delete_time=?,purge_after=?,revision=? WHERE id=? AND org_id=? AND revision=?`, after.Name, after.Description, preset, after.AllowOverseasModels, after.Status, after.IsDelete, after.ArchivedAt, after.DeleteTime, after.PurgeAfter, after.Revision, after.ID, actor.OrgID, current.Project.Revision)
+		write := tx.Exec(`UPDATE workspace.project SET name=?,description=?,style_preset_id=?,cover_asset_id=?,allow_overseas_models=?,status=?,is_delete=?,archived_at=?,delete_time=?,purge_after=?,revision=? WHERE id=? AND org_id=? AND revision=?`, after.Name, after.Description, preset, after.CoverAssetID, after.AllowOverseasModels, after.Status, after.IsDelete, after.ArchivedAt, after.DeleteTime, after.PurgeAfter, after.Revision, after.ID, actor.OrgID, current.Project.Revision)
 		if write.Error != nil {
 			return fmt.Errorf("persist project lifecycle: %w", write.Error)
 		}
@@ -196,7 +211,7 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
-		return recordProjectChange(tx, actor, input.IdempotencyKey, fingerprint, saved)
+		return recordProjectChange(tx, actor, input, fingerprint, saved)
 	})
 	if err != nil {
 		return application.ProjectSnapshot{}, fmt.Errorf("project lifecycle transaction: %w", err)
@@ -206,6 +221,10 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 
 func projectChangeFingerprint(actor identityapp.Principal, input application.ProjectChangeInput) (string, error) {
 	p := input.Patch
+	var cover *projectCoverPatch
+	if p.SetCover {
+		cover = &projectCoverPatch{AssetID: p.CoverAssetID}
+	}
 	body, err := json.Marshal(struct {
 		Contract          string
 		Org, Project      uuid.UUID
@@ -214,55 +233,13 @@ func projectChangeFingerprint(actor identityapp.Principal, input application.Pro
 		Name, Description *string
 		Preset            *uuid.UUID
 		Overseas          *bool
-	}{"project.lifecycle.v1", actor.OrgID, p.ProjectID, input.Action, p.ExpectedRevision, p.Name, p.Description, p.StylePresetID, p.AllowOverseasModels})
+		Cover             *projectCoverPatch `json:"Cover,omitempty"`
+	}{"project.lifecycle.v1", actor.OrgID, p.ProjectID, input.Action, p.ExpectedRevision, p.Name, p.Description, p.StylePresetID, p.AllowOverseasModels, cover})
 	if err != nil {
 		return "", fmt.Errorf("encode project change fingerprint: %w", err)
 	}
 	digest := sha256.Sum256(body)
 	return hex.EncodeToString(digest[:]), nil
-}
-
-func replayProjectChange(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, fingerprint string, saved *application.ProjectSnapshot) (bool, error) {
-	var row struct {
-		RequestHash  string
-		StatusCode   int
-		ResponseBody []byte
-	}
-	read := tx.Raw(`SELECT request_hash,status_code,response_body FROM infra.idempotency_record WHERE actor_id=? AND idem_key=? AND NOT is_delete AND expires_at>statement_timestamp()`, actor.ID, key.String()).Scan(&row)
-	if read.Error != nil {
-		return false, fmt.Errorf("read project lifecycle receipt: %w", read.Error)
-	}
-	if read.RowsAffected == 0 {
-		return false, nil
-	}
-	if row.RequestHash != fingerprint || row.StatusCode != 200 {
-		return false, application.ErrIdempotencyConflict
-	}
-	if err := json.Unmarshal(row.ResponseBody, saved); err != nil {
-		return false, fmt.Errorf("decode project lifecycle receipt: %w", err)
-	}
-	if saved.Project.OrgID != actor.OrgID || saved.Project.ID == uuid.Nil || saved.DefaultModels == nil {
-		return false, application.ErrProjectDependencyUnavailable
-	}
-	return true, nil
-}
-
-func recordProjectChange(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, fingerprint string, saved application.ProjectSnapshot) error {
-	body, err := json.Marshal(saved)
-	if err != nil {
-		return fmt.Errorf("encode project lifecycle receipt: %w", err)
-	}
-	result := tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at)
- VALUES(?,?,?,?,200,?::jsonb,statement_timestamp()+interval '24 hours')
- ON CONFLICT(actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=excluded.status_code,response_body=excluded.response_body,expires_at=excluded.expires_at,is_delete=false,update_time=statement_timestamp()
- WHERE infra.idempotency_record.expires_at<=statement_timestamp() OR infra.idempotency_record.is_delete`, uuid.New(), actor.ID, key.String(), fingerprint, string(body))
-	if result.Error != nil {
-		return fmt.Errorf("persist project lifecycle receipt: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return application.ErrIdempotencyConflict
-	}
-	return nil
 }
 
 var _ application.ProjectLifecycleStore = (*Store)(nil)

@@ -45,7 +45,7 @@ func (h *UploadHandler) Register(group *gin.RouterGroup) {
 // @Produce json
 // @Param pid path string true "项目UUID"
 // @Param Idempotency-Key header string true "UUID幂等键"
-// @Param file formData file true "图片20MiB，视频500MiB且60秒（静音VP8/VP9 WebM实际转为MP4），音频100MiB，包内GLB2模型64MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证"
+// @Param file formData file true "图片20MiB，视频500MiB且60秒（静音VP8/VP9 WebM实际转为MP4），音频100MiB，包内GLB2模型64MiB，TXT/DOCX原件20MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证"
 // @Param local_review_confirmed formData boolean true "已确认本地内容、素材使用权限且不含需要授权的真人素材"
 // @Success 201 {object} application.UploadResult
 // @Failure 403 {object} httpapi.Problem

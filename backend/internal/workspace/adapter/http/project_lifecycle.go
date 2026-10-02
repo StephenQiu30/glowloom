@@ -38,6 +38,8 @@ func (h *ProjectLifecycleHandler) Register(group *gin.RouterGroup) {
 
 // ProjectDetailResponse contains safe settings and actual persisted recovery facts.
 type ProjectDetailResponse struct {
+	CoverAssetID        *uuid.UUID        `json:"cover_asset_id" extensions:"x-nullable"`
+	CoverUnavailable    bool              `json:"cover_unavailable"`
 	ID                  uuid.UUID         `json:"id"`
 	Name                string            `json:"name"`
 	Description         string            `json:"description"`
@@ -60,6 +62,8 @@ type ProjectDetailResponse struct {
 
 // ProjectUpdateRequest contains only settings mutable after creation.
 type ProjectUpdateRequest struct {
+	CoverAssetID        *uuid.UUID `json:"cover_asset_id,omitempty" extensions:"x-nullable"`
+	SetCover            bool       `json:"-" swaggerignore:"true"`
 	ExpectedRevision    *int64     `json:"expected_revision" binding:"required"`
 	Name                *string    `json:"name,omitempty" minLength:"1" maxLength:"50"`
 	Description         *string    `json:"description,omitempty"`
@@ -83,6 +87,11 @@ func (r *ProjectUpdateRequest) UnmarshalJSON(raw []byte) error {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return errors.New("project update contains trailing JSON")
 	}
+	var presence map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &presence); err != nil {
+		return err
+	}
+	_, decoded.SetCover = presence["cover_asset_id"]
 	*r = ProjectUpdateRequest(decoded)
 	return nil
 }
@@ -143,7 +152,7 @@ func (h *ProjectLifecycleHandler) Update(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return
 	}
-	h.change(c, "patch", application.UpdateProjectInput{ExpectedRevision: *body.ExpectedRevision, Name: body.Name, Description: body.Description, StylePresetID: body.StylePresetID, AllowOverseasModels: body.AllowOverseasModels})
+	h.change(c, "patch", application.UpdateProjectInput{SetCover: body.SetCover, CoverAssetID: body.CoverAssetID, ExpectedRevision: *body.ExpectedRevision, Name: body.Name, Description: body.Description, StylePresetID: body.StylePresetID, AllowOverseasModels: body.AllowOverseasModels})
 }
 
 // Archive makes a project read only after owning modules prove no inflight work.
@@ -254,7 +263,7 @@ func writeProjectSnapshot(c *gin.Context, s application.ProjectSnapshot) {
 		id := p.StylePresetID
 		preset = &id
 	}
-	response := ProjectDetailResponse{ID: p.ID, Name: p.Name, Description: p.Description, AspectRatio: p.AspectRatio, StyleType: p.StyleType, StyleSubtype: p.StyleSubtype, StylePresetID: preset, Resolution: p.Resolution, AllowOverseasModels: p.AllowOverseasModels, DefaultModels: s.DefaultModels, Status: p.Status, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, Revision: p.Revision, CreateTime: p.CreateTime, UpdateTime: p.UpdateTime}
+	response := ProjectDetailResponse{CoverAssetID: p.CoverAssetID, CoverUnavailable: s.CoverUnavailable, ID: p.ID, Name: p.Name, Description: p.Description, AspectRatio: p.AspectRatio, StyleType: p.StyleType, StyleSubtype: p.StyleSubtype, StylePresetID: preset, Resolution: p.Resolution, AllowOverseasModels: p.AllowOverseasModels, DefaultModels: s.DefaultModels, Status: p.Status, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, Revision: p.Revision, CreateTime: p.CreateTime, UpdateTime: p.UpdateTime}
 	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, response)
 }
@@ -267,6 +276,8 @@ func writeLifecycleError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, domain.ErrProjectRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
+	case errors.Is(err, application.ErrProjectCoverUnavailable):
+		httpapi.WriteProblem(c, 409, "cover_unavailable", nil)
 	case errors.Is(err, domain.ErrProjectStateConflict):
 		httpapi.WriteProblem(c, 409, "state_conflict", nil)
 	case errors.Is(err, domain.ErrProjectHasInflightOperations):
@@ -274,7 +285,7 @@ func writeLifecycleError(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrProjectRestoreExpired):
 		httpapi.WriteProblem(c, 409, "restore_expired", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
-		httpapi.WriteProblem(c, 422, "idempotency_key_reused", nil)
+		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
 	case errors.Is(err, application.ErrInvalidProjectChange), errors.Is(err, domain.ErrInvalidProject), errors.Is(err, application.ErrStylePresetMismatch):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:

@@ -47,7 +47,7 @@ func provideProjectCopyStore(database *gorm.DB) *pgworkspace.ProjectCopyStore {
 						JobID: binding.JobID, OrgID: binding.OrgID, SourceProjectID: binding.SourceProjectID, TargetProjectID: binding.TargetProjectID,
 					}}
 				})
-			return workspaceapp.ProjectCopyOwners{Media: media, Canvas: canvas, Budget: pgbilling.NewStore(tx)}
+			return workspaceapp.ProjectCopyOwners{Media: media, Canvas: canvas, Budget: pgbilling.NewStore(tx), Cover: projectCopyCoverOwner{tx: tx}}
 		})
 }
 

@@ -4397,7 +4397,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "image/video/audio/model",
+                        "description": "image/video/audio/model/document；默认仅可渲染媒体",
                         "name": "kind",
                         "in": "query"
                     },
@@ -4937,7 +4937,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "图片20MiB，视频500MiB且60秒（静音VP8/VP9 WebM实际转为MP4），音频100MiB，包内GLB2模型64MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证",
+                        "description": "图片20MiB，视频500MiB且60秒（静音VP8/VP9 WebM实际转为MP4），音频100MiB，包内GLB2模型64MiB，TXT/DOCX原件20MiB；图片/视频宽高均≤8192且≤4000万像素；按真实内容验证",
                         "name": "file",
                         "in": "formData",
                         "required": true
@@ -4995,6 +4995,72 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/projects/{pid}/media/{asset_id}/download": {
+            "get": {
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "下载正式文档原件",
+                "operationId": "downloadDocumentAsset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "项目UUID",
+                        "name": "pid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "文档素材UUID",
+                        "name": "asset_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "原始TXT/DOCX附件",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/github_com_StephenQiu30_lanverse_backend_internal_platform_httpapi.Problem"
                         }
@@ -8676,6 +8742,9 @@ const docTemplate = `{
                 "aspect_ratio": {
                     "type": "string"
                 },
+                "cover_asset_id": {
+                    "type": "string"
+                },
                 "create_time": {
                     "type": "string"
                 },
@@ -9713,6 +9782,13 @@ const docTemplate = `{
                 "aspect_ratio": {
                     "type": "string"
                 },
+                "cover_asset_id": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "cover_unavailable": {
+                    "type": "boolean"
+                },
                 "create_time": {
                     "type": "string"
                 },
@@ -9923,6 +9999,13 @@ const docTemplate = `{
                 "aspect_ratio": {
                     "type": "string"
                 },
+                "cover_asset_id": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "cover_unavailable": {
+                    "type": "boolean"
+                },
                 "delete_time": {
                     "type": "string",
                     "x-nullable": true
@@ -9977,6 +10060,10 @@ const docTemplate = `{
             "properties": {
                 "allow_overseas_models": {
                     "type": "boolean"
+                },
+                "cover_asset_id": {
+                    "type": "string",
+                    "x-nullable": true
                 },
                 "description": {
                     "type": "string"

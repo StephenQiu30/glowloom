@@ -42,6 +42,8 @@ import {
   TableCaption,
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { FolderScope } from "./folder-intent";
+import { ProjectCoverPreview } from "./project-cover-preview";
 
 export type ProjectListDisplayItem = Readonly<{
   id: string;
@@ -50,6 +52,8 @@ export type ProjectListDisplayItem = Readonly<{
   styleType: "realistic" | "stylized";
   status: "active" | "archived";
   isDeleted: boolean;
+  coverAssetId?: string | null;
+  coverUnavailable?: boolean;
 }>;
 export type ProjectListView = "cards" | "table";
 export type ProjectAction =
@@ -59,6 +63,7 @@ type ProjectListProps = {
   projects: readonly ProjectListDisplayItem[];
   view: ProjectListView;
   onViewChange: (view: ProjectListView) => void;
+  scope?: FolderScope;
   onAction?: (
     project: ProjectListDisplayItem,
     action: ProjectListAction,
@@ -161,6 +166,7 @@ export function ProjectList({
   view,
   onViewChange,
   onAction,
+  scope,
 }: ProjectListProps) {
   const headingId = useId();
   return (
@@ -210,14 +216,22 @@ export function ProjectList({
           {projects.map((project) => (
             <li key={project.id} className="min-w-0">
               <Card className="group h-full gap-3 overflow-visible border-0 bg-transparent p-0 shadow-none ring-0">
-                <div
-                  aria-hidden="true"
-                  className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl bg-linear-to-br from-muted via-muted/70 to-muted/40 transition-colors group-hover:bg-muted"
-                >
-                  <Clapperboard
-                    className="size-12 text-muted-foreground/35"
-                    strokeWidth={1.25}
-                  />
+                <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl bg-linear-to-br from-muted via-muted/70 to-muted/40 transition-colors group-hover:bg-muted">
+                  {project.coverAssetId && scope && !project.isDeleted ? (
+                    <ProjectCoverPreview
+                      key={`${scope.actorId}:${scope.orgId}:${project.coverAssetId}:${project.coverUnavailable}`}
+                      projectId={project.id}
+                      assetId={project.coverAssetId}
+                      scope={scope}
+                      unavailable={project.coverUnavailable}
+                    />
+                  ) : (
+                    <Clapperboard
+                      aria-hidden="true"
+                      className="size-12 text-muted-foreground/35"
+                      strokeWidth={1.25}
+                    />
+                  )}
                   <span className="absolute right-3 bottom-3 rounded-md bg-background/70 px-2 py-1 text-xs text-muted-foreground tabular-nums">
                     {project.aspectRatio}
                   </span>

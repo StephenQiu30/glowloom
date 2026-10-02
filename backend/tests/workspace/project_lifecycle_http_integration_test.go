@@ -114,7 +114,7 @@ func TestProjectLifecycleHTTPInFlightConflictAndDeadline(t *testing.T) {
 		t.Fatal(first.Code, first.Body.String())
 	}
 	reused := projectHTTPRequest(ctx, otherRouter, "PATCH", otherPath, key, []byte(`{"expected_revision":1,"name":"同键异体"}`))
-	if reused.Code != 422 || !strings.Contains(reused.Body.String(), "idempotency_key_reused") {
+	if reused.Code != 409 || !strings.Contains(reused.Body.String(), "idempotency_key_reused") {
 		t.Fatal("wrong idempotency conflict", reused.Code, reused.Body.String())
 	}
 	stale := projectHTTPRequest(ctx, otherRouter, "POST", otherPath+"/archive", uuid.NewString(), []byte(`{"expected_revision":1}`))

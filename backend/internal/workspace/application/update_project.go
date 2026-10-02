@@ -30,6 +30,8 @@ type UpdateProjectStore interface {
 // UpdateProjectInput contains only mutable settings. A nil pointer leaves a
 // field unchanged; StylePresetID pointing to uuid.Nil clears the preset.
 type UpdateProjectInput struct {
+	SetCover            bool       `json:"SetCover,omitempty"`
+	CoverAssetID        *uuid.UUID `json:"CoverAssetID,omitempty"`
 	ProjectID           uuid.UUID
 	ExpectedRevision    int64
 	Name                *string
@@ -62,7 +64,7 @@ func (c *UpdateProjectCommand) Execute(ctx context.Context, actor identityapp.Pr
 	requestID, err := uuid.Parse(input.RequestID)
 	if input.ProjectID == uuid.Nil || input.ExpectedRevision < 1 || input.ExpectedRevision >= math.MaxInt32 ||
 		err != nil || requestID == uuid.Nil || requestID.String() != input.RequestID ||
-		(input.Name == nil && input.Description == nil && input.StylePresetID == nil && input.AllowOverseasModels == nil) {
+		(input.Name == nil && input.Description == nil && input.StylePresetID == nil && input.AllowOverseasModels == nil && !input.SetCover) {
 		return UpdatedProject{}, ErrInvalidUpdateProject
 	}
 	if !validProjectPatch(input) {
@@ -114,7 +116,7 @@ func (c *UpdateProjectCommand) Execute(ctx context.Context, actor identityapp.Pr
 func sameProjectSettings(left, right domain.Project) bool {
 	return left.Name == right.Name && left.Description == right.Description &&
 		left.StylePresetID == right.StylePresetID &&
-		left.AllowOverseasModels == right.AllowOverseasModels
+		left.AllowOverseasModels == right.AllowOverseasModels && SameProjectCover(left.CoverAssetID, right.CoverAssetID)
 }
 
 func projectSettingsResult(project domain.Project) UpdatedProject {
@@ -128,7 +130,7 @@ func projectSettingsResult(project domain.Project) UpdatedProject {
 		Description: project.Description, AspectRatio: project.AspectRatio,
 		StyleType: project.StyleType, StyleSubtype: project.StyleSubtype,
 		StylePresetID: presetID, Resolution: project.Resolution,
-		AllowOverseasModels: project.AllowOverseasModels, Status: project.Status,
+		CoverAssetID: project.CoverAssetID, AllowOverseasModels: project.AllowOverseasModels, Status: project.Status,
 		Revision: project.Revision, CreateTime: project.CreateTime, UpdateTime: project.UpdateTime,
 	}
 }
@@ -149,6 +151,9 @@ func projectUpdateSummaries(before, after domain.Project) (map[string]any, map[s
 	if before.AllowOverseasModels != after.AllowOverseasModels {
 		old["allow_overseas_models"] = before.AllowOverseasModels
 		afterSummary["allow_overseas_models"] = after.AllowOverseasModels
+	}
+	if !SameProjectCover(before.CoverAssetID, after.CoverAssetID) {
+		afterSummary["cover_changed"] = true
 	}
 	if before.Name != after.Name {
 		afterSummary["name_changed"] = true

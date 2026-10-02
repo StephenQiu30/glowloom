@@ -270,13 +270,16 @@ func validUploadProbe(file *Downloaded, p ProbeResult) bool {
 	case domain.KindModel:
 		return file.Size <= MaxUploadModelBytes && file.MIMEType == "model/gltf-binary" && p.Extension == "glb" && *p.Codec == "glb2" &&
 			p.Width == nil && p.Height == nil && p.DurationMS == nil && p.FPS == nil && p.AudioChannels == nil
+	case domain.KindDocument:
+		return file.Size >= 1 && file.Size <= MaxUploadDocumentBytes && p.Width == nil && p.Height == nil && p.DurationMS == nil && p.FPS == nil && p.AudioChannels == nil &&
+			(file.MIMEType == domain.MIMEText && p.Extension == "txt" && *p.Codec == "txt" || file.MIMEType == domain.MIMEDOCX && p.Extension == "docx" && *p.Codec == "docx")
 	default:
 		return false
 	}
 }
 
 func completeUploadRendered(kind domain.Kind, files []RenditionFile) bool {
-	if kind == domain.KindModel {
+	if kind == domain.KindModel || kind == domain.KindDocument {
 		return len(files) == 0
 	}
 	required := requiredRenditions(kind)
