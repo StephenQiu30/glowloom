@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as media from "@/gen/api/media";
+import * as media from "@/api/media";
 import {
   runLibraryPurge,
   getLibraryPurge,
@@ -15,7 +15,7 @@ import {
   transferIDs as ids,
 } from "@/components/library/transfer-test-fixtures";
 import * as library from "./library-queries";
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/media", () => ({
   createMediaPurge: vi.fn(),
   getMediaPurge: vi.fn(),
   listMediaPurges: vi.fn(),

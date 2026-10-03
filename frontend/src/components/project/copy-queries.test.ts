@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
   retry: vi.fn(),
   reconcile: vi.fn(),
 }));
-vi.mock("@/gen/api/projectCopies", () => ({
+vi.mock("@/api/projectCopies", () => ({
   listProjectCopies: api.list,
   getProjectCopy: api.get,
   createProjectCopy: api.create,

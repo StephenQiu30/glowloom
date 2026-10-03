@@ -1,12 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as media from "@/gen/api/media";
+import * as media from "@/api/media";
 import { uploadLibraryOriginal } from "./library-upload-query";
 import * as queries from "./library-queries";
 const sdk = vi.hoisted(() => ({
   personal: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   project: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }));
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/media", () => ({
   uploadPersonalMediaAsset: sdk.personal,
   uploadMediaAsset: sdk.project,
 }));

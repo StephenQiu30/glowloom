@@ -17,14 +17,14 @@ const ports = vi.hoisted(() => ({
   media: vi.fn(),
   preview: vi.fn(),
 }));
-vi.mock("@/gen/api/projects", () => ({
+vi.mock("@/api/projects", () => ({
   listProjectFolders: ports.list,
   createProjectFolder: ports.create,
   updateProjectFolder: ports.patch,
   recycleProjectFolder: ports.recycle,
   moveProjectToFolder: ports.move,
 }));
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/media", () => ({
   listMediaAssets: ports.media,
   getMediaPreview: ports.preview,
 }));

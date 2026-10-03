@@ -4,7 +4,8 @@ import { BoxGeometry, Mesh, MeshStandardMaterial, Scene, Texture } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { LibraryModelPreview } from "./library-model-preview";
 import { triangleJSON } from "@/components/canvas/director/model-test-fixtures";
-const loader = vi.hoisted(() => ({ parse: vi.fn() }));
+const loader = vi.hoisted(() => ({ parse: vi.fn(), resource: vi.fn() }));
+vi.mock("@/lib/request", () => ({ readResourceStream: loader.resource }));
 vi.mock("@/components/canvas/director/model-file", async (original) => ({
   ...(await original<
     typeof import("@/components/canvas/director/model-file")
@@ -32,9 +33,8 @@ function model() {
 }
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockImplementation(() => Promise.resolve(new Response(bytes))),
+  loader.resource.mockImplementation(() =>
+    Promise.resolve(new Response(bytes).body!),
   );
 });
 afterEach(() => {
@@ -65,13 +65,9 @@ it("JSON原件完整读完后按canonicalMIME解析，生命周期释放几何/�
   expect(new Uint8Array(loader.parse.mock.calls[0][0])).toEqual(
     new Uint8Array(bytes),
   );
-  expect(fetch).toHaveBeenCalledWith(
+  expect(loader.resource).toHaveBeenCalledWith(
     "https://storage.example/current-signed",
-    expect.objectContaining({
-      credentials: "omit",
-      redirect: "error",
-      signal: expect.any(AbortSignal),
-    }),
+    expect.any(AbortSignal),
   );
   expect(error).not.toHaveBeenCalled();
   view.unmount();
@@ -99,7 +95,7 @@ it("关闭后才解析完成的模型立即释放，不更新UI或报告错误",
     />,
   );
   await waitFor(() => expect(loader.parse).toHaveBeenCalledOnce());
-  const signal = vi.mocked(fetch).mock.calls[0][1]?.signal;
+  const signal = loader.resource.mock.calls[0][1] as AbortSignal;
   view.unmount();
   expect(signal?.aborted).toBe(true);
   await act(async () => release(owned.gltf));
@@ -133,7 +129,7 @@ it("本地完整JSON File沿同一个解析器，不请求URL也不制造转换B
     />,
   );
   await screen.findByTestId("model-ready");
-  expect(fetch).not.toHaveBeenCalled();
+  expect(loader.resource).not.toHaveBeenCalled();
   expect(new Uint8Array(loader.parse.mock.calls[0][0])).toEqual(
     new Uint8Array(bytes),
   );

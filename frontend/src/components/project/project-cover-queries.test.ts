@@ -5,7 +5,7 @@ import {
   projectCoverPreviewKey,
 } from "./project-cover-queries";
 const api = vi.hoisted(() => ({ list: vi.fn(), preview: vi.fn() }));
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/media", () => ({
   listMediaAssets: api.list,
   getMediaPreview: api.preview,
 }));

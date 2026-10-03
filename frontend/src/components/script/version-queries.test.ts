@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
-import * as script from "@/gen/api/script";
+import * as script from "@/api/script";
 import { versionSourceText, listConfirmations } from "./version-queries";
-vi.mock("@/gen/api/script", () => ({
+vi.mock("@/api/script", () => ({
   getScriptVersionSourceText: vi.fn(),
   listScriptSplitConfirmations: vi.fn(),
 }));

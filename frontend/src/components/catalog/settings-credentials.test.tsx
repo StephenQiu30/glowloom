@@ -16,8 +16,8 @@ const api = vi.hoisted(() => ({
   disableAdminCredential: vi.fn(),
   testAdminCredential: vi.fn(),
 }));
-vi.mock("@/gen/api/settings", async (original) => ({
-  ...(await original<typeof import("@/gen/api/settings")>()),
+vi.mock("@/api/settings", async (original) => ({
+  ...(await original<typeof import("@/api/settings")>()),
   ...api,
 }));
 const id = "10000000-0000-4000-8000-000000000001";

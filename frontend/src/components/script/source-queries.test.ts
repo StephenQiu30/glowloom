@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as generated from "@/gen/api/script";
+import * as generated from "@/api/script";
 import {
   getSource,
   getWorkspace,
@@ -8,7 +8,7 @@ import {
   requireScriptScope,
   runSourceIntent,
 } from "./source-queries";
-vi.mock("@/gen/api/script", () => ({
+vi.mock("@/api/script", () => ({
   getScriptWorkspace: vi.fn(),
   listScriptSources: vi.fn(),
   getScriptSource: vi.fn(),

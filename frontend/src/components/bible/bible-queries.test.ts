@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({
   createBibleEntry: vi.fn(),
   confirmBibleEntry: vi.fn(),
 }));
-vi.mock("@/gen/api/bible", () => ({
+vi.mock("@/api/bible", () => ({
   ...api,
   listBibleVoices: vi.fn(),
   updateBibleEntry: vi.fn(),

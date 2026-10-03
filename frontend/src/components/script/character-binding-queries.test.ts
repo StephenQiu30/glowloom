@@ -12,7 +12,7 @@ const mocked = vi.hoisted(() => ({
   snapshot: vi.fn(),
   version: vi.fn(),
 }));
-vi.mock("@/gen/api/bible", () => ({ getBibleVersion: mocked.version }));
+vi.mock("@/api/bible", () => ({ getBibleVersion: mocked.version }));
 vi.mock("./source-queries", async (original) => ({
   ...(await original<typeof import("./source-queries")>()),
   getWorkspace: mocked.workspace,

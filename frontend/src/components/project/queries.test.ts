@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({
   presets: vi.fn(),
   detail: vi.fn(),
 }));
-vi.mock("@/gen/api/projects", () => ({
+vi.mock("@/api/projects", () => ({
   createProject: api.create,
   listProjects: api.list,
   listStylePresets: api.presets,

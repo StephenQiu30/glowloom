@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as api from "@/gen/api/mediaDepths";
+import * as api from "@/api/mediaDepths";
 import { ApiError } from "@/lib/request";
 import {
   listDepths,
@@ -7,7 +7,7 @@ import {
   runDepthIntent,
   downloadDepth,
 } from "./media-depth-queries";
-vi.mock("@/gen/api/mediaDepths", () => ({
+vi.mock("@/api/mediaDepths", () => ({
   createMediaDepth: vi.fn(),
   listMediaDepths: vi.fn(),
   getMediaDepth: vi.fn(),

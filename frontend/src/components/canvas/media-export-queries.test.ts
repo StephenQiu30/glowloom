@@ -11,7 +11,7 @@ const api = vi.hoisted(() => ({
   list: vi.fn(),
   review: vi.fn(),
 }));
-vi.mock("@/gen/api/mediaExports", () => ({
+vi.mock("@/api/mediaExports", () => ({
   createMediaExport: api.create,
   listMediaExports: api.list,
   reviewMediaExport: api.review,

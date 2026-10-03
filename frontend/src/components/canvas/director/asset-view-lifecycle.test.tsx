@@ -13,7 +13,12 @@ import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { AuthorizedModel } from "./asset-view";
 import { triangleJSON } from "./model-test-fixtures";
 
-const owner = vi.hoisted(() => ({ preview: vi.fn(), parse: vi.fn() }));
+const owner = vi.hoisted(() => ({
+  preview: vi.fn(),
+  parse: vi.fn(),
+  resource: vi.fn(),
+}));
+vi.mock("@/lib/request", () => ({ readResourceStream: owner.resource }));
 vi.mock("../queries", () => ({ getMediaPreview: owner.preview }));
 vi.mock("./model-file", async (original) => ({
   ...(await original<typeof import("./model-file")>()),
@@ -59,9 +64,8 @@ function ownedModel() {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockImplementation(() => Promise.resolve(new Response(bytes))),
+  owner.resource.mockImplementation(() =>
+    Promise.resolve(new Response(bytes).body!),
   );
   owner.preview.mockResolvedValue(lease);
 });
@@ -131,7 +135,7 @@ it.each(["clay", "normal", "depth", "pose"] as const)(
     expect(view.replacementDispose).toHaveBeenCalledOnce();
     expect(view.status).toHaveBeenLastCalledWith(false);
     expect(view.loaded).toHaveBeenCalledOnce();
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(owner.resource).toHaveBeenCalledOnce();
     await act(async () => {
       reject(new Error("项目预览授权已撤回"));
       await refetch;
@@ -148,7 +152,7 @@ it.each(["clay", "normal", "depth", "pose"] as const)(
 
 it("签名 URL 直接轮换后新加载失败，旧模型原始 texture/material 仍只释放一次", async () => {
   const view = await mount();
-  vi.mocked(fetch).mockRejectedValueOnce(new Error("新原件读取失败"));
+  owner.resource.mockRejectedValueOnce(new Error("新原件读取失败"));
   await act(async () => {
     view.client.setQueryData(key, {
       ...lease,
@@ -193,7 +197,7 @@ it("签名 URL 轮换成功时旧资源完整释放，新材质切换与关闭�
 it("同 URL 和时间戳的新租约对象也完整释放旧模型，失败期间切换模式不重新分配旧材质", async () => {
   const view = await mount(),
     updatedAt = view.client.getQueryState(key)!.dataUpdatedAt;
-  vi.mocked(fetch).mockRejectedValueOnce(new Error("新原件读取失败"));
+  owner.resource.mockRejectedValueOnce(new Error("新原件读取失败"));
   await act(async () => {
     view.client.setQueryData(
       key,

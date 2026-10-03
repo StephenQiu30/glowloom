@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as api from "@/gen/api/media";
+import * as api from "@/api/media";
 import {
   listLibrary,
   applyLibraryIntent,
@@ -13,7 +13,7 @@ import { animatedGIFBytes } from "./gif-test-fixtures";
 const sdk = vi.hoisted(() => ({
   download: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }));
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/media", () => ({
   listMediaLibrary: vi.fn(),
   applyMediaLibraryCommand: vi.fn(),
   getMediaLibraryItem: vi.fn(),

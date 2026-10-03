@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
-import * as api from "@/gen/api/script";
+import * as api from "@/api/script";
 import { listFileImports, runFileImportIntent } from "./file-import-queries";
-vi.mock("@/gen/api/script", () => ({
+vi.mock("@/api/script", () => ({
   listScriptFileImports: vi.fn(),
   getScriptFileImport: vi.fn(),
   createScriptFileImport: vi.fn(),

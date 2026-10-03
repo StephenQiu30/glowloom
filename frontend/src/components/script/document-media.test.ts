@@ -1,12 +1,12 @@
 import { expect, it, vi } from "vitest";
-import * as media from "@/gen/api/media";
+import * as media from "@/api/media";
 import {
   readDocumentPage,
   uploadDocument,
   readDocumentUpload,
   findDocument,
 } from "./document-media";
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/media", () => ({
   uploadMediaAsset: vi.fn(),
   listMediaAssets: vi.fn(),
   downloadDocumentAsset: vi.fn(),

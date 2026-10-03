@@ -78,44 +78,74 @@ it.each([
 });
 it("原件按实际字节完整读取，截断/多字节/cancel均取消reader且无半成品", async () => {
   const bytes = new Uint8Array(triangleJSON());
-  const response = () =>
-    new Response(
-      new ReadableStream({
-        start(controller) {
-          controller.enqueue(bytes.slice(0, 5));
-          controller.enqueue(bytes.slice(5));
-          controller.close();
-        },
-      }),
-    );
+  const stream = () =>
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 5));
+        controller.enqueue(bytes.slice(5));
+        controller.close();
+      },
+    });
   const signal = new AbortController().signal;
   expect(
-    new Uint8Array(await readModelOriginal(response(), bytes.length, signal)),
+    new Uint8Array(await readModelOriginal(stream(), bytes.length, signal)),
   ).toEqual(bytes);
   await expect(
-    readModelOriginal(response(), bytes.length + 1, signal),
+    readModelOriginal(stream(), bytes.length + 1, signal),
   ).rejects.toThrow("完整");
   await expect(
-    readModelOriginal(response(), bytes.length - 1, signal),
+    readModelOriginal(stream(), bytes.length - 1, signal),
   ).rejects.toThrow("容量");
   const cancelled = new AbortController();
   cancelled.abort();
   await expect(
-    readModelOriginal(response(), bytes.length, cancelled.signal),
+    readModelOriginal(stream(), bytes.length, cancelled.signal),
   ).rejects.toMatchObject({ name: "AbortError" });
 });
-it("读取失败、无body、容量异常不启动解析", async () => {
+it("容量异常拒绝读取，stream错误仍释放reader", async () => {
   const signal = new AbortController().signal;
   for (const expected of [0, -1, 1.5, 64 * 1024 * 1024 + 1])
     await expect(
-      readModelOriginal(new Response("x"), expected, signal),
+      readModelOriginal(new Response("x").body!, expected, signal),
     ).rejects.toThrow();
+  const failure = new Error("原件传输中断");
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(failure);
+    },
+  });
+  await expect(readModelOriginal(stream, 1, signal)).rejects.toThrow(failure);
+  expect(stream.locked).toBe(false);
+});
+it("等待下一块时abort取消reader，释放锁并拒绝发布部分原件", async () => {
+  const cancellation = vi.fn();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1]));
+    },
+    cancel: cancellation,
+  });
+  const controller = new AbortController();
+  const result = readModelOriginal(stream, 2, controller.signal);
+  await Promise.resolve();
+  controller.abort();
+  await expect(result).rejects.toMatchObject({ name: "AbortError" });
+  expect(cancellation).toHaveBeenCalledOnce();
+  expect(stream.locked).toBe(false);
+});
+it("每块超额立即取消reader并释放锁，不继续读取或拼接", async () => {
+  const cancellation = vi.fn();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3]));
+    },
+    cancel: cancellation,
+  });
   await expect(
-    readModelOriginal(new Response("x", { status: 403 }), 1, signal),
-  ).rejects.toThrow();
-  await expect(
-    readModelOriginal(new Response(null), 1, signal),
-  ).rejects.toThrow();
+    readModelOriginal(stream, 2, new AbortController().signal),
+  ).rejects.toThrow("容量");
+  expect(cancellation).toHaveBeenCalledOnce();
+  expect(stream.locked).toBe(false);
 });
 it("所有场景的共享几何、材质与纹理只释放一次，Points也纳入模型生命周期", () => {
   const geometry = new BoxGeometry(),

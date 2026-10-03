@@ -1,12 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as script from "@/gen/api/script";
+import * as script from "@/api/script";
 import {
   episodeSourceText,
   listSourceWrites,
   runSourceControl,
   listVersions,
 } from "./review-queries";
-vi.mock("@/gen/api/script", () => ({
+vi.mock("@/api/script", () => ({
   getScriptEpisodeSourceText: vi.fn(),
   listScriptSourceWrites: vi.fn(),
   cancelScriptSourceWrite: vi.fn(),

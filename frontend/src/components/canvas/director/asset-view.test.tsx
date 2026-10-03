@@ -5,7 +5,12 @@ import { BoxGeometry, Mesh, MeshStandardMaterial, Scene } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { AuthorizedModel } from "./asset-view";
 import { triangleJSON } from "./model-test-fixtures";
-const owner = vi.hoisted(() => ({ preview: vi.fn(), parse: vi.fn() }));
+const owner = vi.hoisted(() => ({
+  preview: vi.fn(),
+  parse: vi.fn(),
+  resource: vi.fn(),
+}));
+vi.mock("@/lib/request", () => ({ readResourceStream: owner.resource }));
 vi.mock("../queries", () => ({ getMediaPreview: owner.preview }));
 vi.mock("./model-file", async (original) => ({
   ...(await original<typeof import("./model-file")>()),
@@ -42,9 +47,8 @@ function model() {
 }
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockImplementation(() => Promise.resolve(new Response(bytes))),
+  owner.resource.mockImplementation(() =>
+    Promise.resolve(new Response(bytes).body!),
   );
   owner.preview.mockResolvedValue(lease);
   owner.parse.mockResolvedValue(model().gltf);
@@ -92,13 +96,13 @@ it("warm签名URL不能绕过fresh项目授权；新事实完成后才按真实M
       }),
   );
   const view = mount(client);
-  expect(fetch).not.toHaveBeenCalled();
+  expect(owner.resource).not.toHaveBeenCalled();
   expect(owner.parse).not.toHaveBeenCalled();
   await act(async () => release(lease));
   await waitFor(() => expect(view.loaded).toHaveBeenCalledOnce());
-  expect(fetch).toHaveBeenCalledWith(
+  expect(owner.resource).toHaveBeenCalledWith(
     lease.url,
-    expect.objectContaining({ credentials: "omit", redirect: "error" }),
+    expect.any(AbortSignal),
   );
   expect(owner.parse).toHaveBeenCalledWith(
     expect.any(ArrayBuffer),
@@ -112,13 +116,16 @@ it("warm签名URL不能绕过fresh项目授权；新事实完成后才按真实M
 it.each([
   { asset: { ...lease.asset, project_id: id } },
   { asset: { ...lease.asset, id: project } },
+  { asset: { ...lease.asset, byte_size: 0 } },
+  { asset: { ...lease.asset, byte_size: 1.5 } },
+  { asset: { ...lease.asset, byte_size: 64 * 1024 * 1024 + 1 } },
   { url: "file:///private.gltf" },
   { expires_at: "2000-01-01T00:00:00Z" },
 ])("身份或租约异常拒绝模型原件请求 %j", async (change) => {
   owner.preview.mockResolvedValue({ ...lease, ...change });
   const view = mount();
   expect(await screen.findByRole("alert")).toBeTruthy();
-  expect(fetch).not.toHaveBeenCalled();
+  expect(owner.resource).not.toHaveBeenCalled();
   expect(view.loaded).not.toHaveBeenCalled();
 });
 it("正常关闭释放完整模型；截断原件不能进入ready", async () => {
@@ -133,8 +140,8 @@ it("正常关闭释放完整模型；截断原件不能进入ready", async () =>
   expect(material).toHaveBeenCalledOnce();
   expect(view.status).toHaveBeenLastCalledWith(false);
   owner.parse.mockClear();
-  vi.mocked(fetch).mockResolvedValue(
-    new Response(new Uint8Array(bytes).slice(0, -1)),
+  owner.resource.mockResolvedValue(
+    new Response(new Uint8Array(bytes).slice(0, -1)).body!,
   );
   const broken = mount();
   expect((await screen.findByRole("alert")).textContent).toContain("完整");

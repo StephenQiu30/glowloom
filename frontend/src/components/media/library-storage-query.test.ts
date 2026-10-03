@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
-import * as media from "@/gen/api/media";
+import * as media from "@/api/media";
 import { getLibraryStorageUsage } from "./library-storage-query";
 import {
   transferIdentity as identity,
   transferIDs as ids,
 } from "@/components/library/transfer-test-fixtures";
-vi.mock("@/gen/api/media", () => ({ getMediaLibraryStorageUsage: vi.fn() }));
+vi.mock("@/api/media", () => ({ getMediaLibraryStorageUsage: vi.fn() }));
 const usage = {
   current_actor_id: ids.actor,
   current_org_id: ids.org,

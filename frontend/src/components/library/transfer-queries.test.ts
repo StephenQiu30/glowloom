@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import * as api from "@/gen/api/media";
+import * as api from "@/api/media";
 import { freshLibrary } from "@/components/media/library-queries";
 import {
   listTransfers,
@@ -14,7 +14,7 @@ import {
   transferJob,
   transferLibrary,
 } from "./transfer-test-fixtures";
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/media", () => ({
   listMediaTransfers: vi.fn(),
   getMediaTransfer: vi.fn(),
   createMediaTransfer: vi.fn(),

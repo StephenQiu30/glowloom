@@ -22,8 +22,8 @@ const api = vi.hoisted(() => ({
   getProjectModelDefaults: vi.fn(),
   listPromptPreferences: vi.fn(),
 }));
-vi.mock("@/gen/api/settings", async (original) => ({
-  ...(await original<typeof import("@/gen/api/settings")>()),
+vi.mock("@/api/settings", async (original) => ({
+  ...(await original<typeof import("@/api/settings")>()),
   ...api,
 }));
 const id = "40000000-0000-4000-8000-000000000001";

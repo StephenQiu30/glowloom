@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/request";
-import { listBibleEntries } from "@/gen/api/bible";
-import { getMediaPreview, listMediaAssets } from "@/gen/api/media";
+import { listBibleEntries } from "@/api/bible";
+import { getMediaPreview, listMediaAssets } from "@/api/media";
 import { queryModels, type Model } from "@/components/catalog/queries";
 import { getWorkspace } from "@/components/script/source-queries";
 import {
@@ -15,8 +15,8 @@ import {
   getBibleVoiceModel,
   getBibleFormalScenes,
 } from "./bible-queries";
-vi.mock("@/gen/api/bible", () => ({ listBibleEntries: vi.fn() }));
-vi.mock("@/gen/api/media", () => ({
+vi.mock("@/api/bible", () => ({ listBibleEntries: vi.fn() }));
+vi.mock("@/api/media", () => ({
   listMediaAssets: vi.fn(),
   getMediaPreview: vi.fn(),
 }));

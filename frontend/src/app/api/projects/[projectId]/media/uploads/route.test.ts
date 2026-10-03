@@ -43,13 +43,19 @@ async function consume(body: BodyInit | null | undefined) {
   }
 }
 
+function outboundRequest(): Request {
+  const input = fetchMock.mock.calls[0][0];
+  expect(input).toBeInstanceOf(Request);
+  return input as Request;
+}
+
 describe("bounded streaming media upload route", () => {
   beforeEach(() => {
     vi.stubEnv("LV_API_BASE_URL", "http://127.0.0.1:18991");
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockReset();
-    fetchMock.mockImplementation(async (_url, options) => {
-      await consume(options?.body);
+    fetchMock.mockImplementation(async (input) => {
+      if ((input as Request).body) await consume((input as Request).body);
       return Response.json({ asset: "actual-go-result" }, { status: 201 });
     });
   });
@@ -72,18 +78,19 @@ describe("bounded streaming media upload route", () => {
     );
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ asset: "actual-go-result" });
-    const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe(
+    const upstream = outboundRequest();
+    expect(upstream.url).toBe(
       `http://127.0.0.1:18991/api/projects/${projectId}/media/uploads`,
     );
-    expect(options).toMatchObject({
+    expect(upstream).toMatchObject({
       method: "POST",
       cache: "no-store",
       redirect: "manual",
       duplex: "half",
+      credentials: "omit",
     });
-    expect(options?.body).toBeInstanceOf(ReadableStream);
-    const headers = new Headers(options?.headers);
+    expect(upstream.body).toBeInstanceOf(ReadableStream);
+    const headers = upstream.headers;
     expect(Object.fromEntries(headers)).toEqual({
       "content-type": "multipart/form-data; boundary=original",
       "content-length": "14",
@@ -99,9 +106,78 @@ describe("bounded streaming media upload route", () => {
     input.headers.delete("Origin");
     input.headers.delete("Idempotency-Key");
     await POST(input, context);
-    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    const headers = outboundRequest().headers;
     expect(headers.has("origin")).toBe(false);
     expect(headers.has("idempotency-key")).toBe(false);
+  });
+
+  it.each(["true", "false", ""])(
+    "forwards original multipart confirmation bytes %s without substituting generated form fields",
+    async (confirmation) => {
+      const body = `--original\r\nContent-Disposition: form-data; name="local_review_confirmed"\r\n\r\n${confirmation}\r\n--original--\r\n`;
+      let forwarded = "";
+      fetchMock.mockImplementation(async (input) => {
+        forwarded = await new Response((input as Request).body).text();
+        return new Response(null, { status: 201 });
+      });
+      expect((await POST(request(body), context)).status).toBe(201);
+      expect(forwarded).toBe(body);
+      expect(outboundRequest().headers.get("content-type")).toBe(
+        "multipart/form-data; boundary=original",
+      );
+    },
+  );
+
+  it("preserves missing Content-Type and an absent body for Go validation", async () => {
+    const input = request(null);
+    input.headers.delete("Content-Type");
+    expect((await POST(input, context)).status).toBe(201);
+    const upstream = outboundRequest();
+    expect(upstream.headers.has("content-type")).toBe(false);
+    expect(upstream.body).toBeNull();
+  });
+
+  it("rejects an invalid transport response body instead of interpreting it as payload", async () => {
+    const upstream = new Response(null, { status: 201 });
+    Object.defineProperty(upstream, "body", { value: 0 });
+    fetchMock.mockResolvedValue(upstream);
+    const response = await POST(request(), context);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({
+      code: "dependency_unavailable",
+      request_id: requestId,
+    });
+  });
+
+  it("returns the upstream response stream before all of its bytes are available", async () => {
+    let finish!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    let sent = false;
+    fetchMock.mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          async pull(controller) {
+            if (!sent) {
+              sent = true;
+              controller.enqueue(new Uint8Array([1, 2, 3]));
+              return;
+            }
+            await barrier;
+            controller.enqueue(new Uint8Array([4]));
+            controller.close();
+          },
+        }),
+        { status: 201 },
+      ),
+    );
+    const response = await POST(request(), context);
+    const reader = response.body!.getReader();
+    expect((await reader.read()).value).toEqual(new Uint8Array([1, 2, 3]));
+    finish();
+    expect((await reader.read()).value).toEqual(new Uint8Array([4]));
+    expect((await reader.read()).done).toBe(true);
   });
 
   it.each([403, 409, 413, 415, 422, 429, 503])(
@@ -211,8 +287,8 @@ describe("bounded streaming media upload route", () => {
     const observed = new Promise<void>((resolve) => {
       firstChunk = resolve;
     });
-    fetchMock.mockImplementation(async (_url, options) => {
-      const reader = (options?.body as ReadableStream<Uint8Array>).getReader();
+    fetchMock.mockImplementation(async (input) => {
+      const reader = (input as Request).body!.getReader();
       expect((await reader.read()).value).toEqual(new Uint8Array([1, 2, 3]));
       firstChunk();
       expect((await reader.read()).value).toEqual(new Uint8Array([4]));
@@ -230,11 +306,12 @@ describe("bounded streaming media upload route", () => {
     const controller = new AbortController();
     const input = request("body", undefined, controller.signal);
     fetchMock.mockImplementation(
-      async (_url, options) =>
+      async (input) =>
         new Promise((_resolve, reject) => {
-          options?.signal?.addEventListener(
+          const upstream = input as Request;
+          upstream.signal.addEventListener(
             "abort",
-            () => reject(options.signal?.reason),
+            () => reject(upstream.signal.reason),
             { once: true },
           );
           controller.abort(new DOMException("synthetic cancel", "AbortError"));
@@ -242,7 +319,7 @@ describe("bounded streaming media upload route", () => {
     );
     const response = await POST(input, context);
     expect(response.status).toBe(408);
-    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(outboundRequest().signal.aborted).toBe(true);
   });
 
   it("uses exactly a five-minute abort deadline and reports a safe transport timeout", async () => {
@@ -251,11 +328,12 @@ describe("bounded streaming media upload route", () => {
       .spyOn(AbortSignal, "timeout")
       .mockReturnValue(timeoutController.signal);
     fetchMock.mockImplementation(
-      async (_url, options) =>
+      async (input) =>
         new Promise((_resolve, reject) => {
-          options?.signal?.addEventListener(
+          const upstream = input as Request;
+          upstream.signal.addEventListener(
             "abort",
-            () => reject(options.signal?.reason),
+            () => reject(upstream.signal.reason),
             { once: true },
           );
           timeoutController.abort(
@@ -316,7 +394,7 @@ describe("bounded streaming media upload route", () => {
     const response = await POST(request(), context);
     expect(response.status).toBe(307);
     expect(response.headers.has("location")).toBe(false);
-    expect(fetchMock.mock.calls[0][1]?.redirect).toBe("manual");
+    expect(outboundRequest().redirect).toBe("manual");
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 });

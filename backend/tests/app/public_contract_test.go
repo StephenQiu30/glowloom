@@ -71,6 +71,40 @@ func TestPublicRouterSwaggerContract(t *testing.T) {
 	}
 }
 
+func TestPublicRouterSwaggerUI(t *testing.T) {
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+	}, &gorm.DB{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path        string
+		contentType string
+		contains    string
+	}{
+		{"/swagger/index.html", "text/html", `id="swagger-ui"`},
+		{"/swagger/swagger-initializer.js", "application/javascript", `url: "doc.json"`},
+		{"/swagger/swagger-ui.css", "text/css", ".swagger-ui"},
+		{"/swagger/swagger-ui-bundle.js", "application/javascript", "SwaggerUIBundle"},
+		{"/swagger/swagger-ui-standalone-preset.js", "application/javascript", "SwaggerUIStandalonePreset"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, nil))
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", response.Code)
+			}
+			if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, tc.contentType) {
+				t.Errorf("Content-Type = %q, want %s", contentType, tc.contentType)
+			}
+			if !strings.Contains(response.Body.String(), tc.contains) {
+				t.Errorf("response does not contain %q", tc.contains)
+			}
+		})
+	}
+}
+
 func TestWorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost(t *testing.T) {
 	for _, tc := range []struct{ name, env, address, origin string }{
 		{"staging", "staging", "127.0.0.1:8080", "https://localhost:3000"},

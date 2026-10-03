@@ -1,5 +1,5 @@
-import axios, { AxiosError } from "axios";
-import { afterEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
+import { ApiError, request } from "@/lib/request";
 import { createNode } from "./document";
 import { CanvasNodeType } from "./model";
 import {
@@ -10,6 +10,12 @@ import {
   getMediaPreview,
   uploadCanvasMedia,
 } from "./queries";
+
+vi.mock("@/lib/request", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/request")>()),
+  request: vi.fn(),
+}));
+
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const payload = () => ({
@@ -22,8 +28,8 @@ const payload = () => ({
   nodes: [],
   edges: [],
 });
-afterEach(() => {
-  vi.restoreAllMocks();
+beforeEach(() => {
+  vi.mocked(request).mockReset();
 });
 it("上传消费在线生成客户端并校验同项目资产，只发送multipart及稳定键", async () => {
   const asset = {
@@ -36,24 +42,26 @@ it("上传消费在线生成客户端并校验同项目资产，只发送multipa
     revision: 1,
   };
   const send = vi
-    .spyOn(axios, "request")
-    .mockResolvedValue({ data: { asset, duplicate_of: null } });
+    .mocked(request)
+    .mockResolvedValue({ asset, duplicate_of: null });
   const file = new File(["test"], "图片.png", { type: "image/png" });
   const signal = new AbortController().signal;
   const onProgress = vi.fn();
   expect(
     await uploadCanvasMedia(id(2), file, id(7), { signal, onProgress }),
   ).toEqual(asset);
-  const sent = send.mock.calls[0][0];
+  expect(send.mock.calls[0][0]).toBe(`/api/projects/${id(2)}/media/uploads`);
+  const sent = send.mock.calls[0][1]!;
   expect(sent.data).toBeInstanceOf(FormData);
   expect((sent.data as FormData).get("file")).toBe(file);
   expect((sent.data as FormData).get("local_review_confirmed")).toBe("true");
   expect(sent.headers).toMatchObject({ "Idempotency-Key": id(7) });
-  expect(sent.headers).not.toHaveProperty("Content-Type");
+  expect(sent.requestType).toBe("form");
   expect(sent.signal).toBe(signal);
   expect(sent.timeout).toBeGreaterThanOrEqual(300000);
-  vi.mocked(send).mockResolvedValue({
-    data: { asset: { ...asset, project_id: id(99) }, duplicate_of: null },
+  send.mockResolvedValue({
+    asset: { ...asset, project_id: id(99) },
+    duplicate_of: null,
   });
   await expect(
     uploadCanvasMedia(id(2), file, id(8), { signal, onProgress }),
@@ -108,9 +116,7 @@ it("历史省略尺寸有显式默认值，父group与媒体仅映射正式身�
   ).toThrow();
 });
 it("生成客户端保存链正确映射viewport/edge/null父关系并携带稳定幂等键", async () => {
-  const send = vi
-    .spyOn(axios, "request")
-    .mockResolvedValue({ data: payload() });
+  const send = vi.mocked(request).mockResolvedValue(payload());
   const node = createNode(CanvasNodeType.Image, { x: -25, y: 40 }, id(4), {
     assetId: id(5),
     media: {
@@ -134,11 +140,10 @@ it("生成客户端保存链正确映射viewport/edge/null父关系并携带稳�
     ],
     "same-key",
   );
-  const request = send.mock.calls[0][0];
-  expect(request).toMatchObject({
-    url: `/api/canvases/${id(1)}/commands`,
+  expect(send.mock.calls[0][0]).toBe(`/api/canvases/${id(1)}/commands`);
+  const sent = send.mock.calls[0][1]!;
+  expect(sent).toMatchObject({
     method: "POST",
-    withCredentials: false,
     headers: {
       "Idempotency-Key": "same-key",
     },
@@ -176,36 +181,30 @@ it("生成客户端保存链正确映射viewport/edge/null父关系并携带稳�
       ],
     },
   });
-  expect(JSON.stringify(request.data)).not.toContain("untrusted");
+  expect(JSON.stringify(sent.data)).not.toContain("untrusted");
 });
 it("文档重命名与删除revision沿公共生成客户端传递", async () => {
   const send = vi
-    .spyOn(axios, "request")
-    .mockResolvedValueOnce({ data: payload() })
-    .mockResolvedValueOnce({ data: { id: id(1), revision: 3, deleted: true } });
+    .mocked(request)
+    .mockResolvedValueOnce(payload())
+    .mockResolvedValueOnce({ id: id(1), revision: 3, deleted: true });
   await renameCanvas(id(1), 1, "新名称", "rename-key");
   await deleteCanvas(id(1), 2, "delete-key");
-  expect(send.mock.calls[0][0]).toMatchObject({
+  expect(send.mock.calls[0][0]).toBe(`/api/canvases/${id(1)}`);
+  expect(send.mock.calls[0][1]).toMatchObject({
     method: "PATCH",
     data: { expected_revision: 1, name: "新名称" },
   });
-  expect(send.mock.calls[1][0]).toMatchObject({
+  expect(send.mock.calls[1][0]).toBe(`/api/canvases/${id(1)}`);
+  expect(send.mock.calls[1][1]).toMatchObject({
     method: "DELETE",
     data: { expected_revision: 2 },
   });
 });
-it("网络与修订冲突按统一problem解析，不伪造成功文档", async () => {
-  vi.spyOn(axios, "request").mockRejectedValue(
-    new AxiosError("private", undefined, undefined, undefined, {
-      status: 409,
-      statusText: "Conflict",
-      headers: {},
-      config: {} as never,
-      data: {
-        code: "revision_conflict",
-        request_id: "synthetic-request",
-        meta: { current_revision: 8 },
-      },
+it("生成请求边界的修订冲突按统一ApiError传播，不伪造成功文档", async () => {
+  vi.mocked(request).mockRejectedValue(
+    new ApiError(409, "revision_conflict", "synthetic-request", {
+      current_revision: 8,
     }),
   );
   await expect(
@@ -236,10 +235,12 @@ it("授权media preview走独立查询，短签URL不成为node config事实", a
     url: "https://objects.example.test/asset?signature=synthetic",
     expires_at: "2026-09-30T08:00:00Z",
   };
-  const send = vi.spyOn(axios, "request").mockResolvedValue({ data });
+  const send = vi.mocked(request).mockResolvedValue(data);
   expect(await getMediaPreview(id(2), id(5))).toEqual(data);
-  expect(send.mock.calls[0][0]).toMatchObject({
-    url: `/api/projects/${id(2)}/media/${id(5)}/preview`,
+  expect(send.mock.calls[0][0]).toBe(
+    `/api/projects/${id(2)}/media/${id(5)}/preview`,
+  );
+  expect(send.mock.calls[0][1]).toMatchObject({
     method: "GET",
   });
 });

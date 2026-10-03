@@ -224,9 +224,11 @@ it("未知创建锁字段、新提交与关闭，刷新恢复同一原 key/body�
   );
   fireEvent.click(screen.getByRole("button", { name: "关闭复制任务" }));
   expect(ports.close).not.toHaveBeenCalled();
-  const leaving = new Event("beforeunload", { cancelable: true });
-  window.dispatchEvent(leaving);
-  expect(leaving.defaultPrevented).toBe(true);
+  await waitFor(() => {
+    const leaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+  });
   mounted.unmount();
   open();
   await screen.findByRole("button", { name: "使用原请求核验结果" });
