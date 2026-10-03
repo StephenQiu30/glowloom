@@ -5,7 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { savePromptPreference } from "@/gen/api/settings";
+import { savePromptPreference } from "@/api/settings";
 import { ApiError } from "@/lib/request";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

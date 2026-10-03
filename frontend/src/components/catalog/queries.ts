@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { listProjectModels } from "@/gen/api/models";
+import { listProjectModels } from "@/api/models";
 import { ApiError } from "@/lib/request";
 
 export const MODELS_KEY = ["models"] as const;

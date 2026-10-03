@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as script from "@/gen/api/script";
+import * as script from "@/api/script";
 import { ApiError } from "@/lib/request";
 import { scriptScalarText } from "./rich-document";
 import { scriptUUID } from "./source-model";

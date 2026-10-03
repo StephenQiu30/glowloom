@@ -8,7 +8,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { z } from "zod";
-import { setAdminModelStatus } from "@/gen/api/settings";
+import { setAdminModelStatus } from "@/api/settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

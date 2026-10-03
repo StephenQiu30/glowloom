@@ -9,7 +9,7 @@ import {
   createAdminModel,
   publishAdminModelPrice,
   publishAdminModelVersion,
-} from "@/gen/api/settings";
+} from "@/api/settings";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FieldGroup } from "@/components/ui/field";

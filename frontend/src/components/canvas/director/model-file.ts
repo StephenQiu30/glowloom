@@ -23,7 +23,7 @@ export async function parseDirectorModel(
 
 /** Both private previews consume exact, bounded originals and release readers. */
 export async function readModelOriginal(
-  response: Response,
+  stream: ReadableStream<Uint8Array>,
   byteSize: number,
   signal: AbortSignal,
 ) {
@@ -33,22 +33,32 @@ export async function readModelOriginal(
     byteSize > 64 * 1024 * 1024
   )
     throw new Error("模型原件容量无效。");
-  if (!response.ok || !response.body) throw new Error("模型原件读取失败。");
-  const reader = response.body.getReader(),
+  const reader = stream.getReader(),
     parts: Uint8Array[] = [];
   let length = 0;
+  let cancellation: Promise<void> | undefined;
+  const cancel = () => (cancellation ??= reader.cancel());
+  const abort = () => {
+    void cancel().catch(() => {});
+  };
+  signal.addEventListener("abort", abort, { once: true });
   try {
     while (true) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       const part = await reader.read();
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       if (part.done) break;
       length += part.value.byteLength;
       if (length > byteSize) throw new Error("模型实际容量无效。");
       parts.push(part.value);
     }
   } finally {
-    await reader.cancel();
-    reader.releaseLock();
+    signal.removeEventListener("abort", abort);
+    try {
+      await cancel();
+    } finally {
+      reader.releaseLock();
+    }
   }
   if (length !== byteSize) throw new Error("模型未完整读取。");
   const buffer = new Uint8Array(length);

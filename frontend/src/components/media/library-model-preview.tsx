@@ -4,6 +4,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Box3, Vector3 } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
+import { readResourceStream } from "@/lib/request";
 import {
   parseDirectorModel,
   readModelOriginal,
@@ -51,11 +52,7 @@ export function LibraryModelPreview({
       const data = file
         ? await file.arrayBuffer()
         : await readModelOriginal(
-            await fetch(url, {
-              signal: controller.signal,
-              credentials: "omit",
-              redirect: "error",
-            }),
+            await readResourceStream(url, controller.signal),
             byteSize,
             controller.signal,
           );

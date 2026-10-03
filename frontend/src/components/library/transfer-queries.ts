@@ -1,4 +1,4 @@
-import * as api from "@/gen/api/media";
+import * as api from "@/api/media";
 import { ApiError } from "@/lib/request";
 import {
   libraryUUID,

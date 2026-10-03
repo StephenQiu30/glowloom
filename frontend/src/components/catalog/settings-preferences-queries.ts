@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  getProjectModelDefaults,
-  listPromptPreferences,
-} from "@/gen/api/settings";
+import { getProjectModelDefaults, listPromptPreferences } from "@/api/settings";
 import { ApiError } from "@/lib/request";
 
 export const PROJECT_DEFAULTS_KEY = ["project-model-defaults"] as const;

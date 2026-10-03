@@ -8,7 +8,7 @@ import {
   disableAdminCredential,
   setAdminCredential,
   testAdminCredential,
-} from "@/gen/api/settings";
+} from "@/api/settings";
 import { ApiError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
 import {

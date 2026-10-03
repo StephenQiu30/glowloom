@@ -5037,8 +5037,8 @@ definitions:
     type: object
 info:
   contact: {}
-  description: Single workspace project query, resource canvas commands and authorized
-    media previews.
+  description: Lanverse local workspace API for projects, canvases, media, scripts,
+    bible, model catalog and operations.
   title: Lanverse API
   version: "0.1"
 paths:

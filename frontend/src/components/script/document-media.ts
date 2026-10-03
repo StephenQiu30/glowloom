@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as media from "@/gen/api/media";
+import * as media from "@/api/media";
 import { ApiError } from "@/lib/request";
 import { scriptUUID } from "./source-model";
 import type { ScriptScope } from "./source-intent";

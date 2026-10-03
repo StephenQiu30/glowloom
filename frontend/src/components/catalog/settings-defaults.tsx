@@ -9,7 +9,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { z } from "zod";
-import { saveProjectModelDefaults } from "@/gen/api/settings";
+import { saveProjectModelDefaults } from "@/api/settings";
 import { ApiError } from "@/lib/request";
 import { PROJECTS_KEY } from "@/components/project/queries";
 import { Button } from "@/components/ui/button";

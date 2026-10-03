@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as canvases from "@/gen/api/canvases";
+import * as canvases from "@/api/canvases";
 import { ApiError } from "@/lib/request";
 import {
   generationWireSchema,

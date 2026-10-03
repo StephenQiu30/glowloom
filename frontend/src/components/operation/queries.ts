@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as operations from "@/gen/api/operations";
+import * as operations from "@/api/operations";
 import { ApiError } from "@/lib/request";
 import type { QuoteResponse } from "./use-quote";
 

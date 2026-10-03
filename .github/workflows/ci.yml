@@ -695,7 +695,7 @@ jobs:
           swag init -g internal/app/public_api.go --parseInternal --parseDependency -o "$RUNNER_TEMP/swagger-contract/docs"
           git diff --no-index --exit-code -- docs "$RUNNER_TEMP/swagger-contract/docs"
       - name: Verify production public route and Swagger contracts
-        run: go test -race ./tests/app -run '^Test(PublicRouterSwaggerContract|PublicSwaggerRejectsContractDrift|PublicSwaggerNormalizesPathParameters|SwaggerRuntimeDefaultsDoNotHideNonEmptyDrift)$' -count=1 -v
+        run: go test -race ./tests/app -run '^Test(PublicRouterSwaggerContract|PublicRouterSwaggerUI|PublicSwaggerRejectsContractDrift|PublicSwaggerNormalizesPathParameters|SwaggerRuntimeDefaultsDoNotHideNonEmptyDrift)$' -count=1 -v
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
@@ -800,7 +800,7 @@ jobs:
           });
           JS
           pnpm --dir "$GITHUB_WORKSPACE/frontend" exec prettier --config "$GITHUB_WORKSPACE/frontend/.prettierrc.json" --write "$LANVERSE_CONTRACT_OUTPUT_ROOT/api/**/*.ts"
-          git diff --no-index --exit-code -- ../frontend/src/gen/api "$LANVERSE_CONTRACT_OUTPUT_ROOT/api"
+          git diff --no-index --exit-code -- ../frontend/src/api "$LANVERSE_CONTRACT_OUTPUT_ROOT/api"
           {
             echo '## Public contract gate'
             echo ''

@@ -1,4 +1,4 @@
-import * as api from "@/gen/api/script";
+import * as api from "@/api/script";
 import { scriptUUID } from "./source-model";
 import type { ScriptScope } from "./source-intent";
 import {

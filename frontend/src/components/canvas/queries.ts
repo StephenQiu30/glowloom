@@ -1,4 +1,4 @@
-import * as transcriptions from "@/gen/api/mediaTranscriptions";
+import * as transcriptions from "@/api/mediaTranscriptions";
 import {
   transcriptionJobSchema,
   transcriptionResultSchema,
@@ -15,9 +15,9 @@ import { directorWireSchema, decodeDirector } from "./director/model";
 import { batchWireSchema, decodeBatchConfig } from "./batch-table";
 import { timelineWireSchema, decodeTimeline } from "./timeline";
 import { z } from "zod";
-import * as canvases from "@/gen/api/canvases";
-import * as projects from "@/gen/api/projects";
-import * as media from "@/gen/api/media";
+import * as canvases from "@/api/canvases";
+import * as projects from "@/api/projects";
+import * as media from "@/api/media";
 import { ApiError } from "@/lib/request";
 import { nodeConfig } from "./document";
 import {

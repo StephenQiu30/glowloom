@@ -21,6 +21,7 @@ import {
   type Texture,
 } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
+import { readResourceStream } from "@/lib/request";
 import { getMediaPreview } from "../queries";
 import { resolveDirectorBoneRotation } from "./animation-semantics";
 import {
@@ -184,12 +185,14 @@ export function AuthorizedModel({
     const controller = new AbortController();
     let current: GLTF | undefined;
     void (async () => {
+      if (
+        !Number.isSafeInteger(authorized.asset.byte_size) ||
+        authorized.asset.byte_size < 1 ||
+        authorized.asset.byte_size > 64 * 1024 * 1024
+      )
+        throw new Error("模型原件容量无效。");
       const data = await readModelOriginal(
-        await fetch(authorized.url, {
-          signal: controller.signal,
-          credentials: "omit",
-          redirect: "error",
-        }),
+        await readResourceStream(authorized.url, controller.signal),
         authorized.asset.byte_size,
         controller.signal,
       );

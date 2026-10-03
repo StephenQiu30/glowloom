@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as projects from "@/gen/api/projects";
+import * as projects from "@/api/projects";
 import { ApiError } from "@/lib/request";
 import type { CreationBody } from "./creation";
 

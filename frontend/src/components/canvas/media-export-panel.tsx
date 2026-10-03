@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ApiError } from "@/lib/request";
+import { downloadMediaExport } from "@/api/mediaExports";
 import {
   MEDIA_EXPORTS_KEY,
   controlTimelineExport,
@@ -217,6 +218,46 @@ export function MediaExportPanel({
       setPending(false);
     }
   }
+  async function downloadResult(job: ExportJob) {
+    if (
+      active.current ||
+      pending ||
+      job.status !== "succeeded" ||
+      !job.asset_id ||
+      !job.sha256 ||
+      job.project_id !== projectId
+    )
+      return;
+    active.current = true;
+    setPending(true);
+    setError("");
+    try {
+      const blob: unknown = await downloadMediaExport(
+        { job_id: job.id, project_id: projectId },
+        { responseType: "blob", timeout: 0 },
+      );
+      if (
+        !(blob instanceof Blob) ||
+        blob.size === 0 ||
+        blob.type !== (job.output_kind === "audio" ? "audio/mp4" : "video/mp4")
+      )
+        throw new ApiError(502, "invalid_response");
+      const url = URL.createObjectURL(blob);
+      try {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `timeline-${job.id}.${job.output_kind === "audio" ? "m4a" : "mp4"}`;
+        anchor.click();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "成片下载失败。");
+    } finally {
+      active.current = false;
+      setPending(false);
+    }
+  }
   return (
     <section
       aria-label="时间线正式导出"
@@ -344,13 +385,15 @@ export function MediaExportPanel({
                       ? "音频加入画布"
                       : "成片加入画布"}
                   </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <a
-                      href={`/api/media-exports/${job.id}/download?project_id=${projectId}`}
-                      download={`timeline-${job.id}.${job.output_kind === "audio" ? "m4a" : "mp4"}`}
-                    >
-                      {job.output_kind === "audio" ? "下载 M4A" : "下载 MP4"}
-                    </a>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => {
+                      void downloadResult(job);
+                    }}
+                  >
+                    {job.output_kind === "audio" ? "下载 M4A" : "下载 MP4"}
                   </Button>
                 </>
               ) : null}

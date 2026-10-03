@@ -14,7 +14,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { z } from "zod";
-import { createAdminProvider, updateAdminProvider } from "@/gen/api/settings";
+import { createAdminProvider, updateAdminProvider } from "@/api/settings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {

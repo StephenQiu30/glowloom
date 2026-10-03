@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as copies from "@/gen/api/projectCopies";
+import * as copies from "@/api/projectCopies";
 import { ApiError } from "@/lib/request";
 import { copyIntentSchema, type CopyIntent } from "./copy-intent";
 

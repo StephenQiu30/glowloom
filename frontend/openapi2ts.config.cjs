@@ -5,7 +5,7 @@ const { resolve } = require("node:path");
 loadEnvConfig(resolve(__dirname, ".."));
 module.exports = {
   schemaPath: `${process.env.LV_API_BASE_URL || "http://127.0.0.1:8080"}/swagger/doc.json`,
-  serversPath: "./src/gen",
+  serversPath: "./src",
   projectName: "api",
   requestImportStatement: 'import { request } from "@/lib/request";',
   requestOptionsType: 'import("@/lib/request").RequestOptions',

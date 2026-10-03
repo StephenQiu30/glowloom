@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { STATUS_CODES } from "node:http";
 
+import { uploadMediaAsset } from "@/api/media";
 import { backendApiOrigin } from "@/lib/backend-api-origin";
 
 export const runtime = "nodejs";
@@ -99,28 +100,48 @@ export async function POST(
 
   try {
     signal.throwIfAborted();
-    const options: RequestInit & { duplex: "half" } = {
-      method: "POST",
-      headers,
-      body: countedBody,
-      duplex: "half",
-      signal,
-      cache: "no-store",
-      redirect: "manual",
-    };
-    const upstream = await fetch(
-      `${origin}/api/projects/${projectId}/media/uploads`,
-      options,
-    );
+    let status = 502;
     const responseHeaders = new Headers({
       "Cache-Control": "private, no-store",
     });
-    for (const name of ["Content-Type", "X-Request-Id"]) {
-      const value = upstream.headers.get(name);
-      if (value !== null) responseHeaders.set(name, value);
-    }
-    return new Response(upstream.body, {
-      status: upstream.status,
+    const body: unknown = await uploadMediaAsset(
+      { pid: projectId },
+      // The original multipart stream replaces the generator's FormData entirely.
+      // Go reads the caller's confirmation field from that original stream.
+      { local_review_confirmed: false },
+      undefined,
+      {
+        baseURL: origin,
+        adapter: "fetch",
+        data: countedBody ?? null,
+        headers: {
+          accept: false,
+          "user-agent": false,
+          "content-type": false,
+          ...Object.fromEntries(headers),
+        },
+        signal,
+        timeout: 0,
+        responseType: "stream",
+        validateStatus: () => true,
+        maxRedirects: 0,
+        fetchOptions: {
+          cache: "no-store",
+          redirect: "manual",
+        },
+        onResponse(response) {
+          status = response.status;
+          for (const name of ["Content-Type", "X-Request-Id"]) {
+            const value = response.headers[name.toLowerCase()];
+            if (typeof value === "string") responseHeaders.set(name, value);
+          }
+        },
+      },
+    );
+    if (body !== null && !(body instanceof ReadableStream))
+      return problem(502, "dependency_unavailable", requestId);
+    return new Response(body, {
+      status,
       headers: responseHeaders,
     });
   } catch {

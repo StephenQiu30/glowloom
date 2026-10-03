@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/request";
 import { z } from "zod";
-import * as media from "@/gen/api/media";
+import * as media from "@/api/media";
 import { getProject } from "@/components/project/queries";
 import {
   defaultLibraryFilter,

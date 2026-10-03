@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/swaggo/swag"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -52,11 +53,13 @@ import (
 	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
 )
 
-// NewBusinessRouter assembles the workspace project query and canvas slice.
+//go:generate go run github.com/swaggo/swag/cmd/swag@v1.16.6 init --dir ../.. -g internal/app/public_api.go --parseInternal --parseDependency -o ../../docs
+
+// NewBusinessRouter assembles the public workspace API.
 // Its stores are the same injected dependencies used by the API role.
 // @title Lanverse API
 // @version 0.1
-// @description Single workspace project query, resource canvas commands and authorized media previews.
+// @description Lanverse local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.
 // @BasePath /
 func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProvider, cfg config.Config, database *gorm.DB, storage *objectstorage.Client) (*gin.Engine, error) {
 	if database == nil {
@@ -184,13 +187,8 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		Query:        operationapp.NewPublicQuery(operations),
 		Control:      operationapp.NewWorkflowControlCommand(operations),
 	}).Register(protected)
-	router.GET("/swagger/doc.json", func(c *gin.Context) {
-		body, err := swag.ReadDoc()
-		if err != nil {
-			httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
-			return
-		}
-		c.Data(200, "application/json", []byte(body))
-	})
+	// gin-swagger sets the asset handler prefix, so each router owns its copy.
+	swaggerHandler := *swaggerfiles.Handler
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(&swaggerHandler, ginSwagger.DocExpansion("none")))
 	return router, nil
 }

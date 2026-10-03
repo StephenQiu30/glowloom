@@ -5,7 +5,7 @@ import {
   listAdminCapabilities,
   listAdminModels,
   listAdminProviders,
-} from "@/gen/api/settings";
+} from "@/api/settings";
 import { ApiError } from "@/lib/request";
 
 export const ADMIN_KEY = ["catalog-admin"] as const;

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import * as projects from "@/gen/api/projects";
-import * as media from "@/gen/api/media";
+import * as projects from "@/api/projects";
+import * as media from "@/api/media";
 import { ApiError } from "@/lib/request";
 import { PROJECTS_KEY, listProjects } from "./queries";
 import {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as depths from "@/gen/api/mediaDepths";
+import * as depths from "@/api/mediaDepths";
 import { ApiError } from "@/lib/request";
 import { depthIntentSchema, type DepthIntent } from "./media-depth-intent";
 import {

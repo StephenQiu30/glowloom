@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Single workspace project query, resource canvas commands and authorized media previews.",
+        "description": "Lanverse local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.",
         "title": "Lanverse API",
         "contact": {},
         "version": "0.1"

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as exports from "@/gen/api/mediaExports";
+import * as exports from "@/api/mediaExports";
 import { ApiError } from "@/lib/request";
 import {
   exportJobSchema,

@@ -20,7 +20,7 @@ import {
   unbindBibleVoice,
   adoptBibleResult,
   createBibleEntryFromResult,
-} from "@/gen/api/bible";
+} from "@/api/bible";
 import { ApiError } from "@/lib/request";
 import { queryModels, type Model } from "@/components/catalog/queries";
 import {
@@ -38,7 +38,7 @@ import {
 } from "./bible-model";
 import { bibleIntentSchema, type BibleIntent } from "./bible-intent";
 import { z } from "zod";
-import { listMediaAssets, getMediaPreview } from "@/gen/api/media";
+import { listMediaAssets, getMediaPreview } from "@/api/media";
 import {
   getWorkspace,
   requireScriptScope,

@@ -1,5 +1,5 @@
 import { ApiError } from "@/lib/request";
-import { getBibleVersion } from "@/gen/api/bible";
+import { getBibleVersion } from "@/api/bible";
 import { bibleUUID, readBibleVersion } from "@/components/bible/bible-model";
 import {
   getBibleDetail,

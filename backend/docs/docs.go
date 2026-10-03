@@ -18949,7 +18949,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Lanverse API",
-	Description:      "Single workspace project query, resource canvas commands and authorized media previews.",
+	Description:      "Lanverse local workspace API for projects, canvases, media, scripts, bible, model catalog and operations.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
