@@ -65,7 +65,6 @@ export const promptPreferenceSchema = z
       value.customization.operation === value.definition.operation,
   );
 export type PromptPreference = z.infer<typeof promptPreferenceSchema>;
-export type PromptCustomization = z.infer<typeof promptCustomizationSchema>;
 
 // Defaults seed only a new draft; an explicit draft model remains the caller's choice.
 export async function queryProjectModelDefaults(

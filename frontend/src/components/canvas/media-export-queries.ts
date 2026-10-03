@@ -83,20 +83,6 @@ export async function listTimelineExports(
     throw new ApiError(502, "invalid_response");
   return result.data;
 }
-export async function getTimelineExport(
-  projectId: string,
-  id: string,
-  signal?: AbortSignal,
-) {
-  return job(
-    await exports.getMediaExport(
-      { job_id: id, project_id: projectId },
-      { signal },
-    ),
-    projectId,
-    id,
-  );
-}
 export async function previewTimelineExport(
   value: ExportJob,
   signal?: AbortSignal,

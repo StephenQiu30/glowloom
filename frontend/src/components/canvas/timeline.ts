@@ -354,18 +354,6 @@ export function canPlaceAt(args: CanPlaceAtArgs): CanPlaceAtResult {
   return { ok: true };
 }
 
-/** 返回与候选区间碰撞的所有片段（按现有顺序，不排序）。 */
-export function findCollidingItems(args: CanPlaceAtArgs): TimelineClip[] {
-  const { trackId, startMs, durationMs, excludeClipId, clips } = args;
-  const candidate = { startMs, durationMs };
-  return clips.filter(
-    (c) =>
-      c.trackId === trackId &&
-      c.id !== excludeClipId &&
-      clipsOverlap(candidate, c),
-  );
-}
-
 function getSortedClipsOnTrack(
   trackId: string,
   clips: TimelineClip[],
@@ -451,59 +439,6 @@ export function findNearestAvailablePlacement(
   }
 
   return { startMs: targetStartMs, fits: false };
-}
-
-/** 在所有可放置的视觉/音轨中寻找可放置的轨道（按 order 升序） */
-export function findAvailableTrack(
-  args: FindAvailableTrackArgs,
-): PlacementTrackResult {
-  const { targetStartMs, durationMs, excludeClipId, clips, tracks } = args;
-  const candidates = tracks
-    .filter((t) => t.kind === "video" || t.kind === "audio")
-    .filter((track) => !track.locked);
-
-  for (const track of candidates) {
-    const result = findNearestAvailablePlacement({
-      targetStartMs,
-      durationMs,
-      trackId: track.id,
-      excludeClipId,
-      clips,
-    });
-    if (result.fits) {
-      return { trackId: track.id, startMs: result.startMs };
-    }
-  }
-
-  return { trackId: null, startMs: targetStartMs };
-}
-
-/** 根据相邻片段和最大时长限制，钳制片段时长 */
-export function clampClipDurationByNeighbors(args: ClampDurationArgs): number {
-  const {
-    clipId,
-    startMs,
-    requestedDurationMs,
-    trackId,
-    clips,
-    maxDurationMs,
-  } = args;
-  const managed = getSortedClipsOnTrack(trackId, clips, clipId);
-
-  let maxGap = requestedDurationMs;
-  for (const c of managed) {
-    if (c.startMs > startMs) {
-      const gap = c.startMs - startMs;
-      maxGap = Math.min(maxGap, gap);
-      break;
-    }
-  }
-
-  let result = Math.min(requestedDurationMs, maxGap);
-  if (maxDurationMs !== undefined) {
-    result = Math.min(result, maxDurationMs);
-  }
-  return Math.max(0, result);
 }
 
 // 时间线吸附算法（移植自 lingji-cut 的 timeline-snap.ts）。

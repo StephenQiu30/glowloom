@@ -336,7 +336,6 @@ export type CharacterInput = z.infer<typeof characterInputSchema>;
 const summarySchema = z
   .object({ head: bibleHeadSchema, name: bibleName, content_sha256: bibleSHA })
   .strict();
-export type BibleSummary = z.infer<typeof summarySchema>;
 const pageSchema = z
   .object({
     entries: z.array(summarySchema).max(200),

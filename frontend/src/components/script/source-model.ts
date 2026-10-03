@@ -80,7 +80,6 @@ export const sourcePageSchema = z
       new Set(page.items.map((item) => item.source_lineage_id)).size ===
         page.items.length,
   );
-export type SourcePage = z.infer<typeof sourcePageSchema>;
 const externalLabels = {
   external_id: scriptUUID.optional(),
   external_position: z.number().int().nonnegative().optional(),

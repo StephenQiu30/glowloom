@@ -96,9 +96,6 @@ export function serializeSrtEntries(entries: SrtEntry[]): string {
   );
 }
 
-export const DEFAULT_MAX_CHARS_PER_ENTRY = 35;
-export const MIN_CHARS_PER_ENTRY = 20;
-export const MAX_CHARS_PER_ENTRY_LIMIT = 60;
 export const MIN_SEGMENT_DURATION_MS = 300;
 
 const CJK_PUNCTUATION = "，。；！？、：";

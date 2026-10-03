@@ -57,7 +57,6 @@ export const folderPageSchema = z
     (value) =>
       new Set(value.items.map((item) => item.id)).size === value.items.length,
   );
-export type FolderPage = z.infer<typeof folderPageSchema>;
 export const folderMoveSchema = z
   .object({
     expected_project_revision: revision,

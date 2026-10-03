@@ -103,7 +103,6 @@ const taskDetail = task.extend({
   ),
 });
 export type Task = z.infer<typeof task>;
-export type TaskDetail = z.infer<typeof taskDetail>;
 export type GenerationItem = {
   source?: GenerationSource;
   model_key: string;

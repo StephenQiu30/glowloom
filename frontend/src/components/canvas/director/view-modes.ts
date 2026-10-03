@@ -206,24 +206,6 @@ export type DirectorEffectiveViewport = {
 };
 
 /**
- * 视口活动相机与交互的唯一决策。
- *
- * CAM 取景为 null（空场景、非法光学参数）时回落到已有的 free 相机和自由环绕，
- * 绝不改 DirectorScene。取景重新合法后确定性回到 CAM（orbit 锁死）。
- * 正交轴向不走这条回落：它们始终有安全默认包围盒。
- */
-export function resolveDirectorEffectiveViewport(input: {
-  mode: DirectorViewMode;
-  framing: DirectorViewFraming | null;
-}): DirectorEffectiveViewport {
-  if (directorViewModeCapabilities(input.mode).projection === "orthographic")
-    return { camera: "orthographic", orbit: false };
-  if (input.mode === "camera" && input.framing)
-    return { camera: "camera", orbit: false };
-  return { camera: "free", orbit: true };
-}
-
-/**
  * 解出 CAM 模式下视口相机应有的取景。
  *
  * 返回 null 的情形都必须走 free 回落：3D 模式、空场景、位置/旋转非法、
@@ -356,30 +338,6 @@ export function resolveDirectorCameraLocalFraming(
     near: camera.near,
     far: camera.far,
   };
-}
-
-/**
- * 取景同步键。
- *
- * 相机回写的 effect 只依赖这个字符串：草稿对象每次 render 都是新身份，但取景数值没变
- * 就不该重写相机。数值截到 4 位小数，避免浮点噪声引起无意义的重同步。
- */
-export function directorViewFramingKey(
-  framing: DirectorViewFraming | null,
-): string {
-  if (!framing) return "";
-  return (
-    [
-      ...framing.position,
-      ...framing.target,
-      ...framing.up,
-      framing.fov,
-      framing.near,
-      framing.far,
-    ]
-      .map((value) => value.toFixed(4))
-      .join("|") + `|${framing.cameraId}`
-  );
 }
 
 /**

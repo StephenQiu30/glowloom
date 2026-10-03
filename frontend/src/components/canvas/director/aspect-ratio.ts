@@ -10,12 +10,6 @@ export const DIRECTOR_ASPECT_RATIOS = [
 ] as const;
 export type DirectorAspectRatio = (typeof DIRECTOR_ASPECT_RATIOS)[number];
 
-export function isDirectorAspectRatio(
-  value: unknown,
-): value is DirectorAspectRatio {
-  return DIRECTOR_ASPECT_RATIOS.some((ratio) => ratio === value);
-}
-
 export function directorAspectRatioValue(
   ratio: DirectorAspectRatio,
 ): number | null {

@@ -9,18 +9,14 @@ import type {
   DirectorCamera,
   DirectorHumanoidBone,
   DirectorKeyframe,
-  DirectorKeyframeDeleteTarget,
   DirectorKeyframeEasing,
   DirectorLight,
   DirectorObject,
   DirectorPose,
   DirectorQuat,
-  DirectorScene,
   DirectorTransform,
   DirectorVec3,
 } from "./model";
-import { DIRECTOR_DEFAULT_GROUND } from "./ground";
-import { DIRECTOR_DEFAULT_STAGE_TRANSFORM } from "./stage-transform";
 
 export const DIRECTOR_ACTOR_COLORS = [
   "#f1f3f5",
@@ -34,63 +30,6 @@ export const DIRECTOR_ACTOR_COLORS = [
 export const directorIdentityTransform = (
   position: DirectorVec3 = [0, 0, 0],
 ): DirectorTransform => ({ position, rotation: [0, 0, 0], scale: [1, 1, 1] });
-
-export function createDirectorScene(title = "未命名场景"): DirectorScene {
-  const camera = createDirectorCamera();
-  const shotId = nanoid();
-  return {
-    id: nanoid(),
-    version: 1,
-    title,
-    background: "#060608",
-    environmentIntensity: 0.7,
-    gridVisible: true,
-    gridSnap: false,
-    panoramaRotation: 0,
-    panoramaRadius: 60,
-    ground: { ...DIRECTOR_DEFAULT_GROUND },
-    stageTransform: {
-      ...DIRECTOR_DEFAULT_STAGE_TRANSFORM,
-      position: [...DIRECTOR_DEFAULT_STAGE_TRANSFORM.position],
-      rotation: [...DIRECTOR_DEFAULT_STAGE_TRANSFORM.rotation],
-    },
-    labelsVisible: true,
-    aspectRatio: "adaptive",
-    objects: [createDirectorActor("演员 1", [0, 0, 0])],
-    cameras: [camera],
-    lights: [
-      createDirectorLight("directional", "主光", [4, 6, 4], 2.4),
-      createDirectorLight("directional", "轮廓光", [-4, 3, -2], 1.1),
-      createDirectorLight("ambient", "环境光", [0, 0, 0], 0.65),
-    ],
-    shots: [
-      {
-        id: shotId,
-        name: "镜头 1",
-        cameraId: camera.id,
-        duration: 5,
-        fps: 24,
-        shotSize: "medium",
-        cameraMove: "static",
-        prompt: "",
-      },
-    ],
-    activeShotId: shotId,
-  };
-}
-
-export function toggleDirectorObjectVisibility(
-  scene: DirectorScene,
-  id: string,
-): DirectorScene {
-  if (!scene.objects.some((object) => object.id === id)) return scene;
-  return {
-    ...scene,
-    objects: scene.objects.map((object) =>
-      object.id === id ? { ...object, visible: !object.visible } : object,
-    ),
-  };
-}
 
 export function createDirectorObject(
   primitive: DirectorObject["primitive"] = "box",
@@ -233,10 +172,6 @@ export function createDirectorLight(
   };
 }
 
-export function touchDirectorScene(scene: DirectorScene): DirectorScene {
-  return { ...scene };
-}
-
 /** 关键帧命中容差：upsert 与 remove 必须同判据，否则会出现「记录能覆盖但删不掉」。 */
 export const DIRECTOR_KEYFRAME_EPSILON = 0.001;
 
@@ -321,124 +256,6 @@ export function removeDirectorBoneKeyframe(
   );
 }
 
-/**
- * 时间轴删除关键帧的唯一入口：按轨道类型分派到对应领域函数。
- *
- * 未命中（对象/摄影机/骨骼/关键帧任一不存在）时返回同一个 scene 引用，
- * 调用方据此跳过历史与保存，避免「点了没删掉却多一次修订」。
- */
-export function removeDirectorSceneKeyframe(
-  scene: DirectorScene,
-  target: DirectorKeyframeDeleteTarget,
-): DirectorScene {
-  if (target.track === "camera") {
-    const camera = scene.cameras.find((item) => item.id === target.cameraId);
-    if (!camera) return scene;
-    const keyframes = removeDirectorKeyframe(
-      camera.keyframes,
-      target.keyframeId,
-    );
-    if (keyframes === camera.keyframes) return scene;
-    return {
-      ...scene,
-      cameras: scene.cameras.map((item) =>
-        item.id === camera.id ? { ...item, keyframes } : item,
-      ),
-    };
-  }
-
-  const object = scene.objects.find((item) => item.id === target.objectId);
-  if (!object) return scene;
-
-  if (target.track === "object-transform") {
-    const keyframes = removeDirectorKeyframe(
-      object.keyframes,
-      target.keyframeId,
-    );
-    if (keyframes === object.keyframes) return scene;
-    return {
-      ...scene,
-      objects: scene.objects.map((item) =>
-        item.id === object.id ? { ...item, keyframes } : item,
-      ),
-    };
-  }
-
-  const tracks = object.boneTracks || [];
-  const boneTracks = removeDirectorBoneKeyframe(
-    tracks,
-    target.bone,
-    target.keyframeId,
-  );
-  if (boneTracks === tracks) return scene;
-  return {
-    ...scene,
-    objects: scene.objects.map((item) =>
-      item.id === object.id ? { ...item, boneTracks } : item,
-    ),
-  };
-}
-
-/**
- * 更新一枚关键帧后续区间的缓动。未命中时返回原 scene 引用，调用方据此跳过历史与保存。
- */
-export function setDirectorSceneKeyframeEasing(
-  scene: DirectorScene,
-  target: DirectorKeyframeDeleteTarget,
-  easing: DirectorKeyframeEasing,
-): DirectorScene {
-  const update = <T extends { id: string; easing?: DirectorKeyframeEasing }>(
-    keyframes: T[],
-  ) => {
-    if (!keyframes.some((item) => item.id === target.keyframeId))
-      return keyframes;
-    return keyframes.map((item) =>
-      item.id === target.keyframeId ? { ...item, easing } : item,
-    );
-  };
-
-  if (target.track === "camera") {
-    const camera = scene.cameras.find((item) => item.id === target.cameraId);
-    if (!camera) return scene;
-    const keyframes = update(camera.keyframes);
-    if (keyframes === camera.keyframes) return scene;
-    return {
-      ...scene,
-      cameras: scene.cameras.map((item) =>
-        item.id === camera.id ? { ...item, keyframes } : item,
-      ),
-    };
-  }
-
-  const object = scene.objects.find((item) => item.id === target.objectId);
-  if (!object) return scene;
-  if (target.track === "object-transform") {
-    const keyframes = update(object.keyframes);
-    if (keyframes === object.keyframes) return scene;
-    return {
-      ...scene,
-      objects: scene.objects.map((item) =>
-        item.id === object.id ? { ...item, keyframes } : item,
-      ),
-    };
-  }
-
-  const tracks = object.boneTracks || [];
-  const track = tracks.find((item) => item.bone === target.bone);
-  if (!track) return scene;
-  const keyframes = update(track.keyframes);
-  if (keyframes === track.keyframes) return scene;
-  const boneTracks = tracks.map((item) =>
-    item.bone === target.bone ? { ...item, keyframes } : item,
-  );
-  return {
-    ...scene,
-    objects: scene.objects.map((item) =>
-      item.id === object.id ? { ...item, boneTracks } : item,
-    ),
-  };
-}
-
 /** 缓动属于前一枚关键帧到下一枚关键帧的区间。旧数据未声明时保持线性。 */
 export function resolveDirectorKeyframeProgress(
   progress: number,
@@ -448,15 +265,6 @@ export function resolveDirectorKeyframeProgress(
   if (easing === "step") return 0;
   if (easing === "smooth") return clamped * clamped * (3 - 2 * clamped);
   return clamped;
-}
-
-/** 轨迹渲染只接受有限时间与位置；坏数据不得进入 Three 几何体。 */
-export function finiteDirectorTransformKeyframes(
-  keyframes: DirectorKeyframe[],
-) {
-  return keyframes.filter((keyframe) =>
-    [keyframe.time, ...keyframe.transform.position].every(Number.isFinite),
-  );
 }
 
 /** 按时间顺序累计 Transform 关键帧路径长度；非法时间或坐标段忽略，不污染界面统计。 */

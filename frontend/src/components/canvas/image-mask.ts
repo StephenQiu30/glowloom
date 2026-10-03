@@ -45,14 +45,6 @@ export function drawMaskStroke(
     context.stroke();
   }
 }
-export function maskHasPaint(canvas: HTMLCanvasElement) {
-  const context = canvas.getContext("2d");
-  if (!context) return false;
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-  for (let index = 3; index < pixels.length; index += 4)
-    if (pixels[index] > 0) return true;
-  return false;
-}
 export function renderMaskPreview(
   selection: HTMLCanvasElement,
   preview: HTMLCanvasElement,

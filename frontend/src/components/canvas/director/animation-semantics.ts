@@ -157,35 +157,6 @@ export function resolveDirectorBoneRotation(
   return interpolateDirectorBoneRotation(staged, keyframes, input.time);
 }
 
-export type DirectorGestureState = {
-  active: boolean;
-  committed: boolean;
-  transforming: boolean;
-};
-export type DirectorGestureEvent = "start" | "commit" | "cancel";
-
-export const directorGestureIdle: DirectorGestureState = {
-  active: false,
-  committed: false,
-  transforming: false,
-};
-
-/**
- * 一次手势只允许一个终态：commit 恰好提交一次，任何终态都必须清掉 transforming，
- * 否则 OrbitControls 会一直停留在禁用状态。
- */
-export function reduceDirectorGesture(
-  state: DirectorGestureState,
-  event: DirectorGestureEvent,
-): DirectorGestureState {
-  if (event === "start")
-    return { active: true, committed: false, transforming: true };
-  if (!state.active) return { ...directorGestureIdle, committed: false };
-  if (event === "commit")
-    return { active: false, committed: true, transforming: false };
-  return { active: false, committed: false, transforming: false };
-}
-
 /**
  * 记录关键帧：取值时间与写入时间是两个不同的量。
  * 取值用 raw playhead（视口真正渲染的时间），写入用 snapped 目的时间。
@@ -243,55 +214,4 @@ export function resolveDirectorCameraMoveKeyframes(
     endTime,
     end,
   );
-}
-
-/** 播放头按镜头时长循环；非法输入回落 0，长帧也保留越界余量。 */
-export function advanceDirectorPlayhead(
-  playhead: number,
-  elapsed: number,
-  duration: number,
-) {
-  if (!Number.isFinite(duration) || duration <= 0) return 0;
-  const current = Number.isFinite(playhead) ? playhead : 0;
-  const delta = Number.isFinite(elapsed) && elapsed > 0 ? elapsed : 0;
-  return (((current + delta) % duration) + duration) % duration;
-}
-
-/**
- * 暂停且相机没有被关键帧驱动时不写相机，避免与用户 Orbit 操作互相抢夺。
- * key 必须包含该 playhead 上真正解算出的 transform，否则「同一 playhead 改关键帧内容」
- * 不会引起重新同步。
- */
-export function directorCameraSyncKey(input: {
-  camera?: {
-    id: string;
-    transform: DirectorTransform;
-    target: DirectorVec3;
-    fov: number;
-    near: number;
-    far: number;
-    keyframes: DirectorKeyframe[];
-  } | null;
-  playhead: number;
-  playing: boolean;
-}) {
-  const { camera, playhead, playing } = input;
-  if (!camera) return null;
-  const animated = playing || camera.keyframes.length > 0;
-  const resolved = interpolateDirectorTransform(
-    camera.transform,
-    camera.keyframes,
-    playhead,
-  );
-  const statics = [
-    camera.id,
-    ...resolved.position,
-    ...resolved.rotation,
-    ...resolved.scale,
-    ...camera.target,
-    camera.fov,
-    camera.near,
-    camera.far,
-  ].join(":");
-  return animated ? `${statics}@${playhead.toFixed(4)}` : statics;
 }
