@@ -1,11 +1,6 @@
 # Lanverse 工程规范
 
-> 目标规范，2026-09-25 按 [DES-01 系统架构（第 3 版）](docs/design/01-系统架构设计.md) 与 [DES-08 技术选型（第 3 版）](docs/design/08-技术选型决策.md) 编写，随 PRD-01–PLN-01 一同评审；需求规格见 `docs/requirement/`。
-> 旧实现已于 2026-09-26 删除（BACKLOG M1-01），保留在标签 `legacy-2026-09`，按 [PLN-01 第 5 节](docs/plan/01-实施路线与交付计划.md#5-现有代码的处置已确认方案-a) 逐项审计后按需搬运。本文的路径与命令是目标约定，随 M1 落地。
->
-> 2026-10-01 用户先确认清空旧前端实现，保留技术栈、依赖、锁文件及工程配置；该清理阶段当时不可启动。随后授权的完整工作台迁移已重建当前 Next.js 页面，恢复本机启动。旧页面验收继续视为历史记录，当前各能力的真实进度以 [E37 迁移验收](docs/acceptance/E37-BeefTV完整迁移验收进度.md) 为准。Go API／Worker／Relay、公开契约、SQL 和业务数据保留。
->
-> 2026-10-01 后续用户决定：以 BeefTV **完整迁移页面与功能**重建，全部改造为本项目技术栈，持续推进到完整流程验收。迁移范围以 [完整工作台迁移设计 §0](docs/design/BeefTV能力引入设计.md#0-当前完整迁移合同2026-10-01) 为准，取代此前“只迁画布核心”的范围限制；现有数据与已通过的内部技术底座保留。完整功能快照为 `1ae25027`，画布核心继承 `0d9e9f48`。当前页面可运行，真实模型生成与完整产品验收仍未全部通过。
+本文规定仓库结构、技术栈、编码与契约生成方式。业务目标、模块合同和未决任务分别见 `docs/` 与 [BACKLOG](BACKLOG.md)。
 
 ## 1. 文件职责
 
@@ -15,26 +10,15 @@
 | `PROJECT.md`        | 仓库结构、技术栈、目录与编码约定、质量门禁（本文件）                                                            |
 | `DESIGN.md`         | 视觉与交互规范                                                                                                  |
 | `README.md`         | 项目简介、启动方式、文档入口                                                                                    |
-| `BACKLOG.md`        | 项目进度与待执行任务清单（任务、实现要点、涉及文件、状态、提交）                                                |
-| `docs/prd/`         | PRD：产品需求文档与竞品调研（编号规则见 `docs/README.md`）                                                      |
+| `BACKLOG.md`        | 任务与未决范围清单（任务、实现要点、涉及文件、状态）                                                            |
+| `docs/prd/`         | PRD：产品目标、场景、需求与版本规划（编号规则见 `docs/README.md`）                                              |
 | `docs/requirement/` | REQ：功能需求总表、非功能需求、业务流程与用例、术语、界面；06 起为功能需求文件（一个功能一个文件）              |
 | `docs/design/`      | DES：01–08 架构、数据、接口、工作流、Agent、画布、安全设计与技术选型；09 起为功能设计（与功能需求文件一一对应） |
 | `docs/plan/`        | PLN：实施路线、项目管理与变更                                                                                   |
 | `docs/test/`        | TST：测试策略、需求追踪矩阵、AI 评测                                                                            |
 | `docs/operation/`   | OPS：环境部署、CI/CD、监控告警、备份恢复与故障响应                                                              |
-| `docs/acceptance/`  | 每个里程碑的验收记录                                                                                            |
 
 业务范围以 `docs/prd/` 与 `docs/requirement/` 为准，架构决策以 `docs/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改需求或设计文档并评审，再同步本文。
-
-2026-09-30 用户进一步明确：按上线标准实现完整 Lanverse，当前优先跑通整项目验证和 Demo；画布直接复用 BeefTV 固定提交 0d9e9f48 的 DOM/SVG/rAF InfiniteCanvas 核心及对应设计，替换现有实现（见 BeefTV 引入设计、DES-06/38）。当时只接正式 text/image/video/audio/group 资源节点与 Go/PostgreSQL 合同，2026-10-01 后续已扩大为完整工作台迁移；源 provider/3D/插件/时间轴的用户能力按新设计逐项适配。本项目不保留独立 PoC 产品入口、旧 live/creation 引擎或双状态。完整生成/参考/选定/Agent 仍按产品范围验收，单次 Demo 不等于 MVP 完成。现有业务历史保留，字段演进更新 `backend/db/schema.sql`，既有库另行审阅增量升级。用户随后明确要求先清理独立 Python `agent/` 服务，范围见 [Agent 服务目录清理](docs/design/Agent服务目录清理设计.md)；其执行能力尚未由 Go 承接，M1-12 继续评估和实施。
-
-2026-09-30 用户明确当前先保证 PoC 页面和服务可用，不需要登录认证。用户随后指定直接清理登录功能，不保留兼容分支或免登录开关；单一工作区复用正式项目/画布持久化，消费者认证后置。配置、身份、写入和失败边界见 BeefTV 引入设计 §4.1。
-
-2026-09-30 用户最新调整执行顺序：先迁移 BeefTV 的能力，再继续后续页面。2026-10-01 用户要求将当前改动提交到本地 `main` 并详细规划；工作台测试与实现已提交，生成执行、结果接管、恢复与费用见 [迁移设计](docs/design/BeefTV生成能力迁移设计.md) 与 [实施计划](docs/plan/BeefTV能力迁移实施计划.md)。最新接入顺序为本机 Codex app-server 内置 imagegen 优先，随后火山 Seedream 图片/Seedance 视频，再经 OpenRouter 扩其他模型；不改变已接受的画布核心来源。
-
-2026-10-01 当前进度：M1-12.01 首片内部合同已固定，.02/.03 的数据、DTO、持久发送权与已执行保护已技术通过；Operation 同步转换、成本和 Workflow 仍待 .08/.10，G1 只部分通过。新增 23 个顶层专项测试（10 个合同、12 个真实 PostgreSQL、1 个独立迁移）通过；全后端 343 个顶层测试通过、157 个因外部条件跳过，适用 vet/lint/race/govulncheck 通过（1 个未调用模块告警），见 [首片验收](docs/acceptance/M1-12-同步调用证据与发送权验收.md)。Codex CLI 0.159.2 的公共 schema 已核对能力探测及 thread/turn/imageGeneration 完成事件，但运行、账号、产物和费用尚未真实验证；不默认免费、不复制 OAuth secret、不无声回退付费 HTTP。实际模型、费用、操作者授权与审核合同仍须在启用前固定，真实生成和产品链未通过。
-
-当前主要参考项目为 [glanderness/BeefTV](https://github.com/glanderness/BeefTV)，源码基线固定为 [0d9e9f48d407570cd431ad9730cdd522b06810c0](https://github.com/glanderness/BeefTV/tree/0d9e9f48d407570cd431ad9730cdd522b06810c0)。当前复用合同以 [BeefTV 迁移设计](docs/design/BeefTV能力引入设计.md) 和 [第三方代码声明](THIRD_PARTY_NOTICES.md) 为准；LibTV 与旧 infinite-canvas 的历史调研、业务规则来源与许可证据继续保留，不作为当前主要参考或画布引擎建议。
 
 ## 2. 仓库结构与职责
 
@@ -44,16 +28,16 @@ Lanverse/
   docker-compose.yml        Go 应用服务（backend-api、backend-worker、backend-worker-media、backend-relay）及维护角色
   docker-compose-env.yml    完整部署依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
-  frontend/         Next.js 工作台；完整迁移的未决能力见 E37
-  docs/             生命周期文档：产品需求、需求规格、设计、计划、测试、运维、验收
+  frontend/         Next.js 工作台；未决能力见 BACKLOG
+  docs/             正式文档：产品需求、需求规格、设计、计划、测试、运维
 ```
 
-不设 `contracts/`：公共 REST 契约由后端 Gin 注解与 DTO 经 swag 自动生成，在后端 Swagger 端点在线提供，再由 `@umijs/openapi` 生成前端 API（见 §7）；现有 Activity 与事件的输入输出由 Go 手写类型，不引入单独的 schema 文件与代码生成流水线。被移除的 Python 执行端协议保留在 DES-03，Go 承接时须验证兼容性。
+不设 `contracts/`：公共 REST 契约由后端 Gin 注解与 DTO 经 swag 自动生成，在后端 Swagger 端点在线提供，再由 `@umijs/openapi` 生成前端 API（见 §7）；现有 Activity 与事件的输入输出由 Go 手写类型，不引入单独的 schema 文件与代码生成流水线。Activity 载荷、名称与队列遵循 DES-03，执行端变更须验证历史兼容性。
 
-| 单元        | 必须负责                                                                                        | 不得负责                                                |
-| ----------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `backend/`  | 全部业务事实、权限、计费、公共 API、全部工作流定义、写库与媒体 Activity、Outbox 与事件消费、SSE | M1-12 接入前直接调用模型供应商；在 Workflow 内执行 I/O  |
-| `frontend/` | 界面、交互、服务端状态缓存、编辑器局部状态、按参数 schema 渲染表单                              | 持有供应商密钥；直连 Agent 服务、Temporal、Kafka、Redis |
+| 单元        | 必须负责                                                                                        | 不得负责                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `backend/`  | 全部业务事实、权限、计费、公共 API、全部工作流定义、写库与媒体 Activity、Outbox 与事件消费、SSE | 执行 Worker 与费用门禁就绪前调用模型供应商；在 Workflow 内执行 I/O |
+| `frontend/` | 界面、交互、服务端状态缓存、编辑器局部状态、按参数 schema 渲染表单                              | 持有供应商密钥；直连 Agent 服务、Temporal、Kafka、Redis            |
 
 **调用路径：**
 
@@ -61,26 +45,27 @@ Lanverse/
 浏览器 → Next.js → backend-api(Gin) ─┬─ 命令 / 查询 → PostgreSQL（业务表 + Outbox）
                                      ├─ 启动 / 信号 → Temporal ─┬─ flow  队列 → backend-worker
                                      │                          ├─ media 队列 → backend-worker（FFmpeg → MinIO）
-                                     │                          └─ agent / agent.mock 队列 → 执行端待补（M1-12）
-                                     └─ SSE ← Redis Pub/Sub ← backend-relay ← Kafka ← Outbox
-浏览器 ↔ MinIO：预签名 URL 上传 / 下载
+                                     │                          └─ agent / agent.mock 队列 → 执行端计划接入（DES-05/生成执行设计）
+                                     └─ SSE（公开路由计划接入）← Redis Pub/Sub ← backend-relay ← Kafka ← Outbox
+上传：浏览器 multipart → Next.js（生成 API 转发）→ Go → 私有对象存储
+下载：浏览器 → 授权预签名 URL → 私有对象存储
 ```
 
 ## 3. 技术栈
 
-| 范围     | 技术                                                                                                                                                                                                                              |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 前端     | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier                                                                                                          |
-| 前端组件 | TanStack Query、Zustand + Immer、React Hook Form + Zod、BeefTV InfiniteCanvas 核心、Tiptap（Mention）、TanStack Table + TanStack Virtual、dnd-kit、Sonner、next-themes、Streamdown、`@umijs/openapi` + Axios；CopilotKit（AG-UI） |
-| 后端     | Go、Gin、GORM（pgx 驱动）、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator                                                                                                                          |
-| 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go                                                                                                                                      |
-| 工作流   | Temporal（自建，PostgreSQL 持久化）                                                                                                                                                                                               |
-| 中间件   | PostgreSQL、Redis、Kafka（KRaft）、对象存储（开发 MinIO，生产火山引擎 TOS，均为 S3 协议）                                                                                                                                         |
-| 媒体     | FFmpeg / ffprobe                                                                                                                                                                                                                  |
-| 可观测   | OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo / Jaeger、Temporal UI、Kafka UI                                                                                                                                         |
-| 部署     | Docker、Docker Compose；规模化后 Kubernetes                                                                                                                                                                                       |
+| 范围     | 技术                                                                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 前端     | Next.js（App Router）、React、TypeScript strict、pnpm、Tailwind CSS、shadcn/ui、Radix UI、lucide-react、ESLint、Prettier                                    |
+| 前端组件 | TanStack Query、TanStack Virtual、Zustand + Immer、React Hook Form + Zod、Tiptap、Three.js、React Three Fiber / Drei、next-themes、`@umijs/openapi` + Axios |
+| 后端     | Go、Gin、GORM（pgx 驱动）、Viper、Zap、Wire、swag + gin-swagger、go-playground/validator                                                                    |
+| 后端集成 | Temporal Go SDK、go-redis v9（redis_rate、redsync）、franz-go、minio-go v7、OpenTelemetry Go                                                                |
+| 工作流   | Temporal（自建，PostgreSQL 持久化）                                                                                                                         |
+| 中间件   | PostgreSQL、Redis、Kafka（KRaft）、对象存储（开发 MinIO，生产火山引擎 TOS，均为 S3 协议）                                                                   |
+| 媒体     | FFmpeg / ffprobe                                                                                                                                            |
+| 可观测   | OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo / Jaeger、Temporal UI、Kafka UI                                                                   |
+| 部署     | Docker、Docker Compose；规模化后 Kubernetes                                                                                                                 |
 
-每个中间件的职责边界见 [DES-08 §6](docs/design/08-技术选型决策.md#6-中间件职责)；当前 BeefTV 参考范围与历史技术比较见 [DES-08 §10](docs/design/08-技术选型决策.md#10-参考项目与技术边界)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
+每个中间件的职责边界见 [DES-08 §6](docs/design/08-技术选型决策.md#6-中间件职责)；工作台职责见 [工作台设计](docs/design/工作台设计.md)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
 
 ## 4. Go 后端
 
@@ -124,15 +109,15 @@ backend/
 16. 日志统一用 Zap（不混用标准库 `log` / `slog`）的结构化字段（`trace_id`、`project_id`、`operation_id`），不记录凭据与剧本全文。
 17. 文件名 `snake_case.go`；Go 测试集中放在 `backend/tests/<模块>/`，按被测模块分目录并使用外部测试包（`<package>_test`）；生产源码目录不存放 `*_test.go`。集成测试放在对应模块目录中并使用 testcontainers 启动 PostgreSQL、Redis、Kafka、MinIO，工作流用 Temporal testsuite 与回放测试。
 
-## 5. AI 执行能力的后续承接
+## 5. AI 执行能力
 
-独立 Python 服务目录、启动入口和镜像已移除。当前迁移已增加 Go Codex app-server 协议适配、私有分阶段回执与媒体恢复，以及管理凭据测试的耐久请求入口；Codex 真实执行注册仍默认关闭，供应商实际调用、费用、审核、Skill/Harness 尚未完成真实验收。现有 `agent` / `agent.mock` / `agent.codex` 队列与 Activity 协议不代表对应执行 Worker 已启用。具体迁移范围、状态和失败合同以 [BeefTV 能力引入设计](docs/design/BeefTV能力引入设计.md) 为准。
+供应商执行由 Go adapter 承接，复用 Operation、持久发送权、私有分阶段回执、媒体接管与账本；具体状态与失败合同见 [生成执行设计](docs/design/生成执行设计.md)。Codex app-server 协议适配、私有回执恢复及管理凭据测试入口已接入，真实执行注册仍默认关闭；实际供应商调用、费用、审核、Skill/Harness 与完整产品链尚未完成真实验收。`agent` / `agent.mock` / `agent.codex` 队列和 Activity 协议不能证明执行 Worker 已启用。
 
-冻结输入、预算上限、只读工具白名单、长任务 heartbeat/取消，以及结果未知不自动重提付费请求的业务约束继续有效；迁移须补齐测试、历史兼容与真实供应商证据，不恢复独立 Python 服务作为默认前提。范围与失败路径见 [清理设计](docs/design/Agent服务目录清理设计.md)。
+冻结输入、预算上限、只读工具白名单、长任务 heartbeat/取消，以及结果未知不自动重提付费请求的约束继续有效。执行 Worker 须按角色注入凭据；API、flow/media 与浏览器不得持有执行私钥。本机 Codex 账号由 Codex 客户端管理；实际能力、模型、产物、可信费用及审核须在启用前核验，不默认免费或回退付费 HTTP。任务与放行条件见 BACKLOG M1-12。
 
 ## 6. 前端
 
-2026-10-01 当前状态：完整工作台迁移正在执行，`src/` 和 `public/` 已恢复自身技术栈页面、请求入口、生成客户端、画布核心与表单。源码就近测试已恢复，CI 的 lint、类型、单元测试、构建及在线客户端对比门禁随本轮实现恢复；完整能力与真实生成尚未验收，不沿用清理前的历史结果。
+前端采用 Next.js App Router 与自身 Go API，页面存在不等于能力或真实生成验收完成。
 
 编码与审查遵循 [Vercel React Best Practices](https://vercel.com/blog/introducing-react-best-practices) 和 [Next.js 官方文档](https://nextjs.org/docs/app)，通过 Vercel 插件的 `vercel:react-best-practices`、`vercel:nextjs` 技能读取相关规则。执行顺序与检查项见 [AGENTS.md 的前端工程规范](AGENTS.md#前端工程规范)，具体 API 同时核对安装版本的 `node_modules/next/dist/docs/`。外部示例中的数据请求或缓存库须映射到本项目既有 TanStack Query、统一请求封装和 Go 业务合同；工具链变更仍遵循设计评审规则。
 
@@ -146,55 +131,57 @@ frontend/
         nodes/                   # 节点组件与媒体生命周期
       catalog/                   # 按 ModelProfile.param_schema 渲染参数表单
       operation/                 # 报价确认组件与查询钩子
-      project/                   # 项目列表、创建对话框与预算组件
+      project/                   # 项目列表与设置、创建和复制对话框
       workbench/                 # 工作台页面组件、布局与路由映射
       ui/                        # shadcn/ui（Radix）基础组件
     lib/                         # 前端基础能力
-      request.ts                  # Axios 请求封装；普通 HTTP 与流式连接的统一入口
-    gen/api/                     # @umijs/openapi 从后端在线 Swagger 文档生成，禁止手改
+      request.ts                 # 唯一 Axios 传输入口；含授权媒体流读取
+    api/                         # @umijs/openapi 从后端在线 Swagger 统一生成，禁止手写
   tests/                         # unit、e2e
   eslint.config.mjs              # ESLint flat config
   .prettierrc.json               # Prettier 配置（含 tailwind 插件）
   components.json                # shadcn 配置（Radix 体系）
 ```
 
-2026-09-30 按用户指定的目录方式，业务组件直接放在 `components/<业务>/`。模块私有的查询、钩子、类型、状态与就近测试随组件放在同一业务目录；共享请求与基础能力继续在 `lib/`，生成 API 继续在 `gen/api/`。不再设置 `src/features/` 或重复嵌套的业务 `components/` 层，尚未实现的模块不预建目录。
+业务组件、查询、钩子、类型、状态与就近测试放在 `components/<业务>/`；共享基础能力在 `lib/`，生成 API 在 `src/api/`。不设置 `src/features/` 或重复业务目录；尚未实现的模块不预建目录。
 
-1. 服务端事实只来自 TanStack Query；SSE 事件只用于让相关查询失效。
+1. 服务端事实只来自 TanStack Query；公开 SSE 路由计划接入；实施后的事件只用于让相关查询失效。
 2. 编辑器高频交互状态放 Zustand（嵌套更新用 Immer）；持久化一律通过后端命令接口。
 3. 基础控件、表单、弹窗、菜单、表格一律用 shadcn/ui；不混用其他组件体系（不引入 Ant Design）。
 4. 富文本与实体引用用 Tiptap；`@角色 / @场景 / @道具` 保存为结构化引用，不只保存纯文本。
 5. 超过 100 行的列表（镜头表、资产库、任务中心）使用 TanStack Virtual。
-6. Agent 界面使用 CopilotKit + AG-UI；Agent 下发的画布修改只作为提案展示，用户确认后经命令接口提交；付费生成一律由用户二次确认。
+6. 对话式 Agent 计划按既有 Go 模块接入；界面与工具链按 [DES-39](docs/design/39-对话式Agent.md) 和 BACKLOG E-37 设计与验收。
 7. 模型参数表单只由 `param_schema` 驱动。
 8. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
 9. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。
 10. 付费操作先展示报价并由用户确认。
-11. 所有普通 HTTP 请求通过 `src/lib/request.ts` 中的 Axios 封装；生成函数调用它，业务代码调用生成函数。SSE 与 AG-UI 流式连接也从该文件导出连接入口；不得在业务模块中另建请求实例或直连后端。预签名 URL 上传沿用该入口，不携带后端会话与 CSRF 头到对象存储。
+11. 所有业务接口由 `@umijs/openapi` 统一生成到 `src/api/`，生成函数调用 `src/lib/request.ts` 的 Axios 封装，业务代码与 Route Handler 只调用生成函数。禁止手写 API 文件、自行拼接业务接口路径、直接调用底层 `request` 或网络客户端；接口缺失时先补后端注解与 DTO，再重新生成。ESLint 检查手写请求边界，CI 重生成整个目录并校验漂移。授权对象存储模型原件由 `request.ts` 的流传输入口读取，保留逐块容量上限、取消与禁止重定向，不携带后端凭据。上传代理通过生成函数转发原始 multipart 计数流，保持 Origin/幂等键和响应状态，不缓冲整份文件。请求服务使用私有 `axios.create()` 与 Axios TypeScript 配置，`@umijs/openapi` 仅生成客户端；不引入 `umi-request` 请求运行时。
 12. 不设置项目脚本或 Makefile；前端开发和检查直接执行 `pnpm exec next`、`pnpm exec eslint`、`pnpm exec prettier`、`pnpm exec tsc`、`pnpm exec vitest`、`pnpm exec openapi2ts`。
 
 ## 7. 契约与生成
 
-2026-10-01 完整工作台迁移已恢复 `@umijs/openapi` 在线客户端生成、前端检查及镜像门禁；新增模型、任务与工具合同必须重新通过下述契约链。当前真实业务验收单独记录，不以客户端生成或构建结果替代。
+接口与数据按下述唯一事实源维护，生成或构建通过不能替代真实业务验收。
 
-| 契约      | 唯一来源                                                                       | 生成物                                                                                                         |
-| --------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| 公共 REST | Gin Handler 的 swag 注解 + DTO                                                 | `backend/docs`（生成的 Swagger 2.0）→ 后端在线 `/swagger/doc.json` → `@umijs/openapi` → `frontend/src/gen/api` |
-| Activity  | 现有 Go 类型；DES-03 §7.1 表格为字段的唯一权威描述，原 Python 执行端待 Go 承接 | —                                                                                                              |
-| 数据库    | `backend/db/schema.sql`                                                       | —                                                                                                              |
-| 事件      | Go 结构体，按主题版本号 `.v<N>` 手写，生产者与消费者各自维护                   | —                                                                                                              |
+| 契约      | 唯一来源                                                     | 生成物                                                                                                     |
+| --------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| 公共 REST | Gin Handler 的 swag 注解 + DTO                               | `backend/docs`（生成的 Swagger 2.0）→ 后端在线 `/swagger/doc.json` → `@umijs/openapi` → `frontend/src/api` |
+| Activity  | Go 类型；DES-03 §7.1 规定字段语义与兼容边界                  | —                                                                                                          |
+| 数据库    | `backend/db/schema.sql`                                      | —                                                                                                          |
+| 事件      | Go 结构体，按主题版本号 `.v<N>` 手写，生产者与消费者各自维护 | —                                                                                                          |
 
 1. REST：改 Handler / DTO 与注解 → 运行 swag 自动生成 → 启动后端并从在线 `/swagger/doc.json` 运行 `@umijs/openapi` → 改前端实现。生成器配置 `schemaPath` 为在线地址、`requestImportStatement` 为 `@/lib/request` 的导入语句；Swagger 文档与前端 API 文件均禁止手改。后端未启动或在线规范不可用时生成失败，不以旧文件代替。
-2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 契约测试。Temporal 载荷由现有 Go 类型实现，兼容性样例内联在 `backend/tests/<模块>/` 的测试中，不再维护根目录 `contracts/` 或独立 JSON 规范文件；公共 HTTP 接口统一走上面的 Swagger 链路。M1-12 承接旧执行端时还须验证历史输入输出与队列兼容性，不把未注册的内部 Activity 伪装成公共 HTTP 端点。
+2. Activity 与事件：改 DES-03 表格 → 改 Go 类型 → 契约测试。Temporal 载荷由现有 Go 类型实现，兼容性样例内联在 `backend/tests/<模块>/` 的测试中，不再维护根目录 `contracts/` 或独立 JSON 规范文件；公共 HTTP 接口统一走上面的 Swagger 链路。M1-12 执行接线时还须验证历史输入输出与队列兼容性，不把未注册的内部 Activity 伪装成公共 HTTP 端点。
 3. 不兼容变更升级版本号（Activity 名称或事件主题后缀 `.v<N>`）；旧版本在仍有在途工作流或未消费事件时保留。
-4. 数据库：直接更新 `backend/db/schema.sql` 的表、列、索引、约束、函数、触发器、权限与动态分区最终态，同步 owning 模块与结构合同测试。Schema 只描述已实现能力；概念规划留在 DES-02，不预建对象。新空业务库由独立表所有者在单事务内初始化，预置 `lanverse_app NOLOGIN NOSUPERUSER`；既有业务库依据实例与目标 Schema 审阅增量升级，不自动覆盖、重建或重跑初始化。旧迁移脚本从 Git 历史检索，不再作为当前结构来源。
+4. 数据库：直接更新 `backend/db/schema.sql` 的表、列、索引、约束、函数、触发器、权限与动态分区最终态，同步 owning 模块与结构合同测试。Schema 只描述已实现能力；概念规划留在 DES-02，不预建对象。新空业务库由独立表所有者在单事务内初始化，预置 `lanverse_app NOLOGIN NOSUPERUSER`；既有业务库依据实例与目标 Schema 审阅增量升级，不自动覆盖、重建或重跑初始化。
+
+Swagger 本地生成入口为在 `backend/` 执行 `go generate -run 'swag' ./internal/app`；`public_api.go` 的 `go:generate` 固定 swag `v1.16.6`，从 Handler 注解和 DTO 生成 `docs/docs.go`、`docs/swagger.json`、`docs/swagger.yaml`。API 将生成规范与内置 Swagger UI 静态资源统一提供在 `/swagger/*any`，页面入口 `/swagger/index.html` 读取相对地址 `doc.json`，不依赖外部 CDN 或独立维护的接口清单。生成后须重新构建并重启 API，CI 继续检查重生成文件、在线规范和公开路由一致性。
 
 Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，再执行 `goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go`；`wire_gen.go` 仅由工具生成和格式化，CI 重复这两条命令并比较文件，不设脚本或 Makefile。
 
 ## 8. 配置、数据与安全
 
 - 配置来自环境变量（Go 使用 Viper），启动时集中校验；`.env.example` 只记录占位值与说明，真实 `.env` 与凭据不入库。
-- 供应商凭据仅供服务端使用，现有封装保留，解封与执行端待 M1-12；MinIO、Kafka、Redis、Temporal 凭据只注入需要的单元。
+- 供应商凭据仅供服务端使用，现有封装保留，解封与执行端计划按生成执行设计接入；MinIO、Kafka、Redis、Temporal 凭据只注入需要的单元。
 - 测试数据必须合成或脱敏。构建产物、缓存、日志、本地数据卷不进入仓库。
 
 ## 9. 质量门禁与交付
@@ -203,10 +190,10 @@ Wire 组合根修改后，在 `backend/` 直接执行 `wire ./internal/app`，�
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Go   | `gofmt`、`goimports`、`go vet`、`golangci-lint`、`go test -race ./...`、`govulncheck`、swag 与 Wire 生成一致性                                                                   |
 | 前端 | `pnpm exec eslint .`、`pnpm exec prettier --check .`、`pnpm exec next typegen` + `pnpm exec tsc --noEmit`、`pnpm exec vitest run`、`pnpm exec next build`；交互变化补 Playwright |
-| 契约 | swag 生成物与后端在线 Swagger 一致；`@umijs/openapi` 从在线文档重生的 API 一致；公开路由文档覆盖；现有 Go Activity 样例通过，原执行端的真实链路待 M1-12                          |
+| 契约 | swag 生成物与后端在线 Swagger 一致；`@umijs/openapi` 从在线文档重生的 API 一致；公开路由文档覆盖；现有 Go Activity 样例通过，真实执行链路待 M1-12                                |
 
 1. 核心业务逻辑（Operation 状态机、预算与对账、依赖传播、工作流）先写测试再实现。
-2. 每个里程碑的验收记录在 `docs/acceptance/`；静态检查通过不等于功能验收通过。
+2. 按 TST-01/02/03 执行验收并在对应任务保留未通过条件；静态检查通过不等于功能验收通过。
 3. 提交与分支规则见 `AGENTS.md`。
 4. Go 与前端代码审查分别核对 Google Go 规范和 Vercel 最佳实践；性能修改说明所采用规则、测量结果与适用边界。规范审查与自动化门禁分别记录，跳过项明确说明。
 

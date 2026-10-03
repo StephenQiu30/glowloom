@@ -1,26 +1,25 @@
 # DES-39 对话式 Agent
 
-| 项 | 内容 |
-| --- | --- |
-| 对应需求 | [REQ-37 对话式 Agent](../requirement/37-对话式Agent.md)：AGT-01 对话式 Agent；AGT-02 会话管理；AGT-03 Agent 执行可见性；CNV-07 AI 画布助手 |
-| 优先级 | MVP（首个版本，PRD-01 P20、P27） |
-| 里程碑 | M5（[PLN-01](../plan/01-实施路线与交付计划.md)） |
-| 页面 | Agent 面板（全局右侧抽屉）、管理员调试面板 |
-| 基础设计 | DES-05 §7；DES-02 §5.13；DES-07 §12 |
-| 依赖功能设计 | [DES-21](21-分镜生成与镜头编辑.md)、[DES-22](22-生成模式与参考组合.md)、[DES-24](24-报价与二次确认.md)、[DES-38](38-画布功能.md) |
-| 状态 | 草案（待评审，2026-09-25） |
+| 项           | 内容                                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 对应需求     | [REQ-37 对话式 Agent](../requirement/37-对话式Agent.md)：AGT-01 对话式 Agent；AGT-02 会话管理；AGT-03 Agent 执行可见性；CNV-07 AI 画布助手 |
+| 优先级       | MVP（首个版本，PRD-01 P20、P27）                                                                                                           |
+| 计划里程碑   | M5（[PLN-01](../plan/01-实施路线与交付计划.md)）                                                                                           |
+| 页面         | Agent 面板（全局右侧抽屉）、管理员调试面板                                                                                                 |
+| 基础设计     | DES-05 §7；DES-02 §5.13；DES-07 §12                                                                                                        |
+| 依赖功能设计 | [DES-21](21-分镜生成与镜头编辑.md)、[DES-22](22-生成模式与参考组合.md)、[DES-24](24-报价与二次确认.md)、[DES-38](38-画布功能.md)           |
 
-本文把 [REQ-37](../requirement/37-对话式Agent.md) 拆解为实现设计。需求目标、业务规则（文中 R1、R2… 指 REQ-37 §2 的规则）与验收标准以 REQ-37 为准；表结构以 [DES-02](02-领域与数据模型.md)、接口签名以 [DES-03](03-接口设计.md)、工作流与生成操作以 [DES-04](04-工作流与生成操作.md) 为准，本文说明该功能用到哪些部分、如何组合。设计发现需求问题时先改需求（[文档规则](../README.md#文档规则) 2）。
+对话式 Agent 的运行器、公开接口、交互与评测计划按本文接入；已有持久协议和逐次记账类型不代表对话执行链可用。
 
 ## 1. 设计清单
 
-| 类别 | 内容 |
-| --- | --- |
-| 数据表 | `agent.message`、`agent.proposal`、`agent.session`、`agent.run`、`operation.operation`（额度）、`operation.provider_call` |
-| 接口 | `POST /api/projects/{pid}/agent/sessions`<br>`GET /api/projects/{pid}/agent/sessions`<br>`POST /api/projects/{pid}/agent/sessions/{sid}/runs`<br>`GET /api/projects/{pid}/agent/sessions/{sid}/messages`<br>`POST /api/agent/proposals/{id}:apply`<br>`POST /api/agent/proposals/{id}:reject`<br>`DELETE /api/projects/{pid}/agent/sessions/{sid}`<br>`GET /api/admin/agent/runs/{run_id}/debug`<br>`POST /api/projects/{pid}/agent/sessions/{sid}/budget-quotes`<br>`POST /api/projects/{pid}/agent/sessions/{sid}:close`<br>`POST /internal/agent/runs/{run_id}/calls`<br>`PUT /internal/agent/runs/{run_id}/calls/{call_seq}` |
-| 工作流与任务 | `OperationWorkflow`、`agent-session-settle` |
-| 领域事件 | 无 |
-| 测试用例 | TC-37-xx（[TST-02](../test/02-需求追踪矩阵.md)） |
+| 类别         | 内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 数据表       | `agent.message`、`agent.proposal`、`agent.session`、`agent.run`、`operation.operation`（额度）、`operation.provider_call`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 接口         | `POST /api/projects/{pid}/agent/sessions`<br>`GET /api/projects/{pid}/agent/sessions`<br>`POST /api/projects/{pid}/agent/sessions/{sid}/runs`<br>`GET /api/projects/{pid}/agent/sessions/{sid}/messages`<br>`POST /api/agent/proposals/{id}:apply`<br>`POST /api/agent/proposals/{id}:reject`<br>`DELETE /api/projects/{pid}/agent/sessions/{sid}`<br>`GET /api/admin/agent/runs/{run_id}/debug`<br>`POST /api/projects/{pid}/agent/sessions/{sid}/budget-quotes`<br>`POST /api/projects/{pid}/agent/sessions/{sid}:close`<br>`POST /internal/agent/runs/{run_id}/calls`<br>`PUT /internal/agent/runs/{run_id}/calls/{call_seq}` |
+| 工作流与任务 | `OperationWorkflow`、`agent-session-settle`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 领域事件     | 无                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 测试用例     | TC-37-xx（[TST-02](../test/02-需求追踪矩阵.md)）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## 2. 数据
 
@@ -48,7 +47,7 @@ AG-UI 事件映射见 DES-01 §7.4；自定义事件 `canvas_commands`、`propos
 
 ## 4. 异步与工作流
 
-对话运行不使用 Temporal（交互式、短时），`agent-api` 直接流式执行。每次运行前 Go 在当前额度内登记一条 `agent.run` 并占用 `run_cap`，作为 Harness Budget 传入；每一次模型调用在发起前登记一条 `provider_call`（带 `request_key`），返回后立即写入实际用量与费用；运行结束只汇总 `agent.run.cost_micros`；中断的运行由 `agent-session-settle` 判为 abandoned。额度的确认、追加、结算规则以 DES-04 §8.7 为准（本段为摘要）。生成草稿确认后走 OperationWorkflow。
+对话运行不使用 Temporal（交互式、短时），计划由 Go owning 运行器流式执行。每次运行前 Go 在当前额度内登记一条 `agent.run` 并占用 `run_cap`，作为 Harness Budget 传入；每一次模型调用在发起前登记一条 `provider_call`（带 `request_key`），返回后立即写入实际用量与费用；运行结束只汇总 `agent.run.cost_micros`；中断的运行由 `agent-session-settle` 判为 abandoned。额度的确认、追加、结算规则以 DES-04 §8.7 为准（本段为摘要）。生成草稿确认后走 OperationWorkflow。
 
 ## 5. 事件与实时
 
@@ -72,11 +71,18 @@ PERF-11（首个流式片段 ≤ 3 秒）；SEC-09（提示注入用例集）。
 
 ## 10. 待确认
 
-| 编号 | 问题 | 默认方案（确认前按此实施） | 确认时机 |
-| --- | --- | --- | --- |
-| DES-39-Q1 | CopilotKit 与 ag-ui-protocol 的许可（原 REQ-37-Q2）。 | MVP 开发前核实；不满足要求时前端改用自研面板直接消费 AG-UI 事件流。 | M5 开始前 |
-| DES-39-Q2 | 对话式 Agent 使用哪个 LLM？ | 经 Model Router 选择，P0 评测后确定（TST-03）；不同 Skill 可配置不同模型。 | P0 结束时 |
-| DES-39-Q3 | 浏览器断线后，服务端的 Agent 运行是否继续？ | 继续运行并逐条落库；重连后按 `after_seq` 续传，不重复执行。 | M5 开始前 |
-| DES-39-Q4 | 会话与消息保留多久？ | 保留 90 天；删除会话为软删除，30 天后清理。 | M5 实施中 |
+| 编号      | 问题                                                  | 拟采用方案                                                                 | 确认时机  |
+| --------- | ----------------------------------------------------- | -------------------------------------------------------------------------- | --------- |
+| DES-39-Q1 | CopilotKit 与 ag-ui-protocol 的许可（原 REQ-37-Q2）。 | MVP 开发前核实；不满足要求时前端改用自研面板直接消费 AG-UI 事件流。        | M5 开始前 |
+| DES-39-Q2 | 对话式 Agent 使用哪个 LLM？                           | 经 Model Router 选择，P0 评测后确定（TST-03）；不同 Skill 可配置不同模型。 | P0 结束时 |
+| DES-39-Q3 | 浏览器断线后，服务端的 Agent 运行是否继续？           | 继续运行并逐条落库；重连后按 `after_seq` 续传，不重复执行。                | M5 开始前 |
+| DES-39-Q4 | 会话与消息保留多久？                                  | 保留 90 天；删除会话为软删除，30 天后清理。                                | M5 实施中 |
 
 需求层面的待确认问题见 [REQ-37](../requirement/37-对话式Agent.md) 的“待确认”。
+
+## 故障约束与专项验证
+
+- 专项验证：提案失效、越权工具与提示注入评测；会话额度追加、中断结算、断线按序续传和生成草稿二次确认。
+
+- 提示注入或越权工具输出诱导写操作：停用有风险工具，保留只读对话；所有提案重新走用户确认和权限校验。
+- 运行中断导致额度费用未知：停止新运行并以已确认占用暂估结算，后续按供应商账单只退不补；消息落库后按序续传。

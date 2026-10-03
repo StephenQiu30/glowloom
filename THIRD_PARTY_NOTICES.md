@@ -1,8 +1,14 @@
 # 第三方代码声明
 
+## 字幕转写运行时与模型
+
+本机字幕转写使用官方 [ggml-org/whisper.cpp v1.9.4](https://github.com/ggml-org/whisper.cpp/tree/927cfce34f31707e17f2bff35c349632fb9e2c3a)，固定源码提交 `927cfce34f31707e17f2bff35c349632fb9e2c3a`；代码适用 [MIT 许可](https://github.com/ggml-org/whisper.cpp/blob/927cfce34f31707e17f2bff35c349632fb9e2c3a/LICENSE)，Copyright 2023–2026 The ggml authors。
+
+采用的多语 `ggml-base.bin` 权重来自官方转换仓库 [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp/blob/5359861c739e955e79d9a303bcbc70fb988958b1/README.md)，固定提交 `5359861c739e955e79d9a303bcbc70fb988958b1`，模型卡声明 MIT；文件 147,951,465 字节，SHA256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`。源代码与权重保存在仓库外，使用原字节。Lanverse 的 Go adapter 管理音频预处理、受控请求、时间戳与语言验证、取消和私有结果保存，不将该原生运行时改为业务服务或供应商费用事实。
+
 ## 视频深度推理
 
-Lanverse 的 Go 任务消费者使用固定 [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072) 的 18 个实际模型依赖文件作为离线执行包，保留源文件头部及 Apache-2.0 声明。该包包含 ByteDance、Meta Platforms（DINOv2）、Hugging Face（attention）和 guoyww/AnimateDiff（motion module）的原始署名；完整原许可保存在 [docs/licenses/video-depth-anything.txt](docs/licenses/video-depth-anything.txt)，公开入口 `/licenses/video-depth-anything.txt`。未调用的上游 CLI、Gradio、stream 与 Tencent `dc_utils.py` 不包含在此执行包中。
+Lanverse 的 Go 任务消费者使用固定 [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072) 的 18 个实际模型依赖文件作为离线执行包，保留源文件头部及 Apache-2.0 声明。该包包含 ByteDance、Meta Platforms（DINOv2）、Hugging Face（attention）和 guoyww/AnimateDiff（motion module）的原始署名；完整原许可保存在 [docs/licenses/video-depth-anything.txt](docs/licenses/video-depth-anything.txt)，公开入口 `/licenses/video-depth-anything.txt`。最小执行包清单聚合 SHA256 为 `275d52984b0f60536f53e778c8d38b082a8ff945b174f49d449e6860d1ee0342`；逐文件来源与摘要由 `backend/internal/mediatool/adapter/videodepth/source_manifest.json` 声明。未调用的上游 CLI、Gradio、stream 与未核验许可的 Tencent `dc_utils.py` 不包含在此执行包中。
 
 当前采用的 Small 权重来自官方固定版本 `256875362cff76724b920335dfb4b29dd611f66e`，模型卡声明 Apache-2.0。固定来源、权重大小与 SHA256 见 [docs/licenses/video-depth-anything-small.md](docs/licenses/video-depth-anything-small.md)，公开入口 `/licenses/video-depth-anything-small.md`。该说明仅针对实际采用的 Small 权重。
 
@@ -13,23 +19,23 @@ Lanverse 的 Go 任务消费者使用固定 [Video Depth Anything](https://githu
 BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline-snap.ts` 标明移植自 `yoqu/lingji-cut`。Lanverse 的 `frontend/src/components/canvas/timeline.ts` 改写其碰撞、间隙和吸附算法，使用自身 UUID、闭合输入和画布保存合同。保留该传递来源与修改声明，不将其视为 BeefTV 原创。
 
 - 原项目：[yoqu/lingji-cut](https://github.com/yoqu/lingji-cut)，Copyright 2026 yoqu。
-- 许可：Apache-2.0；2026-10-01 从公开固定提交 `59a2fc9f8bd00ca243b2b0d4c4e31b67eb6387d1` 保存原始许可全文至 [docs/licenses/lingji-cut.txt](docs/licenses/lingji-cut.txt)。该 SHA 是许可核验快照，BeefTV 未标明其算法移植时的确切源提交。
+- 许可：Apache-2.0；从公开固定提交 `59a2fc9f8bd00ca243b2b0d4c4e31b67eb6387d1` 保存原始许可全文至 [docs/licenses/lingji-cut.txt](docs/licenses/lingji-cut.txt)。该 SHA 是许可核验快照，BeefTV 未标明其算法移植时的确切源提交。
 - 运行时许可入口：`/licenses/lingji-cut.txt`。
 
-## BeefTV 无限画布与完整工作台迁移
+## BeefTV 无限画布与工作台
 
-导演台镜头图库与封面（2026-10-02）沿固定 `1ae25027` 的 `lib/canvas/director/director-session.ts`、`director-cover-write.ts` 和 `components/canvas/director/director-camera-screenshot-tabs.tsx` 改写到 `frontend/src/components/canvas/director/outputs.ts`。`gallery.tsx` 参考 `components/canvas/director/director-screenshot-gallery.tsx`，使用自身 shadcn/Radix；`capture-result.ts`、编辑器和节点内容通过正式审核资产、画布 CAS 与持久幂等关联，替换源应用本地路径和 Ant Design 调用。保留上述 MIT 来源与修改说明。
+导演台镜头图库与封面沿固定 `1ae25027` 的 `lib/canvas/director/director-session.ts`、`director-cover-write.ts` 和 `components/canvas/director/director-camera-screenshot-tabs.tsx` 改写到 `frontend/src/components/canvas/director/outputs.ts`。`gallery.tsx` 参考 `components/canvas/director/director-screenshot-gallery.tsx`，使用自身 shadcn/Radix；`capture-result.ts`、编辑器和节点内容通过正式审核资产、画布 CAS 与持久幂等关联，替换源应用本地路径和 Ant Design 调用。保留上述 MIT 来源与修改说明。
 
-白膜视频录制（2026-10-02）将固定 `1ae25027` 的 `components/canvas/director/director-viewport.tsx:1292–1395` 适配到 `frontend/src/components/canvas/director/recording.ts`；`viewport.tsx` 与 `workbench.tsx` 的录制流程参考 `components/canvas/canvas-director-workbench.tsx:833–866`。沿 MIT 保留来源，改为自身镜头身份、保存修订、有界录制、取消与资源清理；本地人工预览、结果核验、Go/FFmpeg WebM→MP4 规范化和正式媒体审核由 Lanverse 实现。
+白膜视频录制将固定 `1ae25027` 的 `components/canvas/director/director-viewport.tsx:1292–1395` 适配到 `frontend/src/components/canvas/director/recording.ts`；`viewport.tsx` 与 `workbench.tsx` 的录制流程参考 `components/canvas/canvas-director-workbench.tsx:833–866`。沿 MIT 保留来源，改为自身镜头身份、保存修订、有界录制、取消与资源清理；本地人工预览、结果核验、Go/FFmpeg WebM→MP4 规范化和正式媒体审核由 Lanverse 实现。
 
-2026-10-01 清理全部旧前端后，用户授权完整迁移重建。以下画布核心现从历史 `bd17655b` 中恢复已适配 Next.js/shadcn 与正式 Go 合同的实现，来源继续为固定 BeefTV `0d9e9f48`。完整工作台能力参考固定 `1ae25027`；新增移植文件逐项追加登记，不把整个上游源码目录复制为第二套应用。首页/导航的功能组织参考 `web/src/pages/home/home-dashboard.tsx` 与 `components/layout/workspace-sidebar-nav.tsx`，改写为自身 App Router 和 shadcn 工作台。
+画布核心适配 Next.js/shadcn 与正式 Go 合同，固定来源为 BeefTV `0d9e9f48`。工作台能力参考固定 `1ae25027`，首页/导航组织参考 `web/src/pages/home/home-dashboard.tsx` 与 `components/layout/workspace-sidebar-nav.tsx`，改写为自身 App Router 和 shadcn 工作台。新增移植文件逐项登记。
 
-- 固定来源：`0d9e9f48d407570cd431ad9730cdd522b06810c0`，用户确认采用该仓库当前 `main` 后固定此提交。
-- 许可：MIT，完整版权与许可文本保留于 [docs/licenses/beeftv.txt](docs/licenses/beeftv.txt)，当前工作台恢复 `/licenses` 和 `/licenses/beeftv.txt` 入口。
+- 固定来源：`0d9e9f48d407570cd431ad9730cdd522b06810c0`。
+- 许可：MIT，完整版权与许可文本保留于 [docs/licenses/beeftv.txt](docs/licenses/beeftv.txt)，运行时入口 `/licenses` 和 `/licenses/beeftv.txt`。
 - 版权：2026 @beefnoode and BeefTV contributors；2026 basketikun；2026 ddcat。
 - 上游来源：BeefTV 的 `NOTICE` 声明其包含 Infinite Canvas v0.5.0（`568f0f1838df8de31fe885a4e130e2f346dd14ab`）的派生代码，并记录上游在 `890ba95858bbb13496d23978003716656109abb2` 改为 MIT 许可。
 
-下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；目标相对于 Lanverse `frontend/src/components/canvas/`。它们恢复了核心实现，不代表完整工具与生成迁移已经完成。
+下表的源路径均相对于固定 BeefTV 提交的 `web/src/`；目标相对于 Lanverse `frontend/src/components/canvas/`。许可登记说明来源与改写范围，不证明完整功能或真实生成验收完成。
 
 | 目标文件                             | 源文件                                                                                                                                  | 适配范围                                                                       |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -58,9 +64,9 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 | `nodes/node-shell.tsx`               | `components/canvas/canvas-node.tsx`                                                                                                     | 卡片、标题、连接端点与缩放手柄；移除生成和裁剪工具                             |
 | `canvas.css`                         | `globals.css`                                                                                                                           | 合成图层和选中态样式，限定到画布组件作用域                                     |
 
-`model.ts`、`document.ts`、`store.ts`、`queries.ts`、`workspace.tsx`、`editor.tsx` 与节点内容曾负责 Lanverse 的正式领域适配：身份与权限、项目资源、服务端 revision、原子命令、持久幂等和媒体预览。历史移植范围见 [无限画布引入设计](docs/design/BeefTV能力引入设计.md) 和对应 Plan；当前状态以 [前端实现清理](docs/design/前端实现清理设计.md) 为准。
+`model.ts`、`document.ts`、`store.ts`、`queries.ts`、`workspace.tsx`、`editor.tsx` 与节点内容负责 Lanverse 的领域适配：身份与权限、项目资源、服务端 revision、原子命令、持久幂等和媒体预览。业务合同见 [工作台设计](docs/design/工作台设计.md)。
 
-当前完整工作台迁移还移植以下 MIT 算法与输入合同。源提交为 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`，目标均按 Lanverse UUID、服务端持久化、权限和关闭的输入范围改写；不保留源 Wails 外壳或本地数据库。未完成能力以正式设计清单为准，不能由许可登记推断已验收。
+以下 MIT 算法与输入合同按自身技术栈改写。源提交为 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`，目标均按 Lanverse UUID、服务端持久化、权限和关闭的输入范围改写；不保留源 Wails 外壳或本地数据库。未完成能力以正式设计清单为准，不能由许可登记推断已验收。
 
 | 目标（相对 `frontend/src/components/canvas/`）                                                                                        | 来源与改写内容                                                                                        |
 | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -84,12 +90,12 @@ Go 时间轴渲染器使用原字节的 `NotoSansCJKsc-Regular.otf` 绘制中英
 
 ## Khronos glTF 输入校验规范
 
-服务端 `backend/internal/media/adapter/gltf/schema/` 的 JSON Schema 原文来自 [KhronosGroup/glTF](https://github.com/KhronosGroup/glTF/tree/5decc120c95764c319c4f92e7f7ead026d926ef3)，固定提交 `5decc120c95764c319c4f92e7f7ead026d926ef3`，2026-10-01 获取。JSON Schema 保持原字节；适配和资源预算校验为 Lanverse 自身 Go 实现。
+服务端 `backend/internal/media/adapter/gltf/schema/` 的 JSON Schema 原文来自 [KhronosGroup/glTF](https://github.com/KhronosGroup/glTF/tree/5decc120c95764c319c4f92e7f7ead026d926ef3)，固定提交 `5decc120c95764c319c4f92e7f7ead026d926ef3`。JSON Schema 保持原字节；适配和资源预算校验为 Lanverse 自身 Go 实现。
 
 - Copyright 2014–2021 The Khronos Group Inc.，源 `COPYING.adoc` 与 `LICENSE.adoc` 原文同目录保留，逐项来源见 `schema/PROVENANCE.md`。
 - 核心 Schema 使用 CC-BY-4.0；KHR 扩展规范遵循上游 Khronos Specification Copyright 原文复制条件。原文分别保存在 [CC-BY-4.0](docs/licenses/CC-BY-4.0.txt) 与 [Khronos Specification Copyright](docs/licenses/LicenseRef-KhronosSpecCopyright.txt)，运行时 `/licenses` 提供相同文本。
 - 本项目没有修改被复制的规范、附加规范认证或厂商背书；未引入需独立解码器或未核验许可的扩展 Schema。
 
-## 历史界面参考
+## infinite-canvas 来源
 
-旧画布曾参考 basketikun/infinite-canvas 的 MIT 版本 `dab19adc0847e32e39b7fc8ff90cb392561fb826`。这些前端实现已移除，其历史许可文本原字节迁至 [docs/licenses/infinite-canvas.txt](docs/licenses/infinite-canvas.txt)。
+画布界面参考来源包含 basketikun/infinite-canvas 的 MIT 版本 `dab19adc0847e32e39b7fc8ff90cb392561fb826`。许可文本原字节保存在 [docs/licenses/infinite-canvas.txt](docs/licenses/infinite-canvas.txt)。
