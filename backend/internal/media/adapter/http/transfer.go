@@ -168,7 +168,7 @@ func (h *TransferHandler) Get(c *gin.Context) {
 		writeTransferError(c, domain.ErrInvalidLibrary)
 		return
 	}
-	id, ok := id(c, "job_id")
+	id, ok := httpapi.PathUUID(c, "job_id")
 	if !ok {
 		return
 	}
@@ -190,7 +190,7 @@ func (h *TransferHandler) control(c *gin.Context, action string) {
 		writeTransferError(c, domain.ErrInvalidLibrary)
 		return
 	}
-	id, ok := id(c, "job_id")
+	id, ok := httpapi.PathUUID(c, "job_id")
 	if !ok {
 		return
 	}

@@ -123,15 +123,6 @@ func encodeAdminCursor(cursor adminCursor) (*string, error) {
 	return &encoded, nil
 }
 
-func adminID(c *gin.Context, name string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(c.Param(name))
-	if err != nil || id == uuid.Nil {
-		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
 func adminError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, identityapp.ErrForbidden):
@@ -234,7 +225,7 @@ func (h *AdminHandler) CreateProvider(c *gin.Context) {
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/admin/providers/{id} [get]
 func (h *AdminHandler) Provider(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -268,7 +259,7 @@ type UpdateProviderRequest struct {
 // @Failure 409 {object} httpapi.Problem
 // @Router /api/admin/providers/{id} [patch]
 func (h *AdminHandler) UpdateProvider(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -305,7 +296,7 @@ type SetCredentialRequest struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/admin/providers/{id}/credentials [put]
 func (h *AdminHandler) SetCredential(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -339,11 +330,11 @@ func (h *AdminHandler) SetCredential(c *gin.Context) {
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/admin/providers/{id}/credentials/{credential_id}/disable [post]
 func (h *AdminHandler) DisableCredential(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
-	credential, ok := adminID(c, "credential_id")
+	credential, ok := httpapi.PathUUID(c, "credential_id")
 	if !ok {
 		return
 	}
@@ -369,11 +360,11 @@ func (h *AdminHandler) DisableCredential(c *gin.Context) {
 // @Failure 409 {object} httpapi.Problem
 // @Router /api/admin/providers/{id}/credentials/{credential_id}/test [post]
 func (h *AdminHandler) TestCredential(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
-	credential, ok := adminID(c, "credential_id")
+	credential, ok := httpapi.PathUUID(c, "credential_id")
 	if !ok {
 		return
 	}
@@ -481,7 +472,7 @@ func (h *AdminHandler) CreateModel(c *gin.Context) {
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/admin/models/{id} [get]
 func (h *AdminHandler) Model(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -524,7 +515,7 @@ type PublishVersionRequest struct {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/admin/models/{id}/versions [post]
 func (h *AdminHandler) PublishVersion(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -566,7 +557,7 @@ type PublishPriceRequest struct {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/admin/models/{id}/prices [post]
 func (h *AdminHandler) PublishPrice(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -602,7 +593,7 @@ type SetModelStatusRequest struct {
 // @Failure 409 {object} httpapi.Problem
 // @Router /api/admin/models/{id}/status [patch]
 func (h *AdminHandler) SetModelStatus(c *gin.Context) {
-	id, ok := adminID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}

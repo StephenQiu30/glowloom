@@ -40,7 +40,7 @@ func libraryFileScope(c *gin.Context) (domain.LibraryScope, uuid.UUID, bool) {
 			return scope, uuid.Nil, false
 		}
 	}
-	item, ok := id(c, "item_id")
+	item, ok := httpapi.PathUUID(c, "item_id")
 	return scope, item, ok
 }
 

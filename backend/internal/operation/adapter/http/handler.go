@@ -115,7 +115,7 @@ type QuotesRequest struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/free-operations [post]
 func (h *Handler) FreeQuote(c *gin.Context) {
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -152,7 +152,7 @@ func quoteResponse(result application.CreateFreeQuoteResult) QuoteResponse {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/quotes [post]
 func (h *Handler) Quotes(c *gin.Context) {
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -215,7 +215,7 @@ type ConfirmResponse struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/operations/{id}/confirm [post]
 func (h *Handler) Confirm(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -270,7 +270,7 @@ type ConfirmBatchResponse struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/batches/{id}/confirm [post]
 func (h *Handler) ConfirmBatch(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -331,7 +331,7 @@ type taskCursor struct {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/operations [get]
 func (h *Handler) List(c *gin.Context) {
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -417,7 +417,7 @@ func (h *Handler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/operations/{id} [get]
 func (h *Handler) Task(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -448,7 +448,7 @@ func (h *Handler) Task(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/batches/{id} [get]
 func (h *Handler) Batch(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -520,7 +520,7 @@ func (h *Handler) CancelBatch(c *gin.Context) { h.control(c, "batch", "cancel") 
 func (h *Handler) ResumeBatch(c *gin.Context) { h.control(c, "batch", "resume") }
 
 func (h *Handler) control(c *gin.Context, kind, action string) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -536,14 +536,6 @@ func (h *Handler) control(c *gin.Context, kind, action string) {
 	c.JSON(202, result)
 }
 
-func pathID(c *gin.Context, name string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(c.Param(name))
-	if err != nil || id == uuid.Nil {
-		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-		return uuid.Nil, false
-	}
-	return id, true
-}
 func queryProject(c *gin.Context) (uuid.UUID, bool) {
 	id, err := uuid.Parse(c.Query("project_id"))
 	if err != nil || id == uuid.Nil {

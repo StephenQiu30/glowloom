@@ -50,11 +50,11 @@ type AdoptVersionRequest struct {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-versions/{vid}/source-text [get]
 func (h *VersionHandler) Text(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	vid, ok := pathID(c, "vid")
+	vid, ok := httpapi.PathUUID(c, "vid")
 	if !ok {
 		return
 	}
@@ -95,7 +95,7 @@ func (h *VersionHandler) Adopt(c *gin.Context) {
 	if !ok {
 		return
 	}
-	vid, ok := pathID(c, "vid")
+	vid, ok := httpapi.PathUUID(c, "vid")
 	if !ok {
 		return
 	}
@@ -123,11 +123,11 @@ func (h *VersionHandler) Adopt(c *gin.Context) {
 // @Success 200 {object} application.ConfirmationPage
 // @Router /api/projects/{pid}/script-versions/{vid}/split-confirmations [get]
 func (h *VersionHandler) Confirmations(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	vid, ok := pathID(c, "vid")
+	vid, ok := httpapi.PathUUID(c, "vid")
 	if !ok {
 		return
 	}
@@ -154,15 +154,15 @@ func (h *VersionHandler) Confirmations(c *gin.Context) {
 // @Success 200 {object} domain.SplitConfirmation
 // @Router /api/projects/{pid}/script-versions/{vid}/split-confirmations/{cid} [get]
 func (h *VersionHandler) Confirmation(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	vid, ok := pathID(c, "vid")
+	vid, ok := httpapi.PathUUID(c, "vid")
 	if !ok {
 		return
 	}
-	cid, ok := pathID(c, "cid")
+	cid, ok := httpapi.PathUUID(c, "cid")
 	if !ok {
 		return
 	}

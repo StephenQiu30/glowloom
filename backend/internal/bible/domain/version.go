@@ -118,24 +118,6 @@ func (v Version) Name() string {
 	return ""
 }
 
-// VisuallyReady indicates complete multi-angle evidence on the selected look.
-func (l LookContent) VisuallyReady() bool {
-	front, side, back := false, false, false
-	for _, r := range l.References {
-		switch r.Role {
-		case RoleTurnaround:
-			return true
-		case RoleFront:
-			front = true
-		case RoleSide:
-			side = true
-		case RoleBack:
-			back = true
-		}
-	}
-	return front && side && back
-}
-
 // Confirmation permanently records the version accepted for a stable identity.
 type Confirmation struct {
 	ID        uuid.UUID `json:"id"`

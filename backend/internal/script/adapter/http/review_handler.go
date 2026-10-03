@@ -83,7 +83,7 @@ type StructureDetail struct {
 // @Success 200 {object} application.VersionPage
 // @Router /api/projects/{pid}/script-versions [get]
 func (h *ReviewHandler) Versions(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -111,11 +111,11 @@ func (h *ReviewHandler) Versions(c *gin.Context) {
 // @Success 200 {object} application.SourceHistoryPage
 // @Router /api/projects/{pid}/script-sources/{lineage}/history [get]
 func (h *ReviewHandler) SourceHistory(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	id, ok := pathID(c, "lineage")
+	id, ok := httpapi.PathUUID(c, "lineage")
 	if !ok {
 		return
 	}
@@ -141,11 +141,11 @@ func (h *ReviewHandler) SourceHistory(c *gin.Context) {
 // @Success 200 {object} application.SourceSnapshotDetail
 // @Router /api/projects/{pid}/script-source-snapshots/{sid} [get]
 func (h *ReviewHandler) SourceSnapshot(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	id, ok := pathID(c, "sid")
+	id, ok := httpapi.PathUUID(c, "sid")
 	if !ok {
 		return
 	}
@@ -167,7 +167,7 @@ func (h *ReviewHandler) SourceSnapshot(c *gin.Context) {
 // @Success 200 {object} application.EpisodeView
 // @Router /api/projects/{pid}/episodes [get]
 func (h *ReviewHandler) Episodes(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -253,7 +253,7 @@ func (h *ReviewHandler) split(c *gin.Context, confirm bool) {
 // @Success 200 {object} application.EpisodeText
 // @Router /api/episodes/{eid}/source-text [get]
 func (h *ReviewHandler) SourceText(c *gin.Context) {
-	id, ok := pathID(c, "eid")
+	id, ok := httpapi.PathUUID(c, "eid")
 	if !ok {
 		return
 	}
@@ -292,7 +292,7 @@ func (h *ReviewHandler) Structure(c *gin.Context) { h.structure(c, 0) }
 // @Success 200 {object} application.StructurePage
 // @Router /api/episodes/{eid}/structure/versions [get]
 func (h *ReviewHandler) StructureVersions(c *gin.Context) {
-	id, ok := pathID(c, "eid")
+	id, ok := httpapi.PathUUID(c, "eid")
 	if !ok {
 		return
 	}
@@ -326,7 +326,7 @@ func (h *ReviewHandler) StructureVersion(c *gin.Context) {
 	h.structure(c, version)
 }
 func (h *ReviewHandler) structure(c *gin.Context, version int64) {
-	id, ok := pathID(c, "eid")
+	id, ok := httpapi.PathUUID(c, "eid")
 	if !ok {
 		return
 	}
@@ -412,7 +412,7 @@ func (h *ReviewHandler) structureCommand(c *gin.Context, revision, episodeRevisi
 		scriptProblem(c, domain.ErrInvalidStructure)
 		return application.StructureCommand{}, false
 	}
-	id, ok := pathID(c, "eid")
+	id, ok := httpapi.PathUUID(c, "eid")
 	if !ok {
 		return application.StructureCommand{}, false
 	}

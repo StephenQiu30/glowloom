@@ -30,6 +30,16 @@ func WriteProblem(c *gin.Context, status int, code string, meta map[string]any) 
 	c.AbortWithStatusJSON(status, problem)
 }
 
+// PathUUID parses a nonzero route identity or writes the public invalid-request error.
+func PathUUID(c *gin.Context, name string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(c.Param(name))
+	if err != nil || id == uuid.Nil {
+		WriteProblem(c, http.StatusUnprocessableEntity, "invalid_request", nil)
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
 // Middleware owns request IDs, public panic recovery and write Origin/key checks.
 func Middleware(origin string) gin.HandlerFunc {
 	return func(c *gin.Context) {

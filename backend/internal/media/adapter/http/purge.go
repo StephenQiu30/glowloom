@@ -171,7 +171,7 @@ func (h *PurgeHandler) Get(c *gin.Context) {
 		writePurgeError(c, domain.ErrInvalidLibrary)
 		return
 	}
-	id, ok := id(c, "job_id")
+	id, ok := httpapi.PathUUID(c, "job_id")
 	if !ok {
 		return
 	}
@@ -193,7 +193,7 @@ func (h *PurgeHandler) control(c *gin.Context, action string) {
 		writePurgeError(c, domain.ErrInvalidLibrary)
 		return
 	}
-	id, ok := id(c, "job_id")
+	id, ok := httpapi.PathUUID(c, "job_id")
 	if !ok {
 		return
 	}

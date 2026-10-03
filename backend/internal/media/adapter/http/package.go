@@ -258,7 +258,7 @@ func (h *PackageHandler) Get(c *gin.Context) {
 		writePackageError(c, application.ErrInvalidPackage)
 		return
 	}
-	id, ok := id(c, "job_id")
+	id, ok := httpapi.PathUUID(c, "job_id")
 	if !ok {
 		return
 	}
@@ -317,7 +317,7 @@ func (h *PackageHandler) control(c *gin.Context, cancel bool) {
 		writePackageError(c, application.ErrInvalidPackage)
 		return
 	}
-	id, ok := id(c, "job_id")
+	id, ok := httpapi.PathUUID(c, "job_id")
 	if !ok {
 		return
 	}

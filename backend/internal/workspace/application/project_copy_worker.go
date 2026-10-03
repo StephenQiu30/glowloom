@@ -61,11 +61,6 @@ func NewProjectCopyWorker(store ProjectCopyExecutionStore, transfer ProjectCopyT
 	return &ProjectCopyWorker{store: store, transfer: transfer, now: now}
 }
 
-// NewProjectCopyWorkerWithScript injects the complete historical-byte consumer.
-func NewProjectCopyWorkerWithScript(store ProjectCopyExecutionStore, transfer ProjectCopyTransferFactory, script ProjectCopyScriptTransferFactory, now func() time.Time) *ProjectCopyWorker {
-	return &ProjectCopyWorker{store: store, transfer: transfer, script: script, now: now}
-}
-
 // NewProjectCopyWorkerWithBible injects complete content and private reference verification.
 func NewProjectCopyWorkerWithBible(store ProjectCopyExecutionStore, transfer ProjectCopyTransferFactory, script ProjectCopyScriptTransferFactory, bible ProjectCopyBibleTransferFactory, now func() time.Time) *ProjectCopyWorker {
 	return &ProjectCopyWorker{store: store, transfer: transfer, script: script, bible: bible, now: now}

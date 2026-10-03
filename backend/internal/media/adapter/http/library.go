@@ -169,7 +169,7 @@ func (h *LibraryHandler) Detail(c *gin.Context) {
 			return
 		}
 	}
-	item, ok := id(c, "item_id")
+	item, ok := httpapi.PathUUID(c, "item_id")
 	if !ok {
 		return
 	}

@@ -41,11 +41,11 @@ func (h *DocumentHandler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/media/{asset_id}/download [get]
 func (h *DocumentHandler) Download(c *gin.Context) {
-	project, ok := id(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	assetID, ok := id(c, "asset_id")
+	assetID, ok := httpapi.PathUUID(c, "asset_id")
 	if !ok {
 		return
 	}

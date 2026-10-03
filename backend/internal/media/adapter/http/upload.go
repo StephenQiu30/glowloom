@@ -59,7 +59,7 @@ func (h *UploadHandler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/media/uploads [post]
 func (h *UploadHandler) Upload(c *gin.Context) {
-	project, ok := id(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}

@@ -87,7 +87,7 @@ func (h *ImportHandler) Create(c *gin.Context) {
 // @Failure 403,404,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports [get]
 func (h *ImportHandler) List(c *gin.Context) {
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -120,11 +120,11 @@ func (h *ImportHandler) List(c *gin.Context) {
 // @Failure 403,404,422,503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-file-imports/{id} [get]
 func (h *ImportHandler) Get(c *gin.Context) {
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -188,7 +188,7 @@ func (h *ImportHandler) control(c *gin.Context, action string) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}

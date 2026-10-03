@@ -187,14 +187,6 @@ func copyResponse(j domain.ProjectCopyJob) ProjectCopyResponse {
 	}
 	return r
 }
-func copyID(c *gin.Context, param string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(c.Param(param))
-	if err != nil || id == uuid.Nil {
-		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-		return uuid.Nil, false
-	}
-	return id, true
-}
 func writeCopyError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, identityapp.ErrForbidden):
@@ -239,7 +231,7 @@ func writeCopyError(c *gin.Context, err error) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/copies [post]
 func (h *ProjectCopyHandler) Create(c *gin.Context) {
-	id, ok := copyID(c, "pid")
+	id, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -282,7 +274,7 @@ func (h *ProjectCopyHandler) Create(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/project-copies/{id} [get]
 func (h *ProjectCopyHandler) Get(c *gin.Context) {
-	id, ok := copyID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -309,7 +301,7 @@ func (h *ProjectCopyHandler) Get(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/copies [get]
 func (h *ProjectCopyHandler) List(c *gin.Context) {
-	id, ok := copyID(c, "pid")
+	id, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -359,7 +351,7 @@ func (h *ProjectCopyHandler) List(c *gin.Context) {
 	c.JSON(200, result)
 }
 func (h *ProjectCopyHandler) control(c *gin.Context, action string) {
-	id, ok := copyID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}

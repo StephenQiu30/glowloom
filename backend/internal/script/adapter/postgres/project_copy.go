@@ -186,15 +186,6 @@ func exactCopyObject(tx *gorm.DB, b application.ProjectCopyBinding, snapshot app
 	}
 	return copyObjectState{row.PutStarted, row.Confirmed, row.Removed}, nil
 }
-func exactCopyUpdate(write *gorm.DB) error {
-	if write.Error != nil {
-		return write.Error
-	}
-	if write.RowsAffected != 1 {
-		return application.ErrConflict
-	}
-	return nil
-}
 
 // BeginObject durably records the exact owned key before any remote put attempt.
 func (s *ProjectCopyStore) BeginObject(ctx context.Context, actor identityapp.Principal, b application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot, fact domain.ObjectFact) error {
@@ -206,7 +197,7 @@ func (s *ProjectCopyStore) BeginObject(ctx context.Context, actor identityapp.Pr
 		if state.Removed {
 			return application.ErrConflict
 		}
-		return exactCopyUpdate(tx.Exec(`UPDATE script.copy_object_state SET put_started=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET put_started=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
 	})
 }
 
@@ -220,7 +211,7 @@ func (s *ProjectCopyStore) CompleteObject(ctx context.Context, actor identityapp
 		if !state.PutStarted || state.Removed {
 			return application.ErrConflict
 		}
-		return exactCopyUpdate(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
 	})
 }
 func copyObjectsComplete(tx *gorm.DB, snapshot application.ProjectCopySnapshot, removed bool) error {
@@ -336,7 +327,7 @@ func (s *ProjectCopyStore) BeginCleanupObject(ctx context.Context, actor identit
 		if _, err := exactCopyObject(tx, b, snapshot, fact); err != nil {
 			return err
 		}
-		return exactCopyUpdate(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET confirmed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
 	})
 }
 
@@ -350,7 +341,7 @@ func (s *ProjectCopyStore) CompleteCleanupObject(ctx context.Context, actor iden
 		if state.PutStarted && !state.Confirmed {
 			return application.ErrNeedsReconciliation
 		}
-		return exactCopyUpdate(tx.Exec(`UPDATE script.copy_object_state SET removed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
+		return exactlyOne(tx.Exec(`UPDATE script.copy_object_state SET removed=true,updated_at=? WHERE target_key=?`, time.Now().UTC(), fact.Key))
 	})
 }
 

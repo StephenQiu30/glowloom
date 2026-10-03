@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
@@ -51,7 +50,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/canvases [get]
 func (h *Handler) List(c *gin.Context) {
-	id, ok := pathID(c, "pid")
+	id, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -79,7 +78,7 @@ func (h *Handler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/canvases [post]
 func (h *Handler) Create(c *gin.Context) {
-	id, ok := pathID(c, "pid")
+	id, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -108,7 +107,7 @@ func (h *Handler) Create(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/canvases/{id} [get]
 func (h *Handler) Get(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -138,7 +137,7 @@ func (h *Handler) Get(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/canvases/{id}/commands [post]
 func (h *Handler) Commands(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -152,14 +151,6 @@ func (h *Handler) Commands(c *gin.Context) {
 		return
 	}
 	c.JSON(200, result)
-}
-func pathID(c *gin.Context, param string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(c.Param(param))
-	if err != nil || id == uuid.Nil {
-		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-		return uuid.Nil, false
-	}
-	return id, true
 }
 func writeError(c *gin.Context, err error) {
 	var conflict *application.RevisionConflict
@@ -203,7 +194,7 @@ func writeError(c *gin.Context, err error) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/canvases/{id} [patch]
 func (h *Handler) Rename(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}
@@ -236,7 +227,7 @@ func (h *Handler) Rename(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/canvases/{id} [delete]
 func (h *Handler) Delete(c *gin.Context) {
-	id, ok := pathID(c, "id")
+	id, ok := httpapi.PathUUID(c, "id")
 	if !ok {
 		return
 	}

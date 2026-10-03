@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
 	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
@@ -42,7 +41,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/media [get]
 func (h *Handler) List(c *gin.Context) {
-	p, ok := id(c, "pid")
+	p, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -77,11 +76,11 @@ func (h *Handler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/media/{asset_id}/preview [get]
 func (h *Handler) Preview(c *gin.Context) {
-	p, ok := id(c, "pid")
+	p, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	asset, ok := id(c, "asset_id")
+	asset, ok := httpapi.PathUUID(c, "asset_id")
 	if !ok {
 		return
 	}
@@ -92,14 +91,6 @@ func (h *Handler) Preview(c *gin.Context) {
 	}
 	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, preview)
-}
-func id(c *gin.Context, name string) (uuid.UUID, bool) {
-	value, err := uuid.Parse(c.Param(name))
-	if err != nil || value == uuid.Nil {
-		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-		return uuid.Nil, false
-	}
-	return value, true
 }
 func writeError(c *gin.Context, err error) {
 	switch {

@@ -447,8 +447,8 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 			    usage = ?::jsonb, cost_micros = ?, receipt = ?::jsonb, update_time = now()
 			WHERE project_id = ?::uuid AND id = ?::uuid
 			  AND create_time = ?::timestamptz AND NOT is_delete
-		`, input.Outcome, input.ProviderTaskID, string(state), nullableProviderUsage(input.Usage),
-			cost, nullableProviderUsage(receipt), op.ProjectID.String(), call.ID.String(), call.CreateTime)
+		`, input.Outcome, input.ProviderTaskID, string(state), nullableJSON(input.Usage),
+			cost, nullableJSON(receipt), op.ProjectID.String(), call.ID.String(), call.CreateTime)
 		if result.Error != nil {
 			return fmt.Errorf("complete provider call: %w", result.Error)
 		}
@@ -648,11 +648,4 @@ func jsonEqual(a, b []byte) bool {
 	var left, right any
 	return json.Unmarshal(a, &left) == nil && json.Unmarshal(b, &right) == nil &&
 		reflect.DeepEqual(left, right)
-}
-
-func nullableProviderUsage(raw []byte) any {
-	if len(raw) == 0 {
-		return nil
-	}
-	return string(raw)
 }

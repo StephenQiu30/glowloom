@@ -54,7 +54,7 @@ func pageQuery(c *gin.Context, cursor string) (int64, int, bool) {
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-source-writes [get]
 func (h *SourceRecoveryHandler) List(c *gin.Context) {
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -81,11 +81,11 @@ func (h *SourceRecoveryHandler) List(c *gin.Context) {
 // @Failure 404 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-source-writes/{wid} [get]
 func (h *SourceRecoveryHandler) Get(c *gin.Context) {
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	id, ok := pathID(c, "wid")
+	id, ok := httpapi.PathUUID(c, "wid")
 	if !ok {
 		return
 	}
@@ -139,7 +139,7 @@ func (h *SourceRecoveryHandler) control(c *gin.Context, action string) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(c, "wid")
+	id, ok := httpapi.PathUUID(c, "wid")
 	if !ok {
 		return
 	}

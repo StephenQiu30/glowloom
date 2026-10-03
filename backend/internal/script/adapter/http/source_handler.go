@@ -115,20 +115,12 @@ func readJSON(c *gin.Context, out any) bool {
 	}
 	return true
 }
-func pathID(c *gin.Context, name string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(c.Param(name))
-	if err != nil || id == uuid.Nil {
-		httpapi.WriteProblem(c, 422, "invalid_request", nil)
-		return uuid.Nil, false
-	}
-	return id, true
-}
 func commandInput(c *gin.Context, action string, revision *int64, version *uuid.UUID) (application.SourceCommand, bool) {
 	if revision == nil || *revision < 0 {
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 		return application.SourceCommand{}, false
 	}
-	project, ok := pathID(c, "pid")
+	project, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return application.SourceCommand{}, false
 	}
@@ -215,7 +207,7 @@ func versionQuery(c *gin.Context) (*uuid.UUID, bool) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-workspace [get]
 func (h *SourceHandler) Workspace(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -240,7 +232,7 @@ func (h *SourceHandler) Workspace(c *gin.Context) {
 // @Failure 422 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources [get]
 func (h *SourceHandler) List(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
@@ -289,11 +281,11 @@ func (h *SourceHandler) List(c *gin.Context) {
 // @Failure 503 {object} httpapi.Problem
 // @Router /api/projects/{pid}/script-sources/{lineage} [get]
 func (h *SourceHandler) Get(c *gin.Context) {
-	pid, ok := pathID(c, "pid")
+	pid, ok := httpapi.PathUUID(c, "pid")
 	if !ok {
 		return
 	}
-	lineage, ok := pathID(c, "lineage")
+	lineage, ok := httpapi.PathUUID(c, "lineage")
 	if !ok {
 		return
 	}
@@ -319,7 +311,7 @@ func (h *SourceHandler) writeOne(c *gin.Context, action string) {
 		return
 	}
 	if action == "update" {
-		lineage, ok := pathID(c, "lineage")
+		lineage, ok := httpapi.PathUUID(c, "lineage")
 		if !ok {
 			return
 		}
@@ -396,7 +388,7 @@ func (h *SourceHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	lineage, ok := pathID(c, "lineage")
+	lineage, ok := httpapi.PathUUID(c, "lineage")
 	if !ok {
 		return
 	}
