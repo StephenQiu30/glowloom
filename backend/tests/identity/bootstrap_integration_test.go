@@ -22,7 +22,7 @@ import (
 func TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres(t *testing.T) {
 	dsn := os.Getenv("LV_TEST_BOOTSTRAP_DB_DSN")
 	if dsn == "" {
-		t.Skip("set LV_TEST_BOOTSTRAP_DB_DSN to a fresh disposable PostgreSQL database with Outbox, identity, and organization migrations")
+		t.Skip("set LV_TEST_BOOTSTRAP_DB_DSN to a fresh disposable PostgreSQL database loaded from db/schema.sql")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
 	defer cancel()
@@ -78,7 +78,7 @@ func TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres(t *testing.T) {
 	if _, err := command.Execute(ctx, input); !errors.Is(err, identityapp.ErrAlreadyBootstrapped) {
 		t.Fatalf("second bootstrap = %v, want already bootstrapped", err)
 	}
-	truncateBootstrapData(ctx, t, conn.DB)
+	resetBootstrapData(ctx, t, conn.DB)
 	existingOrgID := uuid.New()
 	if err := conn.DB.WithContext(ctx).Exec(`
 		INSERT INTO workspace.organization (id, name) VALUES (?::uuid, 'Seeded Team')
@@ -92,7 +92,7 @@ func TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres(t *testing.T) {
 	if err != nil || reused.OrgID != existingOrgID {
 		t.Fatalf("existing organization bootstrap = %+v, error %v", reused, err)
 	}
-	truncateBootstrapData(ctx, t, conn.DB)
+	resetBootstrapData(ctx, t, conn.DB)
 	if err := conn.DB.WithContext(ctx).Exec(`
 		CREATE FUNCTION reject_bootstrap_test_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN
@@ -147,7 +147,7 @@ func TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres(t *testing.T) {
 	if succeeded != 1 || rejected != 1 {
 		t.Fatalf("concurrent bootstrap succeeded %d, rejected %d", succeeded, rejected)
 	}
-	truncateBootstrapData(ctx, t, conn.DB)
+	resetBootstrapData(ctx, t, conn.DB)
 	for range 2 {
 		if err := conn.DB.WithContext(ctx).Exec(`
 			INSERT INTO workspace.organization (id, name) VALUES (?::uuid, 'Unexpected team')
@@ -158,7 +158,7 @@ func TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres(t *testing.T) {
 	if _, err := command.Execute(ctx, input); !errors.Is(err, identityapp.ErrBootstrapOrganizationConflict) {
 		t.Fatalf("multi-organization bootstrap = %v, want conflict", err)
 	}
-	truncateBootstrapData(ctx, t, conn.DB)
+	resetBootstrapData(ctx, t, conn.DB)
 	if err := conn.DB.WithContext(ctx).Exec(`
 		INSERT INTO workspace.organization (id, name, status)
 		VALUES (?::uuid, 'Disabled team', 'disabled')
@@ -170,9 +170,17 @@ func TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres(t *testing.T) {
 	}
 }
 
-func truncateBootstrapData(ctx context.Context, t *testing.T, conn *gorm.DB) {
+func resetBootstrapData(ctx context.Context, t *testing.T, conn *gorm.DB) {
 	t.Helper()
-	if err := conn.WithContext(ctx).Exec(`TRUNCATE identity."user", workspace.organization, infra.outbox`).Error; err != nil {
+	// Delete only bootstrap tables so the complete schema retains its foreign key checks.
+	if err := conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, table := range []string{`infra.outbox`, `identity."user"`, `workspace.organization`} {
+			if err := tx.Exec("DELETE FROM " + table).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		t.Fatalf("reset disposable bootstrap database: %v", err)
 	}
 }
