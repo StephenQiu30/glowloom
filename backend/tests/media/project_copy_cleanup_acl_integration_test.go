@@ -15,7 +15,7 @@ import (
 )
 
 func TestProjectCopyCleanupSchemaColumnGrantsRemainClosed(t *testing.T) {
-	runtime := mediaStoreDB(t)
+	runtime := libraryRuntimeDB(t)
 	var name, role string
 	if err := runtime.Raw(`SELECT current_database(),current_user`).Row().Scan(&name, &role); err != nil || name != "lanverse_library" || role != "lanverse_app" {
 		t.Fatal("cleanup ACL test requires isolated library database and runtime role", name, role, err)

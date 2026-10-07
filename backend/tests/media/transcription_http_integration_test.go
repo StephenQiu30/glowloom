@@ -528,7 +528,7 @@ func TestTranscriptionUnconfiguredActivityFailsOldQueuedWithoutSubmission(t *tes
 	}
 	failed, err := store.Get(t.Context(), actor, project, job.ID)
 	if err != nil || failed.Status != tooldomain.TranscriptionFailed || failed.Stage != "failed" {
-		t.Fatalf("historical unavailable work orphaned %+v %v", failed, err)
+		t.Fatalf("historical unavailable work orphaned %+v %v; workflow error: %v", failed, err, env.GetWorkflowError())
 	}
 	var state struct {
 		InferenceState string
