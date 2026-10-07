@@ -14,6 +14,7 @@ import * as projects from "@/components/project/queries";
 import { ApiError } from "@/lib/request";
 import { saveLibraryUploads } from "./library-upload-intent";
 const nav = vi.hoisted(() => ({ params: "", replace: vi.fn() }));
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(nav.params),
   usePathname: () => "/assets",

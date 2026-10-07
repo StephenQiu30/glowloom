@@ -9,6 +9,7 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/request";
 import { CreateProjectDialog } from "./create-project-dialog";
+import { initialProjectDraft } from "./creation";
 import type { CreationBody } from "./creation";
 
 afterEach(cleanup);
@@ -119,4 +120,41 @@ it("待提交时禁止重复创建和放弃，失败后离开须确认", async (
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
   fireEvent.click(screen.getByRole("button", { name: "放弃并离开" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("首页传入的画幅、风格和名称在真实提交中完整保留", async () => {
+  const onSubmit = vi
+    .fn()
+    .mockResolvedValue({ id: "584ad191-2932-4d7c-bccb-0b9d481c5a76" });
+  const onCreated = vi.fn();
+  render(
+    <CreateProjectDialog
+      open
+      initialDraft={{
+        ...initialProjectDraft,
+        name: "海边来信",
+        aspect_ratio: "9:16",
+        style_type: "stylized",
+        style_subtype: "anime_jp",
+      }}
+      submitLabel="创建并导入剧本"
+      onSubmit={onSubmit}
+      onCreated={onCreated}
+      presets={[]}
+      presetsPending={false}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "创建并导入剧本" }));
+  await waitFor(() =>
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith(
+      "584ad191-2932-4d7c-bccb-0b9d481c5a76",
+    ),
+  );
+  expect(onSubmit.mock.calls[0][0]).toEqual({
+    name: "海边来信",
+    description: "",
+    aspect_ratio: "9:16",
+    style_type: "stylized",
+    style_subtype: "anime_jp",
+  });
 });

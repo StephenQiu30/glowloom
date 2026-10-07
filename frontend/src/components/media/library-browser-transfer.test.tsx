@@ -21,6 +21,7 @@ import {
   transferLibrary,
   transferProjectSummary,
 } from "@/components/library/transfer-test-fixtures";
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/assets",

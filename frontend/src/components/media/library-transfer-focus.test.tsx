@@ -22,6 +22,7 @@ import {
 } from "@/components/library/transfer-test-fixtures";
 
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () =>
     new URLSearchParams(`scope=personal&asset_id=${transferIDs.item}`),

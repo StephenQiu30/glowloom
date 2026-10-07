@@ -89,6 +89,7 @@ function open() {
       <CanvasWorkspace />
     </QueryClientProvider>,
   );
+  fireEvent.click(screen.getByRole("button", { name: "画布管理" }));
 }
 it("画布直接加载项目，没有登录或退出入口", async () => {
   open();
@@ -131,7 +132,7 @@ it("空名称仍是未保存草稿，继续编辑不丢失空值", async () => {
   fireEvent.change(screen.getByLabelText("画布名称"), {
     target: { value: "" },
   });
-  fireEvent.click(screen.getByRole("link", { name: "Lanverse" }));
+  fireEvent.click(screen.getByRole("link", { name: "返回项目库" }));
   await screen.findByRole("dialog", { name: "放弃未保存修改？" });
   fireEvent.click(screen.getByRole("button", { name: "继续编辑" }));
   expect((screen.getByLabelText("画布名称") as HTMLInputElement).value).toBe(
@@ -153,7 +154,7 @@ it("创建请求在途拦截链接离开，收到结果前不可确认放弃", a
   });
   fireEvent.click(screen.getByRole("button", { name: "创建画布" }));
   await waitFor(() => expect(mocks.createCanvas).toHaveBeenCalledOnce());
-  fireEvent.click(screen.getByRole("link", { name: "Lanverse" }));
+  fireEvent.click(screen.getByRole("link", { name: "返回项目库" }));
   await screen.findByRole("dialog", { name: "放弃未保存修改？" });
   expect(
     (screen.getByRole("button", { name: "放弃并继续" }) as HTMLButtonElement)
