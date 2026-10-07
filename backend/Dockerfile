@@ -1,4 +1,17 @@
 # syntax=docker/dockerfile:1
+FROM golang:1.26.8-bookworm AS dev
+ENV CGO_ENABLED=0 GOMAXPROCS=2
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl socat \
+    && rm -rf /var/lib/apt/lists/*
+RUN go install github.com/air-verse/air@v1.67.4
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -p 2 -o /tmp/lanverse-air/lanverse ./cmd/lanverse
+ENTRYPOINT ["sh", "/src/docker/dev-entrypoint.sh"]
+CMD ["--role=api"]
+
 FROM golang:1.26.8-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

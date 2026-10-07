@@ -8,6 +8,12 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
+FROM deps AS dev
+ENV NODE_ENV=development
+COPY . .
+EXPOSE 3000
+CMD ["pnpm", "exec", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+
 FROM base AS build
 ARG LV_API_BASE_URL=http://backend-api:8080
 ENV LV_API_BASE_URL=$LV_API_BASE_URL

@@ -49,22 +49,22 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 ## 文档
 
-| 文件                                                                                                            | 内容                                                                                                                                                    |
-| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [workspace/content/index.md](workspace/content/index.md)                                                                                | 文档中心：产品、需求、设计、计划、测试与运维文档入口                                                                                                    |
-| [BACKLOG.md](BACKLOG.md)                                                                                        | 待执行任务与未决范围：P0、M1～M5 的任务、依赖和验收边界                                                                                                 |
-| [PRD-01 产品需求文档](workspace/content/prd/01-产品需求文档.md)                                                              | 产品目标、用户、场景、产品决策、版本规划、成功指标                                                                                                      |
-| [工作台设计](workspace/content/design/工作台设计.md)                                                                         | 工作台、画布、素材工具、时间轴与导演台的稳定合同                                                                                                        |
-| [REQ-01 功能需求总表](workspace/content/requirement/01-功能需求总表.md)                                                      | 全部需求编号与优先级；功能文件 REQ-06～REQ-33、REQ-35～REQ-39（MVP）与 REQ-34（V2 需求池）写明用户故事、规则与验收标准；对应的功能设计为 DES-09～DES-41 |
-| [REQ-02 非功能需求规格](workspace/content/requirement/02-非功能需求规格.md)                                                  | 性能、可靠性、安全、备份恢复、可观测、AI 质量、合规的可度量目标                                                                                         |
-| [REQ-03 业务流程与用例模型](workspace/content/requirement/03-业务流程与用例模型.md)                                          | 参与者、用例、业务阶段、状态模型                                                                                                                        |
+| 文件                                                                                                                                      | 内容                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [workspace/content/index.md](workspace/content/index.md)                                                                                  | 文档中心：产品、需求、设计、计划、测试与运维文档入口                                                                                                    |
+| [BACKLOG.md](BACKLOG.md)                                                                                                                  | 待执行任务与未决范围：P0、M1～M5 的任务、依赖和验收边界                                                                                                 |
+| [PRD-01 产品需求文档](workspace/content/prd/01-产品需求文档.md)                                                                           | 产品目标、用户、场景、产品决策、版本规划、成功指标                                                                                                      |
+| [工作台设计](workspace/content/design/工作台设计.md)                                                                                      | 工作台、画布、素材工具、时间轴与导演台的稳定合同                                                                                                        |
+| [REQ-01 功能需求总表](workspace/content/requirement/01-功能需求总表.md)                                                                   | 全部需求编号与优先级；功能文件 REQ-06～REQ-33、REQ-35～REQ-39（MVP）与 REQ-34（V2 需求池）写明用户故事、规则与验收标准；对应的功能设计为 DES-09～DES-41 |
+| [REQ-02 非功能需求规格](workspace/content/requirement/02-非功能需求规格.md)                                                               | 性能、可靠性、安全、备份恢复、可观测、AI 质量、合规的可度量目标                                                                                         |
+| [REQ-03 业务流程与用例模型](workspace/content/requirement/03-业务流程与用例模型.md)                                                       | 参与者、用例、业务阶段、状态模型                                                                                                                        |
 | [REQ-04 术语表](workspace/content/requirement/04-术语表.md) · [REQ-05 界面与交互需求](workspace/content/requirement/05-界面与交互需求.md) | 统一术语；信息架构、页面与关键交互                                                                                                                      |
-| [DES-01 系统架构设计](workspace/content/design/01-系统架构设计.md)                                                           | 顶层原则、领域模型、Operation、Temporal 工作流、Agent Harness、事件、画布、扩展点                                                                       |
-| [DES-08 技术选型决策](workspace/content/design/08-技术选型决策.md)                                                           | 前端、后端、Agent、工作流、中间件、模型的明确选型                                                                                                       |
-| [PLN-01 实施路线与交付计划](workspace/content/plan/01-实施路线与交付计划.md)                                                 | P0 与 M1–M5、验收、人力、风险                                                                                                                           |
-| [PROJECT.md](PROJECT.md)                                                                                        | 仓库结构、目录与编码约定、质量门禁                                                                                                                      |
-| [DESIGN.md](DESIGN.md)                                                                                          | 视觉与交互规范                                                                                                                                          |
-| [AGENTS.md](AGENTS.md)                                                                                          | 协作与 Git 规则                                                                                                                                         |
+| [DES-01 系统架构设计](workspace/content/design/01-系统架构设计.md)                                                                        | 顶层原则、领域模型、Operation、Temporal 工作流、Agent Harness、事件、画布、扩展点                                                                       |
+| [DES-08 技术选型决策](workspace/content/design/08-技术选型决策.md)                                                                        | 前端、后端、Agent、工作流、中间件、模型的明确选型                                                                                                       |
+| [PLN-01 实施路线与交付计划](workspace/content/plan/01-实施路线与交付计划.md)                                                              | P0 与 M1–M5、验收、人力、风险                                                                                                                           |
+| [PROJECT.md](PROJECT.md)                                                                                                                  | 仓库结构、目录与编码约定、质量门禁                                                                                                                      |
+| [DESIGN.md](DESIGN.md)                                                                                                                    | 视觉与交互规范                                                                                                                                          |
+| [AGENTS.md](AGENTS.md)                                                                                                                    | 协作与 Git 规则                                                                                                                                         |
 
 ## 本机知识库
 
@@ -76,18 +76,31 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 数据库结构唯一事实源为 [`backend/db/schema.sql`](backend/db/schema.sql)，统一维护当前已实现的表、索引、约束、触发器、函数、应用权限与动态分区；DES-02 只保留概念设计和未实施规划。新空业务库由表所有者执行 `psql "$LV_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql`，由调用方以单事务初始化，管理员须先预置 `lanverse_app NOLOGIN NOSUPERUSER` 权限角色；Outbox、审计与供应商调用以执行时 UTC 当前月准备当前及未来三个月分区。既有业务库须审阅与实例对应的增量升级，不重跑 Schema 或重建覆盖。初始化和升级步骤见 [DES-02 §10](workspace/content/design/02-领域与数据模型.md#10-schema-事实源初始化与升级) 与 [OPS-01 §7](workspace/content/operation/01-环境与部署.md#7-初始化与种子数据)。
 
-工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机直接运行 Go 与 Next.js，连接已运行的本机中间件。配置写在根目录 `.env`（键名样例见 `.env.example`），浏览器地址必须与 `LV_PUBLIC_ORIGIN` 一致。
+工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机通过 Docker 开发应用栈运行 Next.js、Go API、flow Worker、media Worker 与 Relay，连接已运行的本机中间件。也可按下表直接运行进程。配置写在根目录 `.env`（键名样例见 `.env.example`），浏览器地址必须与 `LV_PUBLIC_ORIGIN` 一致。
 
 | 目录        | 技术栈                                                                      | 本地启动                                                             | 健康检查            |
 | ----------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
 | `backend/`  | Go 1.26 · Gin · Viper · Zap                                                 | `cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=api` | `GET :8080/healthz` |
-| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && pnpm exec next dev`                                  | `GET :3000/healthz` |
+| `frontend/` | Next.js 16 · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui（Radix） | `cd frontend && pnpm exec next dev --port 3200`                      | `GET :3200/healthz` |
 
-原 `agent` / `agent.mock` 队列当前没有应用提供的执行 Worker；Go 工作流仍保留这些协议引用，相关任务可能等待或超时。API 健康/就绪检查不证明供应商执行可用；Go 承接完成前，不能将生成、凭据测试、审核或 Skill 运行计为验证通过。本地开发不启动 Compose。
+原 `agent` / `agent.mock` 队列当前没有应用提供的执行 Worker；Go 工作流仍保留这些协议引用，相关任务可能等待或超时。API 健康/就绪检查不证明供应商执行可用；Go 承接完成前，不能将生成、凭据测试、审核或 Skill 运行计为验证通过。本地 Docker 开发只启动应用，不启动依赖 Compose。
+
+从仓库根目录执行以下命令，完整应用支持热更新：
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build --wait
+docker compose -f docker-compose.dev.yml ps
+# 停止应用，保留开发缓存与本机业务数据
+docker compose -f docker-compose.dev.yml down
+```
+
+访问 <http://127.0.0.1:3200>；API 为 <http://127.0.0.1:8080>。Next.js 使用默认 Turbopack Fast Refresh，Go 使用现有 `--role=all` 合并 API、flow/media Worker 和 Relay，由一个 Air 轮询源码、自动编译并优雅重启。宿主源码以只读挂载进入容器，前端 Linux 依赖与 `.next` 使用独立数据卷，Go 缓存保存在后端容器内。依赖锁文件改变后重新构建；前端依赖卷须按 [OPS-01 §6](workspace/content/operation/01-环境与部署.md#6-本地开发环境) 更新。前端只注入内部 API 地址与开发配置，后端注入其 Go 角色需要的变量，根 `.env` 不进入镜像或容器文件系统。
+
+开发容器通过内部回环端口转发连接已有本机中间件，保留 Kafka 广播地址及对象存储签名 URL。默认转发 5432、6379、7233、9000、9092；自定义本机服务端口或字幕服务端口需设置 `LV_HOST_SERVICE_PORTS`。宿主需要 Docker Desktop 的 `host.docker.internal`（Linux 配置 host-gateway），对应本机服务须允许该连接。仅 `127.0.0.1` 对外发布应用端口。
 
 Go Worker 和事件 Relay 可在独立终端运行：`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=worker --queues=flow,media`、`cd backend && LV_ENV_FILE=../.env go run ./cmd/lanverse --role=relay`。`flow` 编排已登记的工作流，`media` 执行私有媒体接管、FFmpeg 音视频导出与本机字幕转写 Activity。Relay 投递 Outbox，投影已登记事件并消费审核后的审计摘要；新环境须预建 OPS-01 列出的全部主题。公开 SSE、真实供应商及完整生成验收仍以对应 BACKLOG 任务为准。本机字幕服务固定来源、模型摘要与启动步骤见 [OPS-01 §6.1](workspace/content/operation/01-环境与部署.md#61-本机字幕转写服务)。
 
-Go 继续提供单一工作区身份，复用既有组织和真实项目数据；公开 `/api/auth/*` 仍已移除，没有认证切换开关。当前可从 `:3000/projects` 创建、编辑、归档和恢复项目，并进入正式画布；项目生命周期合同见 [DES-13](workspace/content/design/13-项目管理.md)。角色与组织授权仍由服务端核验。
+Go 继续提供单一工作区身份，复用既有组织和真实项目数据；公开 `/api/auth/*` 仍已移除，没有认证切换开关。当前可从 `:3200/projects` 创建、编辑、归档和恢复项目，并进入正式画布；项目生命周期合同见 [DES-13](workspace/content/design/13-项目管理.md)。角色与组织授权仍由服务端核验。
 
 Worker 与 Relay 分别在根目录 `.env` 的 `LV_WORKER_HEALTH_ADDR`、`LV_RELAY_HEALTH_ADDR` 提供 `GET /healthz`（样例端口 8081、8082）；该接口只表示进程正在运行，任务处理状况仍需检查 Temporal Worker 与 Outbox 积压。
 
@@ -107,4 +120,4 @@ temporal operator cluster health --address 127.0.0.1:7233
 "$(brew --prefix kafka)/bin/kafka-broker-api-versions" --bootstrap-server 127.0.0.1:9092
 ```
 
-各进程在独立终端执行上表命令。前置工具：Go 1.26、Node.js 24 + Corepack / pnpm、FFmpeg / ffprobe；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。后续容器化部署保留两份独立 Compose 文件：`docker-compose.yml` 定义应用，`docker-compose-env.yml` 完整定义 PostgreSQL、Redis、Kafka、MinIO、Temporal 及管理界面。本机开发使用服务管理器启动的本机依赖，不通过 Compose 启动环境。详细步骤见 [OPS-01](workspace/content/operation/01-环境与部署.md#6-本地开发环境)。
+直接运行时，各进程在独立终端执行上表命令。前置工具：Go 1.26、Node.js 24 + Corepack / pnpm、FFmpeg / ffprobe；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。后续容器化部署保留两份独立 Compose 文件：`docker-compose.yml` 定义应用，`docker-compose-env.yml` 完整定义 PostgreSQL、Redis、Kafka、MinIO、Temporal 及管理界面。本机开发使用服务管理器启动的本机依赖，不通过 Compose 启动环境。详细步骤见 [OPS-01](workspace/content/operation/01-环境与部署.md#6-本地开发环境)。

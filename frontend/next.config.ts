@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
   // Self-contained server for the container image (OPS-01 §3).
   output: "standalone",
   poweredByHeader: false,
+  // Browser access uses loopback while Docker binds the dev server to 0.0.0.0.
+  allowedDevOrigins: ["127.0.0.1"],
   async rewrites() {
     return {
       // Browser API calls use the application-owned Go service through one origin.
