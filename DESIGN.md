@@ -1,6 +1,6 @@
 # Lanverse 视觉与交互规范
 
-页面职责与业务状态以 [REQ-05](docs/requirement/05-界面与交互需求.md)、[DES-06](docs/design/06-画布.md) 和 [工作台设计](docs/design/工作台设计.md) 为准。本文规定共享视觉与交互约束；验证方法见 [design-qa.md](design-qa.md)。
+页面职责与业务状态以 [REQ-05](workspace/content/requirement/05-界面与交互需求.md)、[DES-06](workspace/content/design/06-画布.md) 和 [工作台设计](workspace/content/design/工作台设计.md) 为准。本文规定共享视觉与交互约束；验证方法见 [design-qa.md](design-qa.md)。
 
 ## 视觉层级
 

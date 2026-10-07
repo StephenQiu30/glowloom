@@ -1,4 +1,4 @@
-// Adapted from BeefTV 1ae25027 director-ground.ts; MIT. See docs/licenses/beeftv.txt.
+// Adapted from BeefTV 1ae25027 director-ground.ts; MIT. See workspace/content/licenses/beeftv.txt.
 import type { DirectorScene } from "./model";
 
 export const DIRECTOR_DEFAULT_GROUND = {

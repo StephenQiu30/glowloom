@@ -1,5 +1,5 @@
 // Derived from BeefTV 1ae25027: web/src/lib/canvas/canvas-image-data.ts and
-// canvas-grid-split.ts. MIT; see docs/licenses/beeftv.txt.
+// canvas-grid-split.ts. MIT; see workspace/content/licenses/beeftv.txt.
 // Adaptation: typed geometry, bounded work, cancellation, explicit errors and
 // File outputs for Lanverse's existing media upload/registration contract.
 import type { AnnotationOperation } from "./image-annotation";

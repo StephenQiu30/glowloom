@@ -1,5 +1,5 @@
 // Derived from BeefTV 1ae25027:web/src/lib/canvas/canvas-batch-table.ts.
-// MIT; see docs/licenses/beeftv.txt. UUID identities and nullable reference slots
+// MIT; see workspace/content/licenses/beeftv.txt. UUID identities and nullable reference slots
 // adapt the source interaction to Lanverse's document/command contract.
 import { z } from "zod";
 

@@ -1,5 +1,5 @@
 // Adapted from BeefTV 1ae25027 director-viewport.tsx recordCanvas; MIT.
-// See docs/licenses/beeftv.txt. Recording ownership and upload are Lanverse contracts.
+// See workspace/content/licenses/beeftv.txt. Recording ownership and upload are Lanverse contracts.
 import {
   resolveDirectorPixelCrop,
   type DirectorAspectRatio,

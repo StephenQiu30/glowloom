@@ -1,0 +1,17 @@
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+}
+
+/* Nextra 4.6.1 can retain a zero-width measurement after mobile → desktop. */
+.nextra-sidebar[class~="x:w-64"] > div:first-child > div,
+.nextra-sidebar[class~="x:w-64"] > div:first-child > div > ul {
+  width: 100% !important;
+}
+
+.not-found-page {
+  max-width: 64rem;
+  margin: 4rem auto;
+  padding: 0 1.5rem;
+}

@@ -1,6 +1,6 @@
 # Lanverse 界面验证
 
-本文件规定界面验证方法与证据边界；视觉规则见 [DESIGN.md](DESIGN.md)，业务验收见 [TST-01](docs/test/01-测试策略.md)、[TST-02](docs/test/02-需求追踪矩阵.md) 与 [TST-03](docs/test/03-AI评测方案.md)。未完成范围持续记录在 [BACKLOG](BACKLOG.md)。
+本文件规定界面验证方法与证据边界；视觉规则见 [DESIGN.md](DESIGN.md)，业务验收见 [TST-01](workspace/content/test/01-测试策略.md)、[TST-02](workspace/content/test/02-需求追踪矩阵.md) 与 [TST-03](workspace/content/test/03-AI评测方案.md)。未完成范围持续记录在 [BACKLOG](BACKLOG.md)。
 
 ## 验证范围
 

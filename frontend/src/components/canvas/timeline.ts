@@ -1,6 +1,6 @@
 // Adapted from BeefTV 1ae25027 timeline-placement.ts and timeline-snap.ts,
 // Origin: yoqu/lingji-cut, Copyright 2026 yoqu, Apache-2.0; adapted via BeefTV.
-// See docs/licenses/lingji-cut.txt and THIRD_PARTY_NOTICES.md.
+// See workspace/content/licenses/lingji-cut.txt and THIRD_PARTY_NOTICES.md.
 // Lanverse uses project asset UUIDs and validates persistent config at the boundary.
 import { z } from "zod";
 

@@ -1,0 +1,30 @@
+{
+  "name": "lanverse-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "next": "16.3.6",
+    "nextra": "4.6.1",
+    "nextra-theme-docs": "4.6.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^24.13.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/unist": "^3.0.3",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "pagefind": "1.5.2",
+    "prettier": "^3.9.9",
+    "tsx": "4.23.15",
+    "typescript": "^5"
+  }
+}

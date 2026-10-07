@@ -1,4 +1,4 @@
-// Adapted from BeefTV 1ae25027 director-stage-transform.ts; MIT. See docs/licenses/beeftv.txt.
+// Adapted from BeefTV 1ae25027 director-stage-transform.ts; MIT. See workspace/content/licenses/beeftv.txt.
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 
 import type { DirectorScene, DirectorTransform, DirectorVec3 } from "./model";

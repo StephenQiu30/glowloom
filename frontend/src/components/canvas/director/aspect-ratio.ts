@@ -1,4 +1,4 @@
-// Adapted from BeefTV 1ae25027 director-aspect-ratio.ts; MIT. See docs/licenses/beeftv.txt.
+// Adapted from BeefTV 1ae25027 director-aspect-ratio.ts; MIT. See workspace/content/licenses/beeftv.txt.
 export const DIRECTOR_ASPECT_RATIOS = [
   "adaptive",
   "21:9",

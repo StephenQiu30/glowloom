@@ -1,5 +1,5 @@
 // Derived from BeefTV 1ae25027: web/src/components/canvas/
-// canvas-node-mask-edit-dialog.tsx. MIT; see docs/licenses/beeftv.txt.
+// canvas-node-mask-edit-dialog.tsx. MIT; see workspace/content/licenses/beeftv.txt.
 // Selection strokes and alpha-mask semantics retained; bounded PNG Files replace data URLs.
 export function maskDimensions(width: number, height: number) {
   if (

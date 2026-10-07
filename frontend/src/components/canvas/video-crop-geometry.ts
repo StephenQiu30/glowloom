@@ -1,5 +1,5 @@
 // Derived from BeefTV 1ae25027 web/src/lib/canvas/video-crop-geometry.ts.
-// MIT; see docs/licenses/beeftv.txt. Added explicit finite-value/source budgets.
+// MIT; see workspace/content/licenses/beeftv.txt. Added explicit finite-value/source budgets.
 export type VideoCropRect = {
   x: number;
   y: number;

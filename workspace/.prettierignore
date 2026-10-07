@@ -1,0 +1,7 @@
+.next/
+out/
+node_modules/
+content/
+pnpm-lock.yaml
+next-env.d.ts
+public/_pagefind/

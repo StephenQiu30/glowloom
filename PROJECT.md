@@ -1,6 +1,6 @@
 # Lanverse 工程规范
 
-本文规定仓库结构、技术栈、编码与契约生成方式。业务目标、模块合同和未决任务分别见 `docs/` 与 [BACKLOG](BACKLOG.md)。
+本文规定仓库结构、技术栈、编码与契约生成方式。业务目标、模块合同和未决任务分别见 `workspace/content/` 与 [BACKLOG](BACKLOG.md)。
 
 ## 1. 文件职责
 
@@ -11,14 +11,17 @@
 | `DESIGN.md`         | 视觉与交互规范                                                                                                  |
 | `README.md`         | 项目简介、启动方式、文档入口                                                                                    |
 | `BACKLOG.md`        | 任务与未决范围清单（任务、实现要点、涉及文件、状态）                                                            |
-| `docs/prd/`         | PRD：产品目标、场景、需求与版本规划（编号规则见 `docs/README.md`）                                              |
-| `docs/requirement/` | REQ：功能需求总表、非功能需求、业务流程与用例、术语、界面；06 起为功能需求文件（一个功能一个文件）              |
-| `docs/design/`      | DES：01–08 架构、数据、接口、工作流、Agent、画布、安全设计与技术选型；09 起为功能设计（与功能需求文件一一对应） |
-| `docs/plan/`        | PLN：实施路线、项目管理与变更                                                                                   |
-| `docs/test/`        | TST：测试策略、需求追踪矩阵、AI 评测                                                                            |
-| `docs/operation/`   | OPS：环境部署、CI/CD、监控告警、备份恢复与故障响应                                                              |
+| `workspace/content/prd/`         | PRD：产品目标、场景、需求与版本规划（编号规则见 `workspace/content/index.md`）                                              |
+| `workspace/content/requirement/` | REQ：功能需求总表、非功能需求、业务流程与用例、术语、界面；06 起为功能需求文件（一个功能一个文件）              |
+| `workspace/content/design/`      | DES：01–08 架构、数据、接口、工作流、Agent、画布、安全设计与技术选型；09 起为功能设计（与功能需求文件一一对应） |
+| `workspace/content/plan/`        | PLN：实施路线、项目管理与变更                                                                                   |
+| `workspace/content/test/`        | TST：测试策略、需求追踪矩阵、AI 评测                                                                            |
+| `workspace/content/operation/`   | OPS：环境部署、CI/CD、监控告警、备份恢复与故障响应                                                              |
+| `workspace/content/KNOWLEDGE.md` | 知识库本地阅读与 Obsidian 编辑说明 |
+| `workspace/` | Nextra 本地文档站实现，正文在 content/ |
+| `.obsidian/` | 使用仓库根 Vault 时的共享设置；不要求用户切换当前 Vault |
 
-业务范围以 `docs/prd/` 与 `docs/requirement/` 为准，架构决策以 `docs/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改需求或设计文档并评审，再同步本文。
+业务范围以 `workspace/content/prd/` 与 `workspace/content/requirement/` 为准，架构决策以 `workspace/content/design/` 为准；本文把其中的工程约定落到目录和工具上。两者冲突时，先修改需求或设计文档并评审，再同步本文。
 
 ## 2. 仓库结构与职责
 
@@ -29,7 +32,9 @@ Lanverse/
   docker-compose-env.yml    完整部署依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
   frontend/         Next.js 工作台；未决能力见 BACKLOG
-  docs/             正式文档：产品需求、需求规格、设计、计划、测试、运维
+  workspace/        Nextra 本地文档站配置、页面入口与依赖
+    content/        正式文档：产品需求、需求规格、设计、计划、测试、运维
+  .obsidian/        使用仓库根 Vault 时的共享配置
 ```
 
 不设 `contracts/`：公共 REST 契约由后端 Gin 注解与 DTO 经 swag 自动生成，在后端 Swagger 端点在线提供，再由 `@umijs/openapi` 生成前端 API（见 §7）；现有 Activity 与事件的输入输出由 Go 手写类型，不引入单独的 schema 文件与代码生成流水线。Activity 载荷、名称与队列遵循 DES-03，执行端变更须验证历史兼容性。
@@ -65,7 +70,7 @@ Lanverse/
 | 可观测   | OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo / Jaeger、Temporal UI、Kafka UI                                                                   |
 | 部署     | Docker、Docker Compose；规模化后 Kubernetes                                                                                                                 |
 
-每个中间件的职责边界见 [DES-08 §6](docs/design/08-技术选型决策.md#6-中间件职责)；工作台职责见 [工作台设计](docs/design/工作台设计.md)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
+每个中间件的职责边界见 [DES-08 §6](workspace/content/design/08-技术选型决策.md#6-中间件职责)；工作台职责见 [工作台设计](workspace/content/design/工作台设计.md)。暂不引入：Elasticsearch、独立向量库、图数据库、服务网格、微服务拆分。
 
 ## 4. Go 后端
 
@@ -100,7 +105,7 @@ backend/
 7. 所有业务表带 `org_id` / `project_id`，仓储查询强制带项目条件。
 8. **工作流只写结果与状态字段**，不覆盖人工配置（DES-01 原则 P3）。
 9. 工作流：只用 Go 编写，代码确定性、无 I/O；Workflow ID 用业务 ID；Activity 先查已有结果再执行；代码变更使用 Temporal 版本化机制。
-10. Operation 状态机、`unknown` 对账、预留与结算遵循 [DES-01 §4、§6.2](docs/design/01-系统架构设计.md#4-生成操作operation模型)。
+10. Operation 状态机、`unknown` 对账、预留与结算遵循 [DES-01 §4、§6.2](workspace/content/design/01-系统架构设计.md#4-生成操作operation模型)。
 11. Kafka：主题 `lanverse.<上下文>.<事件>.v<N>`，键为 `project_id`；消费者按事件 ID 去重。
 12. Redis：只放可重建的数据（会话、缓存、限流、锁、Pub/Sub）；键名 `lanverse:<用途>:<标识>`，设置过期时间。
 13. 对象存储（开发 MinIO / 生产 TOS）：只通过 S3 协议访问，不使用厂商私有 API；桶私有；对象键 `projects/{project_id}/{类别}/{id}`；浏览器只通过预签名 URL 访问。
@@ -111,7 +116,7 @@ backend/
 
 ## 5. AI 执行能力
 
-供应商执行由 Go adapter 承接，复用 Operation、持久发送权、私有分阶段回执、媒体接管与账本；具体状态与失败合同见 [生成执行设计](docs/design/生成执行设计.md)。Codex app-server 协议适配、私有回执恢复及管理凭据测试入口已接入，真实执行注册仍默认关闭；实际供应商调用、费用、审核、Skill/Harness 与完整产品链尚未完成真实验收。`agent` / `agent.mock` / `agent.codex` 队列和 Activity 协议不能证明执行 Worker 已启用。
+供应商执行由 Go adapter 承接，复用 Operation、持久发送权、私有分阶段回执、媒体接管与账本；具体状态与失败合同见 [生成执行设计](workspace/content/design/生成执行设计.md)。Codex app-server 协议适配、私有回执恢复及管理凭据测试入口已接入，真实执行注册仍默认关闭；实际供应商调用、费用、审核、Skill/Harness 与完整产品链尚未完成真实验收。`agent` / `agent.mock` / `agent.codex` 队列和 Activity 协议不能证明执行 Worker 已启用。
 
 冻结输入、预算上限、只读工具白名单、长任务 heartbeat/取消，以及结果未知不自动重提付费请求的约束继续有效。执行 Worker 须按角色注入凭据；API、flow/media 与浏览器不得持有执行私钥。本机 Codex 账号由 Codex 客户端管理；实际能力、模型、产物、可信费用及审核须在启用前核验，不默认免费或回退付费 HTTP。任务与放行条件见 BACKLOG M1-12。
 
@@ -150,13 +155,48 @@ frontend/
 3. 基础控件、表单、弹窗、菜单、表格一律用 shadcn/ui；不混用其他组件体系（不引入 Ant Design）。
 4. 富文本与实体引用用 Tiptap；`@角色 / @场景 / @道具` 保存为结构化引用，不只保存纯文本。
 5. 超过 100 行的列表（镜头表、资产库、任务中心）使用 TanStack Virtual。
-6. 对话式 Agent 计划按既有 Go 模块接入；界面与工具链按 [DES-39](docs/design/39-对话式Agent.md) 和 BACKLOG E-37 设计与验收。
+6. 对话式 Agent 计划按既有 Go 模块接入；界面与工具链按 [DES-39](workspace/content/design/39-对话式Agent.md) 和 BACKLOG E-37 设计与验收。
 7. 模型参数表单只由 `param_schema` 驱动。
 8. 画布：拖拽只在松手时提交命令；命令带 `expected_revision` 与幂等键；409 时基于最新文档重放。
 9. 媒体：按缩放级别选择缩略图；视频默认封面，同时播放不超过 3 个；只渲染视口内节点。
 10. 付费操作先展示报价并由用户确认。
 11. 所有业务接口由 `@umijs/openapi` 统一生成到 `src/api/`，生成函数调用 `src/lib/request.ts` 的 Axios 封装，业务代码与 Route Handler 只调用生成函数。禁止手写 API 文件、自行拼接业务接口路径、直接调用底层 `request` 或网络客户端；接口缺失时先补后端注解与 DTO，再重新生成。ESLint 检查手写请求边界，CI 重生成整个目录并校验漂移。授权对象存储模型原件由 `request.ts` 的流传输入口读取，保留逐块容量上限、取消与禁止重定向，不携带后端凭据。上传代理通过生成函数转发原始 multipart 计数流，保持 Origin/幂等键和响应状态，不缓冲整份文件。请求服务使用私有 `axios.create()` 与 Axios TypeScript 配置，`@umijs/openapi` 仅生成客户端；不引入 `umi-request` 请求运行时。
 12. 不设置项目脚本或 Makefile；前端开发和检查直接执行 `pnpm exec next`、`pnpm exec eslint`、`pnpm exec prettier`、`pnpm exec tsc`、`pnpm exec vitest`、`pnpm exec openapi2ts`。
+
+### 6.1 本地知识库文档站
+
+`workspace/` 使用 Nextra 原生内容约定和标准文档主题，提供目录导航、搜索、正文和页内目录；`workspace/content/index.md` 是首页，正文由 Obsidian 或编辑器直接编辑。计划与需求作为普通文档维护。content 外根文件及 `.txt` 许可只做本机只读原文链接适配，不建立管理页面。范围见[知识库设计](workspace/content/design/知识库体系设计.md)，使用说明见 [KNOWLEDGE](workspace/content/KNOWLEDGE.md)。
+
+在仓库根执行以下命令，不配置包 scripts：
+
+```bash
+pnpm --dir workspace install --frozen-lockfile
+pnpm --dir workspace exec next dev --webpack --hostname 127.0.0.1 --port 3210
+```
+
+Nextra 4.6.1 的自定义 remark 链接适配不支持 Turbopack，开发和构建显式使用 `--webpack`。开发时正文实时更新，搜索只反映上次构建的索引。完整本地阅读先停止开发服务器，再依次执行：
+
+```bash
+pnpm --dir workspace exec next build --webpack
+pnpm --dir workspace exec pagefind --site .next/server/app --output-path public/_pagefind
+pnpm --dir workspace exec next start --hostname 127.0.0.1 --port 3210
+```
+
+两种方式均访问 <http://127.0.0.1:3210>，不可同时占用该端口。内容变化后重建正文与搜索索引。具体依赖由 workspace 清单与锁文件约束；本地阅读不需要业务后端、账户或部署。
+
+知识库代码变更的质量门禁在仓库根执行：
+
+```bash
+pnpm --dir workspace exec eslint .
+pnpm --dir workspace exec prettier --check .
+pnpm --dir workspace exec next typegen
+pnpm --dir workspace exec tsc --noEmit
+pnpm --dir workspace exec tsx --test 'tests/*.test.ts'
+pnpm --dir workspace exec next build --webpack
+pnpm --dir workspace exec pagefind --site .next/server/app --output-path public/_pagefind
+```
+
+实际阅读验证检查文档入口、中文路径、分类导航、正文与表格、页内目录、搜索和保存刷新。命令通过与浏览器使用结果分别记录。
 
 ## 7. 契约与生成
 
