@@ -22,7 +22,7 @@ Nextra 提供目录导航、搜索、正文和页内目录；Obsidian 编辑同�
 
 ## 本地打开
 
-在仓库根先执行 `pnpm --dir workspace install --frozen-lockfile`，再执行 `pnpm --dir workspace exec next dev --webpack --hostname 127.0.0.1 --port 3210`，访问 <http://127.0.0.1:3210>。正文实时更新，开发搜索使用上次构建的索引；完整本地阅读的构建和启动命令见[使用说明](KNOWLEDGE.md)。
+在仓库根执行 `docker compose up -d --build --wait`，文档站会与前后端一起启动，访问 <http://127.0.0.1:3210>；只启动文档站可执行 `docker compose up -d --build --wait workspace`。也可以按[使用说明](KNOWLEDGE.md)单独启动宿主进程，切换前停止占用 3210 端口的服务。正文实时更新，开发搜索使用上次构建的索引；完整本地阅读的构建和启动命令见[使用说明](KNOWLEDGE.md)。
 
 Obsidian 可以继续使用当前 `workspace/content/` Vault，也可以按需要打开仓库根。只有仓库根 Vault 同时包含根 AGENTS、PROJECT、BACKLOG，因此 content Vault 中指向这些文件的相对链接可能无法解析；可从文件系统或编辑器打开，无须为此切换 Vault。
 

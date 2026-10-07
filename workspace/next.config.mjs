@@ -8,6 +8,7 @@ const withNextra = nextra({
 export default withNextra({
   agentRules: false,
   devIndicators: false,
+  allowedDevOrigins: ["127.0.0.1"],
   reactStrictMode: true,
   experimental: { cpus: 2 },
   webpack(config, { webpack }) {

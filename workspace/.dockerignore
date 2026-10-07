@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+coverage
+public/_pagefind
+next-env.d.ts
+*.tsbuildinfo
+*.log
+.env*
+**/.obsidian
+**/.DS_Store
+.git
+Dockerfile

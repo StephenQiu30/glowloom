@@ -15,7 +15,17 @@ tags:
 
 从[知识库入口](index.md)按产品、需求、设计、计划、测试或运维分类查找文档。Nextra 提供标准目录导航、正文、页内目录和搜索；计划与实施方案也是普通文档。
 
-在仓库根安装依赖并启动开发预览：
+默认文档站随前后端由 Docker 一起启动，在仓库根执行：
+
+```bash
+docker compose up -d --build --wait
+# 也可以只启动文档服务
+docker compose up -d --build --wait workspace
+```
+
+访问 <http://127.0.0.1:3210>。Docker 只读挂载 `workspace/content/` 和站点源码，Obsidian 或编辑器保存后触发 Webpack 热更新。Linux 依赖与编译缓存保存在文档服务独立卷中；根 `.env` 不进入文档服务。
+
+需要宿主进程时，在仓库根安装依赖并启动开发预览：
 
 ```bash
 pnpm --dir workspace install --frozen-lockfile
@@ -24,7 +34,7 @@ pnpm --dir workspace exec next dev --webpack --hostname 127.0.0.1 --port 3210
 
 访问 <http://127.0.0.1:3210>。正文保存后实时更新，必要时刷新；开发模式的搜索只反映上次构建的索引，首次未构建时没有搜索索引。
 
-完整本地阅读使用生产构建与搜索索引。先停止开发服务器，再依次运行：
+完整本地阅读使用生产构建与搜索索引。Docker 文档站与宿主服务共用 3210 端口；切换到宿主前执行 `docker compose stop workspace`。先停止开发服务器，再依次运行：
 
 ```bash
 pnpm --dir workspace exec next build --webpack

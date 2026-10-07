@@ -70,13 +70,13 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 
 [知识库入口](workspace/content/index.md) 汇集产品、需求、设计、计划、测试与运维文档。正文统一保存在 `workspace/content/`，Obsidian 编辑同一批 Markdown，Nextra 提供标准文档导航、搜索与阅读。
 
-在仓库根先运行 `pnpm --dir workspace install --frozen-lockfile`，再运行 `pnpm --dir workspace exec next dev --webpack --hostname 127.0.0.1 --port 3210`，访问 <http://127.0.0.1:3210>。正文实时更新，开发搜索使用上次构建的索引；完整构建、搜索和 Vault 选择见[使用说明](workspace/content/KNOWLEDGE.md)。本地阅读不需要账户或部署。
+默认执行 `docker compose up -d --build --wait`，文档站随前后端一起启动，访问 <http://127.0.0.1:3210>；单独启动可执行 `docker compose up -d --build --wait workspace`。宿主启动仍可先运行 `pnpm --dir workspace install --frozen-lockfile`，再运行 `pnpm --dir workspace exec next dev --webpack --hostname 127.0.0.1 --port 3210`。正文实时更新，开发搜索使用上次构建的索引；完整构建、搜索和 Vault 选择见[使用说明](workspace/content/KNOWLEDGE.md)。本地阅读不需要账户或部署。
 
 ## 开发
 
 数据库结构唯一事实源为 [`backend/db/schema.sql`](backend/db/schema.sql)，统一维护当前已实现的表、索引、约束、触发器、函数、应用权限与动态分区；DES-02 只保留概念设计和未实施规划。新空业务库由表所有者执行 `psql "$LV_SCHEMA_DB_DSN" -X --single-transaction -v ON_ERROR_STOP=1 -f backend/db/schema.sql`，由调用方以单事务初始化，管理员须先预置 `lanverse_app NOLOGIN NOSUPERUSER` 权限角色；Outbox、审计与供应商调用以执行时 UTC 当前月准备当前及未来三个月分区。既有业务库须审阅与实例对应的增量升级，不重跑 Schema 或重建覆盖。初始化和升级步骤见 [DES-02 §10](workspace/content/design/02-领域与数据模型.md#10-schema-事实源初始化与升级) 与 [OPS-01 §7](workspace/content/operation/01-环境与部署.md#7-初始化与种子数据)。
 
-工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机通过 Docker 开发应用栈运行 Next.js、Go API、flow Worker、media Worker 与 Relay，连接已运行的本机中间件。也可按下表直接运行进程。配置写在根目录 `.env`（键名样例见 `.env.example`），浏览器地址必须与 `LV_PUBLIC_ORIGIN` 一致。
+工程底座及业务接线按 [BACKLOG](BACKLOG.md) 持续交付。本机通过 Docker 开发应用栈运行业务前端、Go API、flow Worker、media Worker、Relay 与 Nextra 文档站，连接已运行的本机中间件。也可按下表直接运行进程。配置写在根目录 `.env`（键名样例见 `.env.example`），浏览器地址必须与 `LV_PUBLIC_ORIGIN` 一致。
 
 | 目录        | 技术栈                                                                      | 本地启动                                                             | 健康检查            |
 | ----------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
@@ -94,7 +94,7 @@ docker compose ps
 docker compose down
 ```
 
-访问 <http://127.0.0.1:3200>；API 为 <http://127.0.0.1:8080>。Next.js 使用默认 Turbopack Fast Refresh，Go 使用现有 `--role=all` 合并 API、flow/media Worker 和 Relay，由一个 Air 轮询源码、自动编译并优雅重启。宿主源码以只读挂载进入容器，前端 Linux 依赖与 `.next` 使用独立数据卷，Go 缓存保存在后端容器内。依赖锁文件改变后重新构建；前端依赖卷须按 [OPS-01 §6](workspace/content/operation/01-环境与部署.md#6-本地开发环境) 更新。前端只注入内部 API 地址与开发配置，后端注入其 Go 角色需要的变量，根 `.env` 不进入镜像或容器文件系统。
+业务应用访问 <http://127.0.0.1:3200>，文档站访问 <http://127.0.0.1:3210>；API 为 <http://127.0.0.1:8080>。Next.js 使用默认 Turbopack Fast Refresh，Go 使用现有 `--role=all` 合并 API、flow/media Worker 和 Relay，由一个 Air 轮询源码、自动编译并优雅重启。Nextra 文档站用 Webpack 轮询正文和站点代码，保存后热更新，不需要手动启动宿主进程。宿主源码以只读挂载进入容器，前端 Linux 依赖与 `.next` 使用独立数据卷，Go 缓存保存在后端容器内。依赖锁文件改变后重新构建；前端依赖卷须按 [OPS-01 §6](workspace/content/operation/01-环境与部署.md#6-本地开发环境) 更新。前端只注入内部 API 地址与开发配置，后端注入其 Go 角色需要的变量，根 `.env` 不进入镜像或容器文件系统。
 
 开发容器通过内部回环端口转发连接已有本机中间件，保留 Kafka 广播地址及对象存储签名 URL。默认转发 5432、6379、7233、9000、9092；自定义本机服务端口或字幕服务端口需设置 `LV_HOST_SERVICE_PORTS`。宿主需要 Docker Desktop 的 `host.docker.internal`（Linux 配置 host-gateway），对应本机服务须允许该连接。仅 `127.0.0.1` 对外发布应用端口。
 

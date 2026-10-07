@@ -28,7 +28,7 @@
 ```text
 Lanverse/
   .env.example              本机进程配置样例；实际 .env 不入库
-  docker-compose.yml        默认本机热更新应用；Next.js 与 Go 全部角色
+  docker-compose.yml        默认本机热更新应用；前端、Go 全部角色与 workspace 文档站
   docker-compose-env.yml    依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
   docker-compose-prod.yml   生产应用配置；保留独立 Go 角色与维护入口
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
@@ -168,7 +168,9 @@ frontend/
 
 `workspace/` 使用 Nextra 原生内容约定和标准文档主题，提供目录导航、搜索、正文和页内目录；`workspace/content/index.md` 是首页，正文由 Obsidian 或编辑器直接编辑。计划与需求作为普通文档维护。content 外根文件及 `.txt` 许可只做本机只读原文链接适配，不建立管理页面。范围见[知识库设计](workspace/content/design/知识库体系设计.md)，使用说明见 [KNOWLEDGE](workspace/content/KNOWLEDGE.md)。
 
-在仓库根执行以下命令，不配置包 scripts：
+默认随应用 Docker 一起启动：`docker compose up -d --build --wait`。文档入口为 <http://127.0.0.1:3210>；只启动文档站可执行 `docker compose up -d --build --wait workspace`。`workspace` 服务与业务后端没有启动依赖，挂载正文、站点代码和原文白名单，使用 Webpack 轮询热更新。容器依赖和 `.next` 使用独立卷，根 `.env` 不挂载到文档站。
+
+也可在仓库根执行宿主命令，不配置包 scripts：
 
 ```bash
 pnpm --dir workspace install --frozen-lockfile
