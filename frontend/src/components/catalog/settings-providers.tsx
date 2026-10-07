@@ -32,14 +32,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Check, CircleMinus, Settings2 } from "lucide-react";
+import { CardFooter } from "@/components/ui/card";
 import {
   ADMIN_KEY,
   adminError,
@@ -348,7 +342,7 @@ export function SettingsProviders() {
     );
   const items = query.data.pages.flatMap((page) => page.items);
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           渠道决定模型的适配器、处理地区和提交额度。
@@ -368,73 +362,73 @@ export function SettingsProviders() {
           )}
         </AdminDialog>
       </div>
-      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>渠道目录</CardTitle>
-            <CardDescription>已载入 {items.length} 个渠道</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {items.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>渠道</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>模型</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map(({ provider, model_count }) => (
-                    <TableRow
-                      key={provider.id}
-                      data-state={
-                        selected === provider.id ? "selected" : undefined
-                      }
-                    >
-                      <TableCell>
-                        <Button
-                          variant="link"
-                          className="h-auto max-w-56 truncate p-0"
-                          onClick={() => setSelected(provider.id)}
-                        >
-                          {provider.name}
-                        </Button>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {provider.adapter_key}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {provider.status === "active" ? "启用" : "禁用"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{model_count}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>尚无渠道</EmptyTitle>
-                  <EmptyDescription>
-                    创建渠道后即可配置模型与凭据。
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-            {query.hasNextPage && (
-              <Button
-                variant="outline"
-                disabled={query.isFetchingNextPage}
-                onClick={() => void query.fetchNextPage()}
-              >
-                加载更多渠道
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+      <div className="flex min-w-0 flex-col gap-6">
+        <div
+          className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3"
+          aria-label="渠道目录"
+        >
+          {items.map(({ provider, model_count }) => (
+            <Card key={provider.id}>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle>{provider.name}</CardTitle>
+                  <Badge
+                    variant={
+                      provider.status === "active" ? "secondary" : "muted"
+                    }
+                  >
+                    {provider.status === "active" ? (
+                      <Check data-icon="inline-start" />
+                    ) : (
+                      <CircleMinus data-icon="inline-start" />
+                    )}
+                    {provider.status === "active" ? "启用" : "禁用"}
+                  </Badge>
+                </div>
+                <CardDescription>
+                  {provider.adapter_key} ·{" "}
+                  {provider.region === "domestic" ? "境内" : "境外"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
+                <p>{model_count} 个模型</p>
+                <p>
+                  最大并发 {provider.concurrency_limit} · 每分钟{" "}
+                  {provider.rate_limit_per_min} 次
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button
+                  variant="secondary"
+                  onClick={() => setSelected(provider.id)}
+                  aria-pressed={selected === provider.id}
+                >
+                  <Settings2 data-icon="inline-start" />
+                  配置 {provider.name}
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+        {!items.length && (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>尚无渠道</EmptyTitle>
+              <EmptyDescription>
+                创建渠道后即可配置模型与凭据。
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
+        {query.hasNextPage && (
+          <Button
+            variant="outline"
+            disabled={query.isFetchingNextPage}
+            onClick={() => void query.fetchNextPage()}
+          >
+            加载更多渠道
+          </Button>
+        )}
         {selected ? (
           <ProviderDetails key={selected} id={selected} />
         ) : (

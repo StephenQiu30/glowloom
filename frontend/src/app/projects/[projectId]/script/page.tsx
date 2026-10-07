@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProjectScriptWorkspace } from "@/components/script/project-script-workspace";
 
-export const metadata = { title: "剧本 | Lanverse" };
+export const metadata = { title: "剧本" };
 
 export default async function ProjectScriptPage({
   params,

@@ -105,8 +105,8 @@ export function ProjectBibleWorkspace({
     context.isSuccess &&
     context.isFetchedAfterMount;
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6">
-      <h1 className="text-2xl font-medium wrap-anywhere">
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+      <h1 className="text-xl font-semibold wrap-anywhere">
         {project.data?.name ?? "项目"} · 设定集
       </h1>
       <p className="text-sm text-muted-foreground">
@@ -143,7 +143,7 @@ export function ProjectBibleWorkspace({
           readOnly={project.data.status !== "active" || project.data.is_delete}
         />
       )}
-    </main>
+    </section>
   );
 }
 function ScopedBibleWorkspace({

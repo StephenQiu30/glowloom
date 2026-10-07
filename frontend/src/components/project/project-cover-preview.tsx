@@ -93,6 +93,8 @@ export function ProjectCoverPreview({
       ) : preview.data && visible ? (
         <Image
           unoptimized
+          // IntersectionObserver 已控制预览读取，避免图片再经历一轮懒加载。
+          loading="eager"
           fill
           src={preview.data.url}
           alt={alt}

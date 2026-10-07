@@ -16,6 +16,11 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { ApiError } from "@/lib/request";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -43,7 +48,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   createCanvas,
   deleteCanvas,
@@ -224,13 +228,16 @@ export function CanvasWorkspace({
   }, [requestLeave]);
   function navigate(pid: string, cid = "") {
     const query = new URLSearchParams();
-    if (pid) query.set("project", pid);
+    if (pid && !initialProjectId) query.set("project", pid);
     if (cid) query.set("canvas", cid);
     setDirty(false);
     setRenameName("");
-    router.replace(`/canvas${query.size ? `?${query}` : ""}`, {
-      scroll: false,
-    });
+    router.replace(
+      `${initialProjectId && pid ? `/projects/${pid}/canvas` : "/canvas"}${query.size ? `?${query}` : ""}`,
+      {
+        scroll: false,
+      },
+    );
   }
   function choose(pid: string, cid = "") {
     requestLeave(() => navigate(pid, cid));
@@ -338,136 +345,187 @@ export function CanvasWorkspace({
     }
   }
   return (
-    <main className="min-h-screen bg-background px-4 py-6 text-foreground lg:px-8">
-      <header className="mx-auto mb-8 flex max-w-[1800px] flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-5">
-          <Link
-            href="/projects"
-            className="rounded text-lg font-semibold focus-visible:ring-2"
-          >
-            Lanverse
-          </Link>
-          <span className="text-xs text-muted-foreground">创作画布</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
+    <Collapsible
+      defaultOpen={!canvasId}
+      className="flex min-w-0 flex-col gap-4"
+    >
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight">无限画布</h1>
+        <div className="flex items-center gap-2">
+          <CollapsibleTrigger asChild>
+            <Button variant="secondary">画布管理</Button>
+          </CollapsibleTrigger>
+          <Button variant="ghost" asChild>
+            <Link href="/projects">返回项目库</Link>
+          </Button>
         </div>
       </header>
-      <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">无限画布</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            把文字、媒体和关系放在同一张画布中。保存由项目服务确认。
-          </p>
-        </div>
+      <div className="flex min-w-0 flex-col gap-4">
         <>
-          {project ? (
-            <div className="flex flex-wrap items-center gap-3">
-              {hasUnsavedChanges ? (
-                <Button variant="ghost" disabled>
-                  复制完整项目
-                </Button>
-              ) : (
-                <Button variant="ghost" asChild>
-                  <Link
-                    href={`/projects?${new URLSearchParams({ copy_source: project.id })}`}
-                  >
+          <CollapsibleContent className="flex flex-col gap-4 rounded-xl bg-surface-1 p-4">
+            {project ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {hasUnsavedChanges ? (
+                  <Button variant="ghost" disabled>
                     复制完整项目
-                  </Link>
-                </Button>
-              )}
-              {hasUnsavedChanges ? (
-                <p className="text-sm text-muted-foreground">
-                  请先保存当前画布和名称，再复制完整项目。
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          <FieldGroup className="grid items-end gap-4 md:grid-cols-3">
-            <Field>
-              <FieldLabel htmlFor="canvas-project">项目</FieldLabel>
-              <Select
-                value={projectId || undefined}
-                disabled={projects.isPending || pending || busy}
-                onValueChange={(value) => choose(value)}
-              >
-                <SelectTrigger id="canvas-project" className="w-full">
-                  <SelectValue placeholder="选择有权项目" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {items.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                        {item.status === "archived" ? "（已归档）" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              {projects.hasNextPage && (
-                <Button
-                  variant="ghost"
-                  disabled={projects.isFetchingNextPage}
-                  onClick={() => void projects.fetchNextPage()}
+                  </Button>
+                ) : (
+                  <Button variant="ghost" asChild>
+                    <Link
+                      href={`/projects?${new URLSearchParams({ copy_source: project.id })}`}
+                    >
+                      复制完整项目
+                    </Link>
+                  </Button>
+                )}
+                {hasUnsavedChanges ? (
+                  <p className="text-sm text-muted-foreground">
+                    请先保存当前画布和名称，再复制完整项目。
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <FieldGroup className="grid items-end gap-4 md:grid-cols-3">
+              <Field>
+                <FieldLabel htmlFor="canvas-project">项目</FieldLabel>
+                <Select
+                  value={projectId}
+                  disabled={projects.isPending || pending || busy}
+                  onValueChange={(value) => choose(value)}
                 >
-                  加载更多项目
-                </Button>
-              )}
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="canvas-document">画布</FieldLabel>
-              <Select
-                value={canvasId || undefined}
-                disabled={!project || canvases.isPending || pending || busy}
-                onValueChange={(value) => choose(projectId, value)}
-              >
-                <SelectTrigger id="canvas-document" className="w-full">
-                  <SelectValue placeholder="选择已有画布" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {canvases.data?.items.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                requestLeave(() => {
-                  setDirty(false);
-                  create.mutate();
-                });
-              }}
-            >
-              <FieldGroup className="flex-row items-end gap-2">
-                <Field className="flex-1">
-                  <FieldLabel htmlFor="new-canvas-name">新画布名称</FieldLabel>
-                  <Input
-                    id="new-canvas-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    required
-                    maxLength={128}
-                    disabled={!project || readonly || pending || busy}
-                  />
-                </Field>
-                <Button
-                  type="submit"
-                  disabled={
-                    !project || readonly || !name.trim() || pending || busy
-                  }
+                  <SelectTrigger id="canvas-project" className="w-full">
+                    <SelectValue placeholder="选择有权项目" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {items.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                          {item.status === "archived" ? "（已归档）" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                {projects.hasNextPage && (
+                  <Button
+                    variant="ghost"
+                    disabled={projects.isFetchingNextPage}
+                    onClick={() => void projects.fetchNextPage()}
+                  >
+                    加载更多项目
+                  </Button>
+                )}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="canvas-document">画布</FieldLabel>
+                <Select
+                  value={canvasId}
+                  disabled={!project || canvases.isPending || pending || busy}
+                  onValueChange={(value) => choose(projectId, value)}
                 >
-                  创建画布
-                </Button>
-              </FieldGroup>
-            </form>
-          </FieldGroup>
+                  <SelectTrigger id="canvas-document" className="w-full">
+                    <SelectValue placeholder="选择已有画布" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {canvases.data?.items.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  requestLeave(() => {
+                    setDirty(false);
+                    create.mutate();
+                  });
+                }}
+              >
+                <FieldGroup className="flex-row items-end gap-2">
+                  <Field className="flex-1">
+                    <FieldLabel htmlFor="new-canvas-name">
+                      新画布名称
+                    </FieldLabel>
+                    <Input
+                      id="new-canvas-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      required
+                      maxLength={128}
+                      disabled={!project || readonly || pending || busy}
+                    />
+                  </Field>
+                  <Button
+                    type="submit"
+                    disabled={
+                      !project || readonly || !name.trim() || pending || busy
+                    }
+                  >
+                    创建画布
+                  </Button>
+                </FieldGroup>
+              </form>
+            </FieldGroup>
+            {document.data &&
+              project &&
+              document.data.projectId === projectId &&
+              !document.error && (
+                <>
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <form
+                      className="flex items-end gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        rename.mutate();
+                      }}
+                    >
+                      <Field>
+                        <FieldLabel htmlFor="rename-canvas">
+                          画布名称
+                        </FieldLabel>
+                        <Input
+                          id="rename-canvas"
+                          value={renameName}
+                          onChange={(event) =>
+                            setRenameName(event.target.value)
+                          }
+                          required
+                          maxLength={128}
+                          disabled={readonly || pending || busy || dirty}
+                        />
+                      </Field>
+                      <Button
+                        variant="secondary"
+                        type="submit"
+                        disabled={
+                          !nameDirty ||
+                          !renameName.trim() ||
+                          readonly ||
+                          pending ||
+                          busy ||
+                          dirty
+                        }
+                      >
+                        重命名画布
+                      </Button>
+                    </form>
+                    <Button
+                      variant="ghost"
+                      disabled={readonly || pending || busy}
+                      onClick={() => requestLeave(() => setDeleting(true))}
+                    >
+                      删除整个画布
+                    </Button>
+                  </div>
+                </>
+              )}
+          </CollapsibleContent>
           {failure && (
             <Failure
               error={failure}
@@ -536,48 +594,6 @@ export function CanvasWorkspace({
             document.data.projectId === projectId &&
             !document.error && (
               <>
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <form
-                    className="flex items-end gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      rename.mutate();
-                    }}
-                  >
-                    <Field>
-                      <FieldLabel htmlFor="rename-canvas">画布名称</FieldLabel>
-                      <Input
-                        id="rename-canvas"
-                        value={renameName}
-                        onChange={(event) => setRenameName(event.target.value)}
-                        required
-                        maxLength={128}
-                        disabled={readonly || pending || busy || dirty}
-                      />
-                    </Field>
-                    <Button
-                      variant="secondary"
-                      type="submit"
-                      disabled={
-                        !nameDirty ||
-                        !renameName.trim() ||
-                        readonly ||
-                        pending ||
-                        busy ||
-                        dirty
-                      }
-                    >
-                      重命名画布
-                    </Button>
-                  </form>
-                  <Button
-                    variant="ghost"
-                    disabled={readonly || pending || busy}
-                    onClick={() => requestLeave(() => setDeleting(true))}
-                  >
-                    删除整个画布
-                  </Button>
-                </div>
                 <Editor
                   key={`${document.data.id}:${epoch}`}
                   document={document.data}
@@ -688,6 +704,6 @@ export function CanvasWorkspace({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </main>
+    </Collapsible>
   );
 }

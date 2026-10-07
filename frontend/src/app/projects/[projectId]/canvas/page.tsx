@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { CanvasWorkspace } from "@/components/canvas/workspace";
 
-export const metadata = { title: "画布 | Lanverse" };
+export const metadata = { title: "画布" };
 
 export default async function ProjectCanvasPage({
   params,

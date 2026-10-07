@@ -56,6 +56,8 @@ export function projectError(error: unknown) {
 }
 
 type Props = {
+  initialDraft?: ProjectDraft;
+  submitLabel?: string;
   open?: boolean;
   onSubmit: (body: CreationBody, key: string) => Promise<{ id: string }>;
   onCreated: (id: string) => void;
@@ -70,6 +72,8 @@ type Props = {
 };
 export function CreateProjectDialog({
   open: controlledOpen,
+  initialDraft = initialProjectDraft,
+  submitLabel = "创建并进入画布",
   onSubmit,
   onCreated,
   onOpenChange,
@@ -83,7 +87,7 @@ export function CreateProjectDialog({
 }: Props) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
-  const [draft, setDraft] = useState<ProjectDraft>({ ...initialProjectDraft });
+  const [draft, setDraft] = useState<ProjectDraft>({ ...initialDraft });
   const [errors, setErrors] = useState<
     Partial<Record<keyof ProjectDraft, string>>
   >({});
@@ -95,7 +99,7 @@ export function CreateProjectDialog({
   const leaving = useRef(false);
   const dirty =
     open &&
-    (JSON.stringify(draft) !== JSON.stringify(initialProjectDraft) ||
+    (JSON.stringify(draft) !== JSON.stringify(initialDraft) ||
       Boolean(error) ||
       pending);
   const editingDisabled = pending;
@@ -118,7 +122,7 @@ export function CreateProjectDialog({
   );
   const clear = () => {
     changeOpen(false);
-    setDraft({ ...initialProjectDraft });
+    setDraft({ ...initialDraft });
     setErrors({});
     setError(null);
     attempt.current = null;
@@ -440,7 +444,7 @@ export function CreateProjectDialog({
                     className="animate-spin"
                   />
                 )}
-                {pending ? "正在创建…" : error ? "重试创建" : "创建并进入画布"}
+                {pending ? "正在创建…" : error ? "重试创建" : submitLabel}
               </Button>
             </DialogFooter>
           </form>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,10 +24,23 @@ import {
 import { ProjectScope } from "@/components/workbench/project-scope";
 import { MODELS_KEY, queryModels } from "./queries";
 import { AdminFailure } from "./admin-ui";
-import { SettingsModels } from "./settings-models";
-import { SettingsProviders } from "./settings-providers";
-import { SettingsDefaults } from "./settings-defaults";
-import { SettingsPrompts } from "./settings-prompts";
+const SettingsModels = dynamic(
+  () => import("./settings-models").then((module) => module.SettingsModels),
+  { loading: () => <p role="status">正在加载设置…</p> },
+);
+const SettingsProviders = dynamic(
+  () =>
+    import("./settings-providers").then((module) => module.SettingsProviders),
+  { loading: () => <p role="status">正在加载设置…</p> },
+);
+const SettingsDefaults = dynamic(
+  () => import("./settings-defaults").then((module) => module.SettingsDefaults),
+  { loading: () => <p role="status">正在加载设置…</p> },
+);
+const SettingsPrompts = dynamic(
+  () => import("./settings-prompts").then((module) => module.SettingsPrompts),
+  { loading: () => <p role="status">正在加载设置…</p> },
+);
 
 function ProjectModels({ projectId }: { projectId: string }) {
   const [search, setSearch] = useState("");
@@ -49,7 +64,7 @@ function ProjectModels({ projectId }: { projectId: string }) {
       .includes(search.trim().toLowerCase()),
   );
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
           项目当前可见的模型与生成配置。已载入 {all.length} 个模型。
@@ -81,7 +96,7 @@ function ProjectModels({ projectId }: { projectId: string }) {
                 {model.key}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
+            <CardContent className="flex flex-col gap-3 text-sm">
               <p>
                 配置版本：
                 {model.current_version
@@ -161,63 +176,102 @@ function ProjectModels({ projectId }: { projectId: string }) {
     </div>
   );
 }
+const sections = {
+  project: {
+    title: "项目模型",
+    description: "查看当前项目可用的模型与生成配置。",
+  },
+  defaults: { title: "默认模型", description: "设置项目创作默认使用的模型。" },
+  prompts: {
+    title: "提示词偏好",
+    description: "管理你的创作要求与提示词偏好。",
+  },
+  providers: {
+    title: "供应商凭据",
+    description: "管理供应商渠道、提交额度与访问凭据。",
+  },
+  models: {
+    title: "模型注册表",
+    description: "管理模型配置、能力与生效价格。",
+  },
+} as const;
 export function SettingsWorkspace() {
-  const [tab, setTab] = useState("project");
+  const parameters = useSearchParams();
+  const router = useRouter();
+  const requested = parameters.get("tab") ?? "project";
+  const tab = Object.hasOwn(sections, requested)
+    ? (requested as keyof typeof sections)
+    : "project";
+  // Mount on first visit, then retain editable drafts while switching sections.
+  const [visited, setVisited] = useState<string[]>([tab]);
+  if (!visited.includes(tab)) setVisited([...visited, tab]);
   return (
-    <div className="space-y-8">
-      <header className="space-y-3">
-        <p className="text-xs tracking-widest text-muted-foreground">
-          MODEL SETTINGS
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight">创作设置</h1>
-        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-          设置项目默认模型与个人创作要求，查看模型目录和渠道配置。生成任务使用创建时冻结的配置和价格。
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-xl font-semibold tracking-tight">
+          {sections[tab].title}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {sections[tab].description}
         </p>
       </header>
-      <Tabs value={tab} onValueChange={setTab}>
-        <div className="mb-6 max-w-full overflow-x-auto">
+      <Tabs
+        value={tab}
+        onValueChange={(value) => {
+          const next = new URLSearchParams(parameters.toString());
+          next.set("tab", value);
+          router.replace(`/settings?${next}`, { scroll: false });
+        }}
+      >
+        <div className="mb-4 max-w-full overflow-x-auto md:hidden">
           <TabsList className="w-max">
-            <TabsTrigger value="project">项目模型</TabsTrigger>
-            <TabsTrigger value="defaults">默认模型</TabsTrigger>
-            <TabsTrigger value="prompts">提示词偏好</TabsTrigger>
-            <TabsTrigger value="providers">渠道管理</TabsTrigger>
-            <TabsTrigger value="models">模型管理</TabsTrigger>
+            {Object.entries(sections).map(([key, section]) => (
+              <TabsTrigger key={key} value={key}>
+                {section.title}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
-        <div hidden={tab !== "project" && tab !== "defaults"}>
-          <ProjectScope>
-            {(project) => (
-              <>
-                <TabsContent
-                  value="project"
-                  forceMount
-                  className="data-[state=inactive]:hidden"
-                >
-                  <ProjectModels projectId={project.id} />
-                </TabsContent>
-                <TabsContent
-                  value="defaults"
-                  forceMount
-                  className="data-[state=inactive]:hidden"
-                >
-                  <SettingsDefaults projectId={project.id} />
-                </TabsContent>
-              </>
-            )}
-          </ProjectScope>
-        </div>
+        {(visited.includes("project") || visited.includes("defaults")) && (
+          <div hidden={tab !== "project" && tab !== "defaults"}>
+            <ProjectScope>
+              {(project) => (
+                <>
+                  {visited.includes("project") && (
+                    <TabsContent
+                      value="project"
+                      forceMount
+                      className="data-[state=inactive]:hidden"
+                    >
+                      <ProjectModels projectId={project.id} />
+                    </TabsContent>
+                  )}
+                  {visited.includes("defaults") && (
+                    <TabsContent
+                      value="defaults"
+                      forceMount
+                      className="data-[state=inactive]:hidden"
+                    >
+                      <SettingsDefaults projectId={project.id} />
+                    </TabsContent>
+                  )}
+                </>
+              )}
+            </ProjectScope>
+          </div>
+        )}
         <TabsContent value="providers">
-          <SettingsProviders />
+          {tab === "providers" && <SettingsProviders />}
         </TabsContent>
         <TabsContent value="models">
-          <SettingsModels />
+          {tab === "models" && <SettingsModels />}
         </TabsContent>
         <TabsContent
           value="prompts"
           forceMount
           className="data-[state=inactive]:hidden"
         >
-          <SettingsPrompts />
+          {visited.includes("prompts") && <SettingsPrompts />}
         </TabsContent>
       </Tabs>
     </div>

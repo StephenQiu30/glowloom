@@ -83,7 +83,9 @@ export function AssetsWorkspace() {
       className="mx-auto flex w-full max-w-7xl flex-col gap-6"
     >
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-medium tracking-tight">素材库</h1>
+        <h1 className="text-xl font-semibold tracking-tight">
+          {scope?.kind === "project" ? "项目素材" : "我的素材"}
+        </h1>
         <p className="text-sm text-muted-foreground">
           管理个人原件与项目素材，在画布和剧本中继续创作。
         </p>

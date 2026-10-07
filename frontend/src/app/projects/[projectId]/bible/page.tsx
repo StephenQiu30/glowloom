@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProjectBibleWorkspace } from "@/components/bible/project-bible-workspace";
 
-export const metadata = { title: "设定集 | Lanverse" };
+export const metadata = { title: "设定集" };
 
 export default async function ProjectBiblePage({
   params,

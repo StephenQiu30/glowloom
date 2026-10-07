@@ -1,13 +1,7 @@
 "use client";
 import { Folder, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,11 +46,12 @@ export function LibraryFolderCard({
   return (
     <div className={themeClass[folder.theme] ?? "bg-background"}>
       <Card
+        variant="folder"
         className={styleClass[folder.style] ?? ""}
         data-folder-style={folder.style}
         data-folder-theme={folder.theme}
       >
-        <CardHeader>
+        <CardHeader className="min-w-0 flex-1 p-0">
           <CardTitle>
             <Button
               variant="ghost"
@@ -68,27 +63,20 @@ export function LibraryFolderCard({
               <span className="truncate">{folder.name}</span>
             </Button>
           </CardTitle>
+          <p className="px-2 text-xs text-muted-foreground">
+            {count} 项素材 · {childrenCount} 个子目录
+          </p>
         </CardHeader>
-        <CardContent>
-          <div
-            className={`${themeClass[folder.theme] ?? "bg-background"} rounded-lg p-3`}
-          >
-            <p className="text-sm text-muted-foreground">
-              {count} 项素材 · {childrenCount} 个子目录
-            </p>
-          </div>
-        </CardContent>
-        <CardFooter>
+        <CardFooter className="p-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="icon-sm"
                 disabled={disabled || readOnly}
                 aria-label={`${folder.name} 目录操作`}
               >
                 <MoreHorizontal aria-hidden data-icon="inline-start" />
-                目录操作
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>

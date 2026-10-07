@@ -17,8 +17,16 @@ export function ThemeToggle() {
       title="切换明暗主题"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
-      <Moon aria-hidden="true" className="size-4 dark:hidden" />
-      <Sun aria-hidden="true" className="hidden size-4 dark:block" />
+      <Moon
+        aria-hidden="true"
+        data-icon="inline-start"
+        className="dark:hidden"
+      />
+      <Sun
+        aria-hidden="true"
+        data-icon="inline-start"
+        className="hidden dark:block"
+      />
     </Button>
   );
 }

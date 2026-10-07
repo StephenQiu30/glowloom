@@ -11,7 +11,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+} from "@/components/ui/input-group";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { ProjectStart } from "./project-start";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Pagination,
@@ -34,7 +40,7 @@ import {
   listStylePresets,
   type ProjectSummary,
 } from "./queries";
-import type { CreationBody } from "./creation";
+import type { CreationBody, ProjectDraft } from "./creation";
 import { FOLDERS_KEY, findFolder, listFolders } from "./folder-queries";
 import { folderUUID, type FolderSummary } from "./folder-model";
 import { ProjectFolderCard, type FolderAction } from "./project-folder-card";
@@ -63,7 +69,7 @@ const ProjectFolderDialog = dynamic(
 const subscribeOrigin = () => () => {};
 const browserOrigin = () => window.location.origin;
 const serverOrigin = () => "";
-export function ProjectsWorkspace() {
+export function ProjectsWorkspace({ landing = false }: { landing?: boolean }) {
   const params = useSearchParams();
   // URL-bound list state remounts on history navigation; unrelated Copy parameters keep their dialog intact.
   const binding = [
@@ -78,9 +84,10 @@ export function ProjectsWorkspace() {
   ]
     .map((key) => params.get(key))
     .join("\0");
-  return <ProjectsWorkspaceContent key={binding} />;
+  return <ProjectsWorkspaceContent key={binding} landing={landing} />;
 }
-function ProjectsWorkspaceContent() {
+function ProjectsWorkspaceContent({ landing }: { landing: boolean }) {
+  const Heading = landing ? "h2" : "h1";
   const router = useRouter();
   const params = useSearchParams();
   const cache = useQueryClient();
@@ -123,6 +130,8 @@ function ProjectsWorkspaceContent() {
   const [folderNotice, setFolderNotice] = useState("");
   const returnTo = useRef<HTMLElement | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [startingDraft, setStartingDraft] = useState<ProjectDraft>();
+  const [importScript, setImportScript] = useState(false);
   const [management, setManagement] = useState<{
     project: ProjectSummary;
     action: ProjectAction;
@@ -235,9 +244,12 @@ function ProjectsWorkspaceContent() {
       next.set("cursor", cursor);
       next.set("page", String(nextPage));
     }
-    router.replace(`/projects${next.size ? `?${next}` : ""}`, {
-      scroll: false,
-    });
+    router.replace(
+      `${landing ? "/" : "/projects"}${next.size ? `?${next}` : ""}`,
+      {
+        scroll: false,
+      },
+    );
   }
   function openFolder(id: string | null) {
     setFolderId(id);
@@ -254,7 +266,19 @@ function ProjectsWorkspaceContent() {
     setFolderSelection({ action, folder });
   }
   return (
-    <div id="projects-main" className="flex min-w-0 flex-col gap-7">
+    <div
+      id="projects-main"
+      className="mx-auto flex max-w-[1440px] min-w-0 flex-col gap-5"
+    >
+      {landing && (
+        <ProjectStart
+          onStart={(draft, importing) => {
+            setStartingDraft(draft);
+            setImportScript(importing);
+            setDialogOpen(true);
+          }}
+        />
+      )}
       {scope && (
         <ProjectFolderDialog
           key={`${scope.origin}:${scope.actorId}:${scope.orgId}:${folderSelection?.action}:${folderSelection && "folder" in folderSelection ? folderSelection.folder.id : folderSelection?.action === "move" ? folderSelection.project.id : ""}`}
@@ -290,14 +314,19 @@ function ProjectsWorkspaceContent() {
             const next = new URLSearchParams(params.toString());
             next.delete("copy_source");
             next.delete("copy_job");
-            router.replace(`/projects${next.size ? `?${next}` : ""}`, {
-              scroll: false,
-            });
+            router.replace(
+              `${landing ? "/" : "/projects"}${next.size ? `?${next}` : ""}`,
+              {
+                scroll: false,
+              },
+            );
           }}
           onJobSelected={(id) => {
             const next = new URLSearchParams(params.toString());
             next.set("copy_job", id);
-            router.replace(`/projects?${next}`, { scroll: false });
+            router.replace(`${landing ? "/" : "/projects"}?${next}`, {
+              scroll: false,
+            });
           }}
         />
       ) : copyJob ? (
@@ -336,16 +365,18 @@ function ProjectsWorkspaceContent() {
       )}
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex flex-col gap-2">
-          <h1
+          <Heading
             id="projects-library-heading"
             tabIndex={-1}
-            className="text-2xl font-semibold tracking-tight outline-none"
+            className="text-xl font-semibold tracking-tight outline-none"
           >
-            我的项目
-          </h1>
-          <p className="text-sm leading-6 text-muted-foreground">
-            每一个故事，都从一张画布开始。
-          </p>
+            {landing ? "项目" : "我的项目"}
+          </Heading>
+          {!landing && (
+            <p className="text-sm leading-6 text-muted-foreground">
+              每一个故事，都从一张画布开始。
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {filter !== "deleted" && (
@@ -361,22 +392,36 @@ function ProjectsWorkspaceContent() {
             </Button>
           )}
           <CreateProjectDialog
+            key={startingDraft ? JSON.stringify(startingDraft) : "new-project"}
+            initialDraft={startingDraft}
+            submitLabel={importScript ? "创建并导入剧本" : undefined}
             open={creating}
             onSubmit={(body, key) => creation.mutateAsync({ body, key })}
             onCreated={(id) => {
               void Promise.all([
                 cache.invalidateQueries({ queryKey: PROJECTS_KEY }),
                 cache.invalidateQueries({ queryKey: ["canvas", "projects"] }),
-              ]).then(() => router.push(`/projects/${id}/canvas`));
+              ]).then(() =>
+                router.push(
+                  `/projects/${id}/${importScript ? "script" : "canvas"}`,
+                ),
+              );
             }}
             onOpenChange={(open) => {
               setDialogOpen(open);
+              if (!open) {
+                setStartingDraft(undefined);
+                setImportScript(false);
+              }
               if (!open && params.has("create")) {
                 const next = new URLSearchParams(params.toString());
                 next.delete("create");
-                router.replace(`/projects${next.size ? `?${next}` : ""}`, {
-                  scroll: false,
-                });
+                router.replace(
+                  `${landing ? "/" : "/projects"}${next.size ? `?${next}` : ""}`,
+                  {
+                    scroll: false,
+                  },
+                );
               }
             }}
             presets={
@@ -467,19 +512,23 @@ function ProjectsWorkspaceContent() {
             syncUrl(next, filter, view);
           }}
         >
-          <div className="relative min-w-0 flex-1">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              aria-label="搜索项目"
-              placeholder="按项目名称搜索…"
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              className="rounded-full border-0 bg-muted/60 pl-9 shadow-none"
-            />
-          </div>
+          <Field className="min-w-0 flex-1">
+            <FieldLabel htmlFor="project-search" className="sr-only">
+              搜索项目
+            </FieldLabel>
+            <InputGroup>
+              <InputGroupAddon>
+                <Search aria-hidden />
+              </InputGroupAddon>
+              <InputGroupInput
+                id="project-search"
+                aria-label="搜索项目"
+                placeholder="搜索项目"
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+              />
+            </InputGroup>
+          </Field>
           <Button type="submit" variant="ghost" className="rounded-full">
             搜索
           </Button>
@@ -577,7 +626,7 @@ function ProjectsWorkspaceContent() {
                         const next = new URLSearchParams(params.toString());
                         next.delete("folder_cursor");
                         router.replace(
-                          `/projects${next.size ? `?${next}` : ""}`,
+                          `${landing ? "/" : "/projects"}${next.size ? `?${next}` : ""}`,
                           { scroll: false },
                         );
                       }}
@@ -594,7 +643,10 @@ function ProjectsWorkspaceContent() {
                         setFolderCursor(cursor);
                         const next = new URLSearchParams(params.toString());
                         next.set("folder_cursor", cursor);
-                        router.replace(`/projects?${next}`, { scroll: false });
+                        router.replace(
+                          `${landing ? "/" : "/projects"}?${next}`,
+                          { scroll: false },
+                        );
                       }}
                     >
                       下一页目录
@@ -666,7 +718,9 @@ function ProjectsWorkspaceContent() {
                     const next = new URLSearchParams(params.toString());
                     next.set("copy_source", item.id);
                     next.delete("copy_job");
-                    router.replace(`/projects?${next}`, { scroll: false });
+                    router.replace(`${landing ? "/" : "/projects"}?${next}`, {
+                      scroll: false,
+                    });
                     return;
                   }
                   const project = list.data.items.find(

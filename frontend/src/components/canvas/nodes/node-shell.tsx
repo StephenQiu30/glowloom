@@ -1,5 +1,6 @@
 // Core node positioning, title, resize and connection rails adapted from BeefTV canvas-node.tsx.
 import { memo, useRef, useState, useEffect, type ReactNode } from "react";
+import { cn } from "cn";
 import { Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -122,7 +123,11 @@ export const NodeShell = memo(function NodeShell(props: Props) {
       data-node-selected={selected ? "true" : "false"}
       data-canvas-node-type={node.type}
       data-canvas-parent-id={node.parentId}
-      className={`node-element absolute flex flex-col rounded-2xl ${node.type === "group" ? "bg-foreground/5" : "bg-background shadow-sm"} ${selected ? "outline-2 outline-foreground" : ""}`}
+      className={cn(
+        "node-element absolute flex flex-col rounded-lg",
+        node.type === "group" ? "bg-foreground/5" : "bg-card shadow-sm",
+        selected && "outline-2 outline-foreground",
+      )}
       style={{
         transform: `translate(${node.position.x}px, ${node.position.y}px)`,
         width: node.width,

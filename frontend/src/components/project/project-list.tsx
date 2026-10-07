@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
+  CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
@@ -78,11 +79,7 @@ function projectStyle(project: ProjectListDisplayItem) {
   return "风格化";
 }
 function StatusLabel({ project }: { project: ProjectListDisplayItem }) {
-  return (
-    <Badge variant="secondary" className="border-0 font-normal">
-      {projectStatus(project)}
-    </Badge>
-  );
+  return <Badge variant="secondary">{projectStatus(project)}</Badge>;
 }
 function ProjectName({ project }: { project: ProjectListDisplayItem }) {
   return project.isDeleted ? (
@@ -195,7 +192,7 @@ export function ProjectList({
           }}
           aria-label="项目列表视图"
           size="sm"
-          className="rounded-lg bg-muted/50 p-1"
+          className="rounded-lg p-1"
         >
           <ToggleGroupItem value="cards" aria-label="卡片视图">
             <LayoutGrid aria-hidden="true" className="size-4" />
@@ -218,11 +215,11 @@ export function ProjectList({
           </EmptyHeader>
         </Empty>
       ) : view === "cards" ? (
-        <ul className="grid gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {projects.map((project) => (
             <li key={project.id} className="min-w-0">
-              <Card className="group h-full gap-3 overflow-visible border-0 bg-transparent p-0 shadow-none ring-0">
-                <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl bg-linear-to-br from-muted via-muted/70 to-muted/40 transition-colors group-hover:bg-muted">
+              <Card variant="project" className="group h-full gap-3">
+                <CardContent className="relative flex aspect-[3/4] items-center justify-center overflow-hidden rounded-lg bg-surface-3">
                   {project.coverAssetId && scope && !project.isDeleted ? (
                     <ProjectCoverPreview
                       key={`${scope.actorId}:${scope.orgId}:${project.coverAssetId}:${project.coverUnavailable}`}
@@ -234,17 +231,20 @@ export function ProjectList({
                   ) : (
                     <Clapperboard
                       aria-hidden="true"
-                      className="size-12 text-muted-foreground/35"
+                      className="size-7 text-subtle-foreground"
                       strokeWidth={1.25}
                     />
                   )}
-                  <span className="absolute right-3 bottom-3 rounded-md bg-background/70 px-2 py-1 text-xs text-muted-foreground tabular-nums">
+                  <Badge
+                    variant="muted"
+                    className="absolute bottom-3 left-3 tabular-nums"
+                  >
                     {project.aspectRatio}
-                  </span>
-                </div>
-                <CardHeader className="gap-2 px-0">
+                  </Badge>
+                </CardContent>
+                <CardHeader className="gap-1">
                   <CardTitle>
-                    <h3 className="text-base font-medium break-words">
+                    <h3 className="break-words">
                       <ProjectName project={project} />
                     </h3>
                   </CardTitle>
@@ -252,7 +252,7 @@ export function ProjectList({
                     {project.aspectRatio} · {projectStyle(project)}
                   </CardDescription>
                 </CardHeader>
-                <CardFooter className="mt-auto justify-between gap-3 border-0 bg-transparent px-0 py-0">
+                <CardFooter className="mt-auto flex-wrap justify-between gap-2">
                   <StatusLabel project={project} />
                   {onAction && (
                     <ProjectActions project={project} onAction={onAction} />

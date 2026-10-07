@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lanverse",
+  title: { default: "浮光 · 创作工作台", template: "%s · 浮光" },
   description: "AI 短剧制作平台",
 };
 

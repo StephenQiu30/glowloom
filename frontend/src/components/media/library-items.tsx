@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQuery } from "@tanstack/react-query";
@@ -75,7 +76,7 @@ export function LibraryItems(props: Props) {
       className={
         props.view === "list"
           ? "flex flex-col gap-3"
-          : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          : "grid grid-cols-2 gap-x-5 gap-y-6 lg:grid-cols-3 xl:grid-cols-4"
       }
       aria-label="素材列表"
     >
@@ -87,8 +88,8 @@ export function LibraryItems(props: Props) {
 }
 function ItemCard({ item, ...props }: Props & { item: LibraryItem }) {
   return (
-    <Card size="sm">
-      <CardHeader>
+    <Card size="sm" variant={props.view === "grid" ? "project" : "default"}>
+      <CardHeader className={props.view === "grid" ? "order-2" : undefined}>
         <div className="flex min-w-0 items-start gap-3">
           <Checkbox
             aria-label={`选择 ${item.title}`}
@@ -105,11 +106,28 @@ function ItemCard({ item, ...props }: Props & { item: LibraryItem }) {
             <Star className="size-4 shrink-0" aria-label="已收藏" />
           )}
         </div>
+        <div className="min-w-0 text-sm text-muted-foreground">
+          <p>
+            {kindLabels[item.kind]} · {categoryLabels[item.category]}
+          </p>
+          <p className="break-words">{item.tags.join(" · ")}</p>
+          {item.media && (
+            <p>
+              {formatBytes(item.media.byte_size)}
+              {item.media.duration_ms
+                ? ` · ${(item.media.duration_ms / 1000).toFixed(1)} 秒`
+                : ""}
+            </p>
+          )}
+          <p>修改于 {new Date(item.updated_at).toLocaleString("zh-CN")}</p>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className={props.view === "grid" ? "order-1" : undefined}>
         <div
           className={
-            props.view === "list" ? "flex items-center gap-4" : "space-y-3"
+            props.view === "list"
+              ? "flex items-center gap-4"
+              : "flex flex-col gap-3"
           }
         >
           <ItemThumbnail
@@ -117,24 +135,9 @@ function ItemCard({ item, ...props }: Props & { item: LibraryItem }) {
             item={item}
             compact={props.view === "list"}
           />
-          <div className="min-w-0 text-sm text-muted-foreground">
-            <p>
-              {kindLabels[item.kind]} · {categoryLabels[item.category]}
-            </p>
-            <p className="break-words">{item.tags.join(" · ")}</p>
-            {item.media && (
-              <p>
-                {formatBytes(item.media.byte_size)}
-                {item.media.duration_ms
-                  ? ` · ${(item.media.duration_ms / 1000).toFixed(1)} 秒`
-                  : ""}
-              </p>
-            )}
-            <p>修改于 {new Date(item.updated_at).toLocaleString("zh-CN")}</p>
-          </div>
         </div>
       </CardContent>
-      <CardFooter className="flex flex-wrap gap-2">
+      <CardFooter className="order-3 flex flex-wrap gap-2">
         <Button
           variant="outline"
           disabled={props.disabled}
@@ -214,7 +217,10 @@ function ItemThumbnail({
   return (
     <div
       ref={root}
-      className={`${compact ? "size-16 shrink-0" : "h-36 w-full"} flex items-center justify-center overflow-hidden rounded-lg bg-muted`}
+      className={cn(
+        "flex items-center justify-center overflow-hidden rounded-lg bg-surface-3",
+        compact ? "size-16 shrink-0" : "aspect-square w-full",
+      )}
     >
       {url ? (
         <ImageSource

@@ -140,7 +140,7 @@ export function ProjectScriptWorkspace({
   });
   if (!valid) return <p role="alert">项目 UUID 无效。</p>;
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6">
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-5">
       <h1 className="text-xl font-semibold">
         {project.data ? `${project.data.name} · 剧本` : "项目剧本"}
       </h1>
@@ -186,7 +186,7 @@ export function ProjectScriptWorkspace({
           }}
         />
       )}
-    </main>
+    </section>
   );
 }
 

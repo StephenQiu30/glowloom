@@ -41,9 +41,9 @@ export function ProjectFolderCard({
 }) {
   const cache = useQueryClient();
   return (
-    <Card className="h-full min-w-0 gap-3 border-0 bg-muted/30 shadow-none">
+    <Card variant="folder" className="h-full min-w-0">
       <button
-        className="relative mx-4 flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`打开目录 ${folder.name}`}
         onClick={() => onOpen(folder.id)}
       >
@@ -61,7 +61,7 @@ export function ProjectFolderCard({
           />
         )}
       </button>
-      <CardHeader>
+      <CardHeader className="min-w-0 flex-1 p-0">
         <CardTitle className="min-w-0">
           <button
             className="rounded-sm text-left break-words focus-visible:ring-2 focus-visible:ring-ring"
@@ -74,12 +74,12 @@ export function ProjectFolderCard({
           {folder.project_count} 个项目
           {folder.cover_unavailable && <span className="ml-2">封面不可用</span>}
         </CardDescription>
-        <p className="text-xs break-all text-muted-foreground">
+        <p className="sr-only">
           <span aria-hidden="true">编号 {folder.id.slice(0, 8)}</span>
           <span className="sr-only">目录编号 {folder.id}</span>
         </p>
       </CardHeader>
-      <CardFooter className="justify-end">
+      <CardFooter className="p-0">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -88,7 +88,7 @@ export function ProjectFolderCard({
               data-folder-actions={folder.id}
               aria-label={`${folder.name}的目录操作`}
             >
-              <MoreHorizontal aria-hidden="true" />
+              <MoreHorizontal data-icon="inline-start" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
