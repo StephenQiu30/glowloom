@@ -88,10 +88,10 @@ Redis（会话 · 缓存 · 限流 · 锁 · 实时扇出）      MinIO（媒体
 从仓库根目录执行以下命令，完整应用支持热更新：
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --build --wait
-docker compose -f docker-compose.dev.yml ps
+docker compose up -d --build --wait
+docker compose ps
 # 停止应用，保留开发缓存与本机业务数据
-docker compose -f docker-compose.dev.yml down
+docker compose down
 ```
 
 访问 <http://127.0.0.1:3200>；API 为 <http://127.0.0.1:8080>。Next.js 使用默认 Turbopack Fast Refresh，Go 使用现有 `--role=all` 合并 API、flow/media Worker 和 Relay，由一个 Air 轮询源码、自动编译并优雅重启。宿主源码以只读挂载进入容器，前端 Linux 依赖与 `.next` 使用独立数据卷，Go 缓存保存在后端容器内。依赖锁文件改变后重新构建；前端依赖卷须按 [OPS-01 §6](workspace/content/operation/01-环境与部署.md#6-本地开发环境) 更新。前端只注入内部 API 地址与开发配置，后端注入其 Go 角色需要的变量，根 `.env` 不进入镜像或容器文件系统。
@@ -120,4 +120,4 @@ temporal operator cluster health --address 127.0.0.1:7233
 "$(brew --prefix kafka)/bin/kafka-broker-api-versions" --bootstrap-server 127.0.0.1:9092
 ```
 
-直接运行时，各进程在独立终端执行上表命令。前置工具：Go 1.26、Node.js 24 + Corepack / pnpm、FFmpeg / ffprobe；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。后续容器化部署保留两份独立 Compose 文件：`docker-compose.yml` 定义应用，`docker-compose-env.yml` 完整定义 PostgreSQL、Redis、Kafka、MinIO、Temporal 及管理界面。本机开发使用服务管理器启动的本机依赖，不通过 Compose 启动环境。详细步骤见 [OPS-01](workspace/content/operation/01-环境与部署.md#6-本地开发环境)。
+直接运行时，各进程在独立终端执行上表命令。前置工具：Go 1.26、Node.js 24 + Corepack / pnpm、FFmpeg / ffprobe；Go 门禁工具 `goimports`、`golangci-lint`（v2）、`govulncheck` 通过 `go install` 安装。仓库只保留三个独立 Compose 入口：`docker-compose.yml` 运行本机热更新应用，`docker-compose-env.yml` 定义 PostgreSQL、Redis、Kafka、MinIO、Temporal 及管理界面，`docker-compose-prod.yml` 保留生产应用配置。本机开发使用服务管理器启动的本机依赖，不通过 Compose 启动环境。详细步骤见 [OPS-01](workspace/content/operation/01-环境与部署.md#6-本地开发环境)。

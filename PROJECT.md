@@ -28,9 +28,9 @@
 ```text
 Lanverse/
   .env.example              本机进程配置样例；实际 .env 不入库
-  docker-compose.yml        Go 应用服务（backend-api、backend-worker、backend-worker-media、backend-relay）及维护角色
-  docker-compose.dev.yml    本机热更新应用栈；复用现有宿主中间件
-  docker-compose-env.yml    完整部署依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
+  docker-compose.yml        默认本机热更新应用；Next.js 与 Go 全部角色
+  docker-compose-env.yml    依赖环境（PostgreSQL、Redis、Kafka、MinIO、Temporal）
+  docker-compose-prod.yml   生产应用配置；保留独立 Go 角色与维护入口
   backend/          Go：API（Gin）、领域模块、Temporal 工作流与 Worker、Outbox relay 与 Kafka 消费者、媒体处理
   frontend/         Next.js 工作台；未决能力见 BACKLOG
   workspace/        Nextra 本地文档站配置、页面入口与依赖

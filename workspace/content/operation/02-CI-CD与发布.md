@@ -166,5 +166,5 @@ CI 直接运行格式、静态检查、测试、生成一致性和镜像构建�
 
 | #     | 问题                                     | 默认处理                                                               |
 | ----- | ---------------------------------------- | ---------------------------------------------------------------------- |
-| CD-Q1 | 部署执行方式（SSH + Compose / 部署代理） | 默认 GitHub Actions 通过堡垒机 SSH 执行 `docker compose pull && up -d` |
+| CD-Q1 | 部署执行方式（SSH + Compose / 部署代理） | 默认 GitHub Actions 通过堡垒机 SSH 执行 `docker compose -f docker-compose-prod.yml pull && docker compose -f docker-compose-prod.yml up -d` |
 | CD-Q2 | 镜像仓库                                 | 默认火山引擎镜像仓库（与生产同地域）                                   |
