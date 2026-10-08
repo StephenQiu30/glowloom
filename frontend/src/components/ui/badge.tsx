@@ -8,6 +8,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
+        notification: "rounded-full bg-warning text-background",
         warning: "bg-warning/10 text-warning",
         muted: "bg-surface-2 text-muted-foreground",
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",

@@ -1,9 +1,10 @@
 "use client";
-import { cn } from "cn";
 
-import Link from "next/link";
+import { Brand } from "@/components/layout/brand";
+import { demoNotice } from "@/components/feedback/demo-notice";
+import { Choice } from "@/components/forms/choice";
 import { useState } from "react";
-import { Check, TriangleAlert, Waves } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,16 +16,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Brand, demoNotice } from "./shared";
 
 const colors = [
   ["background", "#0A0A0A", "画布 / 页面"],
@@ -40,19 +32,24 @@ const colors = [
   ["warning", "#FFB224", "生成中 / 过期"],
   ["destructive", "#E5484D", "失败 / 危险"],
 ];
+
 export function DesignSystemPage() {
   const [view, setView] = useState("故事板");
+  const [ratio, setRatio] = useState("画幅 9:16");
   return (
-    <main className="mx-auto flex w-full max-w-[1440px] min-w-0 flex-col gap-10 px-6 py-12 lg:px-20 lg:py-16">
+    <main className="mx-auto flex w-full max-w-[1440px] min-w-0 flex-col gap-14 px-6 py-12 lg:px-20 lg:py-16">
       <header>
         <Brand wordmark />
-        <h1 className="mt-3 text-[40px] font-semibold">暗色设计语言</h1>
+        <h1 className="mt-3 text-[40px] leading-[48px] font-semibold">
+          暗色设计语言
+        </h1>
         <div className="mt-3 flex flex-wrap justify-between gap-5">
-          <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
+          <p className="max-w-[640px] text-sm leading-6 text-muted-foreground">
             默认暗色，遵循 Vercel / Next.js
-            的黑白质感：主操作用前景白，选中用前景白与更深背景。不用蓝紫渐变、内容大面积描边。留白与对齐分组，不制造边框；控件保留描边、轻阴影与焦点环。
+            的黑白质感：主操作用前景白，选中用前景白与更深背景。不用蓝紫强调。内容以表面层级、留白与对齐分组，不画闭合边框；控件保留描边、轻阴影与焦点环。画布沿用同一套
+            token，节点与浮层按职责分组。
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-end gap-2 pb-1">
             {["Geist Sans / Mono", "shadcn/ui · Radix", "Lucide"].map(
               (value) => (
                 <Badge key={value} variant="secondary">
@@ -74,10 +71,16 @@ export function DesignSystemPage() {
           {colors.map(([token, hex, description]) => (
             <div key={token}>
               <div
-                className="mb-2 h-20 rounded-lg"
+                className="mb-2 h-[88px] rounded-lg"
                 style={{ backgroundColor: `var(--${token})` }}
               />
-              <p className="text-xs">{token}</p>
+              <p className="text-xs">
+                {token === "border"
+                  ? "control-border"
+                  : token === "primary"
+                    ? "foreground / primary"
+                    : token}
+              </p>
               <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                 {hex} · {description}
               </p>
@@ -85,12 +88,12 @@ export function DesignSystemPage() {
           ))}
         </div>
       </section>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2 [&_[data-slot=card-title]]:text-lg [&_[data-slot=card]]:[--card-spacing:--spacing(6)]">
         <Card variant="panel">
           <CardHeader>
             <CardTitle>字体层级</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent className="flex flex-col gap-3">
             {[
               [32, 600, "雾港来信"],
               [20, 600, "第 3 集 · 分镜"],
@@ -192,7 +195,13 @@ export function DesignSystemPage() {
                 <ToggleGroupItem value="镜头表">镜头表</ToggleGroupItem>
                 <ToggleGroupItem value="故事板">故事板</ToggleGroupItem>
               </ToggleGroup>
-              <Field orientation="horizontal">
+              <Choice
+                label="规范画幅"
+                value={ratio}
+                onChange={setRatio}
+                options={["画幅 9:16", "画幅 16:9"]}
+              />
+              <Field orientation="horizontal" className="w-auto">
                 <Switch id="guide-switch" defaultChecked />
                 <FieldLabel htmlFor="guide-switch">自动适配画幅</FieldLabel>
               </Field>
@@ -233,160 +242,6 @@ export function DesignSystemPage() {
           </CardContent>
         </Card>
       </div>
-      <Button asChild variant="link" className="self-start">
-        <Link href="/">返回首页</Link>
-      </Button>
-    </main>
-  );
-}
-function LayoutDiagram({ collapsed = false }: { collapsed?: boolean }) {
-  return (
-    <div className="flex h-[380px] overflow-hidden rounded-lg bg-background">
-      <div className="flex w-[72px] shrink-0 flex-col items-center gap-5 bg-surface-1 py-4">
-        <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Waves className="size-4" />
-        </span>
-        {["项目", "素材", "任务", "管理"].map((label) => (
-          <span className="text-[10px] text-muted-foreground" key={label}>
-            {label}
-          </span>
-        ))}
-      </div>
-      {!collapsed ? (
-        <div className="hidden w-[220px] shrink-0 flex-col gap-4 bg-surface-1 px-4 py-5 text-xs sm:flex">
-          <strong>雾港来信</strong>
-          {[
-            "概览",
-            "剧本",
-            "设定集",
-            "第 3 集",
-            "资产定稿",
-            "分镜",
-            "配音",
-            "画布",
-          ].map((label) => (
-            <span
-              key={label}
-              className={cn(
-                label === "分镜"
-                  ? "rounded-md bg-surface-3 p-2"
-                  : "p-2 text-muted-foreground",
-              )}
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-medium">页面内容 24px</h3>
-            <p className="mt-2 text-xs text-muted-foreground">一页一主标题</p>
-          </div>
-          <Button size="sm">主操作</Button>
-        </div>
-        <span className="m-auto text-xs text-muted-foreground">
-          内容 max-width 1200–1440px
-        </span>
-      </div>
-    </div>
-  );
-}
-export function LayoutGuidePage() {
-  return (
-    <main className="mx-auto flex w-full max-w-[1440px] min-w-0 flex-col gap-12 px-6 py-16 lg:px-20">
-      <header>
-        <p className="font-mono text-xs text-muted-foreground">
-          LAYOUT · v2 · 布局规范
-        </p>
-        <h1 className="mt-3 text-[40px] font-semibold">页框与导航</h1>
-        <p className="mt-4 max-w-4xl text-sm leading-7 text-muted-foreground">
-          全站统一使用左侧主导航，无顶部栏。主导航宽 72px
-          保持全局入口；进入有上下文的页面后，右侧展开 220px
-          的二级导航。分清内容和导航的职责，内容从标题开始。
-        </p>
-      </header>
-      <section>
-        <h2 className="mb-5 text-lg font-medium">页面结构</h2>
-        <Card variant="panel">
-          <CardContent>
-            <LayoutDiagram />
-            <p className="mt-4 text-xs leading-6 text-muted-foreground">
-              ① 主导航 72px：品牌与全局创建、项目、素材、任务、管理。② 二级导航
-              220px：项目或管理上下文。③
-              内容区：页面主标题、工具栏、主操作与页面内容。
-            </p>
-          </CardContent>
-        </Card>
-      </section>
-      <section>
-        <h2 className="mb-5 text-lg font-medium">每个页面的侧栏组合</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>页面</TableHead>
-              <TableHead>主导航</TableHead>
-              <TableHead>二级导航</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {[
-              ["首页与项目库", "项目", "无"],
-              ["素材库", "素材", "个人 / 项目与文件夹"],
-              ["概览、设定集、分镜、配音", "项目", "项目导航"],
-              ["画布", "无常驻", "浮动工具栏与面包屑"],
-              ["镜头详情", "项目", "无"],
-              ["管理页面", "管理", "管理导航"],
-              ["登录、注册、改密", "无", "无"],
-            ].map((row) => (
-              <TableRow key={row[0]}>
-                {row.map((value, index) => (
-                  <TableCell key={index} className="py-4">
-                    {value}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </section>
-      <section>
-        <h2 className="mb-5 text-lg font-medium">收起侧栏</h2>
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Card variant="panel">
-            <CardHeader>
-              <CardTitle>展开 · 默认</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LayoutDiagram />
-              <p className="mt-4 text-xs text-muted-foreground">
-                主轨 72px，二级展开 220px。
-              </p>
-            </CardContent>
-          </Card>
-          <Card variant="panel">
-            <CardHeader>
-              <CardTitle>收起</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LayoutDiagram collapsed />
-              <p className="mt-4 text-xs text-muted-foreground">
-                主轨始终可见；保留上下文并扩大内容区。
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-      <section>
-        <h2 className="mb-4 text-lg font-medium">窄屏</h2>
-        <p className="text-sm leading-7 text-muted-foreground">
-          窄屏下主导航和上下文导航收入可关闭抽屉。内容区卡片按宽度重排，保留主操作与当前页面标题。画布保持独立可滚动视口。
-        </p>
-      </section>
-      <Button asChild variant="link" className="self-start">
-        <Link href="/">返回首页</Link>
-      </Button>
     </main>
   );
 }

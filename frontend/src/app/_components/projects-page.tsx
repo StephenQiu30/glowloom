@@ -1,6 +1,12 @@
 "use client";
-import { cn } from "cn";
 
+import { demoNotice } from "@/components/feedback/demo-notice";
+import { ProductShell } from "@/components/layout/product-shell";
+import { Choice } from "@/components/forms/choice";
+import { SearchInput } from "@/components/forms/search-input";
+import { Placeholder } from "@/components/media/placeholder";
+import { MoreMenu } from "@/components/controls/more-menu";
+import { cn } from "cn";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ArrowRight, Grid2X2, List, Upload } from "lucide-react";
@@ -22,32 +28,26 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty";
-import {
-  ProductShell,
-  SearchInput,
-  Choice,
-  MoreMenu,
-  Placeholder,
-  demoNotice,
-} from "./shared";
-import { screenHref } from "./screens";
+import { screenHref } from "@/components/layout/routes";
+
 const initialProjects = [
   { name: "雾港来信", style: "写实电影感", ratio: "9:16" },
   { name: "第七个夏天", style: "日系胶片", ratio: "9:16" },
-  { name: "城中雪", style: "黑白水墨", ratio: "9:16" },
+  { name: "镜中客", style: "国风水墨", ratio: "9:16" },
   { name: "霓虹追缉", style: "赛博霓虹", ratio: "16:9" },
-  { name: "小满", style: "三维动画", ratio: "9:16" },
-  { name: "未命名项目", style: "写实电影感", ratio: "16:9" },
+  { name: "小满", style: "温暖插画", ratio: "9:16" },
+  { name: "未命名项目", style: "未设风格", ratio: "16:9" },
 ];
-export function HomePage() {
+
+export function ProjectsPage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [ratio, setRatio] = useState("9:16");
-  const [style, setStyle] = useState("写实");
+  const [style, setStyle] = useState("写实电影感");
   const [script, setScript] = useState("");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("最近更新");
+  const [sort, setSort] = useState("最近打开");
   const [view, setView] = useState("grid");
   const [projects, setProjects] = useState(initialProjects);
   const visible = projects.filter((project) => project.name.includes(search));
@@ -59,13 +59,13 @@ export function HomePage() {
   }
   return (
     <ProductShell screen="home" fullBleed>
-      <div className="mx-auto max-w-[1440px] px-5 pb-16 md:px-12 lg:px-16">
-        <section className="mx-auto max-w-[760px] pt-12 pb-[72px]">
-          <h1 className="text-center text-[32px] font-semibold tracking-tight">
+      <div className="mx-auto max-w-[1440px] px-5 pb-16 md:px-12 lg:px-[68px]">
+        <section className="mx-auto max-w-[760px] pt-11 pb-16">
+          <h1 className="text-center text-[32px] leading-[48px] font-semibold tracking-tight md:text-[40px]">
             从一份剧本开始
           </h1>
-          <p className="mt-3 mb-8 text-center text-sm text-muted-foreground">
-            导入文本或剧本，自动分集、抽取设定，后续在画布里继续生产。
+          <p className="mt-2 mb-7 text-center text-sm text-muted-foreground">
+            导入本地剧本，自动分集、抽取设定，再进入画布逐镜生产。
           </p>
           <Card variant="composer">
             <CardContent className="p-4">
@@ -74,7 +74,7 @@ export function HomePage() {
                   <FieldLabel htmlFor="project-name" className="sr-only">
                     项目名称
                   </FieldLabel>
-                  <InputGroup variant="quiet">
+                  <InputGroup variant="quiet" className="h-10">
                     <InputGroupInput
                       id="project-name"
                       placeholder="给新项目起个名字"
@@ -92,7 +92,7 @@ export function HomePage() {
                     ref={inputRef}
                     id="project-script"
                     type="file"
-                    accept=".txt,.md,.docx,.pdf"
+                    accept=".txt,.md,.docx"
                     className="sr-only"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
@@ -116,25 +116,29 @@ export function HomePage() {
                     className="h-[76px] w-full justify-start gap-4 px-4"
                     onClick={() => inputRef.current?.click()}
                   >
-                    <Upload data-icon="inline-start" />
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-3">
+                      <Upload />
+                    </span>
                     <span className="text-left">
                       <span className="block">
-                        {script || "导入剧本文件，或从本地拖拽"}
+                        {script || "拖入剧本文件，或从本地选择"}
                       </span>
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        .txt · .md · .docx，文字内容将自动分集
+                        .txt · .md · .docx，文件只保存在本机
                       </span>
                     </span>
                   </Button>
                 </Field>
               </FieldGroup>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
                 <ToggleGroup
                   type="single"
                   value={ratio}
                   onValueChange={(value) => value && setRatio(value)}
                   aria-label="项目画幅"
                   size="sm"
+                  spacing={0}
+                  className="bg-background p-1"
                 >
                   {["9:16", "16:9", "1:1"].map((value) => (
                     <ToggleGroupItem key={value} value={value}>
@@ -146,13 +150,20 @@ export function HomePage() {
                   value={style}
                   onChange={setStyle}
                   label="项目风格"
-                  options={["写实", "动漫", "国风", "胶片"]}
+                  prefix="风格："
+                  options={[
+                    "写实电影感",
+                    "日系胶片",
+                    "国风水墨",
+                    "赛博霓虹",
+                    "温暖插画",
+                  ]}
                 />
+                <Button variant="ghost" onClick={create}>
+                  空白项目
+                </Button>
                 <div className="ml-auto flex gap-2">
-                  <Button variant="ghost" onClick={create}>
-                    空白项目
-                  </Button>
-                  <Button onClick={create}>
+                  <Button size="pill" onClick={create}>
                     创建项目
                     <ArrowRight data-icon="inline-end" />
                   </Button>
@@ -162,26 +173,28 @@ export function HomePage() {
           </Card>
         </section>
         <section>
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-xl font-semibold">项目</h2>
             <div className="flex flex-wrap items-center gap-2">
               <SearchInput
                 value={search}
                 onChange={setSearch}
                 placeholder="搜索项目"
-                className="w-52"
+                className="w-[264px]"
               />
               <Choice
                 value={sort}
                 onChange={setSort}
                 label="项目排序"
-                options={["最近更新", "项目名称"]}
+                options={["最近打开", "项目名称"]}
               />
               <ToggleGroup
                 type="single"
                 value={view}
                 onValueChange={(value) => value && setView(value)}
                 aria-label="项目视图"
+                spacing={0}
+                className="bg-surface-1 p-1"
               >
                 <ToggleGroupItem value="grid" aria-label="网格视图">
                   <Grid2X2 />
@@ -205,6 +218,7 @@ export function HomePage() {
                   variant="project"
                   key={project.name}
                   className={cn(
+                    "group/project",
                     view === "list" ? "flex-row items-center gap-4" : "",
                   )}
                 >
@@ -214,37 +228,48 @@ export function HomePage() {
                     className={cn(view === "list" ? "w-20 shrink-0" : "")}
                   >
                     <Placeholder
-                      className="aspect-[3/4]"
-                      label={project.ratio}
+                      className="aspect-[3/4] rounded-xl"
+                      label={
+                        project.name === "未命名项目"
+                          ? undefined
+                          : project.ratio
+                      }
+                      labelStyle="badge"
+                      surface="card"
                       showIcon={project.name === "未命名项目"}
                     />
                   </Link>
-                  <CardHeader className="mt-3 flex-1">
-                    <div className="flex items-center justify-between gap-1">
+                  <CardHeader className="mt-2 flex-1">
+                    <div className="relative flex items-center justify-between gap-1">
                       <CardTitle>
                         <Link href={screenHref("analytics")}>
                           {project.name}
                         </Link>
                       </CardTitle>
-                      <MoreMenu
-                        label={`${project.name}更多操作`}
-                        items={[
-                          {
-                            label: "打开画布",
-                            action: () => router.push(screenHref("canvas")),
-                          },
-                          {
-                            label: "复制项目",
-                            action: () => {
-                              setProjects((current) => [
-                                ...current,
-                                { ...project, name: project.name + " · 副本" },
-                              ]);
-                              demoNotice("项目已复制");
+                      <div className="opacity-0 group-focus-within/project:opacity-100 group-hover/project:opacity-100">
+                        <MoreMenu
+                          label={`${project.name}更多操作`}
+                          items={[
+                            {
+                              label: "打开画布",
+                              action: () => router.push(screenHref("canvas")),
                             },
-                          },
-                        ]}
-                      />
+                            {
+                              label: "复制项目",
+                              action: () => {
+                                setProjects((current) => [
+                                  ...current,
+                                  {
+                                    ...project,
+                                    name: project.name + " · 副本",
+                                  },
+                                ]);
+                                demoNotice("项目已复制");
+                              },
+                            },
+                          ]}
+                        />
+                      </div>
                     </div>
                     <CardDescription>
                       {project.ratio} · {project.style}

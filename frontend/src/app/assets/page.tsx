@@ -1,4 +1,4 @@
-import { AssetsPage } from "@/components/fuguang/library-pages";
+import { AssetsPage } from "./_components/assets-page";
 
 export const metadata = { title: "素材库" };
 export default function Page() {

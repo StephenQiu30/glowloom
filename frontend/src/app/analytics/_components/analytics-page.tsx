@@ -1,5 +1,9 @@
 "use client";
 
+import { ProductShell } from "@/components/layout/product-shell";
+import { PageHeading } from "@/components/layout/page-heading";
+import { Choice } from "@/components/forms/choice";
+import { demoNotice } from "@/components/feedback/demo-notice";
 import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
@@ -20,10 +24,10 @@ import {
 } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Progress } from "@/components/ui/progress";
+import { screenHref } from "@/components/layout/routes";
 
-import { ProductShell, PageHeading, Choice, demoNotice } from "./shared";
-import { screenHref } from "./screens";
 const bars = [35, 46, 32, 61, 70, 52, 42, 80, 94, 74, 68, 86, 75, 61];
+
 const progress = [
   [100, 100, 100, 100, 100, 100],
   [100, 100, 100, 100, 92, 100],
@@ -33,10 +37,15 @@ const progress = [
   [100, 0, 2, 0, 0, 0],
   [58, 0, 0, 0, 2, 0],
 ];
+
 export function AnalyticsPage() {
   const [range, setRange] = useState("14 天");
   const [episode, setEpisode] = useState("分集：全部");
-  const shownBars = range === "7 天" ? bars.slice(-7) : bars;
+  const datedBars = bars.map((tasks, index) => ({
+    tasks,
+    date: index < 7 ? `9/${24 + index}` : `10/${index - 6}`,
+  }));
+  const shownBars = range === "7 天" ? datedBars.slice(-7) : datedBars;
   return (
     <ProductShell screen="analytics" contextual>
       <PageHeading
@@ -83,7 +92,11 @@ export function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               {index === 0 ? (
-                <Progress value={60.5} aria-label="镜头完成进度" />
+                <Progress
+                  value={60.5}
+                  variant="chart"
+                  aria-label="镜头完成进度"
+                />
               ) : (
                 <p className="text-xs text-muted-foreground">
                   {index === 1
@@ -97,7 +110,7 @@ export function AnalyticsPage() {
           </Card>
         ))}
       </div>
-      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <Card variant="panel">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -116,18 +129,11 @@ export function AnalyticsPage() {
               config={{ tasks: { label: "生成任务", color: "var(--chart-1)" } }}
               className="h-[200px] w-full"
             >
-              <BarChart
-                accessibilityLayer
-                data={shownBars.map((tasks, index) => ({
-                  date: `${index + 1} 日`,
-                  tasks,
-                }))}
-                barCategoryGap={2}
-              >
+              <BarChart accessibilityLayer data={shownBars} barCategoryGap={2}>
                 <CartesianGrid vertical={false} />
                 <YAxis
-                  ticks={[0, 60, 120]}
-                  domain={[0, 120]}
+                  ticks={[0, 50, 100]}
+                  domain={[0, 100]}
                   tickLine={false}
                   axisLine={false}
                   width={30}
@@ -136,7 +142,12 @@ export function AnalyticsPage() {
                   dataKey="date"
                   tickLine={false}
                   axisLine={false}
-                  interval={Math.floor(shownBars.length / 3)}
+                  ticks={
+                    shownBars.length === 14
+                      ? ["9/24", "9/30", "10/7"]
+                      : undefined
+                  }
+                  minTickGap={20}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar
@@ -271,10 +282,11 @@ export function AnalyticsPage() {
     </ProductShell>
   );
 }
+
 function ProgressRow({ index, values }: { index: number; values: number[] }) {
   return (
     <>
-      <span className="py-2 text-muted-foreground">第 {index + 1} 集</span>
+      <span className="py-1.5 text-muted-foreground">第 {index + 1} 集</span>
       {values.map((value, col) => (
         <Link
           key={col}

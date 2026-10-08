@@ -1,6 +1,8 @@
 "use client";
-import { cn } from "cn";
 
+import { Brand } from "@/components/layout/brand";
+import { demoNotice } from "@/components/feedback/demo-notice";
+import { cn } from "cn";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -30,8 +32,7 @@ import {
 } from "@/components/ui/input-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Brand, demoNotice } from "./shared";
-import { screenHref } from "./screens";
+import { screenHref } from "@/components/layout/routes";
 
 function PasswordInput({
   id,
@@ -66,13 +67,16 @@ function PasswordInput({
     </InputGroup>
   );
 }
+
 function PasswordRules({ value }: { value: string }) {
   return (
     <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
       {[
         [
           value.length >= 10,
-          "至少 10 位（还差 " + Math.max(0, 10 - value.length) + " 位）",
+          value.length >= 10
+            ? "至少 10 位"
+            : "至少 10 位（还差 " + (10 - value.length) + " 位）",
         ],
         [/[a-zA-Z]/.test(value) && /\d/.test(value), "同时包含字母与数字"],
       ].map(([valid, text]) => (
@@ -84,11 +88,12 @@ function PasswordRules({ value }: { value: string }) {
     </ul>
   );
 }
-function AuthArtwork() {
+
+function AuthArtwork({ register }: { register: boolean }) {
   return (
     <aside className="relative hidden min-h-[900px] overflow-hidden bg-auth-art lg:block">
       <div
-        className="absolute top-[220px] left-[7%] h-[370px] w-[720px]"
+        className="absolute top-[216px] left-[7%] h-[370px] w-[720px]"
         aria-hidden="true"
       >
         <svg className="absolute inset-0 size-full" viewBox="0 0 720 370">
@@ -120,13 +125,17 @@ function AuthArtwork() {
           </p>
           <div className="mt-2 h-28 rounded-lg bg-surface-1" />
         </div>
-        <div className="absolute top-0 left-80 w-56">
+        <div className="absolute top-0 left-[318px] w-[228px]">
           <div className="mb-2 flex justify-between text-[10px] text-muted-foreground">
             <span>镜头 S03-02-04</span>
             <Badge variant="warning">生成中</Badge>
           </div>
-          <div className="rounded-xl border border-primary bg-surface-2 p-1 shadow-2xl">
-            <div className="h-72 rounded-lg bg-surface-3" />
+          <div className="rounded-xl border border-primary bg-surface-1 p-2 shadow-2xl">
+            <div className="relative h-[280px] rounded-lg bg-surface-3">
+              <div className="absolute right-1 bottom-1 left-1 h-1 rounded-full bg-surface-4">
+                <div className="h-full w-3/5 rounded-full bg-primary" />
+              </div>
+            </div>
             <p className="px-1 py-2 text-[10px] text-muted-foreground">
               中景推进，林舟在雨中抬头回望。
             </p>
@@ -141,13 +150,16 @@ function AuthArtwork() {
           静影沉璧。
         </p>
         <p className="mt-5 max-w-lg text-sm leading-7 text-muted-foreground">
-          从剧本到成片的无限画布。每一个镜头、角色与声音，都在同一张画布上生长。
+          {register
+            ? "一帧成诗，万帧光影。创建账号，把故事放进画布。"
+            : "从剧本到成片的无限画布。每一个镜头、角色与声音，都在同一张画布上生长。"}
         </p>
       </div>
     </aside>
   );
 }
-export function AuthPage({
+
+export function AuthView({
   mode,
 }: {
   mode: "login" | "register" | "reset-password";
@@ -159,7 +171,7 @@ export function AuthPage({
   const [confirmation, setConfirmation] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(false);
   const reset = mode === "reset-password";
   const register = mode === "register";
   const validPassword =
@@ -181,7 +193,7 @@ export function AuthPage({
         )
       : Boolean(username.trim() && password);
   return (
-    <main className="relative min-h-svh">
+    <main className="relative min-h-svh [&_[data-slot=field-group]]:gap-4">
       <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-6 py-7 lg:px-10">
         <Brand wordmark />
         <Button variant={reset ? "ghost" : "outline"} size="sm" asChild>
@@ -197,12 +209,16 @@ export function AuthPage({
             : "grid min-h-svh lg:grid-cols-[55%_45%]",
         )}
       >
-        {!reset ? <AuthArtwork /> : null}
+        {!reset ? <AuthArtwork register={register} /> : null}
         <div
           className={cn(
             reset
               ? "w-full max-w-[400px]"
               : "flex min-h-svh items-center justify-center px-6 py-28",
+            !reset &&
+              (register
+                ? "lg:items-start lg:pt-[164px]"
+                : "lg:items-start lg:pt-[230px]"),
           )}
         >
           <form
@@ -227,7 +243,7 @@ export function AuthPage({
             }}
           >
             <div className={cn(reset ? "mb-2 text-center" : "mb-1")}>
-              <h1 className="text-[28px] font-semibold tracking-tight">
+              <h1 className="text-[28px] leading-9 font-semibold tracking-tight">
                 {reset ? "设置新密码" : register ? "创建账号" : "欢迎回来"}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -305,6 +321,24 @@ export function AuthPage({
                   onChange={setPassword}
                   invalid={submitted && !password}
                 />
+                {register ? (
+                  <div
+                    className="grid grid-cols-3 gap-1"
+                    aria-label={
+                      validPassword ? "密码强度：满足规则" : "密码强度：待完善"
+                    }
+                  >
+                    {[0, 1, 2].map((part) => (
+                      <span
+                        key={part}
+                        className={cn(
+                          "h-0.5 rounded-full",
+                          validPassword ? "bg-primary" : "bg-surface-4",
+                        )}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 {register || reset ? <PasswordRules value={password} /> : null}
                 {reset ? (
                   <p className="text-xs text-muted-foreground">
@@ -335,7 +369,9 @@ export function AuthPage({
                     checked={remember}
                     onCheckedChange={(value) => setRemember(value === true)}
                   />
-                  <FieldLabel htmlFor="remember">在此设备保持登录</FieldLabel>
+                  <FieldLabel htmlFor="remember" className="text-sm">
+                    在此设备保持登录
+                  </FieldLabel>
                 </Field>
               )}
             </FieldGroup>

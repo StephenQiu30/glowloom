@@ -1,5 +1,9 @@
 "use client";
 
+import { ProductShell } from "@/components/layout/product-shell";
+import { PageHeading } from "@/components/layout/page-heading";
+import { demoNotice } from "@/components/feedback/demo-notice";
+import { LocalDialog } from "@/components/controls/local-dialog";
 import { useState } from "react";
 import Link from "next/link";
 import { Monitor, UserRound } from "lucide-react";
@@ -23,8 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ProductShell, PageHeading, demoNotice, LocalDialog } from "./shared";
-import { screenHref } from "./screens";
+import { screenHref } from "@/components/layout/routes";
 
 export function AccountPage() {
   const [name, setName] = useState("陈导");
@@ -37,7 +40,7 @@ export function AccountPage() {
   return (
     <ProductShell screen="account" contextual>
       <PageHeading title="账号设置" />
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-5 [&_[data-slot=card-footer]]:py-4 [&_[data-slot=card-title]]:text-lg [&_[data-slot=card]]:[--card-spacing:--spacing(5)]">
         <Card variant="panel" id="profile">
           <CardHeader>
             <CardTitle>个人资料</CardTitle>
@@ -47,8 +50,10 @@ export function AccountPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <div className="flex items-center gap-4">
-              <Avatar className="size-16">
-                <AvatarFallback>{name[0] || "陈"}</AvatarFallback>
+              <Avatar className="size-16 text-2xl">
+                <AvatarFallback className="text-2xl">
+                  {name[0] || "陈"}
+                </AvatarFallback>
               </Avatar>
               <Button variant="outline" onClick={() => setAvatar(true)}>
                 更换头像
@@ -71,7 +76,10 @@ export function AccountPage() {
                   <FieldDescription>创建后不可更改</FieldDescription>
                 </Field>
               </div>
-              <Field orientation="horizontal" className="w-auto">
+              <Field
+                orientation="horizontal"
+                className="w-auto [&_[data-slot=field-label]]:flex-none"
+              >
                 <FieldLabel>角色</FieldLabel>
                 <Badge variant="secondary">制作者</Badge>
               </Field>
@@ -96,8 +104,8 @@ export function AccountPage() {
               会话空闲 12 小时或满 7 天后自动失效。
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 rounded-md bg-surface-2 p-3">
+          <CardContent className="flex flex-col gap-0">
+            <div className="flex items-center gap-3 rounded-md bg-surface-2 px-3 py-2">
               <Monitor className="size-4" />
               <div className="flex-1 text-sm">
                 macOS · Chrome
@@ -106,7 +114,7 @@ export function AccountPage() {
               <Badge>本机</Badge>
             </div>
             {remote ? (
-              <div className="flex items-center gap-3 p-3">
+              <div className="flex items-center gap-3 px-3 py-2">
                 <Monitor className="size-4" />
                 <div className="flex-1 text-sm">
                   Windows · Edge
@@ -171,6 +179,7 @@ export function AccountPage() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   rows={3}
+                  className="min-h-[84px]"
                 />
               </Field>
             </FieldGroup>
@@ -192,12 +201,6 @@ export function AccountPage() {
             </Button>
           </CardContent>
         </Card>
-        <details id="licenses" className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer">模型来源</summary>
-          <p className="py-3">
-            演示模型配置来自 Figma 占位内容，未连接供应商。
-          </p>
-        </details>
       </div>
       <LocalDialog
         open={avatar}

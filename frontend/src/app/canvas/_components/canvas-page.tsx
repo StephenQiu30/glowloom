@@ -1,5 +1,13 @@
 "use client";
 
+import { IconButton } from "@/components/controls/icon-button";
+import { Brand } from "@/components/layout/brand";
+import { demoNotice } from "@/components/feedback/demo-notice";
+import { shotFixtures } from "@/components/storyboard/mock-shots";
+import { Placeholder } from "@/components/media/placeholder";
+import { AudioWaveform } from "@/components/media/audio-waveform";
+import { Choice } from "@/components/forms/choice";
+import { LocalDialog } from "@/components/controls/local-dialog";
 import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -8,7 +16,9 @@ import {
   Bell,
   Check,
   Clapperboard,
+  CircleDashed,
   Download,
+  FileText,
   Folder,
   Grid2X2,
   Hand,
@@ -17,7 +27,10 @@ import {
   Minus,
   MousePointer2,
   Music2,
+  LockKeyhole,
   Plus,
+  Play,
+  Pause,
   Sparkles,
   Type,
   UserRound,
@@ -39,16 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Brand,
-  Choice,
-  IconButton,
-  Placeholder,
-  demoNotice,
-  LocalDialog,
-} from "./shared";
-import { screenHref } from "./screens";
-import { shotFixtures } from "./storyboard-pages";
+import { screenHref } from "@/components/layout/routes";
 
 function CanvasNode({
   id,
@@ -61,6 +65,8 @@ function CanvasNode({
   onSelect,
   offset,
   onMove,
+  status,
+  icon: Icon = Grid2X2,
 }: {
   id: string;
   title: string;
@@ -72,6 +78,8 @@ function CanvasNode({
   onSelect: (id: string) => void;
   offset: { x: number; y: number };
   onMove: (id: string, delta: { x: number; y: number }) => void;
+  status?: ReactNode;
+  icon?: typeof Grid2X2;
 }) {
   const origin = useRef({ x: 0, y: 0 });
   return (
@@ -109,12 +117,14 @@ function CanvasNode({
         }}
         className="mb-2 flex w-full cursor-grab items-center gap-2 text-left text-xs text-muted-foreground focus-visible:outline focus-visible:outline-ring"
       >
-        <Grid2X2 className="size-3" />
+        <Icon className="size-3" />
         {title}
+        {status ? <span className="ml-auto">{status}</span> : null}
       </button>
       <div
         className={cn(
-          "rounded-xl bg-surface-2 p-3 shadow-sm",
+          "rounded-xl bg-surface-2 shadow-sm",
+          id === "shot" || id === "candidates" ? "p-2" : "p-3",
           selected && "outline outline-offset-4 outline-primary",
         )}
       >
@@ -123,7 +133,9 @@ function CanvasNode({
     </section>
   );
 }
+
 const zero = { x: 0, y: 0 };
+
 export function CanvasPage() {
   const [zoom, setZoom] = useState(72);
   const [tool, setTool] = useState("选择");
@@ -276,6 +288,7 @@ export function CanvasPage() {
             <CanvasNode
               {...nodeProps}
               id="table"
+              icon={FileText}
               title="镜头表 · 第 3 集 场 2"
               x={92}
               y={130}
@@ -317,6 +330,7 @@ export function CanvasPage() {
             <CanvasNode
               {...nodeProps}
               id="text"
+              icon={Type}
               title="文本 · 氛围提示词"
               x={92}
               y={515}
@@ -328,7 +342,7 @@ export function CanvasPage() {
                 冷蓝夜色，细密雨幕，港口的灯在积水里拉出长长的倒影，镜头缓慢推进保持稳定。
               </p>
             </CanvasNode>
-            <div className="absolute top-[108px] left-[420px] h-[526px] w-[250px] rounded-xl bg-surface-1/60">
+            <div className="absolute top-[84px] left-[424px] h-[540px] w-[244px] rounded-xl bg-surface-1/60">
               <p className="p-3 text-xs text-muted-foreground">
                 设定 · 场 2 本场所需
               </p>
@@ -336,28 +350,33 @@ export function CanvasPage() {
             <CanvasNode
               {...nodeProps}
               id="character"
+              icon={UserRound}
+              status={<LockKeyhole className="size-3" />}
               title="角色 · 林舟 雨夜造型"
-              x={442}
-              y={133}
-              width={206}
+              x={436}
+              y={120}
+              width={226}
               offset={offsets.character ?? zero}
               selected={selected === "character"}
             >
-              <Placeholder className="h-[210px]" label="[角色定稿图]">
-                <UserRound className="size-6" />
-              </Placeholder>
+              <Placeholder
+                className="h-[236px]"
+                kind="portrait"
+                label="[造型定稿图]"
+              />
             </CanvasNode>
             <CanvasNode
               {...nodeProps}
               id="scene"
+              icon={ImageIcon}
               title="场景 · 旧码头 夜"
-              x={442}
-              y={432}
-              width={206}
+              x={436}
+              y={421}
+              width={226}
               offset={offsets.scene ?? zero}
               selected={selected === "scene"}
             >
-              <Placeholder className="h-[154px]" label="[场景参考图]" />
+              <Placeholder className="h-[168px]" label="[场景参考图]" />
             </CanvasNode>
             <div className="absolute top-[98px] left-[718px] flex gap-1 rounded-lg bg-surface-2 p-1">
               <Button size="sm" onClick={() => demoNotice("演示镜头已运行")}>
@@ -374,6 +393,8 @@ export function CanvasPage() {
             <CanvasNode
               {...nodeProps}
               id="shot"
+              icon={Clapperboard}
+              status={<Badge variant="muted">候选 2</Badge>}
               title="镜头 S03-02-04"
               x={718}
               y={154}
@@ -399,7 +420,9 @@ export function CanvasPage() {
             <CanvasNode
               {...nodeProps}
               id="candidates"
-              title="视频候选　　　　　　　　2 / 2"
+              icon={Video}
+              title="视频候选"
+              status={<span className="font-mono text-[10px]">2 / 2</span>}
               x={1100}
               y={132}
               width={274}
@@ -425,7 +448,14 @@ export function CanvasPage() {
             <CanvasNode
               {...nodeProps}
               id="audio"
+              icon={Music2}
               title="台词 · 林舟"
+              status={
+                <Badge variant="warning">
+                  <CircleDashed />
+                  生成中 0:12
+                </Badge>
+              }
               x={1100}
               y={480}
               width={274}
@@ -433,15 +463,22 @@ export function CanvasPage() {
               selected={selected === "audio"}
             >
               <p className="mb-2 text-xs">“没封好，本来就寄不到吧。”</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setPlaying(!playing)}
-              >
-                <Music2 data-icon="inline-start" />
-                {playing ? "暂停演示" : "▂ ▃ ▆ ▅ ▂ ▅ ▇ ▃ ▆ ▅ ▂"}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="icon-round"
+                  aria-label={playing ? "暂停台词试听" : "播放台词试听"}
+                  onClick={() => setPlaying(!playing)}
+                >
+                  {playing ? (
+                    <Pause className="fill-current" />
+                  ) : (
+                    <Play className="fill-current" />
+                  )}
+                </Button>
+                <AudioWaveform playing={playing} />
                 <span className="ml-3 text-[10px]">2.8s</span>
-              </Button>
+              </div>
             </CanvasNode>
           </div>
         </div>
@@ -577,6 +614,7 @@ export function CanvasPage() {
     </TooltipProvider>
   );
 }
+
 function PlayIcon() {
-  return <Clapperboard data-icon="inline-start" />;
+  return <Play data-icon="inline-start" />;
 }

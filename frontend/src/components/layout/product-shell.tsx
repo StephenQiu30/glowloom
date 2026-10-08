@@ -1,45 +1,42 @@
 "use client";
 
+import { Brand } from "@/components/layout/brand";
+import { IconButton } from "@/components/controls/icon-button";
+import { SearchInput } from "@/components/forms/search-input";
+import { demoNotice } from "@/components/feedback/demo-notice";
+import { Choice } from "@/components/forms/choice";
 import { useState, type ReactNode, type CSSProperties } from "react";
 import Link from "next/link";
 import { cn } from "cn";
-import { toast } from "sonner";
 import {
   Activity,
   Bell,
   Check,
-  ChevronDown,
-  ChevronLeft,
   ChevronsUpDown,
-  CircleHelp,
   Clapperboard,
-  Clock3,
   FileText,
   Folder,
   Grid2X2,
-  ImageIcon,
   KeyRound,
   Layers,
   ListTodo,
+  LogOut,
   Menu,
   Monitor,
-  MoreHorizontal,
+  Moon,
   PanelLeft,
   Plus,
   Search,
   Settings2,
   Shield,
   SlidersHorizontal,
-  Star,
   UserRound,
-  Waves,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
 import {
   Sidebar,
   SidebarProvider,
@@ -57,277 +54,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  InputGroup,
-  InputGroupInput,
-  InputGroupAddon,
-} from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { screenHref, screens, type Screen } from "./screens";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { screenHref, screens, type Screen } from "@/components/layout/routes";
 
-export const demoNotice = (message: string): void => {
-  toast.success(`${message}（本地演示）`);
-};
-export function IconButton({
-  icon: Icon,
-  label,
-  onClick,
-  href,
-  ...props
-}: {
-  icon: LucideIcon;
-  label: string;
-  onClick?: () => void;
-  href?: string;
-} & Pick<
-  React.ComponentProps<typeof Button>,
-  "variant" | "size" | "disabled"
->) {
-  const content = href ? (
-    <Button variant="ghost" size="icon" aria-label={label} asChild {...props}>
-      <Link href={href}>
-        <Icon data-icon="inline-start" />
-      </Link>
-    </Button>
-  ) : (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={label}
-      onClick={onClick}
-      {...props}
-    >
-      <Icon data-icon="inline-start" />
-    </Button>
-  );
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{content}</TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-export function Brand({ wordmark = false }: { wordmark?: boolean }) {
-  return (
-    <Link
-      href={screenHref("home")}
-      aria-label="浮光首页"
-      className="inline-flex items-center gap-2 text-sm font-medium"
-    >
-      <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <Waves className="size-4" />
-      </span>
-      {wordmark ? "浮光" : null}
-    </Link>
-  );
-}
-export function SearchInput({
-  value,
-  onChange,
-  placeholder = "搜索",
-  className,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  className?: string;
-}) {
-  return (
-    <InputGroup className={className}>
-      <InputGroupAddon>
-        <Search />
-      </InputGroupAddon>
-      <InputGroupInput
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={placeholder}
-      />
-    </InputGroup>
-  );
-}
-export function Choice({
-  value,
-  onChange,
-  options,
-  label,
-  className,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: readonly string[];
-  label: string;
-  className?: string;
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label={label} className={className}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
-  );
-}
-export function PageHeading({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-xl leading-7 font-semibold tracking-tight">
-          {title}
-        </h1>
-        {description ? (
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      {children ? (
-        <div className="flex flex-wrap items-center gap-2">{children}</div>
-      ) : null}
-    </header>
-  );
-}
-export function Placeholder({
-  className,
-  label,
-  kind = "image",
-  showIcon = true,
-  children,
-}: {
-  className?: string;
-  label?: string;
-  kind?: "image" | "video" | "audio";
-  showIcon?: boolean;
-  children?: ReactNode;
-}) {
-  const Icon =
-    kind === "video" ? Clapperboard : kind === "audio" ? Activity : ImageIcon;
-  return (
-    <div
-      className={cn(
-        "relative flex items-center justify-center overflow-hidden rounded-lg bg-surface-2 text-subtle-foreground",
-        className,
-      )}
-    >
-      {showIcon ? (
-        <Icon className="size-5 opacity-40" aria-hidden="true" />
-      ) : null}
-      {label ? (
-        <span className="absolute bottom-3 left-3 text-[10px] tracking-widest text-muted-foreground">
-          {label}
-        </span>
-      ) : null}
-      {children}
-    </div>
-  );
-}
-export function LocalDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  children,
-  onConfirm,
-  confirmLabel = "保存",
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description?: string;
-  children: ReactNode;
-  onConfirm?: () => void | boolean;
-  confirmLabel?: string;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[460px]">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {description ?? "此操作仅更新本地演示，不会修改真实数据。"}
-          </DialogDescription>
-        </DialogHeader>
-        {children}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button
-            onClick={() => {
-              if (onConfirm?.() !== false) onOpenChange(false);
-            }}
-          >
-            {confirmLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-export function MoreMenu({
-  label = "更多操作",
-  items,
-}: {
-  label?: string;
-  items: { label: string; action: () => void }[];
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button size="icon-sm" variant="ghost" aria-label={label}>
-          <MoreHorizontal data-icon="inline-start" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          {items.map((item) => (
-            <DropdownMenuItem key={item.label} onSelect={item.action}>
-              {item.label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 const adminLinks: [Screen, string, LucideIcon][] = [
   ["users", "账号", UserRound],
   ["providers", "供应商凭据", KeyRound],
@@ -335,11 +74,13 @@ const adminLinks: [Screen, string, LucideIcon][] = [
   ["audit", "审计日志", FileText],
   ["health", "系统健康", Activity],
 ];
+
 const projectLinks: [Screen, string, LucideIcon][] = [
   ["analytics", "概览", Grid2X2],
   ["storyboard", "剧本", FileText],
   ["bible", "设定集", UserRound],
 ];
+
 function NavigationLink({
   href,
   label,
@@ -371,6 +112,7 @@ function NavigationLink({
     </Button>
   );
 }
+
 function ContextNavigation({
   screen,
   close,
@@ -383,8 +125,14 @@ function ContextNavigation({
   const account = screen === "account";
   return (
     <div className="flex h-full flex-col gap-5 p-4 text-sm">
-      <div className="flex items-center justify-between gap-2 py-2">
-        <div className="font-medium text-foreground">
+      <div className="flex items-center justify-between gap-2">
+        {!admin && !account ? (
+          <span
+            className="size-8 shrink-0 rounded-md bg-surface-2"
+            aria-hidden="true"
+          />
+        ) : null}
+        <div className="flex-1 font-medium text-foreground">
           {admin ? "管理" : account ? "设置" : "雾港来信"}
           {!admin && !account ? (
             <p className="mt-1 text-[10px] font-normal text-muted-foreground">
@@ -413,11 +161,11 @@ function ContextNavigation({
             ["profile", "个人资料", UserRound],
             ["sessions", "密码与会话", Monitor],
             ["preferences", "偏好", SlidersHorizontal],
-            ["licenses", "模型来源", Shield],
+            ["models", "模型渠道", Layers],
           ].map(([id, label, icon]) => (
             <NavigationLink
               key={id as string}
-              href={`#${id}`}
+              href={id === "models" ? screenHref("models") : `#${id}`}
               label={label as string}
               icon={icon as LucideIcon}
               active={id === "profile"}
@@ -440,6 +188,7 @@ function ContextNavigation({
               <span>分集</span>
               <Choice
                 label="当前分集"
+                size="sm"
                 value={episode}
                 onChange={setEpisode}
                 options={["第 1 集", "第 2 集", "第 3 集", "第 4 集"]}
@@ -497,6 +246,7 @@ function ContextNavigation({
     </div>
   );
 }
+
 function ProductNavigation({
   screen,
   contextual,
@@ -506,7 +256,7 @@ function ProductNavigation({
   contextual: boolean;
   onToggleContext: () => void;
 }) {
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, isMobile } = useSidebar();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const close = () => setOpenMobile(false);
@@ -519,7 +269,7 @@ function ProductNavigation({
   ];
   return (
     <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="items-center gap-4 py-4">
+      <SidebarHeader className="items-center gap-3 py-3">
         <Button
           className="md:hidden"
           variant="ghost"
@@ -535,6 +285,7 @@ function ProductNavigation({
           icon={Plus}
           href={screenHref("home")}
           variant="outline"
+          size="icon-round"
         />
       </SidebarHeader>
       <SidebarContent>
@@ -543,7 +294,17 @@ function ProductNavigation({
             <SidebarMenuItem key={id}>
               <SidebarMenuButton size="rail" isActive={active} asChild>
                 <Link href={screenHref(id)} onClick={close}>
-                  <Icon />
+                  <span className="relative">
+                    <Icon className="size-5" />
+                    {label === "任务" ? (
+                      <Badge
+                        variant="notification"
+                        className="absolute -top-1.5 -right-2 size-4 justify-center p-0 text-[10px]"
+                      >
+                        2
+                      </Badge>
+                    ) : null}
+                  </span>
                   <span>{label}</span>
                 </Link>
               </SidebarMenuButton>
@@ -628,17 +389,65 @@ function ProductNavigation({
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="end">
-            <DropdownMenuGroup>
-              <DropdownMenuItem disabled>陈导</DropdownMenuItem>
-            </DropdownMenuGroup>
-
+          <DropdownMenuContent
+            side={isMobile ? "top" : "right"}
+            align={isMobile ? "center" : "end"}
+            sideOffset={isMobile ? 8 : 12}
+            collisionPadding={16}
+            className="w-60 p-2 [&_[data-slot=dropdown-menu-item]]:h-9"
+          >
+            <DropdownMenuLabel>
+              陈导
+              <span className="mt-1 block font-mono text-[11px] font-normal text-muted-foreground">
+                chendao
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href={screenHref("account")}>账号设置</Link>
+                <Link href={screenHref("account")} onClick={close}>
+                  <UserRound />
+                  账号设置
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href={screenHref("login")}>退出登录</Link>
+                <Link href={screenHref("assets")} onClick={close}>
+                  <Folder />
+                  我的素材
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={screenHref("providers")} onClick={close}>
+                  <KeyRound />
+                  供应商凭据
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={screenHref("users")} onClick={close}>
+                  <Shield />
+                  管理账号
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`${screenHref("account")}#preferences`}
+                  onClick={close}
+                >
+                  <Moon />
+                  主题
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    深色
+                  </span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={screenHref("login")} onClick={close}>
+                  <LogOut />
+                  退出登录
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -647,6 +456,7 @@ function ProductNavigation({
     </Sidebar>
   );
 }
+
 function MobileHeader() {
   const { toggleSidebar } = useSidebar();
   return (
@@ -656,6 +466,7 @@ function MobileHeader() {
     </header>
   );
 }
+
 export function ProductShell({
   screen,
   children,
@@ -697,18 +508,3 @@ export function ProductShell({
     </TooltipProvider>
   );
 }
-export function EmptySearch({
-  label = "没有符合条件的结果",
-}: {
-  label?: string;
-}) {
-  return (
-    <Empty role="status">
-      <EmptyHeader>
-        <EmptyTitle>{label}</EmptyTitle>
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
-export { Check, ChevronDown, ChevronLeft, CircleHelp, Clock3, Plus, Star, X };
