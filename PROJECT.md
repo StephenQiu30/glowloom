@@ -1,10 +1,10 @@
 # 浮光工程规则
 
-需求与目标设计以 [浮光新页面](docs/requirement/浮光页面/index.md)、[新数据模型](docs/design/浮光页面数据设计.md)、[新接口](docs/design/浮光页面接口设计.md) 为准。旧页面、API、Schema、模块拆分、状态机和中间件拓扑不得反向约束当前设计。旧工程说明保存在 `docs/history/engineering/`，只在明确的迁移/旧环境任务中读取。
+需求基线以 [功能需求总表](docs/requirement/01-功能需求总表.md) 为准；当前按业务模块整理需求，具体目标方案在实施前另行评审。页面与设计稿用于需求追踪，页面完成不等于功能完成。旧页面、API、Schema、模块拆分、状态机和中间件拓扑不得反向约束当前设计。旧工程说明保存在 `docs/history/engineering/`，只在明确的迁移/旧环境任务中读取。
 
 ## 1. 当前阶段与文件职责
 
-当前按用户要求直接替换正式前端页面，允许功能与数据使用 mock；不执行数据库 DDL。`docs/` 按分类维护当前设计、验收与许可；`docs/history/` 保留历史资料，不作为当前需求来源。文档直接通过 Markdown、Git 和 Obsidian 管理。AGENTS负责协作规则，DESIGN负责本次视觉与交互；BACKLOG只维护当前事项。
+正式前端页面已替换，功能与数据仍以 mock 为主，真实业务尚未逐项验收。当前整理原始需求，不执行数据库 DDL。`docs/` 按分类维护当前设计、验收与许可；`docs/history/` 保留历史资料，不作为当前需求来源。文档直接通过 Markdown、Git 和 Obsidian 管理。AGENTS负责协作规则，DESIGN负责本次视觉与交互；BACKLOG只维护当前事项。
 
 ## 2. 可继续使用的工具
 
@@ -15,6 +15,7 @@
 前端复用组件按 feature 放在 `frontend/src/components/<feature>/`；`components/ui/` 保留 shadcn/Radix 基础组件。当前跨页面复用内容按 auth、storyboard、layout、forms、controls、feedback 和 media 归属维护，直接导入具体文件，不使用产品拼音目录或统一导出层。
 
 页面与页面独有组件放在对应 App Router 页面目录：`src/app/<路由>/page.tsx` 负责入口与元数据，`src/app/<路由>/_components/` 存放页面实现、局部状态、私有组件、mock 和交互测试；首页使用 `src/app/_components/`。不额外建立 `src/features/` 或另一套 Pages Router。共享认证视图服务登录、注册和重置密码三个页面；共享镜头 mock 位于 `components/storyboard/`，音频波形位于 `components/media/`。复用组件不得反向导入路由页面或页面私有组件；页面不得从其他页面模块导入共用数据或控件。
+
 ## 3. 数据与契约
 
 新请求/响应由当前设计决定。实施时在Handler/DTO与注解定义，swag生成公开规范，再由openapi2ts生成前端调用；生成文件禁止手改。旧Swagger和客户端不是新需求来源，不为保留旧路由增加兼容层。
@@ -29,7 +30,7 @@
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Go实现   | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；对应生成一致性                                                                                               |
 | 前端实现 | 在frontend执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
-| 文档     | 相对链接、锚点与来源路径；Obsidian 配置路径；许可原文字节；使用编辑器或 Obsidian 实际阅读                                                                                       |
+| 文档     | 相对链接、锚点与来源路径；Obsidian 配置路径；许可原文字节；使用编辑器或 Obsidian 实际阅读                                                                                         |
 
 Markdown 更改检查引用与内容，Obsidian 设置更改检查 JSON 和实际目录。目录迁移核对文件清单与原文，第三方许可保持原文字节。本文不授权跳过真实业务验收，未执行项照实报告。
 

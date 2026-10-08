@@ -8,7 +8,7 @@ tags: [docs, obsidian]
 
 # 文档与 Obsidian 使用说明
 
-项目文档统一保存在 `docs/`，使用 Markdown、Git 和 Obsidian 直接维护。从[文档入口](README.md)阅读当前页面需求、数据与接口设计；历史资料保留在 `docs/history/`，仅供明确的历史核查或迁移任务使用。目录与职责见[文档管理设计](design/知识库体系设计.md)。
+项目文档统一保存在 `docs/`，使用 Markdown、Git 和 Obsidian 直接维护。从[文档入口](README.md)阅读当前原始需求、数据与接口设计；历史资料保留在 `docs/history/`，仅供明确的历史核查或迁移任务使用。目录与职责见[文档管理设计](design/知识库体系设计.md)。
 
 ## 在 Obsidian 中编辑
 
