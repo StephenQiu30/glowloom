@@ -14,8 +14,6 @@ export const ATTACHMENT_PATHS = Object.freeze([
   "design-qa.md",
   "CHANGELOG.md",
   "LICENSE",
-  "backend/db/schema.sql",
-  ".github/workflows/ci.yml",
   "workspace/content/licenses/CC-BY-4.0.txt",
   "workspace/content/licenses/LicenseRef-KhronosSpecCopyright.txt",
   "workspace/content/licenses/beeftv.txt",

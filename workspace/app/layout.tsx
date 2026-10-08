@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import type { PageMapItem } from "nextra";
 import { Head, Search } from "nextra/components";
 import { getPageMap } from "nextra/page-map";
-import { Footer, Layout, Navbar } from "nextra-theme-docs";
+import { Layout, Navbar } from "nextra-theme-docs";
 import type { ReactNode } from "react";
 import "nextra-theme-docs/style.css";
 import "./globals.css";
 
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: { default: "Lanverse 知识库", template: "%s · Lanverse 知识库" },
-  description: "Lanverse 的产品、需求、设计、计划与验证文档。",
+  title: { default: "浮光知识库", template: "%s · 浮光知识库" },
+  description: "浮光的产品、需求、设计、计划与验证文档。",
 };
 
 // Nextra 4.6.1 generates raw routes, while Next.js usePathname keeps URL encoding.
@@ -34,12 +41,20 @@ export default async function RootLayout({
   const pageMap = encodePageMapRoutes(await getPageMap());
 
   return (
-    <html lang="zh-CN" dir="ltr" suppressHydrationWarning>
-      <Head faviconGlyph="L" color={{ lightness: { light: 35, dark: 55 } }} />
+    <html
+      lang="zh-CN"
+      dir="ltr"
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable}`}
+    >
+      <Head
+        faviconGlyph="浮"
+        color={{ hue: 0, saturation: 0, lightness: { light: 35, dark: 55 } }}
+      />
       <body>
         <Layout
-          navbar={<Navbar logo={<strong>Lanverse 知识库</strong>} />}
-          footer={<Footer>Lanverse · 工作空间文档</Footer>}
+          navbar={<Navbar logo={<strong>浮光知识库</strong>} />}
+          nextThemes={{ defaultTheme: "dark" }}
           pageMap={pageMap}
           search={
             <Search

@@ -1,6 +1,6 @@
 # Video Depth Anything Small 权重来源
 
-Lanverse 仅配置 Small 权重，原始模型卡与固定提交元数据声明许可为 Apache-2.0。适用许可全文见 [video-depth-anything.txt](video-depth-anything.txt)。
+浮光 仅配置 Small 权重，原始模型卡与固定提交元数据声明许可为 Apache-2.0。适用许可全文见 [video-depth-anything.txt](video-depth-anything.txt)。
 
 - 官方固定模型卡：[Video-Depth-Anything-Small README](https://huggingface.co/depth-anything/Video-Depth-Anything-Small/blob/256875362cff76724b920335dfb4b29dd611f66e/README.md)。
 - 固定版本：`256875362cff76724b920335dfb4b29dd611f66e`。

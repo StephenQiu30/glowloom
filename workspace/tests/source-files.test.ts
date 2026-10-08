@@ -53,8 +53,13 @@ test("白名单中的符号链接及目录符号链接被拒绝", async () => {
   await writeFile(path.join(outside, "LICENSE"), "不得跟随");
   await symlink(path.join(outside, "LICENSE"), path.join(root, "LICENSE"));
   assert.equal(await readAttachment("LICENSE", root), undefined);
-  await symlink(outside, path.join(root, "backend"));
-  assert.equal(await readAttachment("backend/db/schema.sql", root), undefined);
+  await writeFile(path.join(outside, "beeftv.txt"), "不得跟随目录读取");
+  await rm(path.join(root, "workspace/content/licenses"), { recursive: true });
+  await symlink(outside, path.join(root, "workspace/content/licenses"));
+  assert.equal(
+    await readAttachment("workspace/content/licenses/beeftv.txt", root),
+    undefined,
+  );
 });
 
 test("中文与百分号Markdown路径按真实文件位置转换，index目录与hash保留", () => {
@@ -72,7 +77,7 @@ test("中文与百分号Markdown路径按真实文件位置转换，index目录�
   assert.equal(resolve("https://example.com/page"), "https://example.com/page");
 });
 
-test("根规范、许可和两份已引用源码只转换到原文附件", () => {
+test("根规范和许可可读，历史Schema、CI和归档链接拒绝发布", () => {
   const file = "/repo/workspace/content/design/当前.md";
   const resolve = (href: string) =>
     resolveSourceLink(file, href, { repositoryRoot: "/repo" });
@@ -85,14 +90,12 @@ test("根规范、许可和两份已引用源码只转换到原文附件", () =>
     resolve("../licenses/video-depth-anything.txt"),
     "/files/workspace/content/licenses/video-depth-anything.txt",
   );
-  assert.equal(
-    resolve("../../../backend/db/schema.sql"),
-    "/files/backend/db/schema.sql",
-  );
-  assert.equal(
-    resolve("../../../.github/workflows/ci.yml"),
-    "/files/.github/workflows/ci.yml",
-  );
+  for (const href of [
+    "../../../backend/db/schema.sql",
+    "../../../.github/workflows/ci.yml",
+    "../../history/engineering/PROJECT.md",
+  ])
+    assert.throws(() => resolve(href), /白名单/);
   assert.throws(() => resolve("../../../.env"), /白名单/);
   assert.throws(() => resolve("../../../../private.md"), /越出仓库/);
 });
@@ -138,4 +141,18 @@ test("原生Nextra编译后附件Markdown扩展名仍指向原文件", async () 
     },
   });
   assert.match(compiled, /href: "\/files\/AGENTS%2Emd#/);
+});
+
+test("已存在的历史Schema、CI与归档原文也不提供附件读取", async () => {
+  const root = await fixture();
+  for (const source of [
+    "backend/db/schema.sql",
+    ".github/workflows/ci.yml",
+    "workspace/history/engineering/PROJECT.md",
+  ]) {
+    const file = path.join(root, source);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "历史内容不应发布");
+    assert.equal(await readAttachment(source, root), undefined);
+  }
 });
