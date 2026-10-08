@@ -12,6 +12,9 @@
 
 业务按职责组织，`adapter → application → domain`，依赖显式注入，接口由消费方定义。编码与审查遵循AGENTS的Google Go与Vercel/Next.js规范；不预建未来目录、通用框架或空转发层。
 
+前端复用组件按 feature 放在 `frontend/src/components/<feature>/`；`components/ui/` 保留 shadcn/Radix 基础组件。当前跨页面复用内容按 auth、storyboard、layout、forms、controls、feedback 和 media 归属维护，直接导入具体文件，不使用产品拼音目录或统一导出层。
+
+页面与页面独有组件放在对应 App Router 页面目录：`src/app/<路由>/page.tsx` 负责入口与元数据，`src/app/<路由>/_components/` 存放页面实现、局部状态、私有组件、mock 和交互测试；首页使用 `src/app/_components/`。不额外建立 `src/features/` 或另一套 Pages Router。共享认证视图服务登录、注册和重置密码三个页面；共享镜头 mock 位于 `components/storyboard/`，音频波形位于 `components/media/`。复用组件不得反向导入路由页面或页面私有组件；页面不得从其他页面模块导入共用数据或控件。
 ## 3. 数据与契约
 
 新请求/响应由当前设计决定。实施时在Handler/DTO与注解定义，swag生成公开规范，再由openapi2ts生成前端调用；生成文件禁止手改。旧Swagger和客户端不是新需求来源，不为保留旧路由增加兼容层。
