@@ -1,6 +1,6 @@
 # 浮光界面验证
 
-视觉规则见 [DESIGN](DESIGN.md)，页面范围见[页面需求总览](workspace/content/requirement/浮光页面/index.md)，逐页验收见[需求追踪](workspace/content/test/浮光页面需求追踪.md)与[非功能验收](workspace/content/requirement/浮光页面非功能与验收.md)。本文只规定验证方法，不记录过去轮次的完成声明。
+视觉规则见 [DESIGN](DESIGN.md)，页面范围见[页面需求总览](docs/requirement/浮光页面/index.md)，逐页验收见[需求追踪](docs/test/浮光页面需求追踪.md)与[非功能验收](docs/requirement/浮光页面非功能与验收.md)。本文只规定验证方法，不记录过去轮次的完成声明。
 
 ## 验证方法
 

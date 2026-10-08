@@ -47,10 +47,8 @@ next-env.d.ts
 # Local environment (templates *.env.example are committed)
 docker-compose-env.env
 
-# Workspace site and personal Obsidian state
-/workspace/out/
-/workspace/public/_pagefind/
-/workspace/content/.obsidian/
+# Personal Obsidian state
+/docs/.obsidian/
 /.obsidian/workspace*.json
 /.obsidian/cache/
 /.obsidian/plugins/

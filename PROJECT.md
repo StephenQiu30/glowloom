@@ -1,10 +1,10 @@
 # 浮光工程规则
 
-需求与目标设计以 [浮光新页面](workspace/content/requirement/浮光页面/index.md)、[新数据模型](workspace/content/design/浮光页面数据设计.md)、[新接口](workspace/content/design/浮光页面接口设计.md) 为准。旧页面、API、Schema、模块拆分、状态机和中间件拓扑不得反向约束当前设计。旧工程说明保存在 `workspace/history/engineering/`，只在明确的迁移/旧环境任务中读取。
+需求与目标设计以 [浮光新页面](docs/requirement/浮光页面/index.md)、[新数据模型](docs/design/浮光页面数据设计.md)、[新接口](docs/design/浮光页面接口设计.md) 为准。旧页面、API、Schema、模块拆分、状态机和中间件拓扑不得反向约束当前设计。旧工程说明保存在 `docs/history/engineering/`，只在明确的迁移/旧环境任务中读取。
 
 ## 1. 当前阶段与文件职责
 
-当前按用户要求直接替换正式前端页面，允许功能与数据使用 mock；不执行数据库 DDL。`workspace/content/` 只发布当前设计、验收与许可；`workspace/history/` 不进入文档站导航和搜索。AGENTS负责协作规则，DESIGN负责本次视觉与交互；BACKLOG只维护当前事项。
+当前按用户要求直接替换正式前端页面，允许功能与数据使用 mock；不执行数据库 DDL。`docs/` 按分类维护当前设计、验收与许可；`docs/history/` 保留历史资料，不作为当前需求来源。文档直接通过 Markdown、Git 和 Obsidian 管理。AGENTS负责协作规则，DESIGN负责本次视觉与交互；BACKLOG只维护当前事项。
 
 ## 2. 可继续使用的工具
 
@@ -26,18 +26,12 @@
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Go实现   | gofmt、goimports、go vet、golangci-lint、go test -race、govulncheck；对应生成一致性                                                                                               |
 | 前端实现 | 在frontend执行 pnpm exec eslint .、pnpm exec prettier --check .、pnpm exec next typegen、pnpm exec tsc --noEmit、pnpm exec vitest run、pnpm exec next build；交互变化补浏览器验证 |
-| 文档     | 相对链接/锚点/来源路径；下列文档测试、构建与索引；当前页面实际阅读                                                                                                                |
+| 文档     | 相对链接、锚点与来源路径；Obsidian 配置路径；许可原文字节；使用编辑器或 Obsidian 实际阅读                                                                                       |
 
-```bash
-pnpm --dir workspace exec tsx --test 'tests/*.test.ts'
-pnpm --dir workspace exec next build --webpack
-pnpm --dir workspace exec pagefind --site .next/server/app --output-path public/_pagefind
-```
-
-文档站工具代码变化再执行workspace的eslint、prettier、next typegen和tsc；仅Markdown更改按内容与构建验证。本文不授权跳过真实业务验收，未执行项照实报告。
+Markdown 更改检查引用与内容，Obsidian 设置更改检查 JSON 和实际目录。目录迁移核对文件清单与原文，第三方许可保持原文字节。本文不授权跳过真实业务验收，未执行项照实报告。
 
 ## 5. 本地文档与交付
 
-文档服务默认3210；开发命令 `pnpm --dir workspace exec next dev --webpack --hostname 127.0.0.1 --port 3210`。生产构建与搜索索引需同步更新，构建不等于真实功能完成。详情见 [知识库说明](workspace/content/KNOWLEDGE.md)。
+文档入口为 [docs/README.md](docs/README.md)，正文直接在既有分类目录维护。Obsidian 使用仓库根 Vault，保留标准 Markdown 相对链接、模板与图谱；默认 Compose 只保留业务前后端服务。详情见 [文档与 Obsidian 说明](docs/KNOWLEDGE.md)。
 
 提交遵循AGENTS；只包含本任务，交付报告SHA、检查结果、未决问题与工作区状态。当前正式前端已由 Figma 页面替换；旧前端模块已删除。后端和现有数据尚未变更，后端清理范围需单独确认。

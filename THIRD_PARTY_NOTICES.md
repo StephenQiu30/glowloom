@@ -8,18 +8,18 @@
 
 ## 视频深度推理
 
-Lanverse 的 Go 任务消费者使用固定 [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072) 的 18 个实际模型依赖文件作为离线执行包，保留源文件头部及 Apache-2.0 声明。该包包含 ByteDance、Meta Platforms（DINOv2）、Hugging Face（attention）和 guoyww/AnimateDiff（motion module）的原始署名；完整原许可保存在 [workspace/content/licenses/video-depth-anything.txt](workspace/content/licenses/video-depth-anything.txt)，公开入口 `/licenses/video-depth-anything.txt`。最小执行包清单聚合 SHA256 为 `275d52984b0f60536f53e778c8d38b082a8ff945b174f49d449e6860d1ee0342`；逐文件来源与摘要由 `backend/internal/mediatool/adapter/videodepth/source_manifest.json` 声明。未调用的上游 CLI、Gradio、stream 与未核验许可的 Tencent `dc_utils.py` 不包含在此执行包中。
+Lanverse 的 Go 任务消费者使用固定 [Video Depth Anything](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072) 的 18 个实际模型依赖文件作为离线执行包，保留源文件头部及 Apache-2.0 声明。该包包含 ByteDance、Meta Platforms（DINOv2）、Hugging Face（attention）和 guoyww/AnimateDiff（motion module）的原始署名；完整原许可保存在 [docs/licenses/video-depth-anything.txt](docs/licenses/video-depth-anything.txt)，公开入口 `/licenses/video-depth-anything.txt`。最小执行包清单聚合 SHA256 为 `275d52984b0f60536f53e778c8d38b082a8ff945b174f49d449e6860d1ee0342`；逐文件来源与摘要由 `backend/internal/mediatool/adapter/videodepth/source_manifest.json` 声明。未调用的上游 CLI、Gradio、stream 与未核验许可的 Tencent `dc_utils.py` 不包含在此执行包中。
 
-当前采用的 Small 权重来自官方固定版本 `256875362cff76724b920335dfb4b29dd611f66e`，模型卡声明 Apache-2.0。固定来源、权重大小与 SHA256 见 [workspace/content/licenses/video-depth-anything-small.md](workspace/content/licenses/video-depth-anything-small.md)，公开入口 `/licenses/video-depth-anything-small.md`。该说明仅针对实际采用的 Small 权重。
+当前采用的 Small 权重来自官方固定版本 `256875362cff76724b920335dfb4b29dd611f66e`，模型卡声明 Apache-2.0。固定来源、权重大小与 SHA256 见 [docs/licenses/video-depth-anything-small.md](docs/licenses/video-depth-anything-small.md)，公开入口 `/licenses/video-depth-anything-small.md`。该说明仅针对实际采用的 Small 权重。
 
-`backend/internal/mediatool/adapter/videodepth/worker.py` 的全片 P2/P98 与 gamma 后处理改写自固定 BeefTV `1ae25027` 的 `tools/depth-capture/depth_capture/pipeline.py:108–129`，沿用 [BeefTV MIT 许可](workspace/content/licenses/beeftv.txt)。Lanverse 用完整 CFR 预处理、逐帧等价计算、Go 所有的进程取消/等待、私有对象和正式审核替换上游本地脚本运行与文件输出；源模型结构与 Small 权重保持。
+`backend/internal/mediatool/adapter/videodepth/worker.py` 的全片 P2/P98 与 gamma 后处理改写自固定 BeefTV `1ae25027` 的 `tools/depth-capture/depth_capture/pipeline.py:108–129`，沿用 [BeefTV MIT 许可](docs/licenses/beeftv.txt)。Lanverse 用完整 CFR 预处理、逐帧等价计算、Go 所有的进程取消/等待、私有对象和正式审核替换上游本地脚本运行与文件输出；源模型结构与 Small 权重保持。
 
 ## 时间线算法的上游声明
 
 BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline-snap.ts` 标明移植自 `yoqu/lingji-cut`。Lanverse 的 `frontend/src/components/canvas/timeline.ts` 改写其碰撞、间隙和吸附算法，使用自身 UUID、闭合输入和画布保存合同。保留该传递来源与修改声明，不将其视为 BeefTV 原创。
 
 - 原项目：[yoqu/lingji-cut](https://github.com/yoqu/lingji-cut)，Copyright 2026 yoqu。
-- 许可：Apache-2.0；从公开固定提交 `59a2fc9f8bd00ca243b2b0d4c4e31b67eb6387d1` 保存原始许可全文至 [workspace/content/licenses/lingji-cut.txt](workspace/content/licenses/lingji-cut.txt)。该 SHA 是许可核验快照，BeefTV 未标明其算法移植时的确切源提交。
+- 许可：Apache-2.0；从公开固定提交 `59a2fc9f8bd00ca243b2b0d4c4e31b67eb6387d1` 保存原始许可全文至 [docs/licenses/lingji-cut.txt](docs/licenses/lingji-cut.txt)。该 SHA 是许可核验快照，BeefTV 未标明其算法移植时的确切源提交。
 - 运行时许可入口：`/licenses/lingji-cut.txt`。
 
 ## BeefTV 无限画布与工作台
@@ -31,7 +31,7 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 画布核心适配 Next.js/shadcn 与正式 Go 合同，固定来源为 BeefTV `0d9e9f48`。工作台能力参考固定 `1ae25027`，首页/导航组织参考 `web/src/pages/home/home-dashboard.tsx` 与 `components/layout/workspace-sidebar-nav.tsx`，改写为自身 App Router 和 shadcn 工作台。新增移植文件逐项登记。
 
 - 固定来源：`0d9e9f48d407570cd431ad9730cdd522b06810c0`。
-- 许可：MIT，完整版权与许可文本保留于 [workspace/content/licenses/beeftv.txt](workspace/content/licenses/beeftv.txt)，运行时入口 `/licenses` 和 `/licenses/beeftv.txt`。
+- 许可：MIT，完整版权与许可文本保留于 [docs/licenses/beeftv.txt](docs/licenses/beeftv.txt)，运行时入口 `/licenses` 和 `/licenses/beeftv.txt`。
 - 版权：2026 @beefnoode and BeefTV contributors；2026 basketikun；2026 ddcat。
 - 上游来源：BeefTV 的 `NOTICE` 声明其包含 Infinite Canvas v0.5.0（`568f0f1838df8de31fe885a4e130e2f346dd14ab`）的派生代码，并记录上游在 `890ba95858bbb13496d23978003716656109abb2` 改为 MIT 许可。
 
@@ -64,7 +64,7 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 | `nodes/node-shell.tsx`               | `components/canvas/canvas-node.tsx`                                                                                                     | 卡片、标题、连接端点与缩放手柄；移除生成和裁剪工具                             |
 | `canvas.css`                         | `globals.css`                                                                                                                           | 合成图层和选中态样式，限定到画布组件作用域                                     |
 
-`model.ts`、`document.ts`、`store.ts`、`queries.ts`、`workspace.tsx`、`editor.tsx` 与节点内容负责 Lanverse 的领域适配：身份与权限、项目资源、服务端 revision、原子命令、持久幂等和媒体预览。业务合同见 [工作台设计](workspace/content/design/工作台设计.md)。
+`model.ts`、`document.ts`、`store.ts`、`queries.ts`、`workspace.tsx`、`editor.tsx` 与节点内容负责 Lanverse 的领域适配：身份与权限、项目资源、服务端 revision、原子命令、持久幂等和媒体预览。业务合同见 [工作台设计](docs/history/design/工作台设计.md)。
 
 以下 MIT 算法与输入合同按自身技术栈改写。源提交为 `1ae25027f7ea1c2178e1e4133c36a0f2995d0e98`，目标均按 Lanverse UUID、服务端持久化、权限和关闭的输入范围改写；不保留源 Wails 外壳或本地数据库。未完成能力以正式设计清单为准，不能由许可登记推断已验收。
 
@@ -86,16 +86,16 @@ BeefTV `1ae25027` 的 `web/src/lib/timeline/timeline-placement.ts` 和 `timeline
 
 Go 时间轴渲染器使用原字节的 `NotoSansCJKsc-Regular.otf` 绘制中英文字幕，来源为 [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk/tree/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese)，固定提交 `f8d157532fbfaeda587e826d4cd5b21a49186f7c`，未修改字体。目标路径 `backend/internal/mediatool/adapter/ffmpeg/fonts/NotoSansCJKsc-Regular.otf`；文件 16,437,364 字节，SHA256 `2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b`。
 
-适用 SIL Open Font License 1.1，上游 `Sans/LICENSE` 原文保存于字体旁 `OFL.txt`、[workspace/content/licenses/noto-cjk-ofl.txt](workspace/content/licenses/noto-cjk-ofl.txt) 和运行时 `/licenses/noto-cjk-ofl.txt`。不把字体替换成浏览器页面字体，也不将其作为 Lanverse 自有字体发布。
+适用 SIL Open Font License 1.1，上游 `Sans/LICENSE` 原文保存于字体旁 `OFL.txt`、[docs/licenses/noto-cjk-ofl.txt](docs/licenses/noto-cjk-ofl.txt) 和运行时 `/licenses/noto-cjk-ofl.txt`。不把字体替换成浏览器页面字体，也不将其作为 Lanverse 自有字体发布。
 
 ## Khronos glTF 输入校验规范
 
 服务端 `backend/internal/media/adapter/gltf/schema/` 的 JSON Schema 原文来自 [KhronosGroup/glTF](https://github.com/KhronosGroup/glTF/tree/5decc120c95764c319c4f92e7f7ead026d926ef3)，固定提交 `5decc120c95764c319c4f92e7f7ead026d926ef3`。JSON Schema 保持原字节；适配和资源预算校验为 Lanverse 自身 Go 实现。
 
 - Copyright 2014–2021 The Khronos Group Inc.，源 `COPYING.adoc` 与 `LICENSE.adoc` 原文同目录保留，逐项来源见 `schema/PROVENANCE.md`。
-- 核心 Schema 使用 CC-BY-4.0；KHR 扩展规范遵循上游 Khronos Specification Copyright 原文复制条件。原文分别保存在 [CC-BY-4.0](workspace/content/licenses/CC-BY-4.0.txt) 与 [Khronos Specification Copyright](workspace/content/licenses/LicenseRef-KhronosSpecCopyright.txt)，运行时 `/licenses` 提供相同文本。
+- 核心 Schema 使用 CC-BY-4.0；KHR 扩展规范遵循上游 Khronos Specification Copyright 原文复制条件。原文分别保存在 [CC-BY-4.0](docs/licenses/CC-BY-4.0.txt) 与 [Khronos Specification Copyright](docs/licenses/LicenseRef-KhronosSpecCopyright.txt)，运行时 `/licenses` 提供相同文本。
 - 本项目没有修改被复制的规范、附加规范认证或厂商背书；未引入需独立解码器或未核验许可的扩展 Schema。
 
 ## infinite-canvas 来源
 
-画布界面参考来源包含 basketikun/infinite-canvas 的 MIT 版本 `dab19adc0847e32e39b7fc8ff90cb392561fb826`。许可文本原字节保存在 [workspace/content/licenses/infinite-canvas.txt](workspace/content/licenses/infinite-canvas.txt)。
+画布界面参考来源包含 basketikun/infinite-canvas 的 MIT 版本 `dab19adc0847e32e39b7fc8ff90cb392561fb826`。许可文本原字节保存在 [docs/licenses/infinite-canvas.txt](docs/licenses/infinite-canvas.txt)。

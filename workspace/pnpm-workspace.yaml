@@ -1,9 +1,0 @@
-allowBuilds:
-  esbuild: true
-  unrs-resolver: true
-
-# Nextra 4.6.1 validates theme props after removing children; newer Zod rejects
-# that missing custom field during prerendering. Keep its declared baseline.
-overrides:
-  "nextra@4.6.1>zod": 4.1.12
-  "nextra-theme-docs@4.6.1>zod": 4.1.12

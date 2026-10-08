@@ -1,8 +1,8 @@
 # 浮光 视觉与交互规范
 
-页面职责与业务状态以 [浮光新页面](workspace/content/requirement/浮光页面/index.md) 和 [当前交互要求](workspace/content/requirement/05-界面与交互需求.md) 为准。旧工作台与接口不约束本次设计。本文规定共享视觉与交互约束；验证方法见 [design-qa.md](design-qa.md)。
+页面职责与业务状态以 [浮光新页面](docs/requirement/浮光页面/index.md) 和 [当前交互要求](docs/requirement/05-界面与交互需求.md) 为准。旧工作台与接口不约束本次设计。本文规定共享视觉与交互约束；验证方法见 [design-qa.md](design-qa.md)。
 
-产品对外名称统一为「浮光」，包括产品页面、文档站页眉、浏览器标题与说明。文档站沿用下列颜色与字体；不显示站点底部 footer。
+产品对外名称统一为「浮光」，包括产品页面、浏览器标题与说明。
 
 ## 视觉层级
 

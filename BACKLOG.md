@@ -1,6 +1,6 @@
 # 浮光当前工作清单
 
-当前需求只来自 [浮光新页面](workspace/content/requirement/浮光页面/index.md)。旧Epics、旧接口接线和旧路线保存在 `workspace/history/engineering/BACKLOG.md`，不再作为当前待办。
+当前需求只来自 [浮光新页面](docs/requirement/浮光页面/index.md)。旧Epics、旧接口接线和旧路线保存在 `docs/history/engineering/BACKLOG.md`，不再作为当前待办。
 
 | 事项                                   | 状态               | 结果与下一步                                                                 |
 | -------------------------------------- | ------------------ | ---------------------------------------------------------------------------- |

@@ -1,20 +1,14 @@
 {
   "newFileLocation": "folder",
-  "newFileFolderPath": "workspace/content",
+  "newFileFolderPath": "docs",
   "useMarkdownLinks": true,
   "newLinkFormat": "relative",
   "alwaysUpdateLinks": true,
   "userIgnoreFilters": [
     "backend/",
     "frontend/",
-    "workspace/app/",
-    "workspace/components/",
-    "workspace/lib/",
-    "workspace/tests/",
-    "workspace/node_modules/",
-    "workspace/.next/",
-    "workspace/out/",
-    "workspace/content/templates/",
-    "workspace/content/licenses/"
+    "docs/history/",
+    "docs/templates/",
+    "docs/licenses/"
   ]
 }

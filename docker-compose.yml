@@ -42,56 +42,6 @@ services:
       retries: 3
       start_period: 90s
 
-  workspace:
-    container_name: lanverse-workspace
-    build: ./workspace
-    image: lanverse/workspace:latest
-    init: true
-    cpus: 2
-    mem_limit: 3g
-    restart: unless-stopped
-    environment:
-      NEXT_TELEMETRY_DISABLED: "1"
-      NODE_OPTIONS: "--max-old-space-size=2048"
-      RAYON_NUM_THREADS: "2"
-      WATCHPACK_POLLING: "true"
-    volumes:
-      - ./workspace/app:/repo/workspace/app:ro
-      - ./workspace/content:/repo/workspace/content:ro
-      - ./workspace/lib:/repo/workspace/lib:ro
-      - ./workspace/public:/repo/workspace/public:ro
-      - ./workspace/mdx-components.tsx:/repo/workspace/mdx-components.tsx:ro
-      - ./workspace/next.config.mjs:/repo/workspace/next.config.mjs:ro
-      - ./workspace/tsconfig.json:/repo/workspace/tsconfig.json:ro
-      - ./workspace/package.json:/repo/workspace/package.json:ro
-      - ./workspace/pnpm-lock.yaml:/repo/workspace/pnpm-lock.yaml:ro
-      - ./workspace/pnpm-workspace.yaml:/repo/workspace/pnpm-workspace.yaml:ro
-      - ./AGENTS.md:/repo/AGENTS.md:ro
-      - ./PROJECT.md:/repo/PROJECT.md:ro
-      - ./DESIGN.md:/repo/DESIGN.md:ro
-      - ./BACKLOG.md:/repo/BACKLOG.md:ro
-      - ./README.md:/repo/README.md:ro
-      - ./THIRD_PARTY_NOTICES.md:/repo/THIRD_PARTY_NOTICES.md:ro
-      - ./design-qa.md:/repo/design-qa.md:ro
-      - ./CHANGELOG.md:/repo/CHANGELOG.md:ro
-      - ./LICENSE:/repo/LICENSE:ro
-      - workspace-modules:/repo/workspace/node_modules
-      - workspace-next:/repo/workspace/.next
-    ports:
-      - "127.0.0.1:${LV_WORKSPACE_PORT:-3210}:3000"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:3000/').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
-
   backend:
     container_name: lanverse-backend
     build:
@@ -154,7 +104,3 @@ volumes:
     name: lanverse-dev_frontend-modules
   frontend-next:
     name: lanverse-dev_frontend-next
-  workspace-modules:
-    name: lanverse-dev_workspace-modules
-  workspace-next:
-    name: lanverse-dev_workspace-next
