@@ -1,27 +1,11 @@
-# Lanverse 前端
+# 浮光前端
 
-工作台使用 Next.js App Router、React、TypeScript、shadcn/Radix、TanStack Query 和 Zustand。目录、工具链与质量要求见 [PROJECT.md](../PROJECT.md)；业务合同见 [工作台设计](../workspace/content/design/工作台设计.md)。
+当前设计直接运行在正式产品路由：`/` 为首页，其他页面见[页面需求总览](../workspace/content/requirement/浮光页面/index.md)。不存在独立预览目录、旧工作台或旧 API 代理。页面代码位于 `src/components/fuguang/`，使用共享 shadcn/Radix 组件与 [DESIGN](../DESIGN.md) 语义颜色。
 
-启动 Go API 后，在此目录运行：
+功能和数据暂用 mock，编辑仅影响当前页面状态，刷新恢复；认证、持久化、真实供应商调用和费用尚未接入。mock 不改变正式入口的身份。
 
-```bash
-pnpm install --frozen-lockfile
-LV_API_BASE_URL=http://127.0.0.1:8080 pnpm exec next dev --hostname 127.0.0.1 --port 3000
-```
+## 开发
 
-浏览器通过同源 `/api` 访问 Go API。业务客户端由 `@umijs/openapi` 从在线 Swagger 统一生成到 `src/api/`，调用 `src/lib/request.ts` 的 Axios 封装；禁止手写业务请求、接口路径或修改生成文件。上传代理与授权媒体流复用同一传输入口。完整请求、权限、容量和取消约定见 [DES-03 §1.1](../workspace/content/design/03-接口设计.md#11-公共-api-文档与前端请求链)。
+在本目录执行 `pnpm install --frozen-lockfile`，再执行 `pnpm exec next dev --hostname 127.0.0.1 --port 3141`。Docker 前端访问 <http://127.0.0.1:3200/>；前端不依赖历史后端服务。质量门禁见 [PROJECT](../PROJECT.md#4-质量门禁)。
 
-生成与检查：
-
-```bash
-LV_API_BASE_URL=http://127.0.0.1:8080 pnpm exec openapi2ts
-pnpm exec prettier --ignore-path /dev/null --write 'src/api/*.ts'
-pnpm exec eslint .
-pnpm exec prettier --check .
-pnpm exec next typegen
-pnpm exec tsc --noEmit
-pnpm exec vitest run
-pnpm exec next build
-```
-
-CI 从在线规范重新生成并核对整个 API 目录。交互变化补充浏览器验证；模拟测试和构建不能替代真实媒体、供应商、费用及完整产品验收。许可入口为 `/licenses`，来源见 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)。
+第三方许可保留在 `public/licenses/`；历史实现来源说明只用于版权追溯，不作为新功能需求。

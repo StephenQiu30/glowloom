@@ -1,5 +1,7 @@
 # 第三方代码声明
 
+本文保留历史实现的来源、修改和版权追溯。相关旧前端代码已移除，以下能力与旧路径不属于当前浮光页面的实现或需求；原始许可文本继续保留。
+
 ## 字幕转写运行时与模型
 
 本机字幕转写使用官方 [ggml-org/whisper.cpp v1.9.4](https://github.com/ggml-org/whisper.cpp/tree/927cfce34f31707e17f2bff35c349632fb9e2c3a)，固定源码提交 `927cfce34f31707e17f2bff35c349632fb9e2c3a`；代码适用 [MIT 许可](https://github.com/ggml-org/whisper.cpp/blob/927cfce34f31707e17f2bff35c349632fb9e2c3a/LICENSE)，Copyright 2023–2026 The ggml authors。

@@ -156,6 +156,6 @@
 }
 
 /* Data visualization accent from the Figma analytics board. */
-.preview-charts {
-  --chart-1: #7898f2;
+.dark {
+  --chart-1: #3291ff;
 }

@@ -1,10 +1,8 @@
 # 前端协作规范
 
-本目录同时遵循根目录 [AGENTS.md 的前端工程规范](../AGENTS.md#前端工程规范) 与 [PROJECT.md 的前端约定](../PROJECT.md#6-前端)。
+本目录遵循根目录 [AGENTS](../AGENTS.md#前端工程规范)。工程工具与质量门禁以 [PROJECT](../PROJECT.md) 为准；不在协作文件中定义业务需求、接口形状或额外实施范围。
 
-编写、修改或审查 React / Next.js 代码时，必须使用 Vercel 插件的 `vercel:react-best-practices`、`vercel:nextjs` 技能，读取与当前改动有关的规则；优先检查请求瀑布、客户端包体积和服务端/客户端边界，再检查取数、状态、重复渲染、可访问性和验证证据。具体 API 以当前安装版本文档为准。
-
-业务 API 只能由 `@umijs/openapi` 从后端在线规范生成到 `src/api/`，禁止手写或修改生成文件。业务代码和 Route Handler 只调用生成函数，不拼接接口地址或直接使用网络客户端；Axios 和授权媒体流传输集中在 `src/lib/request.ts`。接口缺失时先补后端注解与 DTO，再重新生成，禁止添加临时手写请求。修改后须通过请求边界 ESLint、生成一致性与适用功能验证。
+编写、修改或审查 React / Next.js 代码时，使用适用的 Vercel React Best Practices 与 Next.js 规则；具体 API 核对当前安装版本的文档。修改前核对用户已接受的设计、服务端/客户端边界和生成文件归属。
 
 <!-- BEGIN:nextjs-agent-rules -->
 

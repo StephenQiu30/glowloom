@@ -12,7 +12,6 @@ services:
     init: true
     restart: unless-stopped
     environment:
-      LV_API_BASE_URL: http://backend:18080
       NEXT_TELEMETRY_DISABLED: "1"
       NODE_OPTIONS: "--max-old-space-size=2048"
     volumes:
@@ -30,9 +29,6 @@ services:
       - frontend-next:/app/.next
     ports:
       - "127.0.0.1:${LV_FRONTEND_PORT:-3200}:3000"
-    depends_on:
-      backend:
-        condition: service_healthy
     healthcheck:
       test:
         [
@@ -79,8 +75,6 @@ services:
       - ./design-qa.md:/repo/design-qa.md:ro
       - ./CHANGELOG.md:/repo/CHANGELOG.md:ro
       - ./LICENSE:/repo/LICENSE:ro
-      - ./backend/db/schema.sql:/repo/backend/db/schema.sql:ro
-      - ./.github/workflows/ci.yml:/repo/.github/workflows/ci.yml:ro
       - workspace-modules:/repo/workspace/node_modules
       - workspace-next:/repo/workspace/.next
     ports:

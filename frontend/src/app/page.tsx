@@ -1,14 +1,6 @@
-import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { HomeDashboard } from "@/components/workbench/home-dashboard";
-import { WorkspaceShell } from "@/components/workbench/workspace-shell";
+import { HomePage } from "@/components/fuguang/home-page";
 
-export default function HomePage() {
-  return (
-    <WorkspaceShell>
-      <Suspense fallback={<Skeleton className="h-96" />}>
-        <HomeDashboard />
-      </Suspense>
-    </WorkspaceShell>
-  );
+export const metadata = { title: "首页与项目库 · 浮光" };
+export default function Page() {
+  return <HomePage />;
 }

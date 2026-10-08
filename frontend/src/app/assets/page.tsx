@@ -1,12 +1,6 @@
-import { Suspense } from "react";
-import { WorkspaceShell } from "@/components/workbench/workspace-shell";
-import { AssetsWorkspace } from "@/components/media/assets-workspace";
-export default function AssetsPage() {
-  return (
-    <WorkspaceShell>
-      <Suspense fallback={<p>载入工作区…</p>}>
-        <AssetsWorkspace />
-      </Suspense>
-    </WorkspaceShell>
-  );
+import { AssetsPage } from "@/components/fuguang/library-pages";
+
+export const metadata = { title: "素材库" };
+export default function Page() {
+  return <AssetsPage />;
 }

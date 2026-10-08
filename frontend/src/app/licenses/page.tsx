@@ -1,13 +1,15 @@
-import { WorkspaceShell } from "@/components/workbench/workspace-shell";
-
+import Link from "next/link";
 export default function LicensesPage() {
   return (
-    <WorkspaceShell>
+    <main className="min-h-svh p-6 md:p-10">
       <div className="max-w-2xl space-y-6">
+        <Link href="/" className="text-sm text-muted-foreground">
+          返回浮光首页
+        </Link>
         <h1 className="text-2xl font-medium">第三方许可</h1>
         <p className="leading-7 text-muted-foreground">
-          Lanverse 的无限画布包含基于 BeefTV 与 Infinite Canvas 的 MIT
-          许可代码，时间线算法同时保留 Lingji Cut 的 Apache-2.0 声明。
+          历史实现曾包含基于 BeefTV 与 Infinite Canvas 的 MIT
+          许可代码，相关时间线算法保留 Lingji Cut 的 Apache-2.0 声明。
         </p>
         <ul className="space-y-3">
           <li>
@@ -84,6 +86,6 @@ export default function LicensesPage() {
           Group Inc.
         </p>
       </div>
-    </WorkspaceShell>
+    </main>
   );
 }
