@@ -115,8 +115,8 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	if code, body := request("POST", path, map[string]any{"expected_revision": 2, "commands": []map[string]any{{"type": "RunNodes"}}}, uuid.NewString(), origin); code != 422 || !bytes.Contains(body, []byte(`"command_index":0`)) {
 		t.Fatalf("unsupported %d %s", code, body)
 	}
-	if code, body := request("GET", "/swagger/doc.json", nil, "", ""); code != 200 || !bytes.Contains(body, []byte("applyCanvasCommands")) {
-		t.Fatalf("swagger %d %s", code, body)
+	if code, body := request("GET", "/swagger/doc.json", nil, "", ""); code != http.StatusNotFound {
+		t.Fatalf("removed swagger route %d %s", code, body)
 	}
 	if code, _ := request("GET", "/api/not-open", nil, "", ""); code != 404 {
 		t.Fatalf("missing route %d", code)

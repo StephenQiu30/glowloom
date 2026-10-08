@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	redisclient "github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -20,39 +17,14 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
 
-func TestPublicRouterSwaggerContract(t *testing.T) {
-	// Constructors do not connect these clients. This test inspects production
-	// registration and its served schema; dependency readiness is a separate gate.
-	redisConn := redisclient.NewClient(&redisclient.Options{Addr: "127.0.0.1:1"})
-	t.Cleanup(func() { _ = redisConn.Close() })
+func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
 	}, &gorm.DB{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/swagger/doc.json", nil))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("online Swagger status = %d, want 200", recorder.Code)
-	}
-	staticJSON, err := os.ReadFile(filepath.Join("..", "..", "docs", "swagger.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var static, online map[string]any
-	if err := json.Unmarshal(staticJSON, &static); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(recorder.Body.Bytes(), &online); err != nil {
-		t.Fatal(err)
-	}
-	if !equivalentSwagger(static, online) {
-		t.Fatal("served Swagger differs from the committed schema")
-	}
-	routes := make(map[string]struct{})
 	for _, route := range router.Routes() {
-		routes[route.Method+" "+route.Path] = struct{}{}
 		if strings.HasPrefix(route.Path, "/api/auth/") {
 			t.Fatalf("removed authentication route remains registered: %s", route.Path)
 		}
@@ -66,40 +38,28 @@ func TestPublicRouterSwaggerContract(t *testing.T) {
 			}
 		}
 	}
-	if err := validatePublicSwagger(static, routes); err != nil {
-		t.Fatal(err)
-	}
 }
 
-func TestPublicRouterSwaggerUI(t *testing.T) {
+func TestPublicRouterRemovedSwaggerRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
 	}, &gorm.DB{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct {
-		path        string
-		contentType string
-		contains    string
-	}{
-		{"/swagger/index.html", "text/html", `id="swagger-ui"`},
-		{"/swagger/swagger-initializer.js", "application/javascript", `url: "doc.json"`},
-		{"/swagger/swagger-ui.css", "text/css", ".swagger-ui"},
-		{"/swagger/swagger-ui-bundle.js", "application/javascript", "SwaggerUIBundle"},
-		{"/swagger/swagger-ui-standalone-preset.js", "application/javascript", "SwaggerUIStandalonePreset"},
+	for _, path := range []string{
+		"/swagger/doc.json",
+		"/swagger/index.html",
+		"/swagger/swagger-initializer.js",
+		"/swagger/swagger-ui.css",
+		"/swagger/swagger-ui-bundle.js",
+		"/swagger/swagger-ui-standalone-preset.js",
 	} {
-		t.Run(tc.path, func(t *testing.T) {
+		t.Run(path, func(t *testing.T) {
 			response := httptest.NewRecorder()
-			router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodGet, tc.path, nil))
-			if response.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200", response.Code)
-			}
-			if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, tc.contentType) {
-				t.Errorf("Content-Type = %q, want %s", contentType, tc.contentType)
-			}
-			if !strings.Contains(response.Body.String(), tc.contains) {
-				t.Errorf("response does not contain %q", tc.contains)
+			router.ServeHTTP(response, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404", response.Code)
 			}
 		})
 	}

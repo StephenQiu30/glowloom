@@ -9,14 +9,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	swaggerfiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	// Generated docs register the public Swagger schema with swag at initialization.
-	_ "github.com/StephenQiu30/lanverse/backend/docs"
 	biblehttp "github.com/StephenQiu30/lanverse/backend/internal/bible/adapter/http"
 	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
 	canvashttp "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/http"
@@ -52,8 +48,6 @@ import (
 	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
 )
-
-//go:generate go run github.com/swaggo/swag/cmd/swag@v1.16.6 init --dir ../.. -g internal/app/public_api.go --parseInternal --parseDependency -o ../../docs
 
 // NewBusinessRouter assembles the public workspace API.
 // Its stores are the same injected dependencies used by the API role.
@@ -187,8 +181,5 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		Query:        operationapp.NewPublicQuery(operations),
 		Control:      operationapp.NewWorkflowControlCommand(operations),
 	}).Register(protected)
-	// gin-swagger sets the asset handler prefix, so each router owns its copy.
-	swaggerHandler := *swaggerfiles.Handler
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(&swaggerHandler, ginSwagger.DocExpansion("none")))
 	return router, nil
 }

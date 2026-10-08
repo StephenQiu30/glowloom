@@ -17,8 +17,6 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
 	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-
-	_ "github.com/StephenQiu30/lanverse/backend/docs"
 )
 
 // Injectors from wire.go:
