@@ -35,6 +35,7 @@
 当前 Figma 实现直接承载正式产品页面：首页 `/`，其余页面采用 `/canvas`、`/shot`、`/storyboard`、`/analytics`、`/bible`、`/assets`、账号与管理入口。`/design-system`、`/layout` 提供设计参考。不存在 `/preview` 页面或旧工作台兼容入口。
 
 - 当前使用固定 mock 数据，编辑只影响当前页面 React 状态，刷新恢复；真实认证、持久化、供应商调用和费用尚未接入。mock 是数据实现阶段，不是另一个产品入口。
+- 主题切换已接入 shadcn/Radix 与 `next-themes`：账号菜单与账号偏好共用浅色、深色、跟随系统选择，默认深色；主题即时生效并在当前浏览器本地保存，刷新及页面跳转保留，跟随系统响应设备外观变化。账号级服务端同步尚未接入。
 - 复用组件按 feature 位于 `frontend/src/components/<feature>/`；页面实现与独有组件位于对应 `frontend/src/app/<路由>/_components/`，正式 `page.tsx` 负责入口和元数据。共享主导航、上下文栏和 shadcn/Radix 控件使用语义 token；灰色图片占位沿用 Figma。具体目录与依赖边界见 PROJECT。
 - 删除被替代的旧业务页面、组件、API 客户端、上传代理与请求 provider；不通过重写或跳转保留历史路由。前端运行不依赖旧后端健康状态。
 - 按用户要求不显示页面底部 footer。桌面以 1440px 画板为参照，移动端重排并保留可关闭导航抽屉。

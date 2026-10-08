@@ -4,6 +4,7 @@ import { ProductShell } from "@/components/layout/product-shell";
 import { PageHeading } from "@/components/layout/page-heading";
 import { demoNotice } from "@/components/feedback/demo-notice";
 import { LocalDialog } from "@/components/controls/local-dialog";
+import { ThemePreference } from "@/components/controls/theme-controls";
 import { useState } from "react";
 import Link from "next/link";
 import { Monitor, UserRound } from "lucide-react";
@@ -26,12 +27,10 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { screenHref } from "@/components/layout/routes";
 
 export function AccountPage() {
   const [name, setName] = useState("陈导");
-  const [theme, setTheme] = useState("深色");
   const [prompt, setPrompt] = useState(
     "电影感光线，35mm 胶片质感，避免文字水印。",
   );
@@ -151,26 +150,12 @@ export function AccountPage() {
           </CardHeader>
           <CardContent>
             <FieldGroup className="gap-5">
-              <Field orientation="horizontal">
+              <Field>
                 <FieldLabel>主题</FieldLabel>
-                <ToggleGroup
-                  type="single"
-                  value={theme}
-                  onValueChange={(value) => {
-                    if (value) {
-                      setTheme(value);
-                      demoNotice(`${value}偏好已选择，当前画板保持深色对照`);
-                    }
-                  }}
-                  aria-label="主题偏好"
-                  className="ml-auto"
-                >
-                  {["深色", "浅色", "跟随系统"].map((value) => (
-                    <ToggleGroupItem key={value} value={value}>
-                      {value}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                <ThemePreference />
+                <FieldDescription>
+                  即时生效并保存在此浏览器，跟随系统会自动适配设备外观。
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="default-prompt">默认提示词后缀</FieldLabel>

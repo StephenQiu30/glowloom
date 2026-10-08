@@ -2,6 +2,7 @@
 
 import { Brand } from "@/components/layout/brand";
 import { IconButton } from "@/components/controls/icon-button";
+import { ThemeMenuItems } from "@/components/controls/theme-controls";
 import { SearchInput } from "@/components/forms/search-input";
 import { demoNotice } from "@/components/feedback/demo-notice";
 import { Choice } from "@/components/forms/choice";
@@ -23,7 +24,6 @@ import {
   LogOut,
   Menu,
   Monitor,
-  Moon,
   PanelLeft,
   Plus,
   Search,
@@ -430,19 +430,9 @@ function ProductNavigation({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            <ThemeMenuItems />
+            <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link
-                  href={`${screenHref("account")}#preferences`}
-                  onClick={close}
-                >
-                  <Moon />
-                  主题
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    深色
-                  </span>
-                </Link>
-              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href={screenHref("login")} onClick={close}>
                   <LogOut />
