@@ -30,7 +30,10 @@ func TestAuthRegistrationSessionPasswordAndFailureTransactions(t *testing.T) {
 	if dsn == "" {
 		t.Skip("requires a disposable database initialized from schema.sql")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	// This scenario performs production-cost password hashing and concurrent
+	// transactions under Race. Shared CI runners need a longer fixture deadline;
+	// session expiry and lock windows are still tested with the injected clock.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 	owner, err := db.Open(ctx, dsn, noop.NewTracerProvider())
 	if err != nil {
