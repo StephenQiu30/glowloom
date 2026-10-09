@@ -4,7 +4,7 @@
 
 ## 1. 当前阶段与文件职责
 
-正式前端页面已替换，功能与数据仍以 mock 为主，真实业务尚未逐项验收。当前整理原始需求，不执行数据库 DDL。`docs/`维护原始产品需求、包含功能/非功能/验收的业务需求文件及生命周期方法；已形成含架构、库表约束、API/DTO及生命周期工程合同的[整体与模块需求Design](docs/design/00-项目需求设计.md)，当前仍没有已接受的新数据/接口设计。需求获取、评审/基线、Design、实施、测试、发布、运行维护及退役遵循[生命周期方法](docs/软件生命周期与需求管理.md)。文档直接通过 Markdown、Git 和 Obsidian 管理。AGENTS负责协作规则，根DESIGN负责本次视觉与交互，docs/design负责待评审项目技术方案；BACKLOG只维护当前事项。
+正式前端页面已替换，功能与数据仍以 mock 为主，真实业务尚未逐项验收。原始需求整理已完成；2026-10-09按用户授权实现M1 T01-01身份切片，真实存储/API/页面已接入并完成分层工程验证，人工页面改密与用户切片接受待完成，实施合同见Design 01末节。数据库仅按本片已审阅的增量实施，不重放最终态Schema。`docs/`维护原始产品需求、包含功能/非功能/验收的业务需求文件及生命周期方法；已形成含架构、库表约束、API/DTO及生命周期工程合同的[整体与模块需求Design](docs/design/00-项目需求设计.md)，全模块方案仍待评审，M1身份切片按Design 01实施合同执行。需求获取、评审/基线、Design、实施、测试、发布、运行维护及退役遵循[生命周期方法](docs/软件生命周期与需求管理.md)。文档直接通过 Markdown、Git 和 Obsidian 管理。AGENTS负责协作规则，根DESIGN负责本次视觉与交互，docs/design负责待评审项目技术方案；BACKLOG只维护当前事项。
 
 ## 2. 可继续使用的工具
 
@@ -28,7 +28,7 @@
 
 M0完整本地工程验收见[Demo Plan第9节](docs/plan/06-画布生图生视频Demo.md#9-m0完整执行与验收)：本地namespace必须先显式准备，不由应用自动创建；Codex进程只核握手/能力，生成Worker接入后置。Go补丁工具链及依赖实际版本以go.mod/Dockerfile为准，不将旧扫描快照当当前结果。
 
-现有运行后端不提供Swagger在线路由，backend/docs不跟踪或重新引入；生成合同门禁在测试中用模块固定版本swag读取当前Handler注解，生成内存规范并与NewBusinessRouter实际路由双向核对。后续新业务仍以已接受Design→Handler/DTO→swag→openapi2ts为生成顺序，不将旧规范发给新前端，也不恢复旧在线接口。
+现有运行后端不提供Swagger在线路由，backend/docs不跟踪或重新引入；生成合同门禁在测试中用模块固定版本swag读取当前Handler注解，生成内存规范并与NewBusinessRouter实际路由双向核对。后续新业务仍以已接受Design→Handler/DTO→swag→openapi2ts为生成顺序，不将旧规范发给新前端，也不恢复旧在线接口。M1认证客户端在frontend运行Plan 01末节的现有工具直接命令，按go.mod固定swag→六个资源/引用DTO→固定@umijs/openapi→仓库Prettier生成；三文件不手改。运行代理使用服务端LV_BACKEND_ORIGIN，浏览器不接触该配置。
 
 ## 4. 质量门禁
 
@@ -44,4 +44,4 @@ Markdown 更改检查引用与内容，Obsidian 设置更改检查 JSON 和实�
 
 文档入口为 [docs/README.md](docs/README.md)，正文直接在既有分类目录维护。Obsidian 使用仓库根 Vault，保留标准 Markdown 相对链接、模板与图谱；默认 Compose 只保留业务前后端服务。详情见 [文档与 Obsidian 说明](docs/KNOWLEDGE.md)。
 
-提交遵循AGENTS；只包含本任务，交付报告SHA、检查结果、未决问题与工作区状态。当前正式前端已由 Figma 页面替换；旧前端模块已删除。后端和现有数据尚未变更，后端清理范围需单独确认。
+提交遵循AGENTS；只包含本任务，交付报告SHA、检查结果、未决问题与工作区状态。当前正式前端已由 Figma 页面替换；旧前端模块已删除。M1身份后端与本地认证增量已落地，其余后端清理范围需单独确认。
