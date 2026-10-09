@@ -3,12 +3,15 @@ package app_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/swaggo/swag"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -16,6 +19,37 @@ import (
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 )
+
+func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
+	// Check the current source contract without restoring removed generated files
+	// or publishing the legacy Swagger endpoints.
+	parser := swag.New(swag.SetParseDependency(1), swag.ParseUsingGoList(true), swag.SetDebugger(log.New(io.Discard, "", 0)))
+	parser.ParseInternal = true
+	if err := parser.ParseAPI("../..", "internal/app/public_api.go", 100); err != nil {
+		t.Fatalf("generate source contract: %v", err)
+	}
+	encoded, err := json.Marshal(parser.GetSwagger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(encoded, &schema); err != nil {
+		t.Fatal(err)
+	}
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+	}, &gorm.DB{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := make(map[string]struct{})
+	for _, route := range router.Routes() {
+		routes[route.Method+" "+route.Path] = struct{}{}
+	}
+	if err := validatePublicSwagger(schema, routes); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{

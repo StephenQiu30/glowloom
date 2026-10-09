@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.temporal.io/api/serviceerror"
 	"go.uber.org/zap"
 
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
@@ -56,5 +58,26 @@ func TestPingWithTemporal(t *testing.T) {
 	defer cancel()
 	if err := conn.Ping(ctx); err != nil {
 		t.Fatalf("Ping() error = %v", err)
+	}
+}
+
+// TestPingRejectsMissingNamespace guards the startup failure observed in M0.
+// It queries a unique absent namespace without creating or modifying one.
+func TestPingRejectsMissingNamespace(t *testing.T) {
+	addr := os.Getenv("LV_TEST_TEMPORAL_ADDR")
+	if addr == "" {
+		t.Skip("set LV_TEST_TEMPORAL_ADDR for local Temporal")
+	}
+	conn, err := temporalconn.Open(addr, "lanverse-m0-absent-"+uuid.NewString(), zap.NewNop(), noop.NewTracerProvider())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(conn.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err = conn.Ping(ctx)
+	var notFound *serviceerror.NamespaceNotFound
+	if !errors.As(err, &notFound) {
+		t.Fatalf("Ping() error = %v, want namespace not found", err)
 	}
 }
