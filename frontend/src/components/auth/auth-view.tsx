@@ -1,10 +1,18 @@
 "use client";
 
 import { Brand } from "@/components/layout/brand";
-import { demoNotice } from "@/components/feedback/demo-notice";
+import {
+  changePassword,
+  createSession,
+  deleteSession,
+  getLoginAvailability,
+  getSession,
+  registerAccount,
+} from "./generated/auth";
+import { AuthError, requireSession } from "./request";
 import { cn } from "cn";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -39,11 +47,13 @@ function PasswordInput({
   value,
   onChange,
   invalid = false,
+  autoComplete = "new-password",
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   invalid?: boolean;
+  autoComplete?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
@@ -54,7 +64,7 @@ function PasswordInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={invalid}
-        autoComplete="off"
+        autoComplete={autoComplete}
       />
       <InputGroupAddon align="inline-end">
         <InputGroupButton
@@ -73,12 +83,13 @@ function PasswordRules({ value }: { value: string }) {
     <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
       {[
         [
-          value.length >= 10,
-          value.length >= 10
+          Array.from(value).length >= 10,
+          Array.from(value).length >= 10
             ? "至少 10 位"
-            : "至少 10 位（还差 " + (10 - value.length) + " 位）",
+            : "至少 10 位（还差 " + (10 - Array.from(value).length) + " 位）",
         ],
-        [/[a-zA-Z]/.test(value) && /\d/.test(value), "同时包含字母与数字"],
+        [/\p{L}/u.test(value) && /\p{Nd}/u.test(value), "同时包含字母与数字"],
+        [new TextEncoder().encode(value).length <= 72, "不超过 72 字节"],
       ].map(([valid, text]) => (
         <li className="flex items-center gap-2" key={String(text)}>
           {valid ? <Check className="size-3" /> : <Circle className="size-3" />}
@@ -91,9 +102,9 @@ function PasswordRules({ value }: { value: string }) {
 
 function AuthArtwork({ register }: { register: boolean }) {
   return (
-    <aside className="relative hidden min-h-[900px] overflow-hidden bg-auth-art lg:block">
+    <aside className="relative hidden min-h-0 overflow-hidden bg-auth-art lg:block">
       <div
-        className="absolute top-[216px] left-[7%] h-[370px] w-[720px]"
+        className="absolute top-[clamp(96px,calc(50dvh-280px),216px)] left-[7%] h-[370px] w-[720px] origin-top-left [@media(max-height:600px)]:hidden [@media(max-height:760px)]:scale-85"
         aria-hidden="true"
       >
         <svg className="absolute inset-0 size-full" viewBox="0 0 720 370">
@@ -165,81 +176,177 @@ export function AuthView({
   mode: "login" | "register" | "reset-password";
 }) {
   const router = useRouter();
-  const [username, setUsername] = useState("chendao");
-  const [displayName, setDisplayName] = useState("陈导");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [session, setSession] = useState<AuthAPI.SessionView | null>(null);
+  const [availability, setAvailability] = useState("");
+  const submitting = useRef(false);
+  const availabilityAbort = useRef<AbortController | null>(null);
   const reset = mode === "reset-password";
+  useEffect(() => {
+    const controller = new AbortController();
+    if (reset)
+      getSession({ signal: controller.signal })
+        .then((value) => setSession(requireSession(value)))
+        .catch((reason) => {
+          if (controller.signal.aborted) return;
+          if (reason instanceof AuthError && reason.status === 401)
+            router.replace(screenHref("login"));
+          else
+            setError(
+              reason instanceof Error
+                ? reason.message
+                : "无法读取会话，请重试。",
+            );
+        });
+    return () => {
+      controller.abort();
+      availabilityAbort.current?.abort();
+    };
+  }, [reset, router]);
   const register = mode === "register";
   const validPassword =
-    password.length >= 10 && /[a-zA-Z]/.test(password) && /\d/.test(password);
+    Array.from(password).length >= 10 &&
+    /\p{L}/u.test(password) &&
+    /\p{Nd}/u.test(password) &&
+    new TextEncoder().encode(password).length <= 72;
   const mismatch = confirmation.length > 0 && confirmation !== password;
   const valid = register
     ? Boolean(
         displayName.trim() &&
-        username.trim() &&
+        Array.from(displayName.trim()).length <= 32 &&
+        /^[a-zA-Z0-9._-]{1,64}$/.test(username.trim()) &&
         validPassword &&
         confirmation === password,
       )
     : reset
       ? Boolean(
+          session &&
           currentPassword &&
           validPassword &&
           password !== currentPassword &&
           confirmation === password,
         )
       : Boolean(username.trim() && password);
+  async function submit() {
+    setSubmitted(true);
+    if (!valid || submitting.current) return;
+    submitting.current = true;
+    setPending(true);
+    setError("");
+    try {
+      const value =
+        reset && session
+          ? await changePassword({
+              expected_credential_revision: session.actor.credential_revision,
+              current_password: currentPassword,
+              new_password: password,
+              confirm_password: confirmation,
+            })
+          : register
+            ? await registerAccount({
+                login_name: username,
+                display_name: displayName,
+                password,
+                confirm_password: confirmation,
+              })
+            : await createSession({
+                login_name: username,
+                password,
+                persistent: remember,
+              });
+      const result = requireSession(value);
+      router.push(
+        screenHref(
+          result.actor.must_change_password ? "reset-password" : "home",
+        ),
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "请求结果未确认，请重试。",
+      );
+    } finally {
+      submitting.current = false;
+      setPending(false);
+    }
+  }
+  async function logout() {
+    if (!session || pending) return;
+    setPending(true);
+    setError("");
+    try {
+      await deleteSession({ session_id: session.session_id });
+      router.replace(screenHref("login"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "退出结果未确认。");
+    } finally {
+      setPending(false);
+    }
+  }
+  async function checkAvailability() {
+    if (!register || !/^[a-zA-Z0-9._-]{1,64}$/.test(username.trim())) return;
+    availabilityAbort.current?.abort();
+    const controller = new AbortController();
+    availabilityAbort.current = controller;
+    setAvailability("正在检查登录名…");
+    try {
+      const result = await getLoginAvailability(
+        { login_name: username },
+        { signal: controller.signal },
+      );
+      if (typeof result?.available !== "boolean")
+        throw new AuthError("invalid_receipt");
+      if (!controller.signal.aborted)
+        setAvailability(result.available ? "登录名可以使用" : "登录名已被使用");
+    } catch {
+      if (!controller.signal.aborted)
+        setAvailability("暂时无法检查，提交时将再次校验。");
+    }
+  }
   return (
-    <main className="relative min-h-svh [&_[data-slot=field-group]]:gap-4">
+    <main className="relative h-dvh overflow-hidden [&_[data-slot=field-group]]:gap-4">
       <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-6 py-7 lg:px-10">
         <Brand wordmark />
-        <Button variant={reset ? "ghost" : "outline"} size="sm" asChild>
-          <Link href={screenHref(register || reset ? "login" : "register")}>
-            {reset ? "退出登录" : register ? "登录" : "注册"}
-          </Link>
-        </Button>
+        {reset ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={logout}
+            disabled={!session || pending}
+          >
+            退出登录
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" asChild>
+            <Link href={screenHref(register ? "login" : "register")}>
+              {register ? "登录" : "注册"}
+            </Link>
+          </Button>
+        )}
       </header>
       <div
         className={cn(
-          reset
-            ? "flex min-h-svh items-center justify-center px-6 py-28"
-            : "grid min-h-svh lg:grid-cols-[55%_45%]",
+          "grid h-full min-h-0",
+          !reset && "lg:grid-cols-[55%_45%]",
         )}
       >
         {!reset ? <AuthArtwork register={register} /> : null}
-        <div
-          className={cn(
-            reset
-              ? "w-full max-w-[400px]"
-              : "flex min-h-svh items-center justify-center px-6 py-28",
-            !reset &&
-              (register
-                ? "lg:items-start lg:pt-[164px]"
-                : "lg:items-start lg:pt-[230px]"),
-          )}
-        >
+        <div className="mt-24 flex min-h-0 flex-col items-center overflow-y-auto px-6 pb-6">
           <form
             className={cn(
-              reset
-                ? "flex w-full max-w-[400px] flex-col gap-5"
-                : "flex w-full max-w-[360px] flex-col gap-5",
+              "my-auto flex w-full shrink-0 flex-col gap-4",
+              reset ? "max-w-[400px]" : "max-w-[360px]",
             )}
             onSubmit={(event) => {
               event.preventDefault();
-              setSubmitted(true);
-              if (valid) {
-                demoNotice(
-                  reset
-                    ? "密码演示已完成"
-                    : register
-                      ? "演示账号已创建"
-                      : "已进入演示工作台",
-                );
-                router.push(screenHref("home"));
-              }
+              void submit();
             }}
           >
             <div className={cn(reset ? "mb-2 text-center" : "mb-1")}>
@@ -248,18 +355,18 @@ export function AuthView({
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
                 {reset
-                  ? "首次登录或密码被重置后，需要先修改密码才能继续使用。"
+                  ? session?.actor.must_change_password
+                    ? "首次登录或密码被重置后，需要先修改密码才能继续使用。"
+                    : "修改后保留当前设备的会话，其他设备需要重新登录。"
                   : register
                     ? "登录名创建后不可修改"
                     : "登录后继续你的创作项目"}
               </p>
             </div>
-            {!register && !reset ? (
+            {error ? (
               <Alert variant="danger">
                 <ShieldAlert />
-                <AlertDescription>
-                  登录名或密码不正确。连续错误 5 次将锁定 15 分钟。
-                </AlertDescription>
+                <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : null}
             <FieldGroup className="gap-5">
@@ -271,7 +378,6 @@ export function AuthView({
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     className="h-11"
-                    maxLength={32}
                   />
                 </Field>
               ) : null}
@@ -281,13 +387,21 @@ export function AuthView({
                   <Input
                     id="login-name"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      availabilityAbort.current?.abort();
+                      setAvailability("");
+                    }}
+                    onBlur={() => void checkAvailability()}
+                    maxLength={64}
                     className="h-11"
-                    autoComplete="off"
+                    autoComplete="username"
                     aria-invalid={submitted && !username.trim()}
                   />
                   {register ? (
-                    <FieldDescription>✓ 可以使用</FieldDescription>
+                    <FieldDescription>
+                      {availability || "仅允许英文、数字及 . _ -，1～64字符"}
+                    </FieldDescription>
                   ) : null}
                 </Field>
               ) : (
@@ -297,6 +411,7 @@ export function AuthView({
                     id="current-password"
                     value={currentPassword}
                     onChange={setCurrentPassword}
+                    autoComplete="current-password"
                   />
                 </Field>
               )}
@@ -308,11 +423,9 @@ export function AuthView({
                     {reset ? "新密码" : "密码"}
                   </FieldLabel>
                   {mode === "login" ? (
-                    <Button variant="link" size="xs" asChild>
-                      <Link href={screenHref("reset-password")}>
-                        忘记密码请联系管理员
-                      </Link>
-                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      忘记密码请联系管理员
+                    </span>
                   ) : null}
                 </div>
                 <PasswordInput
@@ -320,6 +433,9 @@ export function AuthView({
                   value={password}
                   onChange={setPassword}
                   invalid={submitted && !password}
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
                 />
                 {register ? (
                   <div
@@ -384,16 +500,22 @@ export function AuthView({
               size="lg"
               type="submit"
               className="h-11 w-full"
-              disabled={(register || reset) && !valid}
+              disabled={pending || ((register || reset) && !valid)}
             >
-              {reset ? "保存并继续" : register ? "创建账号" : "登录"}
+              {pending
+                ? "正在提交…"
+                : reset
+                  ? "保存并继续"
+                  : register
+                    ? "创建账号"
+                    : "登录"}
               {!register && !reset ? (
                 <ArrowRight data-icon="inline-end" />
               ) : null}
             </Button>
             {reset ? (
               <p className="text-center text-xs text-muted-foreground">
-                修改后，除共享终端设备上的登录会立即失效。
+                修改后保留当前设备并轮换会话，其他设备上的登录立即失效。
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">

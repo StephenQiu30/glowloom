@@ -1,4 +1,4 @@
-// Package application coordinates durable workspace identity and account commands.
+// Package application coordinates authentication and organization-scoped account commands.
 package application
 
 import (
@@ -8,7 +8,7 @@ import (
 )
 
 // Principal identifies the actor recorded by organization-scoped commands.
-// The current API supplies it from the single durable workspace.
+// The public API resolves it from a valid server-side session.
 type Principal struct {
 	ID                 uuid.UUID
 	OrgID              uuid.UUID

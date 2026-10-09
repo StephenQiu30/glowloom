@@ -845,6 +845,37 @@ CREATE TABLE identity."user" (
     CONSTRAINT user_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text])))
 );
 
+-- M1 认证增量：登录名全局唯一，会话摘要、滚动失败窗口与安全事件。
+CREATE UNIQUE INDEX uq_user_login_global ON identity."user" (lower(btrim(login_name::text))) WHERE NOT is_delete;
+
+CREATE TABLE identity.user_session (
+    id uuid PRIMARY KEY,
+    account_id uuid NOT NULL,
+    token_hash bytea NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
+    credential_revision bigint NOT NULL CHECK (credential_revision > 0),
+    created_at timestamptz NOT NULL,
+    last_active_at timestamptz NOT NULL,
+    absolute_expires_at timestamptz NOT NULL,
+    persistent boolean NOT NULL,
+    revoked_at timestamptz,
+    CHECK (last_active_at >= created_at AND absolute_expires_at > created_at)
+);
+CREATE INDEX user_session_account_idx ON identity.user_session (account_id);
+
+CREATE TABLE identity.login_guard (
+    login_key text PRIMARY KEY CHECK (login_key ~ '^[a-z0-9._-]{1,64}$'),
+    failure_times timestamptz[] NOT NULL DEFAULT '{}',
+    locked_until timestamptz,
+    CHECK (cardinality(failure_times) <= 5)
+);
+
+CREATE TABLE identity.auth_event (
+    id uuid PRIMARY KEY,
+    account_id uuid,
+    action text NOT NULL CHECK (action IN ('registered','logged_in','login_failed','logged_out','password_changed')),
+    created_at timestamptz NOT NULL
+);
+
 CREATE TABLE infra.idempotency_record (
     id uuid NOT NULL,
     actor_id uuid NOT NULL,
@@ -3163,6 +3194,9 @@ CREATE UNIQUE INDEX uq_provider_credential_active ON catalog.provider_credential
 
 CREATE INDEX idx_user_directory ON identity."user" USING btree (org_id, create_time DESC, id DESC) WHERE (NOT is_delete);
 
+ALTER TABLE identity.user_session ADD FOREIGN KEY (account_id) REFERENCES identity."user" (id);
+ALTER TABLE identity.auth_event ADD FOREIGN KEY (account_id) REFERENCES identity."user" (id);
+
 CREATE UNIQUE INDEX uq_user_login_name ON identity."user" USING btree (org_id, login_name) WHERE (NOT is_delete);
 
 CREATE INDEX ix_outbox_pending ON ONLY infra.outbox USING btree (create_time) WHERE (published_at IS NULL);
@@ -4002,6 +4036,10 @@ GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider TO lanverse_app;
 GRANT SELECT,INSERT,UPDATE ON TABLE catalog.provider_credential TO lanverse_app;
 
 GRANT SELECT,INSERT,UPDATE ON TABLE identity."user" TO lanverse_app;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.user_session TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE identity.login_guard TO lanverse_app;
+GRANT SELECT,INSERT ON TABLE identity.auth_event TO lanverse_app;
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE infra.idempotency_record TO lanverse_app;
 

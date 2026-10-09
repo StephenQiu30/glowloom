@@ -6,7 +6,10 @@ import { ThemeMenuItems } from "@/components/controls/theme-controls";
 import { SearchInput } from "@/components/forms/search-input";
 import { demoNotice } from "@/components/feedback/demo-notice";
 import { Choice } from "@/components/forms/choice";
-import { useState, type ReactNode, type CSSProperties } from "react";
+import { useEffect, useState, type ReactNode, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
+import { getSession, deleteSession } from "@/components/auth/generated/auth";
+import { AuthError, requireSession } from "@/components/auth/request";
 import Link from "next/link";
 import { cn } from "cn";
 import {
@@ -248,10 +251,14 @@ function ContextNavigation({
 }
 
 function ProductNavigation({
+  session,
+  onLogout,
   screen,
   contextual,
   onToggleContext,
 }: {
+  session: AuthAPI.SessionView;
+  onLogout: () => void;
   screen: Screen;
   contextual: boolean;
   onToggleContext: () => void;
@@ -290,26 +297,28 @@ function ProductNavigation({
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu className="gap-1 px-2">
-          {navs.map(([id, label, Icon, active]) => (
-            <SidebarMenuItem key={id}>
-              <SidebarMenuButton size="rail" isActive={active} asChild>
-                <Link href={screenHref(id)} onClick={close}>
-                  <span className="relative">
-                    <Icon className="size-5" />
-                    {label === "任务" ? (
-                      <Badge
-                        variant="notification"
-                        className="absolute -top-1.5 -right-2 size-4 justify-center p-0 text-[10px]"
-                      >
-                        2
-                      </Badge>
-                    ) : null}
-                  </span>
-                  <span>{label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {navs
+            .filter(([id]) => id !== "users" || session.actor.role === "admin")
+            .map(([id, label, Icon, active]) => (
+              <SidebarMenuItem key={id}>
+                <SidebarMenuButton size="rail" isActive={active} asChild>
+                  <Link href={screenHref(id)} onClick={close}>
+                    <span className="relative">
+                      <Icon className="size-5" />
+                      {label === "任务" ? (
+                        <Badge
+                          variant="notification"
+                          className="absolute -top-1.5 -right-2 size-4 justify-center p-0 text-[10px]"
+                        >
+                          2
+                        </Badge>
+                      ) : null}
+                    </span>
+                    <span>{label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
         </SidebarMenu>
         <div className="md:hidden">
           {contextual ? (
@@ -385,7 +394,9 @@ function ProductNavigation({
           <DropdownMenuTrigger asChild>
             <Button size="icon" variant="ghost" aria-label="账号菜单">
               <Avatar>
-                <AvatarFallback>陈</AvatarFallback>
+                <AvatarFallback>
+                  {Array.from(session.actor.display_name)[0]}
+                </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
@@ -397,9 +408,9 @@ function ProductNavigation({
             className="w-60 p-2 [&_[data-slot=dropdown-menu-item]]:h-9"
           >
             <DropdownMenuLabel>
-              陈导
+              {session.actor.display_name}
               <span className="mt-1 block font-mono text-[11px] font-normal text-muted-foreground">
-                chendao
+                {session.actor.login_name}
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -416,16 +427,26 @@ function ProductNavigation({
                   我的素材
                 </Link>
               </DropdownMenuItem>
+              {session.actor.role === "admin" ? (
+                <DropdownMenuItem asChild>
+                  <Link href={screenHref("providers")} onClick={close}>
+                    <KeyRound />
+                    供应商凭据
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              {session.actor.role === "admin" ? (
+                <DropdownMenuItem asChild>
+                  <Link href={screenHref("users")} onClick={close}>
+                    <Shield />
+                    管理账号
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem asChild>
-                <Link href={screenHref("providers")} onClick={close}>
+                <Link href={screenHref("reset-password")} onClick={close}>
                   <KeyRound />
-                  供应商凭据
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={screenHref("users")} onClick={close}>
-                  <Shield />
-                  管理账号
+                  修改密码
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -433,11 +454,9 @@ function ProductNavigation({
             <ThemeMenuItems />
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href={screenHref("login")} onClick={close}>
-                  <LogOut />
-                  退出登录
-                </Link>
+              <DropdownMenuItem onSelect={onLogout}>
+                <LogOut />
+                退出登录
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -469,6 +488,77 @@ export function ProductShell({
   fullBleed?: boolean;
 }) {
   const [contextOpen, setContextOpen] = useState(true);
+  const router = useRouter();
+  const [session, setSession] = useState<AuthAPI.SessionView | null>(null);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [loggingOut, setLoggingOut] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    getSession({ signal: controller.signal })
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        const result = requireSession(value);
+        if (result.actor.must_change_password) {
+          router.replace(screenHref("reset-password"));
+          return;
+        }
+        if (
+          adminLinks.some(([id]) => id === screen) &&
+          result.actor.role !== "admin"
+        ) {
+          setError("当前账号无权访问管理页面。");
+          return;
+        }
+        setSession(result);
+      })
+      .catch((reason) => {
+        if (controller.signal.aborted) return;
+        if (reason instanceof AuthError && reason.status === 401)
+          router.replace(screenHref("login"));
+        else
+          setError(
+            reason instanceof Error ? reason.message : "无法读取登录状态。",
+          );
+      });
+    return () => controller.abort();
+  }, [router, screen, retry]);
+  async function logout() {
+    if (!session || loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await deleteSession({ session_id: session.session_id });
+      setSession(null);
+      router.replace(screenHref("login"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "退出结果未确认。");
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+  if (!session || error)
+    return (
+      <main className="flex min-h-svh items-center justify-center">
+        <div className="space-y-3">
+          {error ? (
+            <>
+              <p role="alert">{error}</p>
+              <Button
+                onClick={() => {
+                  setError("");
+                  setRetry((value) => value + 1);
+                }}
+              >
+                重新检查会话
+              </Button>
+            </>
+          ) : (
+            <p role="status">正在验证登录状态…</p>
+          )}
+        </div>
+      </main>
+    );
+
   return (
     <TooltipProvider>
       <SidebarProvider style={{ "--sidebar-width": "72px" } as CSSProperties}>
@@ -476,6 +566,8 @@ export function ProductShell({
           跳转到主要内容
         </a>
         <ProductNavigation
+          session={session}
+          onLogout={() => void logout()}
           screen={screen}
           contextual={contextual}
           onToggleContext={() => setContextOpen(!contextOpen)}

@@ -1,4 +1,4 @@
-// Package http supplies the single durable workspace identity to business adapters.
+// Package http exposes identity resources and supplies authenticated principals.
 package http
 
 import (
@@ -41,7 +41,7 @@ func Workspace(store WorkspaceProvider) gin.HandlerFunc {
 	}
 }
 
-// Principal returns the workspace identity for organization-scoped commands.
+// Principal returns the authenticated actor for organization-scoped commands.
 func Principal(c *gin.Context) application.Principal {
 	value, _ := c.Get("principal")
 	principal, _ := value.(application.Principal)

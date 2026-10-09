@@ -13,6 +13,7 @@ services:
     restart: unless-stopped
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
+      LV_BACKEND_ORIGIN: "http://backend:18080"
       NODE_OPTIONS: "--max-old-space-size=2048"
     volumes:
       - ./frontend/src:/app/src:ro

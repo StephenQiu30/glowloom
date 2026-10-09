@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,6 +28,7 @@ import (
 	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
 	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
 	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gltf"
 	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/http"
 	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
@@ -86,7 +88,9 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	router.NoMethod(func(c *gin.Context) { httpapi.WriteProblem(c, 405, "method_not_allowed", nil) })
 	api := router.Group("/api")
 	protected := api.Group("")
-	protected.Use(identityhttp.Workspace(pgidentity.NewStore(database)))
+	auth := identityhttp.NewAuthHandler(identityapp.NewAuth(pgidentity.NewStore(database), time.Now), strings.HasPrefix(cfg.PublicOrigin, "https://"))
+	auth.Register(api)
+	protected.Use(auth.RequireSession())
 	workspaceStore := provideWorkspaceLifecycleStore(database)
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
