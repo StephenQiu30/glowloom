@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   cleanup,
   fireEvent,
@@ -39,3 +40,8 @@ it("创建账号的无效输入保留弹窗，有效输入更新本地表格", (
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.getByText("demo.director")).toBeTruthy();
 });
+
+// 本测试仅覆盖页面交互；真实身份守卫由product-shell.test.tsx与浏览器核验。
+vi.mock("@/components/layout/product-shell", () => ({
+  ProductShell: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));

@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
@@ -36,7 +35,7 @@ import (
 )
 
 type mediaCompositionFixture struct {
-	router  *gin.Engine
+	router  http.Handler
 	runtime *gorm.DB
 	owner   *gorm.DB
 	objects *objectstorage.Client
@@ -109,11 +108,17 @@ func newMediaCompositionFixture(t *testing.T) mediaCompositionFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := identitypg.NewStore(fixture.runtime).EnsureWorkspace(t.Context())
+	authResult, err := identityapp.NewAuth(identitypg.NewStore(fixture.runtime), time.Now).Register(t.Context(), "composition-"+uuid.NewString(), "Composition", "CompositionPassword123", "CompositionPassword123")
 	if err != nil {
 		t.Fatal("resolve formal workspace identity", err)
 	}
+	user := authResult.User
 	fixture.actor = identityapp.Principal{ID: user.ID, OrgID: user.OrgID, Role: user.Role}
+	baseRouter := fixture.router
+	fixture.router = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: "lanverse_session", Value: authResult.Token})
+		baseRouter.ServeHTTP(w, r)
+	})
 	created := mediaCompositionRequest(t, fixture.router, http.MethodPost, "/api/projects", map[string]string{"name": "素材组合验收 " + uuid.NewString()[:8], "aspect_ratio": "16:9", "style_type": "realistic"})
 	var project workspaceapp.CreatedProject
 	if created.Code != 201 || json.Unmarshal(created.Body.Bytes(), &project) != nil || project.ID == uuid.Nil {

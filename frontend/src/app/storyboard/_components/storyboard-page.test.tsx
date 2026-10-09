@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { StoryboardPage } from "./storyboard-page";
@@ -30,3 +31,8 @@ it("分镜取消批选会禁用批量操作，重新勾选后恢复", () => {
     "已为 1 个镜头创建演示任务（本地演示）",
   );
 });
+
+// 本测试仅覆盖页面交互；真实身份守卫由product-shell.test.tsx与浏览器核验。
+vi.mock("@/components/layout/product-shell", () => ({
+  ProductShell: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));

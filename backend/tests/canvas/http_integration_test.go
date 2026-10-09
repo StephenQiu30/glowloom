@@ -20,6 +20,9 @@ import (
 
 	"github.com/StephenQiu30/lanverse/backend/internal/app"
 	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
+	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
 	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
 	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
@@ -27,7 +30,7 @@ import (
 
 func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	database := canvasDB(t, "LV_TEST_CANVAS_HTTP_DB_DSN")
-	_, project := seedCanvasActor(t, database)
+	actor, project := seedCanvasActor(t, database)
 	var storage *objectstorage.Client
 	var mediaDigests map[uuid.UUID][32]byte
 	if os.Getenv("LV_TEST_CANVAS_USE_ENV_OBJECT_STORAGE") == "1" {
@@ -47,6 +50,17 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hash, err := identitydomain.HashPassword("CanvasPassword123", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec(`UPDATE identity."user" SET password_hash=? WHERE id=?::uuid`, hash, actor.ID.String()).Error; err != nil {
+		t.Fatal(err)
+	}
+	authResult, err := identityapp.NewAuth(pgidentity.NewStore(database), time.Now).Login(t.Context(), "canvas-"+actor.ID.String(), "CanvasPassword123", false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -57,6 +71,7 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		req.AddCookie(&http.Cookie{Name: "lanverse_session", Value: authResult.Token})
 		req.Header.Set("Content-Type", "application/json")
 		if originHeader != "" {
 			req.Header.Set("Origin", originHeader)

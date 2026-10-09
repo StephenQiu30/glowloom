@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   cleanup,
   fireEvent,
@@ -38,3 +40,10 @@ it("设定集未确认筛选与搜索共同作用", () => {
       .getAttribute("aria-current"),
   ).toBe("true");
 });
+
+// 本测试仅覆盖页面交互；真实身份守卫由product-shell.test.tsx与浏览器核验。
+vi.mock("@/components/layout/product-shell", () => ({
+  ProductShell: ({ children }: { children: ReactNode }) => (
+    <TooltipProvider>{children}</TooltipProvider>
+  ),
+}));

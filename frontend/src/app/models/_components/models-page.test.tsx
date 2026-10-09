@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ModelsPage } from "./models-page";
@@ -37,3 +38,8 @@ it("模型运动幅度支持键盘调整，参数预览与 JSON 保持一致", (
   expect(preview.textContent).toContain('"motionAmount": 61');
   expect(preview.textContent).toContain('"fixedCamera": true');
 });
+
+// 本测试仅覆盖页面交互；真实身份守卫由product-shell.test.tsx与浏览器核验。
+vi.mock("@/components/layout/product-shell", () => ({
+  ProductShell: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
