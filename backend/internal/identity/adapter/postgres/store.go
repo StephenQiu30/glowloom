@@ -18,7 +18,7 @@ import (
 var (
 	// ErrInvalidUser means an account mutation has invalid identity or state data.
 	ErrInvalidUser = errors.New("invalid new user")
-	// ErrLoginExists means the organization already has this case-insensitive login.
+	// ErrLoginExists means this case-insensitive login is already registered.
 	ErrLoginExists = errors.New("login name already exists")
 	// ErrNotFound means no active account is visible in the organization.
 	ErrNotFound = domain.ErrUserNotFound
@@ -49,7 +49,7 @@ func (s *Store) Create(ctx context.Context, user domain.User) error {
 	`, user.ID.String(), user.OrgID.String(), user.LoginName, user.DisplayName, string(user.Role), user.PasswordHash)
 	if result.Error != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(result.Error, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "uq_user_login_name" {
+		if errors.As(result.Error, &pgErr) && pgErr.Code == "23505" && (pgErr.ConstraintName == "uq_user_login_name" || pgErr.ConstraintName == "uq_user_login_global") {
 			return fmt.Errorf("create user: %w", ErrLoginExists)
 		}
 		return fmt.Errorf("create user: %w", result.Error)

@@ -57,8 +57,8 @@ func TestIdentityUserLoginNameScopeAndDefaults(t *testing.T) {
 	if err := insert(orgA, "ALICE"); !errors.As(err, &pgErr) || pgErr.Code != "23505" {
 		t.Fatalf("case-insensitive duplicate = %v, want unique violation", err)
 	}
-	if err := insert(orgB, "ALICE"); err != nil {
-		t.Fatalf("same login name in another organization: %v", err)
+	if err := insert(orgB, "ALICE"); !errors.As(err, &pgErr) || pgErr.Code != "23505" || pgErr.ConstraintName != "uq_user_login_global" {
+		t.Fatalf("cross-organization duplicate = %v, want global unique violation", err)
 	}
 }
 
@@ -118,8 +118,8 @@ func TestIdentityStoreCreatesAndScopesAccounts(t *testing.T) {
 	}
 	account.ID = uuid.New()
 	account.OrgID = otherOrgID
-	if err := store.Create(ctx, account); err != nil {
-		t.Fatalf("same login in another organization: %v", err)
+	if err := store.Create(ctx, account); !errors.Is(err, pgidentity.ErrLoginExists) {
+		t.Fatalf("cross-organization duplicate = %v, want ErrLoginExists", err)
 	}
 }
 
