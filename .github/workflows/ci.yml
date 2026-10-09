@@ -688,14 +688,8 @@ jobs:
       - run: wire ./internal/app
       - run: goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go
       - run: git diff --exit-code -- internal/app/wire_gen.go
-      - name: Install the module-pinned Swagger generator
-        run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
-      - name: Verify fresh Swagger artifacts without changing the checkout
-        run: |
-          swag init -g internal/app/public_api.go --parseInternal --parseDependency -o "$RUNNER_TEMP/swagger-contract/docs"
-          git diff --no-index --exit-code -- docs "$RUNNER_TEMP/swagger-contract/docs"
-      - name: Verify production public route and Swagger contracts
-        run: go test -race ./tests/app -run '^Test(PublicRouterSwaggerContract|PublicRouterSwaggerUI|PublicSwaggerRejectsContractDrift|PublicSwaggerNormalizesPathParameters|SwaggerRuntimeDefaultsDoNotHideNonEmptyDrift)$' -count=1 -v
+      - name: Verify generated source contract and removed public endpoints
+        run: go test -race ./tests/app -run '^Test(PublicRouterGeneratedSwaggerContract|PublicRouterRemovedAuthenticationRoutes|PublicRouterRemovedSwaggerRoutes|WorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost|PublicSwaggerRejectsContractDrift|PublicSwaggerNormalizesPathParameters|SwaggerRuntimeDefaultsDoNotHideNonEmptyDrift)$' -count=1 -v
 
   frontend:
     runs-on: ubuntu-24.04
