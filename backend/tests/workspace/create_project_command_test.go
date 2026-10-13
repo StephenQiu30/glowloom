@@ -156,7 +156,7 @@ func TestCreateProjectCommandRejectsInvalidCallerAndInputBeforeStorage(t *testin
 		{"must change password", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: actor.Role, MustChangePassword: true}, nil, identityapp.ErrForbidden},
 		{"blank name", actor, func(v *workspaceapp.CreateProjectInput) { v.Name = " \t" }, workspaceapp.ErrInvalidCreateProject},
 		{"long name", actor, func(v *workspaceapp.CreateProjectInput) { v.Name = strings.Repeat("剧", 51) }, workspaceapp.ErrInvalidCreateProject},
-		{"invalid aspect", actor, func(v *workspaceapp.CreateProjectInput) { v.AspectRatio = "1:1" }, workspaceapp.ErrInvalidCreateProject},
+		{"invalid aspect", actor, func(v *workspaceapp.CreateProjectInput) { v.AspectRatio = "2:3" }, workspaceapp.ErrInvalidCreateProject},
 		{"stylized without subtype", actor, func(v *workspaceapp.CreateProjectInput) { v.StyleSubtype = "" }, workspaceapp.ErrInvalidCreateProject},
 		{"realistic with subtype", actor, func(v *workspaceapp.CreateProjectInput) { v.StyleType = "realistic" }, workspaceapp.ErrInvalidCreateProject},
 		{"invalid subtype", actor, func(v *workspaceapp.CreateProjectInput) { v.StyleSubtype = "other" }, workspaceapp.ErrInvalidCreateProject},

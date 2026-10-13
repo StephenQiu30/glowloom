@@ -31,6 +31,9 @@ func (s *Store) FindProject(ctx context.Context, actor identityapp.Principal, pr
 		if err != nil {
 			return err
 		}
+		if project.OwnerID != actor.ID {
+			return ErrProjectNotFound
+		}
 		unavailable, err := s.projectCoverUnavailable(ctx, tx, actor, project)
 		if err != nil {
 			return err
@@ -50,6 +53,9 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 	var row struct {
 		ID                  uuid.UUID
 		OrgID               uuid.UUID
+		OwnerID             *uuid.UUID
+		CanvasID            *uuid.UUID
+		StyleKey            *string
 		Name                string
 		Description         string
 		AspectRatio         string
@@ -68,7 +74,7 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 		UpdateTime          time.Time
 	}
 	result := tx.Raw(`
-		SELECT id, org_id, name, description, aspect_ratio, style_type,
+		SELECT id, org_id, owner_id, initial_canvas_id AS canvas_id, style_key, name, description, aspect_ratio, style_type,
 		       style_subtype, style_preset_id, cover_asset_id, resolution, allow_overseas_models,
 		       status, archived_at, delete_time, purge_after, revision,
 		       create_time, update_time
@@ -89,6 +95,13 @@ func readProjectInTx(tx *gorm.DB, orgID, projectID uuid.UUID) (domain.Project, e
 		CoverAssetID: row.CoverAssetID, PurgeAfter: row.PurgeAfter, Revision: row.Revision,
 		CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
 	}
+	if row.OwnerID != nil {
+		project.OwnerID = *row.OwnerID
+	}
+	if row.CanvasID != nil {
+		project.CanvasID = *row.CanvasID
+	}
+	project.StyleKey = row.StyleKey
 	if row.StyleSubtype != nil {
 		project.StyleSubtype = *row.StyleSubtype
 	}

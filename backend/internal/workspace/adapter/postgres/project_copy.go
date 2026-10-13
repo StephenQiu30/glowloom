@@ -156,10 +156,12 @@ func copyPresets(tx *gorm.DB, source domain.Project, job uuid.UUID, target uuid.
 	return presets, selected, nil
 }
 
-func createCopyTarget(tx *gorm.DB, source domain.Project, target uuid.UUID, name string, now time.Time) (domain.Project, error) {
+func createCopyTarget(tx *gorm.DB, source domain.Project, owner uuid.UUID, target uuid.UUID, name string, now time.Time) (domain.Project, error) {
 	p := source
 	p.ID, p.Name, p.StylePresetID = target, name, uuid.Nil
 	p.CoverAssetID = nil
+	p.CanvasID = uuid.Nil
+	p.OwnerID = owner
 	p.Status, p.ArchivedAt, p.Revision = "copying", nil, 1
 	p.CreateTime, p.UpdateTime = now, now
 	if p.Validate() != nil || p.IsDelete {
@@ -169,7 +171,7 @@ func createCopyTarget(tx *gorm.DB, source domain.Project, target uuid.UUID, name
 	if p.StyleSubtype != "" {
 		subtype = p.StyleSubtype
 	}
-	if err := tx.Exec(`INSERT INTO workspace.project(id,org_id,name,description,aspect_ratio,style_type,style_subtype,resolution,allow_overseas_models,status,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,'copying',1,?,?)`, p.ID, p.OrgID, p.Name, p.Description, p.AspectRatio, p.StyleType, subtype, p.Resolution, p.AllowOverseasModels, now, now).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,style_key,name,description,aspect_ratio,style_type,style_subtype,resolution,allow_overseas_models,status,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,'copying',1,?,?)`, p.ID, p.OrgID, p.OwnerID, p.StyleKey, p.Name, p.Description, p.AspectRatio, p.StyleType, subtype, p.Resolution, p.AllowOverseasModels, now, now).Error; err != nil {
 		return domain.Project{}, fmt.Errorf("create unpublished project target: %w", err)
 	}
 	return p, nil
@@ -280,7 +282,7 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		saved = domain.ProjectCopyJob{RequestID: input.RequestID, ID: uuid.New(), OrgID: actor.OrgID, ActorID: actor.ID, SourceProjectID: input.SourceProjectID, SourceRevision: input.ExpectedRevision, TargetProjectID: uuid.New(), TargetName: input.TargetName, Status: "queued", Stage: "media", Revision: 1}
-		target, err := createCopyTarget(tx, source.Project, saved.TargetProjectID, input.TargetName, now)
+		target, err := createCopyTarget(tx, source.Project, actor.ID, saved.TargetProjectID, input.TargetName, now)
 		if err != nil {
 			return err
 		}

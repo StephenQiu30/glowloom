@@ -67,7 +67,7 @@ func (s *Store) List(ctx context.Context, actor identityapp.Principal, input app
 		if err != nil {
 			return err
 		}
-		query := b.tx.Table(table).Select("id,created_at").Where("org_id=? AND project_id=? AND is_delete=false", actor.OrgID, input.ProjectID)
+		query := b.tx.Table(table).Select("id,created_at").Where("org_id=? AND project_id=? AND is_delete=?", actor.OrgID, input.ProjectID, input.Deleted)
 		if input.Kind == domain.KindCharacter {
 			query = query.Where("redirect_id IS NULL")
 		}

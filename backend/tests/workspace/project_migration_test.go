@@ -44,9 +44,9 @@ func insertWorkspaceProject(ctx context.Context, t *testing.T, database *gorm.DB
 	t.Helper()
 	id := uuid.NewString()
 	if err := database.WithContext(ctx).Exec(`
-		INSERT INTO workspace.project (id, org_id, name, aspect_ratio, style_type, style_subtype)
-		VALUES (?::uuid, ?::uuid, ?, ?, ?, ?)
-	`, id, orgID, "project-"+id, aspectRatio, styleType, styleSubtype).Error; err != nil {
+		INSERT INTO workspace.project (id, org_id, owner_id, name, aspect_ratio, style_type, style_subtype)
+		VALUES (?::uuid, ?::uuid, (SELECT id FROM identity."user" WHERE org_id=?::uuid ORDER BY id LIMIT 1), ?, ?, ?, ?)
+	`, id, orgID, orgID, "project-"+id, aspectRatio, styleType, styleSubtype).Error; err != nil {
 		t.Fatalf("insert project: %v", err)
 	}
 	return id

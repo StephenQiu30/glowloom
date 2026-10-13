@@ -222,6 +222,7 @@ func encodeCursor(cursor any) string {
 }
 
 // List returns a bounded current project Bible list.
+// @Param deleted query bool false "Return soft-deleted entries only"
 // @ID listBibleEntries
 // @Tags bible
 // @Param pid path string true "Project UUID"
@@ -245,7 +246,12 @@ func (h *Handler) List(c *gin.Context) {
 	if c.Query("cursor") != "" {
 		after = &cursor
 	}
-	page, err := h.service.List(c.Request.Context(), identityhttp.Principal(c), application.ListInput{ProjectID: pid, Kind: kind, Limit: limit, After: after})
+	deleted := c.Query("deleted")
+	if deleted != "" && deleted != "true" && deleted != "false" {
+		httpapi.WriteProblem(c, 422, "invalid_request", nil)
+		return
+	}
+	page, err := h.service.List(c.Request.Context(), identityhttp.Principal(c), application.ListInput{ProjectID: pid, Kind: kind, Limit: limit, After: after, Deleted: deleted == "true"})
 	if err != nil {
 		writeError(c, err)
 		return

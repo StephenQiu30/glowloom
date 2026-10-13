@@ -41,6 +41,9 @@ func CopyProjectDocument(source Document, targetProject, job uuid.UUID, assets m
 	}
 	doc := &result.Document
 	for i := range doc.Nodes {
+		if IsDraft(doc.Nodes[i]) {
+			return ProjectDocumentCopy{}, ErrUnsupportedProjectCopy
+		}
 		if doc.Nodes[i].LastOperationID != nil {
 			result.ClearedOperationBindings++
 			doc.Nodes[i].LastOperationID = nil

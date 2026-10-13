@@ -66,8 +66,18 @@ type ImpactInput struct {
 
 // ImpactProof contains the exact owning revisions accepted by an impact acknowledgment.
 type ImpactProof struct {
-	SHA256   string `json:"sha256"`
-	Revision int64  `json:"revision"`
+	SHA256          string `json:"sha256"`
+	Revision        int64  `json:"revision"`
+	CurrentLines    int64  `json:"current_lines"`
+	HistoricalLines int64  `json:"historical_lines"`
+	Aliases         int64  `json:"aliases"`
+}
+
+// CharacterUsage is the exact downstream projection needed for deletion review.
+type CharacterUsage struct {
+	SHA256          string
+	CurrentLines    int64
+	HistoricalLines int64
 }
 
 // Impacts reads and applies actual downstream facts within the content transaction.
@@ -164,6 +174,7 @@ type ListCursor struct {
 
 // ListInput is a project-scoped bounded query.
 type ListInput struct {
+	Deleted   bool
 	ProjectID uuid.UUID
 	Kind      domain.Kind
 	Limit     int

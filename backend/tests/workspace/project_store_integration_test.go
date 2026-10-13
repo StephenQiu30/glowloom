@@ -36,7 +36,7 @@ func insertWorkspaceActor(ctx context.Context, t *testing.T, database *gorm.DB, 
 
 func projectForActor(actor identityapp.Principal) domain.Project {
 	return domain.Project{
-		ID: uuid.New(), OrgID: actor.OrgID, Name: "逆光", AspectRatio: "16:9",
+		ID: uuid.New(), OrgID: actor.OrgID, OwnerID: actor.ID, CanvasID: uuid.New(), Name: "逆光", AspectRatio: "16:9",
 		StyleType: "stylized", StyleSubtype: "guofeng_xianxia",
 		Resolution: "1080p", Status: "active", Revision: 1,
 	}

@@ -60,7 +60,7 @@ func verifyCopyWorkspace(tx *gorm.DB, job domain.ProjectCopyJob) error {
 		}
 	}
 	var actual domain.Project
-	read := tx.Raw(`SELECT id,org_id,name,description,aspect_ratio,style_type,COALESCE(style_subtype,'') AS style_subtype,COALESCE(style_preset_id,'00000000-0000-0000-0000-000000000000'::uuid) AS style_preset_id,cover_asset_id,resolution,allow_overseas_models,status,revision,is_delete FROM workspace.project WHERE id=? AND org_id=? FOR SHARE`, job.TargetProjectID, job.OrgID).Scan(&actual)
+	read := tx.Raw(`SELECT id,org_id,owner_id,initial_canvas_id AS canvas_id,style_key,name,description,aspect_ratio,style_type,COALESCE(style_subtype,'') AS style_subtype,COALESCE(style_preset_id,'00000000-0000-0000-0000-000000000000'::uuid) AS style_preset_id,cover_asset_id,resolution,allow_overseas_models,status,revision,is_delete FROM workspace.project WHERE id=? AND org_id=? FOR SHARE`, job.TargetProjectID, job.OrgID).Scan(&actual)
 	if read.Error != nil {
 		return read.Error
 	}

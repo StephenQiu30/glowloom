@@ -22,6 +22,7 @@ var (
 
 // NodeConfig contains only user-editable, type-specific presentation data.
 type NodeConfig struct {
+	Draft      *Draft            `json:"draft,omitempty"`
 	Text       *string           `json:"text,omitempty"`
 	Collapsed  *bool             `json:"collapsed,omitempty"`
 	BatchTable *BatchTableConfig `json:"batch_table,omitempty"`
@@ -39,6 +40,7 @@ type Viewport struct {
 
 // Node is a resource or a protected business projection. Media identity is never a URL.
 type Node struct {
+	InputRevision   int64      `json:"input_revision,omitempty"`
 	ID              uuid.UUID  `json:"id"`
 	Title           string     `json:"title"`
 	NodeType        string     `json:"node_type"`
@@ -179,8 +181,11 @@ func applyOne(doc *Document, c Command) error {
 			if !editable(n) || n.LastOperationID != nil {
 				return ErrUnsupportedCommand
 			}
-			if n.ID == uuid.Nil || nodeIndex(doc, n.ID) >= 0 || !validTitle(n.Title) || !coordinate(n.X) || !coordinate(n.Y) || !dimension(n.NodeType, n.Width) || !dimension(n.NodeType, n.Height) || !validConfig(n.NodeType, n.Config) || !validZIndex(n.ZIndex) {
+			if n.InputRevision != 0 || n.ID == uuid.Nil || nodeIndex(doc, n.ID) >= 0 || !validTitle(n.Title) || !coordinate(n.X) || !coordinate(n.Y) || !dimension(n.NodeType, n.Width) || !dimension(n.NodeType, n.Height) || !validConfig(n.NodeType, n.Config) || !validZIndex(n.ZIndex) {
 				return ErrInvalidCommand
+			}
+			if IsDraft(n) {
+				n.InputRevision = 1
 			}
 			doc.Nodes = append(doc.Nodes, n)
 		}
@@ -266,6 +271,12 @@ func applyOne(doc *Document, c Command) error {
 		if c.Config == nil || !validConfig(doc.Nodes[i].NodeType, *c.Config) {
 			return ErrInvalidCommand
 		}
+		if IsDraft(doc.Nodes[i]) && *doc.Nodes[i].Config.Draft != *c.Config.Draft {
+			if doc.Nodes[i].InputRevision < 1 || doc.Nodes[i].InputRevision >= math.MaxInt32 {
+				return ErrInvalidCommand
+			}
+			doc.Nodes[i].InputRevision++
+		}
 		doc.Nodes[i].Config = *c.Config
 	case "DeleteNodes":
 		if !batchSize(len(c.IDs)) {
@@ -273,6 +284,9 @@ func applyOne(doc *Document, c Command) error {
 		}
 		seen := map[uuid.UUID]bool{}
 		for _, id := range c.IDs {
+			if index := nodeIndex(doc, id); index >= 0 && IsDraft(doc.Nodes[index]) {
+				return ErrUnsupportedCommand
+			}
 			if _, err := editableIndex(doc, id, seen); err != nil {
 				return err
 			}
@@ -306,7 +320,7 @@ func applyOne(doc *Document, c Command) error {
 			if e.ID == uuid.Nil || e.SourceNodeID == e.TargetNodeID || nodeIndex(doc, e.SourceNodeID) < 0 || nodeIndex(doc, e.TargetNodeID) < 0 || slices.ContainsFunc(doc.Edges, func(a Edge) bool { return a.ID == e.ID }) {
 				return ErrInvalidCommand
 			}
-			if !editable(doc.Nodes[nodeIndex(doc, e.SourceNodeID)]) || !editable(doc.Nodes[nodeIndex(doc, e.TargetNodeID)]) {
+			if IsDraft(doc.Nodes[nodeIndex(doc, e.SourceNodeID)]) || IsDraft(doc.Nodes[nodeIndex(doc, e.TargetNodeID)]) || !editable(doc.Nodes[nodeIndex(doc, e.SourceNodeID)]) || !editable(doc.Nodes[nodeIndex(doc, e.TargetNodeID)]) {
 				return ErrUnsupportedCommand
 			}
 			doc.Edges = append(doc.Edges, e)
@@ -350,6 +364,9 @@ func editable(n Node) bool {
 	if n.LastOperationID != nil {
 		return false
 	}
+	if IsDraft(n) {
+		return n.NodeAction == "generate" && n.RefType == "" && n.RefID == nil
+	}
 	if n.NodeType == "batch_table" || n.NodeType == "timeline" || n.NodeType == "director" || n.NodeType == "generation" {
 		return n.NodeAction == "tool" && n.RefType == "" && n.RefID == nil
 	}
@@ -369,6 +386,12 @@ func annotation(e Edge) bool {
 	return e.EdgeType == "annotation" && e.Role == "" && len(e.Binding) == 0
 }
 func validConfig(kind string, c NodeConfig) bool {
+	if kind == "image_generation" || kind == "video_generation" {
+		return c.Draft != nil && validDraft(*c.Draft) && c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation == nil
+	}
+	if c.Draft != nil {
+		return false
+	}
 	if kind == "generation" {
 		return c.Text == nil && c.Collapsed == nil && c.BatchTable == nil && c.Timeline == nil && c.Director == nil && c.Generation != nil && validGeneration(*c.Generation)
 	}

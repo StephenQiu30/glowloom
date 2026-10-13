@@ -1,6 +1,5 @@
-import { UsersPage } from "./_components/users-page";
-
-export const metadata = { title: "管理账号" };
+import { UsersPage } from "@/components/users/users-page";
+export const metadata = { title: "用户管理 · 浮光" };
 export default function Page() {
   return <UsersPage />;
 }

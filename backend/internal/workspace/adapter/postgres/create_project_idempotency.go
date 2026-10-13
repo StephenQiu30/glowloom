@@ -19,30 +19,29 @@ func replayProjectCreation(tx *gorm.DB, actor identityapp.Principal, request app
 	}
 	var row struct {
 		RequestHash  string
-		StatusCode   int
 		ResponseBody []byte
 	}
-	result := tx.Raw(`SELECT request_hash,status_code,response_body FROM infra.idempotency_record
-	 WHERE actor_id=? AND idem_key=? AND NOT is_delete AND expires_at>statement_timestamp()`, actor.ID, request.Key.String()).Scan(&row)
+	result := tx.Raw(`SELECT request_hash,response_body FROM workspace.project_creation_receipt
+	 WHERE actor_id=? AND idem_key=?`, actor.ID, request.Key.String()).Scan(&row)
 	if result.Error != nil {
 		return false, fmt.Errorf("read project creation receipt: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return false, nil
 	}
-	if row.RequestHash != request.Hash || row.StatusCode != 201 {
+	if row.RequestHash != request.Hash {
 		return false, application.ErrIdempotencyConflict
 	}
 	if err := json.Unmarshal(row.ResponseBody, saved); err != nil {
 		return false, fmt.Errorf("decode project creation receipt: %w", err)
 	}
-	if saved.ID == uuid.Nil || saved.OrgID != actor.OrgID {
+	if saved.ID == uuid.Nil || saved.OrgID != actor.OrgID || saved.OwnerID != actor.ID || saved.CanvasID == uuid.Nil {
 		return false, application.ErrInvalidCreateProject
 	}
 	// Recheck visibility even for a replay. Later edits never replace the first
 	// response, but a deleted or moved project cannot be disclosed from a receipt.
 	var visible int
-	result = tx.Raw(`SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete FOR SHARE`, saved.ID, actor.OrgID).Scan(&visible)
+	result = tx.Raw(`SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND owner_id=? AND NOT is_delete FOR SHARE`, saved.ID, actor.OrgID, actor.ID).Scan(&visible)
 	if result.Error != nil {
 		return false, fmt.Errorf("authorize project creation replay: %w", result.Error)
 	}
@@ -57,12 +56,8 @@ func recordProjectCreation(tx *gorm.DB, actor identityapp.Principal, request app
 	if err != nil {
 		return fmt.Errorf("encode project creation receipt: %w", err)
 	}
-	result := tx.Exec(`INSERT INTO infra.idempotency_record
-	 (id,actor_id,idem_key,request_hash,status_code,response_body,expires_at)
-	 VALUES(?,?,?,?,201,?::jsonb,statement_timestamp()+interval '24 hours')
-	 ON CONFLICT(actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,
-	 status_code=excluded.status_code,response_body=excluded.response_body,
-	 expires_at=excluded.expires_at,is_delete=false,update_time=statement_timestamp()`, uuid.New(), actor.ID, request.Key.String(), request.Hash, string(body))
+	result := tx.Exec(`INSERT INTO workspace.project_creation_receipt
+     (actor_id,idem_key,request_hash,project_id,response_body) VALUES(?,?,?,?,?::jsonb)`, actor.ID, request.Key, request.Hash, saved.ID, string(body))
 	if result.Error != nil {
 		return fmt.Errorf("record project creation receipt: %w", result.Error)
 	}

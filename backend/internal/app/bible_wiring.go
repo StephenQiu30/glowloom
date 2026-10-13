@@ -31,7 +31,8 @@ func provideBibleProjectAccess(tx *gorm.DB) bibleapp.ProjectAccess {
 
 func provideBibleStore(database *gorm.DB, storage *objectstorage.Client, validator catalogapp.ModelVersionValidator) *pgbible.Store {
 	return pgbible.NewStore(database, pgbible.Factories{
-		Access: provideBibleProjectAccess,
+		Access:  provideBibleProjectAccess,
+		Impacts: provideBibleDeletionImpacts,
 		Media: func(tx *gorm.DB) bibleapp.MediaReferences {
 			return bibleMediaReferences{query: mediaapp.NewReferenceFactQuery(
 				pgmedia.NewLibraryStore(tx, provideMediaLibraryProjectAccess, time.Now), storage)}

@@ -1,12 +1,14 @@
 export type RequestOptions = Omit<RequestInit, "body"> & {
   data?: unknown;
-  params?: Record<string, string>;
+  requestType?: "form";
+  params?: Record<string, string | number | boolean | undefined>;
 };
 
 export class AuthError extends Error {
   constructor(
     public readonly code: string,
     public readonly status = 0,
+    public readonly meta?: Record<string, unknown>,
   ) {
     super(authErrorMessage(code));
   }
@@ -33,23 +35,37 @@ export async function request<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { data, params, ...init } = options;
-  const query = new URLSearchParams(params).toString();
+  const { data, params, requestType, ...init } = options;
+  const query = new URLSearchParams(
+    Object.entries(params ?? {}).flatMap(([key, value]) =>
+      value === undefined ? [] : [[key, String(value)]],
+    ),
+  ).toString();
   const headers = new Headers(init.headers);
-  if (init.method && init.method !== "GET")
+  if (init.method && init.method !== "GET" && !headers.has("Idempotency-Key"))
     headers.set("Idempotency-Key", crypto.randomUUID());
-  if (data !== undefined) headers.set("Content-Type", "application/json");
+  const multipart = requestType === "form" && data instanceof FormData;
+  if (data !== undefined && !multipart)
+    headers.set("Content-Type", "application/json");
+  if (multipart) headers.delete("Content-Type");
   let response: Response;
   try {
     response = await fetch(path + (query ? `?${query}` : ""), {
       ...init,
       headers,
-      body: data === undefined ? undefined : JSON.stringify(data),
+      body: multipart
+        ? (data as FormData)
+        : data === undefined
+          ? undefined
+          : JSON.stringify(data),
       credentials: "same-origin",
       cache: "no-store",
       signal: init.signal
-        ? AbortSignal.any([init.signal, AbortSignal.timeout(15000)])
-        : AbortSignal.timeout(15000),
+        ? AbortSignal.any([
+            init.signal,
+            AbortSignal.timeout(multipart ? 120000 : 15000),
+          ])
+        : AbortSignal.timeout(multipart ? 120000 : 15000),
     });
   } catch (error) {
     if (init.signal?.aborted) throw error;
@@ -62,6 +78,9 @@ export async function request<T>(
     throw new AuthError(
       typeof problem?.code === "string" ? problem.code : "request_unconfirmed",
       response.status,
+      problem?.meta && typeof problem.meta === "object"
+        ? problem.meta
+        : undefined,
     );
   }
   return value as T;

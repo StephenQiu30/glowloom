@@ -1,6 +1,14 @@
-import { StoryboardPage } from "./_components/storyboard-page";
-
-export const metadata = { title: "分镜故事板" };
+import { ProductShell } from "@/components/layout/product-shell";
+import { UnavailableState } from "@/components/availability/unavailable";
+export const metadata = { title: "分镜 · 浮光" };
 export default function Page() {
-  return <StoryboardPage />;
+  return (
+    <ProductShell screen="storyboard">
+      <h1 className="text-2xl">分镜</h1>
+      <UnavailableState
+        title="分镜暂未开放"
+        description="此功能尚未接入服务。你可以从创作页进入画布，继续编辑和保存草稿。"
+      />
+    </ProductShell>
+  );
 }

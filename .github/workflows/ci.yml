@@ -151,17 +151,22 @@ jobs:
         env:
           LV_TEST_CATALOG_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_catalog_provider_gate_test?sslmode=disable
         run: go test -race ./tests/catalog -run '^Test(ProviderRejectsInvalidSettingsAndDisablesOnce|CredentialKeepsCiphertextOutOfJSONAndValidatesTestOutcome|ProviderCredentialsWithRealPostgres|ConcurrentCredentialReplacementKeepsOneActive|CreateProviderCommitsAuditAndRejectsStaleAdminOnLocalPostgres|UpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres|SetCredentialCommitsSealedDataAndEventsOnLocalPostgres|DisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure|ProviderDetailReadsSafeMetadataWithCurrentAdminOnLocalPostgres)$' -count=1 -v
-      - name: Prepare isolated canvas contract databases
+      - name: Prepare isolated project and canvas contract databases
         run: |
-          for database in lanverse_canvas_store_test lanverse_canvas_http_test; do
+          for database in lanverse_workspace_m1_test lanverse_canvas_store_test lanverse_canvas_http_test; do
             psql "$LV_TEST_DB_DSN" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database"
             contract_dsn="postgres://lanverse_test:ci-only@127.0.0.1:5432/$database?sslmode=disable"
             psql "$contract_dsn" -X --single-transaction -v ON_ERROR_STOP=1 -f db/schema.sql
           done
+      - name: Verify blank projects, owner scopes and durable creation receipts
+        env:
+          LV_TEST_WORKSPACE_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_workspace_m1_test?sslmode=disable
+        run: go test -race ./tests/workspace -skip '^TestWorkspaceMediaReferenceGuard' -count=1 -v
       - name: Verify canvas persistence and public HTTP contracts
         env:
           LV_TEST_CANVAS_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_canvas_store_test?sslmode=disable
           LV_TEST_CANVAS_HTTP_DB_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_canvas_http_test?sslmode=disable
+          LV_TEST_CANVAS_M1_RUNTIME_DSN: postgres://lanverse_test:ci-only@127.0.0.1:5432/lanverse_canvas_store_test?sslmode=disable&options=-c%20role%3Dlanverse_app
           LV_TEST_CANVAS_REDIS_URL: redis://127.0.0.1:6379/13
         run: go test -race ./tests/canvas -skip '^TestCanvasMediaReferenceGuard' -count=1 -v
       - name: Verify identity commands in isolated databases

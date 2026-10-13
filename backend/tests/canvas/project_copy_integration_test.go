@@ -29,7 +29,7 @@ func TestProjectCopyCanvasPersistsFrozenGraphsAndHidesTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'未发布完整复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,'未发布完整复制','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	var snapshot application.ProjectCopySnapshot
@@ -123,7 +123,7 @@ func TestProjectCopyCanvasRejectsUnknownConfigWithoutPartialSnapshot(t *testing.
 		t.Fatal(err)
 	}
 	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: actor.OrgID, SourceProjectID: project, TargetProjectID: uuid.New()}
-	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type,status) VALUES(?,?,'未发布','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID).Error; err != nil {
+	if err := database.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,name,aspect_ratio,style_type,status) VALUES(?,?,?,'未发布','16:9','realistic','copying')`, binding.TargetProjectID, actor.OrgID, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	err = database.Transaction(func(tx *gorm.DB) error {

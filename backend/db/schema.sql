@@ -2286,6 +2286,10 @@ CREATE TABLE workspace.organization (
 );
 
 CREATE TABLE workspace.project (
+    owner_id uuid,
+    initial_canvas_id uuid,
+    style_key text,
+    CONSTRAINT project_style_key_check CHECK (style_key IS NULL OR (char_length(btrim(style_key)) BETWEEN 1 AND 50)),
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     name text NOT NULL,
@@ -2308,7 +2312,7 @@ CREATE TABLE workspace.project (
     is_delete boolean DEFAULT false NOT NULL,
     cover_asset_id uuid,
     CONSTRAINT ck_project_style CHECK (((style_type = 'stylized'::text) = (style_subtype IS NOT NULL))),
-    CONSTRAINT project_aspect_ratio_check CHECK ((aspect_ratio = ANY (ARRAY['9:16'::text, '16:9'::text]))),
+    CONSTRAINT project_aspect_ratio_check CHECK ((aspect_ratio = ANY (ARRAY['9:16'::text, '16:9'::text, '1:1'::text]))),
     CONSTRAINT project_cover_nonzero CHECK (((cover_asset_id IS NULL) OR (cover_asset_id <> '00000000-0000-0000-0000-000000000000'::uuid))),
     CONSTRAINT project_name_check CHECK (((char_length(name) >= 1) AND (char_length(name) <= 50))),
     CONSTRAINT project_resolution_check CHECK ((resolution = '1080p'::text)),
@@ -4299,3 +4303,42 @@ BEGIN
     EXECUTE format('CREATE TABLE %s PARTITION OF %s DEFAULT', parent_table || '_default', parent_table);
   END LOOP;
 END $$;
+
+-- M1: ownership and the initial document are committed with the project.
+ALTER TABLE canvas.document ADD CONSTRAINT document_id_project_unique UNIQUE(id,project_id);
+ALTER TABLE workspace.project ADD CONSTRAINT project_owner_fk FOREIGN KEY(owner_id) REFERENCES identity."user"(id);
+ALTER TABLE workspace.project ADD CONSTRAINT project_initial_canvas_fk FOREIGN KEY(initial_canvas_id,id) REFERENCES canvas.document(id,project_id) DEFERRABLE INITIALLY DEFERRED;
+CREATE INDEX project_owner_updated ON workspace.project(org_id,owner_id,update_time DESC,id DESC) WHERE NOT is_delete;
+CREATE TABLE workspace.project_creation_receipt (
+    actor_id uuid NOT NULL REFERENCES identity."user"(id),
+    idem_key uuid NOT NULL,
+    request_hash text NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
+    project_id uuid NOT NULL REFERENCES workspace.project(id) ON DELETE CASCADE,
+    response_body jsonb NOT NULL CHECK(jsonb_typeof(response_body)='object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY(actor_id,idem_key)
+);
+GRANT SELECT,INSERT ON workspace.project_creation_receipt TO lanverse_app;
+
+-- M1: draft input versions and save receipts are immutable under the runtime role.
+ALTER TABLE canvas.node ADD COLUMN input_revision bigint CHECK(input_revision > 0);
+CREATE TABLE canvas.node_input (
+    node_id uuid NOT NULL REFERENCES canvas.node(id) ON DELETE CASCADE,
+    input_revision bigint NOT NULL CHECK(input_revision > 0),
+    draft jsonb NOT NULL CHECK(jsonb_typeof(draft)='object'),
+    created_by uuid NOT NULL REFERENCES identity."user"(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY(node_id,input_revision)
+);
+ALTER TABLE canvas.node ADD CONSTRAINT node_input_head_fk FOREIGN KEY(id,input_revision) REFERENCES canvas.node_input(node_id,input_revision) DEFERRABLE INITIALLY DEFERRED;
+CREATE TABLE canvas.save_receipt (
+    actor_id uuid NOT NULL REFERENCES identity."user"(id),
+    idem_key uuid NOT NULL,
+    document_id uuid NOT NULL REFERENCES canvas.document(id) ON DELETE CASCADE,
+    request_hash text NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
+    result_revision bigint NOT NULL CHECK(result_revision > 1),
+    response_body jsonb NOT NULL CHECK(jsonb_typeof(response_body)='object'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY(actor_id,idem_key)
+);
+GRANT SELECT,INSERT ON canvas.node_input,canvas.save_receipt TO lanverse_app;

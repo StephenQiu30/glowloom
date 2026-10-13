@@ -27,6 +27,7 @@ type UserListItem struct {
 	DisplayName string
 	Role        domain.Role
 	Status      domain.Status
+	LoginLocked bool
 	LastLoginAt *time.Time
 	Revision    int64
 	CreateTime  time.Time

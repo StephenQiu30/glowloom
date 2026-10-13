@@ -1,0 +1,334 @@
+/* BeefTV a2196d3: canvas-theme.ts and styles/globals.css. MIT.
+   Page-scoped adaptation; source geometry and semantic surfaces are retained. */
+.creation-canvas {
+  --canvas-bg: #f0f0f0;
+  --canvas-grid: rgba(0, 0, 0, 0.8);
+  --canvas-node-fill: #fff;
+  --canvas-node-panel: #fff;
+  --canvas-node-text: #111827;
+  --canvas-node-muted: #6b7280;
+  --canvas-node-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  --canvas-toolbar: rgba(255, 255, 255, 0.94);
+  --canvas-toolbar-border: rgba(17, 24, 39, 0.1);
+  --canvas-selection: rgba(17, 17, 17, 0.1);
+  color: var(--canvas-node-text);
+  background: var(--canvas-bg);
+}
+.dark .creation-canvas {
+  --canvas-bg: #0f0f0f;
+  --canvas-grid: rgba(175, 175, 175, 0.12);
+  --canvas-node-fill: #202020;
+  --canvas-node-panel: #202020;
+  --canvas-node-text: #ededed;
+  --canvas-node-muted: #a3a3a3;
+  --canvas-node-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+  --canvas-toolbar: #202020;
+  --canvas-toolbar-border: #363636;
+  --canvas-selection: rgba(255, 255, 255, 0.12);
+}
+.creation-canvas .canvas-topbar-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: transparent;
+  padding: 6px 10px;
+  pointer-events: auto;
+}
+.creation-canvas .canvas-main-dock {
+  position: absolute;
+  z-index: 30;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  width: 48px;
+  max-height: calc(100% - 180px);
+  overflow-y: auto;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--canvas-toolbar-border);
+  border-radius: 15px;
+  background: var(--canvas-toolbar);
+  box-shadow:
+    0 14px 38px rgba(0, 0, 0, 0.34),
+    inset 0 1px rgba(255, 255, 255, 0.04);
+}
+.creation-canvas .canvas-main-dock button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.creation-canvas .canvas-main-dock .canvas-add-command {
+  background: #f4f4f4;
+  color: #111;
+}
+.creation-canvas .canvas-tool-switch {
+  display: flex;
+  border-radius: 20px;
+  background: #000;
+  padding: 2px;
+  gap: 2px;
+}
+.creation-canvas .canvas-tool-switch button {
+  width: 30px;
+  height: 30px;
+  color: #a3a3a3;
+  border-radius: 50%;
+}
+.creation-canvas .canvas-tool-switch button[aria-pressed="true"] {
+  background: #fff;
+  color: #000;
+}
+.creation-canvas .canvas-dock-divider {
+  height: 1px;
+  width: 24px;
+  margin-inline: 3px;
+  background: var(--canvas-toolbar-border);
+}
+.creation-canvas .canvas-zoom-controls {
+  position: absolute;
+  left: 16px;
+  bottom: 26px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 12px;
+  background: var(--canvas-toolbar);
+  padding: 4px;
+  box-shadow: var(--canvas-node-shadow);
+}
+.creation-canvas .canvas-media-node {
+  position: absolute;
+  contain: layout style;
+}
+.creation-canvas .canvas-media-node[data-selected="true"] {
+  z-index: 5;
+}
+.creation-canvas .canvas-node-external-header {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  max-width: calc(100% - 28px);
+  font-size: 12px;
+  color: var(--canvas-node-muted);
+  cursor: grab;
+  transform-origin: bottom left;
+  transform: scale(var(--canvas-live-inverse-scale, 1));
+}
+.creation-canvas .canvas-node-rename {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--canvas-node-muted);
+  transform-origin: bottom right;
+  transform: scale(var(--canvas-live-inverse-scale, 1));
+}
+.creation-canvas .canvas-node-shell {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--canvas-node-fill);
+  color: var(--canvas-node-muted);
+  font-size: 12px;
+  box-shadow: var(--canvas-node-shadow);
+}
+.creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-shell {
+  border-color: var(--canvas-node-text);
+}
+.creation-canvas .canvas-node-caption {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  font-size: 11px;
+  color: var(--canvas-node-muted);
+}
+.creation-canvas .canvas-node-composer {
+  position: relative;
+  width: 100%;
+  border-radius: 16px;
+  padding: 10px 12px 8px;
+  background: var(--canvas-node-panel);
+  color: var(--canvas-node-text);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+}
+.creation-canvas .canvas-prompt-input {
+  height: 120px;
+  min-height: 80px;
+  margin-top: 4px;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+}
+.creation-canvas .canvas-composer-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+.creation-canvas .canvas-selection-box {
+  border: 1px solid var(--canvas-node-text);
+  background: var(--canvas-selection);
+}
+.creation-canvas .canvas-mini-map {
+  position: absolute;
+  z-index: 20;
+  right: 16px;
+  bottom: 24px;
+  width: 200px;
+  height: 128px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--canvas-node-panel);
+  box-shadow: var(--canvas-node-shadow);
+}
+.creation-canvas .canvas-feedback {
+  position: absolute;
+  z-index: 35;
+  top: 82px;
+  left: 16px;
+  right: 16px;
+  max-height: calc(100dvh - 180px);
+  overflow: auto;
+  border-radius: 16px;
+  background: var(--canvas-node-panel);
+  padding: 16px;
+  box-shadow: var(--canvas-node-shadow);
+}
+.creation-canvas button:focus-visible,
+.creation-canvas select:focus-visible {
+  outline: 2px solid var(--canvas-node-text);
+  outline-offset: 3px;
+}
+.creation-canvas .canvas-cursor-select {
+  cursor: crosshair;
+}
+@media (max-width: 767px) {
+  .creation-canvas .canvas-zoom-controls {
+    left: 12px;
+    bottom: 16px;
+  }
+  .creation-canvas .canvas-main-dock {
+    top: 80px;
+    bottom: auto;
+    transform: none;
+  }
+  .creation-canvas .canvas-mini-map {
+    right: 12px;
+    bottom: 16px;
+    width: 120px;
+    height: 77px;
+  }
+}
+
+.creation-canvas .canvas-node-panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  overflow: visible;
+}
+
+.creation-canvas .canvas-resize-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 0;
+  z-index: 6;
+  transform: translate(-50%, -50%) scale(var(--canvas-live-inverse-scale, 1));
+}
+.creation-canvas .canvas-resize-handle:focus-visible {
+  outline: 2px solid var(--canvas-node-text);
+  outline-offset: 3px;
+}
+.creation-canvas .canvas-resize-nw {
+  left: 0;
+  top: 0;
+  cursor: nwse-resize;
+}
+.creation-canvas .canvas-resize-ne {
+  left: 100%;
+  top: 0;
+  cursor: nesw-resize;
+}
+.creation-canvas .canvas-resize-sw {
+  left: 0;
+  top: var(--canvas-node-height);
+  cursor: nesw-resize;
+}
+.creation-canvas .canvas-resize-se {
+  left: 100%;
+  top: var(--canvas-node-height);
+  cursor: nwse-resize;
+}
+
+.creation-canvas .canvas-resize-handle::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  left: 8px;
+  top: 8px;
+  border-radius: 2px;
+  background: var(--canvas-node-text);
+  border: 1px solid var(--canvas-node-fill);
+}
+
+.creation-canvas .canvas-topbar-cluster h1 {
+  font-size: 13px;
+}
+.creation-canvas .canvas-prompt-input {
+  height: 94px;
+}
+.creation-canvas .canvas-node-shell {
+  background-image: radial-gradient(
+    var(--canvas-toolbar-border) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+.creation-canvas .canvas-node-composer {
+  padding: 16px;
+  border: 1px solid var(--canvas-toolbar-border);
+}
+@media (max-width: 700px) {
+  .creation-canvas .canvas-topbar-cluster p {
+    display: none;
+  }
+  .creation-canvas .canvas-topbar-cluster [role="status"] {
+    max-width: 90px;
+    font-size: 10px;
+  }
+  .creation-canvas .canvas-topbar-cluster {
+    padding: 4px;
+    gap: 4px;
+  }
+  .creation-canvas .canvas-main-dock {
+    width: 40px;
+    left: 8px;
+  }
+  .creation-canvas .canvas-zoom-controls {
+    left: 8px;
+  }
+}

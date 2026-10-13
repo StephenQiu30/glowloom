@@ -27,7 +27,7 @@ const (
 // ErrInvalidCreateProject means the create command or committed result is invalid.
 var ErrInvalidCreateProject = errors.New("invalid create-project command")
 
-// ErrIdempotencyConflict means an active key was used for another request.
+// ErrIdempotencyConflict means a creation key was used for another request.
 var ErrIdempotencyConflict = errors.New("project idempotency key reused")
 
 // CreateProjectStore rechecks current rights and commits the project, its zero
@@ -37,7 +37,7 @@ type CreateProjectStore interface {
 	CreateProjectIdempotently(context.Context, identityapp.Principal, domain.Project, []identityapp.OutboxEvent, ProjectCreationRequest) (domain.Project, error)
 }
 
-// ProjectCreationRequest identifies one public creation and its bounded receipt.
+// ProjectCreationRequest identifies one public creation and its durable receipt.
 type ProjectCreationRequest struct {
 	Key  uuid.UUID
 	Hash string
@@ -45,6 +45,7 @@ type ProjectCreationRequest struct {
 
 // CreateProjectInput contains the specifications chosen for a new project.
 type CreateProjectInput struct {
+	StyleKey      *string
 	Name          string
 	Description   string
 	AspectRatio   string
@@ -59,6 +60,8 @@ type CreatedProject struct {
 	CoverAssetID        *uuid.UUID `json:"cover_asset_id,omitempty"`
 	ID                  uuid.UUID  `json:"id"`
 	OrgID               uuid.UUID  `json:"org_id"`
+	CanvasID            uuid.UUID  `json:"canvas_id" binding:"required"`
+	StyleKey            *string    `json:"style_key" extensions:"x-nullable"`
 	Name                string     `json:"name"`
 	Description         string     `json:"description"`
 	AspectRatio         string     `json:"aspect_ratio"`
@@ -103,7 +106,8 @@ func (c *CreateProjectCommand) ExecuteIdempotent(ctx context.Context, actor iden
 		StyleType     string
 		StyleSubtype  string
 		StylePresetID uuid.UUID
-	}{actor.OrgID, input.Name, input.Description, input.AspectRatio, input.StyleType, input.StyleSubtype, input.StylePresetID})
+		StyleKey      *string
+	}{actor.OrgID, input.Name, input.Description, input.AspectRatio, input.StyleType, input.StyleSubtype, input.StylePresetID, input.StyleKey})
 	if err != nil {
 		return CreatedProject{}, fmt.Errorf("encode project creation request: %w", err)
 	}
@@ -125,8 +129,11 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 		!utf8.ValidString(name) || !utf8.ValidString(input.Description) {
 		return CreatedProject{}, ErrInvalidCreateProject
 	}
+	if input.StyleType == "" {
+		input.StyleType = "realistic"
+	}
 	project := domain.Project{
-		ID: uuid.New(), OrgID: actor.OrgID, Name: name, Description: input.Description,
+		ID: uuid.New(), OrgID: actor.OrgID, OwnerID: actor.ID, CanvasID: uuid.New(), StyleKey: input.StyleKey, Name: name, Description: input.Description,
 		AspectRatio: input.AspectRatio, StyleType: input.StyleType,
 		StyleSubtype: input.StyleSubtype, StylePresetID: input.StylePresetID,
 		Resolution: "1080p", Status: "active", Revision: 1,
@@ -151,7 +158,7 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 	if err != nil {
 		return CreatedProject{}, fmt.Errorf("create project with events: %w", err)
 	}
-	if saved.ID == uuid.Nil || (request == nil && saved.ID != project.ID) || saved.OrgID != project.OrgID || saved.Name != project.Name ||
+	if saved.OwnerID != actor.ID || saved.CanvasID == uuid.Nil || (request == nil && saved.CanvasID != project.CanvasID) || !equalStyleKey(saved.StyleKey, project.StyleKey) || saved.ID == uuid.Nil || (request == nil && saved.ID != project.ID) || saved.OrgID != project.OrgID || saved.Name != project.Name ||
 		saved.Description != project.Description || saved.AspectRatio != project.AspectRatio ||
 		saved.StyleType != project.StyleType || saved.StyleSubtype != project.StyleSubtype ||
 		saved.StylePresetID != project.StylePresetID || saved.Resolution != "1080p" ||
@@ -166,13 +173,17 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 		stylePresetID = &id
 	}
 	return CreatedProject{
-		ID: saved.ID, OrgID: saved.OrgID, Name: saved.Name, Description: saved.Description,
+		ID: saved.ID, OrgID: saved.OrgID, CanvasID: saved.CanvasID, StyleKey: saved.StyleKey, Name: saved.Name, Description: saved.Description,
 		AspectRatio: saved.AspectRatio, StyleType: saved.StyleType,
 		StyleSubtype: saved.StyleSubtype, StylePresetID: stylePresetID,
 		Resolution: saved.Resolution, AllowOverseasModels: saved.AllowOverseasModels,
 		Status: saved.Status, Revision: saved.Revision,
 		CreateTime: saved.CreateTime.UTC(), UpdateTime: saved.UpdateTime.UTC(),
 	}, nil
+}
+
+func equalStyleKey(a, b *string) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
 func projectCreatedEvents(actor identityapp.Principal, project domain.Project, requestID string, occurredAt time.Time) ([]identityapp.OutboxEvent, error) {
@@ -190,6 +201,9 @@ func projectCreatedEvents(actor identityapp.Principal, project domain.Project, r
 	after := map[string]any{
 		"aspect_ratio": project.AspectRatio, "style_type": project.StyleType,
 		"status": project.Status, "revision": project.Revision,
+	}
+	if project.StyleKey != nil {
+		after["style_key"] = *project.StyleKey
 	}
 	if project.StyleSubtype != "" {
 		after["style_subtype"] = project.StyleSubtype

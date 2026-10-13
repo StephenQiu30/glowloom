@@ -43,7 +43,7 @@ func seedCanvasActor(t *testing.T, database *gorm.DB) (identityapp.Principal, uu
 	}{
 		{`INSERT INTO workspace.organization(id,name) VALUES(?, 'Canvas test')`, []any{a.OrgID}},
 		{`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password) VALUES(?,?,?,'Canvas test','producer','synthetic',false)`, []any{a.ID, a.OrgID, "canvas-" + a.ID.String()}},
-		{`INSERT INTO workspace.project(id,org_id,name,aspect_ratio,style_type) VALUES(?,?,'Canvas test','16:9','realistic')`, []any{p, a.OrgID}},
+		{`INSERT INTO workspace.project(id,org_id,owner_id,name,aspect_ratio,style_type) VALUES(?,?,?,'Canvas test','16:9','realistic')`, []any{p, a.OrgID, a.ID}},
 	} {
 		if err := database.Exec(statement.sql, statement.args...).Error; err != nil {
 			t.Fatal(err)

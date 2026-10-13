@@ -1,0 +1,772 @@
+"use client";
+
+import {
+  useCallback,
+  useEffectEvent,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Brand } from "@/components/layout/brand";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  GenerationDialog,
+  type GenerationSeed,
+} from "@/components/generation/generation-dialog";
+import { AuthError } from "@/components/auth/request";
+import {
+  applyCanvasCommands,
+  getCanvas,
+} from "@/components/projects/generated/projects";
+import type { Project } from "@/components/projects/project";
+import {
+  commandBatch,
+  createDraftNode,
+  isDraft,
+  requireCanvas,
+  requireSaveResult,
+  sameEditable,
+  type Canvas,
+  type Draft,
+  type Node,
+} from "./editor-state";
+
+import { InfiniteCanvas } from "./infinite-canvas";
+import { CanvasNode } from "./canvas-node";
+import { CanvasToolbar } from "./canvas-toolbar";
+import { CanvasComposer } from "./canvas-composer";
+import { CanvasMiniMap } from "./canvas-mini-map";
+import {
+  CANVAS_NODE_DRAG_EVENT,
+  type SelectionArea,
+  type ViewportTransform,
+} from "./canvas-viewport";
+import { CanvasNodePanel } from "./canvas-node-panel";
+import "./canvas.css";
+
+type Pending = {
+  key: string;
+  base: Canvas;
+  nodes: Node[];
+  body: ProjectAPI.CommandsInput;
+};
+const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
+
+export function CanvasEditor({
+  project,
+  initial,
+}: {
+  project: Project;
+  initial: Canvas;
+}) {
+  const [generation, setGeneration] = useState<GenerationSeed | null>(null);
+  const [base, setBase] = useState(initial);
+  const [nodes, setNodes] = useState(initial.nodes);
+  const local = useRef(initial.nodes);
+  const [selected, setSelected] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const [message, setMessage] = useState("");
+  const [conflict, setConflict] = useState<{ server: Canvas | null } | null>(
+    null,
+  );
+  const [leave, setLeave] = useState(false);
+  const leaving = useRef(false);
+  const pending = useRef<Pending | null>(null);
+  const busy = useRef(false);
+  const alive = useRef(false);
+  const request = useRef<AbortController | null>(null);
+  const board = useRef<HTMLDivElement>(null);
+  const [tool, setTool] = useState<"select" | "pan">("select");
+  const [selectedIDs, setSelectedIDs] = useState<string[]>([]);
+  const [details, setDetails] = useState(false);
+  const [miniMap, setMiniMap] = useState(false);
+  const [size, setSize] = useState({ width: 1024, height: 768 });
+  const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 1 });
+  const view = useRef(camera);
+  const drag = useRef<{
+    id: string;
+    clientX: number;
+    clientY: number;
+    x: number;
+    y: number;
+    nextX: number;
+    nextY: number;
+    card: HTMLElement;
+    button: HTMLButtonElement;
+    pointerId: number;
+    members: {
+      id: string;
+      x: number;
+      y: number;
+      element: HTMLElement | null;
+    }[];
+  } | null>(null);
+  const baseline = new Map(base.nodes.map((n) => [n.id, n]));
+  const dirty =
+    nodes.length !== base.nodes.length ||
+    nodes.some(
+      (n) => !baseline.has(n.id) || !sameEditable(n, baseline.get(n.id)!),
+    );
+  const current = nodes.find((n) => n.id === selected);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      request.current?.abort();
+    };
+  }, []);
+  useEffect(() => {
+    if (!dirty && !saving && !unconfirmed) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      if (leaving.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, saving, unconfirmed]);
+
+  useEffect(() => {
+    const el = board.current;
+    if (!el) return;
+    const measure = () =>
+      setSize({
+        width: el.clientWidth || 1024,
+        height: el.clientHeight || 768,
+      });
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(measure);
+    observer?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
+        return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          "input,textarea,select,button,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu]",
+        )
+      )
+        return;
+      if (event.key.toLowerCase() === "v" || event.key.toLowerCase() === "h") {
+        event.preventDefault();
+        setTool(event.key.toLowerCase() === "h" ? "pan" : "select");
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
+  const viewportChange = useCallback((next: ViewportTransform) => {
+    view.current = { x: next.x, y: next.y, zoom: next.k };
+    setCamera(view.current);
+  }, []);
+  const viewportPreview = useCallback((next: ViewportTransform) => {
+    view.current = { x: next.x, y: next.y, zoom: next.k };
+  }, []);
+  function selectNode(id?: string) {
+    setSelected(id);
+    setSelectedIDs(id ? [id] : []);
+  }
+  function selectArea(area: SelectionArea) {
+    const ids = local.current
+      .filter(
+        (node) =>
+          node.x <= area.x + area.width &&
+          node.x + (node.width ?? 288) >= area.x &&
+          node.y <= area.y + area.height &&
+          node.y + (node.height ?? 200) >= area.y,
+      )
+      .map((node) => node.id);
+    setSelectedIDs(ids);
+    setSelected(ids.at(-1));
+  }
+  function edit(next: Node[]) {
+    local.current = next;
+    setNodes(next);
+  }
+  function update(id: string, patch: Partial<Node>) {
+    edit(local.current.map((n) => (n.id === id ? { ...n, ...patch } : n)));
+  }
+  function draft(patch: Partial<Draft>) {
+    const n = local.current.find((n) => n.id === selected);
+    if (n && isDraft(n))
+      update(n.id, { config: { draft: { ...n.config.draft, ...patch } } });
+  }
+  function add(kind: "image_generation" | "video_generation") {
+    if (local.current.length >= 2000) {
+      setMessage("画布已达到 2000 个节点上限。");
+      return;
+    }
+    const n = createDraftNode(kind, project.aspect_ratio, local.current.length);
+    const bounds = board.current?.getBoundingClientRect();
+    if (bounds?.width && bounds.height) {
+      n.x = limit(
+        Math.round(
+          (bounds.width / 2 - view.current.x) / view.current.zoom - 144,
+        ),
+      );
+      n.y = limit(
+        Math.round(
+          (Math.max(96, (bounds.height - 450) / 2) - view.current.y) /
+            view.current.zoom,
+        ),
+      );
+    }
+    edit([...local.current, n]);
+    selectNode(n.id);
+  }
+  function changeCamera(next: typeof camera) {
+    view.current = next;
+    setCamera(next);
+  }
+  function fit() {
+    if (!board.current || !nodes.length) {
+      changeCamera({ x: 0, y: 0, zoom: 1 });
+      return;
+    }
+    const minX = Math.min(...nodes.map((n) => n.x)),
+      minY = Math.min(...nodes.map((n) => n.y));
+    const maxX = Math.max(...nodes.map((n) => n.x + (n.width ?? 288))),
+      maxY = Math.max(...nodes.map((n) => n.y + (n.height ?? 200)));
+    const { width, height } = board.current.getBoundingClientRect();
+    const zoom = Math.max(
+      0.05,
+      Math.min(2, (width - 96) / (maxX - minX), (height - 192) / (maxY - minY)),
+    );
+    changeCamera({ x: 48 - minX * zoom, y: 96 - minY * zoom, zoom });
+  }
+  function beginDrag(e: PointerEvent<HTMLButtonElement>, node: Node) {
+    if (!isDraft(node) || e.button !== 0) return;
+    e.stopPropagation();
+    if (!selectedIDs.includes(node.id)) selectNode(node.id);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const card = e.currentTarget.parentElement!;
+    drag.current = {
+      id: node.id,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      x: node.x,
+      y: node.y,
+      nextX: node.x,
+      nextY: node.y,
+      card,
+      button: e.currentTarget,
+      pointerId: e.pointerId,
+      members: local.current
+        .filter(
+          (n) =>
+            isDraft(n) &&
+            (selectedIDs.includes(node.id)
+              ? selectedIDs.includes(n.id)
+              : n.id === node.id),
+        )
+        .map((n) => ({
+          id: n.id,
+          x: n.x,
+          y: n.y,
+          element:
+            board.current?.querySelector<HTMLElement>(
+              `[data-node-id="${n.id}"]`,
+            ) ?? null,
+        })),
+    };
+  }
+  function moveDrag(e: PointerEvent<HTMLButtonElement>) {
+    const d = drag.current;
+    if (!d) return;
+    d.nextX = limit(
+      Math.round(d.x + (e.clientX - d.clientX) / view.current.zoom),
+    );
+    d.nextY = limit(
+      Math.round(d.y + (e.clientY - d.clientY) / view.current.zoom),
+    );
+    for (const member of d.members) {
+      if (member.element) {
+        member.element.style.left = `${limit(member.x + d.nextX - d.x)}px`;
+        member.element.style.top = `${limit(member.y + d.nextY - d.y)}px`;
+      }
+    }
+    board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
+  }
+  function endDrag(cancel = false) {
+    const d = drag.current;
+    if (!d) return;
+    drag.current = null;
+    if (d.button.hasPointerCapture(d.pointerId))
+      d.button.releasePointerCapture(d.pointerId);
+    if (cancel) {
+      for (const member of d.members)
+        if (member.element) {
+          member.element.style.left = `${member.x}px`;
+          member.element.style.top = `${member.y}px`;
+        }
+      board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
+      return;
+    }
+    const moved = new Map(
+      d.members.map((member) => [
+        member.id,
+        {
+          x: limit(member.x + d.nextX - d.x),
+          y: limit(member.y + d.nextY - d.y),
+        },
+      ]),
+    );
+    edit(
+      local.current.map((node) =>
+        moved.has(node.id) ? { ...node, ...moved.get(node.id)! } : node,
+      ),
+    );
+  }
+  async function readConflict() {
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      const server = requireCanvas(
+        await getCanvas({ id: base.id }, { signal: controller.signal }),
+        base.project_id,
+        base.id,
+      );
+      if (alive.current) setConflict({ server });
+    } catch {
+      if (alive.current && !controller.signal.aborted)
+        setMessage("未能读取服务端版本，本地编辑仍保留，请重试读取。");
+    }
+  }
+  async function save() {
+    if (busy.current || conflict) return;
+    let operation = pending.current;
+    if (!operation) {
+      try {
+        const frozen = structuredClone(local.current);
+        const body = commandBatch(base, frozen);
+        if (!body.commands?.length) return base;
+        operation = { key: crypto.randomUUID(), base, nodes: frozen, body };
+        pending.current = operation;
+      } catch {
+        setMessage(
+          "请检查节点名称、提示词和参数；本次最多提交 100 条编辑命令。",
+        );
+        return;
+      }
+    }
+    busy.current = true;
+    setSaving(true);
+    setMessage("");
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      const value = await applyCanvasCommands({ id: base.id }, operation.body, {
+        headers: { "Idempotency-Key": operation.key },
+        signal: controller.signal,
+      });
+      const committed = requireSaveResult(
+        value,
+        operation.base,
+        operation.nodes,
+        operation.body,
+      );
+      if (!alive.current || controller.signal.aborted) return;
+      const frozen = new Map(operation.nodes.map((n) => [n.id, n]));
+      const saved = new Map(committed.nodes.map((n) => [n.id, n]));
+      edit(
+        local.current.map((n) => {
+          const original = frozen.get(n.id),
+            receipt = saved.get(n.id);
+          if (!receipt || !original) return n;
+          return sameEditable(n, original)
+            ? receipt
+            : { ...n, input_revision: receipt.input_revision };
+        }),
+      );
+      setBase(committed);
+      pending.current = null;
+      setUnconfirmed(false);
+      return committed;
+    } catch (error) {
+      if (!alive.current || controller.signal.aborted) return;
+      if (error instanceof AuthError && error.code === "revision_conflict") {
+        pending.current = null;
+        setUnconfirmed(false);
+        setConflict({ server: null });
+        setMessage(
+          "画布已被其他窗口修改，本地编辑已保留。请对照服务端内容后明确选择。",
+        );
+        await readConflict();
+      } else if (
+        error instanceof AuthError &&
+        [401, 403, 404, 409, 422].includes(error.status)
+      ) {
+        pending.current = null;
+        setUnconfirmed(false);
+        setMessage(
+          error.status === 401
+            ? "登录已失效，本地编辑仍保留，请重新登录后重开画布。"
+            : "服务端拒绝保存，本地编辑仍保留。请检查权限、节点及参数。",
+        );
+      } else {
+        setUnconfirmed(true);
+        setMessage(
+          "保存结果未确认，本地编辑仍保留。请重试原保存，避免重复提交。",
+        );
+      }
+    } finally {
+      busy.current = false;
+      if (alive.current) setSaving(false);
+    }
+  }
+  async function generateCurrent() {
+    if (!current || !isDraft(current) || busy.current) return;
+    const saved = await save();
+    if (!saved) return;
+    const node = saved.nodes.find((n) => n.id === current.id);
+    if (!node || !isDraft(node)) return;
+    setGeneration({
+      project,
+      prompt: node.config.draft.prompt,
+      capability: node.node_type === "video_generation" ? "video" : "image",
+      draft: node.config.draft,
+      source: {
+        canvas_id: saved.id,
+        node_id: node.id,
+        revision: saved.revision,
+      },
+    });
+  }
+  async function adoptResult(id: string, kind: string) {
+    if (!["image", "video", "audio"].includes(kind) || busy.current || conflict)
+      throw new Error("请先解决画布保存状态，再采用结果。");
+    const existing = local.current.find(
+      (n) => n.ref_type === "media_asset" && n.ref_id === id,
+    );
+    if (!existing) {
+      const node: Node = {
+        id: crypto.randomUUID(),
+        title: kind === "video" ? "生成视频" : "生成图片",
+        node_type: kind,
+        node_action: "resource",
+        ref_type: "media_asset",
+        ref_id: id,
+        config: {},
+        x: 80 + (local.current.length % 3) * 340,
+        y: 80 + Math.floor(local.current.length / 3) * 260,
+        z_index: 0,
+        width: 288,
+        height: 200,
+      };
+      edit([...local.current, node]);
+      selectNode(node.id);
+    } else selectNode(existing.id);
+    const saved = await save();
+    if (!saved)
+      throw new Error(
+        "结果已保留在本地画布，保存尚未确认。请重试采用以继续同一次保存。",
+      );
+    setGeneration(null);
+    setMessage("生成结果已添加并保存到画布。");
+  }
+  const saveShortcut = useEffectEvent(() => {
+    void save();
+  });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        saveShortcut();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  function resolveConflict(discard: boolean) {
+    const server = conflict?.server;
+    if (!server) return;
+    if (discard) {
+      edit(server.nodes);
+      selectNode(undefined);
+    } else {
+      const own = new Map(local.current.map((n) => [n.id, n]));
+      const previous = new Map(base.nodes.map((n) => [n.id, n]));
+      const merged = server.nodes.map((n) => {
+        const ours = own.get(n.id),
+          old = previous.get(n.id);
+        return ours && old && !sameEditable(ours, old)
+          ? { ...ours, input_revision: n.input_revision }
+          : n;
+      });
+      const remoteIDs = new Set(server.nodes.map((n) => n.id));
+      for (const n of local.current) if (!remoteIDs.has(n.id)) merged.push(n);
+      edit(merged);
+    }
+    setBase(server);
+    setConflict(null);
+    setMessage("");
+  }
+  const status = saving
+    ? "正在保存…"
+    : unconfirmed
+      ? "保存未确认"
+      : conflict
+        ? "版本冲突，本地编辑保留"
+        : dirty
+          ? "有未保存的编辑"
+          : `已保存 · 版本 ${base.revision}`;
+  return (
+    <main className="creation-canvas relative h-dvh overflow-hidden">
+      <header
+        className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-start justify-between gap-2"
+        onClickCapture={(e) => {
+          if (
+            (dirty || saving || unconfirmed) &&
+            e.target instanceof Element &&
+            e.target.closest('a[href="/projects"],a[href="/"]')
+          ) {
+            e.preventDefault();
+            setLeave(true);
+          }
+        }}
+      >
+        <div className="canvas-topbar-cluster max-w-[65%] min-w-0">
+          <Button asChild variant="ghost" size="icon-sm">
+            <Link
+              href="/projects"
+              onClick={(e) => {
+                if (dirty || saving || unconfirmed) {
+                  e.preventDefault();
+                  setLeave(true);
+                }
+              }}
+            >
+              <ArrowLeft />
+              <span className="sr-only">返回项目</span>
+            </Link>
+          </Button>
+          <Brand />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-medium">{project.name}</h1>
+            <p className="truncate text-xs text-muted-foreground">
+              {project.aspect_ratio} · {project.style_key ?? "未设风格"}
+            </p>
+          </div>
+        </div>
+        <div className="canvas-topbar-cluster shrink-0">
+          <span
+            role="status"
+            aria-live="polite"
+            className="text-xs text-muted-foreground"
+          >
+            {status}
+          </span>
+          <Button
+            onClick={() => void save()}
+            disabled={saving || !!conflict || (!dirty && !unconfirmed)}
+          >
+            {saving ? "正在保存…" : unconfirmed ? "重试原保存" : "保存画布"}
+          </Button>
+        </div>
+      </header>
+      {message && (
+        <p role="alert" className="canvas-feedback text-sm">
+          {message}
+        </p>
+      )}
+      <Dialog open={leave} onOpenChange={setLeave}>
+        <DialogContent role="alertdialog" showCloseButton={false}>
+          <DialogTitle>确认离开画布</DialogTitle>
+          <DialogDescription>
+            未保存的编辑在离开后会丢失；未确认保存可能已写入，请重开后核对实际结果。
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLeave(false)}>
+              留在画布
+            </Button>
+            <Button asChild variant="destructive">
+              <Link
+                href="/projects"
+                onClick={() => {
+                  leaving.current = true;
+                }}
+              >
+                放弃未保存编辑并返回项目库
+              </Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {conflict && (
+        <section
+          aria-label="版本冲突处理"
+          className="canvas-feedback space-y-3 text-sm"
+        >
+          <p>
+            本地基于版本 {base.revision}；
+            {conflict.server
+              ? `服务端版本 ${conflict.server.revision}`
+              : "正在读取服务端版本…"}
+            。本地稿仍在编辑面板中。
+          </p>
+          {conflict.server && (
+            <div className="max-h-40 overflow-auto rounded border p-3">
+              <p className="mb-2 font-medium">服务端草稿</p>
+              {conflict.server.nodes.filter(isDraft).map((n) => (
+                <p key={n.id} className="break-words whitespace-pre-wrap">
+                  {n.title} · {n.config.draft.aspect_ratio} ·{" "}
+                  {n.config.draft.candidate_count} 个候选
+                  <br />
+                  {n.config.draft.prompt || "（空提示词）"}
+                  <br />
+                  {n.config.draft.negative_prompt}
+                </p>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {conflict.server ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => resolveConflict(false)}
+                >
+                  保留本地编辑，以版本 {conflict.server.revision} 继续
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => resolveConflict(true)}
+                >
+                  放弃本地编辑，载入服务端版本
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={() => void readConflict()}>
+                重试读取服务端版本
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
+      <InfiniteCanvas
+        containerRef={board}
+        viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
+        onViewportChange={viewportChange}
+        onViewportPreviewChange={viewportPreview}
+        backgroundMode="dots"
+        boxSelectEnabled={tool === "select"}
+        onSelectArea={selectArea}
+        onCanvasDeselect={() => selectNode(undefined)}
+      >
+        {nodes.map((node) => (
+          <CanvasNode
+            key={node.id}
+            node={node}
+            projectID={project.id}
+            selected={selectedIDs.includes(node.id)}
+            zoom={camera.zoom}
+            onResize={(size) => update(node.id, size)}
+            onResizePreview={() =>
+              board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT))
+            }
+            onSelect={() => {
+              if (selectedIDs.includes(node.id)) setSelected(node.id);
+              else selectNode(node.id);
+            }}
+            onEditTitle={() => {
+              selectNode(node.id);
+              setDetails(true);
+            }}
+            onMove={(x, y) => update(node.id, { x: limit(x), y: limit(y) })}
+            onDragStart={(event) => beginDrag(event, node)}
+            onDragMove={moveDrag}
+            onDragEnd={endDrag}
+          />
+        ))}
+      </InfiniteCanvas>
+      {!nodes.length && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <div className="space-y-3 text-center">
+            <div className="text-4xl font-light text-muted-foreground">+</div>
+            <h2 className="text-lg font-medium">画布暂无节点</h2>
+            <p className="text-sm text-muted-foreground">
+              从左侧添加图片或视频节点，开始你的创作。
+            </p>
+          </div>
+        </div>
+      )}
+      {selectedIDs.length > 1 && (
+        <p className="pointer-events-none absolute top-20 left-4 rounded-lg bg-card px-3 py-2 text-xs">
+          已选择 {selectedIDs.length} 个节点；拖动标题可移动可编辑节点
+        </p>
+      )}
+      <CanvasToolbar
+        tool={tool}
+        onToolChange={setTool}
+        onAdd={add}
+        zoom={camera.zoom}
+        onZoom={(zoom) => changeCamera({ ...view.current, zoom })}
+        onFit={fit}
+        miniMap={miniMap}
+        onMiniMap={() => setMiniMap(!miniMap)}
+      />
+      {miniMap && (
+        <CanvasMiniMap
+          nodes={nodes}
+          viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
+          width={size.width}
+          height={size.height}
+          onNavigate={(x, y) =>
+            changeCamera({
+              x: size.width / 2 - x * view.current.zoom,
+              y: size.height / 2 - y * view.current.zoom,
+              zoom: view.current.zoom,
+            })
+          }
+        />
+      )}
+      {current && (
+        <CanvasNodePanel
+          node={current}
+          viewport={{ x: camera.x, y: camera.y, k: camera.zoom }}
+          containerRef={board}
+        >
+          <CanvasComposer
+            node={current}
+            nodes={nodes}
+            details={details}
+            onDetails={setDetails}
+            onSelect={selectNode}
+            onUpdate={(patch) => update(current.id, patch)}
+            onDraft={draft}
+            onGenerate={() => void generateCurrent()}
+            generating={saving || !!conflict || unconfirmed}
+          />
+        </CanvasNodePanel>
+      )}
+      {generation && (
+        <GenerationDialog
+          seed={generation}
+          onClose={() => setGeneration(null)}
+          onAdopt={adoptResult}
+        />
+      )}
+    </main>
+  );
+}

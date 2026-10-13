@@ -1,23 +1,13 @@
 import Link from "next/link";
-import { cn } from "cn";
-import { Waves } from "lucide-react";
-import { screenHref } from "@/components/layout/routes";
-
+import { Sparkles } from "lucide-react";
 export function Brand({ wordmark = false }: { wordmark?: boolean }) {
   return (
     <Link
-      href={screenHref("home")}
+      href="/"
       aria-label="浮光首页"
-      className="inline-flex items-center gap-2.5 text-sm font-medium"
+      className="inline-flex shrink-0 items-center gap-2 text-2xl font-medium"
     >
-      <span
-        className={cn(
-          "flex items-center justify-center rounded-lg bg-primary text-primary-foreground",
-          wordmark ? "size-7" : "size-9",
-        )}
-      >
-        <Waves className="size-4" />
-      </span>
+      <Sparkles className="size-7" strokeWidth={1.4} />
       {wordmark ? "浮光" : null}
     </Link>
   );

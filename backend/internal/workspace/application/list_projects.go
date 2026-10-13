@@ -32,6 +32,8 @@ type ProjectListItem struct {
 	CoverUnavailable    bool
 	ID                  uuid.UUID
 	OrgID               uuid.UUID
+	CanvasID            *uuid.UUID
+	StyleKey            *string
 	Name                string
 	AspectRatio         string
 	StyleType           string

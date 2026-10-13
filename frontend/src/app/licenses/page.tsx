@@ -8,8 +8,8 @@ export default function LicensesPage() {
         </Link>
         <h1 className="text-2xl font-medium">第三方许可</h1>
         <p className="leading-7 text-muted-foreground">
-          历史实现曾包含基于 BeefTV 与 Infinite Canvas 的 MIT
-          许可代码，相关时间线算法保留 Lingji Cut 的 Apache-2.0 声明。
+          当前画布适配 BeefTV 与 Infinite Canvas 的 MIT 许可代码。
+          历史时间线算法保留 Lingji Cut 的 Apache-2.0 声明。
         </p>
         <ul className="space-y-3">
           <li>
@@ -18,6 +18,14 @@ export default function LicensesPage() {
               href="/licenses/beeftv.txt"
             >
               BeefTV MIT 许可
+            </a>
+          </li>
+          <li>
+            <a
+              className="underline underline-offset-4"
+              href="/licenses/beeftv-notice.txt"
+            >
+              BeefTV 上游来源与版权声明
             </a>
           </li>
           <li>
@@ -78,7 +86,7 @@ export default function LicensesPage() {
           </li>
         </ul>
         <p className="text-sm text-muted-foreground">
-          来源版本：BeefTV 0d9e9f48 画布核心；完整能力迁移参考 1ae25027。© 2026
+          当前画布来源：BeefTV a2196d3；历史来源为 0d9e9f48 / 1ae25027。© 2026
           @beefnoode、BeefTV contributors、basketikun、ddcat、yoqu。
         </p>
         <p className="text-sm text-muted-foreground">

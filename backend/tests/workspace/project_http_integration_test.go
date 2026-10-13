@@ -99,7 +99,7 @@ func TestProjectHTTPCreatePersistsFirstResponseAcrossConcurrentRequests(t *testi
 	 (SELECT count(*) FROM workspace.project WHERE org_id=?) AS projects,
 	 (SELECT count(*) FROM billing.budget WHERE project_id=?) AS budgets,
 	 (SELECT count(*) FROM infra.outbox WHERE partition_key=?) AS events,
-	 (SELECT count(*) FROM infra.idempotency_record WHERE actor_id=? AND idem_key=?) AS receipts`, actor.OrgID, created.ID, created.ID.String(), actor.ID, key).Scan(&counts).Error; err != nil {
+	 (SELECT count(*) FROM workspace.project_creation_receipt WHERE actor_id=? AND idem_key=?) AS receipts`, actor.OrgID, created.ID, created.ID.String(), actor.ID, key).Scan(&counts).Error; err != nil {
 		t.Fatal(err)
 	}
 	if counts.Projects != 1 || counts.Budgets != 1 || counts.Events != 2 || counts.Receipts != 1 {
@@ -107,7 +107,7 @@ func TestProjectHTTPCreatePersistsFirstResponseAcrossConcurrentRequests(t *testi
 	}
 	changed := bytes.Replace(body, []byte("真实项目闭环"), []byte("异体项目"), 1)
 	mismatch := projectHTTPRequest(t.Context(), router, http.MethodPost, "/api/projects", key, changed)
-	if mismatch.Code != 422 || !bytes.Contains(mismatch.Body.Bytes(), []byte(`"code":"idempotency_key_reused"`)) {
+	if mismatch.Code != 409 || !bytes.Contains(mismatch.Body.Bytes(), []byte(`"code":"idempotency_key_reused"`)) {
 		t.Fatalf("key reuse response: %d %s", mismatch.Code, mismatch.Body.String())
 	}
 	var audit struct{ Payload []byte }
@@ -133,10 +133,12 @@ func TestProjectHTTPCreateRechecksScopeAndRollsBackReceiptFailure(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = database.Exec("DROP FUNCTION IF EXISTS " + function + "()").Error })
-	if err := database.Exec(fmt.Sprintf(`CREATE TRIGGER %s BEFORE INSERT ON infra.idempotency_record FOR EACH ROW EXECUTE FUNCTION %s()`, trigger, function)).Error; err != nil {
+	if err := database.Exec(fmt.Sprintf(`CREATE TRIGGER %s BEFORE INSERT ON workspace.project_creation_receipt FOR EACH ROW EXECUTE FUNCTION %s()`, trigger, function)).Error; err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = database.Exec("DROP TRIGGER IF EXISTS " + trigger + " ON infra.idempotency_record").Error })
+	t.Cleanup(func() {
+		_ = database.Exec("DROP TRIGGER IF EXISTS " + trigger + " ON workspace.project_creation_receipt").Error
+	})
 	failed := projectHTTPRequest(t.Context(), router, http.MethodPost, "/api/projects", key, body)
 	if failed.Code != 503 {
 		t.Fatalf("receipt failure: %d %s", failed.Code, failed.Body.String())
@@ -146,13 +148,13 @@ func TestProjectHTTPCreateRechecksScopeAndRollsBackReceiptFailure(t *testing.T) 
 	 (SELECT count(*) FROM workspace.project WHERE org_id=?) AS projects,
 	 (SELECT count(*) FROM billing.budget b JOIN workspace.project p ON p.id=b.project_id WHERE p.org_id=?) AS budgets,
 	 (SELECT count(*) FROM infra.outbox WHERE payload->>'org_id'=?) AS events,
-	 (SELECT count(*) FROM infra.idempotency_record WHERE actor_id=?) AS receipts`, actor.OrgID, actor.OrgID, actor.OrgID.String(), actor.ID).Scan(&counts).Error; err != nil {
+	 (SELECT count(*) FROM workspace.project_creation_receipt WHERE actor_id=?) AS receipts`, actor.OrgID, actor.OrgID, actor.OrgID.String(), actor.ID).Scan(&counts).Error; err != nil {
 		t.Fatal(err)
 	}
 	if counts.Projects != 0 || counts.Budgets != 0 || counts.Events != 0 || counts.Receipts != 0 {
 		t.Fatalf("receipt failure leaked atomic effects: %+v", counts)
 	}
-	if err := database.Exec("DROP TRIGGER " + trigger + " ON infra.idempotency_record").Error; err != nil {
+	if err := database.Exec("DROP TRIGGER " + trigger + " ON workspace.project_creation_receipt").Error; err != nil {
 		t.Fatal(err)
 	}
 	created := projectHTTPRequest(t.Context(), router, http.MethodPost, "/api/projects", key, body)
@@ -380,93 +382,25 @@ func TestProjectHTTPWriteSecurityAndBoundedRequest(t *testing.T) {
 	}
 }
 
-func TestProjectHTTPCreationReceiptUsesExistingTwentyFourHourWindow(t *testing.T) {
+func TestProjectHTTPCreationReceiptSurvivesSharedCacheEviction(t *testing.T) {
 	ctx, database := workspaceMigrationDB(t)
 	actor := insertWorkspaceActor(ctx, t, database, insertWorkspaceOrganization(ctx, t, database))
 	router := projectHTTPRouter(database, actor)
 	key := uuid.NewString()
-	body := []byte(`{"name":"24小时回执窗口","aspect_ratio":"9:16","style_type":"realistic"}`)
-	first := projectHTTPRequest(t.Context(), router, http.MethodPost, "/api/projects", key, body)
+	body := []byte(`{"name":"Durable receipt","aspect_ratio":"1:1"}`)
+	first := projectHTTPRequest(ctx, router, http.MethodPost, "/api/projects", key, body)
 	if first.Code != 201 {
-		t.Fatalf("first create: %d %s", first.Code, first.Body.String())
+		t.Fatalf("first creation: %d %s", first.Code, first.Body.String())
 	}
-	var lifetime struct{ WithinWindow bool }
-	if err := database.Raw(`SELECT expires_at>now()+interval '23 hours' AND expires_at<=now()+interval '24 hours' AS within_window FROM infra.idempotency_record WHERE actor_id=? AND idem_key=?`, actor.ID, key).Scan(&lifetime).Error; err != nil || !lifetime.WithinWindow {
-		t.Fatalf("receipt window: %+v %v", lifetime, err)
-	}
-	if err := database.Exec(`UPDATE infra.idempotency_record SET expires_at=now()-interval '1 second' WHERE actor_id=? AND idem_key=?`, actor.ID, key).Error; err != nil {
+	if err := database.Exec(`DELETE FROM infra.idempotency_record WHERE actor_id=? AND idem_key=?`, actor.ID, key).Error; err != nil {
 		t.Fatal(err)
 	}
-	second := projectHTTPRequest(t.Context(), projectHTTPRouter(database, actor), http.MethodPost, "/api/projects", key, body)
-	if second.Code != 201 || bytes.Equal(second.Body.Bytes(), first.Body.Bytes()) {
-		t.Fatalf("expired receipt silently extended policy: %d %s", second.Code, second.Body.String())
+	second := projectHTTPRequest(ctx, router, http.MethodPost, "/api/projects", key, body)
+	if second.Code != 201 || !bytes.Equal(first.Body.Bytes(), second.Body.Bytes()) {
+		t.Fatalf("durable replay: %d %s", second.Code, second.Body.String())
 	}
-	if count := countProjectsNamed(ctx, t, database, actor.OrgID, "24小时回执窗口"); count != 2 {
-		t.Fatalf("expired window effects: %d", count)
-	}
-}
-
-func TestProjectHTTPCreationRechecksReceiptExpiryAfterKeyLockWait(t *testing.T) {
-	ctx, database := workspaceMigrationDB(t)
-	actor := insertWorkspaceActor(ctx, t, database, insertWorkspaceOrganization(ctx, t, database))
-	router := projectHTTPRouter(database, actor)
-	key := uuid.NewString()
-	body := []byte(`{"name":"跨锁到期","aspect_ratio":"9:16","style_type":"realistic"}`)
-	first := projectHTTPRequest(t.Context(), router, http.MethodPost, "/api/projects", key, body)
-	if first.Code != 201 {
-		t.Fatalf("first create: %d %s", first.Code, first.Body.String())
-	}
-	if err := database.Exec(`UPDATE infra.idempotency_record SET expires_at=clock_timestamp()+interval '1 second' WHERE actor_id=? AND idem_key=?`, actor.ID, key).Error; err != nil {
-		t.Fatal(err)
-	}
-	lock := database.Begin()
-	if lock.Error != nil {
-		t.Fatal(lock.Error)
-	}
-	defer func() { _ = lock.Rollback().Error }()
-	var locked int
-	if err := lock.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.ID.String()+":"+key).Scan(&locked).Error; err != nil {
-		t.Fatal(err)
-	}
-	requestCtx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	response := make(chan *httptest.ResponseRecorder, 1)
-	go func() {
-		response <- projectHTTPRequest(requestCtx, router, http.MethodPost, "/api/projects", key, body)
-	}()
-	// Observe only this task-owned database's wait metadata. The controlled
-	// advisory lock guarantees the request transaction began before expiry.
-	for {
-		var state struct{ Ready bool }
-		err := database.WithContext(requestCtx).Raw(`SELECT clock_timestamp()>expires_at
-		 AND EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory') AS ready
-		 FROM infra.idempotency_record WHERE actor_id=? AND idem_key=?`, actor.ID, key).Scan(&state).Error
-		if err != nil {
-			t.Fatal(err)
-		}
-		if state.Ready {
-			break
-		}
-		select {
-		case <-requestCtx.Done():
-			t.Fatal("request did not wait across owned receipt expiry")
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
-	if err := lock.Commit().Error; err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case result := <-response:
-		if result.Code != 201 || bytes.Equal(result.Body.Bytes(), first.Body.Bytes()) {
-			t.Fatalf("expired receipt replayed after lock wait: %d %s", result.Code, result.Body.String())
-		}
-	case <-requestCtx.Done():
-		t.Fatal("creation did not resume after releasing owned key lock")
-	}
-	var lifetime struct{ FullWindow bool }
-	if err := database.Raw(`SELECT expires_at>=clock_timestamp()+interval '23 hours 59 minutes 59 seconds' AS full_window FROM infra.idempotency_record WHERE actor_id=? AND idem_key=?`, actor.ID, key).Scan(&lifetime).Error; err != nil || !lifetime.FullWindow {
-		t.Fatalf("lock wait shortened new receipt lifetime: %+v %v", lifetime, err)
+	if count := countProjectsNamed(ctx, t, database, actor.OrgID, "Durable receipt"); count != 1 {
+		t.Fatalf("duplicate effects: %d", count)
 	}
 }
 

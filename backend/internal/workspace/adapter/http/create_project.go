@@ -19,10 +19,11 @@ import (
 
 // CreateProjectRequest contains only user-editable creation specifications.
 type CreateProjectRequest struct {
+	StyleKey      *string    `json:"style_key" maxLength:"50" extensions:"x-nullable"`
 	Name          string     `json:"name" binding:"required" minLength:"1" maxLength:"50"`
 	Description   string     `json:"description"`
-	AspectRatio   string     `json:"aspect_ratio" binding:"required" enums:"9:16,16:9"`
-	StyleType     string     `json:"style_type" binding:"required" enums:"realistic,stylized"`
+	AspectRatio   string     `json:"aspect_ratio" binding:"required" enums:"9:16,16:9,1:1"`
+	StyleType     string     `json:"style_type" enums:"realistic,stylized"`
 	StyleSubtype  string     `json:"style_subtype,omitempty" enums:"anime_jp,guofeng_xianxia,cartoon_3d,manhwa"`
 	StylePresetID *uuid.UUID `json:"style_preset_id,omitempty"`
 }
@@ -33,9 +34,10 @@ type CreateProjectRequest struct {
 // @ID createProject
 // @Accept json
 // @Produce json
-// @Param Idempotency-Key header string true "24小时内创建请求的 UUID 幂等键"
+// @Param Idempotency-Key header string true "持久创建回执的 UUID 幂等键"
 // @Param body body CreateProjectRequest true "项目规格"
 // @Success 201 {object} application.CreatedProject
+// @Failure 409 {object} httpapi.Problem
 // @Failure 403 {object} httpapi.Problem
 // @Failure 404 {object} httpapi.Problem
 // @Failure 422 {object} httpapi.Problem
@@ -51,7 +53,7 @@ func (h *Handler) Create(c *gin.Context) {
 		httpapi.WriteProblem(c, 422, "invalid_idempotency_key", nil)
 		return
 	}
-	input := application.CreateProjectInput{Name: body.Name, Description: body.Description, AspectRatio: body.AspectRatio, StyleType: body.StyleType, StyleSubtype: body.StyleSubtype, RequestID: c.GetString("request_id")}
+	input := application.CreateProjectInput{StyleKey: body.StyleKey, Name: body.Name, Description: body.Description, AspectRatio: body.AspectRatio, StyleType: body.StyleType, StyleSubtype: body.StyleSubtype, RequestID: c.GetString("request_id")}
 	if body.StylePresetID != nil {
 		if *body.StylePresetID == uuid.Nil {
 			httpapi.WriteProblem(c, 422, "invalid_request", nil)
@@ -164,7 +166,7 @@ func writeError(c *gin.Context, err error) {
 	case errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
-		httpapi.WriteProblem(c, 422, "idempotency_key_reused", nil)
+		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
 	case errors.Is(err, application.ErrStylePresetMismatch), errors.Is(err, application.ErrInvalidCreateProject), errors.Is(err, application.ErrInvalidStylePresetList):
 		httpapi.WriteProblem(c, 422, "invalid_request", nil)
 	default:

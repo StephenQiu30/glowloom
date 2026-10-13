@@ -1,0 +1,190 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { Upload, LoaderCircle, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { uploadPersonalMediaAsset } from "@/components/media/generated/media";
+import { mediaError, validateUpload } from "@/components/media/library";
+import { isProjectID } from "@/components/projects/project";
+import { AuthError } from "@/components/auth/request";
+import { uploadMediaAsset } from "@/components/creation/generated/creation";
+export function UploadDialog({
+  onClose,
+  onUploaded,
+  projectID,
+}: {
+  onClose: () => void;
+  onUploaded: (asset?: CreationAPI.AssetSummary) => void;
+  projectID?: string;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const key = useRef(crypto.randomUUID());
+  const busy = useRef(false);
+  const request = useRef<AbortController | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => () => request.current?.abort(), []);
+  function choose(f?: File) {
+    if (pending || unconfirmed) return;
+    if (!f) return;
+    setError(validateUpload(f));
+    setFile(f);
+    setDone(false);
+    key.current = crypto.randomUUID();
+  }
+  async function upload() {
+    if (!file || busy.current || !confirmed || validateUpload(file)) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      const sendOptions = {
+        headers: { "Idempotency-Key": key.current },
+        signal: controller.signal,
+      };
+      const r = projectID
+        ? await uploadMediaAsset(
+            { pid: projectID },
+            { local_review_confirmed: true },
+            file,
+            sendOptions,
+          )
+        : await uploadPersonalMediaAsset(
+            { local_review_confirmed: true },
+            file,
+            {
+              headers: { "Idempotency-Key": key.current },
+              signal: controller.signal,
+            },
+          );
+      if (
+        !isProjectID(r.asset?.id) ||
+        (projectID &&
+          (!r.asset ||
+            !("project_id" in r.asset) ||
+            r.asset.project_id !== projectID))
+      )
+        throw new AuthError("invalid_receipt");
+      setDone(true);
+      setUnconfirmed(false);
+      onUploaded(r.asset);
+    } catch (e) {
+      setUnconfirmed(
+        !(e instanceof AuthError && e.status >= 400 && e.status < 500),
+      );
+      setError(
+        controller.signal.aborted
+          ? "上传已中止，但服务器可能已接收文件。请重试原上传确认结果。"
+          : mediaError(e),
+      );
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  }
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !pending) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogTitle>{done ? "素材上传成功" : "上传素材"}</DialogTitle>
+        <DialogDescription>
+          {done
+            ? "文件已保存到当前素材库。"
+            : "图片和文档最多 20 MB，音频 100 MB，视频 500 MB（60 秒），GLB 模型 64 MB。"}
+        </DialogDescription>
+        {!done && (
+          <>
+            <input
+              ref={input}
+              type="file"
+              className="sr-only"
+              aria-label="选择素材文件"
+              disabled={pending || unconfirmed}
+              onChange={(e) => choose(e.target.files?.[0])}
+            />
+            <button
+              className="upload-dropzone"
+              disabled={pending || unconfirmed}
+              onClick={() => input.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                choose(e.dataTransfer.files[0]);
+              }}
+            >
+              <Upload size={30} />
+              <span>{file ? file.name : "拖入文件，或点击选择"}</span>
+              {file && <small>{(file.size / 1024 / 1024).toFixed(2)} MB</small>}
+            </button>
+            <label className="flex items-start gap-3 text-xs leading-5">
+              <Checkbox
+                checked={confirmed}
+                disabled={pending || unconfirmed}
+                onCheckedChange={(v) => setConfirmed(v === true)}
+              />
+              我已确认内容与使用权限，文件不包含需要另行授权的真人内容。
+            </label>
+            {pending && (
+              <p role="status" className="flex items-center gap-2 text-sm">
+                <LoaderCircle className="animate-spin" size={16} />
+                正在上传并验证文件…
+              </p>
+            )}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            {unconfirmed && (
+              <p className="text-xs text-muted-foreground">
+                保留当前文件和原请求编号以安全重试。关闭后，请先刷新资产列表确认结果。
+              </p>
+            )}
+          </>
+        )}
+        <DialogFooter>
+          {pending ? (
+            <Button variant="outline" onClick={() => request.current?.abort()}>
+              <X />
+              中止上传
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={onClose}>
+              {done ? "完成" : "关闭"}
+            </Button>
+          )}
+          {!done && (
+            <Button
+              disabled={
+                !file ||
+                !confirmed ||
+                !!(file && validateUpload(file)) ||
+                pending
+              }
+              onClick={() => void upload()}
+            >
+              {unconfirmed ? "重试原上传" : "上传"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

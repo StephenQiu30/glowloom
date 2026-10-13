@@ -61,7 +61,7 @@ func TestSchemaInitializesEmptyDatabaseAndRejectsReplay(t *testing.T) {
 	if !canAppend || !canRead || canUpdate || canDelete || canTruncate {
 		t.Fatalf("audit privileges insert/select/update/delete/truncate = %t/%t/%t/%t/%t", canAppend, canRead, canUpdate, canDelete, canTruncate)
 	}
-	for _, table := range []string{"identity.user_session", "identity.login_guard", "identity.auth_event"} {
+	for _, table := range []string{"identity.user_session", "identity.login_guard", "identity.auth_event", "canvas.node_input", "canvas.save_receipt"} {
 		if err := tx.QueryRowContext(ctx, `SELECT
 			has_table_privilege('lanverse_app', $1, 'INSERT'),
 			has_table_privilege('lanverse_app', $1, 'SELECT'),
@@ -70,7 +70,7 @@ func TestSchemaInitializesEmptyDatabaseAndRejectsReplay(t *testing.T) {
 			has_table_privilege('lanverse_app', $1, 'TRUNCATE')`, table).Scan(&canAppend, &canRead, &canUpdate, &canDelete, &canTruncate); err != nil {
 			t.Fatal(err)
 		}
-		wantUpdate := table != "identity.auth_event"
+		wantUpdate := table == "identity.user_session" || table == "identity.login_guard"
 		if !canAppend || !canRead || canUpdate != wantUpdate || canDelete || canTruncate {
 			t.Fatalf("%s privileges insert/select/update/delete/truncate = %t/%t/%t/%t/%t", table, canAppend, canRead, canUpdate, canDelete, canTruncate)
 		}

@@ -1,6 +1,14 @@
-import { AnalyticsPage } from "./_components/analytics-page";
-
-export const metadata = { title: "数据分析" };
+import { ProductShell } from "@/components/layout/product-shell";
+import { UnavailableState } from "@/components/availability/unavailable";
+export const metadata = { title: "创作统计 · 浮光" };
 export default function Page() {
-  return <AnalyticsPage />;
+  return (
+    <ProductShell screen="analytics">
+      <h1 className="text-2xl">创作统计</h1>
+      <UnavailableState
+        title="创作统计暂未开放"
+        description="此功能尚未接入服务。你可以从创作页进入画布，继续编辑和保存草稿。"
+      />
+    </ProductShell>
+  );
 }

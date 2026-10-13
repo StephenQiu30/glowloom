@@ -25,6 +25,9 @@ func NewStoreWithProjectWorkGuard(db *gorm.DB, work ProjectWorkFactory) *Store {
 }
 
 type lifecycleProjectRow struct {
+	OwnerID                                                       *uuid.UUID
+	CanvasID                                                      *uuid.UUID
+	StyleKey                                                      *string
 	CoverAssetID                                                  *uuid.UUID
 	ID, OrgID                                                     uuid.UUID
 	Name, Description, AspectRatio, StyleType, Resolution, Status string
@@ -45,6 +48,13 @@ func (r lifecycleProjectRow) snapshot() (application.ProjectSnapshot, error) {
 	if r.StylePresetID != nil {
 		p.StylePresetID = *r.StylePresetID
 	}
+	if r.OwnerID != nil {
+		p.OwnerID = *r.OwnerID
+	}
+	if r.CanvasID != nil {
+		p.CanvasID = *r.CanvasID
+	}
+	p.StyleKey = r.StyleKey
 	result := application.ProjectSnapshot{Project: p}
 	if err := json.Unmarshal([]byte(r.DefaultModels), &result.DefaultModels); err != nil || result.DefaultModels == nil {
 		return application.ProjectSnapshot{}, application.ErrProjectDependencyUnavailable
@@ -56,7 +66,7 @@ func (r lifecycleProjectRow) snapshot() (application.ProjectSnapshot, error) {
 }
 
 func readLifecycleProject(tx *gorm.DB, org, id uuid.UUID, write bool) (application.ProjectSnapshot, error) {
-	query := `SELECT id,org_id,name,description,aspect_ratio,style_type,style_subtype,style_preset_id,cover_asset_id,resolution,allow_overseas_models,status,is_delete,archived_at,delete_time,purge_after,revision,create_time,update_time,default_models::text AS default_models FROM workspace.project WHERE id=? AND org_id=?`
+	query := `SELECT id,org_id,owner_id,initial_canvas_id AS canvas_id,style_key,name,description,aspect_ratio,style_type,style_subtype,style_preset_id,cover_asset_id,resolution,allow_overseas_models,status,is_delete,archived_at,delete_time,purge_after,revision,create_time,update_time,default_models::text AS default_models FROM workspace.project WHERE id=? AND org_id=?`
 	if write {
 		query += ` FOR UPDATE`
 	} else {
@@ -87,6 +97,9 @@ func (s *Store) ReadProjectSnapshot(ctx context.Context, actor identityapp.Princ
 		saved, err = readLifecycleProject(tx, actor.OrgID, id, false)
 		if err != nil {
 			return err
+		}
+		if saved.Project.OwnerID != actor.ID {
+			return ErrProjectNotFound
 		}
 		saved.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, saved.Project)
 		return err

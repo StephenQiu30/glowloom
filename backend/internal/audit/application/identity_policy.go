@@ -20,7 +20,8 @@ func NewRecordedActionParser() *Parser {
 	fields["model.enabled"] = []string{"status", "revision"}
 	fields["model.disabled"] = []string{"status", "revision"}
 	fields["price.published"] = []string{"version_id", "version_no", "unit", "currency", "effective_from", "revision"}
-	fields["project.created"] = []string{"aspect_ratio", "style_type", "style_subtype", "style_preset_id", "status", "revision"}
+	fields["project.created"] = []string{"aspect_ratio", "style_type", "style_key", "style_subtype", "style_preset_id", "status", "revision"}
+	fields["canvas.saved"] = []string{"revision", "node_count"}
 	fields["project.updated"] = []string{"revision", "style_preset_id", "allow_overseas_models", "name_changed", "description_changed", "cover_changed"}
 	for _, action := range []string{"project.archived", "project.unarchived", "project.deleted", "project.restored"} {
 		fields[action] = []string{"revision", "status", "is_delete", "archived_at", "delete_time", "purge_after"}
@@ -91,6 +92,7 @@ func identityActionFields() map[string][]string {
 		"user.updated":          {"display_name", "role"},
 		"user.disabled":         {"status"},
 		"user.enabled":          {"status"},
+		"user.unlocked":         {"login_locked"},
 		"user.password_reset":   {"must_change_password"},
 		"user.password_changed": {"must_change_password"},
 	}

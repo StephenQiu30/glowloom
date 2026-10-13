@@ -25,8 +25,9 @@ func (s *Store) ListForAdmin(ctx context.Context, actorID, orgID uuid.UUID, limi
 			return err
 		}
 		const baseQuery = `
-			SELECT id, login_name, display_name, role, status, last_login_at, revision, create_time
-			FROM identity."user" WHERE org_id = ?::uuid AND NOT is_delete
+			SELECT u.id, u.login_name, u.display_name, u.role, u.status, u.last_login_at, u.revision, u.create_time,
+ COALESCE(GREATEST(u.locked_until,g.locked_until)>now(),false) AS login_locked
+ FROM identity."user" u LEFT JOIN identity.login_guard g ON g.login_key=lower(u.login_name) WHERE u.org_id = ?::uuid AND NOT u.is_delete
 		`
 		query := baseQuery + ` ORDER BY create_time DESC, id DESC LIMIT ?`
 		args := []any{orgID.String(), limit + 1}
@@ -41,6 +42,7 @@ func (s *Store) ListForAdmin(ctx context.Context, actorID, orgID uuid.UUID, limi
 			DisplayName string
 			Role        string
 			Status      string
+			LoginLocked bool
 			LastLoginAt *time.Time
 			Revision    int64
 			CreateTime  time.Time
@@ -57,7 +59,7 @@ func (s *Store) ListForAdmin(ctx context.Context, actorID, orgID uuid.UUID, limi
 			page.Users = append(page.Users, application.UserListItem{
 				ID: row.ID, LoginName: row.LoginName, DisplayName: row.DisplayName,
 				Role: domain.Role(row.Role), Status: domain.Status(row.Status),
-				LastLoginAt: row.LastLoginAt, Revision: row.Revision, CreateTime: row.CreateTime,
+				LoginLocked: row.LoginLocked, LastLoginAt: row.LastLoginAt, Revision: row.Revision, CreateTime: row.CreateTime,
 			})
 		}
 		if more {

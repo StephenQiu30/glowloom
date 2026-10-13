@@ -74,6 +74,38 @@ func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 	}
 }
 
+func TestPublicBusinessRoutesRequireSession(t *testing.T) {
+	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+	}, &gorm.DB{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identityRoutes := map[string]bool{
+		"POST /api/accounts/register":      true,
+		"POST /api/sessions":               true,
+		"GET /api/accounts/availability":   true,
+		"GET /api/session":                 true,
+		"DELETE /api/sessions/:session_id": true,
+		"POST /api/me/password":            true,
+	}
+	for _, route := range router.Routes() {
+		if !strings.HasPrefix(route.Path, "/api/") || identityRoutes[route.Method+" "+route.Path] {
+			continue
+		}
+		t.Run(route.Method+" "+route.Path, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(t.Context(), route.Method, route.Path, nil)
+			request.Header.Set("Origin", "http://localhost:3000")
+			request.Header.Set("Idempotency-Key", "2536a054-cc56-4cce-ac77-d76c5d173e7c")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("anonymous request status = %d, want 401", response.Code)
+			}
+		})
+	}
+}
+
 func TestPublicRouterRemovedSwaggerRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
 		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",

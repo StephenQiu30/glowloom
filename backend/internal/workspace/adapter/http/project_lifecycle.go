@@ -41,6 +41,8 @@ type ProjectDetailResponse struct {
 	CoverAssetID        *uuid.UUID        `json:"cover_asset_id" extensions:"x-nullable"`
 	CoverUnavailable    bool              `json:"cover_unavailable"`
 	ID                  uuid.UUID         `json:"id"`
+	CanvasID            *uuid.UUID        `json:"canvas_id" extensions:"x-nullable"`
+	StyleKey            *string           `json:"style_key" extensions:"x-nullable"`
 	Name                string            `json:"name"`
 	Description         string            `json:"description"`
 	AspectRatio         string            `json:"aspect_ratio"`
@@ -263,7 +265,7 @@ func writeProjectSnapshot(c *gin.Context, s application.ProjectSnapshot) {
 		id := p.StylePresetID
 		preset = &id
 	}
-	response := ProjectDetailResponse{CoverAssetID: p.CoverAssetID, CoverUnavailable: s.CoverUnavailable, ID: p.ID, Name: p.Name, Description: p.Description, AspectRatio: p.AspectRatio, StyleType: p.StyleType, StyleSubtype: p.StyleSubtype, StylePresetID: preset, Resolution: p.Resolution, AllowOverseasModels: p.AllowOverseasModels, DefaultModels: s.DefaultModels, Status: p.Status, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, Revision: p.Revision, CreateTime: p.CreateTime, UpdateTime: p.UpdateTime}
+	response := ProjectDetailResponse{CoverAssetID: p.CoverAssetID, CoverUnavailable: s.CoverUnavailable, ID: p.ID, CanvasID: projectCanvasID(p.CanvasID), StyleKey: p.StyleKey, Name: p.Name, Description: p.Description, AspectRatio: p.AspectRatio, StyleType: p.StyleType, StyleSubtype: p.StyleSubtype, StylePresetID: preset, Resolution: p.Resolution, AllowOverseasModels: p.AllowOverseasModels, DefaultModels: s.DefaultModels, Status: p.Status, IsDelete: p.IsDelete, ArchivedAt: p.ArchivedAt, DeleteTime: p.DeleteTime, PurgeAfter: p.PurgeAfter, Revision: p.Revision, CreateTime: p.CreateTime, UpdateTime: p.UpdateTime}
 	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, response)
 }
@@ -291,4 +293,11 @@ func writeLifecycleError(c *gin.Context, err error) {
 	default:
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 	}
+}
+
+func projectCanvasID(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
 }

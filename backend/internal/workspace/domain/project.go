@@ -32,6 +32,9 @@ const projectRecoveryWindow = 30 * 24 * time.Hour
 type Project struct {
 	ID                  uuid.UUID
 	OrgID               uuid.UUID
+	OwnerID             uuid.UUID `json:",omitzero"`
+	CanvasID            uuid.UUID `json:",omitzero"`
+	StyleKey            *string   `json:",omitempty"`
 	Name                string
 	Description         string
 	AspectRatio         string
@@ -56,11 +59,14 @@ func (p Project) Validate() error {
 	name := strings.TrimSpace(p.Name)
 	if p.ID == uuid.Nil || p.OrgID == uuid.Nil || name == "" ||
 		!utf8.ValidString(p.Name) || utf8.RuneCountInString(p.Name) > 50 ||
-		(p.AspectRatio != "9:16" && p.AspectRatio != "16:9") ||
+		(p.AspectRatio != "9:16" && p.AspectRatio != "16:9" && p.AspectRatio != "1:1") ||
 		p.Resolution != "1080p" ||
 		(p.Status != "active" && p.Status != "archived" && p.Status != "copying") ||
 		p.Revision < 1 || p.Revision > math.MaxInt32 ||
 		(p.CoverAssetID != nil && *p.CoverAssetID == uuid.Nil) {
+		return ErrInvalidProject
+	}
+	if p.StyleKey != nil && (!utf8.ValidString(*p.StyleKey) || strings.TrimSpace(*p.StyleKey) == "" || utf8.RuneCountInString(*p.StyleKey) > 50) {
 		return ErrInvalidProject
 	}
 	switch p.StyleType {

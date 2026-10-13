@@ -48,12 +48,12 @@ func authorize(tx *gorm.DB, a identityapp.Principal, projectID uuid.UUID, write 
 	if r.RowsAffected != 1 {
 		return identityapp.ErrForbidden
 	}
-	query := `SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete AND status IN ('active','archived')`
+	query := `SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND owner_id=? AND NOT is_delete AND status IN ('active','archived')`
 	if write {
 		query += ` AND status='active'`
 	}
 	query += ` FOR SHARE`
-	r = tx.Raw(query, projectID, a.OrgID).Scan(&current)
+	r = tx.Raw(query, projectID, a.OrgID, a.ID).Scan(&current)
 	if r.Error != nil {
 		return fmt.Errorf("check canvas project: %w", r.Error)
 	}
@@ -159,7 +159,7 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 			return domain.ErrInvalidCommand
 		}
 		hash := requestHash("commands/"+id.String(), body)
-		replayed, err := replay(tx, a.ID, key, hash, &result)
+		replayed, err := replaySave(tx, a.ID, id, key, hash, &result)
 		if err != nil || replayed {
 			return err
 		}
@@ -199,6 +199,9 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 			}
 			return err
 		}
+		if err := saveInputs(tx, a.ID, doc, input.Commands); err != nil {
+			return err
+		}
 		commands, err := json.Marshal(input.Commands)
 		if err != nil {
 			return err
@@ -213,7 +216,15 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 		for i := range result.Results {
 			result.Results[i].OK = true
 		}
-		return receipt(tx, a.ID, key, hash, 200, result)
+		for _, node := range updated.Nodes {
+			if domain.IsDraft(node) {
+				if err := savedAudit(tx, a, updated, key); err != nil {
+					return err
+				}
+				break
+			}
+		}
+		return recordSave(tx, a.ID, key, hash, result)
 	})
 	return result, err
 }
@@ -255,11 +266,11 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 		return doc, err
 	}
 	var nodes []nodeRow
-	if err := tx.Raw(`SELECT id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,last_operation_id FROM canvas.node WHERE document_id=? AND NOT is_delete ORDER BY id`, id).Scan(&nodes).Error; err != nil {
+	if err := tx.Raw(`SELECT id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,last_operation_id,COALESCE(input_revision,0) AS input_revision FROM canvas.node WHERE document_id=? AND NOT is_delete ORDER BY id`, id).Scan(&nodes).Error; err != nil {
 		return doc, err
 	}
 	for _, r := range nodes {
-		n := domain.Node{ID: r.ID, Title: r.Title, NodeType: r.NodeType, NodeAction: r.NodeAction, X: r.X, Y: r.Y, Width: r.Width, Height: r.Height, RefType: r.RefType, RefID: r.RefID, ParentID: r.ParentID, LastOperationID: r.LastOperationID, ZIndex: r.ZIndex}
+		n := domain.Node{ID: r.ID, InputRevision: r.InputRevision, Title: r.Title, NodeType: r.NodeType, NodeAction: r.NodeAction, X: r.X, Y: r.Y, Width: r.Width, Height: r.Height, RefType: r.RefType, RefID: r.RefID, ParentID: r.ParentID, LastOperationID: r.LastOperationID, ZIndex: r.ZIndex}
 		if err := json.Unmarshal(r.Config, &n.Config); err != nil {
 			return doc, err
 		}
@@ -272,6 +283,7 @@ func load(tx *gorm.DB, id uuid.UUID, write bool) (domain.Document, error) {
 }
 
 type nodeRow struct {
+	InputRevision   int64
 	ID              uuid.UUID
 	Title           string
 	NodeType        string
@@ -315,16 +327,20 @@ func saveGraph(tx *gorm.DB, before, after domain.Document) error {
 		if previous, exists := previousNodes[n.ID]; exists && reflect.DeepEqual(previous, n) {
 			continue
 		}
-		if (n.NodeAction != "resource" && n.NodeAction != "tool") || n.LastOperationID != nil {
+		if (n.NodeAction != "resource" && n.NodeAction != "tool" && !domain.IsDraft(n)) || n.LastOperationID != nil {
 			continue
 		}
 		config, err := json.Marshal(n.Config)
 		if err != nil {
 			return err
 		}
-		r := tx.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index)
- VALUES(?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,config=excluded.config,x=excluded.x,y=excluded.y,width=excluded.width,height=excluded.height,parent_id=excluded.parent_id,z_index=excluded.z_index,is_delete=false,update_time=now()
- WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action=excluded.node_action AND canvas.node.node_action IN ('resource','tool') AND canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex)
+		var inputRevision any
+		if n.InputRevision > 0 {
+			inputRevision = n.InputRevision
+		}
+		r := tx.Exec(`INSERT INTO canvas.node(id,document_id,title,node_type,node_action,ref_type,ref_id,config,x,y,width,height,parent_id,z_index,input_revision)
+ VALUES(?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,config=excluded.config,x=excluded.x,y=excluded.y,width=excluded.width,height=excluded.height,parent_id=excluded.parent_id,z_index=excluded.z_index,input_revision=excluded.input_revision,is_delete=false,update_time=now()
+ WHERE canvas.node.document_id=excluded.document_id AND canvas.node.node_type=excluded.node_type AND canvas.node.node_action=excluded.node_action AND canvas.node.node_action IN ('resource','tool','generate') AND canvas.node.ref_type IS NOT DISTINCT FROM excluded.ref_type AND canvas.node.ref_id IS NOT DISTINCT FROM excluded.ref_id AND canvas.node.last_operation_id IS NULL`, n.ID, after.ID, n.Title, n.NodeType, n.NodeAction, nullableText(n.RefType), n.RefID, string(config), n.X, n.Y, n.Width, n.Height, n.ParentID, n.ZIndex, inputRevision)
 		if r.Error != nil {
 			return r.Error
 		}

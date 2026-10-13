@@ -1,592 +1,306 @@
 "use client";
-
-import { Brand } from "@/components/layout/brand";
-import { IconButton } from "@/components/controls/icon-button";
-import { ThemeMenuItems } from "@/components/controls/theme-controls";
-import { SearchInput } from "@/components/forms/search-input";
-import { demoNotice } from "@/components/feedback/demo-notice";
-import { Choice } from "@/components/forms/choice";
-import { useEffect, useState, type ReactNode, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
-import { getSession, deleteSession } from "@/components/auth/generated/auth";
-import { AuthError, requireSession } from "@/components/auth/request";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { cn } from "cn";
+import { useRouter } from "next/navigation";
 import {
-  Activity,
-  Bell,
-  Check,
-  ChevronsUpDown,
-  Clapperboard,
-  FileText,
+  Sparkles,
+  Compass,
   Folder,
-  Grid2X2,
-  KeyRound,
-  Layers,
-  ListTodo,
-  LogOut,
-  Menu,
-  Monitor,
-  PanelLeft,
+  Contact,
   Plus,
-  Search,
-  Settings2,
-  Shield,
-  SlidersHorizontal,
+  PanelLeftClose,
+  Menu,
+  Bell,
+  Gift,
+  LogOut,
   UserRound,
-  X,
-  type LucideIcon,
+  Shield,
+  KeyRound,
 } from "lucide-react";
+import { Brand } from "./brand";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  Sidebar,
-  SidebarProvider,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  useSidebar,
-} from "@/components/ui/sidebar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  SessionGate,
+  useSession,
+  revokeSession,
+} from "@/components/auth/session";
+import { UnavailableDialog } from "@/components/availability/unavailable";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { screenHref, screens, type Screen } from "@/components/layout/routes";
-
-const adminLinks: [Screen, string, LucideIcon][] = [
-  ["users", "账号", UserRound],
-  ["providers", "供应商凭据", KeyRound],
-  ["models", "模型注册表", Layers],
-  ["audit", "审计日志", FileText],
-  ["health", "系统健康", Activity],
-];
-
-const projectLinks: [Screen, string, LucideIcon][] = [
-  ["analytics", "概览", Grid2X2],
-  ["storyboard", "剧本", FileText],
-  ["bible", "设定集", UserRound],
-];
-
-function NavigationLink({
-  href,
-  label,
-  icon: Icon,
-  active,
-  onClick,
-}: {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  active?: boolean;
-  onClick?: () => void;
-}) {
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import type { Screen } from "./routes";
+const adminScreens = ["users", "models", "providers", "audit", "health"];
+function Navigation({ screen, close }: { screen: string; close?: () => void }) {
   return (
-    <Button
-      variant="navigation"
-      asChild
-      data-active={active || undefined}
-      className="w-full justify-start gap-2.5"
-    >
-      <Link
-        href={href}
-        aria-current={active ? "page" : undefined}
-        onClick={onClick}
-      >
-        <Icon data-icon="inline-start" />
-        {label}
+    <>
+      <div className="sidebar-brand">
+        <Brand wordmark />
+        {close && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="收起导航"
+            onClick={close}
+          >
+            <PanelLeftClose />
+          </Button>
+        )}
+      </div>
+      <nav aria-label="主导航" className="primary-navigation">
+        {[
+          ["home", "创作", Sparkles, "/"],
+          ["explore", "探索", Compass, "/explore"],
+          ["assets", "资产", Folder, "/assets"],
+          ["subjects", "主体", Contact, "/subjects"],
+        ].map(([id, label, Icon, href]) => {
+          const Symbol = Icon as typeof Sparkles;
+          return (
+            <Link
+              key={String(id)}
+              href={String(href)}
+              onClick={close}
+              aria-current={
+                screen === id || (id === "assets" && screen === "projects")
+                  ? "page"
+                  : undefined
+              }
+            >
+              <Symbol size={20} strokeWidth={1.65} />
+              <span>{String(label)}</span>
+            </Link>
+          );
+        })}
+      </nav>
+      <div className="sidebar-history">
+        <div>
+          对话
+          <Button variant="ghost" size="icon-sm" aria-label="新建创作" asChild>
+            <Link href="/" onClick={close}>
+              <Plus size={14} />
+            </Link>
+          </Button>
+        </div>
+        <p>暂无历史对话</p>
+        <div>
+          画布
+          <Button variant="ghost" size="icon-sm" aria-label="我的画布" asChild>
+            <Link href="/projects" onClick={close}>
+              <Plus size={14} />
+            </Link>
+          </Button>
+        </div>
+        <Link href="/projects" onClick={close}>
+          查看我的画布
+        </Link>
+      </div>
+      <Link className="sidebar-legal" href="/licenses">
+        第三方许可
       </Link>
-    </Button>
+    </>
   );
 }
-
-function ContextNavigation({
+function Shell({
   screen,
-  close,
+  children,
+  fullBleed,
 }: {
-  screen: Screen;
-  close?: () => void;
+  screen: string;
+  children: ReactNode;
+  fullBleed?: boolean;
 }) {
-  const [episode, setEpisode] = useState("第 3 集");
-  const admin = adminLinks.some(([id]) => id === screen);
-  const account = screen === "account";
+  const session = useSession();
+  const router = useRouter();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [feature, setFeature] = useState<string | null>(null);
+  const [logout, setLogout] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  async function leave() {
+    if (pending) return;
+    setPending(true);
+    setError("");
+    try {
+      await revokeSession(session);
+      router.replace("/login");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "退出结果未确认，请重试。");
+    } finally {
+      setPending(false);
+    }
+  }
   return (
-    <div className="flex h-full flex-col gap-5 p-4 text-sm">
-      <div className="flex items-center justify-between gap-2">
-        {!admin && !account ? (
-          <span
-            className="size-8 shrink-0 rounded-md bg-surface-2"
-            aria-hidden="true"
-          />
-        ) : null}
-        <div className="flex-1 font-medium text-foreground">
-          {admin ? "管理" : account ? "设置" : "雾港来信"}
-          {!admin && !account ? (
-            <p className="mt-1 text-[10px] font-normal text-muted-foreground">
-              9:16 · 写实电影感
-            </p>
-          ) : null}
-        </div>
-        {!admin && !account ? (
-          <ChevronsUpDown className="size-3 text-muted-foreground" />
-        ) : null}
+    <div className={`product-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
+      <a className="sr-only focus:not-sr-only" href="#main-content">
+        跳转到主要内容
+      </a>
+      <aside className="product-sidebar">
+        <Navigation screen={screen} close={() => setCollapsed(true)} />
+      </aside>
+      <Sheet open={mobile} onOpenChange={setMobile}>
+        <SheetContent side="left" className="w-64 bg-sidebar p-0">
+          <SheetTitle className="sr-only">导航</SheetTitle>
+          <Navigation screen={screen} close={() => setMobile(false)} />
+        </SheetContent>
+      </Sheet>
+      <div className="product-content">
+        <header className="product-header">
+          <Button
+            className="mobile-menu"
+            variant="ghost"
+            size="icon"
+            aria-label="打开导航"
+            onClick={() => setMobile(true)}
+          >
+            <Menu />
+          </Button>
+          {collapsed && (
+            <Button
+              className="desktop-menu"
+              variant="ghost"
+              size="icon"
+              aria-label="展开导航"
+              onClick={() => setCollapsed(false)}
+            >
+              <Menu />
+            </Button>
+          )}
+          <div className="account-controls">
+            <Button variant="outline" onClick={() => setFeature("积分商城")}>
+              <Gift size={16} />
+              积分商城
+            </Button>
+            <div className="account-cluster">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="消息中心"
+                onClick={() => setFeature("消息中心")}
+              >
+                <Bell size={17} />
+              </Button>
+              <Button
+                variant="ghost"
+                className="text-sky-400"
+                onClick={() => setFeature("会员")}
+              >
+                <Sparkles size={14} />
+                开通会员
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="账号菜单">
+                    <span className="account-avatar">
+                      {Array.from(session.actor.display_name)[0]}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  <DropdownMenuLabel>
+                    {session.actor.display_name}
+                    <p className="mt-1 text-xs font-normal text-muted-foreground">
+                      {session.actor.login_name}
+                    </p>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/account">
+                      <UserRound />
+                      账号设置
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/assets">
+                      <Folder />
+                      我的资产
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/reset-password">
+                      <KeyRound />
+                      修改密码
+                    </Link>
+                  </DropdownMenuItem>
+                  {session.actor.role === "admin" && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/users">
+                        <Shield />
+                        用户管理
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setLogout(true)}>
+                    <LogOut />
+                    退出登录
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </header>
+        <main id="main-content" className={fullBleed ? "" : "workspace-page"}>
+          {children}
+        </main>
       </div>
-      <nav className="flex flex-col gap-1" aria-label="上下文导航">
-        {admin ? (
-          adminLinks.map(([id, label, icon]) => (
-            <NavigationLink
-              key={id}
-              href={screenHref(id)}
-              label={label}
-              icon={icon}
-              active={screen === id}
-              onClick={close}
-            />
-          ))
-        ) : account ? (
-          [
-            ["profile", "个人资料", UserRound],
-            ["sessions", "密码与会话", Monitor],
-            ["preferences", "偏好", SlidersHorizontal],
-            ["models", "模型渠道", Layers],
-          ].map(([id, label, icon]) => (
-            <NavigationLink
-              key={id as string}
-              href={id === "models" ? screenHref("models") : `#${id}`}
-              label={label as string}
-              icon={icon as LucideIcon}
-              active={id === "profile"}
-              onClick={close}
-            />
-          ))
-        ) : (
-          <>
-            {projectLinks.map(([id, label, icon]) => (
-              <NavigationLink
-                key={label}
-                href={screenHref(id)}
-                label={label}
-                icon={icon}
-                active={screen === id && label !== "剧本"}
-                onClick={close}
-              />
-            ))}
-            <div className="my-4 flex items-center justify-between text-xs text-muted-foreground">
-              <span>分集</span>
-              <Choice
-                label="当前分集"
-                size="sm"
-                value={episode}
-                onChange={setEpisode}
-                options={["第 1 集", "第 2 集", "第 3 集", "第 4 集"]}
-              />
-            </div>
-            <NavigationLink
-              href={screenHref("bible")}
-              label="资产定稿"
-              icon={UserRound}
-              onClick={close}
-            />
-            <NavigationLink
-              href={screenHref("storyboard")}
-              label="分镜"
-              icon={Clapperboard}
-              active={screen === "storyboard"}
-              onClick={close}
-            />
-            <NavigationLink
-              href={screenHref("shot")}
-              label="配音"
-              icon={Activity}
-              onClick={close}
-            />
-            <NavigationLink
-              href={screenHref("canvas")}
-              label="画布"
-              icon={Grid2X2}
-              active={screen === "canvas"}
-              onClick={close}
-            />
-            <div className="mt-5 flex flex-col gap-1">
-              <NavigationLink
-                href={screenHref("assets")}
-                label="素材"
-                icon={Folder}
-                onClick={close}
-              />
-              <NavigationLink
-                href={screenHref("account")}
-                label="项目设置"
-                icon={Settings2}
-                onClick={close}
-              />
-            </div>
-          </>
-        )}
-      </nav>
-      {!admin && !account ? (
-        <p className="mt-auto flex items-center gap-2 pt-10 text-[10px] text-muted-foreground">
-          <Check className="size-3" />
-          所有更改已保存
-        </p>
-      ) : null}
+      <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
+      <Dialog
+        open={logout}
+        onOpenChange={(open) => {
+          if (!pending) setLogout(open);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>退出登录？</DialogTitle>
+          <DialogDescription>
+            将结束当前设备的登录会话。已保存的画布仍保留在你的账号中。
+          </DialogDescription>
+          {error && <p role="alert">{error}</p>}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => setLogout(false)}
+            >
+              取消
+            </Button>
+            <Button disabled={pending} onClick={() => void leave()}>
+              {pending ? "正在退出…" : "退出登录"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
-function ProductNavigation({
-  session,
-  onLogout,
-  screen,
-  contextual,
-  onToggleContext,
-}: {
-  session: AuthAPI.SessionView;
-  onLogout: () => void;
-  screen: Screen;
-  contextual: boolean;
-  onToggleContext: () => void;
-}) {
-  const { setOpenMobile, isMobile } = useSidebar();
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const close = () => setOpenMobile(false);
-  const admin = adminLinks.some(([id]) => id === screen);
-  const navs: [string, string, LucideIcon, boolean][] = [
-    ["home", "项目", Grid2X2, !admin && screen !== "assets"],
-    ["assets", "素材", Folder, screen === "assets"],
-    ["analytics", "任务", ListTodo, false],
-    ["users", "管理", Shield, admin],
-  ];
-  return (
-    <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="items-center gap-3 py-3">
-        <Button
-          className="md:hidden"
-          variant="ghost"
-          size="icon"
-          aria-label="关闭导航"
-          onClick={close}
-        >
-          <X data-icon="inline-start" />
-        </Button>
-        <Brand />
-        <IconButton
-          label="新建项目"
-          icon={Plus}
-          href={screenHref("home")}
-          variant="outline"
-          size="icon-round"
-        />
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarMenu className="gap-1 px-2">
-          {navs
-            .filter(([id]) => id !== "users" || session.actor.role === "admin")
-            .map(([id, label, Icon, active]) => (
-              <SidebarMenuItem key={id}>
-                <SidebarMenuButton size="rail" isActive={active} asChild>
-                  <Link href={screenHref(id)} onClick={close}>
-                    <span className="relative">
-                      <Icon className="size-5" />
-                      {label === "任务" ? (
-                        <Badge
-                          variant="notification"
-                          className="absolute -top-1.5 -right-2 size-4 justify-center p-0 text-[10px]"
-                        >
-                          2
-                        </Badge>
-                      ) : null}
-                    </span>
-                    <span>{label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-        </SidebarMenu>
-        <div className="md:hidden">
-          {contextual ? (
-            <ContextNavigation screen={screen} close={close} />
-          ) : null}
-          <nav className="flex flex-col gap-1 p-4">
-            {screens.map((item) => (
-              <Link
-                key={item.id}
-                href={screenHref(item.id)}
-                onClick={close}
-                className="py-1 text-sm"
-              >
-                {item.name}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </SidebarContent>
-      <SidebarFooter className="items-center gap-3 pb-4">
-        <IconButton
-          label="切换上下文导航"
-          icon={PanelLeft}
-          onClick={onToggleContext}
-          disabled={!contextual}
-        />
-        <IconButton
-          label="搜索"
-          icon={Search}
-          onClick={() => setSearchOpen(true)}
-        />
-        <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>搜索页面</DialogTitle>
-              <DialogDescription>
-                按名称查找创作、账号或管理页面。
-              </DialogDescription>
-            </DialogHeader>
-            <SearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder="输入页面名称"
-            />
-            <nav
-              className="flex max-h-72 flex-col gap-1 overflow-y-auto"
-              aria-label="搜索结果"
-            >
-              {screens
-                .filter((item) => item.name.includes(query.trim()))
-                .map((item) => (
-                  <Link
-                    key={item.id}
-                    href={screenHref(item.id)}
-                    className="rounded-md px-3 py-2 text-sm hover:bg-accent focus-visible:outline-ring"
-                    onClick={() => {
-                      setSearchOpen(false);
-                      close();
-                    }}
-                  >
-                    {item.name}
-                  </Link>
-                ))}
-            </nav>
-          </DialogContent>
-        </Dialog>
-        <IconButton
-          label="通知"
-          icon={Bell}
-          onClick={() => demoNotice("暂无新的通知")}
-        />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost" aria-label="账号菜单">
-              <Avatar>
-                <AvatarFallback>
-                  {Array.from(session.actor.display_name)[0]}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            side={isMobile ? "top" : "right"}
-            align={isMobile ? "center" : "end"}
-            sideOffset={isMobile ? 8 : 12}
-            collisionPadding={16}
-            className="w-60 p-2 [&_[data-slot=dropdown-menu-item]]:h-9"
-          >
-            <DropdownMenuLabel>
-              {session.actor.display_name}
-              <span className="mt-1 block font-mono text-[11px] font-normal text-muted-foreground">
-                {session.actor.login_name}
-              </span>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href={screenHref("account")} onClick={close}>
-                  <UserRound />
-                  账号设置
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={screenHref("assets")} onClick={close}>
-                  <Folder />
-                  我的素材
-                </Link>
-              </DropdownMenuItem>
-              {session.actor.role === "admin" ? (
-                <DropdownMenuItem asChild>
-                  <Link href={screenHref("providers")} onClick={close}>
-                    <KeyRound />
-                    供应商凭据
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-              {session.actor.role === "admin" ? (
-                <DropdownMenuItem asChild>
-                  <Link href={screenHref("users")} onClick={close}>
-                    <Shield />
-                    管理账号
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem asChild>
-                <Link href={screenHref("reset-password")} onClick={close}>
-                  <KeyRound />
-                  修改密码
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <ThemeMenuItems />
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={onLogout}>
-                <LogOut />
-                退出登录
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarFooter>
-    </Sidebar>
-  );
-}
-
-function MobileHeader() {
-  const { toggleSidebar } = useSidebar();
-  return (
-    <header className="flex h-14 shrink-0 items-center justify-between px-4 md:hidden">
-      <Brand wordmark />
-      <IconButton label="打开导航" icon={Menu} onClick={toggleSidebar} />
-    </header>
-  );
-}
-
 export function ProductShell({
   screen,
   children,
-  contextual = false,
   fullBleed = false,
 }: {
   screen: Screen;
   children: ReactNode;
-  contextual?: boolean;
   fullBleed?: boolean;
+  contextual?: boolean;
 }) {
-  const [contextOpen, setContextOpen] = useState(true);
-  const router = useRouter();
-  const [session, setSession] = useState<AuthAPI.SessionView | null>(null);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  const [loggingOut, setLoggingOut] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    getSession({ signal: controller.signal })
-      .then((value) => {
-        if (controller.signal.aborted) return;
-        const result = requireSession(value);
-        if (result.actor.must_change_password) {
-          router.replace(screenHref("reset-password"));
-          return;
-        }
-        if (
-          adminLinks.some(([id]) => id === screen) &&
-          result.actor.role !== "admin"
-        ) {
-          setError("当前账号无权访问管理页面。");
-          return;
-        }
-        setSession(result);
-      })
-      .catch((reason) => {
-        if (controller.signal.aborted) return;
-        if (reason instanceof AuthError && reason.status === 401)
-          router.replace(screenHref("login"));
-        else
-          setError(
-            reason instanceof Error ? reason.message : "无法读取登录状态。",
-          );
-      });
-    return () => controller.abort();
-  }, [router, screen, retry]);
-  async function logout() {
-    if (!session || loggingOut) return;
-    setLoggingOut(true);
-    try {
-      await deleteSession({ session_id: session.session_id });
-      setSession(null);
-      router.replace(screenHref("login"));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "退出结果未确认。");
-    } finally {
-      setLoggingOut(false);
-    }
-  }
-  if (!session || error)
-    return (
-      <main className="flex min-h-svh items-center justify-center">
-        <div className="space-y-3">
-          {error ? (
-            <>
-              <p role="alert">{error}</p>
-              <Button
-                onClick={() => {
-                  setError("");
-                  setRetry((value) => value + 1);
-                }}
-              >
-                重新检查会话
-              </Button>
-            </>
-          ) : (
-            <p role="status">正在验证登录状态…</p>
-          )}
-        </div>
-      </main>
-    );
-
   return (
-    <TooltipProvider>
-      <SidebarProvider style={{ "--sidebar-width": "72px" } as CSSProperties}>
-        <a href="#main-content" className="sr-only focus:not-sr-only">
-          跳转到主要内容
-        </a>
-        <ProductNavigation
-          session={session}
-          onLogout={() => void logout()}
-          screen={screen}
-          contextual={contextual}
-          onToggleContext={() => setContextOpen(!contextOpen)}
-        />
-        {contextual && contextOpen ? (
-          <aside className="sticky top-0 hidden h-svh w-[220px] shrink-0 bg-surface-1 md:block">
-            <ContextNavigation screen={screen} />
-          </aside>
-        ) : null}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <MobileHeader />
-          <main
-            id="main-content"
-            className={cn("min-w-0 flex-1", !fullBleed && "p-4 md:p-6")}
-          >
-            {children}
-          </main>
-        </div>
-      </SidebarProvider>
-    </TooltipProvider>
+    <SessionGate admin={adminScreens.includes(screen)}>
+      <Shell screen={screen} fullBleed={fullBleed}>
+        {children}
+      </Shell>
+    </SessionGate>
   );
 }

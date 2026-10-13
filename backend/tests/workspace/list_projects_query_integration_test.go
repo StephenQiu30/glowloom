@@ -32,10 +32,10 @@ func insertProjectListFixture(
 	}
 	result := database.WithContext(ctx).Exec(`
 		INSERT INTO workspace.project
-		  (id, org_id, name, aspect_ratio, style_type, status, archived_at,
+		  (id, org_id, owner_id, name, aspect_ratio, style_type, status, archived_at,
 		   is_delete, delete_time, purge_after, revision, create_time, update_time)
-		VALUES (?::uuid, ?::uuid, ?, '16:9', 'realistic', ?, ?, ?, ?, ?, 2, ?, ?)
-	`, id.String(), orgID, name, status, archivedAt, deleted, deletedAt,
+		VALUES (?::uuid, ?::uuid, (SELECT id FROM identity."user" WHERE org_id=?::uuid ORDER BY id LIMIT 1), ?, '16:9', 'realistic', ?, ?, ?, ?, ?, 2, ?, ?)
+	`, id.String(), orgID, orgID, name, status, archivedAt, deleted, deletedAt,
 		purgeAfter, updatedAt.Add(-7*24*time.Hour), updatedAt)
 	if result.Error != nil || result.RowsAffected != 1 {
 		t.Fatalf("insert project list fixture: rows=%d err=%v", result.RowsAffected, result.Error)

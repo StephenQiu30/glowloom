@@ -1,6 +1,26 @@
 # 第三方代码声明
 
-本文保留历史实现的来源、修改和版权追溯。相关旧前端代码已移除，以下能力与旧路径不属于当前浮光页面的实现或需求；原始许可文本继续保留。
+本文保留当前及历史实现的来源、修改和版权追溯。下节为当前画布适配；其他历史前端能力与旧路径已移除，不属于当前浮光页面的实现或需求；原始许可文本继续保留。
+
+## 当前BeefTV画布适配（2026-10-09）
+
+固定来源：[glanderness/BeefTV `a2196d32782be6090beb003590ce11a956a423e1`](https://github.com/glanderness/BeefTV/tree/a2196d32782be6090beb003590ce11a956a423e1)，MIT。版权为2026 @beefnoode、BeefTV contributors、basketikun和ddcat。[完整许可](/licenses/beeftv.txt)与[上游NOTICE](/licenses/beeftv-notice.txt)随应用分发；NOTICE包含Infinite Canvas派生来源及其重许可说明。
+
+以下源路径相对于该固定提交`web/src/`；目标均位于浮光`frontend/src/app/canvas/_components/`。
+
+| 目标                                                | 上游源                                                                                                           | 改写范围                                                                                     |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `infinite-canvas.tsx`                               | `components/canvas/infinite-canvas.tsx`                                                                          | 指针/触控/滚轮、空格平移、48px网格与生命周期；替换上游主题/广播，排除Radix浮层，接本项目框选 |
+| `canvas-viewport.ts`                                | `lib/canvas/canvas-live-viewport.ts`、`canvas-selection.ts`                                                      | 合成层变换、指针意图与坐标转换，去除未使用的图形层广播                                       |
+| `canvas-node.tsx`                                   | `components/canvas/canvas-node.tsx`                                                                              | 外置节点标题、铅笔入口、媒体容器、四角尺寸手柄与选中样式；接真实草稿，去除本地媒体/任务调用  |
+| `canvas-composer.tsx`                               | `components/canvas/canvas-node-prompt-panel.tsx`                                                                 | 紧凑提示词面板、参数与提交位置；改为shadcn与服务端草稿，生成明确禁用                         |
+| `canvas-node-panel.tsx`、`canvas-panel-position.ts` | `components/canvas/canvas-workspace-overlays.tsx`、`pages/canvas/project.tsx`                                    | 选中节点锚点、16px下间距、660～920px宽度与逐帧视口/节点矩形；手机仅缩窄，不固定底部          |
+| `canvas-toolbar.tsx`                                | `components/canvas/canvas-toolbar.tsx`、`canvas-zoom-controls.tsx`、`components/ui/aceternity/floating-dock.tsx` | 44px胶囊Dock、抓手/框选、创建、缩放与快捷键；使用Radix浮层，去除上游工具注册表与Motion依赖   |
+| `canvas-mini-map.tsx`                               | `components/canvas/canvas-mini-map.tsx`                                                                          | 世界边界、500单位留白、小地图与视口定位；无媒体解码                                          |
+| `canvas.css`                                        | `lib/canvas-theme.ts`、`styles/globals.css`                                                                      | 保留明暗语义表面、节点/浮层/Dock形状及尺寸；限定画布页，去除全局覆盖与重复规则               |
+| `canvas-editor.tsx`                                 | `pages/canvas/canvas-project-top-bar.tsx`                                                                        | 浮动项目簇与工作区编排；Next.js路由、现有Go命令、不可变输入、回执与冲突恢复由浮光维护        |
+
+未复制品牌图像、模型权重、第三方媒体或其他工具资源。来源登记说明实际改写范围，不表示上游全部业务工具、真实生成或产品验收完成。
 
 ## 字幕转写运行时与模型
 
@@ -101,3 +121,11 @@ Go 时间轴渲染器使用原字节的 `NotoSansCJKsc-Regular.otf` 绘制中英
 ## infinite-canvas 来源
 
 画布界面参考来源包含 basketikun/infinite-canvas 的 MIT 版本 `dab19adc0847e32e39b7fc8ff90cb392561fb826`。许可文本原字节保存在 [docs/licenses/infinite-canvas.txt](/licenses/infinite-canvas.txt)。
+
+## R6 视觉参考素材（2026-10-13）
+
+`public/design/` 中的 MANGO、CLI、Seedance、片场、蓝蝶、光影、幻想短片、香氛及网格来自用户指定 Figma 文件 `uLqmeRWuQuzfrp9xOYg6FT` 的设计资源。首页节点 `271:3620`、图片节点 `271:3961` 至 `271:3964`、`271:3983` 至 `271:3985`，登录节点 `9:2`，网格节点 `324:5507`。图片保留下载原字节，文件名末尾记录 SHA256 前八位；不将整页设计截图作为界面实现。
+
+这些参考作品来自即梦公开展示，权利属于原作者及相关权利人；本记录不授予商业使用权。当前用于设计还原与本地审阅，发布前需要核对素材使用权或换成自有素材。浮光不将其声明为用户实际生成的私人资产。
+
+R6 画布重建保留上节登记的指针、坐标与节点交互算法，改为左侧竖向工具栏、底部视口控制与 R6 颜色/圆角；历史来源和许可仍保留。

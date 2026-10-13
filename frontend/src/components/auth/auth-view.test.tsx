@@ -9,7 +9,6 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AuthView } from "./auth-view";
 const mocks = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks }));
-vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();

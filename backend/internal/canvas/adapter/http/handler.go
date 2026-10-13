@@ -167,7 +167,7 @@ func writeError(c *gin.Context, err error) {
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
-		httpapi.WriteProblem(c, 422, "idempotency_key_reused", nil)
+		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)
 	case errors.Is(err, domain.ErrUnsupportedCommand):
 		httpapi.WriteProblem(c, 422, "unsupported_command", meta)
 	case errors.Is(err, domain.ErrInvalidCommand):

@@ -41,7 +41,7 @@ func (s *Store) createProject(ctx context.Context, actor identityapp.Principal, 
 	if err := project.Validate(); err != nil {
 		return domain.Project{}, err
 	}
-	if project.OrgID != actor.OrgID ||
+	if project.OrgID != actor.OrgID || project.OwnerID != actor.ID || project.CanvasID == uuid.Nil ||
 		project.Status != "active" || project.Revision != 1 || project.AllowOverseasModels ||
 		project.IsDelete || project.ArchivedAt != nil || project.DeleteTime != nil ||
 		project.PurgeAfter != nil || !validProjectCreatedEvents(actor, project, events) {
@@ -126,6 +126,7 @@ type projectCreatedAuditData struct {
 	} `json:"object"`
 	RequestID string `json:"request_id"`
 	After     struct {
+		StyleKey      *string    `json:"style_key,omitempty"`
 		AspectRatio   string     `json:"aspect_ratio"`
 		StyleType     string     `json:"style_type"`
 		StyleSubtype  *string    `json:"style_subtype,omitempty"`
@@ -171,6 +172,12 @@ func validProjectCreatedEvents(actor identityapp.Principal, project domain.Proje
 				data.Object.ID != project.ID || data.After.AspectRatio != project.AspectRatio ||
 				data.After.StyleType != project.StyleType || data.After.Status != project.Status ||
 				data.After.Revision != project.Revision {
+				return false
+			}
+			if (data.After.StyleKey == nil) != (project.StyleKey == nil) {
+				return false
+			}
+			if project.StyleKey != nil && *data.After.StyleKey != *project.StyleKey {
 				return false
 			}
 			if project.StyleSubtype == "" {

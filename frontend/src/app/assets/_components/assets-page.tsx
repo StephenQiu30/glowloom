@@ -1,423 +1,704 @@
 "use client";
-
-import { ProductShell } from "@/components/layout/product-shell";
-import { IconButton } from "@/components/controls/icon-button";
-import { demoNotice } from "@/components/feedback/demo-notice";
-import { PageHeading } from "@/components/layout/page-heading";
-import { SearchInput } from "@/components/forms/search-input";
-import { Choice } from "@/components/forms/choice";
-import { Placeholder } from "@/components/media/placeholder";
-import { EmptySearch } from "@/components/feedback/empty-search";
-import { useRef, useState } from "react";
-import { cn } from "cn";
-import { Clock3, Folder, Grid2X2, Plus, Star, Upload, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Progress } from "@/components/ui/progress";
-
-const initialAssets = [
-  {
-    name: "码头雨夜 · 远景",
-    kind: "图片",
-    ratio: "16:9",
-    used: 2,
-    folder: "场景参考",
-  },
-  {
-    name: "灯塔 · 黄昏",
-    kind: "图片",
-    ratio: "9:16",
-    used: 0,
-    folder: "场景参考",
-  },
-  { name: "雨声渐强", kind: "音频", ratio: "0:42", used: 1, folder: "环境音" },
-  { name: "旧信封特写", kind: "图片", ratio: "1:1", used: 0, folder: "服装" },
-  {
-    name: "渔港俯拍",
-    kind: "视频",
-    ratio: "0:26",
-    used: 0,
-    folder: "场景参考",
-  },
-  { name: "风衣面料", kind: "图片", ratio: "4:3", used: 1, folder: "服装" },
-  {
-    name: "旁白初稿",
-    kind: "文本",
-    ratio: "1.2k 字",
-    used: 0,
-    folder: "未分类",
-  },
-  {
-    name: "城市夜景",
-    kind: "图片",
-    ratio: "16:9",
-    used: 0,
-    folder: "场景参考",
-  },
-  { name: "汽笛", kind: "音频", ratio: "0:26", used: 0, folder: "环境音" },
-  { name: "码头木纹", kind: "图片", ratio: "3:4", used: 1, folder: "场景参考" },
+  Upload,
+  Search,
+  Trash2,
+  Heart,
+  FolderPlus,
+  Folder,
+  RotateCw,
+  Download,
+  ArrowLeft,
+  CheckSquare,
+} from "lucide-react";
+import { ProductShell } from "@/components/layout/product-shell";
+import { useSession } from "@/components/auth/session";
+import { AuthError } from "@/components/auth/request";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  listMediaLibrary,
+  applyMediaLibraryCommand,
+} from "@/components/media/generated/media";
+import {
+  requireLibraryPage,
+  requireLibraryReceipt,
+  mediaError,
+  type LibraryPage,
+  type LibraryItem,
+} from "@/components/media/library";
+import { AssetPreview } from "@/components/media/asset-preview";
+import { UploadDialog } from "@/components/media/upload-dialog";
+const kinds = [
+  { id: "image", label: "图片" },
+  { id: "video", label: "视频" },
+  { id: "audio", label: "音频" },
+  { id: "document", label: "文档" },
+  { id: "model", label: "3D" },
 ];
-
-export function AssetsPage() {
-  const [assets, setAssets] = useState(initialAssets);
-  const [search, setSearch] = useState("");
-  const [kind, setKind] = useState("全部");
-  const [scope, setScope] = useState("个人");
-  const [folder, setFolder] = useState("全部");
-  const [sort, setSort] = useState("最近更新");
-  const [selected, setSelected] = useState<string | null>(
-    initialAssets[0].name,
-  );
-  const [favorites, setFavorites] = useState([initialAssets[0].name]);
-  const [uploading, setUploading] = useState(true);
-  const [page, setPage] = useState(1);
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const visible = assets.filter(
-    (asset) =>
-      asset.name.includes(search) &&
-      (kind === "全部" || kind === asset.kind) &&
-      (folder === "全部" ||
-        folder === "最近 30 天" ||
-        (folder === "收藏" && favorites.includes(asset.name)) ||
-        asset.folder === folder),
-  );
-  if (sort === "名称")
-    visible.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
-  const asset = assets.find((item) => item.name === selected);
+type Filter = {
+  kind: string;
+  search: string;
+  favorite: boolean;
+  trash: boolean;
+  folder: string;
+  order: string;
+};
+function Library({
+  filter,
+  onFolder,
+  refresh,
+  onRefresh,
+  searchForm,
+  onLock,
+}: {
+  filter: Filter;
+  onFolder: (id: string) => void;
+  refresh: number;
+  onRefresh: () => void;
+  searchForm: ReactNode;
+  onLock: (locked: boolean) => void;
+}) {
+  const session = useSession();
+  const router = useRouter();
+  const [page, setPage] = useState<LibraryPage | null>(null);
+  const [pageIndex, setPageIndex] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [batch, setBatch] = useState(false);
+  const [detail, setDetail] = useState<LibraryItem | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const [folderOpen, setFolderOpen] = useState(false);
+  const [confirm, setConfirm] = useState<
+    "recycle_items" | "restore_items" | null
+  >(null);
+  const [saving, setSaving] = useState(false);
+  const [writeError, setWriteError] = useState("");
+  const [pendingOperation, setPendingOperation] = useState<{
+    body: MediaAPI.LibraryCommand;
+    key: string;
+    base: LibraryPage;
+  } | null>(null);
+  const busy = useRef(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    listMediaLibrary(
+      {
+        scope: "personal",
+        kind: filter.kind,
+        search: filter.search,
+        favorite_only: filter.favorite,
+        catalog_state: filter.trash ? "trashed" : "active",
+        folder_id: filter.folder || undefined,
+        order: filter.order,
+        page: pageIndex,
+        page_size: 40,
+      },
+      { signal: controller.signal },
+    )
+      .then((v) => requireLibraryPage(v, session.actor.id))
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setPage(result);
+          setError("");
+        }
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) {
+          if (e instanceof AuthError && e.status === 401)
+            router.replace("/login");
+          else setError(mediaError(e));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [filter, session.actor.id, router, pageIndex, retry, refresh]);
+  function reload() {
+    setLoading(true);
+    setError("");
+    setSelected([]);
+    setDetail(null);
+    setRetry((n) => n + 1);
+  }
+  async function command(body?: MediaAPI.LibraryCommand) {
+    if (!page || busy.current) return;
+    const op =
+      pendingOperation ??
+      (body ? { body, key: crypto.randomUUID(), base: page } : null);
+    if (!op) return;
+    busy.current = true;
+    onLock(true);
+    setPendingOperation(op);
+    setSaving(true);
+    setWriteError("");
+    try {
+      requireLibraryReceipt(
+        await applyMediaLibraryCommand(op.body, {
+          headers: { "Idempotency-Key": op.key },
+        }),
+        op.base,
+      );
+      setPendingOperation(null);
+      onLock(false);
+      setConfirm(null);
+      setFolderOpen(false);
+      setFolderName("");
+      reload();
+      onRefresh();
+    } catch (e) {
+      setWriteError(mediaError(e));
+      if (e instanceof AuthError && e.status >= 400 && e.status < 500) {
+        setPendingOperation(null);
+        onLock(false);
+      }
+    } finally {
+      busy.current = false;
+      setSaving(false);
+    }
+  }
+  function favorite(item: LibraryItem) {
+    if (!page) return;
+    void command({
+      scope: { kind: "personal" },
+      expected_revision: page.revision,
+      action: "update_item",
+      item_id: item.id,
+      expected_item_revision: item.revision,
+      metadata: {
+        title: item.title,
+        category: item.category,
+        tags: item.tags,
+        source_label: item.source_label,
+        note: item.note,
+        folder_id: item.folder_id ?? undefined,
+        favorite: !item.favorite,
+      },
+    });
+  }
+  const selection = page?.items.filter((i) => selected.includes(i.id)) ?? [];
   return (
-    <ProductShell screen="assets" fullBleed>
-      <div className="flex min-h-svh flex-col lg:flex-row">
-        <aside className="flex w-full shrink-0 flex-col gap-6 bg-surface-1 p-5 lg:sticky lg:top-0 lg:h-svh lg:w-[260px]">
-          <ToggleGroup
-            type="single"
-            value={scope}
-            onValueChange={(value) => value && setScope(value)}
-            aria-label="素材范围"
-            className="w-full rounded-md bg-surface-2 p-0.5"
+    <>
+      <div className="asset-actions">
+        {searchForm}
+        <Button
+          variant="ghost"
+          disabled={saving || !!pendingOperation}
+          onClick={() => {
+            setBatch(!batch);
+            setSelected([]);
+          }}
+        >
+          <CheckSquare />
+          {batch ? "退出批量" : "批量操作"}
+        </Button>
+        <Button
+          variant="ghost"
+          disabled={saving || !!pendingOperation || !page}
+          onClick={() => setFolderOpen(true)}
+        >
+          <FolderPlus />
+          新建文件夹
+        </Button>
+        {filter.folder && (
+          <Button
+            variant="ghost"
+            disabled={saving || !!pendingOperation}
+            onClick={() => onFolder("")}
           >
-            <ToggleGroupItem value="个人" className="flex-1">
-              个人
-            </ToggleGroupItem>
-            <ToggleGroupItem value="项目" className="flex-1">
-              项目
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <nav
-            className="grid grid-cols-2 gap-1 lg:flex lg:flex-col"
-            aria-label="素材导航"
-          >
-            {[
-              ["全部", "128", Grid2X2],
-              ["收藏", "14", Star],
-              ["最近 30 天", "37", Clock3],
-              ["未分类", "22", Folder],
-            ].map(([label, count, Icon]) => {
-              const NavIcon = Icon as typeof Folder;
-              return (
-                <Button
-                  key={label as string}
-                  variant="navigation"
-                  data-active={folder === label || undefined}
-                  onClick={() => {
-                    setFolder(label as string);
-                    setPage(1);
-                  }}
-                  className="justify-start gap-2"
-                >
-                  <NavIcon data-icon="inline-start" />
-                  {label as string}
-                  <span className="ml-auto text-xs">{count as string}</span>
-                </Button>
-              );
-            })}
-            <div className="col-span-2 mt-6 flex items-center justify-between px-2 text-xs text-muted-foreground">
-              <span>文件夹</span>
-              <IconButton
-                label="新建文件夹"
-                icon={Plus}
-                size="icon-xs"
-                onClick={() => demoNotice("新建文件夹")}
-              />
-            </div>
-            {["场景参考", "服装", "环境音"].map((label) => (
-              <Button
-                variant="navigation"
-                key={label}
-                data-active={folder === label || undefined}
-                onClick={() => setFolder(label)}
-                className="justify-start"
-              >
-                <Folder data-icon="inline-start" />
-                {label}
-              </Button>
-            ))}
-          </nav>
-          <div className="mt-auto hidden rounded-md bg-surface-2 p-3 text-xs lg:block">
-            <div className="mb-3 flex justify-between">
-              <span>本机容量</span>
-              <span>[已用] / [上限]</span>
-            </div>
-            <Progress value={23} aria-label="本机存储容量" />
-            <Button
-              variant="link"
-              size="xs"
-              className="mt-2"
-              onClick={() => demoNotice("回收站已打开")}
-            >
-              回收站 · 6 项
-            </Button>
-          </div>
-        </aside>
-        <div className="min-w-0 flex-1 p-4 md:p-6 lg:pl-8">
-          <PageHeading title={scope === "个人" ? "我的素材" : "项目素材"}>
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="标题、标签、备注"
-              className="w-64"
-            />
-            <Choice
-              label="素材排序"
-              value={sort}
-              onChange={setSort}
-              options={["最近更新", "名称"]}
-            />
-            <Button onClick={() => uploadRef.current?.click()}>
-              <Upload data-icon="inline-start" />
-              上传
-            </Button>
-            <input
-              className="sr-only"
-              ref={uploadRef}
-              type="file"
-              multiple
-              aria-label="选择素材文件"
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
-                setAssets((current) => [
-                  ...files.map((file) => ({
-                    name: file.name,
-                    kind: file.type.startsWith("video")
-                      ? "视频"
-                      : file.type.startsWith("audio")
-                        ? "音频"
-                        : file.type.startsWith("image")
-                          ? "图片"
-                          : "文本",
-                    ratio: "本地",
-                    used: 0,
-                    folder: "未分类",
-                  })),
-                  ...current,
-                ]);
-                demoNotice(`已加入 ${files.length} 个演示素材`);
-              }}
-            />
-          </PageHeading>
-          <ToggleGroup
-            type="single"
-            value={kind}
-            onValueChange={(value) => value && setKind(value)}
-            variant="pill"
-            size="sm"
-            aria-label="素材类型"
-            className="mb-4 flex-wrap"
-          >
-            {["全部", "图片", "视频", "音频", "文本"].map((value) => (
-              <ToggleGroupItem key={value} value={value}>
-                {value}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          {uploading ? (
-            <Card variant="panel" className="mb-4">
-              <CardContent className="flex items-center justify-between gap-4">
-                <div className="flex-1 text-xs">
-                  <p className="mb-1 font-medium">上传中 · 2 / 3</p>
-                  <p>dock_rain_wide.mp4</p>
-                  <p className="mt-1 text-muted-foreground">lighthouse.png</p>
-                </div>
-                <div className="flex w-52 flex-col items-end gap-1 text-[10px] text-muted-foreground">
-                  <div className="flex w-full items-center gap-3">
-                    <Progress value={64} aria-label="上传进度" />
-                    <span>64%</span>
-                  </div>
-                  <span className="text-destructive">× 格式不受支持</span>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    onClick={() => setUploading(false)}
-                  >
-                    清除
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-          <div
-            className={cn(
-              "grid items-start gap-6",
-              asset ? "xl:grid-cols-[minmax(0,1fr)_280px]" : "",
-            )}
-          >
-            <div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-3 xl:grid-cols-4">
-                {visible.map((item) => (
-                  <Card variant="project" key={item.name}>
-                    <button
-                      type="button"
-                      aria-label={`预览${item.name}`}
-                      onClick={() => setSelected(item.name)}
-                      className="rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Placeholder
-                        className="aspect-square"
-                        kind={
-                          item.kind === "视频"
-                            ? "video"
-                            : item.kind === "音频"
-                              ? "audio"
-                              : "image"
-                        }
-                      >
-                        <span className="absolute inset-0 flex items-center justify-center bg-surface-2 font-mono text-[10px] text-subtle-foreground">
-                          {item.kind === "图片"
-                            ? "IMG"
-                            : item.kind === "视频"
-                              ? "VIDEO"
-                              : item.kind === "音频"
-                                ? "AUDIO"
-                                : "TEXT"}
-                        </span>
-                        <span className="absolute right-2 bottom-2 rounded-sm bg-background px-1 font-mono text-[10px]">
-                          {item.ratio}
-                        </span>
-                      </Placeholder>
-                    </button>
-                    <CardHeader className="mt-2">
-                      <CardTitle>
-                        <button
-                          type="button"
-                          onClick={() => setSelected(item.name)}
-                          className="text-left"
-                        >
-                          {item.name}
-                        </button>
-                      </CardTitle>
-                      <CardDescription>
-                        {item.used ? `已引用 ${item.used} 处` : "未引用"}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                ))}
-              </div>
-              {!visible.length ? <EmptySearch /> : null}
-            </div>
-            {asset ? (
-              <Card variant="panel">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>{asset.name}</CardTitle>
-                    <IconButton
-                      label="关闭素材预览"
-                      icon={X}
-                      size="icon-xs"
-                      onClick={() => setSelected(null)}
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  <Placeholder className="aspect-[16/9]" label="[图片预览]" />
-                  <dl className="grid grid-cols-[40px_1fr] gap-x-3 gap-y-2 text-xs">
-                    <dt className="text-muted-foreground">类型</dt>
-                    <dd>
-                      {asset.kind === "图片"
-                        ? "image/png · 2048×1152"
-                        : asset.kind}
-                    </dd>
-                    <dt className="text-muted-foreground">来源</dt>
-                    <dd>本地上传</dd>
-                    <dt className="text-muted-foreground">审核</dt>
-                    <dd>✓ 已通过</dd>
-                    <dt className="text-muted-foreground">引用</dt>
-                    <dd>雾港来信 · 场景“旧码头·夜”</dd>
-                  </dl>
-                  <div className="flex gap-2">
-                    {["雾港", "雨", "港口"].map((tag) => (
-                      <Badge key={tag} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      className="flex-1"
-                      onClick={() => demoNotice("素材已加入雾港来信")}
-                    >
-                      加入项目
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setAssets((current) =>
-                          current.filter((item) => item.name !== asset.name),
-                        );
-                        setSelected(null);
-                        demoNotice("演示素材已移到回收站");
-                      }}
-                    >
-                      移到回收站
-                    </Button>
-                    <IconButton
-                      label={
-                        favorites.includes(asset.name) ? "取消收藏" : "收藏素材"
-                      }
-                      icon={Star}
-                      onClick={() =>
-                        setFavorites((current) =>
-                          current.includes(asset.name)
-                            ? current.filter((name) => name !== asset.name)
-                            : [...current, asset.name],
-                        )
-                      }
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            ) : null}
-          </div>
-          <nav
-            aria-label="素材分页"
-            className="mt-10 flex items-center justify-between text-xs text-muted-foreground"
-          >
-            <span>共 128 项 · 每页 40</span>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4].map((value) => (
-                <Button
-                  key={value}
-                  variant={page === value ? "secondary" : "ghost"}
-                  size="icon-xs"
-                  aria-label={`第 ${value} 页`}
-                  onClick={() => {
-                    setPage(value);
-                    demoNotice(`第 ${value} 页`);
-                  }}
-                >
-                  {value}
-                </Button>
-              ))}
-            </div>
-          </nav>
-        </div>
+            <ArrowLeft />
+            全部资产
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          className="ml-auto"
+          disabled={loading || saving || !!pendingOperation}
+          onClick={reload}
+        >
+          <RotateCw />
+          刷新
+        </Button>
       </div>
+      {writeError && (
+        <div
+          role="alert"
+          className="mb-5 rounded-xl border border-destructive/40 p-4"
+        >
+          <p>{writeError}</p>
+          {pendingOperation ? (
+            <Button
+              className="mt-3"
+              disabled={saving}
+              onClick={() => void command()}
+            >
+              重试原操作
+            </Button>
+          ) : (
+            <Button
+              className="mt-3"
+              variant="outline"
+              onClick={() => {
+                setWriteError("");
+                reload();
+              }}
+            >
+              刷新资产版本
+            </Button>
+          )}
+        </div>
+      )}
+      {batch && (
+        <div className="mb-5 flex items-center gap-4 rounded-lg border p-3">
+          <Checkbox
+            aria-label="选择本页全部资产"
+            checked={
+              !!page?.items.length && selection.length === page.items.length
+            }
+            disabled={saving}
+            onCheckedChange={(v) =>
+              setSelected(
+                v === true ? (page?.items.map((i) => i.id) ?? []) : [],
+              )
+            }
+          />
+          <span className="text-sm">已选择 {selection.length} 项</span>
+          <Button
+            disabled={!selection.length || saving || !!pendingOperation}
+            variant={filter.trash ? "outline" : "destructive"}
+            onClick={() =>
+              setConfirm(filter.trash ? "restore_items" : "recycle_items")
+            }
+          >
+            {filter.trash ? <RotateCw /> : <Trash2 />}
+            {filter.trash ? "恢复" : "移入回收站"}
+          </Button>
+        </div>
+      )}
+      {page && !filter.trash && !filter.folder && page.folders.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-3">
+          {page.folders.map((f) => (
+            <Button
+              variant="outline"
+              key={f.id}
+              disabled={saving || !!pendingOperation}
+              onClick={() => onFolder(f.id!)}
+            >
+              <Folder />
+              {f.name}
+            </Button>
+          ))}
+        </div>
+      )}
+      {loading ? (
+        <div className="asset-grid" role="status" aria-label="正在读取资产">
+          {[0, 1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className="aspect-square animate-pulse rounded-xl bg-card"
+            />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="empty-state" role="alert">
+          <p>{error}</p>
+          <Button variant="outline" onClick={reload}>
+            重试读取资产
+          </Button>
+        </div>
+      ) : page?.items.length === 0 ? (
+        <div className="empty-state">
+          <Folder size={38} strokeWidth={1.2} />
+          <h2>
+            {filter.search
+              ? "没有匹配的资产"
+              : filter.trash
+                ? "回收站为空"
+                : "这里还没有资产"}
+          </h2>
+          <p>
+            {filter.search
+              ? "试试其他关键词，或调整筛选条件。"
+              : filter.trash
+                ? "移入回收站的资产会显示在这里。"
+                : "上传素材，开始积累你的创作灵感。"}
+          </p>
+        </div>
+      ) : (
+        <div className="asset-grid">
+          {page?.items.map((item) => (
+            <article key={item.id} className="asset-card">
+              <button
+                className="asset-cover"
+                aria-label={`查看 ${item.title}`}
+                onClick={() => setDetail(item)}
+              >
+                <AssetPreview item={item} />
+              </button>
+              {batch && (
+                <Checkbox
+                  aria-label={`选择 ${item.title}`}
+                  className="asset-selection"
+                  checked={selected.includes(item.id)}
+                  disabled={saving}
+                  onCheckedChange={(v) =>
+                    setSelected((ids) =>
+                      v === true
+                        ? [...ids, item.id]
+                        : ids.filter((id) => id !== item.id),
+                    )
+                  }
+                />
+              )}
+              <div className="flex items-center gap-2">
+                <h2 className="min-w-0 flex-1 truncate">{item.title}</h2>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`${item.favorite ? "取消收藏" : "收藏"} ${item.title}`}
+                  aria-pressed={item.favorite}
+                  disabled={saving || !!pendingOperation || filter.trash}
+                  onClick={() => favorite(item)}
+                >
+                  <Heart className={item.favorite ? "fill-current" : ""} />
+                </Button>
+              </div>
+              <p>
+                {kinds.find((k) => k.id === item.kind)?.label ?? "素材"}
+                {item.media?.width
+                  ? ` · ${item.media.width} × ${item.media.height}`
+                  : ""}{" "}
+                · {item.source_label || "个人资产"}
+              </p>
+            </article>
+          ))}
+        </div>
+      )}
+      {page && page.total > page.page_size && (
+        <div className="mt-8 flex justify-center gap-5">
+          <Button
+            variant="outline"
+            disabled={pageIndex === 1 || loading}
+            onClick={() => {
+              setPageIndex((n) => n - 1);
+              setSelected([]);
+              setLoading(true);
+            }}
+          >
+            上一页
+          </Button>
+          <span className="self-center text-sm">
+            {pageIndex} / {Math.ceil(page.total / page.page_size)}
+          </span>
+          <Button
+            variant="outline"
+            disabled={pageIndex * page.page_size >= page.total || loading}
+            onClick={() => {
+              setPageIndex((n) => n + 1);
+              setSelected([]);
+              setLoading(true);
+            }}
+          >
+            下一页
+          </Button>
+        </div>
+      )}
+      <Dialog
+        open={!!detail}
+        onOpenChange={(v) => {
+          if (!v) setDetail(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl">
+          <DialogTitle>{detail?.title}</DialogTitle>
+          <DialogDescription>
+            个人资产 · {detail?.media?.file_name ?? detail?.kind}
+          </DialogDescription>
+          {detail && (
+            <>
+              <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-background">
+                <AssetPreview key={detail.id} item={detail} large />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="mr-auto text-xs text-muted-foreground">
+                  {detail.media
+                    ? `${(detail.media.byte_size ?? 0) / 1024 / 1024 < 0.01 ? "< 0.01" : ((detail.media.byte_size ?? 0) / 1024 / 1024).toFixed(2)} MB`
+                    : ""}
+                </span>
+                <Button
+                  variant="outline"
+                  disabled={saving || !!pendingOperation || filter.trash}
+                  onClick={() => favorite(detail)}
+                >
+                  <Heart />
+                  {detail.favorite ? "取消收藏" : "收藏"}
+                </Button>
+                {!filter.trash && (
+                  <Button asChild>
+                    <a
+                      href={`/api/media/library/items/${detail.id}/download?scope=personal`}
+                      download
+                    >
+                      <Download />
+                      下载原件
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={folderOpen}
+        onOpenChange={(v) => {
+          if (!saving && !pendingOperation) setFolderOpen(v);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>新建文件夹</DialogTitle>
+          <DialogDescription>把相关素材整理到一起。</DialogDescription>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (page && folderName.trim())
+                void command({
+                  scope: { kind: "personal" },
+                  expected_revision: page.revision,
+                  action: "create_folder",
+                  folder: {
+                    name: folderName.trim(),
+                    parent_id: undefined,
+                    style: "",
+                    theme: "",
+                  },
+                });
+            }}
+          >
+            <Input
+              aria-label="文件夹名称"
+              value={folderName}
+              maxLength={40}
+              disabled={saving || !!pendingOperation}
+              onChange={(e) => setFolderName(e.target.value)}
+            />
+            <DialogFooter className="mt-5">
+              <Button
+                type="submit"
+                disabled={saving || !!pendingOperation || !folderName.trim()}
+              >
+                创建文件夹
+              </Button>
+            </DialogFooter>
+          </form>
+          {writeError && (
+            <p role="alert" className="text-sm text-destructive">
+              {writeError}
+            </p>
+          )}
+          {pendingOperation && !saving && (
+            <Button onClick={() => void command()}>重试原操作</Button>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!confirm}
+        onOpenChange={(v) => {
+          if (!v && !saving && !pendingOperation) setConfirm(null);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>
+            {confirm === "restore_items" ? "恢复所选资产？" : "移入回收站？"}
+          </DialogTitle>
+          <DialogDescription>
+            将处理已选择的 {selection.length} 项资产。
+            {confirm === "restore_items"
+              ? "恢复后可在资产列表中继续使用。"
+              : "移入回收站后可以恢复。"}
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={saving || !!pendingOperation}
+              onClick={() => setConfirm(null)}
+            >
+              取消
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={() => {
+                if (page && confirm)
+                  void command({
+                    scope: { kind: "personal" },
+                    expected_revision: page.revision,
+                    action: confirm,
+                    items: selection.map((i) => ({
+                      id: i.id,
+                      revision: i.revision,
+                    })),
+                  });
+              }}
+            >
+              {saving ? "正在处理…" : pendingOperation ? "重试原操作" : "确认"}
+            </Button>
+          </DialogFooter>
+          {writeError && (
+            <p role="alert" className="text-sm text-destructive">
+              {writeError}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+function AssetLibrary() {
+  const [filter, setFilter] = useState<Filter>({
+    kind: "image",
+    search: "",
+    favorite: false,
+    trash: false,
+    folder: "",
+    order: "updated_desc",
+  });
+  const [search, setSearch] = useState("");
+  const [upload, setUpload] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [locked, setLocked] = useState(false);
+  return (
+    <>
+      <nav className="workspace-tabs asset-tabs">
+        <Link href="/assets" aria-current="page">
+          生成历史
+        </Link>
+        <Link href="/projects">画布</Link>
+      </nav>
+      <fieldset className="workspace-toolbar asset-filters" disabled={locked}>
+        <Tabs
+          value={filter.kind}
+          onValueChange={(kind) => setFilter((f) => ({ ...f, kind }))}
+        >
+          <TabsList className="bg-transparent">
+            {kinds.map((k) => (
+              <TabsTrigger key={k.id} value={k.id}>
+                {k.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <Button
+          variant="ghost"
+          aria-pressed={filter.favorite}
+          onClick={() => setFilter((f) => ({ ...f, favorite: !f.favorite }))}
+        >
+          <Heart />
+          收藏
+        </Button>
+        <Select
+          value={filter.order}
+          onValueChange={(order) => setFilter((f) => ({ ...f, order }))}
+        >
+          <SelectTrigger aria-label="资产排序" className="w-auto">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="updated_desc">最近修改</SelectItem>
+            <SelectItem value="updated_asc">最早修改</SelectItem>
+            <SelectItem value="name_asc">名称顺序</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          className="ml-auto"
+          variant="outline"
+          onClick={() => setUpload(true)}
+        >
+          <Upload />
+          上传素材
+        </Button>
+
+        <Button
+          variant="ghost"
+          className="ml-auto"
+          aria-pressed={filter.trash}
+          onClick={() =>
+            setFilter((f) => ({
+              ...f,
+              trash: !f.trash,
+              favorite: false,
+              folder: "",
+            }))
+          }
+        >
+          <Trash2 />
+          {filter.trash ? "返回资产" : "回收站"}
+        </Button>
+      </fieldset>
+      <Library
+        key={JSON.stringify(filter)}
+        filter={filter}
+        onLock={setLocked}
+        searchForm={
+          <form
+            className="search-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFilter((f) => ({ ...f, search: search.trim() }));
+            }}
+          >
+            <Search size={16} />
+            <Input
+              disabled={locked}
+              aria-label="搜索资产"
+              placeholder="搜索资产"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              maxLength={512}
+            />
+            <Button disabled={locked} type="submit" variant="ghost">
+              搜索
+            </Button>
+          </form>
+        }
+        onFolder={(folder) => setFilter((f) => ({ ...f, folder }))}
+        refresh={refresh}
+        onRefresh={() => setRefresh((n) => n + 1)}
+      />
+      {upload && (
+        <UploadDialog
+          onClose={() => setUpload(false)}
+          onUploaded={() => setRefresh((n) => n + 1)}
+        />
+      )}
+    </>
+  );
+}
+export function AssetsPage() {
+  return (
+    <ProductShell screen="assets">
+      <AssetLibrary />
     </ProductShell>
   );
 }

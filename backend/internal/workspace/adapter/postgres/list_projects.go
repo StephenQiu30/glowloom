@@ -40,7 +40,7 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 			}
 		}
 		query := `
-			SELECT p.id, p.org_id, p.name, p.aspect_ratio, p.style_type,
+			SELECT p.id, p.org_id, p.initial_canvas_id AS canvas_id, p.style_key, p.name, p.aspect_ratio, p.style_type,
 			       p.style_subtype, p.style_preset_id, p.cover_asset_id, p.resolution,
 			       p.allow_overseas_models, p.status, p.is_delete,
 			       p.archived_at, p.delete_time, p.purge_after, p.revision,
@@ -49,9 +49,9 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 			FROM workspace.project AS p
 			LEFT JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id AND m.actor_id=?::uuid
 			LEFT JOIN workspace.project_folder f ON f.id=m.folder_id AND f.org_id=m.org_id AND f.actor_id=m.actor_id AND NOT f.is_delete
-			WHERE p.org_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
+			WHERE p.org_id = ?::uuid AND p.owner_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
 		`
-		args := []any{actor.ID.String(), actor.OrgID.String(), input.Deleted}
+		args := []any{actor.ID.String(), actor.OrgID.String(), actor.ID.String(), input.Deleted}
 		if input.FolderID != nil {
 			if *input.FolderID == uuid.Nil {
 				query += ` AND f.id IS NULL`
@@ -109,6 +109,8 @@ type projectListRow struct {
 	CoverAssetID        *uuid.UUID
 	ID                  uuid.UUID
 	OrgID               uuid.UUID
+	CanvasID            *uuid.UUID
+	StyleKey            *string
 	Name                string
 	AspectRatio         string
 	StyleType           string
@@ -130,7 +132,7 @@ type projectListRow struct {
 
 func (row projectListRow) item() application.ProjectListItem {
 	item := application.ProjectListItem{CoverAssetID: row.CoverAssetID,
-		ID: row.ID, OrgID: row.OrgID, Name: row.Name,
+		ID: row.ID, OrgID: row.OrgID, CanvasID: row.CanvasID, StyleKey: row.StyleKey, Name: row.Name,
 		AspectRatio: row.AspectRatio, StyleType: row.StyleType,
 		StylePresetID: row.StylePresetID, Resolution: row.Resolution,
 		AllowOverseasModels: row.AllowOverseasModels, Status: row.Status,

@@ -1,6 +1,4 @@
-import { BiblePage } from "./_components/bible-page";
-
-export const metadata = { title: "设定集" };
+import { redirect } from "next/navigation";
 export default function Page() {
-  return <BiblePage />;
+  redirect("/subjects");
 }

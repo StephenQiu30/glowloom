@@ -27,5 +27,8 @@ export default defineConfig([
     "build/**",
     "next-env.d.ts",
     "src/components/auth/generated/**",
+    "src/components/projects/generated/**",
+    "src/components/media/generated/**",
+    "src/components/creation/generated/**",
   ]),
 ]);

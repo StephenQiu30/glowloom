@@ -96,6 +96,27 @@ func TestPublicCanvasAPIWithLocalPostgres(t *testing.T) {
 	if code, body := request("GET", "/api/projects", nil, "", ""); code != 200 || !bytes.Contains(body, []byte(project.String())) {
 		t.Fatalf("project %d %s", code, body)
 	}
+	// A valid same-organization session must not authorize another creator's
+	// project route, even though the older lifecycle adapters use organization IDs.
+	peer := uuid.New()
+	if err := database.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password) VALUES(?,?,?,'Peer','producer',?,false)`, peer, actor.OrgID, "peer-"+peer.String(), hash).Error; err != nil {
+		t.Fatal(err)
+	}
+	peerSession, err := identityapp.NewAuth(pgidentity.NewStore(database), time.Now).Login(t.Context(), "peer-"+peer.String(), "CanvasPassword123", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerSession := authResult
+	authResult = peerSession
+	if code, body := request("GET", "/api/projects", nil, "", ""); code != 200 || bytes.Contains(body, []byte(project.String())) {
+		t.Fatalf("peer list: %d %s", code, body)
+	}
+	for _, path := range []string{"/api/projects/" + project.String(), "/api/projects/" + project.String() + "/canvases"} {
+		if code, body := request("GET", path, nil, "", ""); code != 404 {
+			t.Fatalf("peer project scope: %d %s", code, body)
+		}
+	}
+	authResult = ownerSession
 	createPath := "/api/projects/" + project.String() + "/canvases"
 	if code, _ := request("POST", createPath, map[string]any{"name": "HTTP画布", "scope": map[string]any{}}, uuid.NewString(), "http://evil.invalid"); code != 403 {
 		t.Fatalf("origin %d", code)
