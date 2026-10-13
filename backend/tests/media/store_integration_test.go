@@ -48,9 +48,9 @@ func mediaStoreProject(t *testing.T, database *gorm.DB) (identityapp.Principal, 
 		t.Fatalf("create actor: %v", err)
 	}
 	if err := database.Exec(`
-		INSERT INTO workspace.project (id, org_id, name, aspect_ratio, style_type)
-		VALUES (?::uuid, ?::uuid, '媒体测试', '16:9', 'realistic')
-	`, projectID.String(), orgID.String()).Error; err != nil {
+		INSERT INTO workspace.project (id, org_id, owner_id, name, aspect_ratio, style_type)
+		VALUES (?::uuid, ?::uuid, ?::uuid, '媒体测试', '16:9', 'realistic')
+	`, projectID.String(), orgID.String(), userID.String()).Error; err != nil {
 		t.Fatalf("create project: %v", err)
 	}
 	return identityapp.Principal{ID: userID, OrgID: orgID, Role: identitydomain.RoleProducer}, projectID
