@@ -64,7 +64,7 @@ func scriptActorProject(t *testing.T, db *gorm.DB) (identityapp.Principal, uuid.
 	}{
 		{`INSERT INTO workspace.organization(id,name) VALUES(?,?)`, []any{actor.OrgID, "script-test-" + actor.OrgID.String()}},
 		{`INSERT INTO identity."user"(id,org_id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'producer','active',false)`, []any{actor.ID, actor.OrgID, "script-" + actor.ID.String(), "脚本测试", "test-only-not-a-credential"}},
-		{`INSERT INTO workspace.project(id,org_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,'剧本真实测试','','16:9','realistic','1080p','active',1,'{}')`, []any{pid, actor.OrgID}},
+		{`INSERT INTO workspace.project(id,org_id,owner_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,?,'剧本真实测试','','16:9','realistic','1080p','active',1,'{}')`, []any{pid, actor.OrgID, actor.ID}},
 	} {
 		if err := db.Exec(r.query, r.args...).Error; err != nil {
 			t.Fatal(err)

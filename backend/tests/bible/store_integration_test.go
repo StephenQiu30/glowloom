@@ -63,7 +63,7 @@ func bibleActorProject(t *testing.T, owner *gorm.DB) (identityapp.Principal, uui
 	}{
 		{`INSERT INTO workspace.organization(id,name) VALUES(?,?)`, []any{actor.OrgID, "bible-test-" + actor.OrgID.String()}},
 		{`INSERT INTO identity."user"(id,org_id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'producer','active',false)`, []any{actor.ID, actor.OrgID, "bible-" + actor.ID.String(), "角色测试", "synthetic-test-not-a-credential"}},
-		{`INSERT INTO workspace.project(id,org_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,'角色测试','','16:9','realistic','1080p','active',1,'{}')`, []any{project, actor.OrgID}},
+		{`INSERT INTO workspace.project(id,org_id,owner_id,name,description,aspect_ratio,style_type,resolution,status,revision,default_models) VALUES(?,?,?,'角色测试','','16:9','realistic','1080p','active',1,'{}')`, []any{project, actor.OrgID, actor.ID}},
 	} {
 		if err := owner.Exec(r.sql, r.args...).Error; err != nil {
 			t.Fatal(err)
