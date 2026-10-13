@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 var (

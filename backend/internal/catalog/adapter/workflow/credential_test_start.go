@@ -9,7 +9,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 )
 
 // TestWorkflowClient is the Temporal start API required by credential scheduling.

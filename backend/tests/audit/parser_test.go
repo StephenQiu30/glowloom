@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 )
 
 func TestAuditParserRejectsUnsafeSummaries(t *testing.T) {

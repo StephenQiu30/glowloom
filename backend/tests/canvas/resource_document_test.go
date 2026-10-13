@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 func resourceNode(kind string) domain.Node {

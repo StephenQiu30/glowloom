@@ -49,7 +49,7 @@ export function SessionGate({
     return (
       <main className="session-state">
         <div>
-          <h1>浮光</h1>
+          <h1>织光</h1>
           <p role={error ? "alert" : "status"}>
             {error || "正在验证登录状态…"}
           </p>

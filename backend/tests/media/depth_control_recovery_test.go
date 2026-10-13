@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	toolflow "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/workflow"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	tooldomain "github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func TestDepthJobPGRejectedUndispatchedCancelHasPublicRecovery(t *testing.T) {

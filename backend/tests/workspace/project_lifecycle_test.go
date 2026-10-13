@@ -8,11 +8,11 @@ import (
 
 	"github.com/google/uuid"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	inboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func TestProjectLifecyclePreparationPreservesRecoveryAndAudit(t *testing.T) {

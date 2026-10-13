@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 // workspaceReferenceAllocation measures only the actual guard transaction. SQL

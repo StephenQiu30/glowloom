@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func TestScriptCopyRemapsFullIdentityClosureAndPreservesSemanticHashes(t *testing.T) {

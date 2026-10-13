@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestDirectorOutputsPersistAndRejectUnavailableImages(t *testing.T) {

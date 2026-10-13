@@ -16,9 +16,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // Client uploads worker-owned PCM files to an explicitly configured loopback service.

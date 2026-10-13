@@ -11,10 +11,10 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func TestQuoteExpiryScheduleInstallsIdempotentlyOnLocalTemporal(t *testing.T) {

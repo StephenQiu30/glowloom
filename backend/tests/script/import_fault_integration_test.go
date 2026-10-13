@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/adapter/extract"
-	scriptobjects "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func TestScriptFileImportPGAdmissionOutboxFailureRollsBackAllFrozenFacts(t *testing.T) {

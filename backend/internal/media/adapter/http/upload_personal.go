@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // UploadPersonal receives one explicitly reviewed file in the current actor's

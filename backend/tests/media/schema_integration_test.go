@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 // The fixture database must be initialized from db/schema.sql before this test.

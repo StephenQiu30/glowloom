@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
-	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 )
 
 // CreateBatchFreeQuote preserves request order, excludes only invalid items,

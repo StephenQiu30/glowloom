@@ -4,7 +4,7 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // Principal returns the authenticated actor for organization-scoped commands.

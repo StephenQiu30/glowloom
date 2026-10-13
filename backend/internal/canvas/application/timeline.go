@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // TimelineStore rechecks ownership and freezes references under the document lock.

@@ -115,7 +115,7 @@ it("丢回执重试保留原key和冻结body，键盘移动可保存", async () 
 });
 it("未保存时返回项目和品牌首页均需明确处理", async () => {
   await openDraft();
-  fireEvent.click(screen.getByRole("link", { name: "浮光首页" }));
+  fireEvent.click(screen.getByRole("link", { name: "织光首页" }));
   expect(
     screen.getByRole("alertdialog", { name: "确认离开画布" }),
   ).toBeTruthy();

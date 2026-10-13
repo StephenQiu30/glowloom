@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidEnableUser means the target, revision, or request ID is invalid.

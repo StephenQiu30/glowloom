@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func readCopyHistory(tx *gorm.DB, org, project uuid.UUID) (application.ProjectCopyHistory, error) {

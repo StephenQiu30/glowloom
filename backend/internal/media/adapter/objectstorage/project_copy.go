@@ -6,8 +6,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	platformobjects "github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	platformobjects "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 // ProjectCopyObjects retains exact-key access while translating conditional creation.

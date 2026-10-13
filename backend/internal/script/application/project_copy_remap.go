@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // RemapProjectHistory prepares every historical identity and independent object key.

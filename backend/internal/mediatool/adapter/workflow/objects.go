@@ -7,9 +7,9 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 // Objects maps exact private absence and conditional creation into worker errors.

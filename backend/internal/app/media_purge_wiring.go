@@ -8,17 +8,17 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbible "github.com/StephenQiu30/lanverse/backend/internal/bible/adapter/postgres"
-	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediaobjects "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	pgmediatool "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
-	pgscript "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
+	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgmediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 type mediaReferenceOwners struct{ owners []mediaapp.LibraryReferences }

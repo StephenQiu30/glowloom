@@ -13,9 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestProviderCredentialsWithRealPostgres(t *testing.T) {

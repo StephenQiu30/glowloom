@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 )
 
 type projectChangedEnvelope struct {

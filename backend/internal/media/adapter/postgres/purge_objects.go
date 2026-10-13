@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // PurgeObjects returns only exact persisted keys under a currently live fence.

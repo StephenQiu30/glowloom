@@ -12,10 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	workspacedomain "github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 const uploadEnvelopeBytes int64 = 64 << 10

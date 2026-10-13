@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestPresignGetRejectsUnsafeKeysAndUnboundedLifetime(t *testing.T) {

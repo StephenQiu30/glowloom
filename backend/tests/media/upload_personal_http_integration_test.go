@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediahttp "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/http"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediahttp "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/http"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 func personalUploadRouter(db *gorm.DB, actor identityapp.Principal, objects *uploadObjectsFake) *gin.Engine {

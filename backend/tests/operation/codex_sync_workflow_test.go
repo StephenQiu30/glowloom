@@ -13,9 +13,9 @@ import (
 	"go.temporal.io/sdk/testsuite"
 	temporalworkflow "go.temporal.io/sdk/workflow"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func syncWorkflowFixture() application.WorkflowOperation {

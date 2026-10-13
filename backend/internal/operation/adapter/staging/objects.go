@@ -8,8 +8,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 // Objects never creates a signed URL for staged provider bytes.

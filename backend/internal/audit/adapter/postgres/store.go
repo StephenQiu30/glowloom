@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/audit/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
 )
 
 var (

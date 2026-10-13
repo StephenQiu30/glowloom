@@ -10,12 +10,12 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pginbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	redisrealtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/redis"
-	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
+	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
+	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
 
 func TestOperationStatusWithHostPostgresAndRedis(t *testing.T) {

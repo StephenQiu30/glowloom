@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/videodepth"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/videodepth"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 func TestDepthCanonicalOutputRequiresPlayableSilentFaststart420MP4(t *testing.T) {

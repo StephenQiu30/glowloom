@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pginbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestPruneExpiredRejectsUnboundedBatch(t *testing.T) {

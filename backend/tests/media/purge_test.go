@@ -9,7 +9,7 @@ import (
 	"io"
 	"testing"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 type purgePhysicalFixture struct {

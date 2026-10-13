@@ -20,12 +20,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	workspacehttp "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/http"
-	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 const workspaceTestOrigin = "http://127.0.0.1:3140"

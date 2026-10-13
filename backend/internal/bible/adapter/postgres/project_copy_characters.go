@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ResolveCharacterMappings verifies exact frozen stable/pinned history under trusted caller-owned SQL.

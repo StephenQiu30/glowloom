@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func mergeCharacter(ctx context.Context, tx Transaction, actor identityapp.Principal, c Command, h *domain.Head, v domain.Version, now time.Time) error {

@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
-	record "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	ce "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/event"
-	wa "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	wd "github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
+	record "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	ce "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/event"
+	wa "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	wd "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 type recordedCopyDelivery struct {

@@ -10,10 +10,10 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
-	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
-	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 func TestTemporalSetupInstallsImplementedSchedules(t *testing.T) {

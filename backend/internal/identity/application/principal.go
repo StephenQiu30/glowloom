@@ -4,7 +4,7 @@ package application
 import (
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // Principal identifies the actor recorded by organization-scoped commands.

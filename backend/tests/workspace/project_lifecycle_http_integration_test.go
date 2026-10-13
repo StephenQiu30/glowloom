@@ -12,12 +12,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	operationpg "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	workspacehttp "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/http"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func lifecycleHTTPRouter(database *gorm.DB, actor identityapp.Principal) *gin.Engine {

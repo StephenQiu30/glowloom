@@ -13,11 +13,11 @@ import (
 	"go.temporal.io/sdk/client"
 	"gorm.io/gorm"
 
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	operationevent "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/event"
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	operationevent "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/event"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 type fakeStarterStore struct {

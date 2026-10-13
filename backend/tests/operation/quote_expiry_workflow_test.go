@@ -9,8 +9,8 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 
-	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 func TestQuoteExpiryWorkflowRunsFlowActivity(t *testing.T) {

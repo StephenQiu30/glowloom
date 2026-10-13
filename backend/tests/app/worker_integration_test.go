@@ -11,10 +11,10 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
-	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestWorkerRoleRunsMaintenanceOnLocalTemporal(t *testing.T) {

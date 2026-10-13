@@ -7,7 +7,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 )
 
 // ErrInvalidSecret means an adapter or its credential fields are unsupported.

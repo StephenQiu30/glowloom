@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func TestProjectCopyPlacementPGCurrentActorPrivateScopeAndRevocation(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 )
 
 // Replay returns events after lastEventID. A missing ID means the client must resync.

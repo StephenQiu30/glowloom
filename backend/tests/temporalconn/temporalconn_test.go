@@ -12,7 +12,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/temporalconn"
 )
 
 func TestOpenRejectsMissingConfig(t *testing.T) {

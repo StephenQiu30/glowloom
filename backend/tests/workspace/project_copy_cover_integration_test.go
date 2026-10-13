@@ -12,14 +12,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
-	mediaobjects "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/objectstorage"
-	mediapg "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 type actualProjectCopyCoverOwner struct{ tx *gorm.DB }

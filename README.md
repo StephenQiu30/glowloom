@@ -1,16 +1,20 @@
-# 浮光
+# Glowloom · 织光
 
-浮光围绕项目与剧本到镜头生成和素材管理组织创作：项目、画布、镜头、故事板、设定、素材，以及账号与管理功能。正式前端采用当前设计稿的页面实现；功能和数据暂用 mock，真实业务按正式原始需求逐项接入和验收。
+Glowloom 取意光与织机，围绕画布、生成、主体与素材管理组织视觉创作。中文产品名为「织光」。正式前端依据当前 Figma 设计重建，认证、项目、画布保存、素材、生成、主体和用户管理已接入相应真实接口；完整业务与逐屏视觉验收范围以 [PROJECT](PROJECT.md) 为准。
+
+仓库为 [StephenQiu30/glowloom-server](https://github.com/StephenQiu30/glowloom-server)，本地项目目录采用 `Glowloom/glowloom-server/`；`glowloom-server` 是整个服务仓库，内部保留 `frontend/`、`backend/` 和 `docs/`，命令均从该仓库根目录开始。Go 模块路径为 `github.com/StephenQiu30/glowloom-server/backend`。
+
+为保留现有运行环境，`LV_*` 配置、`lanverse` 命令、数据库角色、存储资源及会话 Cookie 标识保持不变；仓库重命名不执行数据库迁移或服务重新部署。
 
 ## 当前需求入口
 
-- [原始产品需求](docs/prd/00-浮光.md)
+- [原始产品需求](docs/prd/00-织光.md)
 - [业务模块需求与执行顺序](docs/requirement/01-需求总览.md)
 - [软件生命周期与需求管理](docs/软件生命周期与需求管理.md)
 
-业务模块06～19各一份完整规格，在同一文件内包含功能性需求、非功能性需求、验收场景、字段与来源；规则缺口列为待确认，不以页面或mock替代真实业务验收。当前没有已接受的新数据/接口设计，后续按模块评审。
+业务模块06～19各一份完整规格，在同一文件内包含功能性需求、非功能性需求、验收场景、字段与来源；规则缺口列为待确认，不以页面或 mock 替代真实业务验收。已实施切片与仍待评审范围分别在对应 Design、Plan 和 PROJECT 中记录。
 
-[浮光Figma](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT/)是既有视觉参考；正式首页为 `/`，代码位于 `frontend/src/app/`。旧业务实现不反向约束原始需求。已删除的文档如需核查从Git历史读取，不恢复为当前基线。
+[织光Figma](https://www.figma.com/design/uLqmeRWuQuzfrp9xOYg6FT/)是既有视觉参考；正式首页为 `/`，代码位于 `frontend/src/app/`。旧业务实现不反向约束原始需求。已删除的文档如需核查从Git历史读取，不恢复为当前基线。
 
 ## 本地阅读
 

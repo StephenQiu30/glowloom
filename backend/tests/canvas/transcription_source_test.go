@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing.T) {

@@ -6,10 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // ReviewHandler serves actual rules/manual editing and immutable history only.

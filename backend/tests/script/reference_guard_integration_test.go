@@ -12,12 +12,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/adapter/extract"
-	scriptobjects "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	pg "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func scriptReferenceDB(t *testing.T) (*gorm.DB, *gorm.DB) {

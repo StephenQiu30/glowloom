@@ -1,6 +1,6 @@
 import { ProductShell } from "@/components/layout/product-shell";
 import { UnavailableState } from "@/components/availability/unavailable";
-export const metadata = { title: "供应商凭据 · 浮光" };
+export const metadata = { title: "供应商凭据 · 织光" };
 export default function Page() {
   return (
     <ProductShell screen="providers">

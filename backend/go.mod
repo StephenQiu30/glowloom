@@ -1,4 +1,4 @@
-module github.com/StephenQiu30/lanverse/backend
+module github.com/StephenQiu30/glowloom-server/backend
 
 go 1.26.0
 

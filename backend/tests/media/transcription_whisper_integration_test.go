@@ -8,10 +8,10 @@ import (
 	"time"
 	"unicode"
 
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	toolff "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/ffmpeg"
-	whisper "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/whisper"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
+	whisper "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/whisper"
 )
 
 func TestWhisperRealOfficialSpeechAndSyntheticChinese(t *testing.T) {

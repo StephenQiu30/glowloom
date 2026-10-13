@@ -14,12 +14,12 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 
-	mo "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/objectstorage"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	wh "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/http"
-	wf "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/workflow"
-	wa "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	wd "github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	mo "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	wh "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
+	wf "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/workflow"
+	wa "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	wd "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func copyHTTPRequest(t *testing.T, r *gin.Engine, method, path, body string, key uuid.UUID) *httptest.ResponseRecorder {

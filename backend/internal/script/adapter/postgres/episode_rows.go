@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 const episodeColumns = `id,org_id,project_id,script_version_id AS version_id,split_set_id,seq_no,title,span_start AS start,span_end AS "end",revision,current_structure_id,confirmed_structure_id,previous_episode_id,inherit_status,is_delete`

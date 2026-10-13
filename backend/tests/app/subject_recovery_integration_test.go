@@ -18,12 +18,12 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
-	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	identitypg "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	platformdb "github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	identitypg "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestSubjectRecoveryPublicRouter(t *testing.T) {

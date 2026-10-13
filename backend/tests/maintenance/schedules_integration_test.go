@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 
-	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
+	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
 )
 
 func TestScheduleInstallerIsIdempotentAndDetectsDrift(t *testing.T) {

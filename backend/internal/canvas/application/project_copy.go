@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 // ProjectCopyBinding is a trusted workspace admission's immutable module binding.

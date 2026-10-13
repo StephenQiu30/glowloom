@@ -3,10 +3,10 @@ package postgres
 import (
 	"github.com/google/uuid"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	auditdomain "github.com/StephenQiu30/lanverse/backend/internal/audit/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	auditdomain "github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
 func parseIdentityAudit(event application.OutboxEvent) (auditdomain.Record, error) {

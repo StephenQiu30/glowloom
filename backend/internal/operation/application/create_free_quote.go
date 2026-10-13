@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
-	catalogdomain "github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
-	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 )
 
 var (

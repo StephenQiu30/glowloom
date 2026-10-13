@@ -18,9 +18,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 // The owner and application DSNs must point to the same empty, migrated test

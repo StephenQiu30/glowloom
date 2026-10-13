@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 func generationNode() domain.Node {

@@ -13,11 +13,11 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/lanverse/backend/internal/media/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func (r *Renderer) renderAudio(ctx context.Context, frozen domain.FrozenExport, paths map[uuid.UUID]string, progress func(int, string) error) (*mediaapp.Downloaded, error) {

@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 type usageSource struct {

@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestUploadRealMinIOOriginalRenditionsAndPreview(t *testing.T) {

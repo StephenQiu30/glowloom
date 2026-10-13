@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 // ErrInvalidConfiguration means a price version cannot be published as configured.

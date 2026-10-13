@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/billing/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 )
 
 func heldReservation() domain.Reservation {

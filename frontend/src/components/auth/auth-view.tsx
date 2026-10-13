@@ -289,7 +289,7 @@ export function AuthView({
         >
           <div className={cn(reset ? "mb-2 text-center" : "mb-1")}>
             <h1 className="text-[28px] leading-9 font-semibold tracking-tight">
-              {reset ? "设置新密码" : register ? "创建账号" : "登录浮光"}
+              {reset ? "设置新密码" : register ? "创建账号" : "登录织光"}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {reset

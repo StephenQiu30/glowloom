@@ -13,12 +13,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gltf"
-	mediaobjects "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/objectstorage"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
+	mediaobjects "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func packageDownloaded(t *testing.T, data []byte) *mediaapp.Downloaded {

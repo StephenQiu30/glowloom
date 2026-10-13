@@ -8,15 +8,15 @@ import (
 
 	"github.com/google/uuid"
 
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/staged"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/lanverse/backend/internal/media/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/codex"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/staging"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/staged"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestM1StagedIngestPrivateImageCreatesOneCandidate(t *testing.T) {

@@ -3,7 +3,7 @@ package application
 import (
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // validateCopyStructures closes the typed documents against every materialized row.

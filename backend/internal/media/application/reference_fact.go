@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	_ "golang.org/x/image/webp" // Register the existing supported WebP thumbnail decoder.
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // ReferenceFact is current, actually verified owning evidence for new entity

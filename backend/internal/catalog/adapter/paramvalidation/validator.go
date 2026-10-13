@@ -14,7 +14,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 // ErrInvalidConfiguration means a version cannot be published as configured.

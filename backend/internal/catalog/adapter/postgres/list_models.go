@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrModelCatalogProjectNotFound also hides projects outside the actor's organization.

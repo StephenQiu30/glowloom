@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	platformdb "github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 // libraryOwnerDB is used only to create synthetic protected-column fixtures.

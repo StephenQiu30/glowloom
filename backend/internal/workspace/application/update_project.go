@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 // ErrInvalidUpdateProject means the patch or committed result is invalid.

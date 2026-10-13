@@ -8,9 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	scripthttp "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/http"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func TestScriptVersionHTTPActualCandidateTextConfirmationHistoryAndAdoption(t *testing.T) {

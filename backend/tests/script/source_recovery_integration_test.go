@@ -13,11 +13,11 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	objectsadapter "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func scriptAdmin(t *testing.T, owner *gorm.DB, org uuid.UUID) identityapp.Principal {

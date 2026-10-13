@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestNormalizedUploadHTTPRequiresReviewAndReturnsCanonicalSafeAsset(t *testing.T) {

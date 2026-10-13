@@ -7,10 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // Handler is the media query HTTP adapter.

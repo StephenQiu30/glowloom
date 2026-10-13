@@ -1,4 +1,6 @@
-# 浮光工程规则
+# 织光工程规则
+
+英文项目名为 **Glowloom**（光与织机），中文名改为「织光」。远程仓库为 `StephenQiu30/glowloom-server`；本地布局为 `Glowloom/glowloom-server/`，当前整个 Git 仓库位于 `glowloom-server`，内部 `frontend`、`backend` 结构不变。Go 模块使用 `github.com/StephenQiu30/glowloom-server/backend`；既有认证协议、`LV_*` 配置、运行资源名和数据库结构不因本次重命名而改变。
 
 需求基线以 [需求总览](docs/requirement/01-需求总览.md) 为准；当前按业务模块整理需求，具体目标方案在实施前另行评审。页面与设计稿用于需求追踪，页面完成不等于功能完成。旧页面、API、Schema、模块拆分、状态机和中间件拓扑不得反向约束当前设计。旧工程资料已删除，必要核查从Git历史读取，不作为当前需求来源。
 

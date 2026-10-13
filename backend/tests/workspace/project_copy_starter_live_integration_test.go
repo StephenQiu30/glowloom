@@ -10,8 +10,8 @@ import (
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 
-	copyflow "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/workflow"
-	copyapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	copyflow "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/workflow"
+	copyapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 // isolatedCopyClient uses the actual server and SDK on a queue without business workers.

@@ -11,12 +11,12 @@ import (
 
 	"github.com/google/uuid"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 type updateProjectCommandStore struct {

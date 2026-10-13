@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	mediadomain "github.com/StephenQiu30/lanverse/backend/internal/media/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // HasAudibleClip checks saved visibility, mute and gain; the worker must still

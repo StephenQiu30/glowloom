@@ -4,7 +4,7 @@ package workflow
 import (
 	"encoding/json"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 // ProviderSubmitInput is sent to provider.submit on the provider's agent queue.

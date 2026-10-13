@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // ErrExtractionFailed preserves a per-file failure without accepting replacement text.

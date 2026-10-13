@@ -11,12 +11,12 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestBootstrapAdminIsAtomicAndSingleUseWithRealPostgres(t *testing.T) {

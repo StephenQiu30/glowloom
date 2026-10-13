@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	app "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 )
 
 func TestBibleCommandRejectsVoiceRemovalFromLocationAndProp(t *testing.T) {

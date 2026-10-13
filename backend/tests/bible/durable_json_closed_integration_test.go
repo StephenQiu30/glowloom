@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	app "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 // Mutations are limited to each test's own UUID fixture and rolled back. All

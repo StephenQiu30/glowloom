@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
 type createUserStoreSpy struct {

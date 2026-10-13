@@ -12,12 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // AdminDependencies injects existing audited catalog commands and safe queries.

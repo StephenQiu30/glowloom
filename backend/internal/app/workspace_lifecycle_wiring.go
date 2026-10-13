@@ -7,13 +7,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	pgmediatool "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgmediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 type projectWorkGuard struct {

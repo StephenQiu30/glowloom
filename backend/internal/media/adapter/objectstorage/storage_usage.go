@@ -6,8 +6,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	platformobjects "github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	platformobjects "github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 // StorageUsageObjects preserves actual metadata and explicit absence from S3.

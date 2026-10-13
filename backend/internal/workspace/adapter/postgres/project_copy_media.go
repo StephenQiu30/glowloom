@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func freezeProjectCopyMedia(ctx context.Context, actor identityapp.Principal, owner application.ProjectCopyMediaOwner, binding mediaapp.ProjectCopyBinding, at time.Time, references []uuid.UUID) (mediaapp.ProjectCopySnapshot, error) {

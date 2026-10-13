@@ -9,11 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	scripthttp "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/http"
-	objectsadapter "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
+	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 func recoveryRouter(service *app.SourceRecovery, actor identityapp.Principal) *gin.Engine {

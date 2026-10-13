@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "浮光 · 创作工作台", template: "%s" },
+  title: { default: "织光 · 创作工作台", template: "%s" },
   description: "AI 短剧制作平台",
 };
 

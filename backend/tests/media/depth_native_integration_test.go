@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/videodepth"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/videodepth"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 func depthNativeRunner(t *testing.T) *videodepth.Runner {

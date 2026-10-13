@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // These fields are the actual BeefTV 1ae25027 assets.json version-one contract

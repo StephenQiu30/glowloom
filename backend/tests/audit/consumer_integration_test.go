@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	auditevent "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/event"
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	pginbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestAuditConsumerDeduplicatesAndRollsBack(t *testing.T) {

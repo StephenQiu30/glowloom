@@ -16,8 +16,8 @@ import (
 
 	_ "golang.org/x/image/webp" // Register the accepted WebP image decoder.
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 // ReceiptSource verifies durable identities and reads server-derived object keys.

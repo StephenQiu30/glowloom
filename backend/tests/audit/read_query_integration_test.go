@@ -11,10 +11,10 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgaudit "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/postgres"
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/audit/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestAuditReadRechecksCurrentAdminWithRealPostgres(t *testing.T) {

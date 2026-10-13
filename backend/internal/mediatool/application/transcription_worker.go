@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"time"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // TranscriptionWorker owns speech staging, actual inference and private draft recovery.

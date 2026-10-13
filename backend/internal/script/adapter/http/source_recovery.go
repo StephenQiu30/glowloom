@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 // SourceRecoveryHandler exposes permanent explicit recovery of unpublished writes.

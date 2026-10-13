@@ -1,9 +1,9 @@
 ---
 id: PRD-CANVAS-DEMO
-title: 浮光画布生图生视频Demo
+title: 织光画布生图生视频Demo
 type: prd
 status: unreviewed
-tags: [fuguang, canvas, generation, demo]
+tags: [glowloom, canvas, generation, demo]
 ---
 
 # PRD 06：画布生图生视频 Demo

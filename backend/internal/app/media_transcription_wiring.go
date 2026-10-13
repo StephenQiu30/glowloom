@@ -7,12 +7,12 @@ import (
 
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	pgtool "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/whisper"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/whisper"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 // provideMediaTranscriptionStore retains query and cancel access when native

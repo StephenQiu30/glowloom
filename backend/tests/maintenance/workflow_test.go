@@ -5,8 +5,8 @@ import (
 
 	"go.temporal.io/sdk/testsuite"
 
-	maintenanceflow "github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/application"
+	maintenanceflow "github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
 )
 
 func TestMaintenanceWorkflowsExecuteRegisteredActivities(t *testing.T) {

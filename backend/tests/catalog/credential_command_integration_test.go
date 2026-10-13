@@ -12,15 +12,15 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	pgidentity "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/postgres"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {

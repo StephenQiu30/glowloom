@@ -11,7 +11,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 // HTML preserves supported source-editor semantics and rejects meaningful loss.

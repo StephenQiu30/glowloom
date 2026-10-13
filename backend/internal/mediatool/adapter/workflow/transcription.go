@@ -17,8 +17,8 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 // Speech activity names preserve independent native inference payloads.

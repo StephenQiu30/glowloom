@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 // TranscriptionTopic carries server-issued speech job identities, never URLs.

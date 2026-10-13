@@ -14,15 +14,15 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	cataloghttp "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/http"
-	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	operationhttp "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/http"
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	operationhttp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/http"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 func publicOperationRouter(actor identityapp.Principal, database *gorm.DB) *gin.Engine {

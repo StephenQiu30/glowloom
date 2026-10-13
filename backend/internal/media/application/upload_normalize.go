@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // UploadNormalizer fully decodes an accepted recording into a new canonical file.

@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func canvasReferenceCheck(t *testing.T, db *gorm.DB, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {

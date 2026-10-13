@@ -9,12 +9,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/otelconn"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/otelconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/temporalconn"
 )
 
 func provideTrace(ctx context.Context, cfg config.Config, logger *zap.Logger) (trace.TracerProvider, func(), error) {

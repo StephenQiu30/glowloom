@@ -8,7 +8,7 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 )
 
 // Publisher sends one event and waits for the broker acknowledgement.

@@ -13,10 +13,10 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/adapter/temporal"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/adapter/temporal"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 // Injectors from wire.go:

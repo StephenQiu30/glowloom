@@ -1,9 +1,9 @@
 ---
 id: DES-FUGUANG-06
-title: 浮光画布生图生视频Demo需求设计
+title: 织光画布生图生视频Demo需求设计
 type: design
 status: unreviewed
-tags: [fuguang, design, decomposition]
+tags: [glowloom, design, decomposition]
 ---
 
 # Design 06：画布生图生视频Demo

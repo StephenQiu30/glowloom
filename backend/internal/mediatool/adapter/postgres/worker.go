@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	mediadomain "github.com/StephenQiu30/lanverse/backend/internal/media/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func (s *Store) validateSources(ctx context.Context, tx *gorm.DB, row jobRow) error {

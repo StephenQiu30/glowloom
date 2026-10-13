@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/adapter/extract"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 func TestRichDocumentHTMLPreservesSourceEditingSemantics(t *testing.T) {

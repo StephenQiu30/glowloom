@@ -68,7 +68,7 @@ jobs:
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - run: go install github.com/google/wire/cmd/wire@v0.7.0
       - run: test -z "$(gofmt -l .)"
-      - run: test -z "$(goimports -local github.com/StephenQiu30/lanverse/backend -l .)"
+      - run: test -z "$(goimports -local github.com/StephenQiu30/glowloom-server/backend -l .)"
       - run: go vet ./...
       - run: golangci-lint run ./...
       - name: Install media probe tools
@@ -698,7 +698,7 @@ jobs:
         run: go test -race ./tests/db ./tests/app -run '^TestAuditRestrictedLogin' -count=1 -v
       - run: govulncheck ./...
       - run: wire ./internal/app
-      - run: goimports -local github.com/StephenQiu30/lanverse/backend -w internal/app/wire_gen.go
+      - run: goimports -local github.com/StephenQiu30/glowloom-server/backend -w internal/app/wire_gen.go
       - run: git diff --exit-code -- internal/app/wire_gen.go
       - name: Verify generated source contract and removed public endpoints
         run: go test -race ./tests/app -run '^Test(PublicRouterGeneratedSwaggerContract|PublicRouterRemovedAuthenticationRoutes|PublicRouterRemovedSwaggerRoutes|WorkspaceAPIDoesNotExposeAnonymousAccessOutsideThisHost|PublicSwaggerRejectsContractDrift|PublicSwaggerNormalizesPathParameters|SwaggerRuntimeDefaultsDoNotHideNonEmptyDrift)$' -count=1 -v

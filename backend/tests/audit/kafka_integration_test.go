@@ -12,12 +12,12 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	auditevent "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/event"
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	kafkainbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/kafka"
-	pginbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	auditevent "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/event"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
+	pginbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 type auditHandlerFunc func(context.Context, inbox.Record) error

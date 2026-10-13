@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/paramvalidation"
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 const voiceCatalogSchema = `[{"field":"voice_id","label":"音色","type":"string","component":"voice","enum":["z_voice","a_voice"]},{"field":"speed","label":"语速","type":"number","component":"slider","min":0.5,"max":2,"step":0.1,"default":1},{"field":"emotion","label":"情绪","type":"string","component":"select","enum":["neutral","happy"]}]`

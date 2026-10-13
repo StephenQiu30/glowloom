@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 var domainNow = time.Date(2026, time.September, 28, 9, 0, 0, 0, time.UTC)

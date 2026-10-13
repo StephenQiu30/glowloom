@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 const copyJobColumns = "request_id,id,org_id,actor_id,execution_actor_id,source_project_id,target_project_id,source_revision,revision,attempt,target_name,status,stage,failure_code,worker_id,started_at,manifest,media_receipt,canvas_receipt,script_receipt,bible_receipt,retryable,needs_reconciliation,cancellation_requested,reconciliation_requested,execution_unconfirmed"

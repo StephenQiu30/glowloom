@@ -3,7 +3,7 @@ package workflow
 import (
 	"context"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 )
 
 // Activities adapts the catalog's authorized reads and audited writes to flow.

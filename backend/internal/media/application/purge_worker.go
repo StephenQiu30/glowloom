@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // PurgeWorkerRepository binds every read/receipt to one actual physical fence.

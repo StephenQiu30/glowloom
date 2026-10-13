@@ -8,10 +8,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // FreezeTimeline resolves only same-document nodes and authorized project media.

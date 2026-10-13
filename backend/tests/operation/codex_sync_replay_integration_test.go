@@ -10,7 +10,7 @@ import (
 	temporalworkflow "go.temporal.io/sdk/workflow"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 )
 
 // TestM1SyncWorkflowReplayLegacyTemporalHistories consumes exported fixture

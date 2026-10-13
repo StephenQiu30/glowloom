@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 // ProjectCopyInput freezes a complete source revision behind a durable request key.

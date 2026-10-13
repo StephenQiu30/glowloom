@@ -17,8 +17,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/codex"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 func TestM1CodexImageProtocol(t *testing.T) {

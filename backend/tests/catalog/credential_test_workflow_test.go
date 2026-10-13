@@ -10,8 +10,8 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 
-	catalogflow "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 func TestCredentialTestWorkflowSealsAgentBoundaryAndRecordsOnlySuccess(t *testing.T) {

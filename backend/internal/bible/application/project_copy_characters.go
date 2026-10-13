@@ -3,7 +3,7 @@ package application
 import (
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 )
 
 // CharacterCopyReference preserves a historical identity and optional immutable version pin.

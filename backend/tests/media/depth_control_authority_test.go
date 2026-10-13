@@ -14,12 +14,12 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	toolflow "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/workflow"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	tooldomain "github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func depthControlAdmin(t *testing.T, f *depthHTTPFixture) identityapp.Principal {

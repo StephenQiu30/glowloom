@@ -7,14 +7,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	bibleapp "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	bibledomain "github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/lanverse/backend/internal/media/domain"
-	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 func bibleCopyMediaBinding(b bibleapp.ProjectCopyBinding) mediaapp.ProjectCopyBinding {

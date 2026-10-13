@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	biblehttp "github.com/StephenQiu30/lanverse/backend/internal/bible/adapter/http"
-	app "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	biblehttp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/http"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 func TestBibleHTTPCurrentAuthorityClosedBodyAndPermanentRecovery(t *testing.T) {

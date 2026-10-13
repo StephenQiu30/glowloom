@@ -9,7 +9,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gltf"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
 )
 
 func glbDocument() map[string]any {

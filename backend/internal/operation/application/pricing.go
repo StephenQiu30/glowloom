@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	catalogdomain "github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 var (

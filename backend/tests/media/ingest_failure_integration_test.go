@@ -12,8 +12,8 @@ import (
 
 	"go.temporal.io/sdk/temporal"
 
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func TestMediaIngestRejectsPermanentProviderResults(t *testing.T) {

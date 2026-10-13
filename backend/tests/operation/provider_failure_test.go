@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.temporal.io/sdk/testsuite"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func TestOperationWorkflowNormalizesProviderFailureCode(t *testing.T) {

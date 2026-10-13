@@ -9,16 +9,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	canvaspg "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	canvasdomain "github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	mediadomain "github.com/StephenQiu30/lanverse/backend/internal/media/domain"
-	toolpg "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	tooldomain "github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func transcriptionStore(t *testing.T, db *gorm.DB) *toolpg.TranscriptionStore {

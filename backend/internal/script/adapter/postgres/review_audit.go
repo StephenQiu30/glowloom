@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func reviewAudit(tx *gorm.DB, actor identityapp.Principal, project, key, request uuid.UUID, action string, revision int64, version uuid.UUID, episode *uuid.UUID, now time.Time) error {

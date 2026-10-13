@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/prompt/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 var errUnavailable = errors.New("prompt preference storage unavailable")

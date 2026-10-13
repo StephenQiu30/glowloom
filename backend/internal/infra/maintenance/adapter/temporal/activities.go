@@ -6,7 +6,7 @@ import (
 
 	"go.temporal.io/sdk/activity"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
 )
 
 // Activities adapts maintenance use cases to the Temporal flow queue.

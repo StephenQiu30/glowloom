@@ -10,8 +10,8 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgoutbox "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestDropEmptyPastPartitionsPreservesUnpublishedEvents(t *testing.T) {

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 // Config contains operator-owned offline runtime locations, never browser input.

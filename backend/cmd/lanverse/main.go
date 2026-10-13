@@ -15,11 +15,11 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/term"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	lvlog "github.com/StephenQiu30/lanverse/backend/internal/platform/log"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	lvlog "github.com/StephenQiu30/glowloom-server/backend/internal/platform/log"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
 
 func main() {

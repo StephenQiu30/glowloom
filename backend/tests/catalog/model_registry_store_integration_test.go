@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/pricevalidation"
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testing.T) {

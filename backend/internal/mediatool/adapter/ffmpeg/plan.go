@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	canvasdomain "github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 type segment struct {

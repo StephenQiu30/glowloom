@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/maintenance/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/maintenance/application"
 )
 
 type outboxStore struct {

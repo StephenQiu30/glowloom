@@ -7,9 +7,9 @@ import (
 
 	"gorm.io/gorm"
 
-	pgaudit "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
 // ProcessedStore owns a transaction joining deduplication and the audit effect.

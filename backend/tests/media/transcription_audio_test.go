@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	toolff "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/ffmpeg"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	toolff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 func TestTranscriptionPreprocessActualPCMAndRejectSilentVideo(t *testing.T) {

@@ -11,14 +11,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/lanverse/backend/internal/billing/application"
-	billingdomain "github.com/StephenQiu30/lanverse/backend/internal/billing/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // ConfirmBatchQuote confirms only the still valid, selected children. The first

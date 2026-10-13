@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // FFUploadNormalizer fully decodes one silent VP8/VP9 WebM recording to H264

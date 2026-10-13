@@ -14,7 +14,7 @@ import (
 	"os"
 	"testing"
 
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
 )
 
 type fixedResolver struct{ addresses []net.IPAddr }

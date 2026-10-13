@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	pgaudit "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/audit/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestAuditStoreScopesAndPagesRecords(t *testing.T) {

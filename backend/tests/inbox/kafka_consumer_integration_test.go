@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	kafkainbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/kafka"
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
 type recordHandler func(context.Context, application.Record) error

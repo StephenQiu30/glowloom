@@ -13,13 +13,13 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	platformdb "github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	pg "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func scriptTestDB(t *testing.T) (*gorm.DB, *gorm.DB) {

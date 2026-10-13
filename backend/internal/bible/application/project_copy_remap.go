@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 )
 
 func copySHA(data []byte) string       { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }

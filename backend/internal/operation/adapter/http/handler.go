@@ -13,13 +13,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	billingdomain "github.com/StephenQiu30/lanverse/backend/internal/billing/domain"
-	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 )
 
 // Dependencies are the commands and queries consumed by the public workbench.

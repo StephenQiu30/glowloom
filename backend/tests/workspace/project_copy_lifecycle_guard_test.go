@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func TestProjectLifecyclePreparationBlocksCopyDuringRecovery(t *testing.T) {

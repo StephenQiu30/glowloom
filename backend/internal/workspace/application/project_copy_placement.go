@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 // CopyPlacementExpectation is an optional complete CAS of the source's personal classification.

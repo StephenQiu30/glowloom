@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 const maxNativeLog = 64 << 10

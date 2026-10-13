@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 // Preprocessor prepares an owned CFR original before native temporal inference.

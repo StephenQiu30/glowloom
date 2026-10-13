@@ -1,9 +1,9 @@
 ---
 id: PLAN-CANVAS-DEMO
-title: 浮光画布生图生视频Demo执行计划
+title: 织光画布生图生视频Demo执行计划
 type: plan
 status: unreviewed
-tags: [fuguang, canvas, generation, demo]
+tags: [glowloom, canvas, generation, demo]
 ---
 
 # Plan 06：画布生图生视频 Demo
@@ -189,7 +189,7 @@ M5通过后，按总Plan的M6～M9补齐基础管理、剧本设定、镜头故�
 
 ### T00-04：生成合同门禁修复与验证
 
-Red证据：[cc4cfdbc远端CI](https://github.com/StephenQiu30/lanverse/actions/runs/37806397347)比较未跟踪的backend/docs失败。运行后端与容器不再依赖该目录，在线Swagger及旧auth路由已有删除契约；不能恢复旧产物或接口来掩盖失败。
+Red证据：[cc4cfdbc远端CI](https://github.com/StephenQiu30/glowloom-server/actions/runs/37806397347)比较未跟踪的backend/docs失败。运行后端与容器不再依赖该目录，在线Swagger及旧auth路由已有删除契约；不能恢复旧产物或接口来掩盖失败。
 
 Green改动：[public_contract_test.go](../../backend/tests/app/public_contract_test.go)新增TestPublicRouterGeneratedSwaggerContract，使用模块固定版本swag从当前Handler注解生成内存规范，与NewBusinessRouter实际/api路由双向核对，并检查operationID。现有负例验证新增/缺失路由、内部接口及参数规范化能被检测。[ci.yml](../../.github/workflows/ci.yml)移除失效目录比较，执行实际存在的生成合同及已删除公开接口安全检查。生成物不落盘，不修改依赖，不恢复在线Swagger。它验证当前源码合同，不证明Design中候选API已接通；未来新Handler/DTO仍按swag→openapi2ts生成。
 

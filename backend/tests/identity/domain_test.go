@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 func TestPasswordPolicyAndHash(t *testing.T) {

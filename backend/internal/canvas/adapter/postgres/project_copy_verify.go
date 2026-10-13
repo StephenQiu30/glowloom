@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 func copyDocumentValue(document domain.Document) (any, error) {

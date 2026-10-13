@@ -15,10 +15,10 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	exportff "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/ffmpeg"
-	exportdomain "github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	exportff "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/ffmpeg"
+	exportdomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func TestExportCaptionPixelsPreserveChineseStyleOutlineAndBackground(t *testing.T) {

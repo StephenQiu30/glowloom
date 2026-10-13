@@ -10,8 +10,8 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pgaudit "github.com/StephenQiu30/lanverse/backend/internal/audit/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	pgaudit "github.com/StephenQiu30/glowloom-server/backend/internal/audit/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func TestAuditEnsurePartitionsMovesDefaultRowsWithoutChangingRecords(t *testing.T) {

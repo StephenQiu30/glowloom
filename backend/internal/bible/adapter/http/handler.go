@@ -10,12 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
-	identityhttp "github.com/StephenQiu30/lanverse/backend/internal/identity/adapter/http"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	workspacedomain "github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 // Handler injects the formal Bible use case; it neither creates seeds nor executes providers.

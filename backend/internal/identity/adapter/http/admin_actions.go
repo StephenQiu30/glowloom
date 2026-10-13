@@ -3,8 +3,8 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 // AdminRevisionRequest identifies the exact account state the administrator reviewed.

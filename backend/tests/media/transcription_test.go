@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tooldomain "github.com/StephenQiu30/lanverse/backend/internal/mediatool/domain"
+	tooldomain "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
 func TestTranscriptionDraftValidatesAndPreservesExactSRT(t *testing.T) {

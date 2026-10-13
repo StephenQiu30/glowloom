@@ -3,12 +3,12 @@ package app
 import (
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	pgtool "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 // provideMediaExportStore binds source authorization and media publication to

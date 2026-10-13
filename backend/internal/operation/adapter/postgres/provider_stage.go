@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 // ProviderReceipt reads the immutable evidence of exactly one scoped submit.

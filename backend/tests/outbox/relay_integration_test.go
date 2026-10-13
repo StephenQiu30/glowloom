@@ -12,11 +12,11 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	kafkaoutbox "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/adapter/kafka"
-	pgoutbox "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/kafkaconn"
+	kafkaoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/kafka"
+	pgoutbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
 )
 
 func TestOutboxRelayWithHostPostgresAndKafka(t *testing.T) {

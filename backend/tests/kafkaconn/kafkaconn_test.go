@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/kafkaconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/kafkaconn"
 )
 
 func TestOpenRejectsMissingBrokers(t *testing.T) {

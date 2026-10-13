@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 func TestBrowserOriginIsExactAndLocalHTTPIsLoopbackOnly(t *testing.T) {

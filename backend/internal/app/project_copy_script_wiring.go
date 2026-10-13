@@ -8,14 +8,14 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
-	scriptobjects "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	pgscript "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 type projectCopyScriptAccess struct {

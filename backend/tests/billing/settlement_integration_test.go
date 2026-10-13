@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/lanverse/backend/internal/billing/application"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 )
 
 func settlementFixture(t *testing.T, database *gorm.DB, limit, reserved int64) billingapp.SettleInput {

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/temporal"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 // ProviderImageIdentityReader reads the latest explicitly gated frozen call.

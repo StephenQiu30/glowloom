@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 // ErrInvalidDepthInput and the remaining errors preserve native failure classes.

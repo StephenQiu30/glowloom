@@ -11,15 +11,15 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	toolpg "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
-	operationpg "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	platformdb "github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	toolpg "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func folderTestDB(t *testing.T) (context.Context, *gorm.DB, *gorm.DB) {

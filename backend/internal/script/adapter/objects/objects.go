@@ -8,8 +8,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 // Storage uses the configured private bucket; keys come only from frozen plans.

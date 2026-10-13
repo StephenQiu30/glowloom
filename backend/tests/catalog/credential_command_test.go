@@ -10,14 +10,14 @@ import (
 
 	"github.com/google/uuid"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/credentialschema"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/credentialseal"
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
 type credentialCommandStore struct {

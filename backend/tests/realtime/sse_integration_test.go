@@ -17,10 +17,10 @@ import (
 	redisclient "github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	redisrealtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/redis"
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/sse"
-	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
+	redisrealtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/redis"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/sse"
+	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
 
 func TestProjectSSERequiresAuthorizer(t *testing.T) {

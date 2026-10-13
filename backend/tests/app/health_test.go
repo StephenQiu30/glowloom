@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
 )
 
 func TestRoleHealthStopsWithItsRole(t *testing.T) {

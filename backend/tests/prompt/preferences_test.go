@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/prompt/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 func TestPromptCustomizationContracts(t *testing.T) {

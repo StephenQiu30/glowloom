@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 func TestCanvasSplitBatchesShareSavedConcurrencyAndReleaseOnlySettledSlots(t *testing.T) {

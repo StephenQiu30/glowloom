@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	whisper "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/whisper"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	whisper "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/whisper"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 func transcriptionPCM(t *testing.T) *mediaapp.Downloaded {

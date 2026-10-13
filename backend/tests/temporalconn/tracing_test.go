@@ -17,8 +17,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/otelconn"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/temporalconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/otelconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/temporalconn"
 )
 
 func TestQueryWorkflowKeepsParentTrace(t *testing.T) {

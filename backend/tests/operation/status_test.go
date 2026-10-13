@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 func TestStatusTransitionPaths(t *testing.T) {

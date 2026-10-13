@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 // RemapLookScopes plans complete historical formal identities under trusted caller-owned admission SQL.

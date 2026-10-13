@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 )
 
 const sourceColumns = `id,org_id,project_id,source_lineage_id AS lineage_id,previous_source_id AS previous_id,source_revision AS revision,origin,source_kind AS kind,title,status,rights_actor_id,rights_confirmed_at,media_asset_id,media_revision,media_sha256,original_key,original_sha256,original_bytes,original_mime,rich_key,rich_sha256,rich_bytes,content_hash,char_count,provenance::text AS provenance,created_at`

@@ -15,11 +15,11 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/codex"
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/staging"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func freezeReceiptFixtureModel(t *testing.T, database *gorm.DB, identity application.ProviderDispatchIdentity) {

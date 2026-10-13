@@ -10,7 +10,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
 )
 
 // Store keeps a row locked until its broker publication is acknowledged.

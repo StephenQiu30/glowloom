@@ -11,13 +11,13 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
-	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/codex"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/staging"
-	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // The SDK test environment runs actual PostgreSQL/MinIO Activities and a fake

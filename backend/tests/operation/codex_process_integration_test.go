@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/codex"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/codex"
 )
 
 // TestCodexProcessHandshake verifies the installed transport without opening a

@@ -5,14 +5,14 @@ import (
 
 	"gorm.io/gorm"
 
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
-	scriptextract "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/extract"
-	scriptobjects "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	pgscript "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	pgworkspace "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	scriptextract "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func provideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {

@@ -15,12 +15,12 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
-	inboxpg "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
-	inboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	scriptevent "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/event"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/adapter/extract"
-	scriptflow "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/workflow"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
+	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
+	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	scriptevent "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/event"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
+	scriptflow "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/workflow"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 type isolatedImportClient struct {

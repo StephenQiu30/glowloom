@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
 
 func TestOpenRejectsMissingURL(t *testing.T) {

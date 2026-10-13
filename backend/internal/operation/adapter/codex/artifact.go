@@ -14,7 +14,7 @@ import (
 
 	_ "golang.org/x/image/webp" // Register the accepted WebP image decoder.
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 const maxImageBytes = 32 * 1024 * 1024

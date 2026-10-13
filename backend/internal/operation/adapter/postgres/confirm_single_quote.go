@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	pgbilling "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
-	billingapp "github.com/StephenQiu30/lanverse/backend/internal/billing/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // QuoteStaleError carries the ordered reasons observed while the quote is locked.

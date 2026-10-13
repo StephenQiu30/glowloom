@@ -8,9 +8,9 @@ import (
 
 	"go.uber.org/zap"
 
-	kafkainbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/kafka"
-	outboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/outbox/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
+	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
+	outboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/outbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 )
 
 const (

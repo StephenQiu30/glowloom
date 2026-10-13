@@ -9,7 +9,7 @@ import (
 
 	redisclient "github.com/redis/go-redis/v9"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
 )
 
 const (

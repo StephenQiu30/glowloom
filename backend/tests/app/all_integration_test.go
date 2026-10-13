@@ -14,12 +14,12 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/app"
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/adapter/sse"
-	realtime "github.com/StephenQiu30/lanverse/backend/internal/infra/realtime/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/redisconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/adapter/sse"
+	realtime "github.com/StephenQiu30/glowloom-server/backend/internal/infra/realtime/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/redisconn"
 )
 
 func TestAllRoleRunsAndStopsOnLocalServices(t *testing.T) {

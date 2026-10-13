@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 )
 
 func workspaceMigrationDB(t *testing.T) (context.Context, *gorm.DB) {

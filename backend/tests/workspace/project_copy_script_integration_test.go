@@ -11,17 +11,17 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingpg "github.com/StephenQiu30/lanverse/backend/internal/billing/adapter/postgres"
-	canvaspg "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	workspacehttp "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/http"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	billingpg "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
+	canvaspg "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 // This contract fixture tests actual coordinator SQL/fences, not script content ownership.

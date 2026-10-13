@@ -13,11 +13,11 @@ import (
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 
-	inboxpg "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/adapter/postgres"
-	inboxapp "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
-	toolevent "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/event"
-	toolflow "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/workflow"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	inboxpg "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
+	inboxapp "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	toolevent "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/event"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 type depthDeliveryRecorder struct {

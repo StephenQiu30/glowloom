@@ -9,7 +9,7 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
 // ErrInvalidConsumer means the group, topics, brokers, or handler is missing.

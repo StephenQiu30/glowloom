@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	canvasdomain "github.com/StephenQiu30/lanverse/backend/internal/canvas/domain"
+	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 )
 
 // Status is a durable local export lifecycle, including explicit output review.

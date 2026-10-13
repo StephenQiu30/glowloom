@@ -16,16 +16,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/credentialschema"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/credentialseal"
-	cataloghttp "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/http"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/pricevalidation"
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
 func adminCatalogRouter(t *testing.T, database *gorm.DB, actor identityapp.Principal) *gin.Engine {

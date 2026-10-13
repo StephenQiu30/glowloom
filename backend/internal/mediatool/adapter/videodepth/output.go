@@ -7,7 +7,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 // VerifyCanonicalOutput checks the fixed profile's actual MP4 stream/container.

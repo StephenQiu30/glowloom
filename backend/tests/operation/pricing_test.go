@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	catalogdomain "github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 func pricingRule(unit catalogdomain.PriceUnit, rule, currency, fx string) catalogdomain.PriceRuleVersion {

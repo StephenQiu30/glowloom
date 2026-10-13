@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/lanverse/backend/internal/identity/domain"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 type listProvidersStore struct {

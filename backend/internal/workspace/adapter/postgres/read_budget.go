@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	billingdomain "github.com/StephenQiu30/lanverse/backend/internal/billing/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
+	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // FindBudget requires a project ID and checks ownership through the project.

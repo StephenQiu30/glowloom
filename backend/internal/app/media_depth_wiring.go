@@ -5,17 +5,17 @@ import (
 
 	"gorm.io/gorm"
 
-	pgcanvas "github.com/StephenQiu30/lanverse/backend/internal/canvas/adapter/postgres"
-	canvasapp "github.com/StephenQiu30/lanverse/backend/internal/canvas/application"
-	pgmedia "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	pgtool "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/postgres"
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/videodepth"
-	toolflow "github.com/StephenQiu30/lanverse/backend/internal/mediatool/adapter/workflow"
-	toolapp "github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/config"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	pgcanvas "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/postgres"
+	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
+	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	pgtool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/videodepth"
+	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
+	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 func provideMediaToolSource(tx *gorm.DB) toolapp.TranscriptionSourceReader {

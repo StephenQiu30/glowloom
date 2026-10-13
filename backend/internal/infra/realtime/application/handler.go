@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	inbox "github.com/StephenQiu30/lanverse/backend/internal/infra/inbox/application"
+	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 )
 
 // Handler routes supported Kafka topics to their project-scoped projections.

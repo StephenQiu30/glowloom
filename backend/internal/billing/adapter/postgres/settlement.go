@@ -13,8 +13,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/billing/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/billing/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	collectorpb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/otelconn"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/otelconn"
 )
 
 func TestOpenRejectsInvalidEndpoint(t *testing.T) {

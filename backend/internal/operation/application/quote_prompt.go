@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
-	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 )
 
 // QuotePromptCompiler consumes current authorized facts in the quote transaction.

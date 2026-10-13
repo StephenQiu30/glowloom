@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/pricevalidation"
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 func TestPriceRuleValidatorChecksBillableRuleShape(t *testing.T) {

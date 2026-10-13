@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/credentialschema"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialschema"
 )
 
 func TestCredentialSchemaRequiresOnlyDeclaredStringFields(t *testing.T) {

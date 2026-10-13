@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/postgres"
-	catalogapp "github.com/StephenQiu30/lanverse/backend/internal/catalog/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
+	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 )
 
 func insertVoiceCatalogCapability(ctx context.Context, t *testing.T, database *gorm.DB) {

@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/adapter/extract"
-	scripthttp "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/http"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
+	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 func TestScriptFileImportHTTPActualAdmissionRefreshPartialRetryAndControls(t *testing.T) {

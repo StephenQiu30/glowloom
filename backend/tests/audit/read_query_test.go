@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	auditapp "github.com/StephenQiu30/lanverse/backend/internal/audit/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/audit/domain"
+	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
 )
 
 type readStoreStub struct {

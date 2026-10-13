@@ -14,16 +14,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaflow "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/workflow"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
-	"github.com/StephenQiu30/lanverse/backend/internal/script/adapter/extract"
-	objectsadapter "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	pg "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	app "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaflow "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/workflow"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
+	objectsadapter "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func scriptDocument(t *testing.T, db *gorm.DB, objects *objectstorage.Client, actor identityapp.Principal, project uuid.UUID, name string, data []byte) uuid.UUID {

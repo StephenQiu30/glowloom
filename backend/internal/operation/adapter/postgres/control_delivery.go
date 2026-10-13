@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
 // CanDeliverWorkflowControl verifies the event's committed receipt and live target.

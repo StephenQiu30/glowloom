@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/script/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 )
 
 func copyInsert(tx *gorm.DB, table string, row map[string]any) error {

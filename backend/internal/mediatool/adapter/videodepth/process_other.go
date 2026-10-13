@@ -6,7 +6,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/mediatool/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 )
 
 // Unverified native process-tree platforms stay explicitly unavailable.

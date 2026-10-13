@@ -3,7 +3,7 @@ package workflow
 import (
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 func (c *providerCalls) submitImage(providerCtx workflow.Context, input ProviderSubmitInput) (ProviderSubmitOutput, error) {

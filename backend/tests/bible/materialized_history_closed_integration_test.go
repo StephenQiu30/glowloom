@@ -13,16 +13,16 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/lanverse/backend/internal/bible/adapter/postgres"
-	app "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	mediapg "github.com/StephenQiu30/lanverse/backend/internal/media/adapter/postgres"
-	mediaapp "github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	platformdb "github.com/StephenQiu30/lanverse/backend/internal/platform/db"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
-	scriptpg "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	mediapg "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	platformdb "github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
+	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func bibleClosedHistoryDB(t *testing.T) (*gorm.DB, *gorm.DB) {

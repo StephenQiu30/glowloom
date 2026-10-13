@@ -4,7 +4,7 @@ export default function LicensesPage() {
     <main className="min-h-svh p-6 md:p-10">
       <div className="max-w-2xl space-y-6">
         <Link href="/" className="text-sm text-muted-foreground">
-          返回浮光首页
+          返回织光首页
         </Link>
         <h1 className="text-2xl font-medium">第三方许可</h1>
         <p className="leading-7 text-muted-foreground">

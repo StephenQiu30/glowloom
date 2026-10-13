@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/paramvalidation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
 )
 
 func TestModelVersionValidatorUsesSharedParamSchemaCases(t *testing.T) {

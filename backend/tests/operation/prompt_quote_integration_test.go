@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	pgoperation "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/postgres"
-	operationapp "github.com/StephenQiu30/lanverse/backend/internal/operation/application"
-	pgprompt "github.com/StephenQiu30/lanverse/backend/internal/prompt/adapter/postgres"
-	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
-	promptdomain "github.com/StephenQiu30/lanverse/backend/internal/prompt/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
+	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 func templateQuoteStore(database *gorm.DB) *pgoperation.Store {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
 )
 
 func historyClone(h CopyHistory) (CopyHistory, error) {

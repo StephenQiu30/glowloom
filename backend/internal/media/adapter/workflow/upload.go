@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/animation"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/document"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/adapter/gltf"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/media/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/objectstorage"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/animation"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/document"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/gltf"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
 // FFUploadProber exposes malformed input as a stable upload validation error.

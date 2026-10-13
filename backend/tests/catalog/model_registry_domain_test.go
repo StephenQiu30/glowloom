@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
 func validModelProfile() domain.ModelProfile {

@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	catalogdomain "github.com/StephenQiu30/lanverse/backend/internal/catalog/domain"
-	"github.com/StephenQiu30/lanverse/backend/internal/operation/application"
+	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 type providerCallRow struct {

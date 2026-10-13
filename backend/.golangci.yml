@@ -19,4 +19,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/StephenQiu30/lanverse/backend
+        - github.com/StephenQiu30/glowloom-server/backend

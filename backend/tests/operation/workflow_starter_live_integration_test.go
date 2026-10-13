@@ -10,7 +10,7 @@ import (
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 
-	operationflow "github.com/StephenQiu30/lanverse/backend/internal/operation/adapter/workflow"
+	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 )
 
 func TestOperationStarterKeepsOneWorkflowOnLocalTemporal(t *testing.T) {

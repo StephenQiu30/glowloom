@@ -9,16 +9,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pg "github.com/StephenQiu30/lanverse/backend/internal/bible/adapter/postgres"
-	app "github.com/StephenQiu30/lanverse/backend/internal/bible/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/bible/domain"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	scriptobjects "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/objects"
-	scriptpg "github.com/StephenQiu30/lanverse/backend/internal/script/adapter/postgres"
-	scriptapp "github.com/StephenQiu30/lanverse/backend/internal/script/application"
-	scriptdomain "github.com/StephenQiu30/lanverse/backend/internal/script/domain"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
+	pg "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
+	app "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
+	scriptpg "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
+	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
+	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 type bibleScriptCopyAccess struct {

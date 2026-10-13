@@ -19,17 +19,17 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	cataloghttp "github.com/StephenQiu30/lanverse/backend/internal/catalog/adapter/http"
-	identityapp "github.com/StephenQiu30/lanverse/backend/internal/identity/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/platform/httpapi"
-	prompthttp "github.com/StephenQiu30/lanverse/backend/internal/prompt/adapter/http"
-	promptpg "github.com/StephenQiu30/lanverse/backend/internal/prompt/adapter/postgres"
-	promptapp "github.com/StephenQiu30/lanverse/backend/internal/prompt/application"
-	"github.com/StephenQiu30/lanverse/backend/internal/prompt/domain"
-	workspacehttp "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/http"
-	workspacepg "github.com/StephenQiu30/lanverse/backend/internal/workspace/adapter/postgres"
-	workspaceapp "github.com/StephenQiu30/lanverse/backend/internal/workspace/application"
-	workspacedomain "github.com/StephenQiu30/lanverse/backend/internal/workspace/domain"
+	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	prompthttp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/http"
+	promptpg "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
+	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
+	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
+	workspacepg "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 type preferenceFixture struct {
