@@ -111,8 +111,8 @@ func TestProjectFolderPGPlacementPaginationAndDurableIdentity(t *testing.T) {
 		t.Fatalf("root page %+v %v", page, err)
 	}
 	page, err = query.Execute(ctx, other, workspaceapp.ListProjectsInput{FolderID: &root, Limit: 50})
-	if err != nil || len(page.Projects) != 3 {
-		t.Fatalf("personal placements leaked %+v %v", page, err)
+	if err != nil || len(page.Projects) != 0 {
+		t.Fatalf("another owner's projects leaked %+v %v", page, err)
 	}
 	if _, err = query.Execute(ctx, other, workspaceapp.ListProjectsInput{FolderID: &f.ID, Limit: 50}); !errors.Is(err, domain.ErrProjectFolderNotFound) {
 		t.Fatalf("other directory %v", err)

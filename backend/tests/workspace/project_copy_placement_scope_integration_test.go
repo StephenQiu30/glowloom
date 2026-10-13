@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
@@ -24,7 +26,16 @@ func TestProjectCopyPlacementPGCurrentActorPrivateScopeAndRevocation(t *testing.
 	if _, err := service.Create(ctx, other, foreignPlacement); !errors.Is(err, domain.ErrProjectFolderRevisionConflict) {
 		t.Fatalf("another actor's folder bound to copy %v", err)
 	}
-	input := copyInput(source)
+	if _, err := service.Create(ctx, other, copyInput(source)); err == nil {
+		t.Fatal("another owner's project copied")
+	}
+	var unauthorizedJobs int64
+	if err := db.Raw(`SELECT count(*) FROM workspace.project_copy_job WHERE actor_id=?`, other.ID).Scan(&unauthorizedJobs).Error; err != nil || unauthorizedJobs != 0 {
+		t.Fatalf("rejected cross-owner copy left jobs %d %v", unauthorizedJobs, err)
+	}
+	otherSource := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))
+	lifecycleFixtureSQL(t, owner, `UPDATE workspace.project SET owner_id=? WHERE id=?`, other.ID, otherSource)
+	input := copyInput(otherSource)
 	job, err := service.Create(ctx, other, input)
 	if err != nil {
 		t.Fatal(err)
