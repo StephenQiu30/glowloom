@@ -226,3 +226,33 @@ it("生成、主体与管理员接口保持封闭路径和查询范围", async (
     ).status,
   ).toBe(404);
 });
+
+it.each(["GET", "POST"])(
+  "项目画布集合支持 %s 且拒绝无效项目标识",
+  async (method) => {
+    const fetcher = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(new Response("{}")));
+    vi.stubGlobal("fetch", fetcher);
+    const path = "projects/00000000-0000-4000-8000-000000000001/canvases";
+    const handler = method === "GET" ? GET : POST;
+    const response = await handler(
+      new Request(`http://localhost/api/${path}`, { method }),
+      context(path),
+    );
+    expect(response.status).toBe(200);
+    expect(fetcher.mock.calls[0][0].pathname).toBe(`/api/${path}`);
+    expect(fetcher.mock.calls[0][1].method).toBe(method);
+    fetcher.mockClear();
+    const invalid = "projects/wrong/canvases";
+    expect(
+      (
+        await handler(
+          new Request(`http://localhost/api/${invalid}`, { method }),
+          context(invalid),
+        )
+      ).status,
+    ).toBe(404);
+    expect(fetcher).not.toHaveBeenCalled();
+  },
+);

@@ -63,6 +63,7 @@ async function proxy(
   const methods =
     flowMethods ??
     resources[resource] ??
+    (matches(`projects/${uuid}/canvases`) ? ["GET", "POST"] : undefined) ??
     (/^media\/library\/items\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/(preview|download))?$/i.test(
       resource,
     )
