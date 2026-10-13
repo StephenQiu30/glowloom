@@ -86,6 +86,9 @@ func TestProjectFolderPGPlacementPaginationAndDurableIdentity(t *testing.T) {
 	actor := insertWorkspaceActor(ctx, t, owner, insertWorkspaceOrganization(ctx, t, owner))
 	other := insertWorkspaceActor(ctx, t, owner, actor.OrgID.String())
 	ids := []uuid.UUID{uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil)), uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil)), uuid.MustParse(insertWorkspaceProject(ctx, t, owner, actor.OrgID.String(), "16:9", "realistic", nil))}
+	for _, id := range ids {
+		lifecycleFixtureSQL(t, owner, `UPDATE workspace.project SET owner_id=? WHERE id=?`, actor.ID, id)
+	}
 	service := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
 	f := createTestFolder(ctx, t, service, actor, "可重名目录")
 	same := createTestFolder(ctx, t, service, actor, "可重名目录")
