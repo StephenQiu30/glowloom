@@ -224,12 +224,9 @@ function Shell({
                 </div>
               </>
             ) : (
-              <>
-                <span className="guest-label">游客模式</span>
-                <Button size="lg" onClick={() => setAuth(true)}>
-                  登录 / 注册
-                </Button>
-              </>
+              <Button size="lg" onClick={() => setAuth(true)}>
+                登录 / 注册
+              </Button>
             )}
           </div>
         </header>

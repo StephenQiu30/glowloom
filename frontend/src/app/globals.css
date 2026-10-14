@@ -393,11 +393,6 @@ button:not(:disabled),
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-.guest-label {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  margin-right: 40px;
-}
 .account-controls > button {
   min-width: 96px;
 }
@@ -840,8 +835,7 @@ button:not(:disabled),
     display: none;
   }
   .account-controls > button,
-  .account-cluster > button:not([aria-label="账号菜单"]),
-  .guest-label {
+  .account-cluster > button:not([aria-label="账号菜单"]) {
     display: none;
   }
   .account-controls {

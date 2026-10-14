@@ -9,12 +9,12 @@ export function BrandMark({ monochrome = false }: { monochrome?: boolean }) {
         data-monochrome={monochrome}
       >
         <path
-          className="brand-warp"
-          d="M16 2L30 16L25 21L21 17L22 16L16 10L13 13L9 9L16 2Z"
+          fill="currentColor"
+          d="M16 2L30 16L24 22L18 16L16 18L22 24L16 30L2 16L8 10L14 16L16 14L10 8Z"
         />
         <path
-          fill="currentColor"
-          d="M16 30L2 16L7 11L11 15L10 16L16 22L19 19L23 23L16 30Z"
+          className="brand-warp"
+          d="M16 2L30 16L24 22L18 16L16 18L14 16L16 14L10 8Z"
         />
       </svg>
     </span>
