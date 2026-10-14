@@ -2,7 +2,7 @@
 
 import { useRef, useState, type RefObject } from "react";
 import { X } from "lucide-react";
-import { BrandMark } from "@/components/layout/brand";
+import { BrandMark } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

@@ -17,7 +17,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { BrandMark } from "./brand";
+import { BrandMark } from "@/components/brand/brand";
 import { useOptionalSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription } from "@/components/ui/empty";

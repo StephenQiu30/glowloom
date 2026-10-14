@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowUpRight, Search } from "lucide-react";
 import { cn } from "cn";
-import { BrandMark } from "@/components/layout/brand";
+import { BrandMark } from "@/components/brand/brand";
 import { Button } from "@/components/ui/button";
 import {
   Card,

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Brand } from "@/components/layout/brand";
+import { Brand } from "@/components/brand/brand";
 import {
   changePassword,
   createSession,

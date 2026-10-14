@@ -21,7 +21,7 @@ import {
   Shield,
   UserRound,
 } from "lucide-react";
-import { Brand } from "./brand";
+import { Brand } from "@/components/brand/brand";
 import {
   SessionGate,
   useOptionalSession,

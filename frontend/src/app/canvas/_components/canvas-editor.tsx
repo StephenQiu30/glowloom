@@ -12,7 +12,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Check, CircleAlert, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Brand } from "@/components/layout/brand";
+import { Brand } from "@/components/brand/brand";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Empty,
