@@ -3,5 +3,4 @@
 !go.sum
 !cmd/
 !internal/
-!docker/
 **/*_test.go

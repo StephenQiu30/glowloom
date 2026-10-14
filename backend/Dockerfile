@@ -3,13 +3,28 @@ FROM golang:1.26.9-bookworm AS dev
 ENV CGO_ENABLED=0 GOMAXPROCS=2
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl socat \
     && rm -rf /var/lib/apt/lists/*
-RUN go install github.com/air-verse/air@v1.67.4
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -p 2 -o /tmp/lanverse-air/lanverse ./cmd/lanverse
-ENTRYPOINT ["sh", "/src/docker/dev-entrypoint.sh"]
+RUN go build -p 2 -o /usr/local/bin/lanverse ./cmd/lanverse
+# Keep the development-only loopback bridges when starting the compiled binary.
+# The entrypoint lives outside /src, which Compose mounts read-only.
+COPY --chmod=755 <<'ENTRYPOINT' /usr/local/bin/glowloom-dev-entrypoint
+#!/bin/sh
+set -eu
+for port in ${LV_HOST_SERVICE_PORTS:-5432 6379 7233 9000 9092}; do
+  case "$port" in
+    ''|*[!0-9]*) echo "Invalid host service port" >&2; exit 1 ;;
+  esac
+  socat "TCP-LISTEN:$port,bind=127.0.0.1,reuseaddr,fork" "TCP:host.docker.internal:$port" &
+done
+if [ "${LV_DEV_API_PROXY:-false}" = "true" ]; then
+  socat TCP-LISTEN:18080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:8080 &
+fi
+exec /usr/local/bin/lanverse "$@"
+ENTRYPOINT
+ENTRYPOINT ["/usr/local/bin/glowloom-dev-entrypoint"]
 CMD ["--role=api"]
 
 FROM golang:1.26.9-alpine AS build
