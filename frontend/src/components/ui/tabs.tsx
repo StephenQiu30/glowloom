@@ -31,6 +31,7 @@ const tabsListVariants = cva(
         default: "bg-muted",
         line: "gap-1 bg-transparent",
         navigation: "gap-2 bg-transparent p-0",
+        auth: "w-full gap-1 bg-muted p-1 group-data-horizontal/tabs:h-11",
       },
     },
     defaultVariants: {
@@ -67,6 +68,7 @@ function TabsTrigger({
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
         "data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground",
         "group-data-[variant=navigation]/tabs-list:px-4 group-data-[variant=navigation]/tabs-list:font-normal group-data-[variant=navigation]/tabs-list:data-active:border-transparent group-data-[variant=navigation]/tabs-list:data-active:bg-secondary",
+        "group-data-[variant=auth]/tabs-list:h-9 group-data-[variant=auth]/tabs-list:rounded-lg group-data-[variant=auth]/tabs-list:border-0 group-data-[variant=auth]/tabs-list:text-foreground group-data-[variant=auth]/tabs-list:data-active:bg-primary group-data-[variant=auth]/tabs-list:data-active:text-primary-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
         className,
       )}

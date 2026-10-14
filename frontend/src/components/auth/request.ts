@@ -26,6 +26,9 @@ export function authErrorMessage(code: string) {
     session_invalid: "登录已失效，请重新登录。",
     forbidden: "当前账号无权执行此操作。",
     invalid_receipt: "服务端回执不完整，结果未确认，请刷新或重新登录。",
+    dependency_unavailable:
+      "登录服务暂时不可用，请稍后重试。你仍可继续浏览灵感。",
+    request_unconfirmed: "暂时无法连接，请求结果未确认，请检查网络后重试。",
   };
   return messages[code] ?? "请求结果未确认，请稍后重试或重新登录。";
 }

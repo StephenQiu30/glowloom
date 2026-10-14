@@ -113,6 +113,7 @@ it("注册失败保留输入且不进入工作台", async () => {
   expect((screen.getByLabelText("登录名") as HTMLInputElement).value).toBe(
     "alice",
   );
+  expect(document.activeElement).toBe(screen.getByLabelText("登录名"));
 });
 it("注册等待真实回执，只有有效会话可以进入工作台", async () => {
   const session = {
@@ -220,4 +221,76 @@ it("受限改密使用会话版本，失败保留表单，成功后才继续", a
   ).toBe("NextPassword123");
   fireEvent.click(screen.getByRole("button", { name: "保存并继续" }));
   await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/"));
+});
+
+it("空登录表单给出字段错误并将焦点放在首个无效输入，不发送请求", () => {
+  const request = vi.fn();
+  vi.stubGlobal("fetch", request);
+  render(<AuthView mode="login" embedded />);
+  fireEvent.click(screen.getByRole("button", { name: "登录" }));
+  expect(screen.getByLabelText("登录名").getAttribute("aria-invalid")).toBe(
+    "true",
+  );
+  expect(
+    screen.getByLabelText("密码", { exact: true }).getAttribute("aria-invalid"),
+  ).toBe("true");
+  expect(document.activeElement).toBe(screen.getByLabelText("登录名"));
+  expect(screen.getByText("请输入登录名")).toBeTruthy();
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("待提交时只发起一次请求，关闭后取消等待且不应用迟到的回执", async () => {
+  let resolve!: (value: Response) => void;
+  const request = vi.fn().mockImplementation(
+    () =>
+      new Promise<Response>((done) => {
+        resolve = done;
+      }),
+  );
+  vi.stubGlobal("fetch", request);
+  const authenticated = vi.fn();
+  const pending = vi.fn();
+  const view = render(
+    <AuthView
+      mode="login"
+      embedded
+      onAuthenticated={authenticated}
+      onPendingChange={pending}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("登录名"), {
+    target: { value: "alice" },
+  });
+  fireEvent.change(screen.getByLabelText("密码", { exact: true }), {
+    target: { value: "Password12345" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "登录" }));
+  fireEvent.submit(screen.getByRole("form", { name: "登录表单" }));
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(pending).toHaveBeenCalledWith(true);
+  expect(screen.getByLabelText("登录名")).toHaveProperty("disabled", true);
+  const signal = request.mock.calls[0][1].signal as AbortSignal;
+  view.unmount();
+  expect(signal.aborted).toBe(true);
+  resolve(
+    new Response(
+      JSON.stringify({
+        actor: {
+          id: "11111111-1111-4111-8111-111111111111",
+          login_name: "alice",
+          display_name: "Alice",
+          role: "creator",
+          must_change_password: false,
+          credential_revision: 1,
+        },
+        session_id: "22222222-2222-4222-8222-222222222222",
+        persistent: false,
+        last_active_at: new Date().toISOString(),
+        absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
+      }),
+    ),
+  );
+  await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+  expect(authenticated).not.toHaveBeenCalled();
+  expect(mocks.push).not.toHaveBeenCalled();
 });

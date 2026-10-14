@@ -53,8 +53,7 @@ export function SessionGate({
         if (allowGuest) {
           setGuest(true);
         } else if (e instanceof AuthError && e.status === 401) {
-          if (allowGuest) setGuest(true);
-          else router.replace("/login");
+          router.replace("/login");
         } else
           setError(e instanceof Error ? e.message : "暂时无法验证登录状态。");
       });

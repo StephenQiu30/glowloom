@@ -1,33 +1,22 @@
-import Image from "next/image";
 import Link from "next/link";
 export function BrandMark({ monochrome = false }: { monochrome?: boolean }) {
   return (
     <span className="brand-mark" aria-hidden="true">
-      {monochrome ? (
-        <Image
-          src="/design/figma/logo-mono.svg"
-          alt=""
-          width={32}
-          height={32}
+      <svg
+        viewBox="0 0 32 32"
+        fill="none"
+        focusable="false"
+        data-monochrome={monochrome}
+      >
+        <path
+          className="brand-warp"
+          d="M16 2L30 16L25 21L21 17L22 16L16 10L13 13L9 9L16 2Z"
         />
-      ) : (
-        <>
-          <Image
-            className="brand-on-dark"
-            src="/design/figma/logo-dark.svg"
-            alt=""
-            width={32}
-            height={32}
-          />
-          <Image
-            className="brand-on-light"
-            src="/design/figma/logo-light.svg"
-            alt=""
-            width={32}
-            height={32}
-          />
-        </>
-      )}
+        <path
+          fill="currentColor"
+          d="M16 30L2 16L7 11L11 15L10 16L16 22L19 19L23 23L16 30Z"
+        />
+      </svg>
     </span>
   );
 }

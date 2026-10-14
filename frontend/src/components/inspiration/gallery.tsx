@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { ArrowUpRight, Search } from "lucide-react";
 import { cn } from "cn";
 import { BrandMark } from "@/components/layout/brand";
 import { Button } from "@/components/ui/button";
@@ -291,9 +291,14 @@ export function InspirationGallery({
               <CardHeader>
                 <CardTitle>{w.title}</CardTitle>
                 <CardDescription>
-                  {showUpdates
-                    ? "织光精选 · 查看创作过程 ↗"
-                    : `${"author" in w ? w.author : "织光精选"} · ${"duration" in w ? w.duration : ""}`}
+                  {showUpdates ? (
+                    <>
+                      <span>织光精选 · 查看创作过程</span>
+                      <ArrowUpRight aria-hidden="true" data-icon="inline-end" />
+                    </>
+                  ) : (
+                    `${"author" in w ? w.author : "织光精选"} · ${"duration" in w ? w.duration : ""}`
+                  )}
                 </CardDescription>
               </CardHeader>
             </Card>

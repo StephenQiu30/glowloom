@@ -1,6 +1,6 @@
-import { AuthView } from "@/components/auth/auth-view";
+import { AuthEntry } from "@/components/auth/auth-entry";
 
 export const metadata = { title: "注册" };
 export default function Page() {
-  return <AuthView mode="register" />;
+  return <AuthEntry mode="register" />;
 }

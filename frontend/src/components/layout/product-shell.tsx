@@ -31,7 +31,7 @@ import {
   useSessionUpdate,
   revokeSession,
 } from "@/components/auth/session";
-import { AuthView } from "@/components/auth/auth-view";
+import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
 import { UnavailableDialog } from "@/components/availability/unavailable";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -52,7 +52,6 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Sidebar,
   SidebarContent,
@@ -195,18 +194,19 @@ function Shell({
   screen,
   children,
   fullBleed,
+  initialAuthMode,
 }: {
   screen: string;
   children: ReactNode;
   fullBleed?: boolean;
+  initialAuthMode?: AuthMode;
 }) {
   const session = useOptionalSession();
   const updateSession = useSessionUpdate();
   const router = useRouter();
   const { open, setOpen, isMobile, setOpenMobile } = useSidebar();
   const [feature, setFeature] = useState<string | null>(null);
-  const [auth, setAuth] = useState(false);
-  const [authMode, setAuthMode] = useState("login");
+  const [auth, setAuth] = useState(Boolean(initialAuthMode));
   const [logout, setLogout] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -352,35 +352,19 @@ function Shell({
         )}
       </div>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
-      <Dialog open={auth} onOpenChange={setAuth}>
-        <DialogContent className="auth-dialog">
-          <Brand wordmark />
-          <DialogTitle>
-            {authMode === "login" ? "登录织光" : "创建账号"}
-          </DialogTitle>
-          <DialogDescription>
-            登录后保存创作，继续管理你的画布与素材。
-          </DialogDescription>
-          <Tabs value={authMode} onValueChange={setAuthMode}>
-            <TabsList className="w-full">
-              <TabsTrigger value="login">登录</TabsTrigger>
-              <TabsTrigger value="register">注册</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <AuthView
-            key={authMode}
-            embedded
-            mode={authMode === "login" ? "login" : "register"}
-            onAuthenticated={(value) => {
-              updateSession(value);
-              setAuth(false);
-            }}
-          />
-          <Button variant="ghost" onClick={() => setAuth(false)}>
-            暂不登录，继续浏览
-          </Button>
-        </DialogContent>
-      </Dialog>
+      <AuthDialog
+        open={auth}
+        initialMode={initialAuthMode}
+        onOpenChange={(value) => {
+          setAuth(value);
+          if (!value && initialAuthMode) router.replace("/");
+        }}
+        onAuthenticated={(value) => {
+          updateSession(value);
+          setAuth(false);
+          if (initialAuthMode) router.replace("/");
+        }}
+      />
       <Dialog
         open={logout}
         onOpenChange={(value) => {
@@ -419,12 +403,14 @@ export function ProductShell({
   children,
   fullBleed = false,
   allowGuest = false,
+  initialAuthMode,
 }: {
   screen: Screen;
   children: ReactNode;
   fullBleed?: boolean;
   contextual?: boolean;
   allowGuest?: boolean;
+  initialAuthMode?: AuthMode;
 }) {
   return (
     <SessionGate
@@ -435,7 +421,11 @@ export function ProductShell({
         className="product-shell"
         style={{ "--sidebar-width": "240px" } as CSSProperties}
       >
-        <Shell screen={screen} fullBleed={fullBleed}>
+        <Shell
+          screen={screen}
+          fullBleed={fullBleed}
+          initialAuthMode={initialAuthMode}
+        >
           {children}
         </Shell>
       </SidebarProvider>
