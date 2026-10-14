@@ -22,6 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  applicationName: "织光 Glowloom",
   title: { default: "织光 · 创作工作台", template: "%s" },
   description: "AI 短剧制作平台",
 };
