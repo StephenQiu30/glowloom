@@ -1,23 +1,23 @@
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { isProjectID } from "@/components/projects/project";
 export const kinds = {
   character: "角色",
   location: "场景",
   prop: "物品",
 } as const;
-export type Subject = CreationAPI.Detail & {
-  head: CreationAPI.Head & {
+export type Subject = API.Detail & {
+  head: API.Head & {
     id: string;
     project_id: string;
-    kind: CreationAPI.Kind;
+    kind: API.Kind;
     revision: number;
   };
-  current: CreationAPI.Version;
+  current: API.Version;
 };
 export function requireSubject(
-  v: CreationAPI.Detail,
+  v: API.Detail,
   project: string,
-  kind: CreationAPI.Kind,
+  kind: API.Kind,
   id?: string,
 ): Subject {
   if (
@@ -34,12 +34,12 @@ export function requireSubject(
     v.current.id !== v.head.current_version_id ||
     typeof v.current[kind]?.name !== "string"
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return v as Subject;
 }
 export function requireSubjectReceipt(
-  v: CreationAPI.Receipt,
-  kind: CreationAPI.Kind,
+  v: API.Receipt,
+  kind: API.Kind,
   id?: string,
 ) {
   if (
@@ -51,8 +51,8 @@ export function requireSubjectReceipt(
     v.revision! < 1 ||
     !isProjectID(v.version_id)
   )
-    throw new AuthError("invalid_receipt");
-  return v as CreationAPI.Receipt & { entry_id: string; revision: number };
+    throw new RequestError("invalid_receipt");
+  return v as API.Receipt & { entry_id: string; revision: number };
 }
 export const subjectText = (s: Subject) => s.current[s.head.kind]!;
 export const subjectImage = (s: Subject) =>
@@ -61,8 +61,8 @@ export const subjectImage = (s: Subject) =>
     ?.references?.find((r) => r.role === "primary")?.media?.asset_id;
 export function impactProof(
   meta?: Record<string, unknown>,
-): CreationAPI.ImpactProof | undefined {
-  const p = meta?.impact as CreationAPI.ImpactProof | undefined;
+): API.ImpactProof | undefined {
+  const p = meta?.impact as API.ImpactProof | undefined;
   return p &&
     typeof p.sha256 === "string" &&
     /^[a-f0-9]{64}$/.test(p.sha256) &&

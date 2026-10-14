@@ -16,6 +16,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 var (
@@ -33,16 +34,18 @@ var (
 
 // FreeQuoteItemInput describes one canvas request without project metadata.
 type FreeQuoteItemInput struct {
-	ModelKey        string
-	Capability      string
-	Mode            string
-	Prompt          string
-	Params          json.RawMessage
-	OutputCount     int32
-	ForceRegenerate bool
-	MediaInputs     []FreeQuoteMediaInput
-	Source          *domain.CanvasSource
-	PromptTemplate  *promptapp.TemplateRequest
+	InputSource             *promptdomain.InputSource
+	ExpectedSubmissionEpoch *int64
+	ModelKey                string
+	Capability              string
+	Mode                    string
+	Prompt                  string
+	Params                  json.RawMessage
+	OutputCount             int32
+	ForceRegenerate         bool
+	MediaInputs             []FreeQuoteMediaInput
+	Source                  *domain.CanvasSource
+	PromptTemplate          *promptapp.TemplateRequest
 }
 
 // FreeQuoteMediaInput names an ordered canvas asset and its model input role.
@@ -53,6 +56,16 @@ type FreeQuoteMediaInput struct {
 
 // Validate checks prompt, optional model selection and JSON bounds.
 func (i FreeQuoteItemInput) Validate() error {
+	if i.InputSource != nil {
+		if !i.InputSource.Valid() || i.ExpectedSubmissionEpoch == nil || *i.ExpectedSubmissionEpoch < 0 || i.ModelKey != "" || i.Capability != "" || i.Mode != "" || i.Prompt != "" || len(i.Params) != 0 || i.OutputCount != 0 || len(i.MediaInputs) != 0 || i.Source != nil || i.PromptTemplate != nil {
+			return ErrInvalidFreeQuote
+		}
+		return nil
+	}
+	if i.ExpectedSubmissionEpoch != nil {
+		return ErrInvalidFreeQuote
+	}
+
 	if i.PromptTemplate != nil {
 		if err := i.PromptTemplate.ValidateFor(i.Capability); err != nil {
 			return err
@@ -137,7 +150,7 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 	if input.PromptTemplate != nil {
 		return PreparedFreeQuote{}, promptapp.ErrTemplateUnavailable
 	}
-	if len(input.Params) == 0 {
+	if len(input.Params) == 0 && input.InputSource == nil {
 		input.Params = json.RawMessage(`{}`)
 	}
 	if input.Validate() != nil || now.IsZero() || catalog.ModelVersionID == uuid.Nil ||
@@ -268,6 +281,10 @@ func PrepareFreeQuote(input CreateFreeQuoteInput, catalog FreeQuoteCatalog, medi
 
 // CreateFreeQuoteResult contains the committed quote and observed balance.
 type CreateFreeQuoteResult struct {
+	SubmissionID      *uuid.UUID          `json:"submission_id,omitempty"`
+	SubmissionEpoch   int64               `json:"submission_epoch,omitempty"`
+	ConfirmKey        *uuid.UUID          `json:"confirm_key,omitempty"`
+	EditorDraft       *promptdomain.Draft `json:"editor_draft,omitempty"`
 	OperationID       uuid.UUID
 	QuoteMicros       int64
 	QuoteDetail       json.RawMessage
@@ -294,7 +311,7 @@ func NewCreateFreeQuoteCommand(store FreeQuoteCreator) *CreateFreeQuoteCommand {
 
 // Execute creates an immutable quote without reserving any budget.
 func (c *CreateFreeQuoteCommand) Execute(ctx context.Context, actor identityapp.Principal, input CreateFreeQuoteInput) (CreateFreeQuoteResult, error) {
-	if len(input.Params) == 0 {
+	if len(input.Params) == 0 && input.InputSource == nil {
 		input.Params = json.RawMessage(`{}`)
 	}
 	if c == nil || c.store == nil {

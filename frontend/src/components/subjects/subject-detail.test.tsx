@@ -7,14 +7,14 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SubjectDetail } from "./subject-detail";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import type { Subject } from "./contracts";
 const api = vi.hoisted(() => ({
   remove: vi.fn(),
   restore: vi.fn(),
   get: vi.fn(),
 }));
-vi.mock("@/components/creation/generated/creation", () => ({
+vi.mock("@/api/bible", () => ({
   deleteBibleEntry: api.remove,
   restoreBibleEntry: api.restore,
   getBibleEntry: api.get,
@@ -56,7 +56,7 @@ afterEach(cleanup);
 it("reviews actual zero references and submits the exact accepted proof", async () => {
   api.remove
     .mockRejectedValueOnce(
-      new AuthError("impact_acknowledgment_required", 409, { impact: proof }),
+      new RequestError("impact_acknowledgment_required", 409, { impact: proof }),
     )
     .mockResolvedValue({
       entry_id: id,
@@ -86,9 +86,9 @@ it("reviews actual zero references and submits the exact accepted proof", async 
 it("unknown deletion retries the same key and cannot dismiss the pending intent", async () => {
   api.remove
     .mockRejectedValueOnce(
-      new AuthError("impact_acknowledgment_required", 409, { impact: proof }),
+      new RequestError("impact_acknowledgment_required", 409, { impact: proof }),
     )
-    .mockRejectedValueOnce(new AuthError("network_error"))
+    .mockRejectedValueOnce(new RequestError("network_error"))
     .mockResolvedValue({
       entry_id: id,
       kind: "character",
@@ -145,7 +145,7 @@ it("restores the existing identity and requires the restored server state", asyn
 });
 
 it("blocks a stale revision until the subject is refreshed", async () => {
-  api.remove.mockRejectedValue(new AuthError("revision_conflict", 409));
+  api.remove.mockRejectedValue(new RequestError("revision_conflict", 409));
   api.get.mockResolvedValue({
     ...subject,
     head: { ...subject.head, revision: 2 },
@@ -170,7 +170,7 @@ it("blocks a stale revision until the subject is refreshed", async () => {
 it("accepts a committed receipt when a later restore already advanced the head", async () => {
   api.remove
     .mockRejectedValueOnce(
-      new AuthError("impact_acknowledgment_required", 409, { impact: proof }),
+      new RequestError("impact_acknowledgment_required", 409, { impact: proof }),
     )
     .mockResolvedValue({
       entry_id: id,

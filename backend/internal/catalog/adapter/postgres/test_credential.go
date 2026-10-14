@@ -30,9 +30,12 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 		if err := requireCurrentCatalogAdmin(tx, request.ActorID, request.OrgID); err != nil {
 			return err
 		}
+		if err := requireCredentialProvider(tx, request.ProviderID); err != nil {
+			return err
+		}
 		var p providerRow
 		result := tx.Raw(`
-			SELECT id, key, name, adapter_key, region, status, concurrency_limit,
+			SELECT id, current_config_version_id, key, name, adapter_key, region, status, concurrency_limit,
 			       rate_limit_per_min, revision, create_time, update_time
 			FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR SHARE
 		`, request.ProviderID.String()).Scan(&p)
@@ -42,7 +45,7 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 		if result.RowsAffected != 1 {
 			return ErrProviderNotFound
 		}
-		if p.Status != string(domain.ProviderActive) {
+		if p.Status != string(domain.ProviderActive) && p.CurrentConfigVersionID == uuid.Nil {
 			return ErrProviderUnavailable
 		}
 		var c credentialRow
@@ -58,6 +61,14 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 		}
 		if result.RowsAffected != 1 {
 			return ErrCredentialNotFound
+		}
+		var original struct{ ConfigVersionID uuid.UUID }
+		check := tx.Raw(`UPDATE catalog.provider_check SET status='running' WHERE id=? AND config_version_id=? RETURNING config_version_id`, request.TestID, p.CurrentConfigVersionID).Scan(&original)
+		if check.Error != nil {
+			return check.Error
+		}
+		if p.CurrentConfigVersionID != uuid.Nil && check.RowsAffected != 1 {
+			return application.ErrPresetConflict
 		}
 		provider, credential = p.provider(), c.credential()
 		return nil
@@ -81,9 +92,15 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 		if err := requireCurrentCatalogAdmin(tx, observation.ActorID, observation.OrgID); err != nil {
 			return err
 		}
-		var provider struct{ Status string }
+		if err := requireCredentialProvider(tx, observation.ProviderID); err != nil {
+			return err
+		}
+		var provider struct {
+			Status                 string
+			CurrentConfigVersionID *uuid.UUID
+		}
 		result := tx.Raw(`
-			SELECT status FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
+			SELECT status,current_config_version_id FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
 		`, observation.ProviderID.String()).Scan(&provider)
 		if result.Error != nil {
 			return fmt.Errorf("lock provider for credential test: %w", result.Error)
@@ -100,7 +117,7 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 		if result.RowsAffected == 1 {
 			return nil
 		}
-		if provider.Status != string(domain.ProviderActive) {
+		if provider.Status != string(domain.ProviderActive) && provider.CurrentConfigVersionID == nil {
 			return ErrProviderUnavailable
 		}
 		var credential struct {
@@ -132,6 +149,9 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 		}
 		if result.RowsAffected != 1 {
 			return ErrCredentialNotFound
+		}
+		if err := recordProviderCheck(tx, observation); err != nil {
+			return err
 		}
 		for _, event := range events {
 			result = tx.Exec(`

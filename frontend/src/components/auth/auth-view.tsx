@@ -9,8 +9,9 @@ import {
   getLoginAvailability,
   getSession,
   registerAccount,
-} from "./generated/auth";
-import { AuthError, requireSession } from "./request";
+} from "@/api/identity";
+import { RequestError } from "@/lib/request";
+import { requireSession, authErrorMessage } from "./contracts";
 import { cn } from "cn";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -153,7 +154,7 @@ export function AuthView({
 }: {
   mode: "login" | "register" | "reset-password";
   embedded?: boolean;
-  onAuthenticated?: (session: AuthAPI.SessionView) => void;
+  onAuthenticated?: (session: API.SessionView) => void;
   onContinueGuest?: () => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
@@ -168,7 +169,7 @@ export function AuthView({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [serverField, setServerField] = useState<string | null>(null);
-  const [session, setSession] = useState<AuthAPI.SessionView | null>(null);
+  const [session, setSession] = useState<API.SessionView | null>(null);
   const [availability, setAvailability] = useState("");
   const form = useRef<HTMLFormElement>(null);
   const errorAlert = useRef<HTMLDivElement>(null);
@@ -187,14 +188,9 @@ export function AuthView({
         })
         .catch((reason) => {
           if (controller.signal.aborted) return;
-          if (reason instanceof AuthError && reason.status === 401)
+          if (reason instanceof RequestError && reason.status === 401)
             router.replace(screenHref("login"));
-          else
-            setError(
-              reason instanceof Error
-                ? reason.message
-                : "无法读取会话，请重试。",
-            );
+          else setError(authErrorMessage(reason));
         });
     return () => {
       controller.abort();
@@ -307,7 +303,7 @@ export function AuthView({
     } catch (reason) {
       if (controller.signal.aborted) return;
       const field =
-        reason instanceof AuthError
+        reason instanceof RequestError
           ? reason.code === "login_name_taken"
             ? "login-name"
             : reason.code === "weak_password" ||
@@ -318,9 +314,7 @@ export function AuthView({
                 : null
           : null;
       setServerField(field);
-      setError(
-        reason instanceof Error ? reason.message : "请求结果未确认，请重试。",
-      );
+      setError(authErrorMessage(reason));
       if (field)
         form.current
           ?.querySelector<HTMLInputElement>('[id="' + field + '"]')
@@ -344,8 +338,7 @@ export function AuthView({
       );
       if (!controller.signal.aborted) router.replace(screenHref("login"));
     } catch (reason) {
-      if (!controller.signal.aborted)
-        setError(reason instanceof Error ? reason.message : "退出结果未确认。");
+      if (!controller.signal.aborted) setError(authErrorMessage(reason));
     } finally {
       if (!controller.signal.aborted) setPending(false);
     }
@@ -363,7 +356,7 @@ export function AuthView({
         { signal: controller.signal },
       );
       if (typeof result?.available !== "boolean")
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       if (!controller.signal.aborted)
         setAvailability(
           result.available

@@ -1,4 +1,11 @@
 {
-  "tailwindStylesheet": "src/app/globals.css",
-  "plugins": ["prettier-plugin-tailwindcss"]
+  "overrides": [
+    {
+      "files": "*.{ts,tsx,js,jsx,mjs,cjs,css}",
+      "options": {
+        "tailwindStylesheet": "src/app/globals.css",
+        "plugins": ["prettier-plugin-tailwindcss"]
+      }
+    }
+  ]
 }

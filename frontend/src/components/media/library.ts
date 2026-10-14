@@ -1,6 +1,6 @@
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { isProjectID } from "@/components/projects/project";
-export type LibraryItem = MediaAPI.LibraryItemSummary & {
+export type LibraryItem = API.LibraryItemSummary & {
   id: string;
   title: string;
   kind: string;
@@ -9,7 +9,7 @@ export type LibraryItem = MediaAPI.LibraryItemSummary & {
   catalog_state: string;
   updated_at: string;
 };
-export type LibraryPage = Omit<MediaAPI.LibraryPage, "items"> & {
+export type LibraryPage = Omit<API.LibraryPage, "items"> & {
   current_actor_id: string;
   current_org_id: string;
   library_id: string;
@@ -18,7 +18,7 @@ export type LibraryPage = Omit<MediaAPI.LibraryPage, "items"> & {
   page_size: number;
   total: number;
   items: LibraryItem[];
-  folders: MediaAPI.LibraryFolder[];
+  folders: API.LibraryFolder[];
 };
 const revision = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0;
 export function requireLibraryPage(
@@ -63,14 +63,14 @@ export function requireLibraryPage(
         !revision(f.revision),
     )
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return p as LibraryPage;
 }
 export function requireLibraryReceipt(
   value: unknown,
   base: LibraryPage,
-): MediaAPI.LibraryReceipt {
-  const r = value as MediaAPI.LibraryReceipt | null;
+): API.LibraryReceipt {
+  const r = value as API.LibraryReceipt | null;
   if (
     !r ||
     r.current_actor_id !== base.current_actor_id ||
@@ -81,13 +81,10 @@ export function requireLibraryReceipt(
     r.revision !== base.revision + 1 ||
     !Array.isArray(r.items)
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return r;
 }
-export function requirePreview(
-  value: MediaAPI.LibraryMediaPreview,
-  id: string,
-) {
+export function requirePreview(value: API.LibraryMediaPreview, id: string) {
   const u = value.url;
   if (
     value.asset?.id !== id ||
@@ -95,14 +92,14 @@ export function requirePreview(
     !Number.isFinite(Date.parse(value.expires_at ?? "")) ||
     Date.parse(value.expires_at!) <= Date.now()
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   const url = new URL(u);
   if (!["http:", "https:"].includes(url.protocol))
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return u;
 }
 export function mediaError(error: unknown) {
-  if (error instanceof AuthError) {
+  if (error instanceof RequestError) {
     if (error.status === 401) return "登录已失效，请重新登录后重试。";
     if (error.status === 403) return "当前账号无权访问此资产。";
     if (error.status === 404) return "资产已不存在或无法访问，请刷新列表。";

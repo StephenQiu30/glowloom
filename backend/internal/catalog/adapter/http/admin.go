@@ -16,7 +16,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
@@ -47,7 +46,7 @@ func (h *AdminHandler) Register(group *gin.RouterGroup) {
 	admin := group.Group("/admin")
 	admin.Use(func(c *gin.Context) {
 		actor := identityhttp.Principal(c)
-		if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+		if !application.IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 			httpapi.WriteProblem(c, 403, "forbidden", nil)
 			c.Abort()
 			return
@@ -129,10 +128,12 @@ func adminError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrProviderNotFound), errors.Is(err, application.ErrCredentialNotFound), errors.Is(err, application.ErrModelNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
-	case errors.Is(err, domain.ErrProviderRevisionConflict), errors.Is(err, domain.ErrModelRevisionConflict):
+	case errors.Is(err, application.ErrPresetConflict), errors.Is(err, domain.ErrProviderRevisionConflict), errors.Is(err, domain.ErrModelRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)
 	case errors.Is(err, application.ErrProviderKeyExists), errors.Is(err, application.ErrModelKeyExists), errors.Is(err, application.ErrModelVersionConflict), errors.Is(err, application.ErrPriceVersionConflict), errors.Is(err, application.ErrCredentialTestKeyReused):
 		httpapi.WriteProblem(c, 409, "catalog_conflict", nil)
+	case errors.Is(err, application.ErrReleaseUnverified):
+		httpapi.WriteProblem(c, 409, "release_unverified", nil)
 	case errors.Is(err, application.ErrProviderUnavailable), errors.Is(err, application.ErrModelSourceUnavailable), errors.Is(err, domain.ErrProviderDisabled), errors.Is(err, domain.ErrModelNotPublishable):
 		httpapi.WriteProblem(c, 409, "catalog_unavailable", nil)
 	case errors.Is(err, application.ErrInvalidProviderList), errors.Is(err, application.ErrInvalidProviderDetail), errors.Is(err, application.ErrInvalidAdminModels), errors.Is(err, application.ErrInvalidCreateProvider), errors.Is(err, application.ErrInvalidUpdateProvider), errors.Is(err, application.ErrInvalidSetCredential), errors.Is(err, application.ErrInvalidDisableCredential), errors.Is(err, application.ErrInvalidCredentialTest), errors.Is(err, application.ErrInvalidCreateModel), errors.Is(err, application.ErrInvalidPublishModelVersion), errors.Is(err, application.ErrInvalidPublishPriceRule), errors.Is(err, application.ErrInvalidSetModelStatus), errors.Is(err, domain.ErrInvalidProvider), errors.Is(err, domain.ErrInvalidModel), errors.Is(err, domain.ErrInvalidModelVersion), errors.Is(err, domain.ErrInvalidPriceRule):

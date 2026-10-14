@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GenerationDialog } from "./generation-dialog";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 const api = vi.hoisted(() => ({
   models: vi.fn(),
   quote: vi.fn(),
@@ -16,8 +16,10 @@ const api = vi.hoisted(() => ({
   list: vi.fn(),
   cancel: vi.fn(),
 }));
-vi.mock("@/components/creation/generated/creation", () => ({
+vi.mock("@/api/models", () => ({
   listProjectModels: api.models,
+}));
+vi.mock("@/api/operations", () => ({
   createFreeQuote: api.quote,
   confirmOperationQuote: api.confirm,
   getOperation: api.get,
@@ -75,7 +77,7 @@ it("未确认的报价重试复用冻结请求，确认前不提交生成", asyn
     expires_at: "2099-01-01",
   };
   api.quote
-    .mockRejectedValueOnce(new AuthError("request_unconfirmed"))
+    .mockRejectedValueOnce(new RequestError("request_unconfirmed"))
     .mockResolvedValue(quote);
   render(
     <GenerationDialog
@@ -168,7 +170,7 @@ it("画布参考素材沿真实模型角色进入报价，优先采用模型支�
       },
     ],
   });
-  api.quote.mockRejectedValue(new AuthError("invalid_request", 422));
+  api.quote.mockRejectedValue(new RequestError("invalid_request", 422));
   render(
     <GenerationDialog
       seed={{

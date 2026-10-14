@@ -13,7 +13,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidPublishPriceRule means a price publication request is incomplete.
@@ -68,7 +67,7 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 	if c == nil || c.store == nil || c.validator == nil || c.now == nil {
 		return PublishedPriceRule{}, ErrInvalidPublishPriceRule
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return PublishedPriceRule{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)
@@ -77,7 +76,7 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 		return PublishedPriceRule{}, ErrInvalidPublishPriceRule
 	}
 	price := domain.PriceRuleVersion{
-		ID: uuid.New(), ModelID: input.ModelID, VersionNo: input.VersionNo,
+		ID: uuid.NewSHA1(actor.ID, []byte("model.price/"+input.RequestID)), ModelID: input.ModelID, VersionNo: input.VersionNo,
 		Unit: input.Unit, Rule: slices.Clone(input.Rule), Currency: input.Currency,
 		FXRateToCNY: input.FXRateToCNY, EffectiveFrom: input.EffectiveFrom.UTC().Round(time.Microsecond),
 		CreateBy: actor.ID,

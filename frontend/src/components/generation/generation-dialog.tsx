@@ -1,13 +1,8 @@
 "use client";
+import { RichGeneration, type CanvasComposerOwner } from "./rich-generation";
+import type { PromptDraft } from "./prompt-document";
 import { useEffect, useRef, useState } from "react";
-import {
-  ArrowUp,
-  History,
-  ImagePlus,
-  LoaderCircle,
-  RotateCw,
-  X,
-} from "lucide-react";
+import { History, LoaderCircle, RotateCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,51 +10,29 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProjectPicker } from "@/components/projects/project-picker";
-import { isProjectID, type Project } from "@/components/projects/project";
+import { type Project } from "@/components/projects/project";
+import { ProjectMediaPreview } from "@/components/media/project-media";
+import { RequestError } from "@/lib/request";
 import {
-  ProjectMediaPicker,
-  ProjectMediaPreview,
-} from "@/components/media/project-media";
-import { SubjectList } from "@/components/subjects/subject-list";
-import { subjectImage, subjectText } from "@/components/subjects/contracts";
-import { AuthError } from "@/components/auth/request";
-import {
-  listProjectModels,
-  createFreeQuote,
-  confirmOperationQuote,
   getOperation,
   cancelOperation,
   listProjectOperations,
-} from "@/components/creation/generated/creation";
+} from "@/api/operations";
 import {
   activeTask,
-  fieldsForMode,
   flowError,
-  initialParams,
-  money,
-  requireQuote,
   requireTask,
   taskLabels,
-  type Quote,
   type Task,
 } from "./contracts";
-const referenceLabels: Record<string, string> = {
-  reference_image: "参考图片",
-  subject: "主体参考图",
-  first_frame: "首帧图片",
-  last_frame: "尾帧图片",
-  reference_video: "参考视频",
-  reference_audio: "参考音频",
-};
 export type GenerationSeed = {
+  composer?: PromptDraft;
+  draftID?: string;
+  canvasOwner?: CanvasComposerOwner;
   prompt: string;
   capability: "image" | "video";
-  source?: CreationAPI.CanvasSource;
+  source?: API.CanvasSource;
   project?: Project;
   reuse?: Task;
   draft?: {
@@ -135,697 +108,34 @@ function GenerationForm({
   project,
   seed,
   onAdopt,
-  locked,
   onLock,
+  locked,
 }: {
   project: Project;
   seed: GenerationSeed;
-  onAdopt?: (assetID: string, kind: string) => Promise<void> | void;
+  onAdopt?: (id: string, kind: string) => Promise<void> | void;
   locked: boolean;
   onLock: (v: boolean) => void;
 }) {
   const [reuse, setReuse] = useState<Task | undefined>(seed.reuse);
-  const [models, setModels] = useState<CreationAPI.ModelResponse[]>([]),
-    [modelKey, setModelKey] = useState(seed.reuse?.model_key ?? ""),
-    [loadError, setLoadError] = useState(""),
-    [catalogRetry, setCatalogRetry] = useState(0),
-    [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const c = new AbortController();
-    async function load() {
-      try {
-        let cursor: string | undefined;
-        const all: CreationAPI.ModelResponse[] = [];
-        const seen = new Set<string>();
-        do {
-          const p = await listProjectModels(
-            {
-              project_id: project.id,
-              capability: seed.capability + ".generate",
-              limit: 100,
-              cursor,
-            },
-            { signal: c.signal },
-          );
-          if (
-            !Array.isArray(p.items) ||
-            p.items.some(
-              (m) =>
-                !isProjectID(m.id) ||
-                !m.key ||
-                m.capability !== seed.capability + ".generate",
-            )
-          )
-            throw new AuthError("invalid_receipt");
-          all.push(...p.items);
-          cursor = p.next_cursor;
-          if (cursor) {
-            if (seen.has(cursor)) throw new AuthError("invalid_receipt");
-            seen.add(cursor);
-          }
-        } while (cursor && !c.signal.aborted);
-        if (!c.signal.aborted) {
-          setModels(all);
-          setLoadError("");
-        }
-      } catch (e) {
-        if (!c.signal.aborted) setLoadError(flowError(e));
-      } finally {
-        if (!c.signal.aborted) setLoading(false);
-      }
-    }
-    void load();
-    return () => c.abort();
-  }, [project.id, seed.capability, catalogRetry]);
-  const model = models.find((m) => m.key === modelKey);
   return (
     <>
-      {loading ? (
-        <p role="status">正在读取可用模型…</p>
-      ) : loadError ? (
-        <div role="alert">
-          {loadError}
-          <Button
-            onClick={() => {
-              setLoading(true);
-              setCatalogRetry((n) => n + 1);
-            }}
-          >
-            重试读取模型
-          </Button>
-        </div>
-      ) : (
-        <>
-          <label className="form-label">
-            生成模型
-            <select
-              disabled={locked}
-              value={modelKey}
-              onChange={(e) => setModelKey(e.target.value)}
-              aria-label="生成模型"
-            >
-              <option value="">请选择模型</option>
-              {models.map((m) => (
-                <option
-                  key={m.id}
-                  value={m.key}
-                  disabled={
-                    m.status !== "active" ||
-                    m.provider_status !== "active" ||
-                    !m.current_version ||
-                    !m.credential_present
-                  }
-                >
-                  {m.display_name}
-                  {m.status !== "active" || !m.credential_present
-                    ? " · 当前不可用"
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {models.length === 0 && (
-            <p className="flow-notice">
-              项目中没有匹配的模型。可刷新目录，或请管理员配置可用的
-              {seed.capability === "image" ? "图片" : "视频"}模型。
-            </p>
-          )}
-          {model && (
-            <ModelForm
-              key={model.key + (reuse?.id ?? "")}
-              project={project}
-              model={model}
-              seed={{ ...seed, reuse }}
-              onAdopt={onAdopt}
-              locked={locked}
-              onLock={onLock}
-            />
-          )}
-        </>
-      )}
+      <RichGeneration
+        key={reuse?.id ?? seed.draftID ?? "new"}
+        projectID={project.id}
+        seed={{ ...seed, reuse }}
+        draftID={seed.draftID}
+        canvas={seed.canvasOwner}
+        onAdopt={onAdopt}
+        onLock={onLock}
+      />
       <TaskHistory
         projectID={project.id}
         capability={seed.capability + ".generate"}
         onAdopt={onAdopt}
-        onReuse={(t) => {
-          if (!locked) {
-            setReuse(t);
-            setModelKey(t.model_key ?? "");
-          }
-        }}
+        onReuse={setReuse}
         locked={locked}
       />
-    </>
-  );
-}
-function ModelForm({
-  project,
-  model,
-  seed,
-  onAdopt,
-  locked,
-  onLock,
-}: {
-  project: Project;
-  model: CreationAPI.ModelResponse;
-  seed: GenerationSeed;
-  onAdopt?: (id: string, kind: string) => Promise<void> | void;
-  locked: boolean;
-  onLock: (v: boolean) => void;
-}) {
-  const [mode, setMode] = useState(
-    seed.reuse?.mode ??
-      (seed.reference?.kind === "image"
-        ? model.current_version?.modes?.find(
-            (m) =>
-              m ===
-              (seed.capability === "video"
-                ? "image_to_video"
-                : "image_to_image"),
-          )
-        : undefined) ??
-      model.current_version?.modes?.[0] ??
-      "",
-  );
-  let schemaError = "";
-  try {
-    fieldsForMode(model.current_version?.param_schema, mode);
-  } catch {
-    schemaError = "模型参数配置不完整，请刷新目录或联系管理员。";
-  }
-  return (
-    <>
-      <label className="form-label">
-        生成模式
-        <select
-          disabled={locked}
-          aria-label="生成模式"
-          value={mode}
-          onChange={(e) => setMode(e.target.value)}
-        >
-          {model.current_version?.modes?.map((m) => (
-            <option key={m} value={m}>
-              {(
-                {
-                  text_to_image: "文生图",
-                  image_to_image: "图生图",
-                  text_to_video: "文生视频",
-                  image_to_video: "图生视频",
-                } as Record<string, string>
-              )[m] ?? m}
-            </option>
-          ))}
-        </select>
-      </label>
-      {schemaError ? (
-        <p role="alert">{schemaError}</p>
-      ) : (
-        <PromptForm
-          key={mode}
-          project={project}
-          model={model}
-          mode={mode}
-          seed={seed}
-          onAdopt={onAdopt}
-          onLock={onLock}
-        />
-      )}
-    </>
-  );
-}
-function PromptForm({
-  project,
-  model,
-  mode,
-  seed,
-  onAdopt,
-  onLock,
-}: {
-  project: Project;
-  model: CreationAPI.ModelResponse;
-  mode: string;
-  seed: GenerationSeed;
-  onAdopt?: (id: string, kind: string) => Promise<void> | void;
-  onLock: (v: boolean) => void;
-}) {
-  const [subjectPicker, setSubjectPicker] = useState(seed.pickSubject ?? false);
-  const [rerun, setRerun] = useState(!!seed.reuse);
-  const fields = fieldsForMode(model.current_version?.param_schema, mode);
-  const [params, setParams] = useState(() => ({
-      ...initialParams(fields),
-      ...Object.fromEntries(
-        fields
-          .filter(
-            (f) =>
-              seed.draft &&
-              ["aspect_ratio", "negative_prompt"].includes(f.field),
-          )
-          .map((f) => [
-            f.field,
-            seed.draft![f.field as "aspect_ratio" | "negative_prompt"],
-          ]),
-      ),
-      ...Object.fromEntries(
-        fields
-          .filter((f) => seed.reuse?.params?.[f.field] !== undefined)
-          .map((f) => [
-            f.field,
-            seed.reuse!.params![f.field] as string | number | boolean,
-          ]),
-      ),
-    })),
-    [prompt, setPrompt] = useState(
-      seed.reuse?.inputs?.find((i) => i.role === "prompt")?.text ?? seed.prompt,
-    ),
-    [count, setCount] = useState(
-      seed.reuse?.output_count ?? seed.draft?.candidate_count ?? 1,
-    ),
-    [media, setMedia] = useState<CreationAPI.QuoteMediaInput[]>(
-      seed.reuse?.inputs
-        ?.filter((i) => i.media_asset_id)
-        .map((i) => ({ role: i.role, media_asset_id: i.media_asset_id })) ??
-        (() => {
-          const image =
-            seed.reference?.assetID ??
-            (seed.subject && subjectImage(seed.subject));
-          const type = seed.reference?.kind ?? "image";
-          const limits = model.current_version?.limits as
-            { roles?: Record<string, { types?: string[] }> } | undefined;
-          const role =
-            model.input_roles?.find(
-              (r) =>
-                r === (seed.reference ? "reference_" + type : "subject") &&
-                limits?.roles?.[r]?.types?.includes(type),
-            ) ??
-            model.input_roles?.find((r) =>
-              limits?.roles?.[r]?.types?.includes(type),
-            );
-          return image && role ? [{ role, media_asset_id: image }] : [];
-        })(),
-    ),
-    [pickRole, setPickRole] = useState<string | null>(null),
-    [quote, setQuote] = useState<Quote | null>(null),
-    [task, setTask] = useState<string | null>(null),
-    [error, setError] = useState(""),
-    [pending, setPending] = useState(false),
-    [unconfirmed, setUnconfirmed] = useState(false),
-    [now, setNow] = useState(() => Date.now());
-  const [skipReference, setSkipReference] = useState(false);
-  const missingSeedReference =
-    !!seed.reference &&
-    !skipReference &&
-    !media.some((m) => m.media_asset_id === seed.reference!.assetID);
-  const intent = useRef<{
-      key: string;
-      body: CreationAPI.QuoteItemRequest;
-    } | null>(null),
-    confirmKey = useRef<string | null>(null),
-    busy = useRef(false);
-  useEffect(() => {
-    if (!quote) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [quote]);
-  const limits = model.current_version?.limits as
-    | {
-        max_outputs?: number;
-        roles?: Record<string, { types?: string[]; max_count?: number }>;
-      }
-    | undefined;
-  const maxCount = Math.min(150, limits?.max_outputs ?? 1);
-  const locked = pending || unconfirmed || !!quote || !!task;
-  useEffect(() => {
-    onLock(pending || unconfirmed || !!quote);
-    return () => onLock(false);
-  }, [pending, unconfirmed, quote, onLock]);
-  async function getQuote() {
-    if (busy.current || missingSeedReference) return;
-    busy.current = true;
-    setPending(true);
-    setError("");
-    const op = intent.current ?? {
-      key: crypto.randomUUID(),
-      body: {
-        model_key: model.key,
-        capability: model.capability,
-        mode,
-        prompt,
-        params,
-        output_count: count,
-        force_regenerate: rerun,
-        media_inputs: media,
-        source: seed.source,
-      },
-    };
-    intent.current = op;
-    try {
-      const r = requireQuote(
-        await createFreeQuote({ pid: project.id }, op.body, {
-          headers: { "Idempotency-Key": op.key },
-        }),
-      );
-      setQuote(r);
-      setNow(Date.now());
-      setUnconfirmed(false);
-      confirmKey.current = crypto.randomUUID();
-    } catch (e) {
-      setError(flowError(e));
-      const uncertain = !(
-        e instanceof AuthError &&
-        e.status >= 400 &&
-        e.status < 500
-      );
-      setUnconfirmed(uncertain);
-      if (!uncertain) intent.current = null;
-    } finally {
-      busy.current = false;
-      setPending(false);
-    }
-  }
-  async function confirm() {
-    if (!quote || busy.current) return;
-    busy.current = true;
-    setPending(true);
-    setError("");
-    try {
-      const r = await confirmOperationQuote(
-        { id: quote.operation_id },
-        { project_id: project.id },
-        { headers: { "Idempotency-Key": confirmKey.current! } },
-      );
-      if (
-        !isProjectID(r.reservation_id) ||
-        !Number.isSafeInteger(r.available_micros) ||
-        !Number.isSafeInteger(r.budget_revision)
-      )
-        throw new AuthError("invalid_receipt");
-      setTask(quote.operation_id);
-      setQuote(null);
-      setUnconfirmed(false);
-      intent.current = null;
-    } catch (e) {
-      setError(flowError(e));
-      setUnconfirmed(
-        !(e instanceof AuthError && e.status >= 400 && e.status < 500),
-      );
-    } finally {
-      busy.current = false;
-      setPending(false);
-    }
-  }
-  return (
-    <>
-      {subjectPicker && (
-        <Dialog open onOpenChange={setSubjectPicker}>
-          <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl">
-            <DialogTitle>选择角色主体</DialogTitle>
-            <DialogDescription>
-              添加角色描述；模型支持角色参考时，同时引用主图。
-            </DialogDescription>
-            <SubjectList
-              projectID={project.id}
-              onSelect={(s) => {
-                const text = subjectText(s);
-                setPrompt(
-                  (p) => `${p}\n主体：${text.name}。${text.description ?? ""}`,
-                );
-                const image = subjectImage(s);
-                const role =
-                  model.input_roles?.find(
-                    (r) =>
-                      r === "subject" &&
-                      limits?.roles?.[r]?.types?.includes("image"),
-                  ) ??
-                  model.input_roles?.find((r) =>
-                    limits?.roles?.[r]?.types?.includes("image"),
-                  );
-                if (image && role)
-                  setMedia((v) => [
-                    ...v.filter((m) => m.role !== role),
-                    { role, media_asset_id: image },
-                  ]);
-                setSubjectPicker(false);
-              }}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void getQuote();
-        }}
-      >
-        <fieldset disabled={locked}>
-          <label className="form-label">
-            提示词
-            <Textarea
-              aria-label="生成提示词"
-              value={prompt}
-              required
-              maxLength={10000}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="描述主体、环境、光线与镜头…"
-              className="min-h-28"
-            />
-          </label>
-          <div className="generation-params">
-            {fields.map((f) => (
-              <label className="form-label" key={f.field}>
-                {f.label}
-                {f.required ? " *" : ""}
-                {f.enum ? (
-                  <select
-                    aria-label={f.label}
-                    required={f.required}
-                    value={String(params[f.field] ?? "")}
-                    onChange={(e) =>
-                      setParams((p) => ({
-                        ...p,
-                        [f.field]:
-                          f.type === "string"
-                            ? e.target.value
-                            : Number(e.target.value),
-                      }))
-                    }
-                  >
-                    <option value="">请选择</option>
-                    {f.enum.map((v) => (
-                      <option key={String(v)} value={String(v)}>
-                        {String(v)}
-                      </option>
-                    ))}
-                  </select>
-                ) : f.type === "boolean" ? (
-                  <Checkbox
-                    aria-label={f.label}
-                    checked={params[f.field] === true}
-                    onCheckedChange={(v) =>
-                      setParams((p) => ({ ...p, [f.field]: v === true }))
-                    }
-                  />
-                ) : (
-                  <Input
-                    aria-label={f.label}
-                    required={f.required}
-                    type={f.type === "string" ? "text" : "number"}
-                    min={f.min}
-                    max={f.max}
-                    step={f.step ?? (f.type === "integer" ? 1 : "any")}
-                    value={String(params[f.field] ?? "")}
-                    onChange={(e) =>
-                      setParams((p) => {
-                        const next = { ...p };
-                        if (e.target.value === "") delete next[f.field];
-                        else
-                          next[f.field] =
-                            f.type === "string"
-                              ? e.target.value
-                              : Number(e.target.value);
-                        return next;
-                      })
-                    }
-                  />
-                )}
-              </label>
-            ))}
-            <label className="form-label">
-              生成数量
-              <Input
-                aria-label="生成数量"
-                type="number"
-                min={1}
-                max={maxCount}
-                value={count}
-                onChange={(e) => setCount(Number(e.target.value))}
-              />
-            </label>
-          </div>
-          <div className="reference-list">
-            {missingSeedReference && (
-              <Alert>
-                <AlertDescription>
-                  <p>
-                    当前模型未使用所选参考素材。请选择支持该素材的模型，或明确取消此参考。
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setSkipReference(true)}
-                  >
-                    不使用此参考素材
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setSubjectPicker(true)}
-            >
-              添加主体
-            </Button>
-            {media.map((m, i) => (
-              <div key={m.media_asset_id} className="reference-thumb">
-                <ProjectMediaPreview
-                  projectID={project.id}
-                  id={m.media_asset_id!}
-                />
-                <Button
-                  variant="secondary"
-                  size="icon-sm"
-                  type="button"
-                  aria-label={`移除参考 ${i + 1}`}
-                  onClick={() => setMedia((a) => a.filter((_, n) => n !== i))}
-                >
-                  <X />
-                </Button>
-                <small>{referenceLabels[m.role ?? ""] ?? "参考素材"}</small>
-              </div>
-            ))}
-            {model.input_roles
-              ?.filter((role) => !!limits?.roles?.[role]?.types?.length)
-              .map((role) => (
-                <Button
-                  key={role}
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    media.filter((m) => m.role === role).length >=
-                    (limits?.roles?.[role]?.max_count ?? 0)
-                  }
-                  onClick={() => setPickRole(role)}
-                >
-                  <ImagePlus />
-                  {(
-                    {
-                      reference_image: "参考图片",
-                      subject: "主体参考图",
-                      first_frame: "首帧图片",
-                      last_frame: "尾帧图片",
-                      reference_video: "参考视频",
-                      reference_audio: "参考音频",
-                    } as Record<string, string>
-                  )[role] ?? "添加参考素材"}
-                </Button>
-              ))}
-          </div>
-        </fieldset>
-        {error && (
-          <p role="alert" className="flow-error">
-            {error}
-          </p>
-        )}
-        {!quote && !task && (
-          <Button
-            type="submit"
-            disabled={
-              pending ||
-              !prompt.trim() ||
-              !Number.isInteger(count) ||
-              missingSeedReference ||
-              count < 1 ||
-              count > maxCount
-            }
-          >
-            {pending ? <LoaderCircle className="animate-spin" /> : <ArrowUp />}
-            {unconfirmed ? "重试原报价" : "获取生成报价"}
-          </Button>
-        )}
-      </form>
-      {quote && (
-        <section className="quote-card" aria-label="生成报价">
-          <h3>确认本次生成</h3>
-          <p>
-            预计费用 <strong>{money(quote.quote_micros)}</strong> · 可用余额{" "}
-            {money(quote.available_micros)}
-          </p>
-          <p>
-            {now >= Date.parse(quote.expires_at)
-              ? "报价已过期，请重新获取。"
-              : `有效至 ${new Date(quote.expires_at).toLocaleTimeString("zh-CN")}`}
-          </p>
-          {!quote.confirmable && (
-            <p role="alert">
-              当前报价无法确认，请检查余额、模型可用性或刷新报价。
-            </p>
-          )}
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              disabled={pending || unconfirmed}
-              onClick={() => {
-                setQuote(null);
-                intent.current = null;
-                confirmKey.current = null;
-                setError("");
-              }}
-            >
-              返回编辑
-            </Button>
-            <Button
-              disabled={
-                pending ||
-                (!unconfirmed &&
-                  (!quote.confirmable || now >= Date.parse(quote.expires_at)))
-              }
-              onClick={() => void confirm()}
-            >
-              {pending
-                ? "正在确认…"
-                : unconfirmed
-                  ? "重试原确认"
-                  : "确认并开始生成"}
-            </Button>
-          </div>
-        </section>
-      )}
-      {task && (
-        <TaskDetail
-          projectID={project.id}
-          id={task}
-          onAdopt={onAdopt}
-          onReuse={(t) => {
-            setPrompt(t.inputs?.find((i) => i.role === "prompt")?.text ?? "");
-            setRerun(true);
-            setTask(null);
-          }}
-        />
-      )}
-      {pickRole && (
-        <ProjectMediaPicker
-          projectID={project.id}
-          kind={limits?.roles?.[pickRole]?.types?.[0] ?? "image"}
-          onClose={() => setPickRole(null)}
-          onSelect={(a) => {
-            setMedia((v) => [
-              ...v.filter((i) => i.media_asset_id !== a.id),
-              { role: pickRole, media_asset_id: a.id },
-            ]);
-            setPickRole(null);
-          }}
-        />
-      )}
     </>
   );
 }
@@ -843,7 +153,7 @@ function TaskHistory({
   locked: boolean;
 }) {
   const [open, setOpen] = useState(false),
-    [items, setItems] = useState<CreationAPI.TaskSummary[]>([]),
+    [items, setItems] = useState<API.TaskSummary[]>([]),
     [cursor, setCursor] = useState<string | undefined>(),
     [error, setError] = useState(""),
     [pending, setPending] = useState(false),
@@ -859,7 +169,7 @@ function TaskHistory({
         limit: 30,
         cursor: next,
       });
-      if (!Array.isArray(r.items)) throw new AuthError("invalid_receipt");
+      if (!Array.isArray(r.items)) throw new RequestError("invalid_receipt");
       r.items.forEach((i) => requireTask(i, projectID));
       setItems((v) => (next ? [...v, ...r.items!] : r.items!));
       setCursor(r.next_cursor);
@@ -967,7 +277,7 @@ export function TaskDetail({
           projectID,
         );
         if (c.signal.aborted) return;
-        if (t.id !== id) throw new AuthError("invalid_receipt");
+        if (t.id !== id) throw new RequestError("invalid_receipt");
         setTask(t);
         setError("");
         if (activeTask(t.status)) timer = setTimeout(() => void read(), 3000);
@@ -997,7 +307,7 @@ export function TaskDetail({
         receipt.target_type !== "operation" ||
         receipt.action !== "cancel"
       )
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       setConfirmCancel(false);
       setRetry((n) => n + 1);
     } catch (e) {

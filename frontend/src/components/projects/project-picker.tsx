@@ -2,7 +2,7 @@
 import { useEffect, useState, useId } from "react";
 import { Folder, Search } from "lucide-react";
 import Link from "next/link";
-import { listProjects } from "./generated/projects";
+import { listProjects } from "@/api/projects";
 import {
   requireProjectList,
   type Project,

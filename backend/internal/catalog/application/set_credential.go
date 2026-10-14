@@ -3,6 +3,9 @@ package application
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +17,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 const (
@@ -64,23 +66,24 @@ type SavedCredential struct {
 
 // SetCredentialCommand validates, seals, and atomically records a replacement.
 type SetCredentialCommand struct {
-	store     SetCredentialStore
-	validator SecretValidator
-	sealer    CredentialSealer
-	now       func() time.Time
+	store         SetCredentialStore
+	validator     SecretValidator
+	sealer        CredentialSealer
+	now           func() time.Time
+	requestMACKey []byte
 }
 
 // NewSetCredentialCommand injects the store, adapter contracts, public key, and clock.
-func NewSetCredentialCommand(store SetCredentialStore, validator SecretValidator, sealer CredentialSealer, now func() time.Time) *SetCredentialCommand {
-	return &SetCredentialCommand{store: store, validator: validator, sealer: sealer, now: now}
+func NewSetCredentialCommand(store SetCredentialStore, validator SecretValidator, sealer CredentialSealer, now func() time.Time, requestMACKey []byte) *SetCredentialCommand {
+	return &SetCredentialCommand{store: store, validator: validator, sealer: sealer, now: now, requestMACKey: append([]byte(nil), requestMACKey...)}
 }
 
 // Execute never sends the plaintext to persistence, logs, or Outbox.
 func (c *SetCredentialCommand) Execute(ctx context.Context, actor identityapp.Principal, input SetCredentialInput) (SavedCredential, error) {
-	if c == nil || c.store == nil || c.validator == nil || c.sealer == nil || c.now == nil {
+	if c == nil || c.store == nil || c.validator == nil || c.sealer == nil || c.now == nil || len(c.requestMACKey) < 32 {
 		return SavedCredential{}, ErrInvalidSetCredential
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return SavedCredential{}, identityapp.ErrForbidden
 	}
 	label := strings.TrimSpace(input.Label)
@@ -96,7 +99,7 @@ func (c *SetCredentialCommand) Execute(ctx context.Context, actor identityapp.Pr
 	if provider.ID != input.ProviderID {
 		return SavedCredential{}, ErrInvalidSetCredential
 	}
-	if provider.Status != domain.ProviderActive {
+	if provider.Status != domain.ProviderActive && provider.CurrentConfigVersionID == uuid.Nil {
 		return SavedCredential{}, domain.ErrProviderDisabled
 	}
 	last4, err := c.validator.Validate(provider.AdapterKey, input.Secret)
@@ -104,9 +107,25 @@ func (c *SetCredentialCommand) Execute(ctx context.Context, actor identityapp.Pr
 		return SavedCredential{}, fmt.Errorf("validate provider credential fields: %w", err)
 	}
 	credential := domain.Credential{
-		ID: uuid.New(), ProviderID: provider.ID, Label: label,
+		ID: uuid.NewSHA1(actor.ID, []byte(input.ProviderID.String()+"/"+input.RequestID)), ProviderID: provider.ID, Label: label,
 		KeyID: c.sealer.KeyID(), Last4: last4, Status: domain.CredentialActive,
 	}
+	var canonicalSecret map[string]any
+	if err := json.Unmarshal(input.Secret, &canonicalSecret); err != nil {
+		return SavedCredential{}, ErrInvalidSetCredential
+	}
+	payload, err := json.Marshal(struct {
+		Provider uuid.UUID
+		Label    string
+		Secret   map[string]any
+	}{provider.ID, label, canonicalSecret})
+	if err != nil {
+		return SavedCredential{}, ErrInvalidSetCredential
+	}
+	mac := hmac.New(sha256.New, c.requestMACKey)
+	_, _ = mac.Write(payload)
+	clear(payload)
+	credential.RequestFingerprint = hex.EncodeToString(mac.Sum(nil))
 	credential.Ciphertext, err = c.sealer.Seal(provider.ID, credential.ID, input.Secret)
 	if err != nil {
 		return SavedCredential{}, fmt.Errorf("seal provider credential: %w", err)

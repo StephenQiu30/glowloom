@@ -3,7 +3,6 @@ package domain
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -11,18 +10,16 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	passwordCost = 12
 	lockFailures = 5
 	lockDuration = 15 * time.Minute
 )
 
 var (
 	// ErrWeakPassword means a password violates the account policy.
-	ErrWeakPassword = errors.New("password must have at least 10 characters, a letter, and a digit, and fit bcrypt's 72-byte limit")
+	ErrWeakPassword = errors.New("password must contain 15 to 128 Unicode characters")
 	// ErrPasswordReused means the new password equals the current password.
 	ErrPasswordReused = errors.New("new password must differ from current password")
 	// ErrAccountLocked means a temporary login lock has not expired.
@@ -64,11 +61,22 @@ const (
 )
 
 // User contains the account state needed by authentication and account commands.
-// PasswordHash is a bcrypt hash and must never be logged or returned in an API DTO.
+// PasswordHash is a versioned credential and must never be logged or returned in an API DTO.
 type User struct {
 	ID                 uuid.UUID
 	OrgID              uuid.UUID
 	LoginName          string
+	Email              string
+	EmailVerifiedAt    time.Time
+	EmailVersion       int64
+	PlatformRole       string
+	PlatformEpoch      int64
+	AvatarAssetID      *uuid.UUID
+	TermsVersion       string
+	TermsAcceptedAt    time.Time
+	Theme              string
+	PromptSuffix       string
+	DeletedAt          time.Time
 	DisplayName        string
 	Role               Role
 	Status             Status
@@ -86,44 +94,13 @@ type User struct {
 
 // ValidatePassword checks both the password policy and replacement uniqueness.
 func ValidatePassword(password, currentHash string) error {
-	if !utf8.ValidString(password) || utf8.RuneCountInString(password) < 10 || len(password) > 72 {
-		return ErrWeakPassword
-	}
-	var letter, digit bool
-	for _, r := range password {
-		letter = letter || unicode.IsLetter(r)
-		digit = digit || unicode.IsDigit(r)
-	}
-	if !letter || !digit {
-		return ErrWeakPassword
+	if err := ValidateNewPassword(password); err != nil {
+		return err
 	}
 	if currentHash != "" && VerifyPassword(currentHash, password) {
 		return ErrPasswordReused
 	}
 	return nil
-}
-
-// HashPassword validates and hashes a new password at the accepted bcrypt cost.
-func HashPassword(password, currentHash string) (string, error) {
-	if err := ValidatePassword(password, currentHash); err != nil {
-		return "", err
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), passwordCost)
-	if err != nil {
-		return "", fmt.Errorf("hash password: %w", err)
-	}
-	return string(hash), nil
-}
-
-// VerifyPassword compares a candidate without exposing the password or hash.
-func VerifyPassword(hash, password string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
-}
-
-// ValidPasswordHash reports whether a stored hash uses the required bcrypt cost.
-func ValidPasswordHash(hash string) bool {
-	cost, err := bcrypt.Cost([]byte(hash))
-	return err == nil && cost == passwordCost
 }
 
 // CanLogin rejects disabled or currently locked accounts. The returned duration

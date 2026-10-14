@@ -42,13 +42,13 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := pgidentity.NewStore(conn.DB).Create(ctx, identitydomain.User{
-		ID: actor.ID, OrgID: actor.OrgID, LoginName: "admin", DisplayName: "Admin",
+		ID: actor.ID, OrgID: actor.OrgID, LoginName: "admin-" + actor.ID.String(), DisplayName: "Admin",
 		Role: identitydomain.RoleAdmin, PasswordHash: hash,
 	}); err != nil {
 		t.Fatalf("create test administrator: %v", err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`
-		UPDATE identity."user" SET must_change_password = false WHERE id = ?::uuid
+		UPDATE identity."user" SET must_change_password = false, platform_role='platform_admin' WHERE id = ?::uuid
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 		t.Fatalf("unsafe active credential: id %s error %v", active.ID, err)
 	}
 	var oldStatus string
-	if err := conn.DB.WithContext(ctx).Raw(`SELECT status FROM catalog.provider_credential WHERE id = ?::uuid`, first.ID.String()).Scan(&oldStatus).Error; err != nil || oldStatus != "disabled" {
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT status FROM catalog.provider_credential WHERE id = ?::uuid`, first.ID.String()).Scan(&oldStatus).Error; err != nil || oldStatus != "draining" {
 		t.Fatalf("old credential status %q: %v", oldStatus, err)
 	}
 	var rows []struct {
@@ -157,7 +157,7 @@ func TestSetCredentialCommitsSealedDataAndEventsOnLocalPostgres(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = revocation.Rollback().Error })
 	if err := revocation.Exec(`
-		UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid
+		UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}

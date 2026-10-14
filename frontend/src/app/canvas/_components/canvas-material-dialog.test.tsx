@@ -9,7 +9,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CanvasMaterialDialog } from "./canvas-material-dialog";
 const api = vi.hoisted(() => ({ list: vi.fn() }));
-vi.mock("@/components/creation/generated/creation", () => ({
+vi.mock("@/api/media", () => ({
   listMediaAssets: api.list,
 }));
 vi.mock("@/components/media/project-media", () => ({

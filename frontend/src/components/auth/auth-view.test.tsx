@@ -7,6 +7,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AuthView } from "./auth-view";
+import { request as sendRequest, RequestError } from "@/lib/request";
+vi.mock("@/lib/request", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/request")>();
+  return { ...actual, request: vi.fn() };
+});
 const mocks = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks }));
 afterEach(() => {
@@ -15,6 +20,7 @@ afterEach(() => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(sendRequest).mockReset();
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -40,10 +46,7 @@ it("弹窗登录只在收到有效会话后更新当前页面，受限账号仍�
     persistent: false,
   };
   const authenticated = vi.fn();
-  const request = vi
-    .fn()
-    .mockImplementation(async () => new Response(JSON.stringify(session)));
-  vi.stubGlobal("fetch", request);
+  const request = vi.mocked(sendRequest).mockResolvedValue(session);
   const view = render(
     <AuthView mode="login" embedded onAuthenticated={authenticated} />,
   );
@@ -58,15 +61,10 @@ it("弹窗登录只在收到有效会话后更新当前页面，受限账号仍�
   expect(mocks.push).not.toHaveBeenCalled();
   view.unmount();
   authenticated.mockClear();
-  request.mockImplementation(
-    async () =>
-      new Response(
-        JSON.stringify({
-          ...session,
-          actor: { ...session.actor, must_change_password: true },
-        }),
-      ),
-  );
+  request.mockResolvedValue({
+    ...session,
+    actor: { ...session.actor, must_change_password: true },
+  });
   render(<AuthView mode="login" embedded onAuthenticated={authenticated} />);
   fireEvent.change(screen.getByLabelText("登录名"), {
     target: { value: "alice" },
@@ -95,13 +93,8 @@ function fillRegistration() {
   });
 }
 it("注册失败保留输入且不进入工作台", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ code: "login_name_taken" }), {
-        status: 422,
-      }),
-    ),
+  vi.mocked(sendRequest).mockRejectedValue(
+    new RequestError("login_name_taken", 422),
   );
   render(<AuthView mode="register" />);
   fillRegistration();
@@ -130,10 +123,7 @@ it("注册等待真实回执，只有有效会话可以进入工作台", async (
     absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
     persistent: false,
   };
-  const request = vi
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(session), { status: 201 }));
-  vi.stubGlobal("fetch", request);
+  const request = vi.mocked(sendRequest).mockResolvedValue(session);
   render(<AuthView mode="register" />);
   fillRegistration();
   fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
@@ -141,10 +131,7 @@ it("注册等待真实回执，只有有效会话可以进入工作台", async (
   expect(request.mock.calls[0][0]).toBe("/api/accounts/register");
 });
 it("无身份回执不伪造成功", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue(new Response("{}", { status: 201 })),
-  );
+  vi.mocked(sendRequest).mockResolvedValue({});
   render(<AuthView mode="register" />);
   fillRegistration();
   fireEvent.click(screen.getByRole("button", { name: "创建账号" }));
@@ -179,15 +166,10 @@ it("受限改密使用会话版本，失败保留表单，成功后才继续", a
     session_id: "33333333-3333-4333-8333-333333333333",
   };
   const request = vi
-    .fn()
-    .mockResolvedValueOnce(new Response(JSON.stringify(session)))
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: "current_password_invalid" }), {
-        status: 422,
-      }),
-    )
-    .mockResolvedValueOnce(new Response(JSON.stringify(updated)));
-  vi.stubGlobal("fetch", request);
+    .mocked(sendRequest)
+    .mockResolvedValueOnce(session)
+    .mockRejectedValueOnce(new RequestError("current_password_invalid", 422))
+    .mockResolvedValueOnce(updated);
   render(<AuthView mode="reset-password" />);
   await waitFor(() =>
     expect(request).toHaveBeenCalledWith("/api/session", expect.any(Object)),
@@ -212,7 +194,7 @@ it("受限改密使用会话版本，失败保留表单，成功后才继续", a
     expect(screen.getByRole("alert").textContent).toContain("当前密码不正确"),
   );
   expect(mocks.push).not.toHaveBeenCalled();
-  expect(JSON.parse(request.mock.calls[1][1].body)).toMatchObject({
+  expect(request.mock.calls[1][1]?.data).toMatchObject({
     expected_credential_revision: 7,
   });
   expect(
@@ -224,8 +206,7 @@ it("受限改密使用会话版本，失败保留表单，成功后才继续", a
 });
 
 it("空登录表单给出字段错误并将焦点放在首个无效输入，不发送请求", () => {
-  const request = vi.fn();
-  vi.stubGlobal("fetch", request);
+  const request = vi.mocked(sendRequest);
   render(<AuthView mode="login" embedded />);
   fireEvent.click(screen.getByRole("button", { name: "登录" }));
   expect(screen.getByLabelText("登录名").getAttribute("aria-invalid")).toBe(
@@ -240,14 +221,13 @@ it("空登录表单给出字段错误并将焦点放在首个无效输入，不�
 });
 
 it("待提交时只发起一次请求，关闭后取消等待且不应用迟到的回执", async () => {
-  let resolve!: (value: Response) => void;
-  const request = vi.fn().mockImplementation(
+  let resolve!: (value: unknown) => void;
+  const request = vi.mocked(sendRequest).mockImplementation(
     () =>
-      new Promise<Response>((done) => {
+      new Promise((done) => {
         resolve = done;
       }),
   );
-  vi.stubGlobal("fetch", request);
   const authenticated = vi.fn();
   const pending = vi.fn();
   const view = render(
@@ -269,27 +249,23 @@ it("待提交时只发起一次请求，关闭后取消等待且不应用迟到�
   expect(request).toHaveBeenCalledTimes(1);
   expect(pending).toHaveBeenCalledWith(true);
   expect(screen.getByLabelText("登录名")).toHaveProperty("disabled", true);
-  const signal = request.mock.calls[0][1].signal as AbortSignal;
+  const signal = request.mock.calls[0][1]?.signal as AbortSignal;
   view.unmount();
   expect(signal.aborted).toBe(true);
-  resolve(
-    new Response(
-      JSON.stringify({
-        actor: {
-          id: "11111111-1111-4111-8111-111111111111",
-          login_name: "alice",
-          display_name: "Alice",
-          role: "creator",
-          must_change_password: false,
-          credential_revision: 1,
-        },
-        session_id: "22222222-2222-4222-8222-222222222222",
-        persistent: false,
-        last_active_at: new Date().toISOString(),
-        absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
-      }),
-    ),
-  );
+  resolve({
+    actor: {
+      id: "11111111-1111-4111-8111-111111111111",
+      login_name: "alice",
+      display_name: "Alice",
+      role: "creator",
+      must_change_password: false,
+      credential_revision: 1,
+    },
+    session_id: "22222222-2222-4222-8222-222222222222",
+    persistent: false,
+    last_active_at: new Date().toISOString(),
+    absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
+  });
   await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
   expect(authenticated).not.toHaveBeenCalled();
   expect(mocks.push).not.toHaveBeenCalled();

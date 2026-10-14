@@ -4342,3 +4342,352 @@ CREATE TABLE canvas.save_receipt (
     PRIMARY KEY(actor_id,idem_key)
 );
 GRANT SELECT,INSERT ON canvas.node_input,canvas.save_receipt TO lanverse_app;
+
+-- Email identity expansion; final schema retains legacy columns until cutover.
+-- Expand only. The caller owns the transaction and must set a bounded lock timeout.
+-- This file never creates a database/role/schema, resets data, or infers identities.
+-- Run once on the existing pre-email schema; rollback the transaction for rehearsal.
+ALTER TABLE identity."user"
+    ADD COLUMN email_key text,
+    ADD COLUMN email_verified_at timestamptz,
+    ADD COLUMN email_version bigint NOT NULL DEFAULT 1 CHECK (email_version > 0),
+    ADD COLUMN platform_role text NOT NULL DEFAULT 'creator' CHECK (platform_role IN ('creator','platform_admin')),
+    ADD COLUMN platform_epoch bigint NOT NULL DEFAULT 1 CHECK (platform_epoch > 0),
+    ADD COLUMN avatar_asset_id uuid REFERENCES media.media_asset(id) ON DELETE RESTRICT,
+    ADD COLUMN terms_version text,
+    ADD COLUMN terms_accepted_at timestamptz,
+    ADD COLUMN theme text NOT NULL DEFAULT 'system' CHECK (theme IN ('light','dark','system')),
+    ADD COLUMN prompt_suffix text NOT NULL DEFAULT '' CHECK (char_length(prompt_suffix) <= 2000),
+    ADD COLUMN deleted_at timestamptz,
+    ADD CONSTRAINT user_email_key_check CHECK (email_key IS NULL OR (
+        octet_length(email_key) BETWEEN 3 AND 254 AND email_key = lower(btrim(email_key))
+        AND email_key !~ '[^\x21-\x7e]' AND email_key ~ '^[^@]+@[^@]+$')),
+    ADD CONSTRAINT user_email_proof_check CHECK ((email_key IS NULL) = (email_verified_at IS NULL)),
+    ADD CONSTRAINT user_terms_check CHECK ((terms_version IS NULL) = (terms_accepted_at IS NULL));
+
+-- session_epoch is the existing durable credential epoch. Retain one source of
+-- truth during expansion; the cutover will rename it after old consumers retire.
+CREATE UNIQUE INDEX user_email_key_unique ON identity."user"(email_key) WHERE email_key IS NOT NULL;
+CREATE INDEX user_platform_directory_idx ON identity."user"(create_time DESC,id DESC);
+CREATE INDEX user_platform_status_idx ON identity."user"(status,create_time DESC,id DESC);
+CREATE INDEX user_platform_role_idx ON identity."user"(platform_role,status);
+
+ALTER TABLE identity.user_session
+    ADD COLUMN device_summary text NOT NULL DEFAULT '' CHECK (char_length(device_summary) <= 256),
+    ADD COLUMN reauth_at timestamptz,
+    ADD COLUMN reauth_epoch bigint CHECK (reauth_epoch > 0),
+    ADD COLUMN csrf_hash bytea CHECK (octet_length(csrf_hash) = 32),
+    ADD CONSTRAINT user_session_reauth_check CHECK ((reauth_at IS NULL) = (reauth_epoch IS NULL));
+CREATE INDEX user_session_activity_idx ON identity.user_session(account_id,last_active_at DESC,id);
+CREATE INDEX user_session_live_idx ON identity.user_session(account_id,id) WHERE revoked_at IS NULL;
+
+CREATE TABLE identity.platform_settings (
+    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+    registration_enabled boolean NOT NULL DEFAULT false,
+    team_creation_enabled boolean NOT NULL DEFAULT false,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    updated_by uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    update_time timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO identity.platform_settings(singleton) VALUES(true);
+
+CREATE TABLE workspace.team (
+    id uuid PRIMARY KEY,
+    name text NOT NULL CHECK (char_length(name) BETWEEN 2 AND 50),
+    avatar_asset_id uuid REFERENCES media.media_asset(id) ON DELETE RESTRICT,
+    created_by uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    status text NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived','suspended')),
+    resume_status text CHECK (resume_status IN ('active','archived')),
+    governance_blocked boolean NOT NULL DEFAULT false,
+    auth_epoch bigint NOT NULL DEFAULT 1 CHECK (auth_epoch > 0),
+    invitation_enabled boolean NOT NULL DEFAULT true,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    create_time timestamptz NOT NULL DEFAULT now(),
+    update_time timestamptz NOT NULL DEFAULT now(),
+    CHECK ((status = 'suspended') = (resume_status IS NOT NULL))
+);
+CREATE INDEX team_creator_idx ON workspace.team(created_by,status);
+CREATE INDEX team_status_idx ON workspace.team(status,create_time DESC,id DESC);
+
+CREATE TABLE workspace.team_member (
+    team_id uuid NOT NULL REFERENCES workspace.team(id) ON DELETE RESTRICT,
+    user_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    role text NOT NULL CHECK (role IN ('team_admin','member')),
+    status text NOT NULL CHECK (status IN ('active','suspended','removed')),
+    auth_epoch bigint NOT NULL DEFAULT 1 CHECK (auth_epoch > 0),
+    joined_at timestamptz NOT NULL,
+    joined_by uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    source text NOT NULL CHECK (source IN ('created','invited','migrated','transferred')),
+    last_team_activity_at timestamptz,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    create_time timestamptz NOT NULL DEFAULT now(),
+    update_time timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY(team_id,user_id)
+);
+CREATE INDEX team_member_user_idx ON workspace.team_member(user_id,status,team_id);
+CREATE INDEX team_member_directory_idx ON workspace.team_member(team_id,status,joined_at DESC,user_id DESC);
+CREATE INDEX team_member_admin_idx ON workspace.team_member(team_id,role,status);
+
+CREATE TABLE workspace.creation_scope (
+    id uuid PRIMARY KEY,
+    kind text NOT NULL CHECK (kind IN ('personal','team')),
+    owner_user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
+    physical_scope_id uuid NOT NULL REFERENCES workspace.organization(id) ON DELETE RESTRICT,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    create_time timestamptz NOT NULL DEFAULT now(),
+    update_time timestamptz NOT NULL DEFAULT now(),
+    CHECK ((kind = 'personal' AND owner_user_id IS NOT NULL AND team_id IS NULL)
+        OR (kind = 'team' AND owner_user_id IS NULL AND team_id IS NOT NULL))
+);
+CREATE UNIQUE INDEX creation_scope_personal_unique ON workspace.creation_scope(owner_user_id) WHERE owner_user_id IS NOT NULL;
+CREATE UNIQUE INDEX creation_scope_team_unique ON workspace.creation_scope(team_id) WHERE team_id IS NOT NULL;
+
+CREATE TABLE identity.auth_challenge (
+    id uuid PRIMARY KEY,
+    operation_id uuid NOT NULL,
+    purpose text NOT NULL CHECK (purpose IN ('registration_code','registration_grant','password_reset','email_old','email_new','deletion_confirm','deletion_cancel','migration_bind')),
+    email_key text NOT NULL,
+    user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    email_version bigint CHECK (email_version > 0),
+    credential_epoch bigint CHECK (credential_epoch > 0),
+    proof_digest bytea NOT NULL CHECK (octet_length(proof_digest) = 32),
+    proof_key_id text NOT NULL,
+    flow_secret_digest bytea CHECK (octet_length(flow_secret_digest) = 32),
+    attempts smallint NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
+    expires_at timestamptz NOT NULL,
+    consumed_at timestamptz,
+    revoked_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    invitation_id uuid,
+    CHECK (expires_at > created_at)
+);
+CREATE INDEX auth_challenge_operation_idx ON identity.auth_challenge(operation_id,purpose);
+CREATE INDEX auth_challenge_email_idx ON identity.auth_challenge(email_key,purpose,created_at DESC);
+CREATE INDEX auth_challenge_expiry_idx ON identity.auth_challenge(expires_at);
+
+CREATE TABLE identity.email_budget (
+    bucket_key text PRIMARY KEY,
+    sent_at timestamptz[] NOT NULL DEFAULT '{}',
+    failed_at timestamptz[] NOT NULL DEFAULT '{}',
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0)
+);
+
+CREATE TABLE identity.security_event (
+    id uuid PRIMARY KEY,
+    actor_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    target_user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
+    team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
+    scope_kind text NOT NULL,
+    action text NOT NULL,
+    result text NOT NULL,
+    reason text NOT NULL DEFAULT '',
+    request_id text NOT NULL DEFAULT '',
+    safe_diff jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(safe_diff) = 'object'),
+    created_at timestamptz NOT NULL
+);
+CREATE INDEX security_event_user_idx ON identity.security_event(target_user_id,created_at DESC,id);
+CREATE INDEX security_event_team_idx ON identity.security_event(team_id,created_at DESC,id);
+CREATE INDEX security_event_time_idx ON identity.security_event(created_at DESC,id);
+
+CREATE TABLE identity.mail_delivery (
+    event_id uuid PRIMARY KEY,
+    challenge_id uuid REFERENCES identity.auth_challenge(id) ON DELETE RESTRICT,
+    template text NOT NULL,
+    recipient text NOT NULL,
+    encrypted_payload bytea,
+    key_id text,
+    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','leased','submitted','delivered','bounced','failed','expired')),
+    attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    lease_until timestamptz,
+    provider_message_id text,
+    error_category text,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    CHECK ((encrypted_payload IS NULL) = (key_id IS NULL))
+);
+CREATE INDEX mail_delivery_pending_idx ON identity.mail_delivery(status,next_attempt_at,event_id);
+
+GRANT SELECT,INSERT,UPDATE ON identity.platform_settings,identity.auth_challenge,identity.email_budget,identity.mail_delivery,
+    workspace.team,workspace.team_member,workspace.creation_scope TO lanverse_app;
+GRANT SELECT,INSERT ON identity.security_event TO lanverse_app;
+
+-- AI catalog final-state additions (002).
+CREATE TABLE catalog.provider_preset (
+    id uuid PRIMARY KEY,
+    slug text NOT NULL UNIQUE CHECK (slug ~ '^[a-z][a-z0-9_-]{0,63}$'),
+    origin text NOT NULL CHECK (origin IN ('builtin','custom')),
+    parent_id uuid REFERENCES catalog.provider_preset(id),
+    archived boolean NOT NULL DEFAULT false,
+    emergency_disabled boolean NOT NULL DEFAULT false,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    update_time timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE catalog.provider_preset_version (
+    id uuid PRIMARY KEY,
+    preset_id uuid NOT NULL REFERENCES catalog.provider_preset(id),
+    version_no integer NOT NULL CHECK (version_no > 0),
+    payload jsonb NOT NULL CHECK (jsonb_typeof(payload)='object'),
+    content_hash text NOT NULL CHECK (length(content_hash)=64),
+    create_time timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (preset_id,version_no)
+);
+CREATE TABLE catalog.provider_config_version (
+    id uuid PRIMARY KEY,
+    provider_id uuid NOT NULL REFERENCES catalog.provider(id),
+    preset_version_id uuid REFERENCES catalog.provider_preset_version(id),
+    version_no integer NOT NULL CHECK (version_no > 0),
+    config jsonb NOT NULL CHECK (jsonb_typeof(config)='object'),
+    content_hash text NOT NULL CHECK (length(content_hash)=64),
+    create_time timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (provider_id,version_no),
+    UNIQUE (provider_id,id)
+);
+ALTER TABLE catalog.provider ADD COLUMN current_config_version_id uuid;
+ALTER TABLE catalog.provider ADD CONSTRAINT provider_current_config_fk
+    FOREIGN KEY (id,current_config_version_id) REFERENCES catalog.provider_config_version(provider_id,id);
+ALTER TABLE catalog.provider ALTER COLUMN status SET DEFAULT 'disabled';
+ALTER TABLE catalog.provider_credential DROP CONSTRAINT provider_credential_status_check;
+ALTER TABLE catalog.provider_credential ADD CONSTRAINT provider_credential_status_check CHECK (status IN ('active','draining','disabled'));
+CREATE TABLE catalog.config_request (
+    actor_id uuid NOT NULL,
+    action text NOT NULL,
+    target_id uuid NOT NULL,
+    request_id uuid NOT NULL,
+    fingerprint text NOT NULL,
+    result jsonb NOT NULL,
+    create_time timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY(actor_id,action,target_id,request_id)
+);
+CREATE TABLE catalog.provider_check (
+    id uuid PRIMARY KEY,
+    actor_id uuid NOT NULL REFERENCES identity."user"(id),
+    provider_id uuid NOT NULL REFERENCES catalog.provider(id),
+    config_version_id uuid NOT NULL REFERENCES catalog.provider_config_version(id),
+    credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
+    kind text NOT NULL CHECK(kind IN ('connectivity','discovery')),
+    status text NOT NULL CHECK(status IN ('pending','running','completed','failed')),
+    auth_result text NOT NULL DEFAULT 'unknown',
+    adapter_result text NOT NULL DEFAULT 'unknown',
+    discovery_result text NOT NULL DEFAULT 'unknown',
+    error_code text,
+    create_time timestamptz NOT NULL DEFAULT now(),
+    completed_at timestamptz
+);
+CREATE TABLE catalog.model_candidate (
+    id uuid PRIMARY KEY,
+    check_id uuid NOT NULL REFERENCES catalog.provider_check(id),
+    provider_model_id text NOT NULL,
+    display_name text NOT NULL,
+    capability text NOT NULL,
+    metadata jsonb NOT NULL,
+    UNIQUE(check_id,provider_model_id,capability)
+);
+CREATE TABLE catalog.model_release (
+    id uuid PRIMARY KEY,
+    model_id uuid NOT NULL REFERENCES catalog.model_profile(id),
+    model_version_id uuid NOT NULL REFERENCES catalog.model_profile_version(id),
+    price_version_id uuid NOT NULL REFERENCES catalog.price_rule_version(id),
+    config_version_id uuid NOT NULL REFERENCES catalog.provider_config_version(id),
+    status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','retired')),
+    upstream_cost jsonb NOT NULL CHECK (jsonb_typeof(upstream_cost)='object'),
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision>0),
+    create_time timestamptz NOT NULL DEFAULT now(),
+    activated_at timestamptz,
+    UNIQUE(model_id,id)
+);
+CREATE TABLE catalog.model_validation (
+    id uuid PRIMARY KEY,
+    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+    credential_id uuid NOT NULL REFERENCES catalog.provider_credential(id),
+    adapter_version text NOT NULL,
+    mode text NOT NULL,
+    input_digest text NOT NULL,
+    operation_id uuid NOT NULL,
+    status text NOT NULL CHECK (status IN ('pending','running','succeeded','failed','unknown')),
+    evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
+    create_time timestamptz NOT NULL DEFAULT now(),
+    completed_at timestamptz,
+    UNIQUE(operation_id)
+);
+ALTER TABLE catalog.model_profile ADD COLUMN active_release_id uuid;
+ALTER TABLE catalog.model_profile ADD CONSTRAINT model_active_release_fk
+    FOREIGN KEY (id,active_release_id) REFERENCES catalog.model_release(model_id,id);
+CREATE TABLE catalog.capability_default (
+    capability text PRIMARY KEY REFERENCES catalog.capability(key),
+    release_id uuid NOT NULL REFERENCES catalog.model_release(id),
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision>0),
+    update_time timestamptz NOT NULL DEFAULT now()
+);
+
+-- Version 1 builtins: portable configuration only; no models or keys are guessed.
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000001','volcengine-ark','builtin');
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000001','6da07a10-0000-4000-8000-000000000001',1,'{"schema_version":1,"name":"火山方舟","config":{"adapter_key":"volcengine_ark","base_url":"https://ark.cn-beijing.volces.com/api/v3","region":"domestic","capabilities":["video"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'a357018c3c198f6d58123c99cca6978fe6068a44e48b3794a0bcef2dbf9ed078');
+INSERT INTO catalog.provider_preset(id,slug,origin) VALUES('6da07a10-0000-4000-8000-000000000002','openrouter','builtin');
+INSERT INTO catalog.provider_preset_version(id,preset_id,version_no,payload,content_hash) VALUES('6da07a11-0000-4000-8000-000000000002','6da07a10-0000-4000-8000-000000000002',1,'{"schema_version":1,"name":"OpenRouter","config":{"adapter_key":"openrouter","base_url":"https://openrouter.ai/api/v1","region":"overseas","capabilities":["text","image","video"],"timeout_seconds":120,"concurrency_limit":2,"rate_limit_per_min":30}}'::jsonb,'621b784416c935788a8fe5a39a9775a3eed7651307db4c2f14c646cab165b765');
+
+
+-- Capability vocabulary is platform-owned; models opt into a verified subset.
+INSERT INTO catalog.capability(id,key,output_type,modes,input_roles) VALUES
+ ('6da07a12-0000-4000-8000-000000000001','text.generate','json',ARRAY['text_to_text'],ARRAY['prompt']),
+ ('6da07a12-0000-4000-8000-000000000002','image.generate','image',ARRAY['text2image','image2image'],ARRAY['prompt','reference_image','subject']),
+ ('6da07a12-0000-4000-8000-000000000003','video.generate','video',ARRAY['text2video','image2video','omni_reference'],ARRAY['prompt','first_frame','last_frame','reference_image','subject'])
+ON CONFLICT(key) DO NOTHING;
+GRANT SELECT,INSERT,UPDATE ON catalog.provider_preset,catalog.provider_check,catalog.model_release,catalog.model_validation,catalog.capability_default TO lanverse_app;
+GRANT SELECT,INSERT ON catalog.provider_preset_version,catalog.provider_config_version,catalog.config_request,catalog.model_candidate TO lanverse_app;
+
+-- Additive editor persistence. Apply to an existing database only after review.
+CREATE TABLE workspace.prompt_draft (
+ id uuid PRIMARY KEY,
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 2147483647),
+ draft jsonb NOT NULL CHECK(jsonb_typeof(draft)='object' AND octet_length(draft::text)<=1048576),
+ draft_hash text NOT NULL CHECK(draft_hash ~ '^[a-f0-9]{64}$'),
+ input_hash text NOT NULL CHECK(input_hash ~ '^[a-f0-9]{64}$'),
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX prompt_draft_owner ON workspace.prompt_draft(project_id,actor_id,id);
+CREATE TABLE workspace.prompt_draft_receipt (
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ request_key uuid NOT NULL,
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ request_hash text NOT NULL,
+ response jsonb NOT NULL,
+ PRIMARY KEY(actor_id,request_key)
+);
+CREATE TABLE operation.prompt_submission_slot (
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ owner_key text NOT NULL,
+ epoch bigint NOT NULL DEFAULT 0 CHECK(epoch>=0),
+ submission_id uuid,
+ PRIMARY KEY(actor_id,project_id,owner_key)
+);
+CREATE TABLE operation.prompt_submission (
+ id uuid PRIMARY KEY,
+ actor_id uuid NOT NULL REFERENCES identity."user"(id),
+ project_id uuid NOT NULL REFERENCES workspace.project(id),
+ owner_key text NOT NULL,
+ epoch bigint NOT NULL CHECK(epoch>0),
+ operation_id uuid NOT NULL UNIQUE REFERENCES operation.operation(id),
+ confirm_key uuid NOT NULL UNIQUE,
+ input_source jsonb NOT NULL,
+ snapshot jsonb NOT NULL,
+ quote jsonb NOT NULL,
+ state text NOT NULL CHECK(state IN ('quoted','accepted','closed')),
+ resolution text,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(actor_id,project_id,owner_key,epoch)
+);
+CREATE TABLE operation.prompt_resolution_receipt (
+ actor_id uuid NOT NULL,
+ request_key uuid NOT NULL,
+ request_hash text NOT NULL,
+ response jsonb NOT NULL,
+ PRIMARY KEY(actor_id,request_key)
+);
+GRANT SELECT,INSERT,UPDATE ON workspace.prompt_draft,operation.prompt_submission_slot,operation.prompt_submission TO lanverse_app;
+GRANT SELECT,INSERT ON workspace.prompt_draft_receipt,operation.prompt_resolution_receipt TO lanverse_app;

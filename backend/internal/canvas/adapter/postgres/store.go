@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 	"math"
 	"reflect"
 	"time"
@@ -179,6 +180,14 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 		}
 		if err := s.checkMediaReferences(ctx, tx, a, p, input.Commands, updated); err != nil {
 			return err
+		}
+
+		for _, node := range updated.Nodes {
+			if domain.IsDraft(node) && node.Config.Draft.Composer != nil {
+				if err := pgprompt.ValidateDraftSources(tx, a, p, *node.Config.Draft.Composer, false); err != nil {
+					return err
+				}
+			}
 		}
 		updated.Revision++
 		if err := saveGraph(tx, doc, updated); err != nil {

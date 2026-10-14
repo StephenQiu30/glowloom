@@ -75,7 +75,7 @@ func TestProviderCredentialsWithRealPostgres(t *testing.T) {
 	var oldStatus string
 	if err := conn.DB.WithContext(ctx).Raw(`
 		SELECT status FROM catalog.provider_credential WHERE id = ?::uuid
-	`, first.ID.String()).Scan(&oldStatus).Error; err != nil || oldStatus != "disabled" {
+	`, first.ID.String()).Scan(&oldStatus).Error; err != nil || oldStatus != "draining" {
 		t.Fatalf("old credential retained disabled: status %q error %v", oldStatus, err)
 	}
 	var pgErr *pgconn.PgError

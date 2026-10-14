@@ -25,12 +25,9 @@ import {
   EmptyMedia,
   EmptyContent,
 } from "@/components/ui/empty";
-import {
-  listBibleEntries,
-  getBibleEntry,
-} from "@/components/creation/generated/creation";
+import { listBibleEntries, getBibleEntry } from "@/api/bible";
 import { ProjectMediaPreview } from "@/components/media/project-media";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
 import { isProjectID } from "@/components/projects/project";
 import {
@@ -51,7 +48,7 @@ export function SubjectList({
   filters,
 }: {
   projectID: string;
-  kind?: CreationAPI.Kind;
+  kind?: API.Kind;
   onSelect?: (s: Subject) => void;
   selectedID?: string;
   onGenerate?: (s: Subject) => void;
@@ -81,7 +78,7 @@ export function SubjectList({
             s.head.kind !== kind,
         )
       )
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       const entries = await Promise.all(
         p.entries.map(async (s) =>
           requireSubject(

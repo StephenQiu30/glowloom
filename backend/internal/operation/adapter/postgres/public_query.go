@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	"time"
 
 	"github.com/google/uuid"
@@ -164,6 +165,17 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		result.TaskSummary, err = task.Summary.summary()
 		if err != nil {
 			return err
+		}
+		var editorSnapshot struct{ Snapshot []byte }
+		if err := tx.Raw(`SELECT snapshot FROM operation.prompt_submission WHERE operation_id=? AND project_id=? AND actor_id=?`, operationID, projectID, actor.ID).Scan(&editorSnapshot).Error; err != nil {
+			return err
+		}
+		if len(editorSnapshot.Snapshot) > 0 {
+			draft, err := promptdomain.DecodeDraft(editorSnapshot.Snapshot)
+			if err != nil {
+				return err
+			}
+			result.EditorDraft = &draft
 		}
 		result.Params, result.QuoteDetail = json.RawMessage(task.Params), json.RawMessage(task.QuoteDetail)
 		result.OutputCount, result.QuoteExpiresAt, result.ReusedFromID = task.OutputCount, task.QuoteExpiresAt, task.ReusedFromID

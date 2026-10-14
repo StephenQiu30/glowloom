@@ -1,4 +1,4 @@
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function isProjectID(value: unknown): value is string {
@@ -42,7 +42,7 @@ export function requireProject(value: unknown, requireCanvas = false): Project {
     typeof p.update_time !== "string" ||
     !Number.isFinite(Date.parse(p.update_time))
   ) {
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   }
   return p as Project;
 }
@@ -63,13 +63,13 @@ export function requireProjectList(value: unknown): {
         page.next_cursor.length <= 32768)
     )
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   const items = page.items.map((item: unknown) => requireProject(item));
   if (
     new Set(items.map((p) => p.id)).size !== items.length ||
     (items.length === 0 && page.next_cursor !== null)
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return { items, next_cursor: page.next_cursor } as {
     items: Project[];
     next_cursor: string | null;
@@ -78,12 +78,12 @@ export function requireProjectList(value: unknown): {
 
 export function canvasHref(project: Project): string {
   if (!isProjectID(project.id) || !isProjectID(project.canvas_id))
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return `/canvas?project_id=${project.id}&canvas_id=${project.canvas_id}`;
 }
 
 export function projectErrorMessage(error: unknown) {
-  if (error instanceof AuthError) {
+  if (error instanceof RequestError) {
     if (error.status === 401) return "登录已失效，请重新登录。";
     if (error.status === 404) return "项目或画布不存在，或当前账号无权访问。";
     if (error.status === 409)

@@ -25,6 +25,11 @@ type CreateBatchFreeQuoteInput struct {
 
 // Validate checks the envelope. Individual item failures are reported in order.
 func (i CreateBatchFreeQuoteInput) Validate() error {
+	for _, item := range i.Items {
+		if item.InputSource != nil {
+			return ErrInvalidBatchFreeQuote
+		}
+	}
 	requestID, err := uuid.Parse(i.RequestID)
 	if i.ProjectID == uuid.Nil || err != nil || requestID == uuid.Nil ||
 		requestID.String() != i.RequestID || len(i.Items) < 2 || len(i.Items) > 150 {

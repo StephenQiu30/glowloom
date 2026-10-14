@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { ProductShell } from "@/components/layout/product-shell";
-import { createProject } from "@/components/projects/generated/projects";
+import { createProject } from "@/api/projects";
 import {
   canvasHref,
   requireProject,

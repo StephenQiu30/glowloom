@@ -94,6 +94,10 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 	}
 	queueWorker := worker.New(temporalConn.Client, queue, options)
 	switch queue {
+	case "provider":
+		if err := registerProviderActivities(queueWorker, dbConn.DB, cfg); err != nil {
+			return nil, err
+		}
 	case "flow":
 		toolflow.RegisterWorkflow(queueWorker)
 		toolflow.RegisterTranscriptionWorkflow(queueWorker)
@@ -104,7 +108,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		mediaflow.RegisterPurgeWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
-		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB))))
+		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB)), pgcatalog.NewStore(dbConn.DB)))
 		operationStore := pgoperation.NewStore(dbConn.DB)
 		finalizer := NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
 		var recovery operationflow.ProviderImageRecoverer

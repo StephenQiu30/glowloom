@@ -60,6 +60,13 @@ func TestCredentialTestWorkflowSealsAgentBoundaryAndRecordsOnlySuccess(t *testin
 				}
 				return nil
 			}, activity.RegisterOptions{Name: "RecordCredentialTestResult"})
+			env.RegisterActivityWithOptions(func(_ context.Context, got catalogflow.Input) error {
+				if got != input {
+					t.Fatal("wrong failed check identity")
+				}
+				sequence = append(sequence, "failed")
+				return nil
+			}, activity.RegisterOptions{Name: "FailCredentialCheck"})
 			env.ExecuteWorkflow(catalogflow.CredentialTestWorkflow, input)
 			if tc.wantRecord {
 				if err := env.GetWorkflowError(); err != nil {
@@ -72,7 +79,7 @@ func TestCredentialTestWorkflowSealsAgentBoundaryAndRecordsOnlySuccess(t *testin
 				if len(sequence) != 3 || sequence[0] != "load" || sequence[1] != "agent" || sequence[2] != "record" {
 					t.Fatalf("wrong activity order: %v", sequence)
 				}
-			} else if env.GetWorkflowError() == nil || len(sequence) != 2 || sequence[0] != "load" || sequence[1] != "agent" {
+			} else if env.GetWorkflowError() == nil || len(sequence) != 3 || sequence[0] != "load" || sequence[1] != "agent" || sequence[2] != "failed" {
 				t.Fatalf("failed probe recorded result: %v, %v", env.GetWorkflowError(), sequence)
 			}
 		})

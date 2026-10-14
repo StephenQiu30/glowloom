@@ -41,7 +41,7 @@ func (s *Store) FindProviderForAdmin(ctx context.Context, actorID, orgID, provid
 // together with its cache-invalidation and audit events in one transaction.
 func (s *Store) ReplaceWithEvents(ctx context.Context, actorID, orgID uuid.UUID, credential domain.Credential, events []identityapp.OutboxEvent) (domain.Credential, error) {
 	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
-		credential.Validate() != nil || credential.Status != domain.CredentialActive ||
+		len(credential.RequestFingerprint) != 64 || credential.Validate() != nil || credential.Status != domain.CredentialActive ||
 		credential.LastTestResult != "" || !validCredentialEvents(actorID, orgID, credential, events) {
 		return domain.Credential{}, domain.ErrInvalidCredential
 	}
@@ -49,6 +49,33 @@ func (s *Store) ReplaceWithEvents(ctx context.Context, actorID, orgID uuid.UUID,
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
 			return err
+		}
+		var event credentialAuditEvent
+		if !decodeCredentialEvent(events[1].Payload, &event) {
+			return domain.ErrInvalidCredential
+		}
+		requestID := event.Data.RequestID
+		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actorID.String()+"/credential.set/"+credential.ProviderID.String()+"/"+requestID).Error; err != nil {
+			return err
+		}
+		var receipt struct {
+			Fingerprint string
+			Result      []byte
+		}
+		r := tx.Raw(`SELECT fingerprint,result FROM catalog.config_request WHERE actor_id=? AND action='credential.set' AND target_id=? AND request_id=?::uuid`, actorID, credential.ProviderID, requestID).Scan(&receipt)
+		if r.Error != nil {
+			return r.Error
+		}
+		if r.RowsAffected == 1 {
+			if receipt.Fingerprint != credential.RequestFingerprint {
+				return application.ErrPresetConflict
+			}
+			var existing application.SavedCredential
+			if json.Unmarshal(receipt.Result, &existing) != nil {
+				return domain.ErrInvalidCredential
+			}
+			saved = domain.Credential{ID: existing.ID, ProviderID: existing.ProviderID, Label: existing.Label, Last4: existing.Last4, Status: existing.Status, CreateTime: existing.CreateTime, UpdateTime: existing.UpdateTime}
+			return nil
 		}
 		if err := replaceCredentialInTx(tx, credential); err != nil {
 			return err
@@ -78,7 +105,11 @@ func (s *Store) ReplaceWithEvents(ctx context.Context, actorID, orgID uuid.UUID,
 			return domain.ErrInvalidCredential
 		}
 		saved = row.credential()
-		return nil
+		receiptBody, err := json.Marshal(application.SavedCredential{ID: saved.ID, ProviderID: saved.ProviderID, Label: saved.Label, Last4: saved.Last4, Status: saved.Status, CreateTime: saved.CreateTime, UpdateTime: saved.UpdateTime})
+		if err != nil {
+			return err
+		}
+		return tx.Exec(`INSERT INTO catalog.config_request(actor_id,action,target_id,request_id,fingerprint,result) VALUES(?,'credential.set',?,?::uuid,?,?::jsonb)`, actorID, credential.ProviderID, requestID, credential.RequestFingerprint, string(receiptBody)).Error
 	})
 	if err != nil {
 		return domain.Credential{}, fmt.Errorf("replace credential transaction: %w", err)
@@ -93,13 +124,13 @@ func requireCurrentCatalogAdmin(tx *gorm.DB, actorID, orgID uuid.UUID) error {
 		MustChangePassword bool
 	}
 	result := tx.Raw(`
-		SELECT role, status, must_change_password FROM identity."user"
+		SELECT platform_role AS role, status, must_change_password FROM identity."user"
 		WHERE org_id = ?::uuid AND id = ?::uuid AND NOT is_delete FOR SHARE
 	`, orgID.String(), actorID.String()).Scan(&actor)
 	if result.Error != nil {
 		return fmt.Errorf("read current catalog administrator: %w", result.Error)
 	}
-	if result.RowsAffected != 1 || actor.Role != string(identitydomain.RoleAdmin) ||
+	if result.RowsAffected != 1 || actor.Role != "platform_admin" ||
 		actor.Status != string(identitydomain.StatusActive) || actor.MustChangePassword {
 		return identityapp.ErrForbidden
 	}

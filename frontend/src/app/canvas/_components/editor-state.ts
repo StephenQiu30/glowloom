@@ -1,18 +1,24 @@
-import { AuthError } from "@/components/auth/request";
+import {
+  validatePromptDraft,
+  type PromptDraft,
+} from "@/components/generation/prompt-document";
+import { canonical, draftRequest } from "@/components/generation/draft-save";
+import { RequestError } from "@/lib/request";
 import { isProjectID } from "@/components/projects/project";
 
 export type Draft = {
+  composer?: PromptDraft;
   prompt: string;
   negative_prompt: string;
   aspect_ratio: string;
   candidate_count: number;
 };
-export type Node = ProjectAPI.Node & {
+export type Node = Omit<API.Node, "config"> & {
   id: string;
   title: string;
   node_type: string;
   node_action: string;
-  config: ProjectAPI.NodeConfig;
+  config: Omit<API.NodeConfig, "draft"> & { draft?: Draft };
   x: number;
   y: number;
   z_index: number;
@@ -26,7 +32,7 @@ export type Canvas = {
   project_id: string;
   revision: number;
   nodes: Node[];
-  edges: ProjectAPI.Edge[];
+  edges: API.Edge[];
 };
 export function isDraft(node: Node): node is DraftNode {
   return (
@@ -52,6 +58,20 @@ function dimension(value: unknown, max = 2000): boolean {
 }
 function validDraft(value: unknown): value is Draft {
   const d = value as Partial<Draft> | null;
+  if (d?.composer) {
+    try {
+      validatePromptDraft(d.composer);
+      return (
+        d.prompt === "" &&
+        d.negative_prompt === "" &&
+        d.aspect_ratio === "" &&
+        d.candidate_count === 0
+      );
+    } catch {
+      return false;
+    }
+  }
+
   return (
     !!d &&
     typeof d.prompt === "string" &&
@@ -82,7 +102,7 @@ export function requireCanvas(
     !Array.isArray(c.edges) ||
     c.edges.length > 4000
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   const ids = new Set<string>();
   for (const n of c.nodes) {
     if (
@@ -101,7 +121,7 @@ export function requireCanvas(
       !dimension(n.height, n.node_type === "group" ? 100000 : 2000) ||
       !Number.isInteger(n.z_index)
     )
-      throw new AuthError("invalid_receipt");
+      throw new RequestError("invalid_receipt");
     if (
       isDraft(n) &&
       (n.node_action !== "generate" ||
@@ -112,7 +132,7 @@ export function requireCanvas(
         !Number.isSafeInteger(n.input_revision) ||
         n.input_revision! < 1)
     )
-      throw new AuthError("invalid_receipt");
+      throw new RequestError("invalid_receipt");
     ids.add(n.id);
   }
   return c as Canvas;
@@ -141,6 +161,8 @@ export function createDraftNode(
   };
 }
 function sameDraft(a: Draft, b: Draft) {
+  if (a.composer || b.composer) return canonical(a) === canonical(b);
+
   return (
     a.prompt === b.prompt &&
     a.negative_prompt === b.negative_prompt &&
@@ -161,7 +183,7 @@ export function isEditableNode(n: Node): boolean {
   return !n.last_operation_id && (isDraft(n) || isMediaNode(n));
 }
 export function createMediaNode(
-  asset: CreationAPI.AssetSummary,
+  asset: API.AssetSummary,
   projectID: string,
   index: number,
 ): Node {
@@ -170,7 +192,7 @@ export function createMediaNode(
     asset.project_id !== projectID ||
     !["image", "video", "audio", "model"].includes(asset.kind ?? "")
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   const ratio =
     asset.width && asset.height && asset.width > 0 && asset.height > 0
       ? asset.height / asset.width
@@ -193,7 +215,7 @@ export function createMediaNode(
   };
 }
 export function duplicateNode(n: Node): Node {
-  if (!isEditableNode(n)) throw new AuthError("invalid_request");
+  if (!isEditableNode(n)) throw new RequestError("invalid_request");
   const copy = structuredClone(n);
   copy.id = crypto.randomUUID();
   copy.title = Array.from(n.title).slice(0, 125).join("") + " 副本";
@@ -229,19 +251,16 @@ export function sameEditable(a: Node, b: Node): boolean {
     sameDraft(a.config.draft, b.config.draft)
   );
 }
-export function commandBatch(
-  base: Canvas,
-  nodes: Node[],
-): ProjectAPI.CommandsInput {
+export function commandBatch(base: Canvas, nodes: Node[]): API.CommandsInput {
   const byID = new Map(base.nodes.map((n) => [n.id, n]));
-  const commands: ProjectAPI.Command[] = [];
-  const added: ProjectAPI.Node[] = [],
-    moves: ProjectAPI.Move[] = [],
-    names: ProjectAPI.Name[] = [],
-    sizes: ProjectAPI.Size[] = [];
+  const commands: API.Command[] = [];
+  const added: API.Node[] = [],
+    moves: API.Move[] = [],
+    names: API.Name[] = [],
+    sizes: API.Size[] = [];
   const ids = new Set<string>();
   for (const n of nodes) {
-    if (ids.has(n.id)) throw new AuthError("invalid_request");
+    if (ids.has(n.id)) throw new RequestError("invalid_request");
     ids.add(n.id);
     const prior = byID.get(n.id);
     if (
@@ -263,7 +282,7 @@ export function commandBatch(
         !dimension(n.width) ||
         !dimension(n.height)
       )
-        throw new AuthError("invalid_request");
+        throw new RequestError("invalid_request");
       if (prior.x !== n.x || prior.y !== n.y)
         moves.push({ id: n.id, x: n.x, y: n.y });
       if (prior.width !== n.width || prior.height !== n.height)
@@ -291,11 +310,11 @@ export function commandBatch(
       ) {
         const write = { ...n };
         delete write.input_revision;
-        added.push(write);
+        added.push({ ...write, config: apiConfig(write.config) });
         continue;
       }
       if (!prior || !sameEditable(prior, n))
-        throw new AuthError("invalid_request");
+        throw new RequestError("invalid_request");
       continue;
     }
     if (
@@ -307,40 +326,44 @@ export function commandBatch(
       !n.title.trim() ||
       Array.from(n.title).length > 128
     )
-      throw new AuthError("invalid_request");
+      throw new RequestError("invalid_request");
     if (!prior) {
       const write = { ...n };
       delete write.input_revision;
-      added.push(write);
+      added.push({ ...write, config: apiConfig(write.config) });
       continue;
     }
     if (!isDraft(prior) || prior.node_type !== n.node_type)
-      throw new AuthError("invalid_request");
+      throw new RequestError("invalid_request");
     if (prior.x !== n.x || prior.y !== n.y)
       moves.push({ id: n.id, x: n.x, y: n.y });
     if (prior.width !== n.width || prior.height !== n.height)
       sizes.push({ id: n.id, width: n.width ?? 288, height: n.height ?? 200 });
     if (prior.title !== n.title) names.push({ id: n.id, title: n.title });
     if (!sameDraft(prior.config.draft, n.config.draft))
-      commands.push({ type: "UpdateNodeConfig", id: n.id, config: n.config });
+      commands.push({
+        type: "UpdateNodeConfig",
+        id: n.id,
+        config: apiConfig(n.config),
+      });
   }
   if (base.nodes.some((n) => !ids.has(n.id)))
-    throw new AuthError("invalid_request");
+    throw new RequestError("invalid_request");
   if (sizes.length) commands.unshift({ type: "ResizeNodes", sizes });
   if (names.length) commands.unshift({ type: "RenameNodes", names });
   if (moves.length) commands.unshift({ type: "MoveNodes", moves });
   if (added.length) commands.unshift({ type: "AddNodes", nodes: added });
-  if (commands.length > 100) throw new AuthError("batch_too_large");
+  if (commands.length > 100) throw new RequestError("batch_too_large");
   return { expected_revision: base.revision, commands };
 }
 export function requireSaveResult(
   value: unknown,
   base: Canvas,
   frozen: Node[],
-  body: ProjectAPI.CommandsInput,
+  body: API.CommandsInput,
 ): Canvas {
   const c = requireCanvas(value, base.project_id, base.id);
-  const results = (value as ProjectAPI.Result).results;
+  const results = (value as API.Result).results;
   if (
     c.revision !== base.revision + 1 ||
     !Array.isArray(results) ||
@@ -348,23 +371,59 @@ export function requireSaveResult(
     results.some((r) => r.ok !== true) ||
     c.nodes.length !== frozen.length
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   const nodes = new Map(c.nodes.map((n) => [n.id, n]));
   const previous = new Map(base.nodes.map((n) => [n.id, n]));
   for (const n of frozen) {
     const saved = nodes.get(n.id);
     if (!saved || !sameEditable(n, saved))
-      throw new AuthError("invalid_receipt");
+      throw new RequestError("invalid_receipt");
     if (isDraft(n)) {
       const prior = previous.get(n.id);
       const expectedInput =
         prior && isDraft(prior)
           ? prior.input_revision! +
-            (sameDraft(prior.config.draft, n.config.draft) ? 0 : 1)
+            (sameDraftInput(prior.config.draft, n.config.draft) ? 0 : 1)
           : 1;
       if (saved.input_revision !== expectedInput)
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
     }
   }
   return c;
+}
+
+function sameDraftInput(a: Draft, b: Draft) {
+  if (!a.composer || !b.composer) return sameDraft(a, b);
+  const intent = (d: PromptDraft) => ({
+    ...d,
+    labelState: {
+      allocations: Object.fromEntries(
+        d.references.map((r) => [r.id, d.labelState.allocations[r.id]]),
+      ),
+    },
+  });
+  return canonical(intent(a.composer)) === canonical(intent(b.composer));
+}
+export function richCanvasDraft(draft: PromptDraft): Draft {
+  return {
+    composer: draft,
+    prompt: "",
+    negative_prompt: "",
+    aspect_ratio: "",
+    candidate_count: 0,
+  };
+}
+
+function apiConfig(config: Node["config"]): API.NodeConfig {
+  return {
+    ...config,
+    draft: config.draft
+      ? {
+          ...config.draft,
+          composer: config.draft.composer
+            ? draftRequest(config.draft.composer)
+            : undefined,
+        }
+      : undefined,
+  };
 }

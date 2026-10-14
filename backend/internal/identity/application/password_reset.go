@@ -1,0 +1,204 @@
+package application
+
+import (
+	"context"
+	"crypto/hmac"
+	"encoding/hex"
+	"errors"
+	"math"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+)
+
+const unavailableArgonHash = "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+func (a *Auth) loginEmail(ctx context.Context, email, password string, persistent bool) (AuthResult, error) {
+	if !a.emailReady() {
+		return AuthResult{}, ErrRegistrationUnavailable
+	}
+	key, err := domain.NormalizeEmail(email)
+	if err != nil {
+		domain.VerifyPassword(unavailableArgonHash, password)
+		return AuthResult{}, ErrInvalidCredentials
+	}
+	var result AuthResult
+	var rejected error
+	err = a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {
+		// The settings row serializes the lock order with credential/governance changes.
+		if _, err := tx.RegistrationEnabled(); err != nil {
+			return err
+		}
+		guardKey := hex.EncodeToString(a.email.protector.Digest("login_guard", uuid.Nil, key))
+		guard, err := tx.Guard(guardKey)
+		if err != nil {
+			return err
+		}
+		u, lookupErr := tx.AccountByEmail(key)
+		if lookupErr != nil && !errors.Is(lookupErr, domain.ErrUserNotFound) {
+			return lookupErr
+		}
+		hash := u.PasswordHash
+		if lookupErr != nil {
+			hash = unavailableArgonHash
+		}
+		correct := domain.VerifyPassword(hash, password)
+		now := a.now().UTC()
+		if !correct || lookupErr != nil || u.EmailVerifiedAt.IsZero() || u.Status != domain.StatusActive || guard.Locked(now) || now.Before(u.LockedUntil) {
+			guard.Fail(now)
+			if err := tx.SaveGuard(guardKey, guard); err != nil {
+				return err
+			}
+			rejected = ErrInvalidCredentials
+			return tx.AppendAuthEvent(u.ID, "login_failed", now)
+		}
+		if domain.PasswordNeedsUpgrade(hash) {
+			if a.validateNewPassword(password) != nil {
+				u.MustChangePassword = true
+			} else {
+				upgraded, err := domain.HashPassword(password, "")
+				if err != nil {
+					return err
+				}
+				u.PasswordHash = upgraded
+			}
+		}
+		if err := tx.SaveGuard(guardKey, domain.LoginGuard{}); err != nil {
+			return err
+		}
+		u.RegisterLoginSuccess(now)
+		if err := tx.UpdateAccount(u); err != nil {
+			return err
+		}
+		result, err = a.newSession(tx, u, persistent, now)
+		if err != nil {
+			return err
+		}
+		return tx.AppendAuthEvent(u.ID, "logged_in", now)
+	})
+	if err != nil {
+		return AuthResult{}, err
+	}
+	return result, rejected
+}
+
+// StartPasswordReset always accepts the same shape; only verified accounts get
+// a recoverable proof. Unknown addresses receive no account existence detail.
+func (a *Auth) StartPasswordReset(ctx context.Context, email, source string) (RegistrationStart, error) {
+	if !a.mailReady() {
+		return RegistrationStart{}, ErrRegistrationUnavailable
+	}
+	key, err := domain.NormalizeEmail(email)
+	if err != nil {
+		return RegistrationStart{}, err
+	}
+	id := uuid.New()
+	err = a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {
+		if _, err := tx.RegistrationEnabled(); err != nil {
+			return err
+		}
+		now := a.now().UTC()
+		if err := a.reserveEmail(tx, key, source, now); err != nil {
+			return err
+		}
+		u, err := tx.AccountByEmail(key)
+		if errors.Is(err, domain.ErrUserNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if u.EmailVerifiedAt.IsZero() || (u.Status != domain.StatusActive && u.Status != domain.StatusDisabled) {
+			return nil
+		}
+		secret, err := newProofToken()
+		if err != nil {
+			return err
+		}
+		c := domain.EmailChallenge{ID: uuid.New(), OperationID: id, Purpose: "password_reset", EmailKey: key, UserID: &u.ID, EmailVersion: &u.EmailVersion, CredentialEpoch: &u.SessionEpoch, ProofKeyID: a.email.protector.KeyID(), CreatedAt: now, ExpiresAt: now.Add(30 * time.Minute)}
+		c.ProofDigest = a.email.protector.Digest(c.Purpose, c.ID, secret)
+		if err := tx.InsertChallenge(c); err != nil {
+			return err
+		}
+		return a.queueEmail(tx, "password_reset", key, map[string]string{"token": id.String() + "." + secret}, now, c.ExpiresAt, c.ID)
+	})
+	if err != nil {
+		return RegistrationStart{}, err
+	}
+	return RegistrationStart{OperationID: id, RetryAfterSeconds: 60}, nil
+}
+
+func (a *Auth) CompletePasswordReset(ctx context.Context, token, password, confirmation string) error {
+	if !a.emailReady() {
+		return ErrRegistrationUnavailable
+	}
+	idText, secret, ok := strings.Cut(token, ".")
+	id, err := uuid.Parse(idText)
+	if !ok || err != nil || len(secret) != 43 {
+		return ErrProofInvalid
+	}
+	if password != confirmation {
+		return domain.ErrInvalidProfile
+	}
+	if err := a.validateNewPassword(password); err != nil {
+		return err
+	}
+	return a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {
+		if _, err := tx.RegistrationEnabled(); err != nil {
+			return err
+		}
+		c, err := tx.Challenge(id, "password_reset")
+		if err != nil {
+			return err
+		}
+		now := a.now().UTC()
+		if !c.Available(now) || c.UserID == nil || c.CredentialEpoch == nil || c.EmailVersion == nil || c.ProofKeyID != a.email.protector.KeyID() || !hmac.Equal(c.ProofDigest, a.email.protector.Digest(c.Purpose, c.ID, secret)) {
+			return ErrProofInvalid
+		}
+		u, err := tx.AccountByID(*c.UserID)
+		if err != nil {
+			return err
+		}
+		if u.SessionEpoch != *c.CredentialEpoch || u.EmailVersion != *c.EmailVersion || u.Email != c.EmailKey || (u.Status != domain.StatusActive && u.Status != domain.StatusDisabled) {
+			return ErrProofInvalid
+		}
+		if u.SessionEpoch >= math.MaxInt32 || u.Revision >= math.MaxInt32 {
+			return domain.ErrInvalidAccountState
+		}
+		hash, err := domain.HashPassword(password, u.PasswordHash)
+		if err != nil {
+			return err
+		}
+		u.PasswordHash = hash
+		u.SessionEpoch++
+		u.Revision++
+		u.PasswordChangedAt = now
+		u.MustChangePassword = false
+		u.FailedLoginCount = 0
+		u.LockedUntil = time.Time{}
+		if err := tx.UpdateAccount(u); err != nil {
+			return err
+		}
+		if err := tx.RevokeAccountSessions(u.ID, now); err != nil {
+			return err
+		}
+		guardKey := hex.EncodeToString(a.email.protector.Digest("login_guard", uuid.Nil, u.Email))
+		if _, err := tx.Guard(guardKey); err != nil {
+			return err
+		}
+		if err := tx.SaveGuard(guardKey, domain.LoginGuard{}); err != nil {
+			return err
+		}
+		c.ConsumedAt = &now
+		if err := tx.SaveChallenge(c); err != nil {
+			return err
+		}
+		if err := tx.AppendAuthEvent(u.ID, "password_changed", now); err != nil {
+			return err
+		}
+		return a.queueEmail(tx, "password_changed", u.Email, map[string]string{}, now, now.Add(24*time.Hour))
+	})
+}

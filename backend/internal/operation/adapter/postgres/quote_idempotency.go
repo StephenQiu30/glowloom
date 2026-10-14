@@ -17,6 +17,10 @@ import (
 )
 
 func quoteRequestFingerprint(input application.CreateFreeQuoteInput) ([sha256.Size]byte, error) {
+	if input.InputSource != nil {
+		body, err := json.Marshal(input)
+		return sha256.Sum256(body), err
+	}
 	var params map[string]json.RawMessage
 	if err := json.Unmarshal(input.Params, &params); err != nil {
 		return [sha256.Size]byte{}, application.ErrInvalidFreeQuote

@@ -26,8 +26,9 @@ var (
 
 // Store keeps the database handle injected by the composition root.
 type Store struct {
-	db             *gorm.DB
-	promptCompiler func(*gorm.DB) application.QuotePromptCompiler
+	db              *gorm.DB
+	editorSnapshots func(*gorm.DB) application.EditorSnapshots
+	promptCompiler  func(*gorm.DB) application.QuotePromptCompiler
 }
 
 // NewStore injects the caller's database handle.
@@ -290,4 +291,9 @@ func (r operationInputRow) domain() domain.OperationInput {
 		RefVersion: r.RefVersion, TextValue: r.TextValue,
 		MediaAssetID: r.MediaAssetID, MaskAssetID: r.MaskAssetID,
 	}
+}
+
+// NewStoreWithEditor binds snapshot reads to the same quote/confirmation transaction.
+func NewStoreWithEditor(db *gorm.DB, compiler func(*gorm.DB) application.QuotePromptCompiler, snapshots func(*gorm.DB) application.EditorSnapshots) *Store {
+	return &Store{db: db, promptCompiler: compiler, editorSnapshots: snapshots}
 }

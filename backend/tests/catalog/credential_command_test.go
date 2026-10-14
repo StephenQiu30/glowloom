@@ -50,11 +50,11 @@ func newCredentialCommand(t *testing.T, store catalogapp.SetCredentialStore) *ca
 	if err != nil {
 		t.Fatal(err)
 	}
-	return catalogapp.NewSetCredentialCommand(store, credentialschema.NewRegistry(), sealer, time.Now)
+	return catalogapp.NewSetCredentialCommand(store, credentialschema.NewRegistry(), sealer, time.Now, []byte("fixture-only-request-key-32-bytes"))
 }
 
 func adminPrincipal() identityapp.Principal {
-	return identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: identitydomain.RoleAdmin}
+	return identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: identitydomain.RoleAdmin, PlatformRole: "platform_admin"}
 }
 
 func TestSetCredentialCommandReturnsOnlySummaryAndSafeEvents(t *testing.T) {

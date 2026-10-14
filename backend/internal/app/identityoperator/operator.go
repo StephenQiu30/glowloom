@@ -1,0 +1,170 @@
+package identityoperator
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace/noop"
+	"golang.org/x/term"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
+)
+
+type identityCommand struct {
+	action, login, email string
+	operation            uuid.UUID
+	platformAdmin        bool
+}
+
+func parseIdentityCommand(args []string) (identityCommand, error) {
+	var command identityCommand
+	usage := errors.New("usage: lanverse identity key-init | bind-start --login-name NAME --email EMAIL [--platform-admin] | bind-complete --operation UUID [--platform-admin] | mail-run --operation UUID")
+	if len(args) == 0 {
+		return command, usage
+	}
+	command.action = args[0]
+	flags := flag.NewFlagSet("identity "+command.action, flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	var operation string
+	switch command.action {
+	case "key-init":
+	case "bind-start":
+		flags.StringVar(&command.login, "login-name", "", "explicit legacy account")
+		flags.StringVar(&command.email, "email", "", "email to verify")
+		flags.BoolVar(&command.platformAdmin, "platform-admin", false, "explicit first platform administrator")
+	case "bind-complete":
+		flags.StringVar(&operation, "operation", "", "binding operation UUID")
+		flags.BoolVar(&command.platformAdmin, "platform-admin", false, "must match requested authority")
+	case "mail-run":
+		flags.StringVar(&operation, "operation", "", "one mail operation UUID")
+	default:
+		return command, usage
+	}
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+		return command, usage
+	}
+	if command.action == "bind-start" {
+		if _, err := domain.NormalizeLogin(command.login); err != nil {
+			return command, usage
+		}
+		if _, err := domain.NormalizeEmail(command.email); err != nil {
+			return command, usage
+		}
+	}
+	if command.action == "bind-complete" || command.action == "mail-run" {
+		id, err := uuid.Parse(operation)
+		if err != nil || id == uuid.Nil {
+			return command, usage
+		}
+		command.operation = id
+	}
+	return command, nil
+}
+
+func Run(args []string) error {
+	command, err := parseIdentityCommand(args)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if command.action == "key-init" {
+		if err := credentialproof.CreateFile(cfg.IdentityKeyFile); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(os.Stdout, "Identity key file created. Keep a private backup; startup never regenerates it.")
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	conn, err := db.Open(ctx, cfg.DBDSN, noop.NewTracerProvider())
+	if err != nil {
+		return errors.New("connect configured identity database failed")
+	}
+	defer conn.Close()
+	// Operator commands never run schema migrations or turn on public routes.
+	var ready bool
+	if err := conn.DB.WithContext(ctx).Raw(`SELECT to_regclass('identity.auth_challenge') IS NOT NULL AND to_regclass('workspace.creation_scope') IS NOT NULL`).Scan(&ready).Error; err != nil || !ready {
+		return errors.New("identity expansion is not installed; review and apply the incremental migration first")
+	}
+	if command.action == "mail-run" {
+		worker, err := identityruntime.NewMailDelivery(pgidentity.NewOperationMailStore(conn.DB, command.operation), cfg, time.Now)
+		if err != nil {
+			return err
+		}
+		count, err := worker.RunOnce(ctx, 1)
+		if err != nil {
+			return err
+		}
+		var states []struct {
+			Status string
+			Count  int64
+		}
+		if err := conn.DB.WithContext(ctx).Raw(`SELECT m.status,count(*) FROM identity.mail_delivery m JOIN identity.auth_challenge c ON c.id=m.challenge_id WHERE c.operation_id=? GROUP BY m.status`, command.operation).Scan(&states).Error; err != nil {
+			return errors.New("read mail submission status failed")
+		}
+		if _, err := fmt.Fprintf(os.Stdout, "Processed %d mail job(s). SMTP submission is not proof of inbox delivery.\n", count); err != nil {
+			return err
+		}
+		for _, state := range states {
+			if _, err := fmt.Fprintf(os.Stdout, "%s: %d\n", state.Status, state.Count); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	auth, err := identityruntime.NewAuth(conn.DB, cfg, time.Now)
+	if err != nil {
+		return err
+	}
+	if command.action == "bind-start" {
+		result, err := auth.StartMigrationBinding(ctx, command.login, command.email, command.platformAdmin)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(os.Stdout, "Binding operation: %s\nMail queued; run identity mail-run with this operation. Account remains unchanged until verification.\n", result.OperationID)
+		return err
+	}
+	code, err := readIdentityCode()
+	if err != nil {
+		return err
+	}
+	defer clear(code)
+	id, err := auth.CompleteMigrationBinding(ctx, command.operation, string(code), command.platformAdmin)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(os.Stdout, "Verified email bound to original user ID %s; previous sessions revoked.\n", id)
+	return err
+}
+
+func readIdentityCode() ([]byte, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return nil, errors.New("email verification requires an interactive terminal; do not pass proof in command arguments")
+	}
+	fmt.Fprint(os.Stderr, "Email verification code: ")
+	code, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return nil, errors.New("read email verification code failed")
+	}
+	return code, nil
+}

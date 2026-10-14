@@ -17,7 +17,7 @@ import (
 
 // PublishPriceRuleWithAudit rechecks current rights and commits an immutable
 // price, model revision, and safe audit in one transaction.
-func (s *Store) PublishPriceRuleWithAudit(ctx context.Context, actorID, orgID uuid.UUID, price domain.PriceRuleVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+func (s *Store) publishPriceRuleWithAuditOnce(ctx context.Context, actorID, orgID uuid.UUID, price domain.PriceRuleVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
 	validator, err := pricevalidation.NewValidator()
 	if err != nil {
 		return domain.PriceRuleVersion{}, fmt.Errorf("prepare price validation: %w", err)

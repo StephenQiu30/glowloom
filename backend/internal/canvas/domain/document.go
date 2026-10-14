@@ -271,7 +271,12 @@ func applyOne(doc *Document, c Command) error {
 		if c.Config == nil || !validConfig(doc.Nodes[i].NodeType, *c.Config) {
 			return ErrInvalidCommand
 		}
-		if IsDraft(doc.Nodes[i]) && *doc.Nodes[i].Config.Draft != *c.Config.Draft {
+		if IsDraft(doc.Nodes[i]) && doc.Nodes[i].Config.Draft.Composer != nil {
+			if c.Config.Draft.Composer == nil || c.Config.Draft.Composer.ExtendsLabels(doc.Nodes[i].Config.Draft.Composer.LabelState) != nil {
+				return ErrInvalidCommand
+			}
+		}
+		if IsDraft(doc.Nodes[i]) && !SameInput(*doc.Nodes[i].Config.Draft, *c.Config.Draft) {
 			if doc.Nodes[i].InputRevision < 1 || doc.Nodes[i].InputRevision >= math.MaxInt32 {
 				return ErrInvalidCommand
 			}

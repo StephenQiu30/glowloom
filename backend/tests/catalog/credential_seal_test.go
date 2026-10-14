@@ -124,3 +124,48 @@ func TestCredentialSealRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkerUnsealerRejectsChangedBindingAndTamperedEnvelope(t *testing.T) {
+	private, public := testCredentialKey(t)
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsealer, err := credentialseal.NewUnsealer("test-key", pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealer, err := credentialseal.NewSealer("test-key", public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, credential := uuid.New(), uuid.New()
+	plaintext := json.RawMessage(`{"api_key":"synthetic-worker-test"}`)
+	envelope, err := sealer.Seal(provider, credential, plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := unsealer.Open("test-key", provider, credential, envelope)
+	if err != nil || !bytes.Equal(opened, plaintext) {
+		t.Fatal("valid envelope rejected")
+	}
+	clear(opened)
+	for _, tc := range []struct {
+		name, key            string
+		provider, credential uuid.UUID
+		data                 []byte
+	}{
+		{"wrong key", "other", provider, credential, envelope}, {"wrong provider", "test-key", uuid.New(), credential, envelope}, {"wrong credential", "test-key", provider, uuid.New(), envelope}, {"truncated", "test-key", provider, credential, envelope[:10]},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := unsealer.Open(tc.key, tc.provider, tc.credential, tc.data)
+			if !errors.Is(err, credentialseal.ErrInvalidSecret) || len(data) != 0 {
+				t.Fatal("invalid envelope released plaintext")
+			}
+		})
+	}
+	envelope[len(envelope)-1] ^= 1
+	if data, err := unsealer.Open("test-key", provider, credential, envelope); !errors.Is(err, credentialseal.ErrInvalidSecret) || len(data) != 0 {
+		t.Fatal("tampered envelope accepted")
+	}
+}

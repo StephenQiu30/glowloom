@@ -95,12 +95,13 @@ func (s *Store) SaveModelDefaults(ctx context.Context, actor identityapp.Princip
 			var present int
 			result := tx.Raw(`SELECT 1 FROM catalog.model_profile m
 			 JOIN catalog.provider p ON p.id=m.provider_id
+			 LEFT JOIN catalog.model_release published ON published.id=m.active_release_id AND published.status='active'
 			 JOIN catalog.capability cap ON cap.key=m.capability
-			 JOIN catalog.model_profile_version v ON v.id=m.current_version_id AND v.model_profile_id=m.id
+			 JOIN catalog.model_profile_version v ON v.id=CASE WHEN p.adapter_key IN ('openrouter','volcengine_ark') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id=m.id
 			 WHERE m.model_key=? AND m.capability=? AND m.status='active' AND NOT m.is_delete
 			 AND p.status='active' AND NOT p.is_delete AND NOT cap.is_delete AND NOT v.is_delete
 			 AND (? OR p.region='domestic') AND EXISTS(SELECT 1 FROM catalog.price_rule_version pr
-			 WHERE pr.model_profile_id=m.id AND NOT pr.is_delete AND pr.effective_from<=transaction_timestamp())
+			 WHERE (p.adapter_key NOT IN ('openrouter','volcengine_ark') OR pr.id=published.price_version_id) AND pr.model_profile_id=m.id AND NOT pr.is_delete AND pr.effective_from<=transaction_timestamp())
 			 FOR SHARE OF m,p`, model, capability, row.AllowOverseasModels).Scan(&present)
 			if result.Error != nil {
 				return fmt.Errorf("check default model availability: %w", result.Error)

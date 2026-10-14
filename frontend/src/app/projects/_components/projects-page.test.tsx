@@ -16,7 +16,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: api.push }) }));
 vi.mock("@/components/layout/product-shell", () => ({
   ProductShell: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("@/components/projects/generated/projects", () => ({
+vi.mock("@/api/projects", () => ({
   createProject: api.create,
   listProjects: api.list,
 }));

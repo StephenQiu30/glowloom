@@ -1,0 +1,812 @@
+import { Editor, Extension, Node, type EditorOptions } from "@tiptap/core";
+import Document from "@tiptap/extension-document";
+import Paragraph from "@tiptap/extension-paragraph";
+import Text from "@tiptap/extension-text";
+import HardBreak from "@tiptap/extension-hard-break";
+import { Node as PMNode, Slice, Fragment } from "@tiptap/pm/model";
+import {
+  Plugin,
+  PluginKey,
+  NodeSelection,
+  Selection,
+  type Transaction,
+  type EditorState,
+} from "@tiptap/pm/state";
+import {
+  labelKind,
+  referenceLabel,
+  sameReference,
+  validatePromptDraft,
+  validateReference,
+  MAX_LABEL_ALLOCATIONS,
+  type PromptDraft,
+  type LabelState,
+  type ReferenceBinding,
+} from "./prompt-document";
+
+type Intent = Omit<PromptDraft, "document" | "labelState">;
+type Frame = {
+  doc: PMNode;
+  selection: ReturnType<Selection["toJSON"]>;
+  intent: Intent;
+};
+export type ModeTarget = { modelVersion: string; mode: string };
+export type ModeRequest = ModeTarget & {
+  contextKey: string;
+  replicaId: string;
+  selectionEpoch: number;
+};
+export type ComposerSnapshot = {
+  contextKey: string;
+  replicaId: string;
+  localSeq: number;
+  draft: PromptDraft;
+};
+declare module "@tiptap/core" {
+  interface EditorEvents {
+    composerSaveRequested: ComposerSnapshot;
+    composerSubmitRequested: undefined;
+  }
+}
+type HistoryEntry = { before: Frame; after: Frame };
+type SessionState = {
+  contextKey: string;
+  replicaId: string;
+  frame: Frame;
+  labels: LabelState;
+  past: HistoryEntry[];
+  future: HistoryEntry[];
+  localSeq: number;
+  selectionEpoch: number;
+  pendingTarget: ModeRequest | null;
+  deferredMode: ModeRequest | null;
+  deferredSave: boolean;
+  composing: boolean;
+  group: { kind: string; time: number } | null;
+};
+type Action = {
+  intent?: Intent;
+  labels?: LabelState;
+  isolated?: boolean;
+  history?: "undo" | "redo";
+  selection?: ModeTarget | "cancel";
+  composing?: boolean;
+  breakGroup?: boolean;
+  deferMode?: ModeRequest;
+  deferSave?: boolean;
+};
+const sessionKey = new PluginKey<SessionState>("composerSession");
+const HISTORY_LIMIT = 100;
+function stateOf(state: EditorState): SessionState {
+  const session = sessionKey.getState(state);
+  if (!session) throw new Error("composer_session_missing");
+  return session;
+}
+function frameDraft(frame: Frame, labels: LabelState): PromptDraft {
+  return { ...frame.intent, document: frame.doc.toJSON(), labelState: labels };
+}
+function candidate(previous: SessionState, tr: Transaction): Frame {
+  const action: Action = tr.getMeta(sessionKey) ?? {};
+  return {
+    doc: tr.doc,
+    selection: tr.selection.toJSON(),
+    intent: action.intent ?? previous.frame.intent,
+  };
+}
+function apply(tr: Transaction, previous: SessionState): SessionState {
+  const action: Action = tr.getMeta(sessionKey) ?? {};
+  let next = {
+    ...previous,
+    frame: candidate(previous, tr),
+    labels: action.labels ?? previous.labels,
+  };
+  if (action.deferMode) next.deferredMode = action.deferMode;
+  if (action.deferSave !== undefined) next.deferredSave = action.deferSave;
+  if (action.selection || action.history) {
+    next.deferredMode = null;
+    next.selectionEpoch++;
+    next.pendingTarget =
+      action.selection && action.selection !== "cancel"
+        ? {
+            ...action.selection,
+            contextKey: next.contextKey,
+            replicaId: next.replicaId,
+            selectionEpoch: next.selectionEpoch,
+          }
+        : null;
+  }
+  if (action.composing !== undefined) next.composing = action.composing;
+  if (action.history) {
+    const entries = action.history === "undo" ? previous.past : previous.future;
+    const entry = entries.at(-1);
+    if (!entry) return { ...next, group: null };
+    next =
+      action.history === "undo"
+        ? {
+            ...next,
+            past: previous.past.slice(0, -1),
+            future: [...previous.future, entry],
+          }
+        : {
+            ...next,
+            past: [...previous.past, entry],
+            future: previous.future.slice(0, -1),
+          };
+    return { ...next, localSeq: previous.localSeq + 1, group: null };
+  }
+  const changed =
+    !tr.doc.eq(previous.frame.doc) ||
+    (action.intent && action.intent !== previous.frame.intent);
+  if (!changed) {
+    if (
+      action.breakGroup ||
+      action.composing === true ||
+      (tr.selectionSet && !tr.docChanged)
+    )
+      next.group = null;
+    return next;
+  }
+  const composition = tr.getMeta("composition");
+  const kind =
+    composition !== undefined
+      ? `composition:${composition}`
+      : next.composing
+        ? "composition"
+        : "typing";
+  const atomic = !!action.intent || action.isolated;
+  const merge =
+    !atomic &&
+    previous.group?.kind === kind &&
+    previous.past.length > 0 &&
+    (kind.startsWith("composition") || tr.time - previous.group.time <= 500);
+  const entry: HistoryEntry = { before: previous.frame, after: next.frame };
+  const past = merge
+    ? [
+        ...previous.past.slice(0, -1),
+        {
+          before: previous.past.at(-1)!.before,
+          after: next.frame,
+        },
+      ]
+    : [...previous.past, entry].slice(-HISTORY_LIMIT);
+  return {
+    ...next,
+    past,
+    future: [],
+    localSeq: previous.localSeq + 1,
+    group: atomic ? null : { kind, time: tr.time },
+  };
+}
+function history(editor: Editor, direction: "undo" | "redo") {
+  if (editor.isDestroyed || !editor.isEditable) return false;
+  const current = stateOf(editor.state);
+  if (current.composing || editor.view.composing) return false;
+  const entry = (direction === "undo" ? current.past : current.future).at(-1);
+  const frame = entry && (direction === "undo" ? entry.before : entry.after);
+  let tr = editor.state.tr;
+  if (frame) {
+    // Only history restores the document; ordinary input keeps PM selection mappings intact.
+    tr = tr.replaceWith(0, tr.doc.content.size, frame.doc.content);
+    tr.setSelection(Selection.fromJSON(tr.doc, frame.selection));
+  }
+  tr.setMeta(sessionKey, {
+    history: direction,
+    intent: frame?.intent,
+  } satisfies Action);
+  editor.view.dispatch(tr);
+  return !!entry;
+}
+function inComposition(editor: Editor, event?: KeyboardEvent | InputEvent) {
+  return (
+    stateOf(editor.state).composing ||
+    editor.view.composing ||
+    event?.isComposing ||
+    (event instanceof KeyboardEvent && event.keyCode === 229)
+  );
+}
+
+/** Only text, paragraphs, hard breaks and opaque reference IDs. Never parse reference IDs from HTML. */
+function referenceToken(initialLabels: LabelState) {
+  return Node.create({
+    name: "reference",
+    group: "inline",
+    inline: true,
+    atom: true,
+    selectable: true,
+    addAttributes: () => ({ referenceId: { default: null, rendered: false } }),
+    renderHTML({ node }) {
+      return [
+        "span",
+        {
+          "data-prompt-reference": "",
+          contenteditable: "false",
+          class: "rounded bg-muted px-1 text-foreground",
+        },
+        referenceLabel(
+          (this.editor && sessionKey.getState(this.editor.state)?.labels) ??
+            initialLabels,
+          node.attrs.referenceId,
+        ),
+      ];
+    },
+    renderText({ node }) {
+      return referenceLabel(
+        (this.editor && sessionKey.getState(this.editor.state)?.labels) ??
+          initialLabels,
+        node.attrs.referenceId,
+      );
+    },
+  });
+}
+export type ComposerOptions = {
+  contextKey: string;
+  replicaId: string;
+  draft: PromptDraft;
+};
+export function composerEditorOptions(
+  options: ComposerOptions,
+): Partial<EditorOptions> {
+  validatePromptDraft(options.draft);
+  if (!options.contextKey || !options.replicaId)
+    throw new Error("composer_context_required");
+  const draft = structuredClone(options.draft);
+  const { document: initialDocument, labelState, ...intent } = draft;
+  const sessionExtension = Extension.create({
+    name: "composerSession",
+    priority: 1000,
+    addProseMirrorPlugins() {
+      const editor = this.editor;
+      let settleTimer: ReturnType<typeof setTimeout> | undefined;
+      return [
+        new Plugin<SessionState>({
+          key: sessionKey,
+          state: {
+            init: (_, state) => ({
+              contextKey: options.contextKey,
+              replicaId: options.replicaId,
+              frame: {
+                doc: state.doc,
+                selection: state.selection.toJSON(),
+                intent,
+              },
+              labels: labelState,
+              past: [],
+              future: [],
+              localSeq: 0,
+              selectionEpoch: 0,
+              pendingTarget: null,
+              deferredMode: null,
+              deferredSave: false,
+              composing: false,
+              group: null,
+            }),
+            apply,
+          },
+          filterTransaction(tr, state) {
+            if (!tr.docChanged && !tr.getMeta(sessionKey)?.intent) return true;
+            const previous = stateOf(state);
+            try {
+              validatePromptDraft(
+                frameDraft(
+                  candidate(previous, tr),
+                  tr.getMeta(sessionKey)?.labels ?? previous.labels,
+                ),
+              );
+              return true;
+            } catch {
+              return false;
+            }
+          },
+          view: () => ({ destroy: () => clearTimeout(settleTimer) }),
+          props: {
+            handleDOMEvents: {
+              keydown: (_, event) => {
+                event.stopPropagation();
+                if (
+                  (event.metaKey || event.ctrlKey) &&
+                  event.key.toLowerCase() === "s" &&
+                  inComposition(editor, event)
+                ) {
+                  event.preventDefault();
+                  editor.view.dispatch(
+                    editor.state.tr.setMeta(sessionKey, {
+                      deferSave: true,
+                    } satisfies Action),
+                  );
+                  return true;
+                }
+                return false;
+              },
+              beforeinput: (_, event) => {
+                const input = event as InputEvent;
+                if (
+                  input.inputType !== "historyUndo" &&
+                  input.inputType !== "historyRedo"
+                )
+                  return false;
+                input.preventDefault();
+                input.stopPropagation();
+                if (!inComposition(editor, input))
+                  history(
+                    editor,
+                    input.inputType === "historyUndo" ? "undo" : "redo",
+                  );
+                return true;
+              },
+              compositionstart: (view) => {
+                view.dispatch(
+                  view.state.tr.setMeta(sessionKey, {
+                    composing: true,
+                  } satisfies Action),
+                );
+                return false;
+              },
+              compositionend: (view) => {
+                view.dispatch(
+                  view.state.tr.setMeta(sessionKey, {
+                    composing: false,
+                  } satisfies Action),
+                );
+                // Wait until PM has flushed the final composed DOM text before applying a mode.
+                clearTimeout(settleTimer);
+                settleTimer = setTimeout(() => {
+                  if (editor.isDestroyed) return;
+                  const request = stateOf(editor.state).deferredMode;
+                  if (request)
+                    new ComposerSession(editor).resolveModeSelection(request);
+                  if (
+                    stateOf(editor.state).deferredSave &&
+                    !inComposition(editor)
+                  ) {
+                    editor.view.dispatch(
+                      editor.state.tr.setMeta(sessionKey, {
+                        deferSave: false,
+                      } satisfies Action),
+                    );
+                    editor.emit(
+                      "composerSaveRequested",
+                      new ComposerSession(editor).snapshot(),
+                    );
+                  }
+                }, 0);
+                return false;
+              },
+              blur: (view) => {
+                view.dispatch(
+                  view.state.tr.setMeta(sessionKey, {
+                    breakGroup: true,
+                  } satisfies Action),
+                );
+                return false;
+              },
+            },
+            handleKeyDown(view, event) {
+              if (inComposition(editor, event)) return false;
+              const mod = event.metaKey || event.ctrlKey;
+              const key = event.key.toLowerCase();
+              if (mod && (key === "z" || key === "y")) {
+                history(
+                  editor,
+                  key === "y" || event.shiftKey ? "redo" : "undo",
+                );
+                return true;
+              }
+              if (mod && key === "s") {
+                editor.emit(
+                  "composerSaveRequested",
+                  new ComposerSession(editor).snapshot(),
+                );
+                return true;
+              }
+              if (mod && key === "enter") {
+                if (!stateOf(editor.state).pendingTarget)
+                  editor.emit("composerSubmitRequested", undefined);
+                return true;
+              }
+              if (key !== "backspace" && key !== "delete") return false;
+              const selection = view.state.selection;
+              if (
+                selection instanceof NodeSelection &&
+                selection.node.type.name === "reference"
+              ) {
+                view.dispatch(
+                  view.state.tr
+                    .deleteSelection()
+                    .setMeta(sessionKey, { isolated: true } satisfies Action),
+                );
+                return true;
+              }
+              if (!selection.empty) return false;
+              const node =
+                key === "backspace"
+                  ? selection.$from.nodeBefore
+                  : selection.$from.nodeAfter;
+              if (node?.type.name !== "reference") return false;
+              const pos =
+                key === "backspace"
+                  ? selection.from - node.nodeSize
+                  : selection.from;
+              view.dispatch(
+                view.state.tr.setSelection(
+                  NodeSelection.create(view.state.doc, pos),
+                ),
+              );
+              return true;
+            },
+            handlePaste(view, event) {
+              // E0 imports readable text only. Authorized in-app structural import is an E2 boundary.
+              if (event.clipboardData?.files.length) return true;
+              const text = event.clipboardData?.getData("text/plain");
+              if (text === undefined || text === "") return false;
+              const nodes = text
+                .split(/\r\n?|\n/)
+                .map((line) =>
+                  view.state.schema.nodes.paragraph.create(
+                    null,
+                    line ? view.state.schema.text(line) : undefined,
+                  ),
+                );
+              view.dispatch(
+                view.state.tr
+                  .replaceSelection(new Slice(Fragment.from(nodes), 1, 1))
+                  .setMeta(sessionKey, { isolated: true } satisfies Action),
+              );
+              return true;
+            },
+            handleDrop: () => true,
+          },
+        }),
+      ];
+    },
+  });
+  return {
+    extensions: [
+      Document,
+      Paragraph,
+      Text,
+      HardBreak,
+      referenceToken(labelState),
+      sessionExtension,
+    ],
+    content: initialDocument,
+    enableContentCheck: true,
+    editorProps: {
+      attributes: {
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-label": "创作提示词",
+        class:
+          "min-h-32 max-h-80 overflow-y-auto rounded-md border p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      },
+    },
+  };
+}
+
+/** An editor and its application history form one session. No network or independent media state here. */
+export class ComposerSession {
+  constructor(readonly editor: Editor) {
+    stateOf(editor.state);
+  }
+  snapshot(): ComposerSnapshot {
+    const s = stateOf(this.editor.state);
+    return {
+      contextKey: s.contextKey,
+      replicaId: s.replicaId,
+      localSeq: s.localSeq,
+      draft: structuredClone(frameDraft(s.frame, s.labels)),
+    };
+  }
+  get pendingTarget(): ModeRequest | null {
+    return structuredClone(stateOf(this.editor.state).pendingTarget);
+  }
+  undo() {
+    return history(this.editor, "undo");
+  }
+  redo() {
+    return history(this.editor, "redo");
+  }
+  private editable() {
+    return (
+      !this.editor.isDestroyed &&
+      !inComposition(this.editor) &&
+      this.editor.isEditable
+    );
+  }
+  insertReference(input: ReferenceBinding, insertOccurrence = true) {
+    if (!this.editable()) return false;
+    validateReference(input);
+    const s = stateOf(this.editor.state);
+    const existing = s.frame.intent.references.find((r) =>
+      sameReference(r, input),
+    );
+    const binding =
+      existing ??
+      structuredClone({ ...input, order: s.frame.intent.references.length });
+    let labels = s.labels;
+    if (!existing) {
+      // Reusing a historical ID for a different binding would make its tombstone ambiguous.
+      if (s.labels.allocations[binding.id])
+        throw new Error("reference_id_already_allocated");
+      const kind = labelKind(binding);
+      const ordinal = s.labels.highWater[kind] + 1;
+      if (
+        !Number.isSafeInteger(ordinal) ||
+        Object.keys(s.labels.allocations).length >= MAX_LABEL_ALLOCATIONS
+      )
+        throw new Error("label_allocation_limit");
+      labels = {
+        highWater: { ...s.labels.highWater, [kind]: ordinal },
+        allocations: {
+          ...s.labels.allocations,
+          [binding.id]: { labelKind: kind, ordinal },
+        },
+      };
+    }
+    if (existing && !insertOccurrence) return true;
+    const intent = existing
+      ? s.frame.intent
+      : {
+          ...s.frame.intent,
+          references: [...s.frame.intent.references, binding],
+        };
+    let tr = this.editor.state.tr;
+    if (insertOccurrence)
+      tr = tr.replaceSelectionWith(
+        this.editor.schema.nodes.reference.create({ referenceId: binding.id }),
+      );
+    this.editor.view.dispatch(
+      tr.setMeta(sessionKey, {
+        intent,
+        labels,
+        isolated: true,
+      } satisfies Action),
+    );
+    return true;
+  }
+  removeReference(id: string) {
+    if (!this.editable()) return false;
+    const s = stateOf(this.editor.state);
+    if (!s.frame.intent.references.some((r) => r.id === id)) return false;
+    const positions: number[] = [];
+    this.editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === "reference" && node.attrs.referenceId === id)
+        positions.push(pos);
+    });
+    const tr = this.editor.state.tr;
+    for (const pos of positions.reverse()) tr.delete(pos, pos + 1);
+    const references = s.frame.intent.references
+      .filter((r) => r.id !== id)
+      .map((r, order) => ({ ...r, order }));
+    this.editor.view.dispatch(
+      tr.setMeta(sessionKey, {
+        intent: { ...s.frame.intent, references },
+      } satisfies Action),
+    );
+    return true;
+  }
+  /** Replaces a source or role in place; tokens and display number keep their identity. */
+  replaceReference(
+    id: string,
+    replacement: Omit<ReferenceBinding, "id" | "order" | "bindingGeneration">,
+  ) {
+    if (!this.editable()) return false;
+    const state = stateOf(this.editor.state);
+    const previous = state.frame.intent.references.find((r) => r.id === id);
+    if (
+      !previous ||
+      labelKind(previous) !== labelKind({ ...previous, ...replacement })
+    )
+      return false;
+    const references = state.frame.intent.references.map((r) =>
+      r.id === id
+        ? {
+            ...r,
+            ...structuredClone(replacement),
+            bindingGeneration: r.bindingGeneration + 1,
+          }
+        : r,
+    );
+    return this.replaceIntent({ ...state.frame.intent, references });
+  }
+  reorderReference(id: string, offset: number) {
+    if (!this.editable()) return false;
+    const state = stateOf(this.editor.state),
+      references = [...state.frame.intent.references];
+    const from = references.findIndex((r) => r.id === id),
+      to = from + offset;
+    if (from < 0 || to < 0 || to >= references.length) return false;
+    const [item] = references.splice(from, 1);
+    references.splice(to, 0, item);
+    return this.replaceIntent({
+      ...state.frame.intent,
+      references: references.map((r, order) => ({ ...r, order })),
+    });
+  }
+  private replaceIntent(intent: Intent) {
+    const state = stateOf(this.editor.state);
+    validatePromptDraft(frameDraft({ ...state.frame, intent }, state.labels));
+    this.editor.view.dispatch(
+      this.editor.state.tr.setMeta(sessionKey, {
+        intent,
+        isolated: true,
+      } satisfies Action),
+    );
+    return true;
+  }
+  /** An upload can settle only its original owner, binding generation and attempt. */
+  resolveUpload(
+    ticket: {
+      contextKey: string;
+      replicaId: string;
+      referenceId: string;
+      generation: number;
+      attempt: string;
+    },
+    source: ReferenceBinding["source"],
+  ) {
+    if (!this.editable()) return false;
+    const state = stateOf(this.editor.state),
+      ref = state.frame.intent.references.find(
+        (r) => r.id === ticket.referenceId,
+      );
+    if (
+      ticket.contextKey !== state.contextKey ||
+      ticket.replicaId !== state.replicaId ||
+      !ref ||
+      ref.bindingGeneration !== ticket.generation ||
+      ref.source.kind !== "pending_upload" ||
+      ref.source.uploadAttemptId !== ticket.attempt ||
+      source.kind !== "media"
+    )
+      return false;
+    return this.replaceIntent({
+      ...state.frame.intent,
+      references: state.frame.intent.references.map((r) =>
+        r.id === ref.id ? { ...r, source: structuredClone(source) } : r,
+      ),
+    });
+  }
+  applyConversion(
+    expectedSeq: number,
+    params: PromptDraft["params"],
+    references: ReferenceBinding[],
+  ) {
+    if (!this.editable()) return false;
+    const state = stateOf(this.editor.state);
+    if (state.localSeq !== expectedSeq) return false;
+    // Conversion never silently discards bindings. Removal is its own reviewed command.
+    if (
+      references.length !== state.frame.intent.references.length ||
+      references.some(
+        (r) => !state.frame.intent.references.some((old) => old.id === r.id),
+      )
+    )
+      return false;
+    return this.replaceIntent({
+      ...state.frame.intent,
+      params: structuredClone(params),
+      references: structuredClone(references),
+    });
+  }
+  adoptDraft(draft: PromptDraft) {
+    if (!this.editable()) return false;
+    validatePromptDraft(draft);
+    const state = stateOf(this.editor.state),
+      labels = structuredClone(draft.labelState);
+    for (const [id, allocation] of Object.entries(state.labels.allocations)) {
+      if (
+        labels.allocations[id] &&
+        JSON.stringify(labels.allocations[id]) !== JSON.stringify(allocation)
+      )
+        throw new Error("label_allocation_conflict");
+      if (
+        !labels.allocations[id] &&
+        Object.values(labels.allocations).some(
+          (a) =>
+            a.labelKind === allocation.labelKind &&
+            a.ordinal === allocation.ordinal,
+        )
+      )
+        throw new Error("label_allocation_conflict");
+      labels.allocations[id] = allocation;
+    }
+    for (const kind of Object.keys(
+      labels.highWater,
+    ) as (keyof LabelState["highWater"])[])
+      labels.highWater[kind] = Math.max(
+        labels.highWater[kind],
+        state.labels.highWater[kind],
+      );
+    const { document, labelState: _labels, ...intent } = structuredClone(draft);
+    void _labels;
+    this.editor.view.dispatch(
+      this.editor.state.tr
+        .replaceWith(
+          0,
+          this.editor.state.doc.content.size,
+          this.editor.schema.nodeFromJSON(document).content,
+        )
+        .setMeta(sessionKey, {
+          intent,
+          labels,
+          selection: "cancel",
+          isolated: true,
+        } satisfies Action),
+    );
+    return true;
+  }
+  updateParams(params: PromptDraft["params"]) {
+    if (!this.editable()) return false;
+    const s = stateOf(this.editor.state);
+    const intent = { ...s.frame.intent, params: structuredClone(params) };
+    validatePromptDraft(frameDraft({ ...s.frame, intent }, s.labels));
+    if (JSON.stringify(intent.params) === JSON.stringify(s.frame.intent.params))
+      return true;
+    this.editor.view.dispatch(
+      this.editor.state.tr.setMeta(sessionKey, { intent } satisfies Action),
+    );
+    return true;
+  }
+  beginModeSelection(target: ModeTarget): ModeRequest {
+    if (!this.editable()) throw new Error("composer_not_editable");
+    const s = stateOf(this.editor.state);
+    validatePromptDraft(
+      frameDraft(
+        { ...s.frame, intent: { ...s.frame.intent, ...target } },
+        s.labels,
+      ),
+    );
+    this.editor.view.dispatch(
+      this.editor.state.tr.setMeta(sessionKey, {
+        selection: { ...target },
+      } satisfies Action),
+    );
+    return this.pendingTarget!;
+  }
+  cancelModeSelection() {
+    if (this.editor.isDestroyed) return;
+    this.editor.view.dispatch(
+      this.editor.state.tr.setMeta(sessionKey, {
+        selection: "cancel",
+      } satisfies Action),
+    );
+  }
+  resolveModeSelection(request: ModeRequest) {
+    if (this.editor.isDestroyed || !this.editor.isEditable) return false;
+    const s = stateOf(this.editor.state),
+      pending = s.pendingTarget;
+    if (
+      !pending ||
+      request.contextKey !== s.contextKey ||
+      request.replicaId !== s.replicaId ||
+      request.selectionEpoch !== s.selectionEpoch ||
+      request.modelVersion !== pending.modelVersion ||
+      request.mode !== pending.mode
+    )
+      return false;
+    if (inComposition(this.editor)) {
+      this.editor.view.dispatch(
+        this.editor.state.tr.setMeta(sessionKey, {
+          deferMode: { ...request },
+        } satisfies Action),
+      );
+      return true;
+    }
+    const unchanged =
+      s.frame.intent.mode === request.mode &&
+      s.frame.intent.modelVersion === request.modelVersion;
+    this.editor.view.dispatch(
+      this.editor.state.tr.setMeta(sessionKey, {
+        selection: "cancel",
+        intent: unchanged
+          ? undefined
+          : {
+              ...s.frame.intent,
+              mode: request.mode,
+              modelVersion: request.modelVersion,
+            },
+      } satisfies Action),
+    );
+    return true;
+  }
+}

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { File, ImageIcon, Music, Video, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { previewLibraryMediaAsset } from "./generated/media";
+import { previewLibraryMediaAsset } from "@/api/media";
 import { requirePreview, type LibraryItem } from "./library";
 export function AssetPreview({
   item,

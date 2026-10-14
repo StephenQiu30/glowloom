@@ -10,7 +10,7 @@ import (
 )
 
 func TestPasswordPolicyAndHash(t *testing.T) {
-	for _, candidate := range []string{"short1A", "onlyletterslong", "12345678901", "a1" + strings.Repeat("a", 71)} {
+	for _, candidate := range []string{"short1A", strings.Repeat("a", 14), "12345678901", strings.Repeat("a", 129)} {
 		if err := domain.ValidatePassword(candidate, ""); !errors.Is(err, domain.ErrWeakPassword) {
 			t.Errorf("invalid password accepted: %v", err)
 		}
@@ -21,10 +21,10 @@ func TestPasswordPolicyAndHash(t *testing.T) {
 		t.Fatalf("hash valid password: %v", err)
 	}
 	if !domain.VerifyPassword(hash, password) || domain.VerifyPassword(hash, "wrongPassword123") {
-		t.Fatal("bcrypt password verification mismatch")
+		t.Fatal("password verification mismatch")
 	}
 	if !domain.ValidPasswordHash(hash) || domain.ValidPasswordHash(password) {
-		t.Fatal("bcrypt hash format or cost mismatch")
+		t.Fatal("versioned hash format mismatch")
 	}
 	if err := domain.ValidatePassword(password, hash); !errors.Is(err, domain.ErrPasswordReused) {
 		t.Fatalf("same password validation = %v, want ErrPasswordReused", err)

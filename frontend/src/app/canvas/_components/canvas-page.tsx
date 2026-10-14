@@ -3,17 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  getProject,
-  getCanvas,
-} from "@/components/projects/generated/projects";
+import { getProject } from "@/api/projects";
+import { getCanvas } from "@/api/canvases";
 import {
   isProjectID,
   projectErrorMessage,
   requireProject,
   type Project,
 } from "@/components/projects/project";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 
 import dynamic from "next/dynamic";
 const CanvasEditor = dynamic(
@@ -46,7 +44,7 @@ function LoadedCanvas({
         const project = requireProject(projectValue, true);
         const canvas = requireCanvas(canvasValue, projectID, canvasID);
         if (project.id !== projectID || project.canvas_id !== canvasID)
-          throw new AuthError("invalid_receipt");
+          throw new RequestError("invalid_receipt");
         if (!controller.signal.aborted) setResult({ project, canvas });
       })
       .catch((e: unknown) => {

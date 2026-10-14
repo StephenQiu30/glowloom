@@ -33,8 +33,8 @@ func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *tes
 	t.Cleanup(func() { _ = conn.Close() })
 	actor := adminPrincipal()
 	if err := conn.DB.WithContext(ctx).Exec(`
-		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false)
+		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
+		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false, 'platform_admin')
 	`, actor.ID.String(), actor.OrgID.String(), "provider-list-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestListProvidersPagesSafeSummariesAndRealModelCountsOnLocalPostgres(t *tes
 		strings.Contains(string(encoded), "ciphertext") || strings.Contains(string(encoded), "key_id") {
 		t.Fatalf("provider list leaked credential %s: %v", encoded, err)
 	}
-	if err := conn.DB.WithContext(ctx).Exec(`UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
+	if err := conn.DB.WithContext(ctx).Exec(`UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := query.Execute(ctx, actor, catalogapp.ListProvidersInput{}); !errors.Is(err, identityapp.ErrForbidden) {

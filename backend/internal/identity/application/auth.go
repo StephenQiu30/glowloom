@@ -47,6 +47,8 @@ type AuthTx interface {
 	SaveGuard(string, domain.LoginGuard) error
 	SessionByHash([]byte, bool) (domain.AuthSession, error)
 	InsertSession(domain.AuthSession) error
+	SetSessionSecurity(uuid.UUID, []byte) error
+	ReauthenticateSession(uuid.UUID, int64, time.Time) error
 	TouchSession(uuid.UUID, time.Time) error
 	RevokeSession(uuid.UUID, uuid.UUID, time.Time) error
 	RevokeAccountSessions(uuid.UUID, time.Time) error
@@ -57,6 +59,7 @@ type AuthTx interface {
 type Auth struct {
 	store AuthStore
 	now   func() time.Time
+	email *emailRuntime
 }
 
 // NewAuth injects persistence and the server clock.
@@ -64,9 +67,10 @@ func NewAuth(store AuthStore, now func() time.Time) *Auth { return &Auth{store: 
 
 // AuthResult keeps transport credentials separate from public DTOs.
 type AuthResult struct {
-	User    domain.User
-	Session domain.AuthSession
-	Token   string
+	User      domain.User
+	Session   domain.AuthSession
+	Token     string
+	CSRFToken string
 }
 
 // Register creates a producer and a session atomically, with no privileged input.
@@ -96,7 +100,7 @@ func (a *Auth) Register(ctx context.Context, login, display, password, confirmat
 		if err := tx.CreateAccount(user); err != nil {
 			return err
 		}
-		result, err = newAuthSession(tx, user, false, now)
+		result, err = a.newSession(tx, user, false, now)
 		if err != nil {
 			return err
 		}
@@ -109,6 +113,9 @@ const unavailableHash = "$2a$12$yf3ZHVlB9i79td5BSH3Gv.O.0R9lLRkVHKFWANWrD4JaTsx7
 
 // Login commits failed attempts as well as successful sessions under the login lock.
 func (a *Auth) Login(ctx context.Context, login, password string, persistent bool) (AuthResult, error) {
+	if a.email != nil {
+		return a.loginEmail(ctx, login, password, persistent)
+	}
 	key, err := domain.NormalizeLogin(login)
 	if err != nil {
 		domain.VerifyPassword(unavailableHash, password)
@@ -146,7 +153,7 @@ func (a *Auth) Login(ctx context.Context, login, password string, persistent boo
 		if err := tx.UpdateAccount(user); err != nil {
 			return err
 		}
-		result, err = newAuthSession(tx, user, persistent, now)
+		result, err = a.newSession(tx, user, persistent, now)
 		if err != nil {
 			return err
 		}
@@ -167,6 +174,9 @@ func (a *Auth) Current(ctx context.Context, token string) (AuthResult, error) {
 		}
 		session.LastActiveAt = now
 		result = AuthResult{User: user, Session: session}
+		if a.email != nil {
+			result.CSRFToken = a.csrfToken(token, session.ID)
+		}
 		return nil
 	})
 	return result, err
@@ -194,6 +204,11 @@ func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64,
 	if password != confirmation {
 		return AuthResult{}, domain.ErrInvalidProfile
 	}
+	if a.email != nil {
+		if err := a.validateNewPassword(password); err != nil {
+			return AuthResult{}, err
+		}
+	}
 	var result AuthResult
 	err := a.withSession(ctx, token, func(tx AuthTx, user domain.User, session domain.AuthSession, now time.Time) error {
 		if revision != user.SessionEpoch {
@@ -220,7 +235,7 @@ func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64,
 		if err := tx.RevokeAccountSessions(user.ID, now); err != nil {
 			return err
 		}
-		result, err = newAuthSession(tx, user, session.Persistent, now)
+		result, err = a.newSession(tx, user, session.Persistent, now)
 		if err != nil {
 			return err
 		}
@@ -239,12 +254,15 @@ func (a *Auth) Available(ctx context.Context, login string) (bool, error) {
 }
 
 func (a *Auth) withSession(ctx context.Context, token string, execute func(AuthTx, domain.User, domain.AuthSession, time.Time) error) error {
+	if a.email != nil && !a.emailReady() {
+		return ErrSessionInvalid
+	}
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) != 32 {
 		return ErrSessionInvalid
 	}
 	digest := sha256.Sum256(raw)
-	return a.store.Transaction(ctx, func(tx AuthTx) error {
+	return a.sessionTransaction(ctx, func(tx AuthTx) error {
 		session, err := tx.SessionByHash(digest[:], false)
 		if err != nil {
 			return err
@@ -262,6 +280,9 @@ func (a *Auth) withSession(ctx context.Context, token string, execute func(AuthT
 		}
 		now := a.now().UTC()
 		if !session.Valid(user, now) {
+			return ErrSessionInvalid
+		}
+		if a.email != nil && (user.EmailVerifiedAt.IsZero() || !a.sessionProofValid(token, session)) {
 			return ErrSessionInvalid
 		}
 		return execute(tx, user, session, now)

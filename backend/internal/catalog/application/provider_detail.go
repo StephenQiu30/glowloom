@@ -11,7 +11,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidProviderDetail means a requested or stored summary is invalid.
@@ -73,7 +72,7 @@ func (q *ProviderDetailQuery) Execute(ctx context.Context, actor identityapp.Pri
 	if q == nil || q.store == nil || q.fields == nil || providerID == uuid.Nil {
 		return ProviderDetail{}, ErrInvalidProviderDetail
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return ProviderDetail{}, identityapp.ErrForbidden
 	}
 	provider, credential, err := q.store.FindProviderDetailForAdmin(ctx, actor.ID, actor.OrgID, providerID)

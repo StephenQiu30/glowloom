@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ProjectMediaPreview } from "@/components/media/project-media";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
 import {
   deleteBibleEntry,
@@ -16,7 +16,7 @@ import {
   confirmBibleEntry,
   listBibleVersions,
   getBibleEntry,
-} from "@/components/creation/generated/creation";
+} from "@/api/bible";
 import {
   subjectImage,
   subjectText,
@@ -46,13 +46,11 @@ export function SubjectDetail({
     [pending, setPending] = useState(false),
     [uncertain, setUncertain] = useState(false),
     [stale, setStale] = useState(false),
-    [proof, setProof] = useState<CreationAPI.ImpactProof>(),
-    [history, setHistory] = useState<CreationAPI.Version[] | null>(null),
+    [proof, setProof] = useState<API.ImpactProof>(),
+    [history, setHistory] = useState<API.Version[] | null>(null),
     [cursor, setCursor] = useState<string | undefined>(),
     [historyPending, setHistoryPending] = useState(false);
-  const op = useRef<{ key: string; body: CreationAPI.ControlRequest } | null>(
-      null,
-    ),
+  const op = useRef<{ key: string; body: API.ControlRequest } | null>(null),
     busy = useRef(false);
   const params = {
     pid: value.head.project_id,
@@ -89,7 +87,7 @@ export function SubjectDetail({
         value.head.id,
       );
       if (receipt.revision !== t.body.expected_revision! + 1)
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       const s = requireSubject(
         await getBibleEntry(params),
         params.pid,
@@ -105,7 +103,7 @@ export function SubjectDetail({
             (action === "confirm" &&
               s.head.confirmed_version_id !== s.current.id)))
       )
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       changed(s);
       if (s.head.revision > receipt.revision)
         setError("操作已完成，主体随后又有更新。当前显示的是最新状态。");
@@ -115,7 +113,7 @@ export function SubjectDetail({
       op.current = null;
     } catch (e) {
       const impact =
-        e instanceof AuthError && e.code === "impact_acknowledgment_required"
+        e instanceof RequestError && e.code === "impact_acknowledgment_required"
           ? impactProof(e.meta)
           : undefined;
       if (impact) {
@@ -125,7 +123,7 @@ export function SubjectDetail({
         op.current = null;
       } else {
         const conflict =
-          e instanceof AuthError && e.code === "revision_conflict";
+          e instanceof RequestError && e.code === "revision_conflict";
         setStale(conflict);
         setError(
           conflict
@@ -133,7 +131,7 @@ export function SubjectDetail({
             : flowError(e),
         );
         const unknown = !(
-          e instanceof AuthError &&
+          e instanceof RequestError &&
           e.status >= 400 &&
           e.status < 500
         );
@@ -157,7 +155,7 @@ export function SubjectDetail({
           (v) => v.entry_id !== params.id || v.project_id !== params.pid,
         )
       )
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       setHistory((h) => (next ? [...(h ?? []), ...r.versions!] : r.versions!));
       setCursor(r.next_cursor);
     } catch (e) {

@@ -54,7 +54,7 @@ func adminCatalogRouter(t *testing.T, database *gorm.DB, actor identityapp.Princ
 	router := gin.New()
 	router.Use(httpapi.Middleware("http://localhost:3000"))
 	router.Use(func(c *gin.Context) { c.Set("principal", actor) })
-	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{Providers: catalogapp.NewListProvidersQuery(store), Provider: catalogapp.NewProviderDetailQuery(store, registry), CreateProvider: catalogapp.NewCreateProviderCommand(store, registry, time.Now), UpdateProvider: catalogapp.NewUpdateProviderCommand(store, time.Now), SetCredential: catalogapp.NewSetCredentialCommand(store, registry, sealer, time.Now), DisableCredential: catalogapp.NewDisableCredentialCommand(store, time.Now), CredentialTest: catalogapp.NewRequestCredentialTestCommand(store), Models: catalogapp.NewAdminModelsQuery(store), CreateModel: catalogapp.NewCreateModelCommand(store, time.Now), PublishVersion: catalogapp.NewPublishModelVersionCommand(store, params, time.Now), PublishPrice: catalogapp.NewPublishPriceRuleCommand(store, price, time.Now), SetModelStatus: catalogapp.NewSetModelStatusCommand(store, time.Now)}).Register(router.Group("/api"))
+	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{Providers: catalogapp.NewListProvidersQuery(store), Provider: catalogapp.NewProviderDetailQuery(store, registry), CreateProvider: catalogapp.NewCreateProviderCommand(store, registry, time.Now), UpdateProvider: catalogapp.NewUpdateProviderCommand(store, time.Now), SetCredential: catalogapp.NewSetCredentialCommand(store, registry, sealer, time.Now, []byte("fixture-only-request-key-32-bytes")), DisableCredential: catalogapp.NewDisableCredentialCommand(store, time.Now), CredentialTest: catalogapp.NewRequestCredentialTestCommand(store), Models: catalogapp.NewAdminModelsQuery(store), CreateModel: catalogapp.NewCreateModelCommand(store, time.Now), PublishVersion: catalogapp.NewPublishModelVersionCommand(store, params, time.Now), PublishPrice: catalogapp.NewPublishPriceRuleCommand(store, price, time.Now), SetModelStatus: catalogapp.NewSetModelStatusCommand(store, time.Now)}).Register(router.Group("/api"))
 	return router
 }
 
@@ -72,8 +72,8 @@ func adminCatalogRequest(t *testing.T, router *gin.Engine, method, path, body, k
 func TestAdminCatalogHTTPManagementKeepsRolesAndRealPublication(t *testing.T) {
 	ctx, database := modelCatalogDB(t)
 	org := insertModelCatalogOrganization(ctx, t, database)
-	actor := identityapp.Principal{ID: uuid.New(), OrgID: org, Role: "admin"}
-	if err := database.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password) VALUES(?::uuid,?::uuid,?,'HTTP Catalog Admin','admin','synthetic-test-hash',false)`, actor.ID, org, "http-admin-"+actor.ID.String()).Error; err != nil {
+	actor := identityapp.Principal{ID: uuid.New(), OrgID: org, Role: "admin", PlatformRole: "platform_admin"}
+	if err := database.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,password_hash,must_change_password,platform_role) VALUES(?::uuid,?::uuid,?,'HTTP Catalog Admin','admin','synthetic-test-hash',false,'platform_admin')`, actor.ID, org, "http-admin-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	producer := insertModelCatalogActor(ctx, t, database, org)
@@ -140,19 +140,19 @@ func TestAdminCatalogHTTPManagementKeepsRolesAndRealPublication(t *testing.T) {
 		t.Fatalf("publish price=%d %s", res.Code, res.Body)
 	}
 	res = adminCatalogRequest(t, router, "PATCH", modelPath+"/status", `{"expected_revision":3,"status":"active"}`, uuid.NewString())
-	if res.Code != 200 {
-		t.Fatalf("enable model=%d %s", res.Code, res.Body)
+	if res.Code != 409 || !strings.Contains(res.Body.String(), "release_unverified") {
+		t.Fatalf("unverified model bypassed release gate=%d %s", res.Code, res.Body)
 	}
 	res = adminCatalogRequest(t, router, "GET", modelPath, "", "")
 	var detail catalogapp.AdminModelDetail
-	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &detail) != nil || detail.Model.Revision != 4 || len(detail.Versions) != 1 || len(detail.Prices) != 1 {
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &detail) != nil || detail.Model.Revision != 3 || len(detail.Versions) != 1 || len(detail.Prices) != 1 {
 		t.Fatalf("model editor restore=%d %s", res.Code, res.Body)
 	}
 	res = adminCatalogRequest(t, router, "POST", providerPath+"/credentials/"+credential.ID.String()+"/disable", "", uuid.NewString())
 	if res.Code != 200 {
 		t.Fatalf("disable credential=%d %s", res.Code, res.Body)
 	}
-	if err := database.Exec(`UPDATE identity."user" SET role='producer' WHERE id=?::uuid`, actor.ID).Error; err != nil {
+	if err := database.Exec(`UPDATE identity."user" SET platform_role='creator' WHERE id=?::uuid`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	res = adminCatalogRequest(t, router, "GET", modelPath, "", "")

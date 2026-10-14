@@ -25,7 +25,7 @@ export function AuthDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAuthenticated: (session: AuthAPI.SessionView) => void;
+  onAuthenticated: (session: API.SessionView) => void;
   initialMode?: AuthMode;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
 }) {

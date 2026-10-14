@@ -10,7 +10,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidProviderList means the page request or result is invalid.
@@ -59,7 +58,7 @@ func (q *ListProvidersQuery) Execute(ctx context.Context, actor identityapp.Prin
 	if q == nil || q.store == nil {
 		return ProviderListPage{}, ErrInvalidProviderList
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return ProviderListPage{}, identityapp.ErrForbidden
 	}
 	if input.Limit < 0 || input.Limit > 200 ||

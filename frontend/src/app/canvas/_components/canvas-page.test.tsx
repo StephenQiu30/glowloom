@@ -8,16 +8,18 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CanvasPage } from "./canvas-page";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 const api = vi.hoisted(() => ({
   project: vi.fn(),
   canvas: vi.fn(),
   save: vi.fn(),
 }));
-vi.mock("@/components/projects/generated/projects", () => ({
-  getProject: api.project,
+vi.mock("@/api/canvases", () => ({
   getCanvas: api.canvas,
   applyCanvasCommands: api.save,
+}));
+vi.mock("@/api/projects", () => ({
+  getProject: api.project,
 }));
 vi.mock("@/components/media/project-media", () => ({
   ProjectMediaPreview: () => null,
@@ -59,7 +61,7 @@ async function openDraft() {
   await screen.findByText("画布暂无节点");
   fireEvent.click(screen.getByRole("button", { name: "新增图片节点" }));
 }
-function addReceipt(body: ProjectAPI.CommandsInput) {
+function addReceipt(body: API.CommandsInput) {
   return {
     ...canvas,
     revision: 2,
@@ -82,7 +84,7 @@ it("保存中的后续编辑不会被旧回执标成已保存", async () => {
   fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
   const frozen = structuredClone(
     api.save.mock.calls[0][1],
-  ) as ProjectAPI.CommandsInput;
+  ) as API.CommandsInput;
   fireEvent.change(screen.getByLabelText("提示词"), {
     target: { value: "保存中继续编辑" },
   });
@@ -104,12 +106,12 @@ it("丢回执重试保留原key和冻结body，键盘移动可保存", async () 
     "90",
   );
   fireEvent.keyDown(screen.getByLabelText("X 坐标"), { key: "Escape" });
-  api.save.mockRejectedValueOnce(new AuthError("request_unconfirmed"));
+  api.save.mockRejectedValueOnce(new RequestError("request_unconfirmed"));
   fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
   await screen.findByRole("button", { name: "重试原保存" });
   const frozen = structuredClone(
     api.save.mock.calls[0][1],
-  ) as ProjectAPI.CommandsInput;
+  ) as API.CommandsInput;
   const key = api.save.mock.calls[0][2].headers["Idempotency-Key"];
   api.save.mockResolvedValueOnce(addReceipt(frozen));
   fireEvent.click(screen.getByRole("button", { name: "重试原保存" }));
@@ -168,7 +170,7 @@ it("冲突保留本地草稿，由用户明确采用服务端版本继续保存"
       0,
     ),
   );
-  api.save.mockRejectedValueOnce(new AuthError("revision_conflict", 409));
+  api.save.mockRejectedValueOnce(new RequestError("revision_conflict", 409));
   api.canvas.mockResolvedValueOnce({
     ...canvas,
     revision: 3,
@@ -191,7 +193,7 @@ it("冲突保留本地草稿，由用户明确采用服务端版本继续保存"
       revision: 4,
       nodes: [
         { ...node, input_revision: 1 },
-        ...body.commands[0].nodes.map((n: ProjectAPI.Node) => ({
+        ...body.commands[0].nodes.map((n: API.Node) => ({
           ...n,
           input_revision: 1,
         })),

@@ -16,6 +16,7 @@ var ErrCredentialTestKeyReused = errors.New("credential test request key reused"
 // CredentialTestAccepted reports scheduling, never successful provider credentials.
 type CredentialTestAccepted struct {
 	TestID       uuid.UUID `json:"test_id"`
+	CheckID      uuid.UUID `json:"check_id"`
 	EventID      uuid.UUID `json:"event_id"`
 	ProviderID   uuid.UUID `json:"provider_id"`
 	CredentialID uuid.UUID `json:"credential_id"`

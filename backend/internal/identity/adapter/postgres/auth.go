@@ -142,7 +142,7 @@ func (t *authTx) SaveGuard(key string, g domain.LoginGuard) error {
 	return nil
 }
 func (t *authTx) SessionByHash(hash []byte, lock bool) (domain.AuthSession, error) {
-	query := `SELECT id,account_id,token_hash,credential_revision,created_at,last_active_at,absolute_expires_at,persistent,revoked_at FROM identity.user_session WHERE token_hash=?`
+	query := `SELECT * FROM identity.user_session WHERE token_hash=?`
 	if lock {
 		query += ` FOR UPDATE`
 	}
@@ -155,6 +155,14 @@ func (t *authTx) SessionByHash(hash []byte, lock bool) (domain.AuthSession, erro
 		return domain.AuthSession{}, application.ErrSessionInvalid
 	}
 	return session, nil
+}
+
+func (t *authTx) SetSessionSecurity(id uuid.UUID, csrfHash []byte) error {
+	return t.updateSession(`UPDATE identity.user_session SET csrf_hash=? WHERE id=?`, csrfHash, id)
+}
+
+func (t *authTx) ReauthenticateSession(id uuid.UUID, epoch int64, now time.Time) error {
+	return t.updateSession(`UPDATE identity.user_session SET reauth_at=?,reauth_epoch=? WHERE id=? AND revoked_at IS NULL`, now, epoch, id)
 }
 func (t *authTx) InsertSession(s domain.AuthSession) error {
 	if err := t.db.Exec(`INSERT INTO identity.user_session(id,account_id,token_hash,credential_revision,created_at,last_active_at,absolute_expires_at,persistent) VALUES(?::uuid,?::uuid,?,?,?,?,?,?)`, s.ID.String(), s.AccountID.String(), s.TokenHash, s.CredentialRevision, s.CreatedAt, s.LastActiveAt, s.AbsoluteExpiresAt, s.Persistent).Error; err != nil {

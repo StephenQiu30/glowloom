@@ -19,7 +19,9 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	pgprompt "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/adapter/postgres"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 // Dependencies are the commands and queries consumed by the public workbench.
@@ -60,16 +62,18 @@ type QuoteMediaInput struct {
 
 // QuoteItemRequest contains user input; model and price versions freeze server-side.
 type QuoteItemRequest struct {
-	ModelKey        string                     `json:"model_key"`
-	Capability      string                     `json:"capability"`
-	Mode            string                     `json:"mode"`
-	Prompt          string                     `json:"prompt"`
-	Params          json.RawMessage            `json:"params" swaggertype:"object"`
-	OutputCount     int32                      `json:"output_count"`
-	ForceRegenerate bool                       `json:"force_regenerate"`
-	MediaInputs     []QuoteMediaInput          `json:"media_inputs"`
-	Source          *domain.CanvasSource       `json:"source,omitempty" extensions:"x-nullable"`
-	PromptTemplate  *promptapp.TemplateRequest `json:"prompt_template,omitempty"`
+	InputSource             *promptdomain.InputSource  `json:"input_source,omitempty"`
+	ExpectedSubmissionEpoch *int64                     `json:"expected_submission_epoch,omitempty"`
+	ModelKey                string                     `json:"model_key"`
+	Capability              string                     `json:"capability"`
+	Mode                    string                     `json:"mode"`
+	Prompt                  string                     `json:"prompt"`
+	Params                  json.RawMessage            `json:"params" swaggertype:"object"`
+	OutputCount             int32                      `json:"output_count"`
+	ForceRegenerate         bool                       `json:"force_regenerate"`
+	MediaInputs             []QuoteMediaInput          `json:"media_inputs"`
+	Source                  *domain.CanvasSource       `json:"source,omitempty" extensions:"x-nullable"`
+	PromptTemplate          *promptapp.TemplateRequest `json:"prompt_template,omitempty"`
 }
 
 func (i QuoteItemRequest) input() application.FreeQuoteItemInput {
@@ -77,11 +81,15 @@ func (i QuoteItemRequest) input() application.FreeQuoteItemInput {
 	for _, item := range i.MediaInputs {
 		media = append(media, application.FreeQuoteMediaInput{Role: item.Role, MediaAssetID: item.MediaAssetID})
 	}
-	return application.FreeQuoteItemInput{ModelKey: i.ModelKey, Capability: i.Capability, Mode: i.Mode, Prompt: i.Prompt, Params: i.Params, OutputCount: i.OutputCount, ForceRegenerate: i.ForceRegenerate, MediaInputs: media, Source: i.Source, PromptTemplate: i.PromptTemplate}
+	return application.FreeQuoteItemInput{InputSource: i.InputSource, ExpectedSubmissionEpoch: i.ExpectedSubmissionEpoch, ModelKey: i.ModelKey, Capability: i.Capability, Mode: i.Mode, Prompt: i.Prompt, Params: i.Params, OutputCount: i.OutputCount, ForceRegenerate: i.ForceRegenerate, MediaInputs: media, Source: i.Source, PromptTemplate: i.PromptTemplate}
 }
 
 // QuoteResponse is an immutable estimate, not an execution result.
 type QuoteResponse struct {
+	SubmissionID      *uuid.UUID                `json:"submission_id,omitempty"`
+	SubmissionEpoch   int64                     `json:"submission_epoch,omitempty"`
+	ConfirmKey        *uuid.UUID                `json:"confirm_key,omitempty"`
+	EditorDraft       *promptdomain.Draft       `json:"editor_draft,omitempty"`
 	OperationID       uuid.UUID                 `json:"operation_id"`
 	QuoteMicros       int64                     `json:"quote_micros"`
 	QuoteDetail       json.RawMessage           `json:"quote_detail" swaggertype:"object"`
@@ -132,7 +140,7 @@ func (h *Handler) FreeQuote(c *gin.Context) {
 }
 
 func quoteResponse(result application.CreateFreeQuoteResult) QuoteResponse {
-	return QuoteResponse{OperationID: result.OperationID, QuoteMicros: result.QuoteMicros, QuoteDetail: result.QuoteDetail, AvailableMicros: result.AvailableMicros, ExpiresAt: result.ExpiresAt, ReusedFromID: result.ReusedFromID, Confirmable: result.Confirmable, PromptPreparation: result.PromptPreparation, FinalPrompt: result.FinalPrompt}
+	return QuoteResponse{SubmissionID: result.SubmissionID, SubmissionEpoch: result.SubmissionEpoch, ConfirmKey: result.ConfirmKey, EditorDraft: result.EditorDraft, OperationID: result.OperationID, QuoteMicros: result.QuoteMicros, QuoteDetail: result.QuoteDetail, AvailableMicros: result.AvailableMicros, ExpiresAt: result.ExpiresAt, ReusedFromID: result.ReusedFromID, Confirmable: result.Confirmable, PromptPreparation: result.PromptPreparation, FinalPrompt: result.FinalPrompt}
 }
 
 // Quotes creates a bounded batch, preserving invalid-item results in request order.
@@ -552,7 +560,11 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 409, "template_changed", nil)
 	case errors.Is(err, promptapp.ErrTemplateContextUnavailable):
 		httpapi.WriteProblem(c, 409, "context_unavailable", nil)
-	case errors.Is(err, application.ErrQuoteSourceStale):
+	case errors.Is(err, application.ErrSubmissionUnresolved), errors.Is(err, application.ErrSubmissionEpoch), errors.Is(err, application.ErrSubmissionAccepted):
+		httpapi.WriteProblem(c, 409, err.Error(), nil)
+	case errors.Is(err, promptdomain.ErrReferenceUnavailable):
+		httpapi.WriteProblem(c, 422, "reference_unavailable", nil)
+	case errors.Is(err, application.ErrQuoteSourceStale), errors.Is(err, pgprompt.ErrInputStale):
 		httpapi.WriteProblem(c, 409, "canvas_revision_conflict", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)

@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidAdminModels means the requested management snapshot is invalid.
@@ -89,7 +88,7 @@ func NewAdminModelsQuery(store AdminModelsStore) *AdminModelsQuery {
 }
 
 func requireAdmin(actor identityapp.Principal) error {
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return identityapp.ErrForbidden
 	}
 	return nil

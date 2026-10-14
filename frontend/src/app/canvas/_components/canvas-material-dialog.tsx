@@ -45,12 +45,12 @@ import {
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { listMediaAssets } from "@/components/creation/generated/creation";
+import { listMediaAssets } from "@/api/media";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { UploadDialog } from "@/components/media/upload-dialog";
 import { SubjectList } from "@/components/subjects/subject-list";
 import { subjectText, type Subject } from "@/components/subjects/contracts";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
 import { isProjectID } from "@/components/projects/project";
 
@@ -73,17 +73,17 @@ export function CanvasMaterialDialog({
   initialTab?: "assets" | "subjects";
   initialKind?: string;
   onClose: () => void;
-  onAdd: (assets: CreationAPI.AssetSummary[]) => void;
+  onAdd: (assets: API.AssetSummary[]) => void;
   onSubject: (subject: Subject) => void;
 }) {
   const [tab, setTab] = useState(initialTab);
   const [kind, setKind] = useState(initialKind);
-  const [subjectKind, setSubjectKind] = useState<CreationAPI.Kind>("character");
-  const [selected, setSelected] = useState<CreationAPI.AssetSummary[]>([]);
+  const [subjectKind, setSubjectKind] = useState<API.Kind>("character");
+  const [selected, setSelected] = useState<API.AssetSummary[]>([]);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [upload, setUpload] = useState(false);
   const [revision, setRevision] = useState(0);
-  function toggle(asset: CreationAPI.AssetSummary) {
+  function toggle(asset: API.AssetSummary) {
     setSelected((items) =>
       items.some((i) => i.id === asset.id)
         ? items.filter((i) => i.id !== asset.id)
@@ -160,7 +160,7 @@ export function CanvasMaterialDialog({
                 value={subjectKind}
                 onValueChange={(v) => {
                   if (v) {
-                    setSubjectKind(v as CreationAPI.Kind);
+                    setSubjectKind(v as API.Kind);
                     setSubject(null);
                   }
                 }}
@@ -239,10 +239,10 @@ function MaterialList({
 }: {
   projectID: string;
   kind: string;
-  selected: CreationAPI.AssetSummary[];
-  onToggle: (asset: CreationAPI.AssetSummary) => void;
+  selected: API.AssetSummary[];
+  onToggle: (asset: API.AssetSummary) => void;
 }) {
-  const [items, setItems] = useState<CreationAPI.AssetSummary[]>([]);
+  const [items, setItems] = useState<API.AssetSummary[]>([]);
   const [cursor, setCursor] = useState<string>();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -250,7 +250,7 @@ function MaterialList({
   const [retry, setRetry] = useState(0);
   const request = useRef<AbortController | null>(null);
   const busy = useRef(false);
-  function validate(page: CreationAPI.AssetPage) {
+  function validate(page: API.AssetPage) {
     if (
       !Array.isArray(page.items) ||
       page.items.some(
@@ -259,7 +259,7 @@ function MaterialList({
       ) ||
       (page.next_cursor !== undefined && typeof page.next_cursor !== "string")
     )
-      throw new AuthError("invalid_receipt");
+      throw new RequestError("invalid_receipt");
     return page;
   }
   useEffect(() => {
@@ -302,7 +302,7 @@ function MaterialList({
         ),
       );
       if (controller.signal.aborted) return;
-      if (page.next_cursor === cursor) throw new AuthError("invalid_receipt");
+      if (page.next_cursor === cursor) throw new RequestError("invalid_receipt");
       setItems((previous) => [
         ...new Map(
           [...previous, ...page.items!].map((a) => [a.id, a]),

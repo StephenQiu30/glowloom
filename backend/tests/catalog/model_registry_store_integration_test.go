@@ -33,8 +33,8 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	t.Cleanup(func() { _ = conn.Close() })
 	actor := adminPrincipal()
 	if err := conn.DB.WithContext(ctx).Exec(`
-		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Registry Admin', 'admin', 'test-hash', false)
+		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
+		VALUES (?::uuid, ?::uuid, ?, 'Registry Admin', 'admin', 'test-hash', false, 'platform_admin')
 	`, actor.ID.String(), actor.OrgID.String(), "registry-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +79,8 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		t.Fatalf("publish first model version: %v", err)
 	}
 	version1.ExpectedRevision = 2
-	if _, err := publish.Execute(ctx, actor, version1); !errors.Is(err, pgcatalog.ErrModelVersionConflict) {
-		t.Fatalf("duplicate model version accepted: %v", err)
+	if _, err := publish.Execute(ctx, actor, version1); !errors.Is(err, catalogapp.ErrPresetConflict) {
+		t.Fatalf("changed request reused its idempotency key: %v", err)
 	}
 	version2 := validPublishModelVersionInput(model.ID)
 	version2.ExpectedRevision, version2.VersionNo, version2.ProviderModelID = 2, 2, "seedance-2-updated"
@@ -128,7 +128,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		t.Fatalf("publish second price: %v", err)
 	}
 	secondPriceInput.ExpectedRevision = 5
-	if _, err := publishPrice.Execute(ctx, actor, secondPriceInput); !errors.Is(err, pgcatalog.ErrPriceVersionConflict) {
+	if _, err := publishPrice.Execute(ctx, actor, secondPriceInput); !errors.Is(err, catalogapp.ErrPresetConflict) {
 		t.Fatalf("duplicate price version accepted: %v", err)
 	}
 	var originalPrice struct {
@@ -152,7 +152,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		t.Fatalf("loaded model %+v: %v", loaded, err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`
-		UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid
+		UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}

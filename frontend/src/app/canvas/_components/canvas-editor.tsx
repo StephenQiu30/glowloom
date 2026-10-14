@@ -36,14 +36,16 @@ import {
   GenerationDialog,
   type GenerationSeed,
 } from "@/components/generation/generation-dialog";
-import { AuthError } from "@/components/auth/request";
 import {
-  applyCanvasCommands,
-  getCanvas,
-} from "@/components/projects/generated/projects";
+  emptyPromptDraft,
+  type PromptDraft,
+} from "@/components/generation/prompt-document";
+import { RequestError } from "@/lib/request";
+import { applyCanvasCommands, getCanvas } from "@/api/canvases";
 import type { Project } from "@/components/projects/project";
 import {
   commandBatch,
+  richCanvasDraft,
   createDraftNode,
   createMediaNode,
   duplicateNode,
@@ -74,7 +76,7 @@ type Pending = {
   key: string;
   base: Canvas;
   nodes: Node[];
-  body: ProjectAPI.CommandsInput;
+  body: API.CommandsInput;
 };
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
 const CanvasMaterialDialog = dynamic(() =>
@@ -263,7 +265,7 @@ export function CanvasEditor({
     edit([...local.current, n]);
     selectNode(n.id);
   }
-  function addMaterials(assets: CreationAPI.AssetSummary[]) {
+  function addMaterials(assets: API.AssetSummary[]) {
     if (local.current.length + assets.length > 2000) {
       setMessage("画布已达到 2000 个节点上限，请减少所选素材。");
       return;
@@ -439,7 +441,21 @@ export function CanvasEditor({
         setMessage("未能读取服务端版本，本地编辑仍保留，请重试读取。");
     }
   }
+  const saveFlight = useRef<Promise<Canvas | undefined> | null>(null);
+  const saveLatest = useRef<() => Promise<Canvas | undefined>>(
+    async () => undefined,
+  );
   async function save() {
+    if (saveFlight.current) return saveFlight.current;
+    const flight = saveOnce();
+    saveFlight.current = flight;
+    try {
+      return await flight;
+    } finally {
+      saveFlight.current = null;
+    }
+  }
+  async function saveOnce() {
     if (busy.current || conflict) return;
     let operation = pending.current;
     if (!operation) {
@@ -491,7 +507,7 @@ export function CanvasEditor({
       return committed;
     } catch (error) {
       if (!alive.current || controller.signal.aborted) return;
-      if (error instanceof AuthError && error.code === "revision_conflict") {
+      if (error instanceof RequestError && error.code === "revision_conflict") {
         pending.current = null;
         setUnconfirmed(false);
         setConflict({ server: null });
@@ -500,7 +516,7 @@ export function CanvasEditor({
         );
         await readConflict();
       } else if (
-        error instanceof AuthError &&
+        error instanceof RequestError &&
         [401, 403, 404, 409, 422].includes(error.status)
       ) {
         pending.current = null;
@@ -521,25 +537,77 @@ export function CanvasEditor({
       if (alive.current) setSaving(false);
     }
   }
+  useEffect(() => {
+    saveLatest.current = save;
+  });
   async function generateCurrent(pickSubject = false) {
     if (!current || !isDraft(current) || busy.current) return;
     const saved = await save();
     if (!saved) return;
     const node = saved.nodes.find((n) => n.id === current.id);
     if (!node || !isDraft(node)) return;
+    let composer = node.config.draft.composer;
+    if (!composer) {
+      composer = emptyPromptDraft();
+      composer.document = {
+        type: "doc",
+        content: node.config.draft.prompt
+          .split("\n")
+          .map((text) => ({
+            type: "paragraph",
+            ...(text ? { content: [{ type: "text" as const, text }] } : {}),
+          })),
+      };
+      composer.params = {
+        aspect_ratio: node.config.draft.aspect_ratio,
+        output_count: node.config.draft.candidate_count,
+        ...(node.config.draft.negative_prompt
+          ? { negative_prompt: node.config.draft.negative_prompt }
+          : {}),
+      };
+    }
+    const ownerNode = node.id;
     setGeneration({
       project,
-      prompt: node.config.draft.prompt,
+      prompt: "",
+      composer,
       capability: node.node_type === "video_generation" ? "video" : "image",
-      draft: node.config.draft,
       pickSubject,
       source: {
         canvas_id: saved.id,
-        node_id: node.id,
+        node_id: ownerNode,
         revision: saved.revision,
+      },
+      canvasOwner: {
+        contextKey: `canvas/${saved.id}/${ownerNode}`,
+        draft: composer,
+        onChange: (value: PromptDraft) => {
+          const n = local.current.find((n) => n.id === ownerNode);
+          if (n && isDraft(n))
+            update(ownerNode, { config: { draft: richCanvasDraft(value) } });
+        },
+        flush: async () => {
+          const committed = await saveLatest.current();
+          if (!committed)
+            throw new Error("画布保存尚未确认，请先处理冲突或重试原保存。");
+          const owner = committed.nodes.find((n) => n.id === ownerNode);
+          if (!owner || !isDraft(owner) || !owner.config.draft.composer)
+            throw new Error("请先完成节点草稿保存。");
+          const latest = local.current.find((n) => n.id === ownerNode);
+          if (!latest || !sameEditable(latest, owner))
+            throw new Error("保存期间节点已变化，请重新保存当前输入。");
+          return {
+            kind: "canvas_input",
+            canvas_id: committed.id,
+            node_id: ownerNode,
+            canvas_revision: committed.revision,
+            input_revision: owner.input_revision,
+          };
+        },
       },
     });
   }
+
   async function adoptResult(id: string, kind: string) {
     if (!["image", "video", "audio"].includes(kind) || busy.current || conflict)
       throw new Error("请先解决画布保存状态，再采用结果。");

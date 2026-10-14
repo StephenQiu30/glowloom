@@ -30,9 +30,13 @@ type CredentialTestRequest struct {
 // CredentialTestObservation is the Agent's safe result, with no provider body.
 type CredentialTestObservation struct {
 	CredentialTestRequest
-	Result   domain.TestResult
-	TestedAt time.Time
-	Last4    string
+	Result          domain.TestResult
+	TestedAt        time.Time
+	Last4           string
+	AuthResult      string
+	AdapterResult   string
+	DiscoveryResult string
+	Candidates      []ModelCandidate
 }
 
 // CredentialTestStore checks live administrator rights and owns test writes.
@@ -60,7 +64,7 @@ func (s *CredentialTestService) Load(ctx context.Context, request CredentialTest
 	if err != nil {
 		return domain.Provider{}, domain.Credential{}, fmt.Errorf("load credential for test: %w", err)
 	}
-	if provider.ID != request.ProviderID || provider.Status != domain.ProviderActive ||
+	if provider.ID != request.ProviderID || (provider.Status != domain.ProviderActive && provider.CurrentConfigVersionID == uuid.Nil) ||
 		credential.ID != request.CredentialID || credential.ProviderID != provider.ID ||
 		credential.Status != domain.CredentialActive || credential.Validate() != nil {
 		return domain.Provider{}, domain.Credential{}, ErrInvalidCredentialTest

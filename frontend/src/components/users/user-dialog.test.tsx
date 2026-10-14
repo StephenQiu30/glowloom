@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { UserDialog } from "./user-dialog";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 const api = vi.hoisted(() => ({
   update: vi.fn(),
   list: vi.fn(),
@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
   reset: vi.fn(),
   unlock: vi.fn(),
 }));
-vi.mock("@/components/creation/generated/creation", () => ({
+vi.mock("@/api/identity", () => ({
   updateAdminUser: api.update,
   listAdminUsers: api.list,
   disableAdminUser: api.disable,
@@ -37,7 +37,7 @@ const user = {
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 it("停用请求携带读取版本，断网后先核对而不重复写入", async () => {
-  api.disable.mockRejectedValue(new AuthError("request_unconfirmed"));
+  api.disable.mockRejectedValue(new RequestError("request_unconfirmed"));
   api.list.mockResolvedValue({
     items: [{ ...user, status: "disabled", revision: 9 }],
   });

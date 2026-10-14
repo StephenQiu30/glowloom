@@ -45,17 +45,18 @@ const (
 
 // Provider is the platform-level adapter and rate-limit configuration.
 type Provider struct {
-	ID               uuid.UUID
-	Key              string
-	Name             string
-	AdapterKey       string
-	Region           Region
-	Status           ProviderStatus
-	ConcurrencyLimit int
-	RateLimitPerMin  int
-	Revision         int64
-	CreateTime       time.Time
-	UpdateTime       time.Time
+	ID                     uuid.UUID
+	CurrentConfigVersionID uuid.UUID
+	Key                    string
+	Name                   string
+	AdapterKey             string
+	Region                 Region
+	Status                 ProviderStatus
+	ConcurrencyLimit       int
+	RateLimitPerMin        int
+	Revision               int64
+	CreateTime             time.Time
+	UpdateTime             time.Time
 }
 
 // Validate checks fields before a provider is persisted or updated.
@@ -89,6 +90,7 @@ type CredentialStatus string
 // Credential statuses distinguish current and historical records.
 const (
 	CredentialActive   CredentialStatus = "active"
+	CredentialDraining CredentialStatus = "draining"
 	CredentialDisabled CredentialStatus = "disabled"
 )
 
@@ -107,17 +109,18 @@ const (
 // Credential contains encrypted bytes for the worker and safe display metadata.
 // Ciphertext must not appear in an API response or structured log.
 type Credential struct {
-	ID             uuid.UUID
-	ProviderID     uuid.UUID
-	Label          string
-	Ciphertext     []byte `json:"-"`
-	KeyID          string
-	Last4          string
-	Status         CredentialStatus
-	LastTestedAt   time.Time
-	LastTestResult TestResult
-	CreateTime     time.Time
-	UpdateTime     time.Time
+	ID                 uuid.UUID
+	RequestFingerprint string `json:"-"`
+	ProviderID         uuid.UUID
+	Label              string
+	Ciphertext         []byte `json:"-"`
+	KeyID              string
+	Last4              string
+	Status             CredentialStatus
+	LastTestedAt       time.Time
+	LastTestResult     TestResult
+	CreateTime         time.Time
+	UpdateTime         time.Time
 }
 
 // Validate checks encrypted credential metadata without inspecting plaintext.
@@ -125,7 +128,7 @@ func (c Credential) Validate() error {
 	if c.ID == uuid.Nil || c.ProviderID == uuid.Nil || strings.TrimSpace(c.Label) == "" ||
 		len(c.Ciphertext) == 0 || strings.TrimSpace(c.KeyID) == "" ||
 		!utf8.ValidString(c.Last4) || utf8.RuneCountInString(c.Last4) != 4 ||
-		(c.Status != CredentialActive && c.Status != CredentialDisabled) ||
+		(c.Status != CredentialActive && c.Status != CredentialDraining && c.Status != CredentialDisabled) ||
 		(c.LastTestResult == "") != c.LastTestedAt.IsZero() ||
 		(c.LastTestResult != "" && !validTestResult(c.LastTestResult)) {
 		return ErrInvalidCredential

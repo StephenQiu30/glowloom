@@ -2,12 +2,9 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ImageIcon, Upload, RotateCw } from "lucide-react";
-import {
-  getMediaPreview,
-  listMediaAssets,
-} from "@/components/creation/generated/creation";
+import { getMediaPreview, listMediaAssets } from "@/api/media";
 import { isProjectID } from "@/components/projects/project";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
 import {
   Dialog,
@@ -57,7 +54,7 @@ function MediaPreview({
           !Number.isFinite(Date.parse(r.expires_at ?? "")) ||
           Date.parse(r.expires_at ?? "") <= Date.now()
         )
-          throw new AuthError("invalid_receipt");
+          throw new RequestError("invalid_receipt");
         if (!c.signal.aborted) {
           setURL(r.url);
           setFailed(false);
@@ -132,16 +129,16 @@ export function ProjectMediaPicker({
 }: {
   projectID: string;
   kind?: string;
-  onSelect: (asset: CreationAPI.AssetSummary) => void;
+  onSelect: (asset: API.AssetSummary) => void;
   onClose: () => void;
 }) {
-  const [items, setItems] = useState<CreationAPI.AssetSummary[]>([]),
+  const [items, setItems] = useState<API.AssetSummary[]>([]),
     [cursor, setCursor] = useState<string | undefined>(),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [upload, setUpload] = useState(false),
     [retry, setRetry] = useState(0);
-  function validate(p: CreationAPI.AssetPage) {
+  function validate(p: API.AssetPage) {
     if (
       !Array.isArray(p.items) ||
       p.items.some(
@@ -149,7 +146,7 @@ export function ProjectMediaPicker({
           !isProjectID(i.id) || i.project_id !== projectID || i.kind !== kind,
       )
     )
-      throw new AuthError("invalid_receipt");
+      throw new RequestError("invalid_receipt");
     return p;
   }
   useEffect(() => {

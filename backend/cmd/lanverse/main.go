@@ -16,6 +16,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityoperator"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	lvlog "github.com/StephenQiu30/glowloom-server/backend/internal/platform/log"
@@ -30,6 +31,9 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "identity" {
+		return identityoperator.Run(os.Args[2:])
+	}
 	var role app.Role
 	var queues, schedulePrefix string
 	setup := len(os.Args) > 1 && os.Args[1] == "temporal"

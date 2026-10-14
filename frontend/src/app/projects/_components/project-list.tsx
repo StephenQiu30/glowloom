@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Grid2X2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { listProjects } from "@/components/projects/generated/projects";
+import { listProjects } from "@/api/projects";
 import {
   canvasHref,
   projectErrorMessage,

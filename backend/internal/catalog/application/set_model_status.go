@@ -12,7 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidSetModelStatus means the requested status change is incomplete.
@@ -55,7 +54,7 @@ func (c *SetModelStatusCommand) Execute(ctx context.Context, actor identityapp.P
 	if c == nil || c.store == nil || c.now == nil {
 		return ChangedModelStatus{}, ErrInvalidSetModelStatus
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return ChangedModelStatus{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)

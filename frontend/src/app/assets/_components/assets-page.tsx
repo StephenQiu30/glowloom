@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { ProductShell } from "@/components/layout/product-shell";
 import { useSession } from "@/components/auth/session";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -57,10 +57,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  listMediaLibrary,
-  applyMediaLibraryCommand,
-} from "@/components/media/generated/media";
+import { listMediaLibrary, applyMediaLibraryCommand } from "@/api/media";
 import {
   requireLibraryPage,
   requireLibraryReceipt,
@@ -119,7 +116,7 @@ function Library({
   const [saving, setSaving] = useState(false);
   const [writeError, setWriteError] = useState("");
   const [pendingOperation, setPendingOperation] = useState<{
-    body: MediaAPI.LibraryCommand;
+    body: API.LibraryCommand;
     key: string;
     base: LibraryPage;
   } | null>(null);
@@ -149,7 +146,7 @@ function Library({
       })
       .catch((e) => {
         if (!controller.signal.aborted) {
-          if (e instanceof AuthError && e.status === 401)
+          if (e instanceof RequestError && e.status === 401)
             router.replace("/login");
           else setError(mediaError(e));
         }
@@ -166,7 +163,7 @@ function Library({
     setDetail(null);
     setRetry((n) => n + 1);
   }
-  async function command(body?: MediaAPI.LibraryCommand) {
+  async function command(body?: API.LibraryCommand) {
     if (!page || busy.current) return;
     const op =
       pendingOperation ??
@@ -193,7 +190,7 @@ function Library({
       onRefresh();
     } catch (e) {
       setWriteError(mediaError(e));
-      if (e instanceof AuthError && e.status >= 400 && e.status < 500) {
+      if (e instanceof RequestError && e.status >= 400 && e.status < 500) {
         setPendingOperation(null);
         onLock(false);
       }

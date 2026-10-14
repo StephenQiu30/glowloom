@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -132,6 +133,12 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	depths := provideMediaDepthStore(database, cfg.VideoDepthPythonPath != "")
 	toolhttp.NewDepthHandler(depths, toolapp.NewDepthQuery(depths, storage, storage)).Register(protected)
 	catalogStore := pgcatalog.NewStore(database)
+	cataloghttp.NewPresetHandler(catalogapp.NewProviderPresets(catalogStore)).Register(protected)
+	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(protected)
+	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(protected)
+	cataloghttp.NewCheckHandler(catalogapp.NewProviderChecks(catalogStore)).Register(protected)
+	cataloghttp.NewCredentialHistoryHandler(catalogapp.NewCredentialHistory(catalogStore)).Register(protected)
+	cataloghttp.NewReceiptHandler(catalogapp.NewConfigReceipts(catalogStore)).Register(protected)
 	credentialSchema := credentialschema.NewRegistry()
 	parameterValidator, err := paramvalidation.NewValidator()
 	if err != nil {
@@ -157,11 +164,19 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		if err != nil {
 			return nil, fmt.Errorf("configure credential public key: %w", err)
 		}
-		setCredential = catalogapp.NewSetCredentialCommand(catalogStore, credentialSchema, sealer, time.Now)
+		macKey, err := hex.DecodeString(cfg.CredentialRequestMACKey)
+		if err != nil || len(macKey) != 32 {
+			return nil, fmt.Errorf("credential writes require a 32-byte hexadecimal request MAC key")
+		}
+		setCredential = catalogapp.NewSetCredentialCommand(catalogStore, credentialSchema, sealer, time.Now, macKey)
+		clear(macKey)
 	}
 	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(catalogStore)).Register(protected)
 	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(pgworkspace.NewStore(database), time.Now)).Register(protected)
 	prompthttp.NewHandler(promptapp.NewPreferences(pgprompt.NewStore(database), time.Now)).Register(protected)
+	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, func(tx *gorm.DB) promptapp.DraftAccess {
+		return promptDraftAccess{pgworkspace.NewProjectContentAccessStore(tx)}
+	})).Register(protected)
 	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{
 		Providers:         catalogapp.NewListProvidersQuery(catalogStore),
 		Provider:          catalogapp.NewProviderDetailQuery(catalogStore, credentialSchema),
@@ -176,9 +191,14 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		PublishPrice:      catalogapp.NewPublishPriceRuleCommand(catalogStore, priceValidator, time.Now),
 		SetModelStatus:    catalogapp.NewSetModelStatusCommand(catalogStore, time.Now),
 	}).Register(protected)
-	operations := pgoperation.NewStoreWithPromptCompiler(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
+	operations := pgoperation.NewStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
 		return promptapp.NewCompiler(pgprompt.NewStore(tx))
+	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
+		return pgprompt.NewDraftStore(tx, func(ownerTx *gorm.DB) promptapp.DraftAccess {
+			return promptDraftAccess{pgworkspace.NewProjectContentAccessStore(ownerTx)}
+		})
 	})
+	operationhttp.NewSubmissionHandler(operations).Register(protected)
 	operationhttp.NewHandler(operationhttp.Dependencies{
 		FreeQuote:    operationapp.NewCreateFreeQuoteCommand(operations),
 		BatchQuote:   operationapp.NewCreateBatchFreeQuoteCommand(operations),

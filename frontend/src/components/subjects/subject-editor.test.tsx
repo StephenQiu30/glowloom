@@ -7,14 +7,14 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SubjectEditor } from "./subject-editor";
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 const api = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   get: vi.fn(),
   refs: vi.fn(),
 }));
-vi.mock("@/components/creation/generated/creation", () => ({
+vi.mock("@/api/bible", () => ({
   createBibleEntry: api.create,
   updateBibleEntry: api.update,
   getBibleEntry: api.get,
@@ -93,7 +93,7 @@ it("参考图保存断网后继续原主体，不再创建新身份或换请求�
       },
     });
   api.refs
-    .mockRejectedValueOnce(new AuthError("request_unconfirmed"))
+    .mockRejectedValueOnce(new RequestError("request_unconfirmed"))
     .mockResolvedValue({
       entry_id: id,
       kind: "character",

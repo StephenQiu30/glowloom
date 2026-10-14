@@ -108,7 +108,7 @@ func (s *Store) withConfirmationKey(ctx context.Context, actor identityapp.Princ
 			outcome = stored
 			return replayConfirmationError(stored)
 		}
-		outcome, callbackErr = run(NewStore(conn), key)
+		outcome, callbackErr = run(NewStoreWithEditor(conn, s.promptCompiler, s.editorSnapshots), key)
 		if callbackErr != nil && outcome.ErrorCode != "" {
 			if writeErr := conn.Transaction(func(tx *gorm.DB) error {
 				return insertConfirmationOutcome(tx, key, outcome)

@@ -9,6 +9,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProductShell } from "./product-shell";
+import { request, RequestError } from "@/lib/request";
+vi.mock("@/lib/request", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/request")>();
+  return { ...actual, request: vi.fn() };
+});
 function render(children: ReactNode) {
   return renderUI(<TooltipProvider>{children}</TooltipProvider>);
 }
@@ -37,30 +42,22 @@ beforeEach(() => {
     },
   );
   document.cookie = "sidebar_state=; path=/; max-age=0";
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockImplementation(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            actor: {
-              id: "11111111-1111-4111-8111-111111111111",
-              login_name: "admin",
-              display_name: "Admin",
-              role: "admin",
-              must_change_password: false,
-              credential_revision: 1,
-            },
-            session_id: "22222222-2222-4222-8222-222222222222",
-            last_active_at: new Date().toISOString(),
-            absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
-            persistent: false,
-          }),
-          { status: 200 },
-        ),
-      ),
-    ),
-  );
+  vi.mocked(request)
+    .mockReset()
+    .mockResolvedValue({
+      actor: {
+        id: "11111111-1111-4111-8111-111111111111",
+        login_name: "admin",
+        display_name: "Admin",
+        role: "admin",
+        must_change_password: false,
+        credential_revision: 1,
+      },
+      session_id: "22222222-2222-4222-8222-222222222222",
+      last_active_at: new Date().toISOString(),
+      absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
+      persistent: false,
+    });
 });
 it("R6 主导航与画布入口指向真实路由，支持收起和展开", async () => {
   render(
@@ -84,13 +81,8 @@ it("R6 主导航与画布入口指向真实路由，支持收起和展开", asyn
 });
 
 it("会话失效时不渲染工作台内容", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ code: "session_invalid" }), {
-        status: 401,
-      }),
-    ),
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("session_invalid", 401),
   );
   render(
     <ProductShell screen="home">
@@ -173,13 +165,8 @@ it("游客从抽屉打开登录弹窗，关闭后返回移动导航入口", asyn
       removeEventListener: vi.fn(),
     })),
   );
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ code: "session_invalid" }), {
-        status: 401,
-      }),
-    ),
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("session_invalid", 401),
   );
   render(
     <ProductShell screen="home" allowGuest>

@@ -56,8 +56,8 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 	store := pgcatalog.NewStore(conn.DB)
 	actor := adminPrincipal()
 	if err := conn.DB.WithContext(ctx).Exec(`
-		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false)
+		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
+		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false, 'platform_admin')
 	`, actor.ID.String(), actor.OrgID.String(), "disable-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -142,8 +142,8 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 	if !sawChange || !sawAudit {
 		t.Fatalf("missing disable event: change %t audit %t", sawChange, sawAudit)
 	}
-	if _, err := command.Execute(ctx, actor, input); !errors.Is(err, pgcatalog.ErrCredentialNotFound) {
-		t.Fatalf("disabled credential accepted a second command: %v", err)
+	if replay, err := command.Execute(ctx, actor, input); err != nil || replay.ID != summary.ID {
+		t.Fatalf("credential disable replay failed: %v", err)
 	}
 	secondProvider := validProvider()
 	secondProvider.Key = "credential-disable-" + secondProvider.ID.String()
@@ -202,7 +202,7 @@ func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing
 		store: store,
 		revoke: func(ctx context.Context) error {
 			return conn.DB.WithContext(ctx).Exec(`
-				UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid
+				UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid
 			`, actor.ID.String()).Error
 		},
 	}, time.Now)

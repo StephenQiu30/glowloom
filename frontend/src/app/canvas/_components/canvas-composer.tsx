@@ -148,7 +148,7 @@ export function CanvasComposer({
                     onChange={(e) => onUpdate({ title: e.target.value })}
                   />
                 </Field>
-                {isDraft(node) && (
+                {isDraft(node) && !node.config.draft.composer && (
                   <>
                     <Field>
                       <FieldLabel>草稿画幅</FieldLabel>
@@ -297,7 +297,12 @@ export function CanvasComposer({
                   id="node-prompt"
                   placeholder="描述主体、环境、光线与镜头，开始你的创作…"
                   className="canvas-prompt-input"
-                  value={node.config.draft.prompt}
+                  value={
+                    node.config.draft.composer
+                      ? "该节点使用多参考编辑器，请展开编辑"
+                      : node.config.draft.prompt
+                  }
+                  readOnly={!!node.config.draft.composer}
                   maxLength={10000}
                   onChange={(e) => onDraft({ prompt: e.target.value })}
                 />
@@ -332,7 +337,9 @@ export function CanvasComposer({
                     className="ml-auto"
                     size="icon-sm"
                     disabled={
-                      generationBlocked || !node.config.draft.prompt.trim()
+                      generationBlocked ||
+                      (!node.config.draft.composer &&
+                        !node.config.draft.prompt.trim())
                     }
                     onClick={onGenerate}
                     aria-label="生成当前节点"

@@ -17,33 +17,47 @@ var ErrInvalid = errors.New("invalid configuration")
 
 // Config is the validated configuration shared by every backend role.
 type Config struct {
-	Env                       string
-	HTTPAddr                  string
-	PublicOrigin              string
-	WorkerHealthAddr          string
-	RelayHealthAddr           string
-	LogLevel                  string
-	DBDSN                     string
-	PartitionMaintenanceDBDSN string
-	RedisURL                  string
-	KafkaBrokers              string
-	TemporalAddr              string
-	TemporalNamespace         string
-	ObjectStorageEndpoint     string
-	ObjectStorageBucket       string
-	ObjectStorageAccessKey    string
-	ObjectStorageSecretKey    string
-	ObjectStorageRegion       string
-	CredentialPublicKeyFile   string
-	CredentialKeyID           string
-	MediaResultAllowedOrigins string
-	MediaAllowTestLoopbackTLS bool
-	WhisperEndpoint           string
-	VideoDepthPythonPath      string
-	VideoDepthSourceDir       string
-	VideoDepthModelPath       string
-	VideoDepthDevice          string
-	OTelEndpoint              string
+	Env                           string
+	HTTPAddr                      string
+	PublicOrigin                  string
+	WorkerHealthAddr              string
+	RelayHealthAddr               string
+	LogLevel                      string
+	DBDSN                         string
+	PartitionMaintenanceDBDSN     string
+	RedisURL                      string
+	KafkaBrokers                  string
+	TemporalAddr                  string
+	TemporalNamespace             string
+	ObjectStorageEndpoint         string
+	ObjectStorageBucket           string
+	ObjectStorageAccessKey        string
+	ObjectStorageSecretKey        string
+	ObjectStorageRegion           string
+	CredentialPublicKeyFile       string
+	CredentialKeyID               string
+	CredentialRequestMACKey       string
+	CredentialPrivateKeyFile      string
+	MediaResultAllowedOrigins     string
+	MediaAllowTestLoopbackTLS     bool
+	WhisperEndpoint               string
+	VideoDepthPythonPath          string
+	VideoDepthSourceDir           string
+	VideoDepthModelPath           string
+	VideoDepthDevice              string
+	OTelEndpoint                  string
+	SMTPEnabled                   bool
+	SMTPHost                      string
+	SMTPPort                      int
+	SMTPTLSMode                   string
+	SMTPUsername                  string
+	SMTPPassword                  string
+	SMTPFromEmail                 string
+	SMTPFromName                  string
+	IdentityKeyFile               string
+	IdentityTermsVersion          string
+	IdentityMailSourceHourlyLimit int
+	IdentityMailGlobalHourlyLimit int
 }
 
 var (
@@ -70,33 +84,47 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Env:                       strings.TrimSpace(v.GetString("LV_ENV")),
-		HTTPAddr:                  strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
-		PublicOrigin:              strings.TrimSpace(v.GetString("LV_PUBLIC_ORIGIN")),
-		WorkerHealthAddr:          strings.TrimSpace(v.GetString("LV_WORKER_HEALTH_ADDR")),
-		RelayHealthAddr:           strings.TrimSpace(v.GetString("LV_RELAY_HEALTH_ADDR")),
-		LogLevel:                  strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
-		DBDSN:                     strings.TrimSpace(v.GetString("LV_DB_DSN")),
-		PartitionMaintenanceDBDSN: strings.TrimSpace(v.GetString("LV_PARTITION_MAINTENANCE_DB_DSN")),
-		RedisURL:                  strings.TrimSpace(v.GetString("LV_REDIS_URL")),
-		KafkaBrokers:              strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
-		TemporalAddr:              strings.TrimSpace(v.GetString("LV_TEMPORAL_ADDR")),
-		TemporalNamespace:         strings.TrimSpace(v.GetString("LV_TEMPORAL_NAMESPACE")),
-		ObjectStorageEndpoint:     strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_ENDPOINT")),
-		ObjectStorageBucket:       strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_BUCKET")),
-		ObjectStorageAccessKey:    v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
-		ObjectStorageSecretKey:    v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
-		ObjectStorageRegion:       strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
-		CredentialPublicKeyFile:   strings.TrimSpace(v.GetString("LV_CREDENTIAL_PUBLIC_KEY_FILE")),
-		CredentialKeyID:           strings.TrimSpace(v.GetString("LV_CREDENTIAL_KEY_ID")),
-		MediaResultAllowedOrigins: strings.TrimSpace(v.GetString("LV_MEDIA_RESULT_ALLOWED_ORIGINS")),
-		MediaAllowTestLoopbackTLS: v.GetBool("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
-		WhisperEndpoint:           strings.TrimSpace(v.GetString("LV_WHISPER_ENDPOINT")),
-		VideoDepthPythonPath:      strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_PYTHON_PATH")),
-		VideoDepthSourceDir:       strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_SOURCE_DIR")),
-		VideoDepthModelPath:       strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_MODEL_PATH")),
-		VideoDepthDevice:          strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_DEVICE")),
-		OTelEndpoint:              strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
+		Env:                           strings.TrimSpace(v.GetString("LV_ENV")),
+		HTTPAddr:                      strings.TrimSpace(v.GetString("LV_HTTP_ADDR")),
+		PublicOrigin:                  strings.TrimSpace(v.GetString("LV_PUBLIC_ORIGIN")),
+		WorkerHealthAddr:              strings.TrimSpace(v.GetString("LV_WORKER_HEALTH_ADDR")),
+		RelayHealthAddr:               strings.TrimSpace(v.GetString("LV_RELAY_HEALTH_ADDR")),
+		LogLevel:                      strings.TrimSpace(v.GetString("LV_LOG_LEVEL")),
+		DBDSN:                         strings.TrimSpace(v.GetString("LV_DB_DSN")),
+		PartitionMaintenanceDBDSN:     strings.TrimSpace(v.GetString("LV_PARTITION_MAINTENANCE_DB_DSN")),
+		RedisURL:                      strings.TrimSpace(v.GetString("LV_REDIS_URL")),
+		KafkaBrokers:                  strings.TrimSpace(v.GetString("LV_KAFKA_BROKERS")),
+		TemporalAddr:                  strings.TrimSpace(v.GetString("LV_TEMPORAL_ADDR")),
+		TemporalNamespace:             strings.TrimSpace(v.GetString("LV_TEMPORAL_NAMESPACE")),
+		ObjectStorageEndpoint:         strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_ENDPOINT")),
+		ObjectStorageBucket:           strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_BUCKET")),
+		ObjectStorageAccessKey:        v.GetString("LV_OBJECT_STORAGE_ACCESS_KEY"),
+		ObjectStorageSecretKey:        v.GetString("LV_OBJECT_STORAGE_SECRET_KEY"),
+		ObjectStorageRegion:           strings.TrimSpace(v.GetString("LV_OBJECT_STORAGE_REGION")),
+		CredentialPublicKeyFile:       strings.TrimSpace(v.GetString("LV_CREDENTIAL_PUBLIC_KEY_FILE")),
+		CredentialKeyID:               strings.TrimSpace(v.GetString("LV_CREDENTIAL_KEY_ID")),
+		CredentialRequestMACKey:       strings.TrimSpace(v.GetString("LV_CREDENTIAL_REQUEST_MAC_KEY")),
+		CredentialPrivateKeyFile:      strings.TrimSpace(v.GetString("LV_CREDENTIAL_PRIVATE_KEY_FILE")),
+		MediaResultAllowedOrigins:     strings.TrimSpace(v.GetString("LV_MEDIA_RESULT_ALLOWED_ORIGINS")),
+		MediaAllowTestLoopbackTLS:     v.GetBool("LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS"),
+		WhisperEndpoint:               strings.TrimSpace(v.GetString("LV_WHISPER_ENDPOINT")),
+		VideoDepthPythonPath:          strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_PYTHON_PATH")),
+		VideoDepthSourceDir:           strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_SOURCE_DIR")),
+		VideoDepthModelPath:           strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_MODEL_PATH")),
+		VideoDepthDevice:              strings.TrimSpace(v.GetString("LV_VIDEO_DEPTH_DEVICE")),
+		OTelEndpoint:                  strings.TrimSpace(v.GetString("LV_OTEL_ENDPOINT")),
+		SMTPEnabled:                   v.GetBool("SMTP_ENABLED"),
+		SMTPHost:                      strings.TrimSpace(v.GetString("SMTP_HOST")),
+		SMTPPort:                      v.GetInt("SMTP_PORT"),
+		SMTPTLSMode:                   strings.TrimSpace(v.GetString("SMTP_TLS_MODE")),
+		SMTPUsername:                  v.GetString("SMTP_USERNAME"),
+		SMTPPassword:                  v.GetString("SMTP_PASSWORD"),
+		SMTPFromEmail:                 strings.TrimSpace(v.GetString("SMTP_FROM_EMAIL")),
+		SMTPFromName:                  strings.TrimSpace(v.GetString("SMTP_FROM_NAME")),
+		IdentityKeyFile:               strings.TrimSpace(v.GetString("LV_IDENTITY_KEY_FILE")),
+		IdentityTermsVersion:          strings.TrimSpace(v.GetString("LV_IDENTITY_TERMS_VERSION")),
+		IdentityMailSourceHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_SOURCE_HOURLY_LIMIT"),
+		IdentityMailGlobalHourlyLimit: v.GetInt("LV_IDENTITY_MAIL_GLOBAL_HOURLY_LIMIT"),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -105,6 +133,17 @@ func Load() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if c.IdentityKeyFile != "" && !filepath.IsAbs(c.IdentityKeyFile) {
+		return fmt.Errorf("%w: identity key file must be absolute", ErrInvalid)
+	}
+	for _, limit := range []int{c.IdentityMailSourceHourlyLimit, c.IdentityMailGlobalHourlyLimit} {
+		if limit < 0 || limit > 1000000 {
+			return fmt.Errorf("%w: identity mail limit outside 0..1000000", ErrInvalid)
+		}
+	}
+	if c.SMTPEnabled && (c.SMTPHost == "" || c.SMTPPort < 1 || c.SMTPPort > 65535 || (c.SMTPTLSMode != "tls" && c.SMTPTLSMode != "starttls") || c.SMTPFromEmail == "" || (c.SMTPUsername == "") != (c.SMTPPassword == "")) {
+		return fmt.Errorf("%w: SMTP requires host, port, TLS, sender and paired credentials", ErrInvalid)
+	}
 	depthValues := []string{c.VideoDepthPythonPath, c.VideoDepthSourceDir, c.VideoDepthModelPath, c.VideoDepthDevice}
 	depthConfigured := 0
 	for _, value := range depthValues {

@@ -45,8 +45,8 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 	t.Cleanup(func() { _ = conn.Close() })
 	actor := adminPrincipal()
 	if err := conn.DB.WithContext(ctx).Exec(`
-		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false)
+		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
+		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false, 'platform_admin')
 	`, actor.ID.String(), actor.OrgID.String(), "provider-update-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testi
 		UpdateProviderStore: store,
 		beforeWrite: func(ctx context.Context) error {
 			return conn.DB.WithContext(ctx).Exec(`
-				UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid
+				UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid
 			`, actor.ID.String()).Error
 		},
 	}, time.Now)

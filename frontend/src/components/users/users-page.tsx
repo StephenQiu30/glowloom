@@ -11,7 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { listAdminUsers } from "@/components/creation/generated/creation";
+import { listAdminUsers } from "@/api/identity";
 import { requireUserPage, userError, type User } from "./contracts";
 import { UserDialog, type UserAction } from "./user-dialog";
 export function UsersPage() {

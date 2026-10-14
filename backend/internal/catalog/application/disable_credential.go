@@ -12,7 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidDisableCredential means a disable request or result is incomplete.
@@ -54,7 +53,7 @@ func (c *DisableCredentialCommand) Execute(ctx context.Context, actor identityap
 	if c == nil || c.store == nil || c.now == nil {
 		return SavedCredential{}, ErrInvalidDisableCredential
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return SavedCredential{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)

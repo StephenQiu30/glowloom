@@ -71,7 +71,7 @@ func (s *Store) FindProvider(ctx context.Context, providerID uuid.UUID) (domain.
 	}
 	var row providerRow
 	result := s.db.WithContext(ctx).Raw(`
-		SELECT id, key, name, adapter_key, region, status, concurrency_limit,
+		SELECT id, current_config_version_id, key, name, adapter_key, region, status, concurrency_limit,
 		       rate_limit_per_min, revision, create_time, update_time
 		FROM catalog.provider WHERE id = ?::uuid AND NOT is_delete
 	`, providerID.String()).Scan(&row)
@@ -123,12 +123,12 @@ func (s *Store) ReplaceCredential(ctx context.Context, credential domain.Credent
 }
 
 func replaceCredentialInTx(tx *gorm.DB, credential domain.Credential) error {
-	if err := requireActiveProvider(tx, credential.ProviderID); err != nil {
+	if err := requireCredentialProvider(tx, credential.ProviderID); err != nil {
 		return err
 	}
 	result := tx.Exec(`
 			UPDATE catalog.provider_credential
-			SET status = 'disabled', update_time = now()
+			SET status = 'draining', update_time = now()
 			WHERE provider_id = ?::uuid AND status = 'active' AND NOT is_delete
 		`, credential.ProviderID.String())
 	if result.Error != nil {
@@ -204,41 +204,24 @@ func (s *Store) DisableCredential(ctx context.Context, providerID, credentialID 
 	})
 }
 
-func requireActiveProvider(tx *gorm.DB, providerID uuid.UUID) error {
-	var row struct{ Status string }
-	result := tx.Raw(`
-		SELECT status FROM catalog.provider
-		WHERE id = ?::uuid AND NOT is_delete FOR UPDATE
-	`, providerID.String()).Scan(&row)
-	if result.Error != nil {
-		return fmt.Errorf("lock provider for credential replacement: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return ErrProviderNotFound
-	}
-	if row.Status != string(domain.ProviderActive) {
-		return ErrProviderUnavailable
-	}
-	return nil
-}
-
 type providerRow struct {
-	ID               uuid.UUID
-	Key              string
-	Name             string
-	AdapterKey       string
-	Region           string
-	Status           string
-	ConcurrencyLimit int
-	RateLimitPerMin  int
-	Revision         int64
-	CreateTime       time.Time
-	UpdateTime       time.Time
+	CurrentConfigVersionID uuid.UUID
+	ID                     uuid.UUID
+	Key                    string
+	Name                   string
+	AdapterKey             string
+	Region                 string
+	Status                 string
+	ConcurrencyLimit       int
+	RateLimitPerMin        int
+	Revision               int64
+	CreateTime             time.Time
+	UpdateTime             time.Time
 }
 
 func (row providerRow) provider() domain.Provider {
 	return domain.Provider{
-		ID: row.ID, Key: row.Key, Name: row.Name, AdapterKey: row.AdapterKey,
+		ID: row.ID, CurrentConfigVersionID: row.CurrentConfigVersionID, Key: row.Key, Name: row.Name, AdapterKey: row.AdapterKey,
 		Region: domain.Region(row.Region), Status: domain.ProviderStatus(row.Status),
 		ConcurrencyLimit: row.ConcurrencyLimit, RateLimitPerMin: row.RateLimitPerMin,
 		Revision: row.Revision, CreateTime: row.CreateTime, UpdateTime: row.UpdateTime,
@@ -273,4 +256,39 @@ func (row credentialRow) credential() domain.Credential {
 		credential.LastTestResult = domain.TestResult(*row.LastTestResult)
 	}
 	return credential
+}
+
+// requireCredentialProvider permits onboarding while disabled, but never a
+// preset emergency stop. Lock order matches configuration and dispatch changes.
+func requireCredentialProvider(tx *gorm.DB, providerID uuid.UUID) error {
+	var preset struct {
+		ID                uuid.UUID
+		EmergencyDisabled bool
+	}
+	result := tx.Raw(`SELECT preset.id,preset.emergency_disabled FROM catalog.provider p
+ JOIN catalog.provider_config_version c ON c.id=p.current_config_version_id
+ JOIN catalog.provider_preset_version v ON v.id=c.preset_version_id
+ JOIN catalog.provider_preset preset ON preset.id=v.preset_id
+ WHERE p.id=? FOR SHARE OF preset`, providerID).Scan(&preset)
+	if result.Error != nil {
+		return result.Error
+	}
+	if preset.EmergencyDisabled {
+		return application.ErrPresetUnavailable
+	}
+	var provider struct {
+		Status                 string
+		CurrentConfigVersionID *uuid.UUID
+	}
+	result = tx.Raw(`SELECT status,current_config_version_id FROM catalog.provider WHERE id=? AND NOT is_delete FOR UPDATE`, providerID).Scan(&provider)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrProviderNotFound
+	}
+	if provider.Status != "active" && provider.CurrentConfigVersionID == nil {
+		return ErrProviderUnavailable
+	}
+	return nil
 }

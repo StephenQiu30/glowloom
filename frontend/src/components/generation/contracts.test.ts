@@ -32,7 +32,7 @@ describe("生成回执和参数边界", () => {
     ).toThrow();
     expect(() =>
       requireTask(
-        { id, project_id: project, status: "finished" as CreationAPI.Status },
+        { id, project_id: project, status: "finished" as API.OperationStatus },
         project,
       ),
     ).toThrow();

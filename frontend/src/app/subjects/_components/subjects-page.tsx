@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/empty";
 export function SubjectsPage() {
   const [project, setProject] = useState<Project | null>(null),
-    [kind, setKind] = useState<CreationAPI.Kind>("character"),
+    [kind, setKind] = useState<API.Kind>("character"),
     [generation, setGeneration] = useState<GenerationSeed | null>(null);
   return (
     <ProductShell screen="subjects">
@@ -40,12 +40,12 @@ export function SubjectsPage() {
               type="single"
               value={kind}
               onValueChange={(v) => {
-                if (v in kinds) setKind(v as CreationAPI.Kind);
+                if (v in kinds) setKind(v as API.Kind);
               }}
               className="subject-tabs"
               aria-label="主体分类"
             >
-              {(Object.keys(kinds) as CreationAPI.Kind[]).map((k) => (
+              {(Object.keys(kinds) as API.Kind[]).map((k) => (
                 <ToggleGroupItem key={k} value={k}>
                   {kinds[k]}
                 </ToggleGroupItem>

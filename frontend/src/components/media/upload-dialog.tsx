@@ -10,18 +10,18 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { uploadPersonalMediaAsset } from "@/components/media/generated/media";
+import { uploadPersonalMediaAsset } from "@/api/media";
 import { mediaError, validateUpload } from "@/components/media/library";
 import { isProjectID } from "@/components/projects/project";
-import { AuthError } from "@/components/auth/request";
-import { uploadMediaAsset } from "@/components/creation/generated/creation";
+import { RequestError } from "@/lib/request";
+import { uploadMediaAsset } from "@/api/media";
 export function UploadDialog({
   onClose,
   onUploaded,
   projectID,
 }: {
   onClose: () => void;
-  onUploaded: (asset?: CreationAPI.AssetSummary) => void;
+  onUploaded: (asset?: API.AssetSummary) => void;
   projectID?: string;
 }) {
   const [file, setFile] = useState<File | null>(null);
@@ -77,13 +77,13 @@ export function UploadDialog({
             !("project_id" in r.asset) ||
             r.asset.project_id !== projectID))
       )
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       setDone(true);
       setUnconfirmed(false);
       onUploaded(r.asset);
     } catch (e) {
       setUnconfirmed(
-        !(e instanceof AuthError && e.status >= 400 && e.status < 500),
+        !(e instanceof RequestError && e.status >= 400 && e.status < 500),
       );
       setError(
         controller.signal.aborted

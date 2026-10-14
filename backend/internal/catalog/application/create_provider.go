@@ -14,7 +14,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidCreateProvider means a provider request or committed result is invalid.
@@ -73,7 +72,7 @@ func (c *CreateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	if c == nil || c.store == nil || c.adapters == nil || c.now == nil {
 		return CreatedProvider{}, ErrInvalidCreateProvider
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return CreatedProvider{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)

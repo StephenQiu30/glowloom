@@ -38,7 +38,7 @@ func (s *Store) FindCredentialForAdmin(ctx context.Context, actorID, orgID, prov
 			SELECT c.id, c.provider_id, c.last4
 			FROM catalog.provider_credential AS c
 			WHERE c.id = ?::uuid AND c.provider_id = ?::uuid
-			  AND c.status = 'active' AND NOT c.is_delete
+			  AND NOT c.is_delete
 			FOR SHARE
 		`, credentialID.String(), providerID.String()).Scan(&target)
 		if result.Error != nil {
@@ -57,7 +57,7 @@ func (s *Store) FindCredentialForAdmin(ctx context.Context, actorID, orgID, prov
 
 // DisableCredentialWithEvents rechecks current access and target state, then
 // commits the disable and its change/audit events as one transaction.
-func (s *Store) DisableCredentialWithEvents(ctx context.Context, actorID, orgID uuid.UUID, target application.CredentialToDisable, events []identityapp.OutboxEvent) (application.SavedCredential, error) {
+func (s *Store) disableCredentialWithEventsOnce(ctx context.Context, actorID, orgID uuid.UUID, target application.CredentialToDisable, events []identityapp.OutboxEvent) (application.SavedCredential, error) {
 	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
 		target.ID == uuid.Nil || target.ProviderID == uuid.Nil ||
 		!utf8.ValidString(target.Last4) || utf8.RuneCountInString(target.Last4) != 4 ||
@@ -83,7 +83,7 @@ func (s *Store) DisableCredentialWithEvents(ctx context.Context, actorID, orgID 
 		var last4 string
 		result = tx.Raw(`
 			SELECT last4 FROM catalog.provider_credential
-			WHERE id = ?::uuid AND provider_id = ?::uuid AND status = 'active'
+			WHERE id = ?::uuid AND provider_id = ?::uuid AND status IN ('active','draining','disabled')
 			  AND NOT is_delete FOR UPDATE
 		`, target.ID.String(), target.ProviderID.String()).Scan(&last4)
 		if result.Error != nil {
@@ -95,7 +95,7 @@ func (s *Store) DisableCredentialWithEvents(ctx context.Context, actorID, orgID 
 		result = tx.Exec(`
 			UPDATE catalog.provider_credential
 			SET status = 'disabled', update_time = now()
-			WHERE id = ?::uuid AND provider_id = ?::uuid AND status = 'active' AND NOT is_delete
+			WHERE id = ?::uuid AND provider_id = ?::uuid AND status IN ('active','draining','disabled') AND NOT is_delete
 		`, target.ID.String(), target.ProviderID.String())
 		if result.Error != nil {
 			return fmt.Errorf("disable current credential: %w", result.Error)

@@ -15,7 +15,7 @@ import (
 
 // PublishModelVersionWithAudit rechecks current rights and commits the
 // immutable version, current pointer, and safe audit in one transaction.
-func (s *Store) PublishModelVersionWithAudit(ctx context.Context, actorID, orgID uuid.UUID, version domain.ModelVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelVersion, error) {
+func (s *Store) publishModelVersionWithAuditOnce(ctx context.Context, actorID, orgID uuid.UUID, version domain.ModelVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelVersion, error) {
 	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
 		version.Validate() != nil || version.CreateBy != actorID || expectedRevision < 1 ||
 		!validModelVersionPublishedAudit(actorID, orgID, version, expectedRevision, event) {

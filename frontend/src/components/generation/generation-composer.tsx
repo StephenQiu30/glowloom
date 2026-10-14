@@ -1,115 +1,65 @@
 "use client";
 import { useState } from "react";
-import {
-  AtSign,
-  ImageIcon,
-  Plus,
-  SlidersHorizontal,
-  VideoIcon,
-} from "lucide-react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup } from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupTextarea,
-} from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { GenerationDialog, type GenerationSeed } from "./generation-dialog";
+import { ProjectPicker } from "@/components/projects/project-picker";
+import type { Project } from "@/components/projects/project";
+import { PromptEditor } from "./prompt-editor";
+import { emptyPromptDraft } from "./prompt-document";
+const RichGeneration = dynamic(
+  () => import("./rich-generation").then((m) => m.RichGeneration),
+  { ssr: false, loading: () => <p role="status">正在打开创作编辑器…</p> },
+);
+/** The home workspace expands in place, so its owner and undo history survive view changes. */
 export function GenerationComposer() {
-  const [prompt, setPrompt] = useState("");
-  const [capability, setCapability] = useState<"image" | "video">("image");
-  const [seed, setSeed] = useState<GenerationSeed | null>(null);
-  function configure(pickSubject = false) {
-    setSeed({ prompt, capability, pickSubject });
-  }
+  const [draft, setDraft] = useState(emptyPromptDraft),
+    [replicaId] = useState(() => crypto.randomUUID()),
+    [capability, setCapability] = useState<"image" | "video">("image"),
+    [project, setProject] = useState<Project | null>(null),
+    [choosing, setChoosing] = useState(false);
+  if (project)
+    return (
+      <div className="asset-composer">
+        <p className="text-sm text-muted-foreground">
+          {project.name} · 项目草稿
+        </p>
+        <RichGeneration
+          projectID={project.id}
+          seed={{ prompt: "", capability, composer: draft }}
+        />
+      </div>
+    );
   return (
-    <>
-      <form
-        className="asset-composer"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (prompt.trim()) configure();
-        }}
-      >
-        <FieldGroup>
-          <Field>
-            <InputGroup variant="composer" className="generation-composer">
-              <InputGroupAddon align="block-start">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => configure()}
-                >
-                  <Plus data-icon="inline-start" />
-                  参考素材
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => configure(true)}
-                >
-                  <AtSign data-icon="inline-start" />
-                  主体
-                </Button>
-              </InputGroupAddon>
-              <InputGroupTextarea
-                aria-label="资产创作提示词"
-                placeholder="描述你想创作的画面，添加参考素材与主体"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                maxLength={10000}
-              />
-              <InputGroupAddon align="block-end">
-                <Select
-                  value={capability}
-                  onValueChange={(v) => setCapability(v as "image" | "video")}
-                >
-                  <SelectTrigger variant="quiet" aria-label="资产生成类型">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="image">
-                        <ImageIcon />
-                        图片生成
-                      </SelectItem>
-                      <SelectItem value="video">
-                        <VideoIcon />
-                        视频生成
-                      </SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => configure()}
-                >
-                  <SlidersHorizontal data-icon="inline-start" />
-                  选择模型与参数
-                </Button>
-                <Button
-                  type="submit"
-                  className="ml-auto"
-                  size="lg"
-                  disabled={!prompt.trim()}
-                >
-                  生成
-                </Button>
-              </InputGroupAddon>
-            </InputGroup>
-          </Field>
-        </FieldGroup>
-      </form>
-      {seed && <GenerationDialog seed={seed} onClose={() => setSeed(null)} />}
-    </>
+    <section className="asset-composer space-y-3" aria-label="资产创作">
+      <p className="text-sm text-muted-foreground">
+        本地临时输入；选择项目后保存完整草稿。
+      </p>
+      <div className="min-h-28 rounded-lg border p-3 [&_.tiptap]:min-h-24 [&_.tiptap]:outline-none">
+        <PromptEditor
+          contextKey="guest/home"
+          replicaId={replicaId}
+          draft={draft}
+          onReady={() => {}}
+          onChange={(snapshot) => setDraft(snapshot.draft)}
+          onRequestSubmit={() => setChoosing(true)}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <select
+          aria-label="资产生成类型"
+          className="rounded border bg-background px-3"
+          value={capability}
+          onChange={(e) => setCapability(e.target.value as "image" | "video")}
+        >
+          <option value="image">图片生成</option>
+          <option value="video">视频生成</option>
+        </select>
+        <Button variant="outline" onClick={() => setChoosing(true)}>
+          参考素材与主体
+        </Button>
+        <Button onClick={() => setChoosing(true)}>选择项目与生成参数</Button>
+      </div>
+      {choosing && <ProjectPicker value={project} onChange={setProject} />}
+    </section>
   );
 }

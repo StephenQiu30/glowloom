@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 	"time"
 
 	"github.com/google/uuid"
@@ -76,6 +77,7 @@ type TaskEvent struct {
 
 // TaskDetail is the persisted task snapshot used after refresh or reconnection.
 type TaskDetail struct {
+	EditorDraft *promptdomain.Draft `json:"editor_draft,omitempty"`
 	TaskSummary
 	PromptPreparation *domain.PromptPreparation `json:"prompt_preparation,omitempty"`
 	Params            json.RawMessage           `json:"params" swaggertype:"object"`

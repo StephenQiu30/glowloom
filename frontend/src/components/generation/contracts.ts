@@ -1,4 +1,4 @@
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { isProjectID } from "@/components/projects/project";
 export const taskLabels: Record<string, string> = {
   draft: "草稿",
@@ -29,15 +29,12 @@ export const activeTask = (s?: string) =>
     "reconciling",
     "cancelling",
   ].includes(s);
-export type Task = CreationAPI.TaskDetail & {
+export type Task = API.TaskDetail & {
   id: string;
   project_id: string;
   status: string;
 };
-export function requireTask(
-  value: CreationAPI.TaskDetail,
-  project: string,
-): Task {
+export function requireTask(value: API.TaskDetail, project: string): Task {
   if (
     !value ||
     !isProjectID(value.id) ||
@@ -54,17 +51,17 @@ export function requireTask(
                 !["image", "video", "audio", "model"].includes(o.kind ?? ""))),
         )))
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return value as Task;
 }
-export type Quote = CreationAPI.QuoteResponse & {
+export type Quote = API.QuoteResponse & {
   operation_id: string;
   quote_micros: number;
   available_micros: number;
   expires_at: string;
   confirmable: boolean;
 };
-export function requireQuote(v: CreationAPI.QuoteResponse): Quote {
+export function requireQuote(v: API.QuoteResponse): Quote {
   if (
     !v ||
     !isProjectID(v.operation_id) ||
@@ -74,7 +71,7 @@ export function requireQuote(v: CreationAPI.QuoteResponse): Quote {
     typeof v.confirmable !== "boolean" ||
     !Number.isFinite(Date.parse(v.expires_at ?? ""))
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return v as Quote;
 }
 export type ParamField = {
@@ -93,7 +90,7 @@ export type ParamField = {
 };
 export function fieldsForMode(schema: unknown, mode: string): ParamField[] {
   if (!Array.isArray(schema) || schema.length > 128)
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   const names = new Set<string>();
   for (const f of schema) {
     if (
@@ -116,7 +113,7 @@ export function fieldsForMode(schema: unknown, mode: string): ParamField[] {
       (f.for_modes && !Array.isArray(f.for_modes)) ||
       (f.enum && !Array.isArray(f.enum))
     )
-      throw new AuthError("invalid_receipt");
+      throw new RequestError("invalid_receipt");
     names.add(f.field);
   }
   return (schema as ParamField[]).filter(
@@ -131,7 +128,7 @@ export function initialParams(fields: ParamField[]) {
   );
 }
 export function flowError(e: unknown) {
-  if (e instanceof AuthError) {
+  if (e instanceof RequestError) {
     const messages: Record<string, string> = {
       context_unavailable:
         "主体操作依赖的服务暂不可用，内容未确认保存。请稍后重试或联系管理员。",

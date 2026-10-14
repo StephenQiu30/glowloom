@@ -16,8 +16,8 @@ import {
   unlockAdminUser,
   resetAdminPassword,
   listAdminUsers,
-} from "@/components/creation/generated/creation";
-import { AuthError } from "@/components/auth/request";
+} from "@/api/identity";
+import { RequestError } from "@/lib/request";
 import {
   requireUserMutation,
   requireUserPage,
@@ -74,7 +74,7 @@ export function UserDialog({
     setError("");
     try {
       const opts = { headers: { "Idempotency-Key": requestKey.current } };
-      let r: CreationAPI.AdminMutationReceipt;
+      let r: API.AdminMutationReceipt;
       if (action === "create")
         r = await createAdminUser(
           {
@@ -121,7 +121,7 @@ export function UserDialog({
         (action === "edit" &&
           (r.role !== role || r.display_name !== name.trim()))
       )
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       setPassword("");
       setConfirmation("");
       onSaved(
@@ -134,7 +134,7 @@ export function UserDialog({
     } catch (e) {
       setError(userError(e));
       setUncertain(
-        !(e instanceof AuthError && e.status >= 400 && e.status < 500),
+        !(e instanceof RequestError && e.status >= 400 && e.status < 500),
       );
     } finally {
       busy.current = false;
@@ -159,7 +159,7 @@ export function UserDialog({
         );
         cursor = p.next_cursor;
         if (cursor) {
-          if (seen.has(cursor)) throw new AuthError("invalid_receipt");
+          if (seen.has(cursor)) throw new RequestError("invalid_receipt");
           seen.add(cursor);
         }
       } while (!found && cursor);

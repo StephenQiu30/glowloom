@@ -11,6 +11,11 @@ import (
 // The public API resolves it from a valid server-side session.
 type Principal struct {
 	ID                 uuid.UUID
+	SessionID          uuid.UUID
+	CredentialEpoch    int64
+	PlatformEpoch      int64
+	PlatformRole       string
+	ScopeID            uuid.UUID
 	OrgID              uuid.UUID
 	LoginName          string
 	DisplayName        string

@@ -12,7 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidUpdateProvider means the patch or committed result is invalid.
@@ -50,7 +49,7 @@ func (c *UpdateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	if c == nil || c.store == nil || c.now == nil {
 		return CreatedProvider{}, ErrInvalidUpdateProvider
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return CreatedProvider{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)

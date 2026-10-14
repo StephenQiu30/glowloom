@@ -43,7 +43,7 @@ func WorkerQueue(value string) (string, error) {
 	if value == "" {
 		return "flow", nil
 	}
-	var flow, media bool
+	var flow, media, provider bool
 	for _, item := range strings.Split(value, ",") {
 		switch strings.TrimSpace(item) {
 		case "flow":
@@ -51,6 +51,11 @@ func WorkerQueue(value string) (string, error) {
 				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
 			}
 			flow = true
+		case "provider":
+			if provider {
+				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
+			}
+			provider = true
 		case "media":
 			if media {
 				return "", fmt.Errorf("%w: duplicate worker queue %q", ErrRoleNotAvailable, item)
@@ -60,11 +65,15 @@ func WorkerQueue(value string) (string, error) {
 			return "", fmt.Errorf("%w: worker queue %q", ErrRoleNotAvailable, item)
 		}
 	}
-	if flow && media {
-		return "flow,media", nil
+	var selected []string
+	if flow {
+		selected = append(selected, "flow")
 	}
 	if media {
-		return "media", nil
+		selected = append(selected, "media")
 	}
-	return "flow", nil
+	if provider {
+		selected = append(selected, "provider")
+	}
+	return strings.Join(selected, ","), nil
 }

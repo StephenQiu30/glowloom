@@ -16,6 +16,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
+	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
 // CreateFreeQuote keeps the current project, catalog and quote snapshot in one
@@ -25,7 +26,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 	if s == nil || s.db == nil {
 		return application.CreateFreeQuoteResult{}, ErrUnavailable
 	}
-	if len(input.Params) == 0 {
+	if len(input.Params) == 0 && input.InputSource == nil {
 		input.Params = json.RawMessage(`{}`)
 	}
 	if err := input.Validate(); err != nil {
@@ -44,6 +45,14 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 		if err := lockQuoteRequest(tx, actor, requestID); err != nil {
 			return err
 		}
+		var editorSlot application.SubmissionCurrent
+		if input.InputSource != nil {
+			var slotErr error
+			editorSlot, slotErr = s.lockEditorOwner(ctx, tx, actor, input.ProjectID, *input.InputSource)
+			if slotErr != nil {
+				return slotErr
+			}
+		}
 		project, err := lockFreeQuoteProject(tx, actor, input.ProjectID)
 		if err != nil {
 			return err
@@ -61,10 +70,33 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 			}
 			return nil
 		}
+		var editorDraft *promptdomain.Draft
+		originalSource := input.InputSource
+		if originalSource != nil {
+			if editorSlot.Submission != nil {
+				return application.ErrSubmissionUnresolved
+			}
+			if input.ExpectedSubmissionEpoch == nil || editorSlot.Epoch != *input.ExpectedSubmissionEpoch {
+				return application.ErrSubmissionEpoch
+			}
+			draft, readErr := s.editorSnapshots(tx).ReadInput(ctx, actor, input.ProjectID, *originalSource, false)
+			if readErr != nil {
+				return readErr
+			}
+			editorDraft = &draft
+			prepared, prepareErr := compileEditorInput(tx, input, draft)
+			if prepareErr != nil {
+				return prepareErr
+			}
+			input = prepared
+		}
 		now := time.Now().UTC()
 		item, _, err := s.prepareFreeQuoteItem(ctx, tx, actor, input, project, now)
 		if err != nil {
 			return err
+		}
+		if editorDraft != nil && (item.Operation.ModelProfileVersionID == nil || item.Operation.ModelProfileVersionID.String() != *editorDraft.ModelVersion) {
+			return application.ErrFreeQuoteModelMissing
 		}
 		budget, err := pgbilling.NewStore(tx).FindBudget(ctx, actor, input.ProjectID)
 		if err != nil {
@@ -87,6 +119,11 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 		}
 		if item.PromptPreparation != nil {
 			result.FinalPrompt = *item.Inputs[0].TextValue
+		}
+		if originalSource != nil {
+			if err := recordEditorSubmission(tx, actor, input.ProjectID, *originalSource, editorSlot.Epoch, *editorDraft, &result); err != nil {
+				return err
+			}
 		}
 		return insertQuoteRequest(tx, actor, requestID, fingerprint, result)
 	})
@@ -122,7 +159,7 @@ func lockFreeQuoteProject(tx *gorm.DB, actor identityapp.Principal, projectID uu
 func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor identityapp.Principal,
 	input application.CreateFreeQuoteInput, project freeQuoteProject, now time.Time,
 ) (QuoteItem, string, error) {
-	if len(input.Params) == 0 {
+	if len(input.Params) == 0 && input.InputSource == nil {
 		input.Params = json.RawMessage(`{}`)
 	}
 	if err := input.Validate(); err != nil {
@@ -233,17 +270,18 @@ func readFreeQuoteCatalog(tx *gorm.DB, input application.CreateFreeQuoteInput, a
 		JOIN catalog.provider_credential AS credential
 		  ON credential.provider_id = provider.id
 		 AND credential.status = 'active' AND NOT credential.is_delete
+		LEFT JOIN catalog.model_release AS published ON published.id=m.active_release_id AND published.status='active'
 		JOIN catalog.capability AS capability
 		  ON capability.key = m.capability AND NOT capability.is_delete
 		JOIN catalog.model_profile_version AS v
-		  ON v.id = m.current_version_id AND v.model_profile_id = m.id AND NOT v.is_delete
+		  ON v.id = CASE WHEN provider.adapter_key IN ('volcengine_ark','openrouter') THEN published.model_version_id ELSE m.current_version_id END AND v.model_profile_id = m.id AND NOT v.is_delete
 		JOIN LATERAL (
 		  SELECT id, version_no, unit, rule, currency, fx_rate_to_cny, effective_from
 		  FROM catalog.price_rule_version
-		  WHERE model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
+		  WHERE (provider.adapter_key NOT IN ('volcengine_ark','openrouter') OR id=published.price_version_id) AND model_profile_id = m.id AND effective_from <= ? AND NOT is_delete
 		  ORDER BY effective_from DESC, version_no DESC LIMIT 1
 		) AS price ON true
-		WHERE m.model_key = ? AND m.capability = ? AND m.status = 'active'
+		WHERE m.model_key = ? AND (provider.adapter_key NOT IN ('volcengine_ark','openrouter') OR EXISTS (SELECT 1 FROM catalog.provider_config_version pc JOIN catalog.provider_preset_version pv ON pv.id=pc.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id WHERE pc.id=published.config_version_id AND NOT preset.emergency_disabled)) AND m.capability = ? AND m.status = 'active'
 		  AND NOT m.is_delete AND ? = ANY(v.modes) AND ? = ANY(capability.modes)
 		  AND 'prompt' = ANY(capability.input_roles)
 		  AND (? OR provider.region = 'domestic')

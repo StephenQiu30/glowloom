@@ -17,6 +17,7 @@ const sessionCookie = "lanverse_session"
 
 // Actor contains only safe account identity and credential version.
 type Actor struct {
+	PlatformRole       string `json:"platform_role" enums:"creator,platform_admin"`
 	ID                 string `json:"id" binding:"required"`
 	LoginName          string `json:"login_name" binding:"required"`
 	DisplayName        string `json:"display_name" binding:"required"`
@@ -97,11 +98,11 @@ func (h *AuthHandler) RequireSession() gin.HandlerFunc {
 			httpapi.WriteProblem(c, 403, "password_change_required", nil)
 			return
 		}
-		if strings.HasPrefix(c.FullPath(), "/api/admin/") && u.Role != domain.RoleAdmin {
+		if strings.HasPrefix(c.FullPath(), "/api/admin/") && u.Role != domain.RoleAdmin && u.PlatformRole != "platform_admin" {
 			httpapi.WriteProblem(c, 403, "forbidden", nil)
 			return
 		}
-		c.Set("principal", application.Principal{ID: u.ID, OrgID: u.OrgID, LoginName: u.LoginName, DisplayName: u.DisplayName, Role: u.Role, MustChangePassword: u.MustChangePassword})
+		c.Set("principal", application.Principal{ID: u.ID, PlatformRole: u.PlatformRole, PlatformEpoch: u.PlatformEpoch, CredentialEpoch: u.SessionEpoch, OrgID: u.OrgID, LoginName: u.LoginName, DisplayName: u.DisplayName, Role: u.Role, MustChangePassword: u.MustChangePassword})
 		c.Next()
 	}
 }
@@ -223,7 +224,7 @@ func (h *AuthHandler) respond(c *gin.Context, result application.AuthResult, err
 	if result.User.Role == domain.RoleAdmin {
 		role = "admin"
 	}
-	c.JSON(status, SessionView{Actor: Actor{ID: result.User.ID.String(), LoginName: result.User.LoginName, DisplayName: result.User.DisplayName, Role: role, MustChangePassword: result.User.MustChangePassword, CredentialRevision: result.User.SessionEpoch}, SessionID: result.Session.ID.String(), LastActiveAt: result.Session.LastActiveAt, AbsoluteExpiresAt: result.Session.AbsoluteExpiresAt, Persistent: result.Session.Persistent})
+	c.JSON(status, SessionView{Actor: Actor{ID: result.User.ID.String(), PlatformRole: result.User.PlatformRole, LoginName: result.User.LoginName, DisplayName: result.User.DisplayName, Role: role, MustChangePassword: result.User.MustChangePassword, CredentialRevision: result.User.SessionEpoch}, SessionID: result.Session.ID.String(), LastActiveAt: result.Session.LastActiveAt, AbsoluteExpiresAt: result.Session.AbsoluteExpiresAt, Persistent: result.Session.Persistent})
 }
 func authProblem(c *gin.Context, err error) {
 	c.Header("Cache-Control", "no-store")

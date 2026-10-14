@@ -15,7 +15,7 @@ import (
 
 // CreateModelWithAudit rechecks the administrator and commits the new model
 // identity and audit event in one PostgreSQL transaction.
-func (s *Store) CreateModelWithAudit(ctx context.Context, actorID, orgID uuid.UUID, model domain.ModelProfile, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
+func (s *Store) createModelWithAuditOnce(ctx context.Context, actorID, orgID uuid.UUID, model domain.ModelProfile, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
 	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
 		model.Validate() != nil || model.Status != domain.ModelDisabled ||
 		model.CurrentVersionID != uuid.Nil || model.Revision != 1 ||

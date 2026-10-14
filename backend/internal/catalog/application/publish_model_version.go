@@ -15,7 +15,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidPublishModelVersion means a version publication request is incomplete.
@@ -75,7 +74,7 @@ func (c *PublishModelVersionCommand) Execute(ctx context.Context, actor identity
 	if c == nil || c.store == nil || c.validator == nil || c.now == nil {
 		return PublishedModelVersion{}, ErrInvalidPublishModelVersion
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return PublishedModelVersion{}, identityapp.ErrForbidden
 	}
 	requestID, requestErr := uuid.Parse(input.RequestID)
@@ -86,7 +85,7 @@ func (c *PublishModelVersionCommand) Execute(ctx context.Context, actor identity
 		return PublishedModelVersion{}, ErrInvalidPublishModelVersion
 	}
 	version := domain.ModelVersion{
-		ID: uuid.New(), ModelID: input.ModelID, VersionNo: input.VersionNo,
+		ID: uuid.NewSHA1(actor.ID, []byte("model.version/"+input.RequestID)), ModelID: input.ModelID, VersionNo: input.VersionNo,
 		ProviderModelID: input.ProviderModelID, Modes: slices.Clone(input.Modes),
 		Limits: slices.Clone(input.Limits), ParamSchema: slices.Clone(input.ParamSchema),
 		SupportsQuery: input.SupportsQuery, SupportsCancel: input.SupportsCancel,

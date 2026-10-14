@@ -11,6 +11,7 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 )
 
@@ -40,6 +41,8 @@ type LoadedCredential struct {
 
 // AgentTestInput is the reviewed JSON contract for provider.test_credential.
 type AgentTestInput struct {
+	TestID      uuid.UUID       `json:"test_id,omitempty"`
+	ActorID     uuid.UUID       `json:"actor_id,omitempty"`
 	ProviderID  uuid.UUID       `json:"provider_id"`
 	ProviderKey string          `json:"provider_key"`
 	AdapterKey  string          `json:"adapter_key"`
@@ -55,11 +58,16 @@ type AgentCredential struct {
 
 // AgentTestOutput is the safe result category returned by the Agent.
 type AgentTestOutput struct {
-	Result domain.TestResult `json:"result"`
+	Result          domain.TestResult            `json:"result"`
+	AuthResult      string                       `json:"auth_result,omitempty"`
+	AdapterResult   string                       `json:"adapter_result,omitempty"`
+	DiscoveryResult string                       `json:"discovery_result,omitempty"`
+	Candidates      []application.ModelCandidate `json:"candidates,omitempty"`
 }
 
 // RecordInput commits a completed test against its original credential.
 type RecordInput struct {
+	Evidence AgentTestOutput
 	Input
 	Result   domain.TestResult `json:"result"`
 	TestedAt time.Time         `json:"tested_at"`
@@ -75,7 +83,7 @@ type Output struct {
 
 // CredentialTestWorkflow loads the current sealed credential, probes it once,
 // then atomically records a safe result and its events.
-func CredentialTestWorkflow(ctx workflow.Context, input Input) (Output, error) {
+func CredentialTestWorkflow(ctx workflow.Context, input Input) (output Output, resultErr error) {
 	requestID, err := uuid.Parse(input.RequestID)
 	if input.TestID == uuid.Nil || input.ProviderID == uuid.Nil || input.CredentialID == uuid.Nil ||
 		input.ActorID == uuid.Nil || input.OrgID == uuid.Nil || err != nil || requestID.String() != input.RequestID {
@@ -89,6 +97,19 @@ func CredentialTestWorkflow(ctx workflow.Context, input Input) (Output, error) {
 		},
 	}
 	flowCtx := workflow.WithActivityOptions(ctx, flowOptions)
+	version := workflow.GetVersion(ctx, "catalog-provider-worker-v1", workflow.DefaultVersion, 1)
+	if version != workflow.DefaultVersion {
+		defer func() {
+			if resultErr == nil {
+				return
+			}
+			cleanup, _ := workflow.NewDisconnectedContext(flowCtx)
+			if err := workflow.ExecuteActivity(cleanup, "FailCredentialCheck", input).Get(cleanup, nil); err != nil {
+				workflow.GetLogger(ctx).Warn("Could not close provider check", "test_id", input.TestID.String())
+			}
+		}()
+	}
+
 	var loaded LoadedCredential
 	if err := workflow.ExecuteActivity(flowCtx, "LoadCredentialForTest", input).Get(flowCtx, &loaded); err != nil {
 		return Output{}, err
@@ -98,15 +119,19 @@ func CredentialTestWorkflow(ctx workflow.Context, input Input) (Output, error) {
 		len(loaded.Ciphertext) == 0 || len(loaded.Last4) != 4 {
 		return Output{}, ErrInvalidTestWorkflow
 	}
-	agentInput := AgentTestInput{
+	agentInput := AgentTestInput{TestID: input.TestID, ActorID: input.ActorID,
 		ProviderID: loaded.ProviderID, ProviderKey: loaded.ProviderKey, AdapterKey: loaded.AdapterKey,
 		Credential: AgentCredential{
 			ID: loaded.CredentialID, KeyID: loaded.KeyID,
 			Ciphertext: base64.StdEncoding.EncodeToString(loaded.Ciphertext),
 		},
 	}
+	queue := "agent"
+	if version != workflow.DefaultVersion && (loaded.AdapterKey == "volcengine_ark" || loaded.AdapterKey == "openrouter") {
+		queue = "provider"
+	}
 	agentCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		TaskQueue: "agent", StartToCloseTimeout: 15 * time.Second,
+		TaskQueue: queue, StartToCloseTimeout: 90 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 	var tested AgentTestOutput
@@ -117,7 +142,7 @@ func CredentialTestWorkflow(ctx workflow.Context, input Input) (Output, error) {
 		return Output{}, ErrInvalidTestWorkflow
 	}
 	record := RecordInput{
-		Input: input, Result: tested.Result, TestedAt: workflow.Now(ctx).UTC(), Last4: loaded.Last4,
+		Input: input, Result: tested.Result, TestedAt: workflow.Now(ctx).UTC(), Last4: loaded.Last4, Evidence: tested,
 	}
 	if err := workflow.ExecuteActivity(flowCtx, "RecordCredentialTestResult", record).Get(flowCtx, nil); err != nil {
 		return Output{}, err

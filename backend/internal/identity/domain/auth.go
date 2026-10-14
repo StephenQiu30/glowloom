@@ -64,6 +64,15 @@ type AuthSession struct {
 	AbsoluteExpiresAt  time.Time
 	Persistent         bool
 	RevokedAt          *time.Time
+	CSRFHash           []byte
+	DeviceSummary      string
+	ReauthAt           *time.Time
+	ReauthEpoch        *int64
+}
+
+// RecentlyAuthenticated binds the five-minute proof to this credential epoch.
+func (s AuthSession) RecentlyAuthenticated(user User, now time.Time) bool {
+	return s.Valid(user, now) && s.ReauthAt != nil && s.ReauthEpoch != nil && *s.ReauthEpoch == user.SessionEpoch && !now.Before(*s.ReauthAt) && now.Before(s.ReauthAt.Add(5*time.Minute))
 }
 
 // Valid enforces account revocation and both session deadlines at the exact boundary.

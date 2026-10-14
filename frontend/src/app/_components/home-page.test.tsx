@@ -7,6 +7,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { HomePage } from "./home-page";
+import { request, RequestError } from "@/lib/request";
+vi.mock("@/lib/request", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/request")>();
+  return { ...actual, request: vi.fn() };
+});
 import { ProductShell } from "@/components/layout/product-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
@@ -21,14 +26,9 @@ beforeEach(() => {
     },
   );
   vi.clearAllMocks();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ code: "session_invalid" }), {
-        status: 401,
-      }),
-    ),
-  );
+  vi.mocked(request)
+    .mockReset()
+    .mockRejectedValue(new RequestError("session_invalid", 401));
 });
 afterEach(() => {
   cleanup();
@@ -63,15 +63,12 @@ it("游客可浏览首页，提交时打开登录弹窗，关闭和切换模式�
   expect(router.replace).not.toHaveBeenCalled();
   expect(
     vi
-      .mocked(fetch)
+      .mocked(request)
       .mock.calls.every(([path]) => String(path) === "/api/session"),
   ).toBe(true);
 });
 it("会话服务不可用时仍可浏览公共灵感，但资产页面不会因 allowGuest 暴露内容", async () => {
-  vi.mocked(fetch).mockImplementation(
-    async () =>
-      new Response(JSON.stringify({ code: "unavailable" }), { status: 503 }),
-  );
+  vi.mocked(request).mockRejectedValue(new RequestError("unavailable", 503));
   const home = render(
     <TooltipProvider>
       <HomePage />
@@ -80,11 +77,8 @@ it("会话服务不可用时仍可浏览公共灵感，但资产页面不会因 
   await screen.findByLabelText("创作提示词");
   expect(screen.getByRole("heading", { name: "最近上新" })).toBeTruthy();
   home.unmount();
-  vi.mocked(fetch).mockImplementation(
-    async () =>
-      new Response(JSON.stringify({ code: "session_invalid" }), {
-        status: 401,
-      }),
+  vi.mocked(request).mockRejectedValue(
+    new RequestError("session_invalid", 401),
   );
   render(
     <ProductShell screen="assets" allowGuest>

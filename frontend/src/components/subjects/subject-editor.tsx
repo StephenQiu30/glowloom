@@ -19,8 +19,8 @@ import {
   updateBibleEntry,
   getBibleEntry,
   replaceBibleReferences,
-} from "@/components/creation/generated/creation";
-import { AuthError } from "@/components/auth/request";
+} from "@/api/bible";
+import { RequestError } from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
 import { isProjectID } from "@/components/projects/project";
 import {
@@ -39,7 +39,7 @@ export function SubjectEditor({
   onSaved,
 }: {
   projectID: string;
-  kind: CreationAPI.Kind;
+  kind: API.Kind;
   initial?: Subject;
   onClose: () => void;
   onSaved: (s: Subject) => void;
@@ -60,12 +60,12 @@ export function SubjectEditor({
   const busy = useRef(false),
     transaction = useRef<{
       key: string;
-      body: CreationAPI.ContentRequest;
+      body: API.ContentRequest;
       id?: string;
       revision?: number;
       metadataDone: boolean;
       referenceKey: string;
-      referenceBody?: CreationAPI.ReferencesRequest;
+      referenceBody?: API.ReferencesRequest;
       look?: string;
     } | null>(null);
   const dirty =
@@ -128,9 +128,9 @@ export function SubjectEditor({
       if (kind === "character" && image && image !== subjectImage(s)) {
         if (!t.referenceBody) {
           if (s.head.revision !== t.revision)
-            throw new AuthError("revision_conflict", 409);
+            throw new RequestError("revision_conflict", 409);
           const look = s.current.character?.looks?.find((l) => l.default);
-          if (!isProjectID(look?.id)) throw new AuthError("invalid_receipt");
+          if (!isProjectID(look?.id)) throw new RequestError("invalid_receipt");
           t.look = look.id;
           t.referenceBody = {
             expected_revision: s.head.revision,
@@ -165,13 +165,13 @@ export function SubjectEditor({
         subjectText(s).name !== name.trim() ||
         subjectText(s).description !== description.trim()
       )
-        throw new AuthError("invalid_receipt");
+        throw new RequestError("invalid_receipt");
       onSaved(s);
     } catch (e) {
       setError(flowError(e));
       if (
         !t.metadataDone &&
-        e instanceof AuthError &&
+        e instanceof RequestError &&
         e.status >= 400 &&
         e.status < 500
       ) {

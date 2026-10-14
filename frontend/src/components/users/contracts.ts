@@ -1,6 +1,6 @@
-import { AuthError } from "@/components/auth/request";
+import { RequestError } from "@/lib/request";
 import { isProjectID } from "@/components/projects/project";
-export type User = CreationAPI.AdminUser & {
+export type User = API.AdminUser & {
   id: string;
   login_name: string;
   display_name: string;
@@ -8,7 +8,7 @@ export type User = CreationAPI.AdminUser & {
   status: "active" | "disabled";
   revision: number;
 };
-export function requireUser(v: CreationAPI.AdminUser): User {
+export function requireUser(v: API.AdminUser): User {
   if (
     !v ||
     !isProjectID(v.id) ||
@@ -19,15 +19,15 @@ export function requireUser(v: CreationAPI.AdminUser): User {
     !Number.isSafeInteger(v.revision) ||
     v.revision! < 1
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return v as User;
 }
-export function requireUserPage(p: CreationAPI.AdminUserPage) {
-  if (!p || !Array.isArray(p.items)) throw new AuthError("invalid_receipt");
+export function requireUserPage(p: API.AdminUserPage) {
+  if (!p || !Array.isArray(p.items)) throw new RequestError("invalid_receipt");
   return { items: p.items.map(requireUser), next_cursor: p.next_cursor };
 }
 export function requireUserMutation(
-  r: CreationAPI.AdminMutationReceipt,
+  r: API.AdminMutationReceipt,
   id?: string,
   revision?: number,
 ) {
@@ -39,11 +39,11 @@ export function requireUserMutation(
     r.revision! < 1 ||
     (revision !== undefined && r.revision !== revision + 1)
   )
-    throw new AuthError("invalid_receipt");
+    throw new RequestError("invalid_receipt");
   return r;
 }
 export function userError(e: unknown) {
-  if (e instanceof AuthError) {
+  if (e instanceof RequestError) {
     const m: Record<string, string> = {
       login_name_taken: "登录名已存在，请更换登录名。",
       weak_password: "密码需至少 10 个字符，包含字母和数字，且不超过 72 字节。",

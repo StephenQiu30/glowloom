@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@tiptap/core": "3.32.0",
+    "@tiptap/extension-document": "3.32.0",
+    "@tiptap/extension-hard-break": "3.32.0",
+    "@tiptap/extension-paragraph": "3.32.0",
+    "@tiptap/extension-text": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/react": "3.32.0",
+    "axios": "1.20.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.48.0",
@@ -33,5 +41,10 @@
     "typescript": "^5",
     "vitest": "^5.0.2"
   },
-  "packageManager": "pnpm@12.4.2"
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "api:schema": "go -C ../backend run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g internal/app/public_api.go --parseInternal --parseDependency -ot json -o ../frontend/node_modules/.cache/openapi",
+    "api:generate": "pnpm run api:schema && openapi2ts && prettier --write src/api",
+    "api:check": "vitest run tests/unit/api-generation.test.ts"
+  }
 }

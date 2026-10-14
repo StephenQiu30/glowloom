@@ -13,7 +13,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidCreateModel means a model registration or its committed result is invalid.
@@ -63,7 +62,7 @@ func (c *CreateModelCommand) Execute(ctx context.Context, actor identityapp.Prin
 	if c == nil || c.store == nil || c.now == nil {
 		return CreatedModel{}, ErrInvalidCreateModel
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.Role != identitydomain.RoleAdmin || actor.MustChangePassword {
+	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return CreatedModel{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)
@@ -75,7 +74,7 @@ func (c *CreateModelCommand) Execute(ctx context.Context, actor identityapp.Prin
 		return CreatedModel{}, ErrInvalidCreateModel
 	}
 	model := domain.ModelProfile{
-		ID: uuid.New(), Key: input.Key, ProviderID: input.ProviderID,
+		ID: uuid.NewSHA1(actor.ID, []byte("model.create/"+input.RequestID)), Key: input.Key, ProviderID: input.ProviderID,
 		Capability: input.Capability, DisplayName: name,
 		Status: domain.ModelDisabled, Revision: 1,
 	}

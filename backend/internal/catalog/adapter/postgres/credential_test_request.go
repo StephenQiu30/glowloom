@@ -51,13 +51,20 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 			}
 			return nil
 		}
+		if err := requireCredentialProvider(tx, request.ProviderID); err != nil {
+			return err
+		}
 		var found int
-		row = tx.Raw(`SELECT 1 FROM catalog.provider p JOIN catalog.provider_credential c ON c.provider_id=p.id WHERE p.id=?::uuid AND c.id=?::uuid AND p.status='active' AND c.status='active' AND NOT p.is_delete AND NOT c.is_delete FOR SHARE OF p,c`, request.ProviderID, request.CredentialID).Scan(&found)
+		row = tx.Raw(`SELECT 1 FROM catalog.provider p JOIN catalog.provider_credential c ON c.provider_id=p.id WHERE p.id=?::uuid AND c.id=?::uuid AND (p.status='active' OR p.current_config_version_id IS NOT NULL) AND c.status='active' AND NOT p.is_delete AND NOT c.is_delete FOR SHARE OF p,c`, request.ProviderID, request.CredentialID).Scan(&found)
 		if row.Error != nil {
 			return fmt.Errorf("authorize credential test target: %w", row.Error)
 		}
 		if row.RowsAffected != 1 {
 			return application.ErrCredentialNotFound
+		}
+		if err := tx.Exec(`INSERT INTO catalog.provider_check(id,actor_id,provider_id,config_version_id,credential_id,kind,status)
+ SELECT ?,?,p.id,p.current_config_version_id,?,'connectivity','pending' FROM catalog.provider p WHERE p.id=? AND p.current_config_version_id IS NOT NULL`, request.TestID, actor.ID, request.CredentialID, request.ProviderID).Error; err != nil {
+			return err
 		}
 		eventID := uuid.NewSHA1(request.TestID, []byte("credential_test_requested"))
 		now := time.Now().UTC()
@@ -69,7 +76,7 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 		if err := tx.Exec(`INSERT INTO infra.outbox(id,topic,partition_key,payload) VALUES(?::uuid,?,?,?::jsonb)`, eventID, topic, actor.OrgID.String(), string(payload)).Error; err != nil {
 			return fmt.Errorf("record credential test request: %w", err)
 		}
-		result = application.CredentialTestAccepted{TestID: request.TestID, EventID: eventID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, Accepted: true}
+		result = application.CredentialTestAccepted{TestID: request.TestID, CheckID: request.TestID, EventID: eventID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, Accepted: true}
 		body, err := json.Marshal(result)
 		if err != nil {
 			return fmt.Errorf("encode credential test receipt: %w", err)

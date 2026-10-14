@@ -39,8 +39,8 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 	provider := validProvider()
 	provider.Key = "credential-test-" + provider.ID.String()
 	if err := conn.DB.WithContext(ctx).Exec(`
-		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false)
+		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
+		VALUES (?::uuid, ?::uuid, ?, 'Test Admin', 'admin', 'test-hash', false, 'platform_admin')
 	`, actor.ID.String(), actor.OrgID.String(), "test-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestCredentialTestRecordsCurrentResultAndEventsOnLocalPostgres(t *testing.T
 		t.Fatalf("loaded replaced credential: %v", err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`
-		UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid
+		UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -7,13 +7,14 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, deleteSession } from "./generated/auth";
-import { AuthError, requireSession } from "./request";
+import { getSession, deleteSession } from "@/api/identity";
+import { RequestError } from "@/lib/request";
+import { requireSession, authErrorMessage } from "./contracts";
 import { Button } from "@/components/ui/button";
-const SessionContext = createContext<AuthAPI.SessionView | null>(null);
-const SessionUpdateContext = createContext<
-  (session: AuthAPI.SessionView) => void
->(() => {});
+const SessionContext = createContext<API.SessionView | null>(null);
+const SessionUpdateContext = createContext<(session: API.SessionView) => void>(
+  () => {},
+);
 export function useOptionalSession() {
   return useContext(SessionContext);
 }
@@ -35,7 +36,7 @@ export function SessionGate({
   allowGuest?: boolean;
 }) {
   const router = useRouter();
-  const [session, setSession] = useState<AuthAPI.SessionView | null>(null);
+  const [session, setSession] = useState<API.SessionView | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [guest, setGuest] = useState(false);
@@ -52,10 +53,9 @@ export function SessionGate({
         if (controller.signal.aborted) return;
         if (allowGuest) {
           setGuest(true);
-        } else if (e instanceof AuthError && e.status === 401) {
+        } else if (e instanceof RequestError && e.status === 401) {
           router.replace("/login");
-        } else
-          setError(e instanceof Error ? e.message : "暂时无法验证登录状态。");
+        } else setError(authErrorMessage(e));
       });
     return () => controller.abort();
   }, [router, retry, allowGuest]);
@@ -80,7 +80,11 @@ export function SessionGate({
         </div>
       </main>
     );
-  if (admin && session?.actor.role !== "admin")
+  if (
+    admin &&
+    session?.actor.role !== "admin" &&
+    session?.actor.platform_role !== "platform_admin"
+  )
     return (
       <main className="session-state">
         <div>
@@ -98,6 +102,6 @@ export function SessionGate({
     </SessionContext.Provider>
   );
 }
-export async function revokeSession(session: AuthAPI.SessionView) {
+export async function revokeSession(session: API.SessionView) {
   await deleteSession({ session_id: session.session_id });
 }

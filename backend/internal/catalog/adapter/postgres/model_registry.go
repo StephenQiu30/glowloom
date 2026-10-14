@@ -242,6 +242,14 @@ func setModelStatusInTx(tx *gorm.DB, modelID uuid.UUID, status domain.ModelStatu
 	}
 	var publishable bool
 	if status == domain.ModelActive {
+		// Real providers can only be activated through verified release publication.
+		var adapter string
+		if err := tx.Raw(`SELECT adapter_key FROM catalog.provider WHERE id=?`, model.ProviderID).Scan(&adapter).Error; err != nil {
+			return err
+		}
+		if adapter == "openrouter" || adapter == "volcengine_ark" {
+			return application.ErrReleaseUnverified
+		}
 		if model.CurrentVersionID == uuid.Nil {
 			return domain.ErrModelNotPublishable
 		}

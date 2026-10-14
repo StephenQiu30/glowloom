@@ -60,6 +60,10 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 		if err := requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
+		submissionID, err := s.lockEditorConfirmation(ctx, tx, actor, input)
+		if err != nil {
+			return err
+		}
 		var row operationRow
 		read := tx.Raw(`
 			SELECT o.id, o.project_id, o.batch_id, o.target_type, o.target_id,
@@ -180,6 +184,11 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 		}
 		if write.RowsAffected != 1 {
 			return domain.ErrQuoteNotConfirmable
+		}
+		if submissionID != nil {
+			if err := tx.Exec(`UPDATE operation.prompt_submission SET state='accepted' WHERE id=?`, *submissionID).Error; err != nil {
+				return err
+			}
 		}
 		events, err := application.SingleConfirmationEvents(actor, quoted, reserve.ReservationID,
 			model.ModelKey, input.RequestID, confirmedAt)

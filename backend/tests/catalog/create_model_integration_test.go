@@ -33,8 +33,8 @@ func TestCreateModelCommitsAuditAndRechecksAdminOnLocalPostgres(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 	actor := adminPrincipal()
 	if err := conn.DB.WithContext(ctx).Exec(`
-		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password)
-		VALUES (?::uuid, ?::uuid, ?, 'Model Admin', 'admin', 'test-hash', false)
+		INSERT INTO identity."user" (id, org_id, login_name, display_name, role, password_hash, must_change_password, platform_role)
+		VALUES (?::uuid, ?::uuid, ?, 'Model Admin', 'admin', 'test-hash', false, 'platform_admin')
 	`, actor.ID.String(), actor.OrgID.String(), "model-admin-"+actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestCreateModelCommitsAuditAndRechecksAdminOnLocalPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := conn.DB.WithContext(ctx).Exec(`
-		UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid
+		UPDATE identity."user" SET platform_role = 'creator' WHERE id = ?::uuid
 	`, actor.ID.String()).Error; err != nil {
 		t.Fatal(err)
 	}

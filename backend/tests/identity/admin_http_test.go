@@ -109,7 +109,7 @@ func TestAdminCreateUsesAuditedCommandWithoutReturningSecrets(t *testing.T) {
 	identityhttp.NewAdminHandler(identityhttp.AdminDependencies{Create: application.NewCreateUserCommand(store, time.Now)}).Register(g)
 	call := func() *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		req := httptest.NewRequestWithContext(t.Context(), "POST", "/api/admin/users", strings.NewReader(`{"login_name":"Creator.One","display_name":"创作者","role":"creator","initial_password":"Validation1234"}`))
+		req := httptest.NewRequestWithContext(t.Context(), "POST", "/api/admin/users", strings.NewReader(`{"login_name":"Creator.One","display_name":"创作者","role":"creator","initial_password":"Validation12345"}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", "https://local.test")
 		req.Header.Set("Idempotency-Key", uuid.NewString())
@@ -123,10 +123,10 @@ func TestAdminCreateUsesAuditedCommandWithoutReturningSecrets(t *testing.T) {
 	if store.actor != actor.ID || store.user.OrgID != actor.OrgID || store.user.Role != domain.RoleProducer || store.user.LoginName != "creator.one" || !store.user.MustChangePassword || len(store.events) != 2 {
 		t.Fatal("create did not use the scoped, audited command")
 	}
-	if store.user.PasswordHash == "Validation1234" || store.user.PasswordHash == "" {
+	if store.user.PasswordHash == "Validation12345" || store.user.PasswordHash == "" {
 		t.Fatal("password was not hashed")
 	}
-	if strings.Contains(w.Body.String(), "password_hash") || strings.Contains(w.Body.String(), "Validation1234") || strings.Contains(w.Body.String(), "org_id") {
+	if strings.Contains(w.Body.String(), "password_hash") || strings.Contains(w.Body.String(), "Validation12345") || strings.Contains(w.Body.String(), "org_id") {
 		t.Fatal("create returned secret or organization fields")
 	}
 	store.err = application.ErrLoginTaken
