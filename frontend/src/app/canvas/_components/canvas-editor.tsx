@@ -9,9 +9,22 @@ import {
   type PointerEvent,
 } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import dynamic from "next/dynamic";
+import { ArrowLeft, Check, CircleAlert, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/layout/brand";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Spinner } from "@/components/ui/spinner";
+import { UploadDialog } from "@/components/media/upload-dialog";
+import { ProjectMediaPreview } from "@/components/media/project-media";
+import { subjectText, type Subject } from "@/components/subjects/contracts";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +45,10 @@ import type { Project } from "@/components/projects/project";
 import {
   commandBatch,
   createDraftNode,
+  createMediaNode,
+  duplicateNode,
   isDraft,
+  isEditableNode,
   requireCanvas,
   requireSaveResult,
   sameEditable,
@@ -61,6 +77,11 @@ type Pending = {
   body: ProjectAPI.CommandsInput;
 };
 const limit = (value: number) => Math.max(-1e6, Math.min(1e6, value));
+const CanvasMaterialDialog = dynamic(() =>
+  import("./canvas-material-dialog").then(
+    (module) => module.CanvasMaterialDialog,
+  ),
+);
 
 export function CanvasEditor({
   project,
@@ -70,6 +91,12 @@ export function CanvasEditor({
   initial: Canvas;
 }) {
   const [generation, setGeneration] = useState<GenerationSeed | null>(null);
+  const [materials, setMaterials] = useState<{
+    tab: "assets" | "subjects";
+    kind?: string;
+  } | null>(null);
+  const [upload, setUpload] = useState(false);
+  const [preview, setPreview] = useState<Node | null>(null);
   const [base, setBase] = useState(initial);
   const [nodes, setNodes] = useState(initial.nodes);
   const local = useRef(initial.nodes);
@@ -184,6 +211,7 @@ export function CanvasEditor({
     view.current = { x: next.x, y: next.y, zoom: next.k };
   }, []);
   function selectNode(id?: string) {
+    if (id !== selected) setDetails(false);
     setSelected(id);
     setSelectedIDs(id ? [id] : []);
   }
@@ -235,6 +263,64 @@ export function CanvasEditor({
     edit([...local.current, n]);
     selectNode(n.id);
   }
+  function addMaterials(assets: CreationAPI.AssetSummary[]) {
+    if (local.current.length + assets.length > 2000) {
+      setMessage("画布已达到 2000 个节点上限，请减少所选素材。");
+      return;
+    }
+    try {
+      const added = assets.map((a, i) =>
+        createMediaNode(a, project.id, local.current.length + i),
+      );
+      const bounds = board.current?.getBoundingClientRect();
+      if (bounds?.width && bounds.height) {
+        const x = (bounds.width / 2 - view.current.x) / view.current.zoom - 144;
+        const y =
+          (Math.max(96, (bounds.height - 450) / 2) - view.current.y) /
+          view.current.zoom;
+        added.forEach((n, i) => {
+          n.x = limit(Math.round(x + (i % 3) * 340));
+          n.y = limit(Math.round(y + Math.floor(i / 3) * 260));
+        });
+      }
+      edit([...local.current, ...added]);
+      selectNode(added.at(-1)?.id);
+      setMaterials(null);
+      setMessage(`已添加 ${added.length} 个素材，请保存画布。`);
+    } catch {
+      setMessage("素材信息不完整或不属于当前项目，请重新读取后添加。");
+    }
+  }
+  function copyNode(node: Node) {
+    if (local.current.length >= 2000) {
+      setMessage("画布已达到 2000 个节点上限。");
+      return;
+    }
+    const copy = duplicateNode(node);
+    edit([...local.current, copy]);
+    selectNode(copy.id);
+  }
+  function removeLocal(node: Node) {
+    if (
+      busy.current ||
+      unconfirmed ||
+      conflict ||
+      baseline.has(node.id) ||
+      !isEditableNode(node)
+    )
+      return;
+    edit(local.current.filter((n) => n.id !== node.id));
+    selectNode(undefined);
+  }
+  function useSubject(subject: Subject) {
+    setMaterials(null);
+    setGeneration({
+      project,
+      prompt: `${subjectText(subject).name}。${subjectText(subject).description ?? ""}`,
+      capability: "image",
+      subject,
+    });
+  }
   function changeCamera(next: typeof camera) {
     view.current = next;
     setCamera(next);
@@ -256,7 +342,7 @@ export function CanvasEditor({
     changeCamera({ x: 48 - minX * zoom, y: 96 - minY * zoom, zoom });
   }
   function beginDrag(e: PointerEvent<HTMLButtonElement>, node: Node) {
-    if (!isDraft(node) || e.button !== 0) return;
+    if (!isEditableNode(node) || e.button !== 0 || tool === "pan") return;
     e.stopPropagation();
     if (!selectedIDs.includes(node.id)) selectNode(node.id);
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -275,7 +361,7 @@ export function CanvasEditor({
       members: local.current
         .filter(
           (n) =>
-            isDraft(n) &&
+            isEditableNode(n) &&
             (selectedIDs.includes(node.id)
               ? selectedIDs.includes(n.id)
               : n.id === node.id),
@@ -435,7 +521,7 @@ export function CanvasEditor({
       if (alive.current) setSaving(false);
     }
   }
-  async function generateCurrent() {
+  async function generateCurrent(pickSubject = false) {
     if (!current || !isDraft(current) || busy.current) return;
     const saved = await save();
     if (!saved) return;
@@ -446,6 +532,7 @@ export function CanvasEditor({
       prompt: node.config.draft.prompt,
       capability: node.node_type === "video_generation" ? "video" : "image",
       draft: node.config.draft,
+      pickSubject,
       source: {
         canvas_id: saved.id,
         node_id: node.id,
@@ -557,7 +644,7 @@ export function CanvasEditor({
                 }
               }}
             >
-              <ArrowLeft />
+              <ArrowLeft data-icon="inline-start" />
               <span className="sr-only">返回项目</span>
             </Link>
           </Button>
@@ -575,20 +662,42 @@ export function CanvasEditor({
             aria-live="polite"
             className="text-xs text-muted-foreground"
           >
+            {saving ? (
+              <Spinner aria-hidden="true" />
+            ) : dirty || unconfirmed || conflict ? (
+              <CircleAlert />
+            ) : (
+              <Check />
+            )}
             {status}
           </span>
           <Button
             onClick={() => void save()}
             disabled={saving || !!conflict || (!dirty && !unconfirmed)}
           >
+            {saving ? (
+              <Spinner data-icon="inline-start" aria-hidden="true" />
+            ) : (
+              <Save data-icon="inline-start" />
+            )}
             {saving ? "正在保存…" : unconfirmed ? "重试原保存" : "保存画布"}
           </Button>
         </div>
       </header>
       {message && (
-        <p role="alert" className="canvas-feedback text-sm">
-          {message}
-        </p>
+        <Alert className="canvas-feedback canvas-notice">
+          <AlertDescription className="flex items-center justify-between gap-3">
+            {message}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="关闭画布提示"
+              onClick={() => setMessage("")}
+            >
+              <X data-icon="inline-start" />
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
       <Dialog open={leave} onOpenChange={setLeave}>
         <DialogContent role="alertdialog" showCloseButton={false}>
@@ -616,7 +725,7 @@ export function CanvasEditor({
       {conflict && (
         <section
           aria-label="版本冲突处理"
-          className="canvas-feedback space-y-3 text-sm"
+          className="canvas-feedback flex flex-col gap-3 text-sm"
         >
           <p>
             本地基于版本 {base.revision}；
@@ -681,7 +790,9 @@ export function CanvasEditor({
             projectID={project.id}
             selected={selectedIDs.includes(node.id)}
             zoom={camera.zoom}
-            onResize={(size) => update(node.id, size)}
+            onResize={(size) =>
+              update(node.id, { ...size, x: limit(size.x), y: limit(size.y) })
+            }
             onResizePreview={() =>
               board.current?.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT))
             }
@@ -697,18 +808,27 @@ export function CanvasEditor({
             onDragStart={(event) => beginDrag(event, node)}
             onDragMove={moveDrag}
             onDragEnd={endDrag}
+            onDuplicate={() => copyNode(node)}
+            canRemove={
+              !baseline.has(node.id) && !saving && !unconfirmed && !conflict
+            }
+            onRemove={() => removeLocal(node)}
           />
         ))}
       </InfiniteCanvas>
       {!nodes.length && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <div className="space-y-3 text-center">
-            <div className="text-4xl font-light text-muted-foreground">+</div>
-            <h2 className="text-lg font-medium">画布暂无节点</h2>
-            <p className="text-sm text-muted-foreground">
-              从左侧添加图片或视频节点，开始你的创作。
-            </p>
-          </div>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Plus />
+              </EmptyMedia>
+              <EmptyTitle>画布暂无节点</EmptyTitle>
+              <EmptyDescription>
+                从左侧添加图片、视频节点或项目素材，开始你的创作。
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         </div>
       )}
       {selectedIDs.length > 1 && (
@@ -720,6 +840,8 @@ export function CanvasEditor({
         tool={tool}
         onToolChange={setTool}
         onAdd={add}
+        onMaterials={(tab = "assets", kind) => setMaterials({ tab, kind })}
+        onUpload={() => setUpload(true)}
         zoom={camera.zoom}
         onZoom={(zoom) => changeCamera({ ...view.current, zoom })}
         onFit={fit}
@@ -756,7 +878,25 @@ export function CanvasEditor({
             onUpdate={(patch) => update(current.id, patch)}
             onDraft={draft}
             onGenerate={() => void generateCurrent()}
-            generating={saving || !!conflict || unconfirmed}
+            onSubject={() => void generateCurrent(true)}
+            onPreview={() => setPreview(current)}
+            onContinue={() => {
+              if (
+                current.ref_id &&
+                ["image", "video", "audio"].includes(current.node_type)
+              )
+                setGeneration({
+                  project,
+                  prompt: "",
+                  capability: current.node_type === "image" ? "image" : "video",
+                  reference: {
+                    assetID: current.ref_id,
+                    kind: current.node_type as "image" | "video" | "audio",
+                  },
+                });
+            }}
+            generating={saving}
+            blocked={!!conflict || unconfirmed}
           />
         </CanvasNodePanel>
       )}
@@ -766,6 +906,55 @@ export function CanvasEditor({
           onClose={() => setGeneration(null)}
           onAdopt={adoptResult}
         />
+      )}
+      {materials && (
+        <CanvasMaterialDialog
+          projectID={project.id}
+          initialTab={materials.tab}
+          initialKind={materials.kind}
+          onClose={() => setMaterials(null)}
+          onAdd={addMaterials}
+          onSubject={useSubject}
+        />
+      )}
+      {upload && (
+        <UploadDialog
+          projectID={project.id}
+          onClose={() => setUpload(false)}
+          onUploaded={(asset) => {
+            setUpload(false);
+            if (
+              asset &&
+              ["image", "video", "audio", "model"].includes(asset.kind ?? "")
+            )
+              addMaterials([asset]);
+            else
+              setMessage(
+                "文件已上传。当前画布支持图片、视频、音频及 3D 素材，请在项目素材中查看文件。",
+              );
+          }}
+        />
+      )}
+      {preview?.ref_id && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPreview(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-4xl">
+            <DialogTitle>{preview.title}</DialogTitle>
+            <DialogDescription>当前项目的素材预览</DialogDescription>
+            <div className="relative flex h-[min(60dvh,560px)] items-center justify-center overflow-hidden rounded-lg">
+              <ProjectMediaPreview
+                projectID={project.id}
+                id={preview.ref_id}
+                kind={preview.node_type}
+                large
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </main>
   );

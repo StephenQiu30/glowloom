@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { isProjectID, type Project } from "@/components/projects/project";
 import {
@@ -68,6 +69,7 @@ export type GenerationSeed = {
   };
   pickSubject?: boolean;
   subject?: import("@/components/subjects/contracts").Subject;
+  reference?: { assetID: string; kind: "image" | "video" | "audio" };
 };
 export function GenerationDialog({
   seed,
@@ -292,7 +294,18 @@ function ModelForm({
   onLock: (v: boolean) => void;
 }) {
   const [mode, setMode] = useState(
-    seed.reuse?.mode ?? model.current_version?.modes?.[0] ?? "",
+    seed.reuse?.mode ??
+      (seed.reference?.kind === "image"
+        ? model.current_version?.modes?.find(
+            (m) =>
+              m ===
+              (seed.capability === "video"
+                ? "image_to_video"
+                : "image_to_image"),
+          )
+        : undefined) ??
+      model.current_version?.modes?.[0] ??
+      "",
   );
   let schemaError = "";
   try {
@@ -392,16 +405,20 @@ function PromptForm({
         ?.filter((i) => i.media_asset_id)
         .map((i) => ({ role: i.role, media_asset_id: i.media_asset_id })) ??
         (() => {
-          const image = seed.subject && subjectImage(seed.subject);
+          const image =
+            seed.reference?.assetID ??
+            (seed.subject && subjectImage(seed.subject));
+          const type = seed.reference?.kind ?? "image";
           const limits = model.current_version?.limits as
             { roles?: Record<string, { types?: string[] }> } | undefined;
           const role =
             model.input_roles?.find(
               (r) =>
-                r === "subject" && limits?.roles?.[r]?.types?.includes("image"),
+                r === (seed.reference ? "reference_" + type : "subject") &&
+                limits?.roles?.[r]?.types?.includes(type),
             ) ??
             model.input_roles?.find((r) =>
-              limits?.roles?.[r]?.types?.includes("image"),
+              limits?.roles?.[r]?.types?.includes(type),
             );
           return image && role ? [{ role, media_asset_id: image }] : [];
         })(),
@@ -413,6 +430,11 @@ function PromptForm({
     [pending, setPending] = useState(false),
     [unconfirmed, setUnconfirmed] = useState(false),
     [now, setNow] = useState(() => Date.now());
+  const [skipReference, setSkipReference] = useState(false);
+  const missingSeedReference =
+    !!seed.reference &&
+    !skipReference &&
+    !media.some((m) => m.media_asset_id === seed.reference!.assetID);
   const intent = useRef<{
       key: string;
       body: CreationAPI.QuoteItemRequest;
@@ -437,7 +459,7 @@ function PromptForm({
     return () => onLock(false);
   }, [pending, unconfirmed, quote, onLock]);
   async function getQuote() {
-    if (busy.current) return;
+    if (busy.current || missingSeedReference) return;
     busy.current = true;
     setPending(true);
     setError("");
@@ -640,6 +662,22 @@ function PromptForm({
             </label>
           </div>
           <div className="reference-list">
+            {missingSeedReference && (
+              <Alert>
+                <AlertDescription>
+                  <p>
+                    当前模型未使用所选参考素材。请选择支持该素材的模型，或明确取消此参考。
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSkipReference(true)}
+                  >
+                    不使用此参考素材
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -705,6 +743,7 @@ function PromptForm({
               pending ||
               !prompt.trim() ||
               !Number.isInteger(count) ||
+              missingSeedReference ||
               count < 1 ||
               count > maxCount
             }

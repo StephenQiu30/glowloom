@@ -5,6 +5,8 @@ import {
   requireCanvas,
   requireSaveResult,
   sameEditable,
+  createMediaNode,
+  duplicateNode,
 } from "./editor-state";
 const projectID = "00000000-0000-4000-8000-000000000001";
 const canvasID = "00000000-0000-4000-8000-000000000002";
@@ -161,5 +163,80 @@ it("生成结果以真实媒体引用添加，不接受缺失或任意引用", (
   expect(() => commandBatch(base, [{ ...result, ref_id: "bad" }])).toThrow();
   expect(() =>
     commandBatch(base, [{ ...result, node_type: "script" }]),
+  ).toThrow();
+});
+
+it("项目素材节点保存几何与名称，拒绝跨项目及受业务操作锁定的改写", () => {
+  const n = createMediaNode(
+    {
+      id: crypto.randomUUID(),
+      project_id: projectID,
+      kind: "image",
+      file_name: "参考.png",
+      width: 1200,
+      height: 800,
+    },
+    projectID,
+    0,
+  );
+  const base = { ...empty, nodes: [n] };
+  expect(n.height).toBe(192);
+  const unicodeTitle = { ...n, title: "🎬".repeat(128) };
+  expect(commandBatch(empty, [unicodeTitle]).commands?.[0].type).toBe(
+    "AddNodes",
+  );
+  const edited = { ...n, x: 150, width: 400, title: "海边香氛" };
+  const body = commandBatch(base, [edited]);
+  expect(body.commands?.map((c) => c.type)).toEqual([
+    "MoveNodes",
+    "RenameNodes",
+    "ResizeNodes",
+  ]);
+  expect(
+    requireSaveResult(
+      {
+        ...base,
+        revision: 2,
+        nodes: [edited],
+        results: body.commands?.map(() => ({ ok: true })),
+      },
+      base,
+      [edited],
+      body,
+    ).nodes[0].title,
+  ).toBe("海边香氛");
+  expect(() =>
+    createMediaNode(
+      { id: n.ref_id, project_id: canvasID, kind: "image" },
+      projectID,
+      0,
+    ),
+  ).toThrow();
+  expect(() =>
+    commandBatch({ ...base, nodes: [{ ...n, last_operation_id: canvasID }] }, [
+      { ...edited, last_operation_id: canvasID },
+    ]),
+  ).toThrow();
+  expect(() => commandBatch(base, [{ ...n, ref_id: canvasID }])).toThrow();
+});
+
+it("复制保留素材身份和草稿内容，但生成新的节点身份及输入版本", () => {
+  const draft = {
+    ...createDraftNode("image_generation", "1:1", 0),
+    input_revision: 3,
+  };
+  const copy = duplicateNode(draft);
+  expect(copy.id).not.toBe(draft.id);
+  expect(copy.input_revision).toBeUndefined();
+  expect(copy.x).toBe(draft.x + 32);
+  expect(copy.config).toEqual(draft.config);
+  const media = createMediaNode(
+    { id: canvasID, project_id: projectID, kind: "video" },
+    projectID,
+    0,
+  );
+  expect(duplicateNode(media).ref_id).toBe(media.ref_id);
+  expect(() =>
+    duplicateNode({ ...media, last_operation_id: canvasID }),
   ).toThrow();
 });

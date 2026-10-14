@@ -1,9 +1,28 @@
 "use client";
 // BeefTV a2196d3: canvas-node.tsx, NodeExternalHeader and node media shells (MIT).
 import { useRef, type PointerEvent, type CSSProperties } from "react";
-import { ImageIcon, VideoIcon, Pencil } from "lucide-react";
+import {
+  AudioLines,
+  Box,
+  Copy,
+  ImageIcon,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  VideoIcon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ProjectMediaPreview } from "@/components/media/project-media";
-import { isDraft, type Node } from "./editor-state";
+import { isDraft, isEditableNode, type Node } from "./editor-state";
 
 export function CanvasNode({
   node,
@@ -18,6 +37,9 @@ export function CanvasNode({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onDuplicate,
+  onRemove,
+  canRemove = false,
 }: {
   node: Node;
   projectID?: string;
@@ -36,6 +58,9 @@ export function CanvasNode({
   onDragStart: (event: PointerEvent<HTMLButtonElement>) => void;
   onDragMove: (event: PointerEvent<HTMLButtonElement>) => void;
   onDragEnd: (cancel?: boolean) => void;
+  onDuplicate?: () => void;
+  onRemove?: () => void;
+  canRemove?: boolean;
 }) {
   const resize = useRef<{
     pointerID: number;
@@ -121,7 +146,14 @@ export function CanvasNode({
       onResizePreview();
     } else onResize(d.next);
   }
-  const Icon = node.node_type === "video_generation" ? VideoIcon : ImageIcon;
+  const editable = isEditableNode(node);
+  const Icon = node.node_type.includes("video")
+    ? VideoIcon
+    : node.node_type === "audio"
+      ? AudioLines
+      : node.node_type === "model"
+        ? Box
+        : ImageIcon;
   return (
     <article
       data-node-id={node.id}
@@ -139,7 +171,7 @@ export function CanvasNode({
       <button
         type="button"
         className="canvas-node-external-header"
-        aria-label={isDraft(node) ? `移动 ${node.title}` : `查看 ${node.title}`}
+        aria-label={editable ? `移动 ${node.title}` : `查看 ${node.title}`}
         onClick={onSelect}
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
@@ -147,7 +179,7 @@ export function CanvasNode({
         onPointerCancel={() => onDragEnd(true)}
         onLostPointerCapture={() => onDragEnd(true)}
         onKeyDown={(event) => {
-          if (!isDraft(node)) return;
+          if (!editable) return;
           const step = event.shiftKey ? 10 : 1;
           const move: Record<string, [number, number]> = {
             ArrowLeft: [-step, 0],
@@ -166,17 +198,60 @@ export function CanvasNode({
         <Icon className="size-3 shrink-0" />
         <span className="truncate">{node.title}</span>
       </button>
-      {isDraft(node) && (
-        <button
-          className="canvas-node-rename"
-          type="button"
-          aria-label={`编辑节点名称：${node.title}`}
-          onClick={onEditTitle}
-          data-canvas-no-zoom
-        >
-          <Pencil className="size-3" />
-        </button>
-      )}
+      {editable &&
+        (onDuplicate ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="canvas-node-rename"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`节点操作：${node.title}`}
+                data-canvas-no-zoom
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal data-icon="inline-start" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onSelect={onEditTitle}>
+                  <Pencil data-icon="inline-start" />
+                  编辑节点参数
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onDuplicate}>
+                  <Copy data-icon="inline-start" />
+                  复制节点
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={!canRemove}
+                  onSelect={onRemove}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  移除未保存节点
+                </DropdownMenuItem>
+                {!canRemove && (
+                  <DropdownMenuLabel>已保存节点暂不支持移除</DropdownMenuLabel>
+                )}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button
+            className="canvas-node-rename"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`编辑节点名称：${node.title}`}
+            onClick={onEditTitle}
+            data-canvas-no-zoom
+          >
+            <Pencil data-icon="inline-start" />
+          </Button>
+        ))}
       <button
         type="button"
         className="canvas-node-shell"
@@ -189,7 +264,10 @@ export function CanvasNode({
         aria-label={`选择 ${node.title}`}
         style={{ height: "var(--canvas-node-height)" }}
       >
-        {projectID && node.ref_type === "media_asset" && node.ref_id ? (
+        {projectID &&
+        ["image", "video"].includes(node.node_type) &&
+        node.ref_type === "media_asset" &&
+        node.ref_id ? (
           <ProjectMediaPreview
             projectID={projectID}
             id={node.ref_id}
@@ -200,13 +278,13 @@ export function CanvasNode({
         )}
         <span>
           {isDraft(node)
-            ? `${node.node_type === "image_generation" ? "图片" : "视频"}草稿 · 尚未生成`
+            ? "准备好，开始生成"
             : node.ref_type === "media_asset"
               ? ""
               : node.title}
         </span>
       </button>
-      {isDraft(node) &&
+      {editable &&
         selected &&
         (["nw", "ne", "sw", "se"] as const).map((corner) => (
           <button

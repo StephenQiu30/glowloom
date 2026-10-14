@@ -157,6 +157,51 @@ export function isMediaNode(n: Node): boolean {
     Object.keys(n.config).length === 0
   );
 }
+export function isEditableNode(n: Node): boolean {
+  return !n.last_operation_id && (isDraft(n) || isMediaNode(n));
+}
+export function createMediaNode(
+  asset: CreationAPI.AssetSummary,
+  projectID: string,
+  index: number,
+): Node {
+  if (
+    !isProjectID(asset.id) ||
+    asset.project_id !== projectID ||
+    !["image", "video", "audio", "model"].includes(asset.kind ?? "")
+  )
+    throw new AuthError("invalid_receipt");
+  const ratio =
+    asset.width && asset.height && asset.width > 0 && asset.height > 0
+      ? asset.height / asset.width
+      : 200 / 288;
+  return {
+    id: crypto.randomUUID(),
+    title: Array.from(asset.file_name?.trim() || "项目素材")
+      .slice(0, 128)
+      .join(""),
+    node_type: asset.kind!,
+    node_action: "resource",
+    ref_type: "media_asset",
+    ref_id: asset.id,
+    config: {},
+    x: 80 + (index % 3) * 340,
+    y: 80 + Math.floor(index / 3) * 260,
+    z_index: 0,
+    width: 288,
+    height: Math.max(40, Math.min(2000, Math.round(288 * ratio))),
+  };
+}
+export function duplicateNode(n: Node): Node {
+  if (!isEditableNode(n)) throw new AuthError("invalid_request");
+  const copy = structuredClone(n);
+  copy.id = crypto.randomUUID();
+  copy.title = Array.from(n.title).slice(0, 125).join("") + " 副本";
+  copy.x = Math.min(1e6, n.x + 32);
+  copy.y = Math.min(1e6, n.y + 32);
+  delete copy.input_revision;
+  return copy;
+}
 export function sameEditable(a: Node, b: Node): boolean {
   if (isMediaNode(a) && isMediaNode(b))
     return (
@@ -199,13 +244,45 @@ export function commandBatch(
     if (ids.has(n.id)) throw new AuthError("invalid_request");
     ids.add(n.id);
     const prior = byID.get(n.id);
+    if (
+      prior &&
+      isMediaNode(n) &&
+      isMediaNode(prior) &&
+      isEditableNode(prior)
+    ) {
+      if (
+        n.ref_id !== prior.ref_id ||
+        n.node_type !== prior.node_type ||
+        n.parent_id !== prior.parent_id ||
+        n.z_index !== prior.z_index ||
+        n.last_operation_id !== prior.last_operation_id ||
+        !n.title.trim() ||
+        Array.from(n.title).length > 128 ||
+        !position(n.x) ||
+        !position(n.y) ||
+        !dimension(n.width) ||
+        !dimension(n.height)
+      )
+        throw new AuthError("invalid_request");
+      if (prior.x !== n.x || prior.y !== n.y)
+        moves.push({ id: n.id, x: n.x, y: n.y });
+      if (prior.width !== n.width || prior.height !== n.height)
+        sizes.push({
+          id: n.id,
+          width: n.width ?? 288,
+          height: n.height ?? 200,
+        });
+      if (prior.title !== n.title) names.push({ id: n.id, title: n.title });
+      continue;
+    }
     if (!isDraft(n)) {
       if (
         !prior &&
         isMediaNode(n) &&
+        isEditableNode(n) &&
         isProjectID(n.id) &&
         n.title.trim() &&
-        n.title.length <= 128 &&
+        Array.from(n.title).length <= 128 &&
         position(n.x) &&
         position(n.y) &&
         dimension(n.width) &&

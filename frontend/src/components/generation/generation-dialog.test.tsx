@@ -144,3 +144,83 @@ it("过期报价允许返回编辑，不会执行确认", async () => {
   );
   expect(api.confirm).not.toHaveBeenCalled();
 });
+
+it("画布参考素材沿真实模型角色进入报价，优先采用模型支持的图生图模式", async () => {
+  api.models.mockResolvedValue({
+    items: [
+      {
+        id,
+        key: "actual",
+        display_name: "真实模型",
+        capability: "image.generate",
+        status: "active",
+        provider_status: "active",
+        credential_present: true,
+        input_roles: ["reference_image"],
+        current_version: {
+          modes: ["text_to_image", "image_to_image"],
+          limits: {
+            max_outputs: 4,
+            roles: { reference_image: { types: ["image"] } },
+          },
+          param_schema: [],
+        },
+      },
+    ],
+  });
+  api.quote.mockRejectedValue(new AuthError("invalid_request", 422));
+  render(
+    <GenerationDialog
+      seed={{
+        project,
+        prompt: "海边",
+        capability: "image",
+        reference: { assetID: id, kind: "image" },
+      }}
+      onClose={() => {}}
+    />,
+  );
+  await screen.findByRole("option", { name: "真实模型" });
+  fireEvent.change(screen.getByLabelText("生成模型"), {
+    target: { value: "actual" },
+  });
+  expect((screen.getByLabelText("生成模式") as HTMLSelectElement).value).toBe(
+    "image_to_image",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "获取生成报价" }));
+  await waitFor(() => expect(api.quote).toHaveBeenCalledOnce());
+  expect(api.quote.mock.calls[0][1].media_inputs).toEqual([
+    { role: "reference_image", media_asset_id: id },
+  ]);
+  expect(api.confirm).not.toHaveBeenCalled();
+});
+
+it("模型不支持画布参考时必须明确取消参考，不能静默发出不含素材的报价", async () => {
+  render(
+    <GenerationDialog
+      seed={{
+        project,
+        prompt: "海边",
+        capability: "image",
+        reference: { assetID: id, kind: "image" },
+      }}
+      onClose={() => {}}
+    />,
+  );
+  await screen.findByRole("option", { name: "真实模型" });
+  fireEvent.change(screen.getByLabelText("生成模型"), {
+    target: { value: "actual" },
+  });
+  expect(
+    screen
+      .getByRole("button", { name: "获取生成报价" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  expect(api.quote).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "不使用此参考素材" }));
+  expect(
+    screen
+      .getByRole("button", { name: "获取生成报价" })
+      .hasAttribute("disabled"),
+  ).toBe(false);
+});

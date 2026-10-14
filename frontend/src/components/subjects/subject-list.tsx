@@ -46,12 +46,14 @@ export function SubjectList({
   projectID,
   kind = "character",
   onSelect,
+  selectedID,
   onGenerate,
   filters,
 }: {
   projectID: string;
   kind?: CreationAPI.Kind;
   onSelect?: (s: Subject) => void;
+  selectedID?: string;
   onGenerate?: (s: Subject) => void;
   filters?: ReactNode;
 }) {
@@ -255,6 +257,7 @@ export function SubjectList({
               <button
                 className="subject-card"
                 key={s.head.id}
+                aria-pressed={onSelect ? selectedID === s.head.id : undefined}
                 onClick={() => (onSelect ? onSelect(s) : setSelected(s))}
               >
                 <Card variant="media">

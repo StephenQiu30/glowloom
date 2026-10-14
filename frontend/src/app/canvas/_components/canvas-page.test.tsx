@@ -19,6 +19,10 @@ vi.mock("@/components/projects/generated/projects", () => ({
   getCanvas: api.canvas,
   applyCanvasCommands: api.save,
 }));
+vi.mock("@/components/media/project-media", () => ({
+  ProjectMediaPreview: () => null,
+  ProjectMediaPicker: () => null,
+}));
 const projectID = "00000000-0000-4000-8000-000000000001";
 const canvasID = "00000000-0000-4000-8000-000000000002";
 const project = {
@@ -95,9 +99,11 @@ it("丢回执重试保留原key和冻结body，键盘移动可保存", async () 
     key: "ArrowRight",
     shiftKey: true,
   });
+  fireEvent.click(screen.getByRole("button", { name: "节点参数" }));
   expect((screen.getByLabelText("X 坐标") as HTMLInputElement).value).toBe(
     "90",
   );
+  fireEvent.keyDown(screen.getByLabelText("X 坐标"), { key: "Escape" });
   api.save.mockRejectedValueOnce(new AuthError("request_unconfirmed"));
   fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
   await screen.findByRole("button", { name: "重试原保存" });
@@ -228,4 +234,66 @@ it("切换项目取消旧请求，迟到的旧项目不能覆盖新项目", asyn
   await waitFor(() => expect(oldSignal.aborted).toBe(true));
   expect(screen.queryByRole("heading", { name: "真实画布项目" })).toBeNull();
   expect(screen.getByText("画布暂无节点")).toBeTruthy();
+});
+
+it("媒体节点移动使用真实命令，复制保留媒体身份，移除本地副本不发删除请求", async () => {
+  const media = {
+    id: "00000000-0000-4000-8000-000000000013",
+    title: "海边.png",
+    node_type: "image",
+    node_action: "resource",
+    ref_type: "media_asset",
+    ref_id: "00000000-0000-4000-8000-000000000014",
+    config: {},
+    x: 80,
+    y: 80,
+    z_index: 0,
+    width: 288,
+    height: 192,
+  };
+  api.project.mockResolvedValue(project);
+  api.canvas.mockResolvedValue({ ...canvas, nodes: [media] });
+  api.save.mockImplementationOnce((_p, body) =>
+    Promise.resolve({
+      ...canvas,
+      nodes: [{ ...media, x: 90 }],
+      revision: 2,
+      results: body.commands.map(() => ({ ok: true })),
+    }),
+  );
+  render(<CanvasPage projectID={projectID} canvasID={canvasID} />);
+  fireEvent.keyDown(
+    await screen.findByRole("button", { name: "移动 海边.png" }),
+    { key: "ArrowRight", shiftKey: true },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "保存画布" }));
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toContain("已保存"),
+  );
+  expect(api.save.mock.calls[0][1].commands).toEqual([
+    { type: "MoveNodes", moves: [{ id: media.id, x: 90, y: 80 }] },
+  ]);
+  fireEvent.keyDown(
+    screen.getByRole("button", { name: "节点操作：海边.png" }),
+    { key: "Enter" },
+  );
+  expect(
+    screen
+      .getByRole("menuitem", { name: "移除未保存节点" })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
+  fireEvent.click(screen.getByRole("menuitem", { name: "复制节点" }));
+  await screen.findByRole("button", { name: "移动 海边.png 副本" });
+  fireEvent.keyDown(
+    screen.getByRole("button", { name: "节点操作：海边.png 副本" }),
+    { key: "Enter" },
+  );
+  fireEvent.click(screen.getByRole("menuitem", { name: "移除未保存节点" }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "移动 海边.png 副本" }),
+    ).toBeNull(),
+  );
+  expect(api.save).toHaveBeenCalledOnce();
+  expect(screen.getByRole("status").textContent).toContain("已保存");
 });
