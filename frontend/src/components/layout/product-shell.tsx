@@ -3,6 +3,8 @@ import {
   createContext,
   useContext,
   useState,
+  useRef,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -11,17 +13,12 @@ import { cn } from "cn";
 import { useRouter } from "next/navigation";
 import {
   Bell,
-  Contact,
-  Compass,
   Folder,
   Gift,
   KeyRound,
   LogOut,
   Menu,
-  PanelLeftClose,
-  Plus,
   Shield,
-  Sparkles,
   UserRound,
 } from "lucide-react";
 import { Brand } from "./brand";
@@ -52,144 +49,30 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupAction,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  useSidebar,
-} from "@/components/ui/sidebar";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import { Navigation, ProductNavigation } from "./product-navigation";
 import type { Screen } from "./routes";
 const adminScreens = ["users", "models", "providers", "audit", "health"];
-const links = [
-  { id: "home", label: "创作", icon: Sparkles, href: "/" },
-  { id: "explore", label: "探索", icon: Compass, href: "/explore" },
-  { id: "assets", label: "资产", icon: Folder, href: "/assets" },
-  { id: "subjects", label: "主体", icon: Contact, href: "/subjects" },
-];
 const LoginContext = createContext<() => void>(() => {});
 export function useLoginDialog() {
   return useContext(LoginContext);
 }
-function Navigation({
-  screen,
-  mobile = false,
-}: {
-  screen: string;
-  mobile?: boolean;
-}) {
-  const { setOpenMobile } = useSidebar();
-  return (
-    <nav
-      aria-label={mobile ? "移动主导航" : "主导航"}
-      className={cn(
-        mobile && "mobile-navigation",
-        !mobile && "primary-navigation",
-      )}
-    >
-      <SidebarMenu>
-        {links.map(({ id, label, icon: Icon, href }) => (
-          <SidebarMenuItem key={id}>
-            <SidebarMenuButton
-              asChild
-              isActive={
-                screen === id || (id === "assets" && screen === "projects")
-              }
-            >
-              <Link
-                href={href}
-                onClick={() => setOpenMobile(false)}
-                aria-current={
-                  screen === id || (id === "assets" && screen === "projects")
-                    ? "page"
-                    : undefined
-                }
-              >
-                <Icon data-icon="inline-start" />
-                <span>{label}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ))}
-      </SidebarMenu>
-    </nav>
-  );
+const sidebarPreferenceEvent = "glowloom:sidebar-preference";
+function subscribeSidebarPreference(onChange: () => void) {
+  window.addEventListener(sidebarPreferenceEvent, onChange);
+  return () => window.removeEventListener(sidebarPreferenceEvent, onChange);
 }
-function ProductNavigation({
-  screen,
-  onLogin,
-}: {
-  screen: string;
-  onLogin: () => void;
-}) {
-  const session = useOptionalSession();
-  const { setOpen, setOpenMobile, isMobile } = useSidebar();
-  return (
-    <Sidebar collapsible="offcanvas" className="border-0">
-      <SidebarHeader className="sidebar-brand">
-        <Brand wordmark />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="收起导航"
-          onClick={() => (isMobile ? setOpenMobile(false) : setOpen(false))}
-        >
-          <PanelLeftClose data-icon="inline-start" />
-        </Button>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup className="p-0">
-          <SidebarGroupContent>
-            <Navigation screen={screen} />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup className="sidebar-history">
-          <SidebarGroupLabel>对话</SidebarGroupLabel>
-          <SidebarGroupAction asChild>
-            <Link href="/" aria-label="新建创作">
-              <Plus />
-            </Link>
-          </SidebarGroupAction>
-          <SidebarGroupContent>
-            <p>暂无历史对话</p>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup className="sidebar-history">
-          <SidebarGroupLabel>画布</SidebarGroupLabel>
-          <SidebarGroupAction asChild>
-            <Link href="/projects" aria-label="我的画布">
-              <Plus />
-            </Link>
-          </SidebarGroupAction>
-          <SidebarGroupContent>
-            <Link href="/projects">查看我的画布</Link>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="sidebar-footer">
-        {!session && (
-          <>
-            <p>登录后保存你的创作</p>
-            <Button variant="ghost" onClick={onLogin}>
-              登录 / 注册
-            </Button>
-          </>
-        )}
-        <Link className="sidebar-legal" href="/licenses">
-          第三方许可
-        </Link>
-      </SidebarFooter>
-    </Sidebar>
-  );
+function getSidebarPreference() {
+  return !document.cookie.split("; ").includes("sidebar_state=false");
 }
+function setSidebarPreference(open: boolean) {
+  document.cookie = `sidebar_state=${open}; path=/; max-age=604800; SameSite=Lax`;
+  window.dispatchEvent(new Event(sidebarPreferenceEvent));
+}
+function getServerSidebarPreference() {
+  return true;
+}
+
 function Shell({
   screen,
   children,
@@ -204,7 +87,8 @@ function Shell({
   const session = useOptionalSession();
   const updateSession = useSessionUpdate();
   const router = useRouter();
-  const { open, setOpen, isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, openMobile, setOpenMobile } = useSidebar();
+  const mobileNavigationTrigger = useRef<HTMLButtonElement>(null);
   const [feature, setFeature] = useState<string | null>(null);
   const [auth, setAuth] = useState(Boolean(initialAuthMode));
   const [logout, setLogout] = useState(false);
@@ -228,19 +112,30 @@ function Shell({
       <a className="sr-only focus:not-sr-only" href="#main-content">
         跳转到主要内容
       </a>
-      <ProductNavigation screen={screen} onLogin={() => setAuth(true)} />
+      <ProductNavigation
+        screen={screen}
+        onLogin={() => setAuth(true)}
+        onMobileCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (!auth) mobileNavigationTrigger.current?.focus();
+        }}
+      />
       <div className="product-content">
         <header className="product-header">
-          {isMobile && <Brand wordmark />}
-          {!open && !isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="展开导航"
-              onClick={() => setOpen(true)}
-            >
-              <Menu />
-            </Button>
+          {isMobile && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                ref={mobileNavigationTrigger}
+                aria-label="打开导航"
+                aria-expanded={openMobile}
+                onClick={() => setOpenMobile(true)}
+              >
+                <Menu />
+              </Button>
+              <Brand wordmark />
+            </>
           )}
           <div className="account-controls">
             {session ? (
@@ -342,17 +237,10 @@ function Shell({
         <main id="main-content" className={cn(!fullBleed && "workspace-page")}>
           {children}
         </main>
-        {isMobile && (
-          <div className="mobile-footer">
-            <Button variant="ghost" onClick={() => setOpenMobile(true)}>
-              <Menu data-icon="inline-start" />
-              更多导航
-            </Button>
-          </div>
-        )}
       </div>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
       <AuthDialog
+        fallbackFocusRef={mobileNavigationTrigger}
         open={auth}
         initialMode={initialAuthMode}
         onOpenChange={(value) => {
@@ -412,6 +300,11 @@ export function ProductShell({
   allowGuest?: boolean;
   initialAuthMode?: AuthMode;
 }) {
+  const sidebarOpen = useSyncExternalStore(
+    subscribeSidebarPreference,
+    getSidebarPreference,
+    getServerSidebarPreference,
+  );
   return (
     <SessionGate
       admin={adminScreens.includes(screen)}
@@ -419,7 +312,14 @@ export function ProductShell({
     >
       <SidebarProvider
         className="product-shell"
-        style={{ "--sidebar-width": "240px" } as CSSProperties}
+        open={sidebarOpen}
+        onOpenChange={setSidebarPreference}
+        style={
+          {
+            "--sidebar-width": "240px",
+            "--sidebar-width-icon": "64px",
+          } as CSSProperties
+        }
       >
         <Shell
           screen={screen}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { X } from "lucide-react";
 import { BrandMark } from "@/components/layout/brand";
 import { Button } from "@/components/ui/button";
@@ -21,11 +21,13 @@ export function AuthDialog({
   onOpenChange,
   onAuthenticated,
   initialMode = "login",
+  fallbackFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAuthenticated: (session: AuthAPI.SessionView) => void;
   initialMode?: AuthMode;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [pending, setPending] = useState(false);
@@ -47,9 +49,14 @@ export function AuthDialog({
           content.current?.querySelector<HTMLInputElement>("input")?.focus();
         }}
         onCloseAutoFocus={(event) => {
-          if (returnFocus.current?.isConnected) {
+          const target =
+            returnFocus.current?.isConnected &&
+            returnFocus.current !== document.body
+              ? returnFocus.current
+              : fallbackFocusRef?.current;
+          if (target?.isConnected) {
             event.preventDefault();
-            returnFocus.current.focus();
+            target.focus();
           }
         }}
       >

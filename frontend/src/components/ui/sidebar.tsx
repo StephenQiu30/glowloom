@@ -161,11 +161,15 @@ function Sidebar({
   className,
   children,
   dir,
+  onMobileCloseAutoFocus,
   ...props
 }: React.ComponentProps<"div"> & {
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
+  onMobileCloseAutoFocus?: React.ComponentProps<
+    typeof SheetContent
+  >["onCloseAutoFocus"];
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
@@ -188,6 +192,7 @@ function Sidebar({
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetContent
+          onCloseAutoFocus={onMobileCloseAutoFocus}
           dir={dir}
           data-sidebar="sidebar"
           data-slot="sidebar"
@@ -201,8 +206,10 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>导航</SheetTitle>
+            <SheetDescription>
+              浏览创作、探索、资产与主体，或打开你的画布。
+            </SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
