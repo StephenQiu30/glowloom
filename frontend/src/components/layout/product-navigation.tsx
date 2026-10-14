@@ -135,6 +135,7 @@ export function ProductNavigation({
             <Button
               variant="ghost"
               size="icon-sm"
+              className="sidebar-toggle"
               aria-label={toggleLabel}
               aria-expanded={isMobile ? true : open}
               aria-controls="product-sidebar-navigation"

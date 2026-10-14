@@ -128,6 +128,7 @@ function Shell({
                 variant="ghost"
                 size="icon"
                 ref={mobileNavigationTrigger}
+                className="mobile-navigation-trigger"
                 aria-label="打开导航"
                 aria-expanded={openMobile}
                 onClick={() => setOpenMobile(true)}
