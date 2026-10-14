@@ -1,3 +1,0 @@
-{
-  "search": "(path:docs OR path:BACKLOG OR path:PROJECT OR path:AGENTS OR path:DESIGN) -path:docs/history -path:docs/templates -path:docs/licenses"
-}
