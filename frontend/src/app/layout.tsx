@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
-import { Noto_Sans_SC, Geist_Mono } from "next/font/google";
+import { Noto_Sans_SC, Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
-const geistSans = Noto_Sans_SC({
+const notoSans = Noto_Sans_SC({
   variable: "--font-noto-sans",
   weight: ["400", "500", "600"],
   display: "swap",
   subsets: ["latin"],
+});
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -25,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="zh-CN"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${notoSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <Providers>{children}</Providers>

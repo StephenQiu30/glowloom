@@ -164,7 +164,7 @@ export function CanvasEditor({
       if (
         event.target instanceof Element &&
         event.target.closest(
-          "input,textarea,select,button,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu]",
+          "input,textarea,select,button,[contenteditable=true],[role=dialog],[role=alertdialog],[role=menu],[role=listbox]",
         )
       )
         return;
@@ -534,7 +534,7 @@ export function CanvasEditor({
   return (
     <main className="creation-canvas relative h-dvh overflow-hidden">
       <header
-        className="pointer-events-none absolute inset-x-3 top-3 z-30 flex items-start justify-between gap-2"
+        className="canvas-header"
         onClickCapture={(e) => {
           if (
             (dirty || saving || unconfirmed) &&
@@ -561,7 +561,7 @@ export function CanvasEditor({
               <span className="sr-only">返回项目</span>
             </Link>
           </Button>
-          <Brand />
+          <Brand wordmark />
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-medium">{project.name}</h1>
             <p className="truncate text-xs text-muted-foreground">

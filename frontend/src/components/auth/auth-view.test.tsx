@@ -13,7 +13,73 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
+it("弹窗登录只在收到有效会话后更新当前页面，受限账号仍转入改密流程", async () => {
+  const session = {
+    actor: {
+      id: "11111111-1111-4111-8111-111111111111",
+      login_name: "alice",
+      display_name: "Alice",
+      role: "creator",
+      must_change_password: false,
+      credential_revision: 1,
+    },
+    session_id: "22222222-2222-4222-8222-222222222222",
+    last_active_at: new Date().toISOString(),
+    absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
+    persistent: false,
+  };
+  const authenticated = vi.fn();
+  const request = vi
+    .fn()
+    .mockImplementation(async () => new Response(JSON.stringify(session)));
+  vi.stubGlobal("fetch", request);
+  const view = render(
+    <AuthView mode="login" embedded onAuthenticated={authenticated} />,
+  );
+  fireEvent.change(screen.getByLabelText("登录名"), {
+    target: { value: "alice" },
+  });
+  fireEvent.change(screen.getByLabelText("密码", { exact: true }), {
+    target: { value: "Password12345" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "登录" }));
+  await waitFor(() => expect(authenticated).toHaveBeenCalledWith(session));
+  expect(mocks.push).not.toHaveBeenCalled();
+  view.unmount();
+  authenticated.mockClear();
+  request.mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          ...session,
+          actor: { ...session.actor, must_change_password: true },
+        }),
+      ),
+  );
+  render(<AuthView mode="login" embedded onAuthenticated={authenticated} />);
+  fireEvent.change(screen.getByLabelText("登录名"), {
+    target: { value: "alice" },
+  });
+  fireEvent.change(screen.getByLabelText("密码", { exact: true }), {
+    target: { value: "Password12345" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "登录" }));
+  await waitFor(() =>
+    expect(mocks.push).toHaveBeenCalledWith("/reset-password"),
+  );
+  expect(authenticated).not.toHaveBeenCalled();
+});
 function fillRegistration() {
   fireEvent.change(screen.getByLabelText("显示名"), {
     target: { value: "Alice" },

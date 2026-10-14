@@ -1,30 +1,35 @@
 /* BeefTV a2196d3: canvas-theme.ts and styles/globals.css. MIT.
    Page-scoped adaptation; source geometry and semantic surfaces are retained. */
 .creation-canvas {
-  --canvas-bg: #f0f0f0;
-  --canvas-grid: rgba(0, 0, 0, 0.8);
-  --canvas-node-fill: #fff;
-  --canvas-node-panel: #fff;
-  --canvas-node-text: #111827;
-  --canvas-node-muted: #6b7280;
-  --canvas-node-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-  --canvas-toolbar: rgba(255, 255, 255, 0.94);
-  --canvas-toolbar-border: rgba(17, 24, 39, 0.1);
-  --canvas-selection: rgba(17, 17, 17, 0.1);
+  --canvas-bg: var(--background);
+  --canvas-grid: color-mix(in srgb, var(--border) 35%, transparent);
+  --canvas-node-fill: var(--card);
+  --canvas-node-panel: var(--card);
+  --canvas-node-text: var(--foreground);
+  --canvas-node-muted: var(--muted-foreground);
+  --canvas-node-shadow: none;
+  --canvas-toolbar: var(--card);
+  --canvas-toolbar-border: var(--border);
+  --canvas-selection: color-mix(in srgb, var(--brand) 12%, transparent);
   color: var(--canvas-node-text);
   background: var(--canvas-bg);
 }
-.dark .creation-canvas {
-  --canvas-bg: #0f0f0f;
-  --canvas-grid: rgba(175, 175, 175, 0.12);
-  --canvas-node-fill: #202020;
-  --canvas-node-panel: #202020;
-  --canvas-node-text: #ededed;
-  --canvas-node-muted: #a3a3a3;
-  --canvas-node-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
-  --canvas-toolbar: #202020;
-  --canvas-toolbar-border: #363636;
-  --canvas-selection: rgba(255, 255, 255, 0.12);
+.creation-canvas .canvas-header {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 64px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  z-index: 30;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+}
+.creation-canvas .product-brand small {
+  display: none;
 }
 .creation-canvas .canvas-topbar-cluster {
   display: flex;
@@ -38,7 +43,7 @@
 .creation-canvas .canvas-main-dock {
   position: absolute;
   z-index: 30;
-  left: 12px;
+  left: 16px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -50,38 +55,36 @@
   gap: 2px;
   padding: 4px;
   border: 1px solid var(--canvas-toolbar-border);
-  border-radius: 15px;
+  border-radius: 8px;
   background: var(--canvas-toolbar);
-  box-shadow:
-    0 14px 38px rgba(0, 0, 0, 0.34),
-    inset 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: none;
 }
 .creation-canvas .canvas-main-dock button {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
   flex-shrink: 0;
 }
 .creation-canvas .canvas-main-dock .canvas-add-command {
-  background: #f4f4f4;
-  color: #111;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .creation-canvas .canvas-tool-switch {
   display: flex;
   border-radius: 20px;
-  background: #000;
+  background: var(--muted);
   padding: 2px;
   gap: 2px;
 }
 .creation-canvas .canvas-tool-switch button {
   width: 30px;
   height: 30px;
-  color: #a3a3a3;
+  color: var(--muted-foreground);
   border-radius: 50%;
 }
 .creation-canvas .canvas-tool-switch button[aria-pressed="true"] {
-  background: #fff;
-  color: #000;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .creation-canvas .canvas-dock-divider {
   height: 1px;
@@ -152,7 +155,7 @@
   box-shadow: var(--canvas-node-shadow);
 }
 .creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-shell {
-  border-color: var(--canvas-node-text);
+  border-color: var(--ring);
 }
 .creation-canvas .canvas-node-caption {
   display: flex;
@@ -164,7 +167,7 @@
 .creation-canvas .canvas-node-composer {
   position: relative;
   width: 100%;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 10px 12px 8px;
   background: var(--canvas-node-panel);
   color: var(--canvas-node-text);
@@ -210,7 +213,7 @@
   right: 16px;
   max-height: calc(100dvh - 180px);
   overflow: auto;
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--canvas-node-panel);
   padding: 16px;
   box-shadow: var(--canvas-node-shadow);
@@ -246,7 +249,7 @@
   left: 0;
   top: 0;
   z-index: 20;
-  overflow: visible;
+  overflow: auto;
 }
 
 .creation-canvas .canvas-resize-handle {
@@ -331,4 +334,13 @@
   .creation-canvas .canvas-zoom-controls {
     left: 8px;
   }
+}
+
+.creation-canvas .canvas-zoom-controls {
+  background: transparent;
+  border-radius: 8px;
+  bottom: 18px;
+}
+.creation-canvas .canvas-header .canvas-topbar-cluster {
+  padding: 0;
 }

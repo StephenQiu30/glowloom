@@ -626,7 +626,7 @@ function CanvasGrid({ mode }: { mode: CanvasBackgroundMode }) {
         // 装饰网格固定在屏幕坐标，避免缩放时改变密度或产生亚像素位移闪烁。
         inset: 0,
         backgroundImage,
-        backgroundSize: "48px 48px",
+        backgroundSize: "20px 20px",
         opacity: mode === "dots" ? 0.34 : 0.46,
       }}
     />

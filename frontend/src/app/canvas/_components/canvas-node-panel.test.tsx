@@ -20,11 +20,12 @@ it("提示词浮层逐帧跟随真实媒体矩形，切换节点更换锚点", (
   const shell = container.current.querySelector<HTMLElement>(
     `[data-node-id="${n.id}"] .canvas-node-shell`,
   )!;
-  shell.getBoundingClientRect = () => ({ bottom, left, width: 288 }) as DOMRect;
+  shell.getBoundingClientRect = () =>
+    ({ top: bottom - 200, bottom, left, width: 288, height: 200 }) as DOMRect;
   container.current.querySelector<HTMLElement>(
     `[data-node-id="${other.id}"] .canvas-node-shell`,
   )!.getBoundingClientRect = () =>
-    ({ bottom: 500, left: 600, width: 288 }) as DOMRect;
+    ({ top: 300, bottom: 500, left: 600, width: 288, height: 200 }) as DOMRect;
   const view = render(
     <CanvasNodePanel
       node={n}
@@ -37,15 +38,15 @@ it("提示词浮层逐帧跟随真实媒体矩形，切换节点更换锚点", (
   const panel = document.querySelector<HTMLElement>(
     "[data-canvas-node-panel]",
   )!;
-  expect(panel.style.transform).toBe("translate3d(16px, 316px, 0)");
+  expect(panel.style.transform).toBe("translate3d(76px, 320px, 0)");
   bottom = 380;
   left = 400;
   container.current.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
-  expect(panel.style.transform).toBe("translate3d(214px, 396px, 0)");
+  expect(panel.style.transform).toBe("translate3d(204px, 400px, 0)");
   bottom = 240;
   left = 500;
   applyCanvasLiveViewport(container.current, { x: 100, y: -100, k: 0.5 });
-  expect(panel.style.transform).toBe("translate3d(314px, 256px, 0)");
+  expect(panel.style.transform).toBe("translate3d(304px, 260px, 0)");
   view.rerender(
     <CanvasNodePanel
       node={other}
@@ -56,7 +57,7 @@ it("提示词浮层逐帧跟随真实媒体矩形，切换节点更换锚点", (
     </CanvasNodePanel>,
   );
   expect(panel.dataset.canvasNodePanel).toBe(other.id);
-  expect(panel.style.transform).toBe("translate3d(414px, 516px, 0)");
+  expect(panel.style.transform).toBe("translate3d(404px, 520px, 0)");
   view.unmount();
   container.current.dispatchEvent(new Event(CANVAS_NODE_DRAG_EVENT));
 });

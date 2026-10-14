@@ -28,31 +28,35 @@ export function CanvasNodePanel({
     if (!container || !panel) return;
     let liveViewport = viewport;
     const update = () => {
-      const position = nodePanelPosition(
-        {
-          x: node.x,
-          y: node.y,
-          width: node.width ?? 288,
-          height: node.height ?? 200,
-        },
-        liveViewport,
-        container.clientWidth || 1024,
-      );
       const shell = container.querySelector<HTMLElement>(
         `[data-node-id="${node.id}"] .canvas-node-shell`,
       );
-      if (shell && container.clientWidth) {
-        const rect = shell.getBoundingClientRect(),
-          bounds = container.getBoundingClientRect();
-        position.left = Math.max(
-          16,
-          Math.min(
-            container.clientWidth - position.width - 16,
-            rect.left - bounds.left + rect.width / 2 - position.width / 2,
-          ),
-        );
-        position.top = rect.bottom - bounds.top + 16;
-      }
+      const bounds = container.getBoundingClientRect();
+      const rect = shell?.getBoundingClientRect();
+      const screenNode =
+        rect && container.clientWidth
+          ? {
+              x: rect.left - bounds.left,
+              y: rect.top - bounds.top,
+              width: rect.width,
+              height: rect.height,
+            }
+          : {
+              x: node.x,
+              y: node.y,
+              width: node.width ?? 288,
+              height: node.height ?? 200,
+            };
+      const position = nodePanelPosition(
+        screenNode,
+        rect && container.clientWidth ? { x: 0, y: 0, k: 1 } : liveViewport,
+        container.clientWidth || 1024,
+        container.clientHeight || Number.POSITIVE_INFINITY,
+        panel.offsetHeight || 216,
+      );
+      panel.style.maxHeight = container.clientHeight
+        ? `${Math.max(80, container.clientHeight - 96)}px`
+        : "";
       panel.style.width = `${position.width}px`;
       panel.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
     };
@@ -66,6 +70,7 @@ export function CanvasNodePanel({
         ? undefined
         : new ResizeObserver(update);
     observer?.observe(container);
+    observer?.observe(panel);
     container.addEventListener(CANVAS_VIEWPORT_EVENT, preview);
     container.addEventListener(CANVAS_NODE_DRAG_EVENT, update);
     return () => {

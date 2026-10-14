@@ -135,8 +135,12 @@ function AuthArtwork() {
 
 export function AuthView({
   mode,
+  embedded = false,
+  onAuthenticated,
 }: {
   mode: "login" | "register" | "reset-password";
+  embedded?: boolean;
+  onAuthenticated?: (session: AuthAPI.SessionView) => void;
 }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -153,6 +157,7 @@ export function AuthView({
   const submitting = useRef(false);
   const availabilityAbort = useRef<AbortController | null>(null);
   const reset = mode === "reset-password";
+  const Surface = embedded ? "div" : "main";
   useEffect(() => {
     const controller = new AbortController();
     if (reset)
@@ -226,6 +231,10 @@ export function AuthView({
                 persistent: remember,
               });
       const result = requireSession(value);
+      if (onAuthenticated && !result.actor.must_change_password) {
+        onAuthenticated(result);
+        return;
+      }
       router.push(
         screenHref(
           result.actor.must_change_password ? "reset-password" : "home",
@@ -274,8 +283,13 @@ export function AuthView({
     }
   }
   return (
-    <main className={cn("auth-shell", reset && "auth-reset")}>
-      {!reset ? <AuthArtwork /> : null}
+    <Surface
+      className={cn(
+        embedded ? "auth-embedded" : "auth-shell",
+        reset && "auth-reset",
+      )}
+    >
+      {!reset && !embedded ? <AuthArtwork /> : null}
       <div className="auth-form-panel">
         <form
           className={cn(
@@ -287,20 +301,22 @@ export function AuthView({
             void submit();
           }}
         >
-          <div className={cn(reset ? "mb-2 text-center" : "mb-1")}>
-            <h1 className="text-[28px] leading-9 font-semibold tracking-tight">
-              {reset ? "设置新密码" : register ? "创建账号" : "登录织光"}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {reset
-                ? session?.actor.must_change_password
-                  ? "首次登录或密码被重置后，需要先修改密码才能继续使用。"
-                  : "修改后保留当前设备的会话，其他设备需要重新登录。"
-                : register
-                  ? "登录名创建后不可修改"
-                  : "登录后继续你的创作与素材。"}
-            </p>
-          </div>
+          {!embedded && (
+            <div className={cn(reset ? "mb-2 text-center" : "mb-1")}>
+              <h1 className="text-[28px] leading-9 font-semibold tracking-tight">
+                {reset ? "设置新密码" : register ? "创建账号" : "登录织光"}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {reset
+                  ? session?.actor.must_change_password
+                    ? "首次登录或密码被重置后，需要先修改密码才能继续使用。"
+                    : "修改后保留当前设备的会话，其他设备需要重新登录。"
+                  : register
+                    ? "登录名创建后不可修改"
+                    : "登录后继续你的创作与素材。"}
+              </p>
+            </div>
+          )}
           {error ? (
             <Alert variant="danger">
               <ShieldAlert />
@@ -462,7 +478,7 @@ export function AuthView({
             <p className="text-center text-xs text-muted-foreground">
               修改后保留当前设备并轮换会话，其他设备上的登录立即失效。
             </p>
-          ) : (
+          ) : !embedded ? (
             <p className="text-xs text-muted-foreground">
               {register ? "已有账号？" : "还没有账号？"}
               <Link
@@ -472,9 +488,9 @@ export function AuthView({
                 {register ? "登录" : "注册"}
               </Link>
             </p>
-          )}
+          ) : null}
         </form>
       </div>
-    </main>
+    </Surface>
   );
 }

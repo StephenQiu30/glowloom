@@ -1,5 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
 import {
   Type,
   ImageIcon,
@@ -27,6 +34,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { UnavailableDialog } from "@/components/availability/unavailable";
+function ToolButton({ title, ...props }: ComponentProps<typeof Button>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button {...props} />
+      </TooltipTrigger>
+      <TooltipContent>{title ?? props["aria-label"]}</TooltipContent>
+    </Tooltip>
+  );
+}
 export function CanvasToolbar({
   tool,
   onToolChange,
@@ -48,14 +65,14 @@ export function CanvasToolbar({
 }) {
   const [feature, setFeature] = useState<string | null>(null);
   return (
-    <>
+    <TooltipProvider>
       <div
         className="canvas-main-dock"
         role="toolbar"
         aria-label="画布工具"
         data-canvas-no-zoom
       >
-        <Button
+        <ToolButton
           variant="ghost"
           size="icon"
           aria-label="添加文本"
@@ -63,8 +80,8 @@ export function CanvasToolbar({
           onClick={() => setFeature("文本节点")}
         >
           <Type />
-        </Button>
-        <Button
+        </ToolButton>
+        <ToolButton
           variant="ghost"
           size="icon"
           aria-label="新增图片节点"
@@ -72,8 +89,8 @@ export function CanvasToolbar({
           onClick={() => onAdd("image_generation")}
         >
           <ImageIcon />
-        </Button>
-        <Button
+        </ToolButton>
+        <ToolButton
           variant="ghost"
           size="icon"
           aria-label="新增视频节点"
@@ -81,14 +98,14 @@ export function CanvasToolbar({
           onClick={() => onAdd("video_generation")}
         >
           <VideoIcon />
-        </Button>
+        </ToolButton>
         {[
           { name: "音频", icon: AudioLines },
           { name: "分镜", icon: Clapperboard },
           { name: "主体", icon: Contact },
           { name: "3D", icon: Box },
         ].map(({ name, icon: Icon }) => (
-          <Button
+          <ToolButton
             key={name}
             variant="ghost"
             size="icon"
@@ -97,10 +114,10 @@ export function CanvasToolbar({
             onClick={() => setFeature(name)}
           >
             <Icon />
-          </Button>
+          </ToolButton>
         ))}
-        <span className="canvas-dock-divider" />
-        <Button
+        <Separator className="canvas-dock-divider" />
+        <ToolButton
           variant="ghost"
           size="icon"
           aria-label="素材库"
@@ -108,8 +125,8 @@ export function CanvasToolbar({
           onClick={() => setFeature("素材库")}
         >
           <Folder />
-        </Button>
-        <Button
+        </ToolButton>
+        <ToolButton
           variant="ghost"
           size="icon"
           aria-label="上传素材"
@@ -117,7 +134,7 @@ export function CanvasToolbar({
           onClick={() => setFeature("素材上传")}
         >
           <Upload />
-        </Button>
+        </ToolButton>
       </div>
       <div
         className="canvas-zoom-controls"
@@ -125,7 +142,7 @@ export function CanvasToolbar({
         aria-label="画布视口"
         data-canvas-no-zoom
       >
-        <Button
+        <ToolButton
           variant="ghost"
           size="icon-sm"
           aria-label="区域选择"
@@ -133,8 +150,8 @@ export function CanvasToolbar({
           onClick={() => onToolChange("select")}
         >
           <MousePointer2 />
-        </Button>
-        <Button
+        </ToolButton>
+        <ToolButton
           variant="ghost"
           size="icon-sm"
           aria-label="抓手工具"
@@ -142,35 +159,35 @@ export function CanvasToolbar({
           onClick={() => onToolChange("pan")}
         >
           <Hand />
-        </Button>
-        <Button
+        </ToolButton>
+        <ToolButton
           variant="ghost"
           size="icon-sm"
           aria-label="缩小"
           onClick={() => onZoom(Math.max(0.05, zoom / 1.25))}
         >
           <Minus />
-        </Button>
+        </ToolButton>
         <span className="min-w-10 text-center text-xs">
           {Math.round(zoom * 100)}%
         </span>
-        <Button
+        <ToolButton
           variant="ghost"
           size="icon-sm"
           aria-label="放大"
           onClick={() => onZoom(Math.min(2, zoom * 1.25))}
         >
           <Plus />
-        </Button>
-        <Button
+        </ToolButton>
+        <ToolButton
           variant="ghost"
           size="icon-sm"
           aria-label="适应画布"
           onClick={onFit}
         >
           <Maximize />
-        </Button>
-        <Button
+        </ToolButton>
+        <ToolButton
           variant="ghost"
           size="icon-sm"
           aria-label="小地图"
@@ -178,7 +195,7 @@ export function CanvasToolbar({
           onClick={onMiniMap}
         >
           <Map />
-        </Button>
+        </ToolButton>
         <Dialog>
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label="画布快捷键">
@@ -206,6 +223,6 @@ export function CanvasToolbar({
         </Dialog>
       </div>
       <UnavailableDialog feature={feature} onClose={() => setFeature(null)} />
-    </>
+    </TooltipProvider>
   );
 }

@@ -10,7 +10,13 @@ import {
 } from "@/components/generation/generation-dialog";
 import { subjectText } from "@/components/subjects/contracts";
 import { kinds } from "@/components/subjects/contracts";
-import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 export function SubjectsPage() {
   const [project, setProject] = useState<Project | null>(null),
     [kind, setKind] = useState<CreationAPI.Kind>("character"),
@@ -18,27 +24,34 @@ export function SubjectsPage() {
   return (
     <ProductShell screen="subjects">
       <div className="flow-page-heading subjects-heading">
-        <h1>主体</h1>
-        <p>管理角色、场景与物品，在项目创作中保持一致。</p>
-      </div>
-      <ProjectPicker value={project} onChange={setProject} />
-      <div className="subject-tabs" aria-label="主体分类">
-        {(Object.keys(kinds) as CreationAPI.Kind[]).map((k) => (
-          <Button
-            key={k}
-            variant={kind === k ? "secondary" : "ghost"}
-            aria-pressed={kind === k}
-            onClick={() => setKind(k)}
-          >
-            {kinds[k]}
-          </Button>
-        ))}
+        <div>
+          <h1>主体</h1>
+          <p>保持角色与商品的一致性，在生成和画布中通过 @ 引用。</p>
+        </div>
+        <ProjectPicker value={project} onChange={setProject} compact />
       </div>
       {project ? (
         <SubjectList
           key={project.id + kind}
           projectID={project.id}
           kind={kind}
+          filters={
+            <ToggleGroup
+              type="single"
+              value={kind}
+              onValueChange={(v) => {
+                if (v in kinds) setKind(v as CreationAPI.Kind);
+              }}
+              className="subject-tabs"
+              aria-label="主体分类"
+            >
+              {(Object.keys(kinds) as CreationAPI.Kind[]).map((k) => (
+                <ToggleGroupItem key={k} value={k}>
+                  {kinds[k]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          }
           onGenerate={(subject) => {
             const text = subjectText(subject);
             setGeneration({
@@ -50,10 +63,14 @@ export function SubjectsPage() {
           }}
         />
       ) : (
-        <div className="empty-state">
-          <h2>选择项目，查看你的主体</h2>
-          <p>主体与参考素材保存在所属项目中。</p>
-        </div>
+        <Empty className="min-h-80">
+          <EmptyHeader>
+            <EmptyTitle>选择项目，查看你的主体</EmptyTitle>
+            <EmptyDescription>
+              主体与参考素材保存在所属项目中。
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
       {generation && (
         <GenerationDialog

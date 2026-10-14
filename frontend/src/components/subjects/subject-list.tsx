@@ -1,9 +1,30 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+} from "@/components/ui/input-group";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyMedia,
+  EmptyContent,
+} from "@/components/ui/empty";
 import {
   listBibleEntries,
   getBibleEntry,
@@ -26,11 +47,13 @@ export function SubjectList({
   kind = "character",
   onSelect,
   onGenerate,
+  filters,
 }: {
   projectID: string;
   kind?: CreationAPI.Kind;
   onSelect?: (s: Subject) => void;
   onGenerate?: (s: Subject) => void;
+  filters?: ReactNode;
 }) {
   const [items, setItems] = useState<Subject[]>([]),
     [cursor, setCursor] = useState<string | undefined>(),
@@ -122,16 +145,19 @@ export function SubjectList({
   return (
     <>
       <div className="subject-toolbar">
-        <div className="subject-search">
-          <Search size={16} />
-          <Input
+        <InputGroup className="subject-search">
+          <InputGroupAddon>
+            <Search />
+          </InputGroupAddon>
+          <InputGroupInput
             aria-label="搜索主体"
             placeholder="搜索已加载主体"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={100}
           />
-        </div>
+        </InputGroup>
+        {filters}
         <Button
           variant={deleted ? "outline" : "secondary"}
           disabled={!deleted}
@@ -180,32 +206,49 @@ export function SubjectList({
       {loading && items.length === 0 ? (
         <div className="subject-grid" aria-label="正在读取主体">
           {[0, 1, 2, 3].map((n) => (
-            <div className="subject-skeleton animate-pulse" key={n} />
+            <Skeleton className="subject-skeleton" key={n} />
           ))}
         </div>
       ) : shown.length === 0 && !error ? (
-        <div className="empty-state">
-          <Icon size={36} />
-          <h2>
-            {query
-              ? "没有匹配的主体"
-              : deleted
-                ? "没有已删除的主体"
-                : "还没有" + kinds[kind] + "主体"}
-          </h2>
-          <p>
-            {query
-              ? "换个关键词，或加载更多主体。"
-              : "添加参考与描述，在创作中保持一致。"}
-          </p>
+        <Empty className="min-h-80">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon />
+            </EmptyMedia>
+            <EmptyTitle>
+              {query
+                ? "没有匹配的主体"
+                : deleted
+                  ? "没有已删除的主体"
+                  : "还没有" + kinds[kind] + "主体"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {query
+                ? "换个关键词，或加载更多主体。"
+                : "添加参考与描述，在创作中保持一致。"}
+            </EmptyDescription>
+          </EmptyHeader>
           {!query && !deleted && (
-            <Button variant="outline" onClick={() => setCreate(true)}>
-              创建第一个{kinds[kind]}
-            </Button>
+            <EmptyContent>
+              <Button variant="outline" onClick={() => setCreate(true)}>
+                创建第一个{kinds[kind]}
+              </Button>
+            </EmptyContent>
           )}
-        </div>
+        </Empty>
       ) : (
         <div className="subject-grid">
+          {!deleted && !query && (
+            <Button
+              variant="tile"
+              className="subject-create"
+              onClick={() => setCreate(true)}
+            >
+              <Plus />
+              <span>新建主体</span>
+              <small>添加主图、名称与描述</small>
+            </Button>
+          )}
           {shown.map((s) => {
             const image = subjectImage(s);
             return (
@@ -214,26 +257,30 @@ export function SubjectList({
                 key={s.head.id}
                 onClick={() => (onSelect ? onSelect(s) : setSelected(s))}
               >
-                <span className="subject-card-image">
-                  {image ? (
-                    <ProjectMediaPreview projectID={projectID} id={image} />
-                  ) : (
-                    <Icon size={48} strokeWidth={1} />
-                  )}
-                  <span className="subject-status">
-                    {s.head.deleted
-                      ? "已删除"
-                      : s.head.confirmed_version_id === s.current.id
-                        ? "已确认"
-                        : "草稿"}
-                  </span>
-                </span>
-                <span className="subject-card-body">
-                  <strong>{subjectText(s).name}</strong>
-                  <span>
-                    {subjectText(s).description || "添加描述，让创作更一致"}
-                  </span>
-                </span>
+                <Card variant="media">
+                  <CardContent>
+                    <div className="subject-card-image">
+                      {image ? (
+                        <ProjectMediaPreview projectID={projectID} id={image} />
+                      ) : (
+                        <Icon size={48} strokeWidth={1} />
+                      )}
+                      <Badge variant="secondary" className="subject-status">
+                        {s.head.deleted
+                          ? "已删除"
+                          : s.head.confirmed_version_id === s.current.id
+                            ? "已确认"
+                            : "草稿"}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                  <CardHeader>
+                    <CardTitle>{subjectText(s).name}</CardTitle>
+                    <CardDescription className="truncate">
+                      {subjectText(s).description || "添加描述，让创作更一致"}
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
               </button>
             );
           })}

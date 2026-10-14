@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { cn } from "cn";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -19,6 +20,26 @@ import { useSession } from "@/components/auth/session";
 import { AuthError } from "@/components/auth/request";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+} from "@/components/ui/input-group";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -27,6 +48,7 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  SelectGroup,
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -48,6 +70,7 @@ import {
 } from "@/components/media/library";
 import { AssetPreview } from "@/components/media/asset-preview";
 import { UploadDialog } from "@/components/media/upload-dialog";
+import { GenerationComposer } from "@/components/generation/generation-composer";
 const kinds = [
   { id: "image", label: "图片" },
   { id: "video", label: "视频" },
@@ -315,48 +338,54 @@ function Library({
       {loading ? (
         <div className="asset-grid" role="status" aria-label="正在读取资产">
           {[0, 1, 2, 3].map((n) => (
-            <div
-              key={n}
-              className="aspect-square animate-pulse rounded-xl bg-card"
-            />
+            <Skeleton key={n} className="aspect-video rounded-xl" />
           ))}
         </div>
       ) : error ? (
-        <div className="empty-state" role="alert">
-          <p>{error}</p>
+        <Empty className="min-h-80" role="alert">
+          <EmptyHeader>
+            <EmptyTitle>无法读取资产</EmptyTitle>
+            <EmptyDescription>{error}</EmptyDescription>
+          </EmptyHeader>
           <Button variant="outline" onClick={reload}>
             重试读取资产
           </Button>
-        </div>
+        </Empty>
       ) : page?.items.length === 0 ? (
-        <div className="empty-state">
-          <Folder size={38} strokeWidth={1.2} />
-          <h2>
-            {filter.search
-              ? "没有匹配的资产"
-              : filter.trash
-                ? "回收站为空"
-                : "这里还没有资产"}
-          </h2>
-          <p>
-            {filter.search
-              ? "试试其他关键词，或调整筛选条件。"
-              : filter.trash
-                ? "移入回收站的资产会显示在这里。"
-                : "上传素材，开始积累你的创作灵感。"}
-          </p>
-        </div>
+        <Empty className="min-h-80">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Folder />
+            </EmptyMedia>
+            <EmptyTitle>
+              {filter.search
+                ? "没有匹配的资产"
+                : filter.trash
+                  ? "回收站为空"
+                  : "这里还没有资产"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {filter.search
+                ? "试试其他关键词，或调整筛选条件。"
+                : filter.trash
+                  ? "移入回收站的资产会显示在这里。"
+                  : "上传素材，开始积累你的创作灵感。"}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className="asset-grid">
           {page?.items.map((item) => (
-            <article key={item.id} className="asset-card">
-              <button
-                className="asset-cover"
-                aria-label={`查看 ${item.title}`}
-                onClick={() => setDetail(item)}
-              >
-                <AssetPreview item={item} />
-              </button>
+            <Card key={item.id} variant="media" className="asset-card">
+              <CardContent>
+                <button
+                  className="asset-cover"
+                  aria-label={`查看 ${item.title}`}
+                  onClick={() => setDetail(item)}
+                >
+                  <AssetPreview item={item} />
+                </button>
+              </CardContent>
               {batch && (
                 <Checkbox
                   aria-label={`选择 ${item.title}`}
@@ -372,27 +401,31 @@ function Library({
                   }
                 />
               )}
-              <div className="flex items-center gap-2">
-                <h2 className="min-w-0 flex-1 truncate">{item.title}</h2>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`${item.favorite ? "取消收藏" : "收藏"} ${item.title}`}
-                  aria-pressed={item.favorite}
-                  disabled={saving || !!pendingOperation || filter.trash}
-                  onClick={() => favorite(item)}
-                >
-                  <Heart className={item.favorite ? "fill-current" : ""} />
-                </Button>
-              </div>
-              <p>
-                {kinds.find((k) => k.id === item.kind)?.label ?? "素材"}
-                {item.media?.width
-                  ? ` · ${item.media.width} × ${item.media.height}`
-                  : ""}{" "}
-                · {item.source_label || "个人资产"}
-              </p>
-            </article>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="min-w-0 flex-1 truncate">
+                    {item.title}
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`${item.favorite ? "取消收藏" : "收藏"} ${item.title}`}
+                    aria-pressed={item.favorite}
+                    disabled={saving || !!pendingOperation || filter.trash}
+                    onClick={() => favorite(item)}
+                  >
+                    <Heart className={cn(item.favorite && "fill-current")} />
+                  </Button>
+                </div>
+                <CardDescription>
+                  {kinds.find((k) => k.id === item.kind)?.label ?? "素材"}
+                  {item.media?.width
+                    ? ` · ${item.media.width} × ${item.media.height}`
+                    : ""}{" "}
+                  · {item.source_label || "个人资产"}
+                </CardDescription>
+              </CardHeader>
+            </Card>
           ))}
         </div>
       )}
@@ -601,7 +634,7 @@ function AssetLibrary() {
           value={filter.kind}
           onValueChange={(kind) => setFilter((f) => ({ ...f, kind }))}
         >
-          <TabsList className="bg-transparent">
+          <TabsList variant="navigation">
             {kinds.map((k) => (
               <TabsTrigger key={k.id} value={k.id}>
                 {k.label}
@@ -625,9 +658,11 @@ function AssetLibrary() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="updated_desc">最近修改</SelectItem>
-            <SelectItem value="updated_asc">最早修改</SelectItem>
-            <SelectItem value="name_asc">名称顺序</SelectItem>
+            <SelectGroup>
+              <SelectItem value="updated_desc">最近修改</SelectItem>
+              <SelectItem value="updated_asc">最早修改</SelectItem>
+              <SelectItem value="name_asc">名称顺序</SelectItem>
+            </SelectGroup>
           </SelectContent>
         </Select>
         <Button
@@ -662,24 +697,30 @@ function AssetLibrary() {
         onLock={setLocked}
         searchForm={
           <form
-            className="search-form"
+            className="asset-search-form"
             onSubmit={(e) => {
               e.preventDefault();
               setFilter((f) => ({ ...f, search: search.trim() }));
             }}
           >
-            <Search size={16} />
-            <Input
-              disabled={locked}
-              aria-label="搜索资产"
-              placeholder="搜索资产"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              maxLength={512}
-            />
-            <Button disabled={locked} type="submit" variant="ghost">
-              搜索
-            </Button>
+            <InputGroup>
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput
+                disabled={locked}
+                aria-label="搜索资产"
+                placeholder="搜索资产"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                maxLength={512}
+              />
+              <InputGroupAddon align="inline-end">
+                <Button disabled={locked} type="submit" variant="ghost">
+                  搜索
+                </Button>
+              </InputGroupAddon>
+            </InputGroup>
           </form>
         }
         onFolder={(folder) => setFilter((f) => ({ ...f, folder }))}
@@ -692,6 +733,7 @@ function AssetLibrary() {
           onUploaded={() => setRefresh((n) => n + 1)}
         />
       )}
+      <GenerationComposer />
     </>
   );
 }
