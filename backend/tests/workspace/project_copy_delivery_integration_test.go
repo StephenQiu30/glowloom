@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/postgres"
 	record "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
@@ -32,6 +33,21 @@ func (s *recordedCopyDelivery) Deliver(_ context.Context, d wa.ProjectCopyDelive
 }
 func TestProjectCopyRealOutboxDeliveryProofAndRetry(t *testing.T) {
 	ctx, db := workspaceMigrationDB(t)
+	testProjectCopyDelivery(ctx, t, db)
+}
+
+func TestProjectCopyDeliveryFixtureInRollbackTransaction(t *testing.T) {
+	ctx, db := workspaceMigrationDB(t)
+	tx := db.Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	defer rollbackLifecycleTest(t, tx)
+	testProjectCopyDelivery(ctx, t, tx)
+}
+
+func testProjectCopyDelivery(ctx context.Context, t *testing.T, db *gorm.DB) {
+	t.Helper()
 	actor, source := lifecycleActorProject(ctx, t, db)
 	store := projectCopyStore(db)
 	job, err := store.Create(ctx, actor, copyInput(source), time.Now())
@@ -61,8 +77,8 @@ func TestProjectCopyRealOutboxDeliveryProofAndRetry(t *testing.T) {
 	}
 	injected := message
 	injected.Value = fake
-	if err := handler.Handle(ctx, injected); err != nil {
-		t.Fatal(err)
+	if err := handler.Handle(ctx, injected); !errors.Is(err, wd.ErrInvalidProjectCopy) {
+		t.Fatal("forged delivery was not rejected", err)
 	}
 	if starter.calls != 0 {
 		t.Fatal("injected actor delivered")
