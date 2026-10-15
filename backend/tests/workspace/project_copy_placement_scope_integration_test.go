@@ -1,12 +1,14 @@
 package workspace_test
 
 import (
+	"context"
 	"errors"
 	"math"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
@@ -15,6 +17,21 @@ import (
 
 func TestProjectCopyPlacementPGCurrentActorPrivateScopeAndRevocation(t *testing.T) {
 	ctx, db, owner := folderTestDB(t)
+	verifyCopyPlacementScope(ctx, t, db, owner)
+}
+
+func TestWorkspaceCopyPlacementFixtureInRollbackTransaction(t *testing.T) {
+	ctx, db := workspaceMigrationDB(t)
+	tx := db.Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	defer rollbackLifecycleTest(t, tx)
+	verifyCopyPlacementScope(ctx, t, tx, tx)
+}
+
+func verifyCopyPlacementScope(ctx context.Context, t *testing.T, db, owner *gorm.DB) {
+	t.Helper()
 	actor, source := lifecycleActorProject(ctx, t, owner)
 	other := insertWorkspaceActor(ctx, t, owner, actor.OrgID.String())
 	folders := workspaceapp.NewProjectFolders(folderStore(db), time.Now)
@@ -22,8 +39,14 @@ func TestProjectCopyPlacementPGCurrentActorPrivateScopeAndRevocation(t *testing.
 	f = *moveTestProject(ctx, t, folders, actor, source, f, 0).Folder
 	service := workspaceapp.NewProjectCopyService(projectCopyStore(db), time.Now)
 	otherSource := uuid.MustParse(insertWorkspaceProject(ctx, t, owner, other, "16:9", "realistic", nil))
+	// A persisted root placement makes revision 1 current. Only the claimed
+	// foreign folder differs, so public shape validation cannot mask isolation.
+	lifecycleFixtureSQL(t, owner, `INSERT INTO workspace.project_folder_placement(org_id,owner_scope_id,actor_id,project_id,revision) VALUES(?,?,?,?,1)`, other.OrgID, other.ScopeID, other.ID, otherSource)
 	foreignPlacement := copyInput(otherSource)
-	foreignPlacement.Placement = &workspaceapp.CopyPlacementExpectation{ExpectedPlacementRevision: 0, FolderID: &f.ID, ExpectedFolderRevision: f.Revision}
+	foreignPlacement.Placement = &workspaceapp.CopyPlacementExpectation{ExpectedPlacementRevision: 1, FolderID: &f.ID, ExpectedFolderRevision: f.Revision}
+	if err := foreignPlacement.Validate(); err != nil {
+		t.Fatal("foreign folder fixture must reach admission", err)
+	}
 	if _, err := service.Create(ctx, other, foreignPlacement); !errors.Is(err, domain.ErrProjectFolderRevisionConflict) {
 		t.Fatalf("another actor's folder bound to copy %v", err)
 	}
