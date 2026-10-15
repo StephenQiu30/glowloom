@@ -122,7 +122,7 @@ func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal,
 	if len(row.ResponseBody) > 1<<20 || strictCopyMedia(row.ResponseBody, &job) != nil || job.ID != row.JobID || job.CurrentActorID != actor.ID || job.CurrentOrgID != actor.OrgID || job.Revision < 1 {
 		return nil, application.ErrUnavailable
 	}
-	binding, err := s.readJob(tx, actor, job.ID, false)
+	binding, err := s.readJob(tx, actor, job.ID, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,10 @@ func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal,
 	}
 	return &job, nil
 }
-func (s *TransferStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock bool) (transferJobRow, error) {
+
+// The first ownership check must take the scope lock strength needed by the
+// entire transaction. Concurrent read-to-write upgrades can deadlock.
+func (s *TransferStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, lock, writeScope bool) (transferJobRow, error) {
 	var row transferJobRow
 	query := `SELECT * FROM media.transfer_job WHERE id=? AND org_id=? AND actor_id=?`
 	if lock {
@@ -152,7 +155,7 @@ func (s *TransferStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uui
 	if row.SourceScopeID == nil || row.TargetScopeID == nil || row.SourceOrgID == nil || row.TargetOrgID == nil {
 		return row, application.ErrNotFound
 	}
-	sa, ta, err := s.transferActors(tx, actor, source, target, false)
+	sa, ta, err := s.transferActors(tx, actor, source, target, writeScope)
 	if err != nil {
 		return row, err
 	}
@@ -199,7 +202,7 @@ func (s *TransferStore) GetTransfer(ctx context.Context, actor identityapp.Princ
 		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		row, err := s.readJob(tx, actor, id, false)
+		row, err := s.readJob(tx, actor, id, false, false)
 		if err != nil {
 			return err
 		}
@@ -255,7 +258,7 @@ func (s *TransferStore) ListTransfers(ctx context.Context, actor identityapp.Pri
 			if row.SourceScopeID == nil || row.TargetScopeID == nil || row.SourceOrgID == nil || row.TargetOrgID == nil {
 				continue
 			}
-			if _, err := s.readJob(tx, actor, row.ID, false); err != nil {
+			if _, err := s.readJob(tx, actor, row.ID, false, false); err != nil {
 				if errors.Is(err, application.ErrNotFound) {
 					continue
 				}

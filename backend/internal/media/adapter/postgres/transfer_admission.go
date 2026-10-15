@@ -212,7 +212,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 				}
 			}
 		}
-		row, err := s.readJob(tx, actor, jobID, false)
+		row, err := s.readJob(tx, actor, jobID, false, true)
 		if err != nil {
 			return err
 		}

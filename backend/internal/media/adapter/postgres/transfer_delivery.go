@@ -43,7 +43,7 @@ func (s *TransferStore) VerifyTransferDelivery(ctx context.Context, d applicatio
 		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		row, err := s.readJob(tx, actor, d.JobID, false)
+		row, err := s.readJob(tx, actor, d.JobID, false, true)
 		if err != nil {
 			return err
 		}

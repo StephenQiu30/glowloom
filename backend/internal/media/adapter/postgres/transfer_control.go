@@ -37,7 +37,7 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 		if err := transferLock(tx, actor.ID, key); err != nil {
 			return err
 		}
-		row, err := s.readJob(tx, actor, id, false)
+		row, err := s.readJob(tx, actor, id, false, true)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 		if _, _, err := s.ensureTransferLibraries(tx, actor, source, target); err != nil {
 			return err
 		}
-		row, err = s.readJob(tx, actor, id, true)
+		row, err = s.readJob(tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}
@@ -124,7 +124,7 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 				return err
 			}
 		}
-		row, err = s.readJob(tx, actor, id, false)
+		row, err = s.readJob(tx, actor, id, false, true)
 		if err != nil {
 			return err
 		}

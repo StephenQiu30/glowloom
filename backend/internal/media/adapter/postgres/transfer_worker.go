@@ -38,7 +38,7 @@ func (s *TransferStore) withLease(ctx context.Context, lease application.Transfe
 		if err := s.requireCurrentActor(tx, lease.Actor); err != nil {
 			return err
 		}
-		row, err := s.readJob(tx, lease.Actor, lease.Work.JobID, false)
+		row, err := s.readJob(tx, lease.Actor, lease.Work.JobID, false, true)
 		if err != nil {
 			return err
 		}
@@ -50,7 +50,7 @@ func (s *TransferStore) withLease(ctx context.Context, lease application.Transfe
 		if err != nil {
 			return err
 		}
-		row, err = s.readJob(tx, lease.Actor, lease.Work.JobID, true)
+		row, err = s.readJob(tx, lease.Actor, lease.Work.JobID, true, true)
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func (s *TransferStore) ClaimTransfer(ctx context.Context, work application.Tran
 		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		row, err := s.readJob(tx, actor, work.JobID, false)
+		row, err := s.readJob(tx, actor, work.JobID, false, true)
 		if err != nil {
 			return err
 		}
@@ -96,7 +96,7 @@ func (s *TransferStore) ClaimTransfer(ctx context.Context, work application.Tran
 		if _, _, err := s.ensureTransferLibraries(tx, actor, source, target); err != nil {
 			return err
 		}
-		row, err = s.readJob(tx, actor, work.JobID, true)
+		row, err = s.readJob(tx, actor, work.JobID, true, true)
 		if err != nil {
 			return err
 		}
@@ -327,7 +327,7 @@ func (s *TransferStore) FinishTransfer(ctx context.Context, lease application.Tr
 		if err := libraryChanged(tx, `UPDATE media.transfer_job SET status=?,stage=?,needs_reconciliation=?,revision=revision+1,updated_at=? WHERE id=? AND worker_fence=?`, status, stage, unknown, s.clock().UTC(), row.ID, lease.Fence); err != nil {
 			return err
 		}
-		row, err = s.readJob(tx, lease.Actor, row.ID, false)
+		row, err = s.readJob(tx, lease.Actor, row.ID, false, true)
 		if err != nil {
 			return err
 		}
