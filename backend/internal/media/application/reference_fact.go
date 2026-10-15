@@ -33,7 +33,7 @@ func (q *ReferenceFactQuery) verifyImageRendition(ctx context.Context, r domain.
 	if r.ByteSize != nil && (*r.ByteSize < 1 || *r.ByteSize > limit) {
 		return "", ErrUnavailable
 	}
-	reader, err := q.objects.Get(ctx, r.ObjectKey)
+	reader, err := readMediaObject(ctx, r.ObjectLocation, r.ObjectKey, q.objectReader, q.objects)
 	if err != nil || reader == nil {
 		return "", errors.Join(ErrUnavailable, err)
 	}
@@ -62,8 +62,9 @@ type ReferenceFactReader interface {
 
 // ReferenceFactQuery verifies independent original and image rendition bytes.
 type ReferenceFactQuery struct {
-	reader  ReferenceFactReader
-	objects DocumentObjectGetter
+	reader       ReferenceFactReader
+	objects      DocumentObjectGetter
+	objectReader ObjectReader
 }
 
 // NewReferenceFactQuery injects a transaction-bound owner and private object I/O.
@@ -71,8 +72,13 @@ func NewReferenceFactQuery(reader ReferenceFactReader, objects DocumentObjectGet
 	return &ReferenceFactQuery{reader: reader, objects: objects}
 }
 
-func (q *ReferenceFactQuery) verify(ctx context.Context, key string, size *int64, sha *string, limit int64) (int64, string, error) {
-	reader, err := q.objects.Get(ctx, key)
+// NewRoutedReferenceFactQuery verifies source bytes from their saved physical locations.
+func NewRoutedReferenceFactQuery(reader ReferenceFactReader, objects ObjectReader) *ReferenceFactQuery {
+	return &ReferenceFactQuery{reader: reader, objectReader: objects}
+}
+
+func (q *ReferenceFactQuery) verify(ctx context.Context, location *domain.ObjectLocation, key string, size *int64, sha *string, limit int64) (int64, string, error) {
+	reader, err := readMediaObject(ctx, location, key, q.objectReader, q.objects)
 	if err != nil || reader == nil {
 		return 0, "", errors.Join(ErrUnavailable, err)
 	}
@@ -101,7 +107,7 @@ func (q *ReferenceFactQuery) verify(ctx context.Context, key string, size *int64
 // Reference supports actual image/audio binding facts and rejects hidden library
 // items. Callers freeze the returned safe proof through their own owning write.
 func (q *ReferenceFactQuery) Reference(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID, kind domain.Kind) (ReferenceFact, error) {
-	if q == nil || q.reader == nil || q.objects == nil {
+	if q == nil || q.reader == nil || q.objects == nil && q.objectReader == nil {
 		return ReferenceFact{}, ErrUnavailable
 	}
 	if project == uuid.Nil || id == uuid.Nil || kind != domain.KindImage && kind != domain.KindAudio {
@@ -115,7 +121,7 @@ func (q *ReferenceFactQuery) Reference(ctx context.Context, actor identityapp.Pr
 	if a.ID != id || a.ProjectID != project || a.Personal != nil || a.Kind != kind || !a.CanReference() || a.ContainsRealPerson || a.ConsentRecordID != nil || a.SHA256 == nil || !copySHA(a.SHA256) || a.ByteSize < 1 || a.ByteSize > libraryOriginalLimit(a.Kind) {
 		return ReferenceFact{}, ErrUnavailable
 	}
-	if _, _, err := q.verify(ctx, a.ObjectKey, &a.ByteSize, a.SHA256, libraryOriginalLimit(a.Kind)); err != nil {
+	if _, _, err := q.verify(ctx, a.ObjectLocation, a.ObjectKey, &a.ByteSize, a.SHA256, libraryOriginalLimit(a.Kind)); err != nil {
 		return ReferenceFact{}, errors.Join(ErrUnavailable, err)
 	}
 	fact := ReferenceFact{AssetID: a.ID, Revision: a.Revision, Kind: a.Kind, SHA256: *a.SHA256, ByteSize: a.ByteSize}

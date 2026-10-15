@@ -43,13 +43,19 @@ type DocumentObjectGetter interface {
 
 // DocumentSources owns authorization and exact bounded original-byte reads.
 type DocumentSources struct {
-	store   DocumentSourceStore
-	objects DocumentObjectGetter
+	store        DocumentSourceStore
+	objects      DocumentObjectGetter
+	objectReader ObjectReader
 }
 
 // NewDocumentSources injects current project facts and the private object reader.
 func NewDocumentSources(store DocumentSourceStore, objects DocumentObjectGetter) *DocumentSources {
 	return &DocumentSources{store: store, objects: objects}
+}
+
+// NewRoutedDocumentSources reads source rows with their immutable saved locations.
+func NewRoutedDocumentSources(store DocumentSourceStore, objects ObjectReader) *DocumentSources {
+	return &DocumentSources{store: store, objectReader: objects}
 }
 
 func documentSource(asset domain.MediaAsset) (DocumentSource, error) {
@@ -110,7 +116,7 @@ func (s *DocumentSources) Freeze(ctx context.Context, actor identityapp.Principa
 // Open reauthorizes and compares every frozen fact before fetching private bytes.
 // The caller owns the returned temporary original and must Close it.
 func (s *DocumentSources) Open(ctx context.Context, actor identityapp.Principal, project uuid.UUID, source DocumentSource) (*Downloaded, error) {
-	if s == nil || s.store == nil || s.objects == nil {
+	if s == nil || s.store == nil || s.objects == nil && s.objectReader == nil {
 		return nil, ErrUnavailable
 	}
 	if err := ctx.Err(); err != nil {
@@ -130,7 +136,7 @@ func (s *DocumentSources) Open(ctx context.Context, actor identityapp.Principal,
 	if current != source {
 		return nil, ErrDocumentSourceConflict
 	}
-	reader, err := s.objects.Get(ctx, asset.ObjectKey)
+	reader, err := readMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, s.objectReader, s.objects)
 	if err != nil {
 		return nil, fmt.Errorf("get document original: %w", errors.Join(ErrUnavailable, err))
 	}

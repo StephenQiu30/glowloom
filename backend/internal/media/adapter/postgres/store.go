@@ -116,7 +116,7 @@ func (s *Store) findAsset(ctx context.Context, actor identityapp.Principal, proj
 			return err
 		}
 		result := tx.Raw(`
-			SELECT a.id, a.project_id, a.kind, a.origin, a.status, a.object_key,
+			SELECT a.id, a.project_id, a.kind, a.origin, a.status, a.object_key, a.object_location_id,
 			       a.file_name, a.mime_type, a.byte_size, a.sha256, a.width,
 			       a.height, a.duration_ms, a.fps, a.audio_channels, a.codec,
 			       a.source_operation_id, a.provider_key, a.model_key, a.region,
@@ -136,7 +136,7 @@ func (s *Store) findAsset(ctx context.Context, actor identityapp.Principal, proj
 		if result.RowsAffected != 1 {
 			return ErrNotFound
 		}
-		return nil
+		return row.loadLocation(tx)
 	})
 	if err != nil {
 		return domain.MediaAsset{}, fmt.Errorf("find media asset: %w", err)
@@ -214,7 +214,7 @@ func (s *Store) FindRenditions(ctx context.Context, actor identityapp.Principal,
 			return err
 		}
 		result := tx.Raw(`
-			SELECT id, media_asset_id, kind, object_key, width, height,
+			SELECT id, media_asset_id, kind, object_key, object_location_id, width, height,
 			       byte_size, create_time, update_time, is_delete
 			FROM media.rendition
 			WHERE media_asset_id = ?::uuid AND NOT is_delete
@@ -222,6 +222,11 @@ func (s *Store) FindRenditions(ctx context.Context, actor identityapp.Principal,
 		`, assetID.String()).Scan(&rows)
 		if result.Error != nil {
 			return fmt.Errorf("read renditions: %w", result.Error)
+		}
+		for i := range rows {
+			if err := rows[i].loadLocation(tx); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -320,6 +325,8 @@ func nullableJSON(value json.RawMessage) any {
 }
 
 type assetRow struct {
+	ObjectLocationID   *uuid.UUID `json:"object_location_id,omitempty"`
+	location           *domain.ObjectLocation
 	ID                 uuid.UUID  `json:"id"`
 	ProjectID          uuid.UUID  `json:"project_id"`
 	PersonalOrgID      *uuid.UUID `json:"personal_org_id"`
@@ -371,7 +378,7 @@ func (r assetRow) domain() domain.MediaAsset {
 	return domain.MediaAsset{
 		ID: r.ID, ProjectID: r.ProjectID, Personal: personal, Kind: domain.Kind(r.Kind),
 		Origin: domain.Origin(r.Origin), Status: domain.Status(r.Status),
-		ObjectKey: r.ObjectKey, FileName: r.FileName, MimeType: r.MimeType,
+		ObjectKey: r.ObjectKey, ObjectLocation: rowLocation(r.ObjectLocationID, r.location), FileName: r.FileName, MimeType: r.MimeType,
 		ByteSize: r.ByteSize, SHA256: r.SHA256, Width: r.Width, Height: r.Height,
 		DurationMS: r.DurationMS, FPS: r.FPS, AudioChannels: r.AudioChannels,
 		Codec: r.Codec, SourceOperationID: r.SourceOperationID,
@@ -387,22 +394,24 @@ func (r assetRow) domain() domain.MediaAsset {
 }
 
 type renditionRow struct {
-	ID           uuid.UUID
-	MediaAssetID uuid.UUID
-	Kind         string
-	ObjectKey    string
-	Width        *int32
-	Height       *int32
-	ByteSize     *int64
-	CreateTime   time.Time
-	UpdateTime   time.Time
-	IsDelete     bool
+	ObjectLocationID *uuid.UUID
+	location         *domain.ObjectLocation
+	ID               uuid.UUID
+	MediaAssetID     uuid.UUID
+	Kind             string
+	ObjectKey        string
+	Width            *int32
+	Height           *int32
+	ByteSize         *int64
+	CreateTime       time.Time
+	UpdateTime       time.Time
+	IsDelete         bool
 }
 
 func (r renditionRow) domain() domain.Rendition {
 	return domain.Rendition{
 		ID: r.ID, MediaAssetID: r.MediaAssetID,
-		Kind: domain.RenditionKind(r.Kind), ObjectKey: r.ObjectKey,
+		Kind: domain.RenditionKind(r.Kind), ObjectKey: r.ObjectKey, ObjectLocation: rowLocation(r.ObjectLocationID, r.location),
 		Width: r.Width, Height: r.Height, ByteSize: r.ByteSize,
 		CreateTime: r.CreateTime, UpdateTime: r.UpdateTime, IsDelete: r.IsDelete,
 	}
@@ -444,7 +453,15 @@ func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal
 		}
 		query += ` ORDER BY id DESC LIMIT ? FOR SHARE OF a`
 		args = append(args, limit)
-		return tx.Raw(query, args...).Scan(&rows).Error
+		if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
+			return err
+		}
+		for i := range rows {
+			if err := rows[i].loadLocation(tx); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err

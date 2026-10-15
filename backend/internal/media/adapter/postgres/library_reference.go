@@ -41,6 +41,9 @@ func (s *LibraryStore) ReadReferenceFactSource(ctx context.Context, actor identi
 		if read.RowsAffected != 1 {
 			return application.ErrNotFound
 		}
+		if err := row.loadLocation(tx); err != nil {
+			return err
+		}
 		result.Asset = row.domain()
 		if !result.Asset.CanReference() {
 			return application.ErrUnavailable
@@ -59,6 +62,9 @@ func (s *LibraryStore) ReadReferenceFactSource(ctx context.Context, actor identi
 		seen := make(map[domain.RenditionKind]bool, len(rows))
 		prefix := strings.TrimSuffix(result.Asset.ObjectKey, path.Ext(result.Asset.ObjectKey)) + "/"
 		for _, row := range rows {
+			if err := row.loadLocation(tx); err != nil {
+				return err
+			}
 			r := row.domain()
 			ext := path.Ext(r.ObjectKey)
 			if r.Validate() != nil || seen[r.Kind] || r.ObjectKey != prefix+string(r.Kind)+ext {

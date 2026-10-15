@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
@@ -62,4 +63,52 @@ func (s *StorageRoutes) ReadLocation(ctx context.Context, id uuid.UUID) (domain.
 		return domain.ObjectLocation{}, err
 	}
 	return location, nil
+}
+
+// rowLocation keeps an unresolved FK visible so an unmigrated reader cannot
+// silently turn a routed row back into a legacy key-only record.
+func rowLocation(id *uuid.UUID, loaded *domain.ObjectLocation) *domain.ObjectLocation {
+	if loaded != nil {
+		return loaded
+	}
+	if id != nil {
+		return &domain.ObjectLocation{ID: *id}
+	}
+	return nil
+}
+
+func readRowLocation(tx *gorm.DB, id *uuid.UUID, key string) (*domain.ObjectLocation, error) {
+	if id == nil {
+		return nil, nil
+	}
+	if *id == uuid.Nil {
+		return nil, application.ErrUnavailable
+	}
+	var row objectLocationRow
+	read := tx.Raw(`SELECT * FROM media.object_location WHERE id=? AND object_key=? FOR SHARE`, *id, key).Scan(&row)
+	if read.Error != nil {
+		return nil, fmt.Errorf("read stored media location: %w", read.Error)
+	}
+	if read.RowsAffected != 1 {
+		return nil, application.ErrUnavailable
+	}
+	location := row.domain()
+	if location.Ref.Validate() != nil {
+		return nil, application.ErrUnavailable
+	}
+	return &location, nil
+}
+func (r *assetRow) loadLocation(tx *gorm.DB) error {
+	location, err := readRowLocation(tx, r.ObjectLocationID, r.ObjectKey)
+	if err == nil {
+		r.location = location
+	}
+	return err
+}
+func (r *renditionRow) loadLocation(tx *gorm.DB) error {
+	location, err := readRowLocation(tx, r.ObjectLocationID, r.ObjectKey)
+	if err == nil {
+		r.location = location
+	}
+	return err
 }

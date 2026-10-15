@@ -34,9 +34,11 @@ type StorageUsage struct {
 
 // StorageUsageInventory is internal owning evidence. Its keys never reach a DTO.
 type StorageUsageInventory struct {
-	LibraryID  uuid.UUID
-	Prefixes   []string
-	ObjectKeys []string
+	LibraryID        uuid.UUID
+	Locations        []domain.ObjectRef
+	PhysicalPrefixes []StorageUsagePrefix
+	Prefixes         []string
+	ObjectKeys       []string
 }
 
 // StorageUsageSource holds current authorization while the exact inventory is read.
@@ -52,6 +54,7 @@ type StorageUsageIntentSource interface {
 
 // StorageUsageObject is private metadata used only to locate an actual object.
 type StorageUsageObject struct {
+	Ref      domain.ObjectRef
 	Key      string
 	ByteSize int64
 }
@@ -65,9 +68,10 @@ type StorageUsageObjects interface {
 // StorageUsageReader counts unique existing objects, including retained trash
 // and unknown execution results. Listing sizes alone are never accounting facts.
 type StorageUsageReader struct {
-	source  StorageUsageSource
-	objects StorageUsageObjects
-	clock   func() time.Time
+	source          StorageUsageSource
+	objects         StorageUsageObjects
+	physicalObjects PhysicalStorageUsageObjects
+	clock           func() time.Time
 }
 
 // NewStorageUsageReader explicitly injects the owner and private object reader.
@@ -80,6 +84,9 @@ func NewStorageUsageReader(source StorageUsageSource, objects StorageUsageObject
 
 // StorageUsage never publishes partial results or invents an unconfigured limit.
 func (s *StorageUsageReader) StorageUsage(ctx context.Context, actor identityapp.Principal, scope domain.LibraryScope) (StorageUsage, error) {
+	if s != nil && s.physicalObjects != nil {
+		return s.physicalStorageUsage(ctx, actor, scope)
+	}
 	if s == nil || s.source == nil || s.objects == nil {
 		return StorageUsage{}, ErrUnavailable
 	}
@@ -93,7 +100,7 @@ func (s *StorageUsageReader) StorageUsage(ctx context.Context, actor identityapp
 	defer cancel()
 	var result StorageUsage
 	err = s.source.InspectStorageUsage(ctx, actor, scope, func(inventory StorageUsageInventory) error {
-		if inventory.LibraryID != id || len(inventory.Prefixes) == 0 || len(inventory.Prefixes) > 16 || len(inventory.ObjectKeys) > MaxStorageUsageObjects {
+		if len(inventory.Locations) != 0 || len(inventory.PhysicalPrefixes) != 0 || inventory.LibraryID != id || len(inventory.Prefixes) == 0 || len(inventory.Prefixes) > 16 || len(inventory.ObjectKeys) > MaxStorageUsageObjects {
 			return ErrUnavailable
 		}
 		keys := make(map[string]bool)

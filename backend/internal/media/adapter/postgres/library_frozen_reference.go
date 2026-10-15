@@ -35,6 +35,9 @@ func (s *LibraryStore) ReadFrozenReferenceFactSource(ctx context.Context, actor 
 		if read.RowsAffected != 1 {
 			return application.ErrNotFound
 		}
+		if err := row.loadLocation(tx); err != nil {
+			return err
+		}
 		result.Asset = row.domain()
 		if !result.Asset.CanReference() || result.Asset.ContainsRealPerson || result.Asset.ConsentRecordID != nil {
 			return application.ErrUnavailable
@@ -53,6 +56,9 @@ func (s *LibraryStore) ReadFrozenReferenceFactSource(ctx context.Context, actor 
 		prefix := strings.TrimSuffix(result.Asset.ObjectKey, path.Ext(result.Asset.ObjectKey)) + "/"
 		seen := make(map[domain.RenditionKind]bool, len(rows))
 		for _, row := range rows {
+			if err := row.loadLocation(tx); err != nil {
+				return err
+			}
 			r := row.domain()
 			if r.Validate() != nil || seen[r.Kind] || r.ObjectKey != prefix+string(r.Kind)+path.Ext(r.ObjectKey) {
 				return application.ErrUnavailable

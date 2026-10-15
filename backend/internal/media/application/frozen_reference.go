@@ -20,7 +20,7 @@ type FrozenReferenceFactReader interface {
 // VerifyFrozenReference checks an existing proof against exact current media
 // facts and actual private bytes; it cannot form or update a new binding.
 func (q *ReferenceFactQuery) VerifyFrozenReference(ctx context.Context, actor identityapp.Principal, project uuid.UUID, fact ReferenceFact) error {
-	if q == nil || q.reader == nil || q.objects == nil {
+	if q == nil || q.reader == nil || q.objects == nil && q.objectReader == nil {
 		return ErrUnavailable
 	}
 	reader, ok := q.reader.(FrozenReferenceFactReader)
@@ -45,7 +45,7 @@ func (q *ReferenceFactQuery) VerifyFrozenReference(ctx context.Context, actor id
 	if a.ID != fact.AssetID || a.ProjectID != project || a.Personal != nil || a.Kind != fact.Kind || !a.CanReference() || a.ContainsRealPerson || a.ConsentRecordID != nil || a.Revision != fact.Revision || a.ByteSize != fact.ByteSize || a.ByteSize > libraryOriginalLimit(a.Kind) || a.SHA256 == nil || *a.SHA256 != fact.SHA256 {
 		return ErrUnavailable
 	}
-	if _, _, err := q.verify(ctx, a.ObjectKey, &a.ByteSize, a.SHA256, libraryOriginalLimit(a.Kind)); err != nil {
+	if _, _, err := q.verify(ctx, a.ObjectLocation, a.ObjectKey, &a.ByteSize, a.SHA256, libraryOriginalLimit(a.Kind)); err != nil {
 		return errors.Join(ErrUnavailable, err)
 	}
 	if fact.Kind == domain.KindAudio {

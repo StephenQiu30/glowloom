@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,13 +60,20 @@ type Preview struct {
 
 // AssetQuery owns media eligibility and safe projections for preview and canvas references.
 type AssetQuery struct {
-	store  AssetReader
-	signer PreviewSigner
+	store        AssetReader
+	signer       PreviewSigner
+	objectSigner ObjectSigner
+	previewTTL   time.Duration
 }
 
 // NewAssetQuery injects the authorized facts and private object signer.
 func NewAssetQuery(store AssetReader, signer PreviewSigner) *AssetQuery {
-	return &AssetQuery{store: store, signer: signer}
+	return &AssetQuery{store: store, signer: signer, previewTTL: 10 * time.Minute}
+}
+
+// NewRoutedAssetQuery requires persisted locations and an explicitly configured lease.
+func NewRoutedAssetQuery(store AssetReader, signer ObjectSigner, ttl time.Duration) *AssetQuery {
+	return &AssetQuery{store: store, objectSigner: signer, previewTTL: ttl}
 }
 func summary(a domain.MediaAsset) AssetSummary {
 	return AssetSummary{ID: a.ID, ProjectID: a.ProjectID, Kind: string(a.Kind), FileName: a.FileName, MIMEType: a.MimeType, ByteSize: a.ByteSize, Width: a.Width, Height: a.Height, DurationMS: a.DurationMS, Revision: a.Revision}
@@ -146,14 +152,21 @@ func (q *AssetQuery) Preview(ctx context.Context, a identityapp.Principal, p, id
 	if err != nil {
 		return Preview{}, err
 	}
-	if q.signer == nil {
+	grant, err := signMediaObject(ctx, asset.ObjectLocation, asset.ObjectKey, q.objectSigner, q.signer, q.previewTTL)
+	if err != nil {
+		return Preview{}, err
+	}
+	if q.objectSigner != nil {
+		current, err := q.reference(ctx, a, p, id)
+		if err != nil {
+			return Preview{}, err
+		}
+		if current.Revision != asset.Revision || !sameObjectLocation(current.ObjectLocation, asset.ObjectLocation) {
+			return Preview{}, ErrNotFound
+		}
+	}
+	if !grant.ExpiresAt.After(time.Now()) {
 		return Preview{}, ErrUnavailable
 	}
-	const ttl = 10 * time.Minute
-	expires := time.Now().UTC().Add(ttl)
-	url, err := q.signer.PresignGet(ctx, asset.ObjectKey, ttl)
-	if err != nil || url == "" {
-		return Preview{}, fmt.Errorf("%w: sign media preview", ErrUnavailable)
-	}
-	return Preview{Asset: summary(asset), URL: url, ExpiresAt: expires}, nil
+	return Preview{Asset: summary(asset), URL: grant.URL, ExpiresAt: grant.ExpiresAt}, nil
 }

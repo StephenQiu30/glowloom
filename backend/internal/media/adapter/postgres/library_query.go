@@ -80,7 +80,14 @@ func decodeLibraryAsset(raw []byte) (domain.MediaAsset, error) {
 	}
 	wire.assetRow.ModerationDetail = wire.ModerationDetail
 	a := wire.domain()
-	if a.Validate() != nil || a.IsDelete || a.Status != domain.StatusReady || a.ModerationStatus != domain.ModerationPassed {
+	// This decoder feeds only safe catalog metadata. Physical facts are loaded
+	// separately under the owning transaction before any object access.
+	metadata := a
+	metadata.ObjectLocation = nil
+	if a.ObjectLocation != nil && a.ObjectLocation.ID == uuid.Nil {
+		return domain.MediaAsset{}, application.ErrUnavailable
+	}
+	if metadata.Validate() != nil || a.IsDelete || a.Status != domain.StatusReady || a.ModerationStatus != domain.ModerationPassed {
 		return domain.MediaAsset{}, application.ErrUnavailable
 	}
 	return a, nil

@@ -48,6 +48,9 @@ func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor identityapp.P
 		if read.RowsAffected != 1 {
 			return application.ErrNotFound
 		}
+		if err := a.loadLocation(tx); err != nil {
+			return err
+		}
 		asset := a.domain()
 		if asset.Validate() != nil {
 			return application.ErrUnavailable
@@ -64,6 +67,9 @@ func (s *LibraryStore) FindLibraryMedia(ctx context.Context, actor identityapp.P
 		prefix := strings.TrimSuffix(asset.ObjectKey, path.Ext(asset.ObjectKey)) + "/"
 		result.Renditions = make([]domain.Rendition, 0, len(rows))
 		for _, row := range rows {
+			if err := row.loadLocation(tx); err != nil {
+				return err
+			}
 			rend := row.domain()
 			if rend.Validate() != nil || rend.MediaAssetID != asset.ID || seen[rend.Kind] || !strings.HasPrefix(rend.ObjectKey, prefix) || path.Base(rend.ObjectKey) != string(rend.Kind)+path.Ext(rend.ObjectKey) {
 				return application.ErrUnavailable

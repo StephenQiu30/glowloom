@@ -129,7 +129,7 @@ func sameReferenceFact(a, b ReferenceFact) bool {
 func verifyReferenceFile(ctx context.Context, objects DocumentObjectGetter, file LibraryMediaFile, fact ReferenceFact) error {
 	q := &ReferenceFactQuery{objects: objects}
 	a := file.Asset
-	if _, _, err := q.verify(ctx, a.ObjectKey, &fact.ByteSize, &fact.SHA256, libraryOriginalLimit(fact.Kind)); err != nil {
+	if _, _, err := q.verify(ctx, a.ObjectLocation, a.ObjectKey, &fact.ByteSize, &fact.SHA256, libraryOriginalLimit(fact.Kind)); err != nil {
 		return errors.Join(ErrObjectMismatch, err)
 	}
 	if fact.Kind == domain.KindAudio {

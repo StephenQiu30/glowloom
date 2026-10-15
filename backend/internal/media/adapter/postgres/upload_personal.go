@@ -98,6 +98,9 @@ func replayPersonalUpload(tx *gorm.DB, actor identityapp.Principal, r applicatio
 	if read.RowsAffected != 1 {
 		return application.PersonalUploadResult{}, false, application.ErrUploadConflict
 	}
+	if err := available.loadLocation(tx); err != nil {
+		return application.PersonalUploadResult{}, false, err
+	}
 	if available.domain().Validate() != nil {
 		return application.PersonalUploadResult{}, false, application.ErrUnavailable
 	}
@@ -143,6 +146,9 @@ func (s *Store) CommitPersonalUpload(ctx context.Context, actor identityapp.Prin
 			return fmt.Errorf("find same personal original: %w", read.Error)
 		}
 		if read.RowsAffected == 1 {
+			if err := existing.loadLocation(tx); err != nil {
+				return err
+			}
 			duplicate := existing.domain()
 			if duplicate.Validate() != nil {
 				return application.ErrUnavailable

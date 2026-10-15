@@ -66,8 +66,11 @@ func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor i
 		if len(rows) != len(ids) {
 			return ErrNotFound
 		}
-		for _, row := range rows {
-			asset := row.domain()
+		for i := range rows {
+			if err := rows[i].loadLocation(tx); err != nil {
+				return err
+			}
+			asset := rows[i].domain()
 			if asset.Validate() != nil {
 				return application.ErrUnavailable
 			}

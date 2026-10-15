@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/uuid"
+
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -73,7 +75,10 @@ func (s *StorageUsageStore) InspectStorageUsage(ctx context.Context, actor ident
 }
 
 func storageUsageMediaKeys(tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope) ([]string, error) {
-	var keys []string
+	var rows []struct {
+		ObjectKey  string
+		LocationID *uuid.UUID
+	}
 	condition := "a.project_id=? AND a.personal_org_id IS NULL AND a.personal_actor_id IS NULL"
 	var args []any
 	if scope.Kind == domain.LibraryProject {
@@ -82,24 +87,32 @@ func storageUsageMediaKeys(tx *gorm.DB, actor identityapp.Principal, scope domai
 		condition = "a.project_id IS NULL AND a.personal_org_id=? AND a.personal_actor_id=?"
 		args = []any{actor.OrgID, actor.ID, actor.OrgID, actor.ID, actor.OrgID, actor.ID, actor.OrgID, actor.ID}
 	}
-	query := `SELECT object_key FROM (
-	 SELECT a.object_key FROM media.media_asset a WHERE ` + condition + `
-	 UNION SELECT r.object_key FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE ` + condition
+	query := `SELECT object_key,location_id FROM (
+	 SELECT a.object_key,a.object_location_id AS location_id FROM media.media_asset a WHERE ` + condition + `
+	 UNION SELECT r.object_key,r.object_location_id FROM media.rendition r JOIN media.media_asset a ON a.id=r.media_asset_id WHERE ` + condition
 	if scope.Kind == domain.LibraryProject {
-		query += ` UNION SELECT o.source_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_project_id=? AND j.org_id=?
-		 UNION SELECT o.target_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_project_id=? AND j.org_id=?
-		 UNION SELECT o.source_object_key FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.source_project_id=? AND s.org_id=?
-		 UNION SELECT o.target_object_key FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.target_project_id=? AND s.org_id=?`
+		query += ` UNION SELECT o.source_object_key,o.source_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_project_id=? AND j.org_id=?
+		 UNION SELECT o.target_object_key,o.target_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_project_id=? AND j.org_id=?
+		 UNION SELECT o.source_object_key,o.source_location_id FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.source_project_id=? AND s.org_id=?
+		 UNION SELECT o.target_object_key,o.target_location_id FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.target_project_id=? AND s.org_id=?`
 	} else {
-		query += ` UNION SELECT o.source_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.org_id=? AND j.actor_id=?
-		 UNION SELECT o.target_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.org_id=? AND j.actor_id=?`
+		query += ` UNION SELECT o.source_object_key,o.source_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.org_id=? AND j.actor_id=?
+		 UNION SELECT o.target_object_key,o.target_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.org_id=? AND j.actor_id=?`
 	}
 	query += `) held ORDER BY object_key LIMIT 50001`
-	if err := tx.Raw(query, args...).Scan(&keys).Error; err != nil {
+	if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("read media-owned usage keys: %w", err)
 	}
-	if len(keys) > application.MaxStorageUsageObjects {
+	if len(rows) > application.MaxStorageUsageObjects {
 		return nil, application.ErrUnavailable
+	}
+	keys := make([]string, 0, len(rows))
+	for _, row := range rows {
+		// Legacy inventory must not discard physical identity and count a different bucket.
+		if row.LocationID != nil {
+			return nil, application.ErrUnavailable
+		}
+		keys = append(keys, row.ObjectKey)
 	}
 	return keys, nil
 }

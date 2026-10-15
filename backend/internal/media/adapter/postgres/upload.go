@@ -112,6 +112,9 @@ func replayUpload(tx *gorm.DB, actor identityapp.Principal, r application.Upload
 	if read.RowsAffected != 1 {
 		return application.UploadResult{}, false, application.ErrUploadConflict
 	}
+	if err := available.loadLocation(tx); err != nil {
+		return application.UploadResult{}, false, err
+	}
 	if available.domain().Validate() != nil {
 		return application.UploadResult{}, false, ErrUnavailable
 	}
@@ -142,6 +145,9 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 			return fmt.Errorf("find identical local upload: %w", read.Error)
 		}
 		if read.RowsAffected == 1 {
+			if err := existing.loadLocation(tx); err != nil {
+				return err
+			}
 			duplicate := existing.domain()
 			if err := duplicate.Validate(); err != nil {
 				return ErrUnavailable
