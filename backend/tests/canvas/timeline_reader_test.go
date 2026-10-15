@@ -10,6 +10,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
+	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 )
 
 func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
@@ -52,7 +53,7 @@ func TestTimelineReaderFreezesOwnedMediaAndRejectsStaleRevision(t *testing.T) {
 	}
 	_, foreign := seedCanvasActor(t, database)
 	_, err = reader.FreezeTimeline(t.Context(), actor, foreign, doc.ID, timeline.ID, result.Revision)
-	if !errors.Is(err, application.ErrNotFound) {
+	if !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("different project accepted: %v", err)
 	}
 	if err := database.Exec(`UPDATE media.media_asset SET width=256,height=192 WHERE id=?`, asset).Error; err != nil {

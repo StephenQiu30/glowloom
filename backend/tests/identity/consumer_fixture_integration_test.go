@@ -64,6 +64,15 @@ func TestConsumerFixturesRequireCurrentSessionAndExplicitPersonalOwnership(t *te
 	if _, err := workers.FindAsset(t.Context(), worker, project, assetID); err != nil {
 		t.Fatal("durable worker authority required an HTTP session", err)
 	}
+	if err := tx.Exec(`UPDATE workspace.project SET status='archived' WHERE id=?`, project).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canvases.Create(t.Context(), actor, project, uuid.NewString(), canvas.CreateInput{Name: "Archived"}); !errors.Is(err, media.ErrMediaStateConflict) {
+		t.Fatal("archived canvas admission error", err)
+	}
+	if err := tx.Exec(`UPDATE workspace.project SET status='active' WHERE id=?`, project).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := tx.Exec(`UPDATE identity."user" SET status='disabled' WHERE id=?`, actor.ID).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -73,7 +73,7 @@ func TestTranscriptionSourceFreezesFormalNodeAndLocksUntilOuterCommit(t *testing
 	}
 	_, foreign := seedCanvasActor(t, database)
 	_, err = reader.FreezeTranscriptionSource(t.Context(), actor, foreign, doc.ID, node.ID, saved.Revision)
-	if !errors.Is(err, application.ErrNotFound) {
+	if !errors.Is(err, mediaapp.ErrNotFound) {
 		t.Fatalf("foreign source accepted: %v", err)
 	}
 	if err := database.Exec(`UPDATE media.media_asset SET status='processing',moderation_status='pending' WHERE id=?`, asset).Error; err != nil {

@@ -17,6 +17,7 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
+	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 func seedCanvasMedia(t *testing.T, db *gorm.DB, project uuid.UUID, kind string) uuid.UUID {
@@ -228,7 +229,7 @@ func TestResourceGroupRestoreAndParentValidationOnPostgres(t *testing.T) {
 	if _, err := service.Get(t.Context(), actor, doc.ID); err != nil {
 		t.Fatalf("archived project should remain readable: %v", err)
 	}
-	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); !errors.Is(err, application.ErrNotFound) {
+	if _, err := service.Execute(t.Context(), actor, doc.ID, key, input); !errors.Is(err, mediadomain.ErrMediaStateConflict) {
 		t.Fatalf("archived project replay bypassed current write access: %v", err)
 	}
 }
