@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"time"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -56,11 +55,8 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 		return work, application.ErrInvalidExport
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readJob(tx, uuid.Nil, id.JobID, true)
+		row, err := s.lockWorkerJob(ctx, tx, id.JobID, false)
 		if err != nil {
-			return err
-		}
-		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if row.Attempt != id.Attempt {
@@ -92,9 +88,6 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 			return application.ErrInvalidExport
 		}
 		row.ActiveWorker = &id.ExecutionID
-		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
-			return err
-		}
 		if err := s.validateSources(ctx, tx, row.actor(), row); err != nil {
 			return err
 		}
@@ -127,11 +120,8 @@ func (s *Store) Progress(ctx context.Context, id application.WorkID, progress in
 		return application.ErrInvalidExport
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readJob(tx, uuid.Nil, id.JobID, true)
+		row, err := s.lockWorkerJob(ctx, tx, id.JobID, false)
 		if err != nil {
-			return err
-		}
-		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if row.Attempt != id.Attempt {
@@ -164,7 +154,7 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 		return job, application.ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readJob(tx, uuid.Nil, id.JobID, true)
+		row, err := s.lockWorkerJob(ctx, tx, id.JobID, true)
 		if err != nil {
 			return err
 		}
@@ -186,9 +176,6 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 		}
 		if row.Status != "running" || asset.ProjectID != row.ProjectID || string(asset.Kind) != string(domain.OutputKind(row.OutputKind).Effective()) {
 			return application.ErrConflict
-		}
-		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
-			return err
 		}
 		if err := s.validateSources(ctx, tx, row.actor(), row); err != nil {
 			return err
@@ -367,11 +354,8 @@ func (s *Store) AuthorizeObjectWrite(ctx context.Context, id application.WorkID)
 		return application.ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readJob(tx, uuid.Nil, id.JobID, true)
+		row, err := s.lockWorkerJob(ctx, tx, id.JobID, false)
 		if err != nil {
-			return err
-		}
-		if err = s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if row.Attempt != id.Attempt || row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID {

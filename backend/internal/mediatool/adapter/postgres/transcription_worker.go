@@ -39,6 +39,30 @@ func (s *TranscriptionStore) validateSource(ctx context.Context, tx *gorm.DB, ac
 	return nil
 }
 
+// Worker gates follow the same authority-before-job order as request commands.
+// The unlocked candidate supplies authority only; all work uses the locked row.
+func (s *TranscriptionStore) lockAuthorizedTranscription(ctx context.Context, tx *gorm.DB, id uuid.UUID) (transcriptionRow, error) {
+	candidate, err := readTranscription(tx, uuid.Nil, id, false)
+	if err != nil {
+		return transcriptionRow{}, err
+	}
+	if err := s.authorize(ctx, tx, candidate.actor(), candidate.ProjectID, true); err != nil {
+		return transcriptionRow{}, err
+	}
+	return lockTranscriptionBinding(tx, candidate)
+}
+
+func lockTranscriptionBinding(tx *gorm.DB, candidate transcriptionRow) (transcriptionRow, error) {
+	row, err := readTranscription(tx, uuid.Nil, candidate.ID, true)
+	if err != nil {
+		return row, err
+	}
+	if row.ActorID != candidate.ActorID || row.OrgID != candidate.OrgID || row.ProjectID != candidate.ProjectID {
+		return row, application.ErrConflict
+	}
+	return row, nil
+}
+
 // Claim serializes physical local owners and never restarts uncertain inference.
 func (s *TranscriptionStore) Claim(ctx context.Context, id application.TranscriptionWorkID) (application.TranscriptionWork, error) {
 	var work application.TranscriptionWork
@@ -48,11 +72,8 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 		return work, application.ErrInvalidTranscription
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
+		row, err := s.lockAuthorizedTranscription(ctx, tx, id.JobID)
 		if err != nil {
-			return err
-		}
-		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if row.Attempt != id.Attempt {
@@ -99,9 +120,6 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 		}
 		if id.ExecutionID == uuid.Nil {
 			return application.ErrInvalidTranscription
-		}
-		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
-			return err
 		}
 		if err := s.validateSource(ctx, tx, row.actor(), row); err != nil {
 			return err
@@ -166,11 +184,8 @@ func (s *TranscriptionStore) StartInference(ctx context.Context, id application.
 		return application.ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
+		row, err := s.lockAuthorizedTranscription(ctx, tx, id.JobID)
 		if err != nil {
-			return err
-		}
-		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if err := ownTranscription(row, id); err != nil {
@@ -231,7 +246,15 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 	digest := sha256.Sum256(raw)
 	sha := hex.EncodeToString(digest[:])
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
+		candidate, err := readTranscription(tx, uuid.Nil, id.JobID, false)
+		if err != nil {
+			return err
+		}
+		var authorizationErr error
+		if candidate.Status == "running" {
+			authorizationErr = s.authorize(ctx, tx, candidate.actor(), candidate.ProjectID, true)
+		}
+		row, err := lockTranscriptionBinding(tx, candidate)
 		if err != nil {
 			return err
 		}
@@ -258,8 +281,13 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 			if row.Status != "running" {
 				return application.ErrConflict
 			}
-			if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
-				return err
+			// A cancellation or terminal replay needs no new authority. A row
+			// that became running must retry with authority acquired first.
+			if candidate.Status != "running" {
+				return application.ErrConflict
+			}
+			if authorizationErr != nil {
+				return authorizationErr
 			}
 			if err := s.validateSource(ctx, tx, row.actor(), row); err != nil {
 				return err
@@ -419,11 +447,8 @@ func (s *TranscriptionStore) AuthorizeObjectWrite(ctx context.Context, id applic
 		return application.ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
+		row, err := s.lockAuthorizedTranscription(ctx, tx, id.JobID)
 		if err != nil {
-			return err
-		}
-		if err = s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if err = ownTranscription(row, id); err != nil {

@@ -26,7 +26,18 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 	}
 	var authorityErr error
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		r, err := readDepth(tx, uuid.Nil, id.JobID, true)
+		r, authority, err := s.lockDepthAuthority(ctx, tx, id.JobID, func(r depthRow) string {
+			if r.Attempt != id.Attempt || r.ActiveWorker != nil || r.ExecutionUnconfirmed {
+				return ""
+			}
+			if r.CancellationRequested {
+				return "cleanup"
+			}
+			if id.Reconcile {
+				return "reconcile"
+			}
+			return "worker"
+		})
 		if err != nil {
 			return err
 		}
@@ -36,16 +47,8 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 		if r.ActiveWorker != nil || r.ExecutionUnconfirmed {
 			return application.ErrWorkerBusy
 		}
-		actor := r.actor()
-		if r.CancellationRequested || id.Reconcile {
-			action := "reconcile"
-			if r.CancellationRequested {
-				action = "cleanup"
-			}
-			actor, err = s.depthControlActor(ctx, tx, r, action)
-		} else {
-			err = s.authorize(ctx, tx, actor, r.ProjectID, true)
-		}
+		actor := authority.actor
+		err = authority.err
 		if err != nil {
 			if errors.Is(err, identityapp.ErrForbidden) && r.Status == "cancel_requested" && r.CancellationRequested && r.ProcessState == "none" {
 				if empty, checkErr := depthHasNoOutput(tx, r); checkErr != nil {
@@ -227,8 +230,16 @@ func (s *DepthStore) Finish(ctx context.Context, id application.DepthWorkID, sto
 		return job, application.ErrInvalidDepthInput
 	}
 	var authorityErr error
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		r, err := readDepth(tx, uuid.Nil, id.JobID, true)
+	finish := func(tx *gorm.DB) error {
+		r, authority, err := s.lockDepthAuthority(ctx, tx, id.JobID, func(r depthRow) string {
+			if r.Attempt != id.Attempt || r.ActiveWorker == nil || *r.ActiveWorker != id.ExecutionID {
+				return depthPhysicalMode
+			}
+			if stopped && r.CancellationRequested && (!uncertain || r.ProcessState == "none") && r.Status != "review_required" && r.Status != "succeeded" && r.Status != "cancelled" {
+				return "cleanup"
+			}
+			return depthPhysicalMode
+		})
 		if err != nil {
 			return err
 		}
@@ -259,7 +270,7 @@ func (s *DepthStore) Finish(ctx context.Context, id application.DepthWorkID, sto
 				state.Job.Revision--
 			}
 			if state.Job.CancellationRequested && (!uncertain || state.ProcessState == domain.DepthProcessNone) {
-				actor, err = s.depthControlActor(ctx, tx, r, "cleanup")
+				actor, err = authority.actor, authority.err
 				if errors.Is(err, identityapp.ErrForbidden) {
 					authorityErr = err
 					code = "depth_cleanup_unknown"
@@ -329,7 +340,18 @@ func (s *DepthStore) Finish(ctx context.Context, id application.DepthWorkID, sto
 		job = r.job()
 		key := depthRuntimeAuditKey(r)
 		return depthAudit(tx, actor, key, action, job)
-	})
+	}
+	// A concurrent accepted control can change the required authority between
+	// the candidate and job lock. Release that job lock before authorizing the
+	// new intent. These bounded retries repeat only this database transaction;
+	// native execution and object operations are never replayed.
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = s.db.WithContext(ctx).Transaction(finish)
+		if !stopped || !errors.Is(err, errDepthAuthorityChanged) {
+			break
+		}
+	}
 	return job, errors.Join(err, authorityErr)
 }
 

@@ -86,7 +86,21 @@ func (s *DepthStore) withDepthAttempt(ctx context.Context, id application.DepthW
 		return application.ErrInvalidDepthInput
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		r, err := readDepth(tx, uuid.Nil, id.JobID, true)
+		r, authority, err := s.lockDepthAuthority(ctx, tx, id.JobID, func(r depthRow) string {
+			if r.Attempt != id.Attempt || r.ActiveWorker == nil || *r.ActiveWorker != id.ExecutionID || r.ExecutionUnconfirmed {
+				return ""
+			}
+			if cleanup {
+				if !r.CancellationRequested || (r.ProcessState != "none" && r.ProcessState != "ended") {
+					return ""
+				}
+				return "cleanup"
+			}
+			if r.CancellationRequested || r.Status != "running" {
+				return ""
+			}
+			return "worker"
+		})
 		if err != nil {
 			return err
 		}
@@ -97,9 +111,6 @@ func (s *DepthStore) withDepthAttempt(ctx context.Context, id application.DepthW
 			if !r.CancellationRequested || (r.ProcessState != "none" && r.ProcessState != "ended") {
 				return application.ErrConflict
 			}
-			if _, err := s.depthControlActor(ctx, tx, r, "cleanup"); err != nil {
-				return err
-			}
 		} else {
 			if r.CancellationRequested || r.Status == "cancel_requested" {
 				return application.ErrCancelled
@@ -107,9 +118,9 @@ func (s *DepthStore) withDepthAttempt(ctx context.Context, id application.DepthW
 			if r.Status != "running" {
 				return application.ErrConflict
 			}
-			if err := s.authorize(ctx, tx, r.actor(), r.ProjectID, true); err != nil {
-				return err
-			}
+		}
+		if authority.err != nil {
+			return authority.err
 		}
 		return use(tx, r)
 	})
