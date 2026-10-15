@@ -22,7 +22,7 @@ var (
 
 // IsPlatformAdmin does not infer platform authority from a team or legacy role.
 func IsPlatformAdmin(actor identityapp.Principal) bool {
-	return actor.ID != uuid.Nil && actor.PlatformRole == "platform_admin" && !actor.MustChangePassword
+	return actor.ID != uuid.Nil && actor.PlatformRole == "platform_admin"
 }
 
 // SavePresetInput creates a custom preset or appends an immutable version.

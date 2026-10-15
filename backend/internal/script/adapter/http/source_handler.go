@@ -163,9 +163,11 @@ func scriptProblem(c *gin.Context, err error) {
 		meta = map[string]any{"affected_episodes": impact.Affected}
 	}
 	switch {
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
+	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrConfirmationRequired):
 		httpapi.WriteProblem(c, 409, "confirmation_required", meta)

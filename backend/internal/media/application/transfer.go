@@ -127,6 +127,7 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 		return FrozenTransferItem{}, err
 	}
 	a := clone.Asset
+	a.ObjectLocation = nil
 	a.ID = result.TargetItem.ID
 	a.ProjectID, a.Personal = uuid.Nil, nil
 	if target.Kind == domain.LibraryProject {
@@ -151,7 +152,7 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 	result.SourceRenditions = sourceClone.Renditions
 	result.TargetAsset = &a
 	result.TargetItem.AssetID = &a.ID
-	result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: "pending"})
+	result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, SourceLocation: original.ObjectLocation, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: "pending"})
 	seen := make(map[domain.RenditionKind]bool)
 	for _, current := range clone.Renditions {
 		prefix := strings.TrimSuffix(original.ObjectKey, path.Ext(original.ObjectKey)) + "/"
@@ -162,12 +163,14 @@ func PrepareTransferItem(job, org, actor uuid.UUID, target domain.LibraryScope, 
 		}
 		seen[current.Kind] = true
 		from := current.ObjectKey
+		fromLocation := current.ObjectLocation
+		current.ObjectLocation = nil
 		current.ID = uuid.NewSHA1(job, []byte("transfer-rendition/"+current.ID.String()))
 		current.MediaAssetID = a.ID
 		current.ObjectKey = strings.TrimSuffix(a.ObjectKey, path.Ext(a.ObjectKey)) + "/" + string(current.Kind) + ext
 		current.CreateTime, current.UpdateTime = now, now
 		result.TargetRenditions = append(result.TargetRenditions, current)
-		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(current.Kind), SourceObjectKey: from, TargetObjectKey: current.ObjectKey, ByteSize: current.ByteSize, ContentType: mime, Status: "pending"})
+		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(current.Kind), SourceObjectKey: from, SourceLocation: fromLocation, TargetObjectKey: current.ObjectKey, ByteSize: current.ByteSize, ContentType: mime, Status: "pending"})
 	}
 	return result, nil
 }

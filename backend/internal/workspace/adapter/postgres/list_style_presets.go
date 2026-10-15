@@ -20,12 +20,12 @@ func (s *Store) ListStylePresetSummaries(ctx context.Context, actor identityapp.
 	}
 	var page application.StylePresetPage
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireScope(ctx, tx, actor, false); err != nil {
 			return err
 		}
 		query := `SELECT id,name,style_type,COALESCE(style_subtype,'') AS style_subtype
-		 FROM workspace.style_preset WHERE org_id=? AND project_id IS NULL AND NOT is_delete`
-		args := []any{actor.OrgID}
+		 FROM workspace.style_preset WHERE org_id=? AND owner_scope_id=? AND project_id IS NULL AND NOT is_delete`
+		args := []any{actor.OrgID, actor.ScopeID}
 		if input.StyleType != "" {
 			query += ` AND style_type=?`
 			args = append(args, input.StyleType)

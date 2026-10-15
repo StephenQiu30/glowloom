@@ -5,8 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 )
 
 func TestIdentityKeyFileFailsClosed(t *testing.T) {

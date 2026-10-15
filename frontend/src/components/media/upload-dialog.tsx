@@ -1,6 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { Upload, LoaderCircle, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { useEffect, useRef, useState, useId } from "react";
+import { Upload, X } from "lucide-react";
+import { LoadingState } from "@/components/layout/loading-state";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +28,8 @@ export function UploadDialog({
   onUploaded: (asset?: API.AssetSummary) => void;
   projectID?: string;
 }) {
+  const formFieldId = useId();
+
   const [file, setFile] = useState<File | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
@@ -111,7 +117,7 @@ export function UploadDialog({
         </DialogDescription>
         {!done && (
           <>
-            <input
+            <Input
               ref={input}
               type="file"
               className="sr-only"
@@ -119,8 +125,9 @@ export function UploadDialog({
               disabled={pending || unconfirmed}
               onChange={(e) => choose(e.target.files?.[0])}
             />
-            <button
-              className="upload-dropzone"
+            <Button
+              variant="ghost"
+              className="upload-dropzone h-auto p-0"
               disabled={pending || unconfirmed}
               onClick={() => input.current?.click()}
               onDragOver={(e) => e.preventDefault()}
@@ -132,25 +139,28 @@ export function UploadDialog({
               <Upload size={30} />
               <span>{file ? file.name : "拖入文件，或点击选择"}</span>
               {file && <small>{(file.size / 1024 / 1024).toFixed(2)} MB</small>}
-            </button>
-            <label className="flex items-start gap-3 text-xs leading-5">
+            </Button>
+            <Field
+              data-disabled={pending || unconfirmed}
+              orientation="horizontal"
+            >
               <Checkbox
+                id={`${formFieldId}-field-1`}
                 checked={confirmed}
                 disabled={pending || unconfirmed}
                 onCheckedChange={(v) => setConfirmed(v === true)}
               />
-              我已确认内容与使用权限，文件不包含需要另行授权的真人内容。
-            </label>
-            {pending && (
-              <p role="status" className="flex items-center gap-2 text-sm">
-                <LoaderCircle className="animate-spin" size={16} />
-                正在上传并验证文件…
-              </p>
-            )}
+              <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+                <span>
+                  我已确认内容与使用权限，文件不包含需要另行授权的真人内容。
+                </span>
+              </FieldLabel>
+            </Field>
+            {pending && <LoadingState>正在上传并验证文件…</LoadingState>}
             {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
             {unconfirmed && (
               <p className="text-xs text-muted-foreground">

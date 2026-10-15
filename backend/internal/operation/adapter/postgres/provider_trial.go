@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -41,7 +40,10 @@ func (s *Store) CreateProviderTrialQuote(ctx context.Context, actor identityapp.
 	fingerprint := sha256.Sum256(raw)
 	var result application.CreateFreeQuoteResult
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requirePlatform(tx, actor); err != nil {
+			return err
+		}
+		if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
 		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actor.ID.String()+"/trial.quote/"+releaseID.String()+"/"+input.RequestID.String()).Error; err != nil {
@@ -106,10 +108,10 @@ func (s *Store) CreateProviderTrialQuote(ctx context.Context, actor identityapp.
 		if *prepared.Operation.QuoteMicros > input.MaxChargeMicros {
 			return application.ErrInvalidFreeQuote
 		}
-		if err := NewStore(tx).CreateQuoteSnapshot(ctx, actor, nil, []QuoteItem{{Operation: prepared.Operation, Inputs: prepared.Inputs, trial: &trialBinding{ReleaseID: releaseID, Input: input}}}); err != nil {
+		if err := s.withDB(tx).CreateQuoteSnapshot(ctx, actor, nil, []QuoteItem{{Operation: prepared.Operation, Inputs: prepared.Inputs, trial: &trialBinding{ReleaseID: releaseID, Input: input}}}); err != nil {
 			return err
 		}
-		budget, err := pgbilling.NewStore(tx).FindBudget(ctx, actor, input.ProjectID)
+		budget, err := s.billingStore(tx).FindBudget(ctx, actor, input.ProjectID)
 		if err != nil {
 			return err
 		}
@@ -140,7 +142,7 @@ func freezeTrialRelease(tx *gorm.DB, actor identityapp.Principal, op domain.Oper
  JOIN catalog.provider_config_version config ON config.id=r.config_version_id
  JOIN catalog.provider_preset_version pv ON pv.id=config.preset_version_id JOIN catalog.provider_preset preset ON preset.id=pv.preset_id
  JOIN catalog.provider_credential key ON key.provider_id=p.id AND key.status='active' AND NOT key.is_delete
- WHERE actor.id=? AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete AND NOT actor.must_change_password
+ WHERE actor.id=? AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete
  AND r.status='draft' AND r.model_version_id=? AND r.price_version_id=? AND NOT preset.emergency_disabled
  AND r.upstream_cost->>'currency'=? AND (r.upstream_cost->>'max_micros')::bigint<=?
  FOR SHARE OF actor,preset,key`, trial.ReleaseID, actor.ID, op.ModelProfileVersionID, op.PriceRuleVersionID, trial.Input.SupplierCurrency, trial.Input.SupplierMaxMicros).Scan(&present)
@@ -174,7 +176,7 @@ func currentTrialCatalog(tx *gorm.DB, actor identityapp.Principal, op domain.Ope
  JOIN catalog.model_profile m ON m.id=r.model_id JOIN catalog.provider p ON p.id=m.provider_id
  JOIN catalog.provider_config_version c ON c.id=r.config_version_id JOIN catalog.provider_preset_version pv ON pv.id=c.preset_version_id
  JOIN catalog.provider_preset preset ON preset.id=pv.preset_id
- JOIN identity."user" actor ON actor.id=? AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete AND NOT actor.must_change_password
+ JOIN identity."user" actor ON actor.id=? AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete
  JOIN catalog.provider_credential key ON key.provider_id=p.id AND key.status='active' AND NOT key.is_delete
  WHERE b.operation_id=? AND r.status='draft' AND NOT m.is_delete AND NOT p.is_delete AND NOT preset.emergency_disabled
  AND (? OR p.region='domestic') FOR SHARE OF actor,m,p,r,key,preset`, actor.ID, op.ID, allowOverseas).Scan(&row)

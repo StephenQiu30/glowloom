@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/audit/domain"
 )
 
@@ -28,7 +29,8 @@ var (
 
 // Store reads audit records; authorization is checked before calling it.
 type Store struct {
-	db *gorm.DB
+	db     *gorm.DB
+	actors func(*gorm.DB) application.ActorAccess
 }
 
 // NewStore injects the database handle used for audit queries.

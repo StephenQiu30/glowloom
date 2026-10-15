@@ -10,7 +10,7 @@
   --canvas-node-shadow: none;
   --canvas-toolbar: var(--card);
   --canvas-toolbar-border: var(--border);
-  --canvas-selection: color-mix(in srgb, var(--brand) 12%, transparent);
+  --canvas-selection: color-mix(in srgb, var(--foreground) 8%, transparent);
   color: var(--canvas-node-text);
   background: var(--canvas-bg);
 }
@@ -171,7 +171,7 @@
   padding: 10px 12px 8px;
   background: var(--canvas-node-panel);
   color: var(--canvas-node-text);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--canvas-node-shadow);
 }
 .creation-canvas .canvas-prompt-input {
   height: 120px;
@@ -546,11 +546,8 @@
   width: min(560px, calc(100% - 32px));
   padding: 12px 16px;
 }
-.canvas-material-dialog {
-  --ring: var(--brand);
-}
 .creation-canvas .canvas-media-node[data-selected="true"] .canvas-node-shell {
-  border-color: var(--brand);
+  border-color: var(--foreground);
 }
 .canvas-material-check {
   color: var(--background);

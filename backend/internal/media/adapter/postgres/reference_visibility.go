@@ -41,8 +41,8 @@ func requireNoNewMediaPurge(tx *gorm.DB, ids []uuid.UUID) error {
 	return nil
 }
 
-func projectMediaLibrary(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID) (libraryRow, error) {
-	if err := requireProject(tx, actor, project, false); err != nil {
+func (s scopeAuthority) projectMediaLibrary(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID) (libraryRow, error) {
+	if err := s.requireProject(tx, actor, project, false); err != nil {
 		return libraryRow{}, err
 	}
 	return readLibrary(tx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, false)

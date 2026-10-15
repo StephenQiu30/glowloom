@@ -11,7 +11,6 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
@@ -60,7 +59,7 @@ func (c projectCopyScriptCharacters) FreezeCharacters(ctx context.Context, actor
 
 func provideProjectCopyCharacters(tx *gorm.DB, a workspaceapp.ProjectCopyAuthority) scriptapp.ProjectCopyCharacters {
 	store := pgbible.NewProjectCopyStore(tx, func(bibleTx *gorm.DB) bibleapp.ProjectCopyAccess {
-		return projectCopyBibleAccess{store: pgworkspace.NewProjectCopyAccessStore(bibleTx, a)}
+		return projectCopyBibleAccess{store: provideCopyAccess(bibleTx, a)}
 	}, nil, nil)
 	return projectCopyScriptCharacters{store: store, snapshot: a.Bible}
 }

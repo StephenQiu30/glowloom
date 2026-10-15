@@ -1,5 +1,22 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Table,
+  TableCaption,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import { useCallback, useEffect, useRef, useState, useId } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -7,7 +24,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { getSession } from "@/api/identity";
+import { getSession, getMyPreferences } from "@/api/identity";
 import { listProjectModels } from "@/api/models";
 import { getMediaPreview } from "@/api/media";
 import {
@@ -120,7 +137,7 @@ export function RichGeneration(props: Props) {
     let active = true;
     async function boot() {
       try {
-        const [identity, modelsPage] = await Promise.all([
+        const [identity, modelsPage, preferences] = await Promise.all([
           getSession({ signal: controller.signal }),
           listProjectModels(
             {
@@ -130,6 +147,7 @@ export function RichGeneration(props: Props) {
             },
             { signal: controller.signal },
           ),
+          getMyPreferences({ signal: controller.signal }),
         ]);
         if (!identity.actor?.id) throw new RequestError("session_invalid");
         const models = [...(modelsPage.items ?? [])];
@@ -175,6 +193,11 @@ export function RichGeneration(props: Props) {
               draft = structuredClone(props.seed.reuse.editor_draft);
             }
             draft = structuredClone(draft);
+            if (preferences.prompt_suffix)
+              draft.document.content.push({
+                type: "paragraph",
+                content: [{ type: "text", text: preferences.prompt_suffix }],
+              });
             const add = (ref: ReturnType<typeof mediaBinding>) => {
               ref.order = draft.references.length;
               draft.references.push(ref);
@@ -293,6 +316,8 @@ function EditorWorkspace({
   current: API.SubmissionCurrent;
   onOpen: (id: string) => void;
 }) {
+  const formFieldId = useId();
+
   const [models, setModels] = useState(initialModels);
   const [replicaId] = useState(() => crypto.randomUUID()),
     [session, setSession] = useState<ComposerSession | null>(null),
@@ -848,14 +873,16 @@ function EditorWorkspace({
   }
   if (suspended)
     return (
-      <div role="alert">
-        <p>
-          身份已变化或无法核验。当前页面已停止私有缓存写入；本地分支在重新核验后恢复。
-        </p>
-        <Button onClick={() => onOpen(snapshot.draft_id)}>
-          重新核验并找回草稿
-        </Button>
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>
+          <p>
+            身份已变化或无法核验。当前页面已停止私有缓存写入；本地分支在重新核验后恢复。
+          </p>
+          <Button onClick={() => onOpen(snapshot.draft_id)}>
+            重新核验并找回草稿
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   return (
     <section
@@ -974,11 +1001,14 @@ function EditorWorkspace({
           </div>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-sm">
-            生成模型
-            <select
+          <Field data-disabled={frozen || !session}>
+            <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+              <span>生成模型</span>
+            </FieldLabel>
+            <NativeSelect
+              id={`${formFieldId}-field-1`}
               aria-label="生成模型"
-              className="rounded border bg-background p-2"
+
               disabled={frozen || !session}
               value={draft.modelVersion ?? ""}
               onChange={(e) => {
@@ -992,9 +1022,9 @@ function EditorWorkspace({
                   );
               }}
             >
-              <option value="">请选择模型</option>
+              <NativeSelectOption value="">请选择模型</NativeSelectOption>
               {models.map((m) => (
-                <option
+                <NativeSelectOption
                   key={m.id}
                   value={m.current_version?.id}
                   disabled={
@@ -1007,25 +1037,28 @@ function EditorWorkspace({
                   {m.status !== "active" || !m.credential_present
                     ? " · 当前不可用"
                     : ""}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            生成模式
-            <select
+            </NativeSelect>
+          </Field>
+          <Field data-disabled={frozen || !model || !session}>
+            <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+              <span>生成模式</span>
+            </FieldLabel>
+            <NativeSelect
+              id={`${formFieldId}-field-2`}
               aria-label="生成模式"
-              className="rounded border bg-background p-2"
+
               disabled={frozen || !model || !session}
               value={draft.mode ?? ""}
               onChange={(e) => selectMode(draft.modelVersion!, e.target.value)}
             >
-              <option value="">请选择模式</option>
+              <NativeSelectOption value="">请选择模式</NativeSelectOption>
               {model?.current_version?.modes?.map((m) => (
-                <option key={m}>{m}</option>
+                <NativeSelectOption key={m}>{m}</NativeSelectOption>
               ))}
-            </select>
-          </label>
+            </NativeSelect>
+          </Field>
         </div>
         <div className="min-h-32 rounded-lg border p-3 text-base [&_.tiptap]:min-h-24 [&_.tiptap]:outline-none">
           <PromptEditor
@@ -1085,12 +1118,15 @@ function EditorWorkspace({
               } catch {
                 return [];
               }
-            })().map((f) => (
-              <label key={f.field} className="grid gap-1 text-sm">
-                {f.label}
+            })().map((f, fieldIndex0) => (
+              <Field key={f.field} data-disabled={frozen}>
+                <FieldLabel htmlFor={`${formFieldId}-field-3-${fieldIndex0}`}>
+                  <span>{f.label}</span>
+                </FieldLabel>
                 {f.enum ? (
-                  <select
-                    className="rounded border bg-background p-2"
+                  <NativeSelect
+                    id={`${formFieldId}-field-3-${fieldIndex0}`}
+
                     disabled={frozen}
                     value={String(draft.params[f.field] ?? "")}
                     onChange={(e) =>
@@ -1103,28 +1139,30 @@ function EditorWorkspace({
                       })
                     }
                   >
-                    <option value="">请选择</option>
+                    <NativeSelectOption value="">请选择</NativeSelectOption>
                     {f.enum.map((v) => (
-                      <option key={String(v)} value={v}>
+                      <NativeSelectOption key={String(v)} value={v}>
                         {v}
-                      </option>
+                      </NativeSelectOption>
                     ))}
-                  </select>
+                  </NativeSelect>
                 ) : f.type === "boolean" ? (
-                  <input
-                    type="checkbox"
+                  <Checkbox
+                    id={`${formFieldId}-field-3-${fieldIndex0}`}
+
                     disabled={frozen}
                     checked={!!draft.params[f.field]}
-                    onChange={(e) =>
+                    onCheckedChange={(e) =>
                       session?.updateParams({
                         ...draft.params,
-                        [f.field]: e.target.checked,
+                        [f.field]: e === true,
                       })
                     }
                   />
                 ) : (
-                  <input
-                    className="rounded border bg-background p-2"
+                  <Input
+                    id={`${formFieldId}-field-3-${fieldIndex0}`}
+
                     disabled={frozen}
                     type={f.type === "string" ? "text" : "number"}
                     value={String(draft.params[f.field] ?? "")}
@@ -1143,12 +1181,15 @@ function EditorWorkspace({
                     }
                   />
                 )}
-              </label>
+              </Field>
             ))}
-            <label className="grid gap-1 text-sm">
-              候选数量
-              <input
-                className="rounded border bg-background p-2"
+            <Field data-disabled={frozen}>
+              <FieldLabel htmlFor={`${formFieldId}-field-4`}>
+                <span>候选数量</span>
+              </FieldLabel>
+              <Input
+                id={`${formFieldId}-field-4`}
+
                 type="number"
                 min={1}
                 max={8}
@@ -1161,7 +1202,7 @@ function EditorWorkspace({
                   })
                 }
               />
-            </label>
+            </Field>
           </div>
         )}
         {issues.length > 0 && (
@@ -1186,9 +1227,9 @@ function EditorWorkspace({
           </div>
         )}
         {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
         {saveState === "保存冲突" && !canvas && (
           <div className="flex gap-2">
@@ -1313,7 +1354,13 @@ function EditorWorkspace({
             )}
             {current.submission.state !== "accepted" &&
               !confirmUnknown &&
-              quoteExpired && <p role="alert">报价已过期，请重新检查费用。</p>}
+              quoteExpired && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    报价已过期，请重新检查费用。
+                  </AlertDescription>
+                </Alert>
+              )}
             <pre className="max-h-36 overflow-auto text-xs whitespace-pre-wrap">
               {quote?.final_prompt ?? current.submission.quote?.final_prompt}
             </pre>
@@ -1322,25 +1369,27 @@ function EditorWorkspace({
               {activeQuote?.compiler_version}
             </p>
             {activeQuote?.reference_mapping?.length ? (
-              <table className="w-full text-left text-xs">
-                <caption>显示标签与实际媒体输入顺序</caption>
-                <thead>
-                  <tr>
-                    <th>引用</th>
-                    <th>角色</th>
-                    <th>媒体位置</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="w-full text-left text-xs">
+                <TableCaption>显示标签与实际媒体输入顺序</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>引用</TableHead>
+                    <TableHead>角色</TableHead>
+                    <TableHead>媒体位置</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {activeQuote.reference_mapping.map((m) => (
-                    <tr key={m.reference_id}>
-                      <td>{m.label}</td>
-                      <td>{m.role}</td>
-                      <td>{m.media_seq_nos?.join("、") || "仅描述"}</td>
-                    </tr>
+                    <TableRow key={m.reference_id}>
+                      <TableCell>{m.label}</TableCell>
+                      <TableCell>{m.role}</TableCell>
+                      <TableCell>
+                        {m.media_seq_nos?.join("、") || "仅描述"}
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             ) : null}
             <div className="flex flex-wrap gap-2">
               <Button

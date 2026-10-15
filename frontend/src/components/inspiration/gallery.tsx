@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowUpRight, Search } from "lucide-react";
 import { cn } from "cn";
 import { BrandMark } from "@/components/brand/brand";
@@ -29,6 +29,7 @@ import {
   DialogContent,
   DialogTitle,
   DialogDescription,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -136,6 +137,34 @@ const updates = [
   },
 ];
 type Preview = { src: string; title: string };
+function InspirationPreview({
+  item,
+  children,
+}: {
+  item: Preview;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogTitle>{item.title}</DialogTitle>
+        <DialogDescription>
+          设计稿灵感示例。封面可浏览，作品发布与创作过程尚未接入。
+        </DialogDescription>
+        <div className="relative aspect-video">
+          <Image
+            src={`/design/figma/${item.src}`}
+            alt={item.title}
+            fill
+            sizes="80vw"
+            className="object-contain"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 export function InspirationGallery({
   showUpdates = true,
 }: {
@@ -144,7 +173,6 @@ export function InspirationGallery({
   const [category, setCategory] = useState(showUpdates ? "精选" : "广告营销");
   const [scene, setScene] = useState("品牌广告");
   const [query, setQuery] = useState("");
-  const [preview, setPreview] = useState<Preview | null>(null);
   const [publish, setPublish] = useState(false);
   const matches = showUpdates
     ? homeWorks.filter(
@@ -169,26 +197,27 @@ export function InspirationGallery({
           <h2>最近上新</h2>
           <div className="updates-strip" aria-label="最近上新">
             {updates.map((item) => (
-              <button
-                key={item.title}
-                className="feature-entry"
-                onClick={() => setPreview(item)}
-              >
-                <Card variant="feature">
-                  <CardContent>
-                    <Image
-                      src={`/design/figma/${item.src}`}
-                      alt={item.title}
-                      fill
-                      sizes="(max-width: 767px) 308px, (min-width: 1700px) 25vw, 273px"
-                    />
-                  </CardContent>
-                  <CardHeader>
-                    <CardTitle>{item.title}</CardTitle>
-                    <CardDescription>{item.caption}</CardDescription>
-                  </CardHeader>
-                </Card>
-              </button>
+              <InspirationPreview key={item.title} item={item}>
+                <Button
+                  variant="ghost"
+                  className="feature-entry h-auto p-0 whitespace-normal"
+                >
+                  <Card variant="feature" className="w-full">
+                    <CardContent>
+                      <Image
+                        src={`/design/figma/${item.src}`}
+                        alt={item.title}
+                        fill
+                        sizes="(max-width: 767px) 308px, (min-width: 1700px) 25vw, 273px"
+                      />
+                    </CardContent>
+                    <CardHeader>
+                      <CardTitle>{item.title}</CardTitle>
+                      <CardDescription>{item.caption}</CardDescription>
+                    </CardHeader>
+                  </Card>
+                </Button>
+              </InspirationPreview>
             ))}
             <Link href="/projects" className="feature-entry">
               <Card variant="feature" data-feature="start">
@@ -268,41 +297,45 @@ export function InspirationGallery({
       )}
       <div className="inspiration-grid">
         {matches.map((w) => (
-          <button
-            key={w.title}
-            className="work-entry"
-            onClick={() => setPreview(w)}
-          >
-            <Card variant="media">
-              <CardContent>
-                <div className="work-cover">
-                  <Image
-                    src={`/design/figma/${w.src}`}
-                    alt={w.title}
-                    fill
-                    sizes={
-                      showUpdates
-                        ? "(max-width: 767px) 45vw, 33vw"
-                        : "(max-width: 767px) 45vw, 25vw"
-                    }
-                  />
-                </div>
-              </CardContent>
-              <CardHeader>
-                <CardTitle>{w.title}</CardTitle>
-                <CardDescription>
-                  {showUpdates ? (
-                    <>
-                      <span>织光精选 · 查看创作过程</span>
-                      <ArrowUpRight aria-hidden="true" data-icon="inline-end" />
-                    </>
-                  ) : (
-                    `${"author" in w ? w.author : "织光精选"} · ${"duration" in w ? w.duration : ""}`
-                  )}
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </button>
+          <InspirationPreview key={w.title} item={w}>
+            <Button
+              variant="ghost"
+              className="work-entry h-auto p-0 whitespace-normal"
+            >
+              <Card variant="media" className="w-full">
+                <CardContent>
+                  <div className="work-cover">
+                    <Image
+                      src={`/design/figma/${w.src}`}
+                      alt={w.title}
+                      fill
+                      sizes={
+                        showUpdates
+                          ? "(max-width: 767px) 45vw, 33vw"
+                          : "(max-width: 767px) 45vw, 25vw"
+                      }
+                    />
+                  </div>
+                </CardContent>
+                <CardHeader>
+                  <CardTitle>{w.title}</CardTitle>
+                  <CardDescription>
+                    {showUpdates ? (
+                      <>
+                        <span>织光精选 · 查看创作过程</span>
+                        <ArrowUpRight
+                          aria-hidden="true"
+                          data-icon="inline-end"
+                        />
+                      </>
+                    ) : (
+                      `${"author" in w ? w.author : "织光精选"} · ${"duration" in w ? w.duration : ""}`
+                    )}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Button>
+          </InspirationPreview>
         ))}
       </div>
       {!matches.length && (
@@ -318,30 +351,6 @@ export function InspirationGallery({
           ? "设计稿灵感示例 · 封面仅供浏览参考"
           : "发现好作品，把灵感带回自己的画布。设计稿展示内容，发布功能尚未接入。"}
       </p>
-      <Dialog
-        open={!!preview}
-        onOpenChange={(value) => {
-          if (!value) setPreview(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-3xl">
-          <DialogTitle>{preview?.title}</DialogTitle>
-          <DialogDescription>
-            设计稿灵感示例。封面可浏览，作品发布与创作过程尚未接入。
-          </DialogDescription>
-          {preview && (
-            <div className="relative aspect-video">
-              <Image
-                src={`/design/figma/${preview.src}`}
-                alt={preview.title}
-                fill
-                sizes="80vw"
-                className="object-contain"
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
       <UnavailableDialog
         feature={publish ? "发布短片" : null}
         onClose={() => setPublish(false)}

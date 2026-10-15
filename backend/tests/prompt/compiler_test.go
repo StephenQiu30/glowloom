@@ -133,7 +133,7 @@ func TestTemplateCompilerValidatesClosedOptionsAndOwnership(t *testing.T) {
 	}
 	request = templateRequest("skill_draft")
 	actor := compilerActor()
-	actor.Role = "unknown"
+	actor.ID = uuid.Nil
 	if _, err := promptapp.NewCompiler(reader).Prepare(t.Context(), actor, request, templateRuntime(request.Operation)); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatal("unauthorized principal accepted", err)
 	}

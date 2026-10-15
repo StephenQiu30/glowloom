@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -21,8 +22,11 @@ import (
 )
 
 var (
-	ErrProofInvalid            = errors.New("invalid or expired proof")
-	ErrRateLimited             = errors.New("identity request rate limited")
+	// ErrProofInvalid rejects invalid, expired, revoked or consumed proofs.
+	ErrProofInvalid = errors.New("invalid or expired proof")
+	// ErrRateLimited reports exhausted rolling or resend budgets.
+	ErrRateLimited = errors.New("identity request rate limited")
+	// ErrRegistrationUnavailable keeps registration closed without required policy or keys.
 	ErrRegistrationUnavailable = errors.New("registration unavailable")
 )
 
@@ -32,6 +36,7 @@ type RateLimit struct{ RetryAfter time.Duration }
 func (e *RateLimit) Error() string { return ErrRateLimited.Error() }
 func (e *RateLimit) Unwrap() error { return ErrRateLimited }
 
+// EmailPolicy supplies accepted terms and local password and delivery limits.
 type EmailPolicy struct {
 	TermsVersion                         string
 	SourceHourlyLimit, GlobalHourlyLimit int
@@ -45,21 +50,29 @@ type ProofProtector interface {
 	Seal(uuid.UUID, []byte) ([]byte, error)
 }
 
+// QueuedMail keeps message content encrypted until delivery.
 type QueuedMail struct {
 	ChallengeID                *uuid.UUID
+	InvitationID               *uuid.UUID
+	InvitationRevision         *int64
 	EventID                    uuid.UUID
 	Template, Recipient, KeyID string
 	EncryptedPayload           []byte
 	CreatedAt, ExpiresAt       time.Time
 }
 
+// EmailStore provides atomic email identity transactions.
 type EmailStore interface {
 	EmailTransaction(context.Context, func(EmailTx) error) error
 }
+
+// EmailTx combines account, proof, budget and outbox writes in one transaction.
 type EmailTx interface {
 	AuthTx
 	RegistrationEnabled() (bool, error)
+	RegistrationInvitation(uuid.UUID, []byte, string, time.Time) (Invitation, error)
 	AccountByEmail(string) (domain.User, error)
+	EmailReserved(string) (bool, error)
 	Challenge(uuid.UUID, string) (domain.EmailChallenge, error)
 	InsertChallenge(domain.EmailChallenge) error
 	SaveChallenge(domain.EmailChallenge) error
@@ -78,20 +91,22 @@ type emailRuntime struct {
 }
 
 // NewEmailAuth enables the new flow only with explicit policy and key dependencies.
-func NewEmailAuth(store interface {
-	AuthStore
-	EmailStore
-}, protector ProofProtector, policy EmailPolicy, now func() time.Time) *Auth {
+func NewEmailAuth(store EmailStore, protector ProofProtector, policy EmailPolicy, now func() time.Time) *Auth {
 	policy.BlockedPasswords = append([]string(nil), policy.BlockedPasswords...)
-	return &Auth{store: store, now: now, email: &emailRuntime{store: store, protector: protector, policy: policy}}
+	return &Auth{now: now, email: &emailRuntime{store: store, protector: protector, policy: policy}}
 }
 
+// RegistrationStart acknowledges an operation and its resend delay.
 type RegistrationStart struct {
 	OperationID       uuid.UUID
 	FlowSecret        string
 	RetryAfterSeconds int
 }
+
+// RegistrationProof advances email verification without creating a login session.
 type RegistrationProof struct{ Outcome, Grant string }
+
+// CompleteRegistrationInput binds account creation to email proof and terms consent.
 type CompleteRegistrationInput struct {
 	OperationID                                                             uuid.UUID
 	FlowSecret, Grant, DisplayName, Password, ConfirmPassword, TermsVersion string
@@ -116,6 +131,7 @@ func (a *Auth) registrationReady() bool {
 	return version != "" && version == strings.TrimSpace(version) && !strings.Contains(strings.ToLower(version), "draft")
 }
 
+// StartRegistration starts email verification using the default source budget.
 func (a *Auth) StartRegistration(ctx context.Context, email, invitation string) (RegistrationStart, error) {
 	return a.StartRegistrationFrom(ctx, email, invitation, "local")
 }
@@ -129,7 +145,7 @@ func (a *Auth) StartRegistrationFrom(ctx context.Context, email, invitation, sou
 	if err != nil {
 		return RegistrationStart{}, err
 	}
-	if invitation != "" {
+	if invitation != "" && len(invitation) != 43 {
 		return RegistrationStart{}, ErrProofInvalid
 	}
 	flow, err := newProofToken()
@@ -142,14 +158,22 @@ func (a *Auth) StartRegistrationFrom(ctx context.Context, email, invitation, sou
 		if err != nil {
 			return err
 		}
-		if !enabled {
+		now := a.now().UTC()
+		var invited *Invitation
+		if invitation != "" {
+			sum := sha256.Sum256([]byte(invitation))
+			i, err := tx.RegistrationInvitation(uuid.Nil, sum[:], key, now)
+			if err != nil {
+				return err
+			}
+			invited = &i
+		} else if !enabled {
 			return ErrRegistrationUnavailable
 		}
-		now := a.now().UTC()
 		if err := a.reserveEmail(tx, key, source, now); err != nil {
 			return err
 		}
-		return a.issueRegistrationCode(tx, start.OperationID, flow, key, now)
+		return a.issueRegistrationCode(tx, start.OperationID, flow, key, now, invited)
 	})
 	if err != nil {
 		return RegistrationStart{}, err
@@ -157,10 +181,12 @@ func (a *Auth) StartRegistrationFrom(ctx context.Context, email, invitation, sou
 	return start, nil
 }
 
+// ResendRegistration replaces a verification code without resetting the failure budget.
 func (a *Auth) ResendRegistration(ctx context.Context, id uuid.UUID, flow string) (RegistrationStart, error) {
 	return a.ResendRegistrationFrom(ctx, id, flow, "local")
 }
 
+// ResendRegistrationFrom also applies the current request-source delivery budget.
 func (a *Auth) ResendRegistrationFrom(ctx context.Context, id uuid.UUID, flow, source string) (RegistrationStart, error) {
 	if !a.registrationReady() {
 		return RegistrationStart{}, ErrRegistrationUnavailable
@@ -170,14 +196,15 @@ func (a *Auth) ResendRegistrationFrom(ctx context.Context, id uuid.UUID, flow, s
 		if err != nil {
 			return err
 		}
-		if !enabled {
-			return ErrRegistrationUnavailable
-		}
 		c, err := tx.Challenge(id, "registration_code")
 		if err != nil {
 			return err
 		}
 		now := a.now().UTC()
+		invited, err := registrationAdmission(tx, enabled, c, now)
+		if err != nil {
+			return err
+		}
 		if !a.matchesFlow(c, flow) || c.ConsumedAt != nil || c.RevokedAt != nil {
 			return ErrProofInvalid
 		}
@@ -188,18 +215,22 @@ func (a *Auth) ResendRegistrationFrom(ctx context.Context, id uuid.UUID, flow, s
 		if err := tx.SaveChallenge(c); err != nil {
 			return err
 		}
-		return a.issueRegistrationCode(tx, id, flow, c.EmailKey, now)
+		return a.issueRegistrationCode(tx, id, flow, c.EmailKey, now, invited)
 	})
 	return RegistrationStart{OperationID: id, RetryAfterSeconds: 60}, err
 }
 
-func (a *Auth) issueRegistrationCode(tx EmailTx, id uuid.UUID, flow, email string, now time.Time) error {
+func (a *Auth) issueRegistrationCode(tx EmailTx, id uuid.UUID, flow, email string, now time.Time, invited *Invitation) error {
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
 		return err
 	}
 	code := fmt.Sprintf("%06d", n.Int64())
 	c := domain.EmailChallenge{ID: uuid.New(), OperationID: id, Purpose: "registration_code", EmailKey: email, ProofKeyID: a.email.protector.KeyID(), CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
+	if invited != nil {
+		c.InvitationID = &invited.ID
+		c.InvitationRevision = &invited.Revision
+	}
 	c.ProofDigest = a.email.protector.Digest(c.Purpose, c.ID, code)
 	c.FlowSecretDigest = a.email.protector.Digest("registration_flow", id, flow)
 	if err := tx.InsertChallenge(c); err != nil {
@@ -208,6 +239,7 @@ func (a *Auth) issueRegistrationCode(tx EmailTx, id uuid.UUID, flow, email strin
 	return a.queueEmail(tx, "registration_code", email, map[string]string{"code": code}, now, c.ExpiresAt, c.ID)
 }
 
+// VerifyRegistration consumes the code and returns a single-use account-creation grant.
 func (a *Auth) VerifyRegistration(ctx context.Context, id uuid.UUID, flow, code string) (RegistrationProof, error) {
 	if !a.registrationReady() {
 		return RegistrationProof{}, ErrRegistrationUnavailable
@@ -219,14 +251,14 @@ func (a *Auth) VerifyRegistration(ctx context.Context, id uuid.UUID, flow, code 
 		if err != nil {
 			return err
 		}
-		if !enabled {
-			return ErrRegistrationUnavailable
-		}
 		c, err := tx.Challenge(id, "registration_code")
 		if err != nil {
 			return err
 		}
 		now := a.now().UTC()
+		if _, err := registrationAdmission(tx, enabled, c, now); err != nil {
+			return err
+		}
 		if !c.Available(now) || !a.matchesFlow(c, flow) {
 			return ErrProofInvalid
 		}
@@ -255,19 +287,20 @@ func (a *Auth) VerifyRegistration(ctx context.Context, id uuid.UUID, flow, code 
 		if err := tx.SaveChallenge(c); err != nil {
 			return err
 		}
-		_, err = tx.AccountByEmail(c.EmailKey)
-		if err == nil {
+		reserved, err := tx.EmailReserved(c.EmailKey)
+		if err != nil {
+			return err
+		}
+		if reserved {
 			result.Outcome = "login_required"
 			return nil
-		}
-		if !errors.Is(err, domain.ErrUserNotFound) {
-			return err
 		}
 		grant, err := newProofToken()
 		if err != nil {
 			return err
 		}
 		proof := domain.EmailChallenge{ID: uuid.New(), OperationID: id, Purpose: "registration_grant", EmailKey: c.EmailKey, ProofKeyID: c.ProofKeyID, FlowSecretDigest: c.FlowSecretDigest, CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
+		proof.InvitationID, proof.InvitationRevision = c.InvitationID, c.InvitationRevision
 		proof.ProofDigest = a.email.protector.Digest(proof.Purpose, proof.ID, grant)
 		if err := tx.InsertChallenge(proof); err != nil {
 			return err
@@ -281,6 +314,7 @@ func (a *Auth) VerifyRegistration(ctx context.Context, id uuid.UUID, flow, code 
 	return result, rejected
 }
 
+// CompleteRegistration creates an account after proof and exact terms-version checks.
 func (a *Auth) CompleteRegistration(ctx context.Context, input CompleteRegistrationInput) (uuid.UUID, error) {
 	if !a.registrationReady() {
 		return uuid.Nil, ErrRegistrationUnavailable
@@ -298,21 +332,21 @@ func (a *Auth) CompleteRegistration(ctx context.Context, input CompleteRegistrat
 		if err != nil {
 			return err
 		}
-		if !enabled {
-			return ErrRegistrationUnavailable
-		}
 		c, err := tx.Challenge(input.OperationID, "registration_grant")
 		if err != nil {
 			return err
 		}
 		now := a.now().UTC()
+		if _, err := registrationAdmission(tx, enabled, c, now); err != nil {
+			return err
+		}
 		if !c.Available(now) || !a.matchesFlow(c, input.FlowSecret) || !hmac.Equal(c.ProofDigest, a.email.protector.Digest(c.Purpose, c.ID, input.Grant)) {
 			return ErrProofInvalid
 		}
-		if _, err := tx.AccountByEmail(c.EmailKey); err == nil {
-			return ErrProofInvalid
-		} else if !errors.Is(err, domain.ErrUserNotFound) {
+		if reserved, err := tx.EmailReserved(c.EmailKey); err != nil {
 			return err
+		} else if reserved {
+			return ErrProofInvalid
 		}
 		hash, err := domain.HashPassword(input.Password, "")
 		if err != nil {
@@ -417,4 +451,25 @@ func validDisplayName(name string) bool {
 		}
 	}
 	return true
+}
+
+// registrationAdmission rechecks the immutable invitation revision at every proof transition.
+func registrationAdmission(tx EmailTx, enabled bool, c domain.EmailChallenge, now time.Time) (*Invitation, error) {
+	if c.InvitationID == nil {
+		if !enabled {
+			return nil, ErrRegistrationUnavailable
+		}
+		return nil, nil
+	}
+	if c.InvitationRevision == nil {
+		return nil, ErrProofInvalid
+	}
+	i, err := tx.RegistrationInvitation(*c.InvitationID, nil, c.EmailKey, now)
+	if err != nil {
+		return nil, err
+	}
+	if i.Revision != *c.InvitationRevision {
+		return nil, ErrProofInvalid
+	}
+	return &i, nil
 }

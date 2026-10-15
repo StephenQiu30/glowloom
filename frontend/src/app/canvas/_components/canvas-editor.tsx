@@ -876,7 +876,11 @@ export function CanvasEditor({
           ? "有未保存的编辑"
           : `已保存 · 版本 ${base.revision}`;
   if (identityInvalid)
-    return <p role="alert">身份已变化，请重新登录后打开画布。</p>;
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>身份已变化，请重新登录后打开画布。</AlertDescription>
+      </Alert>
+    );
   return (
     <main className="creation-canvas relative h-dvh overflow-hidden">
       <header

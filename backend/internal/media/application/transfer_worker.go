@@ -51,14 +51,20 @@ func (e *TransferItemError) Unwrap() error { return e.Cause }
 // TransferWorker copies real private objects and publishes each complete item.
 // Its heartbeat has explicit cancellation, ownership and a join before end proof.
 type TransferWorker struct {
-	repo    TransferWorkerRepository
-	objects ProjectCopyObjects
-	tempDir string
+	repo     TransferWorkerRepository
+	objects  ProjectCopyObjects
+	physical PhysicalTransferObjects
+	tempDir  string
 }
 
 // NewTransferWorker injects fenced SQL, immutable object I/O and temporary files.
 func NewTransferWorker(repo TransferWorkerRepository, objects ProjectCopyObjects, tempDir string) *TransferWorker {
 	return &TransferWorker{repo: repo, objects: objects, tempDir: tempDir}
+}
+
+// NewRoutedTransferWorker retains exact source/target locations from its fenced repository.
+func NewRoutedTransferWorker(repo TransferWorkerRepository, objects PhysicalTransferObjects, tempDir string) *TransferWorker {
+	return &TransferWorker{repo: repo, physical: objects, tempDir: tempDir}
 }
 
 func (w *TransferWorker) copyItem(ctx context.Context, lease TransferLease, index int) error {
@@ -67,7 +73,7 @@ func (w *TransferWorker) copyItem(ctx context.Context, lease TransferLease, inde
 		return err
 	}
 	for _, object := range objects {
-		if err := transferPrivateObject(ctx, w.objects, w.tempDir, object,
+		if err := transferPrivateObject(ctx, w.objects, w.physical, w.tempDir, object,
 			func(sha string, size int64) error {
 				return w.repo.RecordTransferDigest(ctx, lease, index, object.RenditionKind, sha, size)
 			},
@@ -91,7 +97,7 @@ func (w *TransferWorker) cleanupItem(ctx context.Context, lease TransferLease, i
 		if err := w.repo.AuthorizeTransferRemoval(ctx, lease, index, object.RenditionKind); err != nil {
 			return err
 		}
-		exists, err := w.objects.Exists(ctx, object.TargetObjectKey)
+		exists, err := copyObjectExists(ctx, w.objects, w.physical, object.TargetLocation, object.TargetObjectKey)
 		if err != nil {
 			return err
 		}
@@ -99,13 +105,13 @@ func (w *TransferWorker) cleanupItem(ctx context.Context, lease TransferLease, i
 			return &ProjectCopyTransferError{Code: "object_absence_unknown", NeedsReconciliation: true, Cause: ErrObjectMismatch}
 		}
 		if exists {
-			if err := verifyTransferredObject(ctx, w.objects, object); err != nil {
+			if err := verifyTransferredObject(ctx, w.objects, w.physical, object); err != nil {
 				return err
 			}
-			if err := w.objects.Remove(ctx, object.TargetObjectKey); err != nil {
+			if err := removeCopyObject(ctx, w.objects, w.physical, object.TargetLocation, object.TargetObjectKey); err != nil {
 				return err
 			}
-			if exists, err := w.objects.Exists(ctx, object.TargetObjectKey); err != nil || exists {
+			if exists, err := copyObjectExists(ctx, w.objects, w.physical, object.TargetLocation, object.TargetObjectKey); err != nil || exists {
 				return errors.Join(ErrObjectMismatch, err)
 			}
 		}

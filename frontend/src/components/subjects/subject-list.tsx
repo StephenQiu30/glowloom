@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Plus, Search, UserRound, MapPin, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   InputGroup,
   InputGroupInput,
@@ -189,8 +190,8 @@ export function SubjectList({
         </Button>
       </div>
       {error && (
-        <div role="alert" className="flow-error">
-          {error}
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
           <Button
             variant="ghost"
             onClick={() => {
@@ -200,7 +201,7 @@ export function SubjectList({
           >
             重试读取
           </Button>
-        </div>
+        </Alert>
       )}
       {loading && items.length === 0 ? (
         <div className="subject-grid" aria-label="正在读取主体">
@@ -251,13 +252,14 @@ export function SubjectList({
           {shown.map((s) => {
             const image = subjectImage(s);
             return (
-              <button
-                className="subject-card"
+              <Button
+                variant="ghost"
+                className="subject-card h-auto p-0 whitespace-normal"
                 key={s.head.id}
                 aria-pressed={onSelect ? selectedID === s.head.id : undefined}
                 onClick={() => (onSelect ? onSelect(s) : setSelected(s))}
               >
-                <Card variant="media">
+                <Card variant="media" className="w-full">
                   <CardContent>
                     <div className="subject-card-image">
                       {image ? (
@@ -281,7 +283,7 @@ export function SubjectList({
                     </CardDescription>
                   </CardHeader>
                 </Card>
-              </button>
+              </Button>
             );
           })}
         </div>

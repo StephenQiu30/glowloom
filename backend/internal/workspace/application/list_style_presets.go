@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 var (
@@ -66,8 +65,8 @@ func NewListStylePresetsQuery(store StylePresetSummaryStore) *ListStylePresetsQu
 
 // Execute returns usable organization presets, excluding project-scoped rows.
 func (q *ListStylePresetsQuery) Execute(ctx context.Context, actor identityapp.Principal, input ListStylePresetsInput) (StylePresetPage, error) {
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
+		(actor.ScopeID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1) {
 		return StylePresetPage{}, identityapp.ErrForbidden
 	}
 	if q == nil || q.store == nil || input.Limit < 0 || input.Limit > 200 ||

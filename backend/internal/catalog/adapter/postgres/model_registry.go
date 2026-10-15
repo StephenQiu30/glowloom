@@ -13,6 +13,7 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 var (
@@ -31,8 +32,8 @@ var (
 )
 
 // CreateCapabilityForAdmin adds a platform capability after checking the live administrator.
-func (s *Store) CreateCapabilityForAdmin(ctx context.Context, actorID, orgID uuid.UUID, capability domain.Capability) error {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || capability.Validate() != nil {
+func (s *Store) CreateCapabilityForAdmin(ctx context.Context, actor identityapp.Principal, capability domain.Capability) error {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || capability.Validate() != nil {
 		return domain.ErrInvalidCapability
 	}
 	modes, err := json.Marshal(capability.Modes)
@@ -44,7 +45,7 @@ func (s *Store) CreateCapabilityForAdmin(ctx context.Context, actorID, orgID uui
 		return fmt.Errorf("encode capability input roles: %w", err)
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		result := tx.Exec(`
@@ -64,14 +65,14 @@ func (s *Store) CreateCapabilityForAdmin(ctx context.Context, actorID, orgID uui
 }
 
 // CreateModelForAdmin registers a disabled model with an initial revision.
-func (s *Store) CreateModelForAdmin(ctx context.Context, actorID, orgID uuid.UUID, model domain.ModelProfile) error {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+func (s *Store) CreateModelForAdmin(ctx context.Context, actor identityapp.Principal, model domain.ModelProfile) error {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		model.Validate() != nil || model.Status != domain.ModelDisabled ||
 		model.CurrentVersionID != uuid.Nil || model.Revision != 1 {
 		return domain.ErrInvalidModel
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		return createModelInTx(tx, model)
@@ -103,13 +104,13 @@ func createModelInTx(tx *gorm.DB, model domain.ModelProfile) error {
 }
 
 // FindModelForAdmin checks live rights before reading a model identity and status.
-func (s *Store) FindModelForAdmin(ctx context.Context, actorID, orgID, modelID uuid.UUID) (domain.ModelProfile, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || modelID == uuid.Nil {
+func (s *Store) FindModelForAdmin(ctx context.Context, actor identityapp.Principal, modelID uuid.UUID) (domain.ModelProfile, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || modelID == uuid.Nil {
 		return domain.ModelProfile{}, ErrModelNotFound
 	}
 	var model domain.ModelProfile
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var row modelProfileRow

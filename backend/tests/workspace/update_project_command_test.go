@@ -197,7 +197,7 @@ func TestUpdateProjectCommandRejectsInvalidInputBeforeStorage(t *testing.T) {
 	}{
 		{"missing actor", identityapp.Principal{OrgID: actor.OrgID, Role: actor.Role}, nil, identityapp.ErrForbidden},
 		{"missing organization", identityapp.Principal{ID: actor.ID, Role: actor.Role}, nil, identityapp.ErrForbidden},
-		{"unknown role", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID}, nil, identityapp.ErrForbidden},
+		{"missing session and scope", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID}, nil, identityapp.ErrForbidden},
 		{"must change password", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: actor.Role, MustChangePassword: true}, nil, identityapp.ErrForbidden},
 		{"missing project", actor, func(v *workspaceapp.UpdateProjectInput) { v.ProjectID = uuid.Nil }, workspaceapp.ErrInvalidUpdateProject},
 		{"missing revision", actor, func(v *workspaceapp.UpdateProjectInput) { v.ExpectedRevision = 0 }, workspaceapp.ErrInvalidUpdateProject},

@@ -1,4 +1,5 @@
 "use client";
+import { FieldSet } from "@/components/ui/field";
 import Link from "next/link";
 import { cn } from "cn";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -19,6 +20,7 @@ import { ProductShell } from "@/components/layout/product-shell";
 import { useSession } from "@/components/auth/session";
 import { RequestError } from "@/lib/request";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import {
   InputGroup,
@@ -57,7 +59,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { listMediaLibrary, applyMediaLibraryCommand } from "@/api/media";
+import {
+  listMediaLibrary,
+  applyMediaLibraryCommand,
+  downloadLibraryMediaAsset,
+} from "@/api/media";
 import {
   requireLibraryPage,
   requireLibraryReceipt,
@@ -65,6 +71,7 @@ import {
   type LibraryPage,
   type LibraryItem,
 } from "@/components/media/library";
+import { DownloadButton } from "@/components/media/download-button";
 import { AssetPreview } from "@/components/media/asset-preview";
 import { UploadDialog } from "@/components/media/upload-dialog";
 import { GenerationComposer } from "@/components/generation/generation-composer";
@@ -263,11 +270,8 @@ function Library({
         </Button>
       </div>
       {writeError && (
-        <div
-          role="alert"
-          className="mb-5 rounded-xl border border-destructive/40 p-4"
-        >
-          <p>{writeError}</p>
+        <Alert variant="destructive" className="mb-5">
+          <AlertDescription>{writeError}</AlertDescription>
           {pendingOperation ? (
             <Button
               className="mt-3"
@@ -288,7 +292,7 @@ function Library({
               刷新资产版本
             </Button>
           )}
-        </div>
+        </Alert>
       )}
       {batch && (
         <div className="mb-5 flex items-center gap-4 rounded-lg border p-3">
@@ -375,13 +379,14 @@ function Library({
           {page?.items.map((item) => (
             <Card key={item.id} variant="media" className="asset-card">
               <CardContent>
-                <button
-                  className="asset-cover"
+                <Button
+                  variant="ghost"
+                  className="asset-cover h-auto w-full p-0"
                   aria-label={`查看 ${item.title}`}
                   onClick={() => setDetail(item)}
                 >
                   <AssetPreview item={item} />
-                </button>
+                </Button>
               </CardContent>
               {batch && (
                 <Checkbox
@@ -486,15 +491,18 @@ function Library({
                   {detail.favorite ? "取消收藏" : "收藏"}
                 </Button>
                 {!filter.trash && (
-                  <Button asChild>
-                    <a
-                      href={`/api/media/library/items/${detail.id}/download?scope=personal`}
-                      download
-                    >
-                      <Download />
-                      下载原件
-                    </a>
-                  </Button>
+                  <DownloadButton
+                    filename={detail.media?.file_name || detail.title}
+                    load={() =>
+                      downloadLibraryMediaAsset({
+                        item_id: detail.id,
+                        scope: "personal",
+                      })
+                    }
+                  >
+                    <Download />
+                    下载原件
+                  </DownloadButton>
                 )}
               </div>
             </>
@@ -544,9 +552,9 @@ function Library({
             </DialogFooter>
           </form>
           {writeError && (
-            <p role="alert" className="text-sm text-destructive">
-              {writeError}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{writeError}</AlertDescription>
+            </Alert>
           )}
           {pendingOperation && !saving && (
             <Button onClick={() => void command()}>重试原操作</Button>
@@ -596,9 +604,9 @@ function Library({
             </Button>
           </DialogFooter>
           {writeError && (
-            <p role="alert" className="text-sm text-destructive">
-              {writeError}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{writeError}</AlertDescription>
+            </Alert>
           )}
         </DialogContent>
       </Dialog>
@@ -626,7 +634,7 @@ function AssetLibrary() {
         </Link>
         <Link href="/projects">画布</Link>
       </nav>
-      <fieldset className="workspace-toolbar asset-filters" disabled={locked}>
+      <FieldSet className="workspace-toolbar asset-filters" disabled={locked}>
         <Tabs
           value={filter.kind}
           onValueChange={(kind) => setFilter((f) => ({ ...f, kind }))}
@@ -687,7 +695,7 @@ function AssetLibrary() {
           <Trash2 />
           {filter.trash ? "返回资产" : "回收站"}
         </Button>
-      </fieldset>
+      </FieldSet>
       <Library
         key={JSON.stringify(filter)}
         filter={filter}

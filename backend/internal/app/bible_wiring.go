@@ -12,7 +12,6 @@ import (
 	pgbible "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/postgres"
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	bibledomain "github.com/StephenQiu30/glowloom-server/backend/internal/bible/domain"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
@@ -22,11 +21,10 @@ import (
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	scriptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func provideBibleProjectAccess(tx *gorm.DB) bibleapp.ProjectAccess {
-	return pgworkspace.NewProjectContentAccessStore(tx)
+	return provideProjectContentAccess(tx)
 }
 
 func provideBibleStore(database *gorm.DB, storage *objectstorage.Client, validator catalogapp.ModelVersionValidator) *pgbible.Store {
@@ -35,13 +33,13 @@ func provideBibleStore(database *gorm.DB, storage *objectstorage.Client, validat
 		Impacts: provideBibleDeletionImpacts,
 		Media: func(tx *gorm.DB) bibleapp.MediaReferences {
 			return bibleMediaReferences{query: mediaapp.NewReferenceFactQuery(
-				pgmedia.NewLibraryStore(tx, provideMediaLibraryProjectAccess, time.Now), storage)}
+				pgmedia.NewScopedLibraryStore(tx, provideMediaLibraryProjectAccess, time.Now, provideMediaScopeAccess), storage)}
 		},
 		Scopes: func(tx *gorm.DB) bibleapp.ScriptScopes {
 			return bibleScriptScopes{query: pgscript.NewBibleScopes(tx, provideScriptProjectAccess(tx))}
 		},
 		Voices: func(tx *gorm.DB) bibleapp.CatalogVoices {
-			return bibleCatalogVoices{query: catalogapp.NewVoiceCatalog(pgcatalog.NewStore(tx), validator)}
+			return bibleCatalogVoices{query: catalogapp.NewVoiceCatalog(provideCatalogStore(tx), validator)}
 		},
 	})
 }

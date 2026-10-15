@@ -12,7 +12,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrInvalidModelCatalog means the internal request or stored page is invalid.
@@ -98,8 +97,7 @@ func (q *ListModelsQuery) Execute(ctx context.Context, actor identityapp.Princip
 	if q == nil || q.store == nil {
 		return ModelCatalogPage{}, ErrInvalidModelCatalog
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return ModelCatalogPage{}, identityapp.ErrForbidden
 	}
 	if input.ProjectID == uuid.Nil || input.Limit < 0 || input.Limit > 200 ||

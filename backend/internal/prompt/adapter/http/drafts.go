@@ -145,9 +145,11 @@ func (h *DraftHandler) ListDrafts(c *gin.Context) {
 }
 func writeDraftError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrDraftNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
+	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrDraftNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)

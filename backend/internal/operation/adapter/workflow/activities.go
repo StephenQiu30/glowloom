@@ -27,6 +27,7 @@ type Store interface {
 
 // Finalizer enters a terminal state and closes billing in one transaction.
 type Finalizer interface {
+	ResolveRevokedOperation(context.Context, string) error
 	FinalizeOperation(context.Context, SettlementInput) error
 	CompleteFromReuse(context.Context, string) error
 }
@@ -74,6 +75,11 @@ func (a *Activities) SettleOperation(ctx context.Context, input SettlementInput)
 	return permanentActivityError(a.finalizer.FinalizeOperation(ctx, input))
 }
 
+// ResolveRevokedOperation uses only durable financial and execution metadata.
+func (a *Activities) ResolveRevokedOperation(ctx context.Context, id string) error {
+	return permanentActivityError(a.finalizer.ResolveRevokedOperation(ctx, id))
+}
+
 // CompleteFromReuse links frozen source outputs and settles zero cost atomically.
 func (a *Activities) CompleteFromReuse(ctx context.Context, operationID string) error {
 	return permanentActivityError(a.finalizer.CompleteFromReuse(ctx, operationID))
@@ -117,6 +123,9 @@ func permanentActivityError(err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+		return temporal.NewNonRetryableApplicationError("current execution authority is unavailable", "execution_authority_revoked", err)
+	}
 	if errors.Is(err, application.ErrWorkflowInputNotReady) {
 		return temporal.NewNonRetryableApplicationError("frozen input media is not ready", "input_not_ready", err)
 	}
@@ -149,6 +158,7 @@ func permanentActivityError(err error) error {
 // Register installs one deterministic workflow and its flow queue activities.
 func Register(w worker.Worker, activities *Activities) {
 	w.RegisterWorkflowWithOptions(OperationWorkflow, workflow.RegisterOptions{Name: "OperationWorkflow"})
+	w.RegisterActivityWithOptions(activities.ResolveRevokedOperation, activity.RegisterOptions{Name: "flow.ResolveRevokedOperation"})
 	w.RegisterActivityWithOptions(activities.LoadOperation, activity.RegisterOptions{Name: "flow.LoadOperation"})
 	w.RegisterActivityWithOptions(activities.CheckConsent, activity.RegisterOptions{Name: "flow.CheckConsent"})
 	w.RegisterActivityWithOptions(activities.Transition, activity.RegisterOptions{Name: "flow.Transition"})

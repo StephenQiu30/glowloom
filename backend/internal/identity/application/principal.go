@@ -2,6 +2,8 @@
 package application
 
 import (
+ "encoding/json"
+ "errors"
 	"github.com/google/uuid"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
@@ -21,4 +23,15 @@ type Principal struct {
 	DisplayName        string
 	Role               domain.Role
 	MustChangePassword bool
+}
+
+// ErrForbidden means current authority does not permit the operation.
+var ErrForbidden = errors.New("forbidden")
+
+// OutboxEvent is the retained event envelope used by content and audit consumers.
+type OutboxEvent struct {
+ ID uuid.UUID
+ Topic string
+ PartitionKey string
+ Payload json.RawMessage
 }

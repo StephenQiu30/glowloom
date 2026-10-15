@@ -46,7 +46,7 @@ func recordProviderCheck(tx *gorm.DB, observation application.CredentialTestObse
 func (s *Store) ReadProviderCheck(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (application.ProviderCheck, error) {
 	var result application.ProviderCheck
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		r := tx.Raw(`SELECT id,provider_id,config_version_id,credential_id,kind,status,auth_result,adapter_result,discovery_result,error_code,create_time AS created_at,completed_at FROM catalog.provider_check WHERE id=?`, id).Scan(&result)

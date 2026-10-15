@@ -23,11 +23,11 @@ func (s *FolderStore) ListFolders(ctx context.Context, actor identityapp.Princip
 	}
 	var out application.FolderListPage
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireScope(ctx, tx, actor, false); err != nil {
 			return err
 		}
-		query := `SELECT f.id,f.org_id,f.actor_id,f.name,f.cover_project_id,f.cover_asset_id,f.revision,f.is_delete,f.delete_time,f.create_time,f.update_time,(SELECT count(*) FROM workspace.project_folder_placement m JOIN workspace.project p ON p.id=m.project_id AND p.org_id=m.org_id WHERE m.folder_id=f.id AND m.actor_id=f.actor_id AND m.org_id=f.org_id AND NOT p.is_delete AND p.status IN ('active','archived')) AS project_count FROM workspace.project_folder f WHERE f.org_id=? AND f.actor_id=? AND NOT f.is_delete`
-		args := []any{actor.OrgID, actor.ID}
+		query := `SELECT f.id,f.org_id,f.actor_id,f.name,f.cover_project_id,f.cover_asset_id,f.revision,f.is_delete,f.delete_time,f.create_time,f.update_time,(SELECT count(*) FROM workspace.project_folder_placement m JOIN workspace.project p ON p.id=m.project_id AND p.org_id=m.org_id WHERE m.folder_id=f.id AND m.actor_id=f.actor_id AND m.org_id=f.org_id AND m.owner_scope_id=f.owner_scope_id AND p.owner_scope_id=f.owner_scope_id AND NOT p.is_delete AND p.status IN ('active','archived')) AS project_count FROM workspace.project_folder f WHERE f.org_id=? AND f.actor_id=? AND f.owner_scope_id=? AND NOT f.is_delete`
+		args := []any{actor.OrgID, actor.ID, actor.ScopeID}
 		if in.After != nil {
 			query += ` AND (f.update_time,f.id)<(?,?)`
 			args = append(args, in.After.UpdateTime.UTC(), in.After.ID)

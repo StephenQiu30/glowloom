@@ -3,8 +3,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityoperator"
 	"os"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityoperator"
 )
 
 func main() {

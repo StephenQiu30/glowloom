@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strconv"
 
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
@@ -223,9 +225,11 @@ func (h *LibraryHandler) Command(c *gin.Context) {
 
 func writeLibraryError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrNotFound):
+	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrLibraryKeyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_conflict", nil)

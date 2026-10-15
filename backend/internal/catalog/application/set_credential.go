@@ -29,8 +29,8 @@ var ErrInvalidSetCredential = errors.New("invalid set-credential command")
 
 // SetCredentialStore reads a provider and commits the credential plus events.
 type SetCredentialStore interface {
-	FindProviderForAdmin(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.Provider, error)
-	ReplaceWithEvents(context.Context, uuid.UUID, uuid.UUID, domain.Credential, []identityapp.OutboxEvent) (domain.Credential, error)
+	FindProviderForAdmin(context.Context, identityapp.Principal, uuid.UUID) (domain.Provider, error)
+	ReplaceWithEvents(context.Context, identityapp.Principal, domain.Credential, []identityapp.OutboxEvent) (domain.Credential, error)
 }
 
 // SecretValidator enforces the selected provider adapter's declared fields.
@@ -92,7 +92,7 @@ func (c *SetCredentialCommand) Execute(ctx context.Context, actor identityapp.Pr
 		requestIDErr != nil || requestID.String() != input.RequestID {
 		return SavedCredential{}, ErrInvalidSetCredential
 	}
-	provider, err := c.store.FindProviderForAdmin(ctx, actor.ID, actor.OrgID, input.ProviderID)
+	provider, err := c.store.FindProviderForAdmin(ctx, actor, input.ProviderID)
 	if err != nil {
 		return SavedCredential{}, fmt.Errorf("read credential provider: %w", err)
 	}
@@ -137,7 +137,7 @@ func (c *SetCredentialCommand) Execute(ctx context.Context, actor identityapp.Pr
 	if err != nil {
 		return SavedCredential{}, fmt.Errorf("build credential events: %w", err)
 	}
-	saved, err := c.store.ReplaceWithEvents(ctx, actor.ID, actor.OrgID, credential, events)
+	saved, err := c.store.ReplaceWithEvents(ctx, actor, credential, events)
 	if err != nil {
 		return SavedCredential{}, fmt.Errorf("replace credential with events: %w", err)
 	}

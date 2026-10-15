@@ -17,8 +17,10 @@ type EmailChallenge struct {
 	ExpiresAt, CreatedAt          time.Time
 	ConsumedAt, RevokedAt         *time.Time
 	InvitationID                  *uuid.UUID
+	InvitationRevision            *int64
 }
 
+// Available checks proof expiry, consumption, revocation and attempt budget.
 func (c EmailChallenge) Available(now time.Time) bool {
 	return c.ConsumedAt == nil && c.RevokedAt == nil && c.Attempts < 5 && !now.Before(c.CreatedAt) && now.Before(c.ExpiresAt)
 }
@@ -26,6 +28,7 @@ func (c EmailChallenge) Available(now time.Time) bool {
 // EmailBudget is shared by all operations for one address, source, or service.
 type EmailBudget struct{ SentAt, FailedAt []time.Time }
 
+// RetryAfter returns the longest remaining interval or rolling-limit wait.
 func (b EmailBudget) RetryAfter(now time.Time, hourLimit, dayLimit int, interval time.Duration) time.Duration {
 	var wait time.Duration
 	hour, day, failures := 0, 0, 0

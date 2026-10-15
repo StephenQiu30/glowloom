@@ -30,7 +30,7 @@ func TestSecurityEventHTTPFilters(t *testing.T) {
 	h := identityhttp.NewEmailAuthHandler(auth, "http://localhost:3200", false)
 	h.Register(router.Group("/api"))
 	identityhttp.NewEventHandler(identity.NewEventQuery(pgidentity.NewEventStore(tx), key, func() time.Time { return now })).Register(router.Group("/api", h.RequireSession()))
-	r := httptest.NewRequest(http.MethodPost, "/api/sessions", strings.NewReader(`{"email":"event-http@example.invalid","password":"long password for tests"}`))
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/sessions", strings.NewReader(`{"email":"event-http@example.invalid","password":"long password for tests"}`))
 	r.Header.Set("Origin", "http://localhost:3200")
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Idempotency-Key", uuid.NewString())
@@ -41,7 +41,7 @@ func TestSecurityEventHTTPFilters(t *testing.T) {
 	}
 	cookie := w.Result().Cookies()[0]
 	get := func(path string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
 		r.AddCookie(cookie)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, r)

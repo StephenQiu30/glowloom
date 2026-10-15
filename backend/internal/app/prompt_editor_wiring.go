@@ -19,7 +19,7 @@ type promptDraftAccess struct {
 
 func (a promptDraftAccess) AuthorizeDraft(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool) error {
 	_, err := a.store.Authorize(ctx, actor, project, write)
-	if errors.Is(err, workspaceapp.ErrProjectNotFound) {
+	if errors.Is(err, workspaceapp.ErrProjectNotFound) || errors.Is(err, workspaceapp.ErrScopeNotFound) {
 		return promptapp.ErrDraftNotFound
 	}
 	return err

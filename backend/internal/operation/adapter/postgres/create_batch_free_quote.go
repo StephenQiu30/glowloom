@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
@@ -34,7 +33,7 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 	requestID := uuid.MustParse(input.RequestID)
 	var result application.CreateBatchFreeQuoteResult
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
 		if err := lockQuoteRequest(tx, actor, requestID); err != nil {
@@ -101,7 +100,7 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 			}
 			valid = append(valid, item)
 		}
-		budget, err := pgbilling.NewStore(tx).FindBudget(ctx, actor, input.ProjectID)
+		budget, err := s.billingStore(tx).FindBudget(ctx, actor, input.ProjectID)
 		if err != nil {
 			return err
 		}
@@ -119,7 +118,7 @@ func (s *Store) CreateBatchFreeQuote(ctx context.Context, actor identityapp.Prin
 				Scope: batchScope, Status: domain.BatchStatusQuoted,
 				TotalCount: int32(len(valid)), QuoteTotalMicros: result.TotalMicros,
 			}
-			if err := NewStore(tx).CreateQuoteSnapshot(ctx, actor, &batch, valid); err != nil {
+			if err := s.withDB(tx).CreateQuoteSnapshot(ctx, actor, &batch, valid); err != nil {
 				return err
 			}
 			result.BatchID = &batchID

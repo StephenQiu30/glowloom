@@ -31,7 +31,7 @@ func (s *Store) FindReservation(ctx context.Context, actor identityapp.Principal
 		ClosedAt     *time.Time
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`

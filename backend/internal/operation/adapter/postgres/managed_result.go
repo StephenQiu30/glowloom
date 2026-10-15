@@ -78,6 +78,9 @@ func (s *Store) ReadManagedResult(ctx context.Context, i application.ProviderDis
 // IngestManagedText copies durable provider output to the project candidate table.
 func (s *Store) IngestManagedText(ctx context.Context, i application.ProviderDispatchIdentity) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, i.OperationID, true); err != nil {
+			return err
+		}
 		var present int
 		r := tx.Raw(`SELECT 1 FROM operation.operation WHERE id=? AND project_id=? AND status='ingesting' AND capability='text.generate' AND NOT is_delete FOR UPDATE`, i.OperationID, i.ProjectID).Scan(&present)
 		if r.Error != nil {
@@ -86,7 +89,7 @@ func (s *Store) IngestManagedText(ctx context.Context, i application.ProviderDis
 		if r.RowsAffected != 1 {
 			return application.ErrProviderCallConflict
 		}
-		result, err := NewStore(tx).ReadManagedResult(ctx, i)
+		result, err := s.withDB(tx).ReadManagedResult(ctx, i)
 		if err != nil {
 			return err
 		}

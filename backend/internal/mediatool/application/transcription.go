@@ -104,6 +104,7 @@ type TranscriptionWork struct {
 // TranscriptionWorkerStore never infers remote cessation from a client timeout.
 type TranscriptionWorkerStore interface {
 	Claim(context.Context, TranscriptionWorkID) (TranscriptionWork, error)
+	AuthorizeObjectWrite(context.Context, TranscriptionWorkID) error
 	Progress(context.Context, TranscriptionWorkID, int, string) error
 	StartInference(context.Context, TranscriptionWorkID) error
 	EndInference(context.Context, TranscriptionWorkID) error

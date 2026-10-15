@@ -29,7 +29,7 @@ func (s *Store) ReadCurrentQuoteCatalog(ctx context.Context, actor identityapp.P
 	}
 	var modelID, priceID *uuid.UUID
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, quoted.ProjectID, false); err != nil {
 			return err
 		}
 		var project struct{ AllowOverseasModels bool }

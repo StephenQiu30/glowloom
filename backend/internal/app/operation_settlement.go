@@ -37,17 +37,25 @@ func (f *operationFinalizer) FinalizeOperation(ctx context.Context, input operat
 	if err != nil || id.String() != input.OperationID || input.ActualCostMicros < 0 {
 		return operationflow.ErrInvalidOperationInput
 	}
-	loaded, err := f.operation.LoadWorkflowOperation(ctx, id)
-	if err != nil {
-		return fmt.Errorf("load operation for settlement: %w", err)
-	}
+	return f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		facts, err := f.operation.ReadSettlementFactsInTransaction(ctx, tx, id)
+		if err != nil {
+			return fmt.Errorf("load operation for settlement: %w", err)
+		}
+		return f.finalizeOperationInTransaction(ctx, tx, id, input, facts)
+	})
+}
+
+// finalizeOperationInTransaction uses the caller's facts and connection;
+// stores may retain root-pool handles, but every financial read/write uses tx.
+func (f *operationFinalizer) finalizeOperationInTransaction(ctx context.Context, tx *gorm.DB, id uuid.UUID, input operationflow.SettlementInput, loaded operationapp.SettlementFacts) error {
 	var retryable *bool
 	if input.To == "failed" {
 		retryable = &input.Retryable
 	}
 	var modelKey *string
-	if loaded.Provider.ModelKey != "" {
-		modelKey = &loaded.Provider.ModelKey
+	if loaded.ModelKey != "" {
+		modelKey = &loaded.ModelKey
 	}
 	finalize := operationapp.FinalizeInput{
 		OperationID: id, From: []operationdomain.Status{input.From},
@@ -55,52 +63,50 @@ func (f *operationFinalizer) FinalizeOperation(ctx context.Context, input operat
 		Retryable: retryable, Reason: input.Reason,
 	}
 	settle := billingapp.SettleInput{
-		ProjectID: loaded.Operation.ProjectID, OperationID: id,
+		ProjectID: loaded.ProjectID, OperationID: id,
 		ActualCostMicros: input.ActualCostMicros,
 		CapAtReservation: loaded.PriceUnit == "per_1k_tokens",
-		Capability:       loaded.Operation.Capability, ModelKey: modelKey,
-		Region:     loaded.Operation.Region,
+		Capability:       loaded.Capability, ModelKey: modelKey,
+		Region:     loaded.Region,
 		OccurredAt: time.Now().UTC(),
 	}
-	return f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		prepared, err := f.operation.PrepareFinalizationInTransaction(ctx, tx, finalize)
+	prepared, err := f.operation.PrepareFinalizationInTransaction(ctx, tx, finalize)
+	if err != nil {
+		return fmt.Errorf("prepare operation finalization: %w", err)
+	}
+	if prepared.ProjectID != settle.ProjectID {
+		return errSettlementStateConflict
+	}
+	if !prepared.AlreadyFinalized {
+		providerCost, err := f.operation.ProviderCostInTransaction(ctx, tx, id)
 		if err != nil {
-			return fmt.Errorf("prepare operation finalization: %w", err)
+			return fmt.Errorf("establish provider cost: %w", err)
 		}
-		if prepared.ProjectID != settle.ProjectID {
-			return errSettlementStateConflict
+		if providerCost.ActualCostMicros != input.ActualCostMicros {
+			return operationapp.ErrProviderCallConflict
 		}
-		if !prepared.AlreadyFinalized {
-			providerCost, err := f.operation.ProviderCostInTransaction(ctx, tx, id)
-			if err != nil {
-				return fmt.Errorf("establish provider cost: %w", err)
-			}
-			if providerCost.ActualCostMicros != input.ActualCostMicros {
-				return operationapp.ErrProviderCallConflict
-			}
-			if providerCost.ManualNotExecuted &&
-				(input.From != operationdomain.StatusManual || input.To != operationdomain.StatusFailed ||
-					input.FailureCode != "provider_not_executed") {
-				return operationapp.ErrProviderCallConflict
-			}
-			settle.ActualCostMicros = providerCost.ActualCostMicros
+		if providerCost.ManualNotExecuted &&
+			(input.From != operationdomain.StatusManual || input.To != operationdomain.StatusFailed ||
+				input.FailureCode != "provider_not_executed") {
+			return operationapp.ErrProviderCallConflict
 		}
-		result, err := f.billing.SettleInTransaction(ctx, tx, settle)
-		if err != nil {
-			if errors.Is(err, pgbilling.ErrSettlementConflict) || errors.Is(err, billingapp.ErrInvalidSettlement) {
-				return operationapp.ErrTransitionConflict
-			}
-			return fmt.Errorf("settle operation reservation: %w", err)
+		settle.ActualCostMicros = providerCost.ActualCostMicros
+	}
+	result, err := f.billing.SettleInTransaction(ctx, tx, settle)
+	if err != nil {
+		if errors.Is(err, pgbilling.ErrSettlementConflict) || errors.Is(err, billingapp.ErrInvalidSettlement) {
+			return operationapp.ErrTransitionConflict
 		}
-		if prepared.AlreadyFinalized != result.AlreadySettled {
-			return errSettlementStateConflict
-		}
-		finalize.SettledMicros = result.ChargeMicros
-		if err := f.operation.FinalizeInTransaction(ctx, tx, finalize); err != nil {
-			return fmt.Errorf("finalize operation state: %w", err)
-		}
-		return f.operation.ReleaseBatchLaunchInTransaction(ctx, tx, id)
-	})
+		return fmt.Errorf("settle operation reservation: %w", err)
+	}
+	if prepared.AlreadyFinalized != result.AlreadySettled {
+		return errSettlementStateConflict
+	}
+	finalize.SettledMicros = result.ChargeMicros
+	if err := f.operation.FinalizeInTransaction(ctx, tx, finalize); err != nil {
+		return fmt.Errorf("finalize operation state: %w", err)
+	}
+	return f.operation.ReleaseBatchLaunchInTransaction(ctx, tx, id)
 }
 
 // CompleteFromReuse commits copied output rows, a zero-cost settlement, and
@@ -177,4 +183,34 @@ func (f *operationFinalizer) CancelQueuedBatchOperation(ctx context.Context, bat
 		return false, fmt.Errorf("settle queued batch cancellation: %w", err)
 	}
 	return true, nil
+}
+
+// ResolveRevokedOperation closes proven liabilities, retaining unknown supplier
+// outcomes without publishing content or making another provider request.
+func (f *operationFinalizer) ResolveRevokedOperation(ctx context.Context, operationID string) error {
+	id, err := uuid.Parse(operationID)
+	if err != nil || id.String() != operationID {
+		return operationflow.ErrInvalidOperationInput
+	}
+	return f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		facts, err := f.operation.PrepareRevocationInTransaction(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if facts.Status.IsTerminal() {
+			return nil
+		}
+		cost, err := f.operation.ProviderCostInTransaction(ctx, tx, id)
+		if errors.Is(err, operationapp.ErrProviderCostUnknown) || errors.Is(err, operationapp.ErrManualResolutionUnverified) {
+			return f.operation.RecordRevocationUnknownInTransaction(ctx, tx, id)
+		}
+		if err != nil {
+			return err
+		}
+		code := "execution_authority_revoked"
+		if cost.ManualNotExecuted {
+			code = "provider_not_executed"
+		}
+		return f.finalizeOperationInTransaction(ctx, tx, id, operationflow.SettlementInput{OperationID: operationID, From: facts.Status, To: operationdomain.StatusFailed, ActualCostMicros: cost.ActualCostMicros, FailureCode: code, Reason: "execution_authority_revoked"}, facts)
+	})
 }

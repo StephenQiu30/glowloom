@@ -30,10 +30,7 @@ func (s *ProjectCopyStore) CompleteBible(ctx context.Context, actor identityapp.
 	}
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		before, err := readCopyJob(tx, actor, id, true)
+		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}

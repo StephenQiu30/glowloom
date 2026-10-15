@@ -13,11 +13,17 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
-func copyReferenceAccess(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) error {
+func (s scopeAuthority) copyReferenceAccess(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) error {
 	if binding.Validate() != nil || actor.OrgID != binding.OrgID {
 		return application.ErrProjectCopyMediaUnavailable
 	}
-	if err := requireCurrentActor(tx, actor); err != nil {
+	if err := s.requireCurrentActor(tx, actor); err != nil {
+		return err
+	}
+	if err := s.requireProject(tx, actor, binding.SourceProjectID, false); err != nil {
+		return err
+	}
+	if err := s.requireCopyTarget(tx, actor, binding.TargetProjectID); err != nil {
 		return err
 	}
 	ids := []uuid.UUID{binding.SourceProjectID, binding.TargetProjectID}
@@ -48,7 +54,7 @@ func (s *ProjectCopyStore) ReadCopyReference(ctx context.Context, actor identity
 		return result, application.ErrUnavailable
 	}
 	tx := s.db.WithContext(ctx)
-	if err := copyReferenceAccess(tx, actor, binding); err != nil {
+	if err := s.copyReferenceAccess(tx, actor, binding); err != nil {
 		return result, err
 	}
 	content, err := s.load(ctx, actor, binding, snapshot)

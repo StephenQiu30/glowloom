@@ -55,16 +55,15 @@ func (a *Auth) loginEmail(ctx context.Context, email, password string, persisten
 			rejected = ErrInvalidCredentials
 			return tx.AppendAuthEvent(u.ID, "login_failed", now)
 		}
-		if domain.PasswordNeedsUpgrade(hash) {
-			if a.validateNewPassword(password) != nil {
-				u.MustChangePassword = true
-			} else {
-				upgraded, err := domain.HashPassword(password, "")
-				if err != nil {
-					return err
-				}
-				u.PasswordHash = upgraded
+		// New-password rules apply only when the user chooses a new credential.
+		// Preserve a valid historical password even when it cannot be rehashed
+		// under the current policy; it still creates an ordinary session.
+		if domain.PasswordNeedsUpgrade(hash) && domain.ValidateNewPassword(password) == nil {
+			upgraded, err := domain.HashPassword(password, "")
+			if err != nil {
+				return err
 			}
+			u.PasswordHash = upgraded
 		}
 		if err := tx.SaveGuard(guardKey, domain.LoginGuard{}); err != nil {
 			return err
@@ -114,16 +113,7 @@ func (a *Auth) StartPasswordReset(ctx context.Context, email, source string) (Re
 		if u.EmailVerifiedAt.IsZero() || (u.Status != domain.StatusActive && u.Status != domain.StatusDisabled) {
 			return nil
 		}
-		secret, err := newProofToken()
-		if err != nil {
-			return err
-		}
-		c := domain.EmailChallenge{ID: uuid.New(), OperationID: id, Purpose: "password_reset", EmailKey: key, UserID: &u.ID, EmailVersion: &u.EmailVersion, CredentialEpoch: &u.SessionEpoch, ProofKeyID: a.email.protector.KeyID(), CreatedAt: now, ExpiresAt: now.Add(30 * time.Minute)}
-		c.ProofDigest = a.email.protector.Digest(c.Purpose, c.ID, secret)
-		if err := tx.InsertChallenge(c); err != nil {
-			return err
-		}
-		return a.queueEmail(tx, "password_reset", key, map[string]string{"token": id.String() + "." + secret}, now, c.ExpiresAt, c.ID)
+		return a.issuePasswordReset(tx, u, id, now)
 	})
 	if err != nil {
 		return RegistrationStart{}, err
@@ -131,6 +121,7 @@ func (a *Auth) StartPasswordReset(ctx context.Context, email, source string) (Re
 	return RegistrationStart{OperationID: id, RetryAfterSeconds: 60}, nil
 }
 
+// CompletePasswordReset consumes a bound proof and revokes all old sessions atomically.
 func (a *Auth) CompletePasswordReset(ctx context.Context, token, password, confirmation string) error {
 	if !a.emailReady() {
 		return ErrRegistrationUnavailable
@@ -201,4 +192,17 @@ func (a *Auth) CompletePasswordReset(ctx context.Context, token, password, confi
 		}
 		return a.queueEmail(tx, "password_changed", u.Email, map[string]string{}, now, now.Add(24*time.Hour))
 	})
+}
+
+func (a *Auth) issuePasswordReset(tx EmailTx, u domain.User, id uuid.UUID, now time.Time) error {
+	secret, err := newProofToken()
+	if err != nil {
+		return err
+	}
+	c := domain.EmailChallenge{ID: uuid.New(), OperationID: id, Purpose: "password_reset", EmailKey: u.Email, UserID: &u.ID, EmailVersion: &u.EmailVersion, CredentialEpoch: &u.SessionEpoch, ProofKeyID: a.email.protector.KeyID(), CreatedAt: now, ExpiresAt: now.Add(30 * time.Minute)}
+	c.ProofDigest = a.email.protector.Digest(c.Purpose, c.ID, secret)
+	if err := tx.InsertChallenge(c); err != nil {
+		return err
+	}
+	return a.queueEmail(tx, "password_reset", u.Email, map[string]string{"token": id.String() + "." + secret}, now, c.ExpiresAt, c.ID)
 }

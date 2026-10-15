@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   list: vi.fn(),
   cancel: vi.fn(),
   identity: vi.fn(),
+  preferences: vi.fn(),
   create: vi.fn(),
   save: vi.fn(),
   current: vi.fn(),
@@ -24,7 +25,10 @@ const api = vi.hoisted(() => ({
   preview: vi.fn(),
   validate: vi.fn(),
 }));
-vi.mock("@/api/identity", () => ({ getSession: api.identity }));
+vi.mock("@/api/identity", () => ({
+  getSession: api.identity,
+  getMyPreferences: api.preferences,
+}));
 vi.mock("@/api/models", () => ({ listProjectModels: api.models }));
 vi.mock("@/api/operations", () => ({
   createFreeQuote: api.quote,
@@ -104,6 +108,11 @@ beforeEach(() => {
     submission_id: id,
   };
   api.identity.mockResolvedValue({ actor: { id } });
+  api.preferences.mockResolvedValue({
+    prompt_suffix: "",
+    theme: "system",
+    revision: "1",
+  });
   api.create.mockImplementation(async (_, body) => saved(body));
   api.save.mockImplementation(async (_, body) => saved(body));
   api.current.mockImplementation(async () => current);

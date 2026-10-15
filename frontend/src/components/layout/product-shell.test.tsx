@@ -25,7 +25,11 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks }));
 vi.mock("sonner", () => ({
-  toast: { success: mocks.success, error: mocks.error },
+  toast: Object.assign(vi.fn(), {
+    success: mocks.success,
+    error: mocks.error,
+    dismiss: vi.fn(),
+  }),
 }));
 afterEach(() => {
   cleanup();
@@ -45,18 +49,32 @@ beforeEach(() => {
   vi.mocked(request)
     .mockReset()
     .mockResolvedValue({
+      items: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          kind: "personal",
+          name: "个人空间",
+          role: "creator",
+          writable: true,
+          team_id: "",
+        },
+      ],
       actor: {
         id: "11111111-1111-4111-8111-111111111111",
-        login_name: "admin",
+        email: "admin@example.com",
+        platform_role: "platform_admin",
+        status: "active",
+        revision: "1",
+        capabilities: ["platform:manage"],
         display_name: "Admin",
-        role: "admin",
-        must_change_password: false,
-        credential_revision: 1,
       },
       session_id: "22222222-2222-4222-8222-222222222222",
       last_active_at: new Date().toISOString(),
       absolute_expires_at: new Date(Date.now() + 86400000).toISOString(),
       persistent: false,
+      must_change_password: false,
+      csrf_token: "proof",
+      credential_epoch: "1",
     });
 });
 it("R6 主导航与画布入口指向真实路由，支持收起和展开", async () => {

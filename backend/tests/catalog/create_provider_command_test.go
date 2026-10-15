@@ -24,7 +24,7 @@ type createProviderStore struct {
 	called  bool
 }
 
-func (s *createProviderStore) CreateProviderWithAudit(_ context.Context, _, _ uuid.UUID, provider domain.Provider, event identityapp.OutboxEvent) (domain.Provider, error) {
+func (s *createProviderStore) CreateProviderWithAudit(_ context.Context, _ identityapp.Principal, provider domain.Provider, event identityapp.OutboxEvent) (domain.Provider, error) {
 	s.called = true
 	s.created = provider
 	s.events = []identityapp.OutboxEvent{event}

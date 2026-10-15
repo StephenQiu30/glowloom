@@ -16,7 +16,7 @@ func (s *Store) CreateCopyTargetBudget(ctx context.Context, actor identityapp.Pr
 		return ErrUnavailable
 	}
 	tx := s.db.WithContext(ctx)
-	if err := requireCurrentActor(tx, actor); err != nil {
+	if err := s.requireProject(tx, actor, target, true); err != nil {
 		return err
 	}
 	var present int
@@ -38,7 +38,7 @@ func (s *Store) VerifyCopyTargetBudget(ctx context.Context, actor identityapp.Pr
 	if s == nil || s.db == nil || target == uuid.Nil {
 		return ErrUnavailable
 	}
-	if err := requireCurrentActor(s.db.WithContext(ctx), actor); err != nil {
+	if err := s.requireProject(s.db.WithContext(ctx), actor, target, true); err != nil {
 		return err
 	}
 	var valid bool

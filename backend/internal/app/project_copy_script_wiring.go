@@ -59,7 +59,7 @@ func projectCopyScriptError(err error) error {
 
 func provideScriptProjectCopyStore(database *gorm.DB, authority workspaceapp.ProjectCopyAuthority) *pgscript.ProjectCopyStore {
 	return pgscript.NewProjectCopyStoreWithCharacters(database, func(tx *gorm.DB) scriptapp.ProjectCopyAccess {
-		return projectCopyScriptAccess{store: pgworkspace.NewProjectCopyAccessStore(tx, authority)}
+		return projectCopyScriptAccess{store: provideCopyAccess(tx, authority)}
 	}, func(tx *gorm.DB) scriptapp.ProjectCopyCharacters { return provideProjectCopyCharacters(tx, authority) })
 }
 

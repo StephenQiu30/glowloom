@@ -15,15 +15,15 @@ import (
 
 // CreateProviderWithAudit rechecks the live administrator and commits the
 // provider registration and its audit event in one transaction.
-func (s *Store) CreateProviderWithAudit(ctx context.Context, actorID, orgID uuid.UUID, provider domain.Provider, event identityapp.OutboxEvent) (domain.Provider, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+func (s *Store) CreateProviderWithAudit(ctx context.Context, actor identityapp.Principal, provider domain.Provider, event identityapp.OutboxEvent) (domain.Provider, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		provider.Validate() != nil || provider.Revision != 1 || provider.Status != domain.ProviderActive ||
-		!validProviderCreatedAudit(actorID, orgID, provider, event) {
+		!validProviderCreatedAudit(actor.ID, actor.OrgID, provider, event) {
 		return domain.Provider{}, application.ErrInvalidCreateProvider
 	}
 	var saved domain.Provider
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		if err := NewStore(tx).CreateProvider(ctx, provider); err != nil {

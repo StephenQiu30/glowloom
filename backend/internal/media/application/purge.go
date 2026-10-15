@@ -13,6 +13,8 @@ import (
 
 // LibraryReferences reads actual current and immutable historical references
 // from the installed owners. Missing or unreadable owners must return an error.
+// A nil project means an already-authorized personal library; only avatar owners
+// apply there. This port never grants access to an asset or a library.
 type LibraryReferences interface {
 	HasMediaReferences(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (bool, error)
 }

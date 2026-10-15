@@ -1,10 +1,10 @@
 # Development application stack; existing host middleware retains its data.
 # Run independently: docker compose up -d --build
-name: lanverse
+name: glowloom
 
 services:
   frontend:
-    container_name: lanverse-frontend
+    container_name: glowloom-frontend
     build:
       context: ./frontend
       target: dev
@@ -44,7 +44,7 @@ services:
       start_period: 90s
 
   backend:
-    container_name: lanverse-backend
+    container_name: glowloom-backend
     build:
       context: ./backend
       target: dev
@@ -56,6 +56,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/src:ro
+    secrets:
+      - source: identity-key
+        target: identity-key
     healthcheck:
       test:
         [
@@ -82,6 +85,7 @@ services:
       LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS: ${LV_MEDIA_ALLOW_TEST_LOOPBACK_TLS:-false}
       LV_HTTP_ADDR: "127.0.0.1:8080"
       LV_PUBLIC_ORIGIN: ${LV_PUBLIC_ORIGIN:-http://127.0.0.1:${LV_FRONTEND_PORT:-3200}}
+      LV_IDENTITY_KEY_FILE: "/run/secrets/identity-key"
       LV_DB_DSN: ${LV_DB_DSN:?Set LV_DB_DSN for the backend API}
       LV_REDIS_URL: ${LV_REDIS_URL:?Set LV_REDIS_URL for the backend API}
       LV_SESSION_IDLE_TTL: ${LV_SESSION_IDLE_TTL:-12h}
@@ -100,8 +104,14 @@ services:
       - "127.0.0.1:${LV_WORKER_HEALTH_PORT:-8081}:8081"
       - "127.0.0.1:${LV_RELAY_HEALTH_PORT:-8082}:8082"
 
+secrets:
+  identity-key:
+    file: ${LV_IDENTITY_KEY_FILE:-./.identity.key}
+
 volumes:
   frontend-modules:
     name: lanverse-dev_frontend-modules
+    external: true
   frontend-next:
     name: lanverse-dev_frontend-next
+    external: true

@@ -23,7 +23,7 @@ type providerDetailStore struct {
 	called     bool
 }
 
-func (s *providerDetailStore) FindProviderDetailForAdmin(_ context.Context, _, _, _ uuid.UUID) (domain.Provider, *catalogapp.ProviderCredentialSummary, error) {
+func (s *providerDetailStore) FindProviderDetailForAdmin(_ context.Context, _ identityapp.Principal, _ uuid.UUID) (domain.Provider, *catalogapp.ProviderCredentialSummary, error) {
 	s.called = true
 	return s.provider, s.credential, nil
 }

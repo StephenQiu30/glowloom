@@ -12,6 +12,7 @@ import (
 )
 
 type objectLocationRow struct {
+	OwnerIntentID                       *uuid.UUID
 	OwnerSessionID                      *uuid.UUID
 	ID                                  uuid.UUID
 	ProfileID, Bucket, ObjectKey, State string

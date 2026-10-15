@@ -11,12 +11,17 @@ import (
 // ErrMailOutcomeUnknown means the remote service may have accepted the message.
 var ErrMailOutcomeUnknown = errors.New("mail submission outcome unknown")
 
+// MailSender submits a decrypted message and distinguishes unknown outcomes.
 type MailSender interface {
 	Send(context.Context, uuid.UUID, string, string, []byte) (string, error)
 }
+
+// MailOpener decrypts a queued payload bound to its immutable event ID.
 type MailOpener interface {
 	Open(uuid.UUID, string, []byte) ([]byte, error)
 }
+
+// MailJob contains a leased encrypted mail payload and delivery metadata.
 type MailJob struct {
 	EventID                    uuid.UUID
 	Template, Recipient, KeyID string
@@ -24,14 +29,20 @@ type MailJob struct {
 	ExpiresAt, LeaseUntil      time.Time
 	AttemptCount               int
 }
+
+// MailCompletion records a classified delivery attempt without secret payloads.
 type MailCompletion struct {
 	Status, ProviderMessageID, ErrorCategory string
 	NextAttemptAt, CompletedAt               time.Time
 }
+
+// MailDeliveryStore leases and completes persistent delivery attempts.
 type MailDeliveryStore interface {
 	Claim(context.Context, int, time.Time) ([]MailJob, error)
 	Complete(context.Context, MailJob, MailCompletion) error
 }
+
+// MailDelivery runs bounded mail attempts outside the claiming transaction.
 type MailDelivery struct {
 	store  MailDeliveryStore
 	opener MailOpener
@@ -39,6 +50,7 @@ type MailDelivery struct {
 	now    func() time.Time
 }
 
+// NewMailDelivery constructs MailDelivery with explicit caller-supplied dependencies.
 func NewMailDelivery(store MailDeliveryStore, opener MailOpener, sender MailSender, now func() time.Time) *MailDelivery {
 	return &MailDelivery{store: store, opener: opener, sender: sender, now: now}
 }

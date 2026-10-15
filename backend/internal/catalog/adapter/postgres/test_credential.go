@@ -27,7 +27,7 @@ func (s *Store) LoadForCredentialTest(ctx context.Context, request application.C
 	var provider domain.Provider
 	var credential domain.Credential
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, request.ActorID, request.OrgID); err != nil {
+		if err := s.requireWorkerPlatform(tx, request); err != nil {
 			return err
 		}
 		if err := requireCredentialProvider(tx, request.ProviderID); err != nil {
@@ -89,7 +89,7 @@ func (s *Store) RecordCredentialTest(ctx context.Context, observation applicatio
 		return application.ErrInvalidCredentialTest
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, observation.ActorID, observation.OrgID); err != nil {
+		if err := s.requireWorkerPlatform(tx, observation.CredentialTestRequest); err != nil {
 			return err
 		}
 		if err := requireCredentialProvider(tx, observation.ProviderID); err != nil {

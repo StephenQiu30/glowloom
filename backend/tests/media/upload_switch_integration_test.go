@@ -70,9 +70,23 @@ func TestUploadAdmissionPersistsAcrossRouteSwitch(t *testing.T) {
 	}
 }
 
-// Routing tests use the committed media authorization fixture.
+// Routing tests exercise PostgreSQL admission/acceptance with an explicit scope
+// stub. Live session, membership and revocation acceptance belongs to the
+// identity integration suite; a nil production authority still fails closed.
+type routingScopeStub struct{}
+
+func (routingScopeStub) CheckActor(context.Context, identityapp.Principal) error { return nil }
+func (routingScopeStub) AuthorizePersonal(context.Context, identityapp.Principal, bool) error {
+	return nil
+}
+func (routingScopeStub) AuthorizeProject(context.Context, identityapp.Principal, uuid.UUID, bool) error {
+	return nil
+}
+func (routingScopeStub) AuthorizeCopyTarget(context.Context, identityapp.Principal, uuid.UUID) error {
+	return nil
+}
 func routingMediaStore(database *gorm.DB) *pgmedia.Store {
-	return pgmedia.NewStore(database)
+	return pgmedia.NewScopedStore(database, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
 }
 
 type persistedRoutedUpload struct {

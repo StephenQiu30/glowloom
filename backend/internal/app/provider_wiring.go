@@ -13,7 +13,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/providerprobe"
 	managedprovider "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/managed"
-	operationpg "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -36,14 +35,14 @@ func registerProviderActivities(w worker.Worker, database *gorm.DB, cfg config.C
 	if err != nil {
 		return fmt.Errorf("configure provider worker sealing key: %w", err)
 	}
-	activities := providerprobe.NewActivities(database, unsealer, providerhttp.NewClient(&http.Client{}))
+	activities := providerprobe.NewScopedActivities(database, unsealer, providerhttp.NewClient(&http.Client{}), provideCatalogStore(database))
 	w.RegisterActivityWithOptions(activities.TestCredential, activity.RegisterOptions{Name: "provider.test_credential"})
 
 	storage, err := objectstorage.Open(cfg.ObjectStorageEndpoint, cfg.ObjectStorageBucket, cfg.ObjectStorageAccessKey, cfg.ObjectStorageSecretKey, cfg.ObjectStorageRegion)
 	if err != nil {
 		return fmt.Errorf("configure provider result storage: %w", err)
 	}
-	store := operationpg.NewStore(database)
+	store := provideOperationStore(database)
 	results := operationapp.NewManagedResults(staging.NewObjects(storage), store)
 	execution := managedprovider.NewActivities(store, unsealer, providerhttp.NewClient(&http.Client{}), results, storage, managedprovider.NewVideos())
 	w.RegisterActivityWithOptions(execution.Step, activity.RegisterOptions{Name: "provider.managed"})

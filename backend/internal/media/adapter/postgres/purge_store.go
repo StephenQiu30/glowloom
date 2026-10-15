@@ -21,6 +21,7 @@ type LibraryReferenceFactory func(*gorm.DB) application.LibraryReferences
 
 // PurgeStore owns permanent acceptance and exact private removal reservations.
 type PurgeStore struct {
+	scopeAuthority
 	db         *gorm.DB
 	project    LibraryProjectAccessFactory
 	guards     LibraryWorkGuardFactory
@@ -55,7 +56,7 @@ func (r purgeJobRow) scope() domain.LibraryScope {
 }
 
 func (s *PurgeStore) access(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
-	return (&LibraryStore{project: s.project}).authorize(ctx, tx, actor, scope, write)
+	return (&LibraryStore{project: s.project, scopeAuthority: s.scopeAuthority}).authorize(ctx, tx, actor, scope, write)
 }
 func purgeLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-purge/"+actor.String()+"/"+key.String()).Error
@@ -131,7 +132,7 @@ func (s *PurgeStore) GetPurge(ctx context.Context, actor identityapp.Principal, 
 		return result, application.ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, actor, id, false)
@@ -175,7 +176,7 @@ func (s *PurgeStore) scopeBusy(ctx context.Context, tx *gorm.DB, actor identitya
 	}
 	// The package reader authorizes this same current library transaction. Its
 	// factory is unused, avoiding lifecycle recursion and a second connection.
-	packageBusy, err := NewPackageStore(tx, s.project, nil, s.clock).HasInflightLibraryPackageWork(ctx, actor, scope)
+	packageBusy, err := NewScopedPackageStore(tx, s.project, nil, s.clock, s.scopes).HasInflightLibraryPackageWork(ctx, actor, scope)
 	if err != nil {
 		return err
 	}
@@ -239,4 +240,11 @@ func recordPurgeCommand(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID,
 		return fmt.Errorf("record permanent purge audit: %w", err)
 	}
 	return nil
+}
+
+// NewScopedPurgeStore binds live scope authority explicitly.
+func NewScopedPurgeStore(db *gorm.DB, project LibraryProjectAccessFactory, guards LibraryWorkGuardFactory, references LibraryReferenceFactory, clock func() time.Time, scopes ScopeAccessFactory) *PurgeStore {
+	s := NewPurgeStore(db, project, guards, references, clock)
+	s.scopeAuthority = scopeAuthority{scopes: scopes}
+	return s
 }

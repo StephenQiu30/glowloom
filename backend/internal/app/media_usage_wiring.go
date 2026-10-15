@@ -56,11 +56,11 @@ func (s mediaStorageIntents) StorageUsageKeys(ctx context.Context, actor identit
 }
 
 func provideMediaStorageUsage(database *gorm.DB, storage *objectstorage.Client) *mediaapp.StorageUsageReader {
-	source := pgmedia.NewStorageUsageStore(database, provideMediaLibraryProjectAccess, func(tx *gorm.DB) mediaapp.StorageUsageIntentSource {
+	source := pgmedia.NewScopedStorageUsageStore(database, provideMediaLibraryProjectAccess, func(tx *gorm.DB) mediaapp.StorageUsageIntentSource {
 		return mediaStorageIntents{
-			tools:    pgmediatool.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(pgmedia.NewStore(tx))),
+			tools:    pgmediatool.NewRetainedMediaReader(tx, mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, provideMediaScopeAccess))),
 			packages: provideMediaPackageStore(tx),
 		}
-	})
+	}, provideMediaScopeAccess)
 	return mediaapp.NewStorageUsageReader(source, mediaobjects.NewStorageUsageObjects(storage), time.Now)
 }

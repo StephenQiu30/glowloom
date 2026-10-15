@@ -3,7 +3,13 @@ import { ThemeProvider } from "next-themes";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountMenu } from "./account-menu";
 
-const actor = {
+const actor: API.EmailSessionView["actor"] = {
+  id: "11111111-1111-4111-8111-111111111111",
+  email_verified_at: new Date().toISOString(),
+  avatar_asset_id: "",
+  status: "active",
+  revision: "1",
+  capabilities: [],
   display_name: "真实创作者",
   email: "creator@example.com",
   platform_role: "creator",
@@ -63,14 +69,17 @@ it("展示当前账号摘要和真实入口，普通创作者不见管理入口"
   expect(onLogout).toHaveBeenCalledOnce();
 });
 
-it.each([
-  { ...actor, role: "admin" as const },
-  { ...actor, platform_role: "platform_admin" as const },
-])("仅向现有管理员身份提供管理入口 %j", async (admin) => {
-  await openMenu(admin);
+it("仅向平台管理员提供管理入口", async () => {
+  await openMenu({ ...actor, platform_role: "platform_admin" });
   expect(
     screen.getByRole("menuitem", { name: "用户管理" }).getAttribute("href"),
   ).toBe("/users");
+});
+it("历史 admin role 不授予平台管理入口", async () => {
+  const legacy = { ...actor, role: "admin", login_name: "legacy-admin" };
+  await openMenu(legacy);
+  expect(screen.queryByRole("menuitem", { name: "用户管理" })).toBeNull();
+  expect(screen.queryByText("legacy-admin")).toBeNull();
 });
 
 it("键盘进入外观子菜单，主题选择写入现有偏好", async () => {
@@ -96,6 +105,7 @@ it("手机直接展示主题选项，保留全部账号操作", async () => {
 
 it("优先显示真实邮箱，缺失账号标识时仍能使用菜单", async () => {
   const emailActor = {
+    ...actor,
     display_name: "邮箱创作者",
     email: "creator@example.com",
   };

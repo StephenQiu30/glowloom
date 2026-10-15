@@ -1,5 +1,8 @@
 "use client";
-import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
+import { useState, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,6 +32,8 @@ export function PresetEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const formFieldId = useId();
+
   const [source, setSource] = useState(
     preset ? JSON.stringify(preset.document, null, 2) : "",
   );
@@ -54,20 +59,26 @@ export function PresetEditor({
         <DialogDescription>
           只包含平台协议和默认配置。内置预设需复制后修改，不会影响已创建的连接。
         </DialogDescription>
-        <label className="space-y-1 text-sm">
-          预设标识
+        <Field data-disabled={editing}>
+          <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+            <span>预设标识</span>
+          </FieldLabel>
           <Input
+            id={`${formFieldId}-field-1`}
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
             disabled={editing}
             pattern="[a-z][a-z0-9_-]{0,63}"
             placeholder="例如：openrouter-team"
           />
-        </label>
-        <label className="space-y-1 text-sm">
-          预设 JSON
-          <textarea
-            className="min-h-64 w-full rounded-md border bg-background p-3 font-mono text-xs"
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+            <span>预设 JSON</span>
+          </FieldLabel>
+          <Textarea
+            id={`${formFieldId}-field-2`}
+            className="min-h-64 w-full"
             value={source}
             onChange={(e) => {
               setSource(e.target.value);
@@ -75,11 +86,11 @@ export function PresetEditor({
             }}
             spellCheck={false}
           />
-        </label>
+        </Field>
         {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         ) : null}
         {preview ? (
           <div className="rounded-lg bg-muted p-3 text-sm">

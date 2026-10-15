@@ -21,16 +21,22 @@ import (
 
 // ProjectCopyStore owns media snapshots, immutable object intents and target registration.
 // Workspace injects its admission/fenced transaction; no method reads its copy job.
-type ProjectCopyStore struct{ db *gorm.DB }
+type ProjectCopyStore struct {
+	db *gorm.DB
+	scopeAuthority
+}
 
 // NewProjectCopyStore injects an owning coordinator's transaction.
 func NewProjectCopyStore(tx *gorm.DB) *ProjectCopyStore { return &ProjectCopyStore{db: tx} }
 
-func copyMediaTarget(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) error {
+func (s scopeAuthority) copyMediaTarget(tx *gorm.DB, actor identityapp.Principal, binding application.ProjectCopyBinding) error {
 	if binding.Validate() != nil || binding.OrgID != actor.OrgID {
 		return application.ErrProjectCopyMediaUnavailable
 	}
-	if err := requireCurrentActor(tx, actor); err != nil {
+	if err := s.requireCurrentActor(tx, actor); err != nil {
+		return err
+	}
+	if err := s.requireCopyTarget(tx, actor, binding.TargetProjectID); err != nil {
 		return err
 	}
 	var present int
@@ -126,10 +132,10 @@ func (s *ProjectCopyStore) freezeWithReferenceFacts(ctx context.Context, actor i
 		return application.ProjectCopySnapshot{}, application.ErrUnavailable
 	}
 	tx := s.db.WithContext(ctx)
-	if err := copyMediaTarget(tx, actor, binding); err != nil {
+	if err := s.copyMediaTarget(tx, actor, binding); err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
-	if err := requireProject(tx, actor, binding.SourceProjectID, false); err != nil {
+	if err := s.requireProject(tx, actor, binding.SourceProjectID, false); err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
 	librarySource, err := readCopySourceLibrary(tx, actor, binding)
@@ -277,7 +283,7 @@ func (r copyObjectRow) object() application.ProjectCopyObject {
 
 func (s *ProjectCopyStore) load(ctx context.Context, actor identityapp.Principal, binding application.ProjectCopyBinding, snapshot application.ProjectCopySnapshot) (application.ProjectMediaCopy, error) {
 	tx := s.db.WithContext(ctx)
-	if err := copyMediaTarget(tx, actor, binding); err != nil {
+	if err := s.copyMediaTarget(tx, actor, binding); err != nil {
 		return application.ProjectMediaCopy{}, err
 	}
 	var row struct {
@@ -477,7 +483,7 @@ func (s *ProjectCopyStore) ReferenceCopiedAsset(ctx context.Context, actor ident
 	if s == nil || s.db == nil {
 		return application.AssetSummary{}, application.ErrUnavailable
 	}
-	if err := copyMediaTarget(s.db.WithContext(ctx), actor, binding); err != nil {
+	if err := s.copyMediaTarget(s.db.WithContext(ctx), actor, binding); err != nil {
 		return application.AssetSummary{}, err
 	}
 	var row assetRow
@@ -582,4 +588,9 @@ func (s *ProjectCopyStore) BeginObjectWrite(ctx context.Context, actor identitya
 		return application.ErrObjectMismatch
 	}
 	return nil
+}
+
+// NewScopedProjectCopyStore binds coordinator authority without replacing its lease.
+func NewScopedProjectCopyStore(tx *gorm.DB, scopes ScopeAccessFactory) *ProjectCopyStore {
+	return &ProjectCopyStore{db: tx, scopeAuthority: scopeAuthority{scopes: scopes}}
 }

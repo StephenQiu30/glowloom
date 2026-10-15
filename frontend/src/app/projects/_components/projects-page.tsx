@@ -1,5 +1,7 @@
 "use client";
-import { useRef, useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FieldSet, Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import { useRef, useState, useId } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
@@ -28,6 +30,8 @@ import {
 } from "@/components/ui/select";
 import { ProjectList } from "./project-list";
 export function ProjectsPage() {
+  const formFieldId = useId();
+
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -115,53 +119,65 @@ export function ProjectsPage() {
               void create();
             }}
           >
-            <fieldset disabled={pending} className="space-y-5">
-              <label className="form-label">
-                画布名称
-                <Input
-                  autoFocus
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="未命名画布"
-                  maxLength={100}
-                />
-              </label>
-              <label className="form-label">
-                默认画幅
-                <Select
-                  value={ratio}
-                  onValueChange={(v) => setRatio(v as typeof ratio)}
-                >
-                  <SelectTrigger aria-label="默认画幅">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["16:9", "9:16", "1:1"].map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              {error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => setOpen(false)}
-                >
-                  取消
-                </Button>
-                <Button type="submit">
-                  {pending ? "正在创建…" : "创建画布"}
-                </Button>
-              </DialogFooter>
-            </fieldset>
+            <FieldGroup>
+              <FieldSet disabled={pending}>
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+                      <span>画布名称</span>
+                    </FieldLabel>
+                    <Input
+                      id={`${formFieldId}-field-1`}
+                      autoFocus
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="未命名画布"
+                      maxLength={100}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+                      <span>默认画幅</span>
+                    </FieldLabel>
+                    <Select
+                      value={ratio}
+                      onValueChange={(v) => setRatio(v as typeof ratio)}
+                    >
+                      <SelectTrigger
+                        id={`${formFieldId}-field-2`}
+                        aria-label="默认画幅"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["16:9", "9:16", "1:1"].map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {r}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => setOpen(false)}
+                    >
+                      取消
+                    </Button>
+                    <Button type="submit">
+                      {pending ? "正在创建…" : "创建画布"}
+                    </Button>
+                  </DialogFooter>
+                </FieldGroup>
+              </FieldSet>
+            </FieldGroup>
           </form>
         </DialogContent>
       </Dialog>

@@ -11,9 +11,10 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
+	workspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
 func importDeliveryProof(tx *gorm.DB, d application.ImportDelivery) error {
@@ -35,40 +36,52 @@ func (s *ImportStore) VerifyImportDelivery(ctx context.Context, d application.Im
 	if err := s.configured(); err != nil {
 		return false, err
 	}
-	tx := s.db.WithContext(ctx)
-	if err := importDeliveryProof(tx, d); err != nil {
-		return false, err
-	}
-	r, err := readImport(tx, identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}, d.ProjectID, d.JobID, false)
-	if err != nil {
-		return false, err
-	}
-	if r.Job.Attempt != d.Attempt || r.Job.Status == "succeeded" || r.Job.Status == "cancelled" {
-		return false, nil
-	}
-	switch d.Action {
-	case "cancel":
-		return r.Job.CancellationRequested, nil
-	case "reconcile":
-		return r.Job.ReconciliationRequested, nil
-	default:
-		return r.Job.Status == "queued" || r.Job.Status == "running" && !r.Job.NeedsReconciliation, nil
-	}
+	var valid bool
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := importDeliveryProof(tx, d); err != nil {
+			return err
+		}
+		actor := identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}
+		scoped := &ImportStore{db: tx, workerAccess: s.workerAccess}
+		err := scoped.workerTransaction(ctx, actor, d.ProjectID, func(tx *gorm.DB) error {
+			r, err := readImport(tx, actor, d.ProjectID, d.JobID, false)
+			if err != nil {
+				return err
+			}
+			if r.Job.Attempt != d.Attempt || r.Job.Status == "succeeded" || r.Job.Status == "cancelled" {
+				return nil
+			}
+			switch d.Action {
+			case "cancel":
+				valid = r.Job.CancellationRequested
+			case "reconcile":
+				valid = r.Job.ReconciliationRequested
+			default:
+				valid = r.Actor.ID == d.ActorID && (r.Job.Status == "queued" || r.Job.Status == "running" && !r.Job.NeedsReconciliation)
+			}
+			return nil
+		})
+		if errors.Is(err, workspace.ErrScopeNotFound) || errors.Is(err, workspace.ErrProjectNotFound) || errors.Is(err, workspacedomain.ErrProjectStateConflict) || errors.Is(err, identityapp.ErrForbidden) {
+			valid = false
+			return nil
+		}
+		return err
+	})
+	return valid, err
 }
 
 func importActor(tx *gorm.DB, d application.ImportDelivery) (identityapp.Principal, error) {
 	var row struct {
-		ActorID   uuid.UUID
-		ActorRole string
+		ActorID uuid.UUID
 	}
-	read := tx.Raw(`SELECT actor_id,actor_role FROM script.import_job WHERE id=? AND org_id=? AND project_id=?`, d.JobID, d.OrgID, d.ProjectID).Scan(&row)
+	read := tx.Raw(`SELECT actor_id FROM script.import_job WHERE id=? AND org_id=? AND project_id=?`, d.JobID, d.OrgID, d.ProjectID).Scan(&row)
 	if read.Error != nil {
 		return identityapp.Principal{}, read.Error
 	}
 	if read.RowsAffected != 1 {
 		return identityapp.Principal{}, application.ErrNotFound
 	}
-	return identityapp.Principal{ID: row.ActorID, OrgID: d.OrgID, Role: identitydomain.Role(row.ActorRole)}, nil
+	return identityapp.Principal{ID: row.ActorID, OrgID: d.OrgID}, nil
 }
 
 // ClaimImport refuses timeout/lost-owner inference; only queued or proven stopped work starts.
@@ -131,16 +144,15 @@ func (s *ImportStore) withWorker(ctx context.Context, work application.ImportWor
 	}
 	var row struct {
 		ProjectID, OrgID, ActorID uuid.UUID
-		ActorRole                 string
 	}
-	read := s.db.WithContext(ctx).Raw(`SELECT project_id,org_id,actor_id,actor_role FROM script.import_job WHERE id=?`, work.JobID).Scan(&row)
+	read := s.db.WithContext(ctx).Raw(`SELECT project_id,org_id,actor_id FROM script.import_job WHERE id=?`, work.JobID).Scan(&row)
 	if read.Error != nil {
 		return read.Error
 	}
 	if read.RowsAffected != 1 {
 		return application.ErrNotFound
 	}
-	actor := identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID, Role: identitydomain.Role(row.ActorRole)}
+	actor := identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}
 	return s.creatorTransaction(ctx, actor, row.ProjectID, func(tx *gorm.DB, current identityapp.Principal) error {
 		actor = current
 		r, err := readImport(tx, actor, row.ProjectID, work.JobID, true)
@@ -156,17 +168,7 @@ func (s *ImportStore) withWorker(ctx context.Context, work application.ImportWor
 }
 
 func (s *ImportStore) creatorTransaction(ctx context.Context, seed identityapp.Principal, project uuid.UUID, f func(*gorm.DB, identityapp.Principal) error) error {
-	actor := seed
-	actor.Role = identitydomain.RoleProducer
-	run := func() error {
-		return s.transaction(ctx, actor, project, true, func(tx *gorm.DB) error { return f(tx, actor) })
-	}
-	err := run()
-	if errors.Is(err, identityapp.ErrForbidden) {
-		actor.Role = identitydomain.RoleAdmin
-		return run()
-	}
-	return err
+	return s.workerTransaction(ctx, seed, project, func(tx *gorm.DB) error { return f(tx, seed) })
 }
 
 // ReportImportPhase records actual current work, never an estimated percentage.
@@ -281,30 +283,20 @@ func (s *ImportStore) controlTransaction(ctx context.Context, d application.Impo
 	if err := importDeliveryProof(s.db.WithContext(ctx), d); err != nil {
 		return err
 	}
-	// Existing project owner compares exact current Principal role. Probe these two
-	// closed allowed roles; neither constructed role grants access by itself.
-	actor := identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID, Role: identitydomain.RoleProducer}
-	run := func() error {
-		return s.transaction(ctx, actor, d.ProjectID, true, func(tx *gorm.DB) error {
-			if err := importDeliveryProof(tx, d); err != nil {
-				return err
-			}
-			r, err := readImport(tx, actor, d.ProjectID, d.JobID, true)
-			if err != nil {
-				return err
-			}
-			if !r.Job.CanControl || r.Job.Attempt != d.Attempt {
-				return identityapp.ErrForbidden
-			}
-			return f(tx, r, actor)
-		})
-	}
-	err := run()
-	if errors.Is(err, identityapp.ErrForbidden) {
-		actor.Role = identitydomain.RoleAdmin
-		return run()
-	}
-	return err
+	actor := identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}
+	return s.workerTransaction(ctx, actor, d.ProjectID, func(tx *gorm.DB) error {
+		if err := importDeliveryProof(tx, d); err != nil {
+			return err
+		}
+		r, err := readImport(tx, actor, d.ProjectID, d.JobID, true)
+		if err != nil {
+			return err
+		}
+		if !r.Job.CanControl || r.Job.Attempt != d.Attempt {
+			return identityapp.ErrForbidden
+		}
+		return f(tx, r, actor)
+	})
 }
 
 // ImportControlRecord rechecks the actual permanent controller, never the old creator.

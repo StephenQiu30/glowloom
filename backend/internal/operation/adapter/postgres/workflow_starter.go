@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/google/uuid"
 )
 
 // ConfirmedSingle verifies an event against the committed single-operation row.
-func (s *Store) ConfirmedSingle(ctx context.Context, orgID, projectID, operationID, reservationID uuid.UUID) (bool, error) {
+func (s *Store) confirmedSingle(ctx context.Context, orgID, projectID, operationID, reservationID uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, ErrUnavailable
 	}
@@ -61,7 +63,7 @@ func (s *Store) StaleConfirmedSingles(ctx context.Context, before time.Time, lim
 }
 
 // ConfirmedBatch verifies the committed parent and every selected child.
-func (s *Store) ConfirmedBatch(ctx context.Context, orgID, projectID, batchID uuid.UUID) (bool, error) {
+func (s *Store) confirmedBatch(ctx context.Context, orgID, projectID, batchID uuid.UUID) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, ErrUnavailable
 	}
@@ -133,4 +135,38 @@ func (s *Store) StaleConfirmedBatches(ctx context.Context, before time.Time, lim
 		ids = append(ids, row.ID)
 	}
 	return ids, nil
+}
+
+// ConfirmedSingle authorizes the durable confirming actor before event delivery.
+func (s *Store) ConfirmedSingle(ctx context.Context, orgID, projectID, operationID, reservationID uuid.UUID) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, ErrUnavailable
+	}
+	var eligible bool
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, operationID, true); err != nil {
+			return err
+		}
+		var err error
+		eligible, err = s.withDB(tx).confirmedSingle(ctx, orgID, projectID, operationID, reservationID)
+		return err
+	})
+	return eligible, err
+}
+
+// ConfirmedBatch authorizes every durable child before batch event delivery.
+func (s *Store) ConfirmedBatch(ctx context.Context, orgID, projectID, batchID uuid.UUID) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, ErrUnavailable
+	}
+	var eligible bool
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireBatchWorker(tx, batchID, true); err != nil {
+			return err
+		}
+		var err error
+		eligible, err = s.withDB(tx).confirmedBatch(ctx, orgID, projectID, batchID)
+		return err
+	})
+	return eligible, err
 }

@@ -1,5 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { LoadingState } from "@/components/layout/loading-state";
+import { ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import { useEffect, useState, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { RequestError } from "@/lib/request";
 import { Input } from "@/components/ui/input";
@@ -30,6 +44,8 @@ export function ConnectionDetail({
   presets: API.Preset[];
   onSaved: () => void;
 }) {
+  const formFieldId = useId();
+
   const [detail, setDetail] = useState<API.ProviderDetail | null>(null);
   const [config, setConfig] = useState<API.ConnectionConfig | null>(null);
   const [credentials, setCredentials] = useState<
@@ -102,12 +118,12 @@ export function ConnectionDetail({
     >
       <h2 className="text-lg font-medium">{provider?.name ?? "连接详情"}</h2>
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : null}
       {!detail ? (
-        <p role="status">正在加载连接…</p>
+        <LoadingState>正在加载连接…</LoadingState>
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
@@ -116,7 +132,6 @@ export function ConnectionDetail({
             {provider?.region === "domestic" ? "国内" : "海外"}
           </p>
           <form
-            className="space-y-3"
             onSubmit={async (event) => {
               event.preventDefault();
               const key = apiKey;
@@ -140,29 +155,34 @@ export function ConnectionDetail({
               );
             }}
           >
-            <label className="space-y-1 text-sm">
-              平台 API Key
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(event) => setAPIKey(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                required
-                placeholder={
-                  detail.credential?.last4
-                    ? `已配置 ••••${detail.credential.last4}，输入以轮换`
-                    : "输入 API Key"
-                }
-              />
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Key 仅用于本次保存，不会保存在浏览器。轮换后旧 Key
-              只用于已有任务恢复。
-            </p>
-            <Button disabled={mutation.busy || !apiKey}>
-              {detail.credential ? "轮换 Key" : "保存 Key"}
-            </Button>
+            <FieldGroup className="gap-3">
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+                  <span>平台 API Key</span>
+                </FieldLabel>
+                <Input
+                  id={`${formFieldId}-field-1`}
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => setAPIKey(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  required
+                  placeholder={
+                    detail.credential?.last4
+                      ? `已配置 ••••${detail.credential.last4}，输入以轮换`
+                      : "输入 API Key"
+                  }
+                />
+              </Field>
+              <p className="text-xs text-muted-foreground">
+                Key 仅用于本次保存，不会保存在浏览器。轮换后旧 Key
+                只用于已有任务恢复。
+              </p>
+              <Button disabled={mutation.busy || !apiKey}>
+                {detail.credential ? "轮换 Key" : "保存 Key"}
+              </Button>
+            </FieldGroup>
           </form>
           <MutationStatus mutation={mutation} />
           <section className="space-y-2" aria-label="Key 轮换记录">
@@ -181,29 +201,49 @@ export function ConnectionDetail({
                       : "已停用"}
                 </span>
                 {key.status !== "disabled" ? (
-                  <details>
-                    <summary className="cursor-pointer">紧急停用</summary>
-                    <p className="my-2 max-w-xs text-xs">
-                      停用此 Key
-                      后，绑定它的任务也无法继续查询。此操作不能撤销，后续需要添加新
-                      Key。
-                    </p>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={mutation.busy}
-                      onClick={() =>
-                        mutation.run("credential.disable", key.id!, (request) =>
-                          disableAdminCredential(
-                            { id, credential_id: key.id! },
-                            { headers: { "Idempotency-Key": request } },
-                          ),
-                        )
-                      }
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="group/collapsible h-auto w-full justify-between whitespace-normal"
+                      >
+                        <span>紧急停用</span>
+                        <ChevronDown
+                          data-icon="inline-end"
+                          className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+                        />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent
+                      forceMount
+                      className="pt-3 data-[state=closed]:hidden"
                     >
-                      确认停用此 Key
-                    </Button>
-                  </details>
+                      <p className="my-2 max-w-xs text-xs">
+                        停用此 Key
+                        后，绑定它的任务也无法继续查询。此操作不能撤销，后续需要添加新
+                        Key。
+                      </p>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={mutation.busy}
+                        onClick={() =>
+                          mutation.run(
+                            "credential.disable",
+                            key.id!,
+                            (request) =>
+                              disableAdminCredential(
+                                { id, credential_id: key.id! },
+                                { headers: { "Idempotency-Key": request } },
+                              ),
+                          )
+                        }
+                      >
+                        确认停用此 Key
+                      </Button>
+                    </CollapsibleContent>
+                  </Collapsible>
                 ) : null}
               </div>
             ))}
@@ -273,27 +313,44 @@ export function ConnectionDetail({
                   <p>候选列表已截断，可在模型管理中手动补充模型 ID。</p>
                 ) : null}
                 {check.candidates?.length ? (
-                  <details>
-                    <summary>查看 {check.candidates.length} 个候选模型</summary>
-                    <ul className="mt-2 max-h-64 space-y-2 overflow-auto">
-                      {check.candidates.map((item) => (
-                        <li
-                          key={`${item.capability}:${item.provider_model_id}`}
-                          className="rounded border p-2 break-all"
-                        >
-                          <span>
-                            {item.display_name || item.provider_model_id}
-                          </span>
-                          <code className="block text-xs">
-                            {item.provider_model_id}
-                          </code>
-                          <span className="text-xs text-muted-foreground">
-                            {item.capability}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="group/collapsible h-auto w-full justify-between whitespace-normal"
+                      >
+                        <span>查看 {check.candidates.length} 个候选模型</span>
+                        <ChevronDown
+                          data-icon="inline-end"
+                          className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+                        />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent
+                      forceMount
+                      className="pt-3 data-[state=closed]:hidden"
+                    >
+                      <ul className="mt-2 max-h-64 space-y-2 overflow-auto">
+                        {check.candidates.map((item) => (
+                          <li
+                            key={`${item.capability}:${item.provider_model_id}`}
+                            className="rounded border p-2 break-all"
+                          >
+                            <span>
+                              {item.display_name || item.provider_model_id}
+                            </span>
+                            <code className="block text-xs">
+                              {item.provider_model_id}
+                            </code>
+                            <span className="text-xs text-muted-foreground">
+                              {item.capability}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CollapsibleContent>
+                  </Collapsible>
                 ) : null}
               </div>
             ) : null}
@@ -304,17 +361,22 @@ export function ConnectionDetail({
               <p className="text-xs text-muted-foreground">
                 保存配置只更新候选快照。现有模型发布和任务继续使用原快照。
               </p>
-              <label className="block text-sm">
-                目标预设版本
-                <select
-                  className="mt-1 h-10 w-full rounded-md border bg-background px-3"
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+                  <span>目标预设版本</span>
+                </FieldLabel>
+                <NativeSelect
+                  id={`${formFieldId}-field-2`}
+                  className="mt-1 h-10 w-full"
                   value={target}
                   onChange={(e) => {
                     setTarget(e.target.value);
                     setPreview(null);
                   }}
                 >
-                  <option value="">选择同一预设的新版本</option>
+                  <NativeSelectOption value="">
+                    选择同一预设的新版本
+                  </NativeSelectOption>
                   {presets
                     .filter(
                       (p) =>
@@ -324,12 +386,15 @@ export function ConnectionDetail({
                           provider?.adapter_key,
                     )
                     .map((p) => (
-                      <option key={p.version_id} value={p.version_id}>
+                      <NativeSelectOption
+                        key={p.version_id}
+                        value={p.version_id}
+                      >
                         {p.document?.name} v{p.version}
-                      </option>
+                      </NativeSelectOption>
                     ))}
-                </select>
-              </label>
+                </NativeSelect>
+              </Field>
               <Button
                 variant="outline"
                 disabled={!target || mutation.busy}
@@ -359,14 +424,17 @@ export function ConnectionDetail({
                       ? `需处理冲突：${preview.conflicts.join("、")}`
                       : "没有覆盖冲突。请确认最终配置。"}
                   </p>
-                  <label className="block text-sm">
-                    最终配置
-                    <textarea
-                      className="mt-1 min-h-48 w-full rounded-md border bg-background p-3 font-mono text-xs"
+                  <Field>
+                    <FieldLabel htmlFor={`${formFieldId}-field-3`}>
+                      <span>最终配置</span>
+                    </FieldLabel>
+                    <Textarea
+                      id={`${formFieldId}-field-3`}
+                      className="mt-1 min-h-48 w-full"
                       value={resolution}
                       onChange={(e) => setResolution(e.target.value)}
                     />
-                  </label>
+                  </Field>
                   <Button
                     disabled={mutation.busy}
                     onClick={async () => {

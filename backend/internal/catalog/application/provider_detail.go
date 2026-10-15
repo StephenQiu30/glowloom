@@ -48,7 +48,7 @@ type ProviderDetail struct {
 
 // ProviderDetailStore reads one consistent, currently authorized snapshot.
 type ProviderDetailStore interface {
-	FindProviderDetailForAdmin(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (domain.Provider, *ProviderCredentialSummary, error)
+	FindProviderDetailForAdmin(context.Context, identityapp.Principal, uuid.UUID) (domain.Provider, *ProviderCredentialSummary, error)
 }
 
 // CredentialFieldCatalog describes input fields for a supported adapter.
@@ -75,7 +75,7 @@ func (q *ProviderDetailQuery) Execute(ctx context.Context, actor identityapp.Pri
 	if !IsPlatformAdmin(actor) || actor.OrgID == uuid.Nil {
 		return ProviderDetail{}, identityapp.ErrForbidden
 	}
-	provider, credential, err := q.store.FindProviderDetailForAdmin(ctx, actor.ID, actor.OrgID, providerID)
+	provider, credential, err := q.store.FindProviderDetailForAdmin(ctx, actor, providerID)
 	if err != nil {
 		return ProviderDetail{}, fmt.Errorf("read provider detail: %w", err)
 	}

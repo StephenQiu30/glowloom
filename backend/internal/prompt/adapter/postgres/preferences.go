@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -20,7 +21,10 @@ import (
 var errUnavailable = errors.New("prompt preference storage unavailable")
 
 // Store keeps private preferences behind an explicitly injected database handle.
-type Store struct{ db *gorm.DB }
+type Store struct {
+	db     *gorm.DB
+	actors func(*gorm.DB) application.ActorAccess
+}
 
 // NewStore injects the canonical PostgreSQL database.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
@@ -32,11 +36,11 @@ func (s *Store) ReadCustomizations(ctx context.Context, actor identityapp.Princi
 	}
 	customizations := []domain.Customization{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		return tx.Raw(`SELECT id,operation,mode,content,base_template_id,revision,update_time
-		 FROM workspace.prompt_customization WHERE org_id=? AND owner_id=? ORDER BY operation`, actor.OrgID, actor.ID).Scan(&customizations).Error
+		 FROM workspace.prompt_customization WHERE owner_id=? ORDER BY operation`, actor.ID).Scan(&customizations).Error
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read prompt preferences transaction: %w", err)
@@ -69,7 +73,7 @@ func (s *Store) SaveCustomization(ctx context.Context, actor identityapp.Princip
 	fingerprint := hex.EncodeToString(hash[:])
 	var saved domain.Customization
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		var locked int
@@ -118,19 +122,15 @@ func (s *Store) SaveCustomization(ctx context.Context, actor identityapp.Princip
 	return saved, nil
 }
 
-func requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
-	var present int
-	result := tx.Raw(`SELECT 1 FROM identity."user" u JOIN workspace.organization o ON o.id=u.org_id
-	 WHERE u.id=? AND u.org_id=? AND u.role IN ('admin','producer') AND u.status='active'
-	 AND NOT u.is_delete AND NOT u.must_change_password AND o.status='active' AND NOT o.is_delete
-	 FOR SHARE OF u,o`, actor.ID, actor.OrgID).Scan(&present)
-	if result.Error != nil {
-		return fmt.Errorf("check current prompt actor: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
+// NewScopedStore injects exact-session authorization for self-account preferences.
+func NewScopedStore(db *gorm.DB, actors func(*gorm.DB) application.ActorAccess) *Store {
+	return &Store{db: db, actors: actors}
+}
+func (s *Store) requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
+	if s.actors == nil || s.actors(tx) == nil {
 		return identityapp.ErrForbidden
 	}
-	return nil
+	return s.actors(tx).CheckSession(tx.Statement.Context, actor, time.Now().UTC())
 }
 
 func replayPreference(tx *gorm.DB, actor, key uuid.UUID, fingerprint string, saved *domain.Customization) (bool, error) {

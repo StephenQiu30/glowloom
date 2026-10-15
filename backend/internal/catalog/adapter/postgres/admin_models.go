@@ -29,7 +29,7 @@ func (s *Store) ListAdminModels(ctx context.Context, actor identityapp.Principal
 		return page, application.ErrInvalidAdminModels
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actor.ID, actor.OrgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		query := adminModelSelect + ` WHERE NOT is_delete`
@@ -85,7 +85,7 @@ func (s *Store) ReadAdminModel(ctx context.Context, actor identityapp.Principal,
 		return result, application.ErrInvalidAdminModels
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actor.ID, actor.OrgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var model modelProfileRow
@@ -138,7 +138,7 @@ func (s *Store) ListAdminCapabilities(ctx context.Context, actor identityapp.Pri
 		return nil, application.ErrInvalidAdminModels
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actor.ID, actor.OrgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var rows []struct {

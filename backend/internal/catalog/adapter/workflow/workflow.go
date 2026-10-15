@@ -41,6 +41,8 @@ type LoadedCredential struct {
 
 // AgentTestInput is the reviewed JSON contract for provider.test_credential.
 type AgentTestInput struct {
+	OrgID       uuid.UUID       `json:"org_id"`
+	RequestID   string          `json:"request_id"`
 	TestID      uuid.UUID       `json:"test_id,omitempty"`
 	ActorID     uuid.UUID       `json:"actor_id,omitempty"`
 	ProviderID  uuid.UUID       `json:"provider_id"`
@@ -119,7 +121,7 @@ func CredentialTestWorkflow(ctx workflow.Context, input Input) (output Output, r
 		len(loaded.Ciphertext) == 0 || len(loaded.Last4) != 4 {
 		return Output{}, ErrInvalidTestWorkflow
 	}
-	agentInput := AgentTestInput{TestID: input.TestID, ActorID: input.ActorID,
+	agentInput := AgentTestInput{TestID: input.TestID, ActorID: input.ActorID, OrgID: input.OrgID, RequestID: input.RequestID,
 		ProviderID: loaded.ProviderID, ProviderKey: loaded.ProviderKey, AdapterKey: loaded.AdapterKey,
 		Credential: AgentCredential{
 			ID: loaded.CredentialID, KeyID: loaded.KeyID,

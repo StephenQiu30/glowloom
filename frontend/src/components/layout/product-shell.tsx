@@ -11,6 +11,10 @@ import {
 import { cn } from "cn";
 import { useRouter } from "next/navigation";
 import { Bell, Gift, Menu } from "lucide-react";
+import {
+  SpaceProvider,
+  SpaceSwitcher,
+} from "@/components/spaces/space-context";
 import { AccountMenu } from "@/components/account/account-menu";
 import { Brand } from "@/components/brand/brand";
 import {
@@ -33,7 +37,15 @@ import {
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { Navigation, ProductNavigation } from "./product-navigation";
 import type { Screen } from "./routes";
-const adminScreens = ["users", "models", "providers", "audit", "health"];
+const adminScreens = [
+  "users",
+  "models",
+  "providers",
+  "audit",
+  "health",
+  "platform/teams",
+  "platform/settings",
+];
 const LoginContext = createContext<() => void>(() => {});
 export function useLoginDialog() {
   return useContext(LoginContext);
@@ -155,6 +167,11 @@ function Shell({
             )}
           </div>
         </header>
+        {session ? (
+          <div className="border-b px-4 py-2">
+            <SpaceSwitcher />
+          </div>
+        ) : null}
         {isMobile && <Navigation screen={screen} mobile />}
         <main id="main-content" className={cn(!fullBleed && "workspace-page")}>
           {children}
@@ -187,7 +204,7 @@ function Shell({
             将结束当前设备的登录会话。已保存的画布仍保留在你的账号中。
           </DialogDescription>
           {error && (
-            <Alert variant="danger">
+            <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -230,27 +247,32 @@ export function ProductShell({
   return (
     <SessionGate
       admin={adminScreens.includes(screen)}
-      allowGuest={allowGuest && (screen === "home" || screen === "explore")}
+      allowGuest={
+        allowGuest &&
+        (screen === "home" || screen === "explore" || screen === "invitations")
+      }
     >
-      <SidebarProvider
-        className="product-shell"
-        open={sidebarOpen}
-        onOpenChange={setSidebarPreference}
-        style={
-          {
-            "--sidebar-width": "240px",
-            "--sidebar-width-icon": "64px",
-          } as CSSProperties
-        }
-      >
-        <Shell
-          screen={screen}
-          fullBleed={fullBleed}
-          initialAuthMode={initialAuthMode}
+      <SpaceProvider>
+        <SidebarProvider
+          className="product-shell"
+          open={sidebarOpen}
+          onOpenChange={setSidebarPreference}
+          style={
+            {
+              "--sidebar-width": "240px",
+              "--sidebar-width-icon": "64px",
+            } as CSSProperties
+          }
         >
-          {children}
-        </Shell>
-      </SidebarProvider>
+          <Shell
+            screen={screen}
+            fullBleed={fullBleed}
+            initialAuthMode={initialAuthMode}
+          >
+            {children}
+          </Shell>
+        </SidebarProvider>
+      </SpaceProvider>
     </SessionGate>
   );
 }

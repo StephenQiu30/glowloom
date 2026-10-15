@@ -41,7 +41,7 @@ func replayProjectCreation(tx *gorm.DB, actor identityapp.Principal, request app
 	// Recheck visibility even for a replay. Later edits never replace the first
 	// response, but a deleted or moved project cannot be disclosed from a receipt.
 	var visible int
-	result = tx.Raw(`SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND owner_id=? AND NOT is_delete FOR SHARE`, saved.ID, actor.OrgID, actor.ID).Scan(&visible)
+	result = tx.Raw(`SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND owner_scope_id=? AND NOT is_delete FOR SHARE`, saved.ID, actor.OrgID, actor.ScopeID).Scan(&visible)
 	if result.Error != nil {
 		return false, fmt.Errorf("authorize project creation replay: %w", result.Error)
 	}

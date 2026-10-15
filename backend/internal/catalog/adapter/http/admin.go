@@ -124,6 +124,8 @@ func encodeAdminCursor(cursor adminCursor) (*string, error) {
 
 func adminError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "session_invalid", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrProviderNotFound), errors.Is(err, application.ErrCredentialNotFound), errors.Is(err, application.ErrModelNotFound):

@@ -2,6 +2,7 @@
 // BeefTV a2196d3: canvas-mini-map.tsx world bounds, margins and navigation (MIT).
 import { isDraft, type Node } from "./editor-state";
 import type { ViewportTransform } from "./canvas-viewport";
+import { Button } from "@/components/ui/button";
 
 export function CanvasMiniMap({
   nodes,
@@ -26,12 +27,34 @@ export function CanvasMiniMap({
   const offsetX = (200 - (right - left) * scale) / 2,
     offsetY = (128 - (bottom - top) * scale) / 2;
   return (
-    <div
-      className="canvas-mini-map"
+    <Button
+      variant="outline"
+      type="button"
+      className="canvas-mini-map h-auto p-0"
       data-canvas-no-zoom
-      aria-label="画布小地图"
+      aria-label="在小地图定位画布"
+      onClick={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (!event.detail) {
+          onNavigate((left + right) / 2, (top + bottom) / 2);
+          return;
+        }
+        onNavigate(
+          left +
+            (((event.clientX - rect.left) * 200) / rect.width - offsetX) /
+              scale,
+          top +
+            (((event.clientY - rect.top) * 128) / rect.height - offsetY) /
+              scale,
+        );
+      }}
     >
-      <svg viewBox="0 0 200 128" role="img" aria-label="节点位置与当前视口">
+      <svg
+        className="size-full"
+        viewBox="0 0 200 128"
+        role="img"
+        aria-label="节点位置与当前视口"
+      >
         {nodes.map((node) => (
           <rect
             key={node.id}
@@ -54,26 +77,6 @@ export function CanvasMiniMap({
           strokeWidth="1"
         />
       </svg>
-      <button
-        type="button"
-        aria-label="在小地图定位画布"
-        className="absolute inset-0"
-        onClick={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          if (!event.detail) {
-            onNavigate((left + right) / 2, (top + bottom) / 2);
-            return;
-          }
-          onNavigate(
-            left +
-              (((event.clientX - rect.left) * 200) / rect.width - offsetX) /
-                scale,
-            top +
-              (((event.clientY - rect.top) * 128) / rect.height - offsetY) /
-                scale,
-          );
-        }}
-      />
-    </div>
+    </Button>
   );
 }

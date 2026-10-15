@@ -113,7 +113,7 @@ func (h *Handler) ServeProject(w http.ResponseWriter, r *http.Request, projectID
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache, no-transform")
+	w.Header().Set("Cache-Control", "no-store, no-transform")
 	w.Header().Set("X-Accel-Buffering", "no")
 	seen := newSeenIDs(r.Header.Get("Last-Event-ID"))
 	if resync {
@@ -123,6 +123,9 @@ func (h *Handler) ServeProject(w http.ResponseWriter, r *http.Request, projectID
 		flusher.Flush()
 	}
 	for _, message := range replay {
+		if !h.authorize(streamRequest, projectID) {
+			return
+		}
 		if err := writeMessage(w, message); err != nil {
 			h.logger.Warn("write replay event", zap.String("project_id", projectID), zap.Error(err))
 			return

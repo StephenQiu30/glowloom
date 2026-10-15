@@ -24,6 +24,9 @@ func (s *Store) ClaimProviderDispatch(ctx context.Context, identity application.
 	}
 	var dispatch application.ProviderDispatchResult
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, identity.OperationID, true); err != nil {
+			return err
+		}
 		var op struct {
 			ProjectID             uuid.UUID
 			Status                string

@@ -18,26 +18,23 @@ import (
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
-func requirePlatformCatalogAdmin(tx *gorm.DB, actor identityapp.Principal) error {
-	var present int
-	result := tx.Raw(`SELECT 1 FROM identity."user" WHERE id=? AND platform_role='platform_admin'
- AND status='active' AND NOT is_delete AND NOT must_change_password FOR SHARE`, actor.ID).Scan(&present)
-	if result.Error != nil {
-		return fmt.Errorf("check platform catalog administrator: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
+func requirePlatformCatalogAdmin(tx *gorm.DB, actors ActorAccessFactory, actor identityapp.Principal) error {
+	if actors == nil || actors(tx) == nil {
 		return identityapp.ErrForbidden
 	}
-	return nil
+	return actors(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now().UTC())
+}
+func (s *Store) requirePlatformAdmin(tx *gorm.DB, actor identityapp.Principal) error {
+	return requirePlatformCatalogAdmin(tx, s.actors, actor)
 }
 
 // catalogMutation stores only nonsecret request fingerprints and safe receipts.
 // A transaction-level advisory lock closes the concurrent first-use race.
-func catalogMutation[T any](ctx context.Context, db *gorm.DB, actor identityapp.Principal, action string, target, requestID uuid.UUID, input any, mutate func(*gorm.DB) (T, error)) (T, error) {
-	return catalogRequest(ctx, db, actor, action, target, requestID, input, true, mutate)
+func catalogMutation[T any](ctx context.Context, db *gorm.DB, actors ActorAccessFactory, actor identityapp.Principal, action string, target, requestID uuid.UUID, input any, mutate func(*gorm.DB) (T, error)) (T, error) {
+	return catalogRequest(ctx, db, actors, actor, action, target, requestID, input, true, mutate)
 }
 
-func catalogRequest[T any](ctx context.Context, db *gorm.DB, actor identityapp.Principal, action string, target, requestID uuid.UUID, input any, audit bool, mutate func(*gorm.DB) (T, error)) (T, error) {
+func catalogRequest[T any](ctx context.Context, db *gorm.DB, actors ActorAccessFactory, actor identityapp.Principal, action string, target, requestID uuid.UUID, input any, audit bool, mutate func(*gorm.DB) (T, error)) (T, error) {
 	var output T
 	encoded, err := json.Marshal(input)
 	if err != nil {
@@ -46,7 +43,7 @@ func catalogRequest[T any](ctx context.Context, db *gorm.DB, actor identityapp.P
 	digest := sha256.Sum256(encoded)
 	fingerprint := hex.EncodeToString(digest[:])
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, actors, actor); err != nil {
 			return err
 		}
 		lockKey := actor.ID.String() + "/" + action + "/" + target.String() + "/" + requestID.String()
@@ -139,7 +136,7 @@ func readPreset(tx *gorm.DB, id uuid.UUID) (domain.Preset, error) {
 func (s *Store) ListPresets(ctx context.Context, actor identityapp.Principal) ([]domain.Preset, error) {
 	items := []domain.Preset{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		var rows []presetRow
@@ -160,7 +157,7 @@ func (s *Store) ListPresets(ctx context.Context, actor identityapp.Principal) ([
 
 // SavePreset appends a custom version; builtins can only be copied.
 func (s *Store) SavePreset(ctx context.Context, actor identityapp.Principal, input application.SavePresetInput) (domain.Preset, error) {
-	return catalogMutation(ctx, s.db, actor, "preset.save", input.ID, input.RequestID, input, func(tx *gorm.DB) (domain.Preset, error) {
+	return catalogMutation(ctx, s.db, s.actors, actor, "preset.save", input.ID, input.RequestID, input, func(tx *gorm.DB) (domain.Preset, error) {
 		id := input.ID
 		version := 1
 		if id == uuid.Nil {
@@ -203,7 +200,7 @@ func (s *Store) SavePreset(ctx context.Context, actor identityapp.Principal, inp
 
 // SetPresetState does not alter connections already pinned to immutable versions.
 func (s *Store) SetPresetState(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.PresetStateInput) (domain.Preset, error) {
-	return catalogMutation(ctx, s.db, actor, "preset.state", id, input.RequestID, input, func(tx *gorm.DB) (domain.Preset, error) {
+	return catalogMutation(ctx, s.db, s.actors, actor, "preset.state", id, input.RequestID, input, func(tx *gorm.DB) (domain.Preset, error) {
 		r := tx.Exec(`UPDATE catalog.provider_preset SET archived=?,emergency_disabled=?,revision=revision+1,update_time=now() WHERE id=? AND revision=?`, input.Archived, input.EmergencyDisabled, id, input.ExpectedRevision)
 		if r.Error != nil {
 			return domain.Preset{}, r.Error
@@ -217,7 +214,7 @@ func (s *Store) SetPresetState(ctx context.Context, actor identityapp.Principal,
 
 // ConnectPreset atomically creates the disabled provider and its initial snapshot.
 func (s *Store) ConnectPreset(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.ConnectPresetInput) (application.PresetConnection, error) {
-	return catalogMutation(ctx, s.db, actor, "preset.connect", id, input.RequestID, input, func(tx *gorm.DB) (application.PresetConnection, error) {
+	return catalogMutation(ctx, s.db, s.actors, actor, "preset.connect", id, input.RequestID, input, func(tx *gorm.DB) (application.PresetConnection, error) {
 		var row struct{ Payload []byte }
 		r := tx.Raw(`SELECT v.payload FROM catalog.provider_preset p JOIN catalog.provider_preset_version v ON v.preset_id=p.id WHERE p.id=? AND v.id=? AND NOT p.archived AND NOT p.emergency_disabled FOR SHARE OF p`, id, input.VersionID).Scan(&row)
 		if r.Error != nil {

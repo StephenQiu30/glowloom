@@ -40,9 +40,9 @@ type publishVersionStore struct {
 	err              error
 }
 
-func (s *publishVersionStore) PublishModelVersionWithAudit(_ context.Context, actorID, orgID uuid.UUID, version domain.ModelVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelVersion, error) {
+func (s *publishVersionStore) PublishModelVersionWithAudit(_ context.Context, actor identityapp.Principal, version domain.ModelVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelVersion, error) {
 	s.called = true
-	s.actorID, s.orgID = actorID, orgID
+	s.actorID, s.orgID = actor.ID, actor.OrgID
 	s.version, s.expectedRevision, s.event = version, expectedRevision, event
 	if s.err != nil {
 		return domain.ModelVersion{}, s.err

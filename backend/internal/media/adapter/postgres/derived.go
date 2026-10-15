@@ -19,10 +19,10 @@ func (s *Store) AuthorizeDerivedProject(ctx context.Context, actor identityapp.P
 		return ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		return requireProject(tx, actor, project, write)
+		return s.requireProject(tx, actor, project, write)
 	})
 }
 
@@ -32,10 +32,10 @@ func (s *Store) StoreDerived(ctx context.Context, actor identityapp.Principal, a
 		return ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if err := requireProject(tx, actor, asset.ProjectID, true); err != nil {
+		if err := s.requireProject(tx, actor, asset.ProjectID, true); err != nil {
 			return err
 		}
 		if err := asset.Validate(); err != nil {
@@ -65,10 +65,10 @@ func (s *Store) ReviewDerived(ctx context.Context, actor identityapp.Principal, 
 		return ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if err := requireProject(tx, actor, project, true); err != nil {
+		if err := s.requireProject(tx, actor, project, true); err != nil {
 			return err
 		}
 		detail, err := json.Marshal(struct {
@@ -99,10 +99,10 @@ func (s *Store) RejectDerived(ctx context.Context, actor identityapp.Principal, 
 		return ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if err := requireProject(tx, actor, project, true); err != nil {
+		if err := s.requireProject(tx, actor, project, true); err != nil {
 			return err
 		}
 		r := tx.Exec(`UPDATE media.media_asset SET status='rejected',moderation_status='rejected',failure_reason=?,revision=revision+1,update_time=? WHERE id=? AND project_id=? AND origin='system' AND status='processing' AND moderation_status='pending' AND NOT is_delete`, reason, now, id, project)

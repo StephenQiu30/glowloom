@@ -7,6 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { RequestError } from "@/lib/request";
 import { flowError } from "@/components/generation/contracts";
@@ -211,7 +212,7 @@ export function SubjectDetail({
             action ? "subject-control" : "subject-detail sm:max-w-[680px]"
           }
           showCloseButton={!pending && !uncertain}
-          overlayClassName={action ? "bg-black/65" : undefined}
+          overlayClassName={action ? "bg-cover-overlay" : undefined}
           onInteractOutside={(e) => e.preventDefault()}
         >
           {!action && (
@@ -290,9 +291,9 @@ export function SubjectDetail({
                 </Button>
               </div>
               {error && (
-                <p role="alert" className="flow-error">
-                  {error}
-                </p>
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
             </>
           )}
@@ -328,9 +329,9 @@ export function SubjectDetail({
                 )}
                 {action === "delete" && <p>删除后可在“已删除”中恢复。</p>}
                 {error && (
-                  <p role="alert" className="flow-error">
-                    {error}
-                  </p>
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
                 {error && !uncertain && (
                   <Button

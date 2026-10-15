@@ -270,6 +270,9 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 	if _, err := downloaded.File.Seek(0, io.SeekStart); err != nil {
 		return IngestOutput{}, fmt.Errorf("rewind media result: %w", err)
 	}
+	if err := s.authorizeObjectWrite(ctx, op); err != nil {
+		return IngestOutput{}, err
+	}
 	if err := s.objects.PutIfAbsent(ctx, objectKey, downloaded.File, downloaded.Size, downloaded.MIMEType, downloaded.SHA256); err != nil && !errors.Is(err, ErrObjectAlreadyExists) {
 		return IngestOutput{}, fmt.Errorf("store media result: %w", err)
 	}
@@ -300,6 +303,9 @@ func (s *IngestService) Ingest(ctx context.Context, input IngestInput) (IngestOu
 		key := path.Join(strings.TrimSuffix(objectKey, path.Ext(objectKey)), string(file.Kind)+"."+file.Ext)
 		if _, err := file.Result.File.Seek(0, io.SeekStart); err != nil {
 			return IngestOutput{}, fmt.Errorf("rewind media preview: %w", err)
+		}
+		if err := s.authorizeObjectWrite(ctx, op); err != nil {
+			return IngestOutput{}, err
 		}
 		if err := s.objects.PutIfAbsent(ctx, key, file.Result.File, file.Result.Size, file.Result.MIMEType, file.Result.SHA256); err != nil && !errors.Is(err, ErrObjectAlreadyExists) {
 			return IngestOutput{}, fmt.Errorf("store media preview: %w", err)
@@ -372,6 +378,20 @@ func (s *IngestService) verifyObject(ctx context.Context, key string, size int64
 	}
 	if stored.Size != size || stored.ContentType != contentType || stored.SHA256 != sha {
 		return ErrObjectMismatch
+	}
+	return nil
+}
+
+// authorizeObjectWrite re-reads durable operation authority after potentially long
+// download/render work and before each new original or rendition object write.
+// Existing writes are retained on denial; no provider submission is performed here.
+func (s *IngestService) authorizeObjectWrite(ctx context.Context, frozen SourceOperation) error {
+	current, err := s.repo.LoadOperation(ctx, frozen.ID)
+	if err != nil {
+		return fmt.Errorf("authorize media object write: %w", err)
+	}
+	if current.ID != frozen.ID || current.ProjectID != frozen.ProjectID || current.ProviderKey != frozen.ProviderKey || current.ModelKey != frozen.ModelKey || current.Region != frozen.Region || current.AspectRatio != frozen.AspectRatio || current.OutputKind != frozen.OutputKind || !current.CreateTime.Equal(frozen.CreateTime) {
+		return ErrInvalidIngest
 	}
 	return nil
 }

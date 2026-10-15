@@ -102,7 +102,7 @@ func (s *Store) withConfirmationKey(ctx context.Context, actor identityapp.Princ
 			}
 		}()
 		if actorErr := conn.Transaction(func(tx *gorm.DB) error {
-			if err := requireCurrentActor(tx, actor); err != nil {
+			if err := s.requireProject(tx, actor, key.projectID, true); err != nil {
 				return err
 			}
 			if key.operationID == uuid.Nil || s.editorSnapshots == nil {
@@ -132,7 +132,7 @@ func (s *Store) withConfirmationKey(ctx context.Context, actor identityapp.Princ
 			outcome = stored
 			return replayConfirmationError(stored)
 		}
-		outcome, callbackErr = run(NewStoreWithEditor(conn, s.promptCompiler, s.editorSnapshots), key)
+		outcome, callbackErr = run(s.withDB(conn), key)
 		if callbackErr != nil && outcome.ErrorCode != "" {
 			if writeErr := conn.Transaction(func(tx *gorm.DB) error {
 				return insertConfirmationOutcome(tx, key, outcome)

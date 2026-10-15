@@ -134,3 +134,6 @@ func credentialTestEvents(observation CredentialTestObservation) ([]identityapp.
 		{ID: auditID, Topic: auditTopic, PartitionKey: key, Payload: audit},
 	}, nil
 }
+
+// ErrCredentialTestRevoked is returned only after the durable accepted receipt is verified.
+var ErrCredentialTestRevoked = errors.New("accepted credential test authority revoked")

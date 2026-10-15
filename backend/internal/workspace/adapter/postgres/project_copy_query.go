@@ -19,14 +19,14 @@ func (s *ProjectCopyStore) List(ctx context.Context, actor identityapp.Principal
 	}
 	page := application.ProjectCopyPage{Jobs: []domain.ProjectCopyJob{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireRequest(ctx, tx, actor, false); err != nil {
 			return err
 		}
-		if _, err := readLifecycleProject(tx, actor.OrgID, input.SourceProjectID, false); err != nil {
+		if err := (&Store{scopes: s.requests}).authorizeProject(ctx, tx, actor, input.SourceProjectID, false); err != nil {
 			return err
 		}
-		query := `SELECT ` + copyJobColumns + `,create_time FROM workspace.project_copy_job WHERE org_id=? AND source_project_id=?`
-		args := []any{actor.OrgID, input.SourceProjectID}
+		query := `SELECT ` + copyJobColumns + `,create_time FROM workspace.project_copy_job WHERE org_id=? AND source_project_id=? AND owner_scope_id=?`
+		args := []any{actor.OrgID, input.SourceProjectID, actor.ScopeID}
 		if input.After != nil {
 			query += ` AND (create_time,id)<(?,?)`
 			args = append(args, input.After.CreatedAt, input.After.ID)
@@ -43,7 +43,7 @@ func (s *ProjectCopyStore) List(ctx context.Context, actor identityapp.Principal
 			page.Next = &application.ProjectCopyCursor{CreatedAt: last.CreateTime, ID: last.ID}
 		}
 		for _, row := range rows {
-			job, err := row.job()
+			job, err := s.authorizedCopy(ctx, tx, actor, row.ID, false, false)
 			if err != nil {
 				return err
 			}
@@ -61,14 +61,15 @@ func (s *ProjectCopyStore) WorkerActor(ctx context.Context, org, id uuid.UUID) (
 	}
 	var actor identityapp.Principal
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		result := tx.Raw(`SELECT u.id,u.org_id,u.role,u.must_change_password FROM identity."user" u JOIN workspace.project_copy_job j ON COALESCE(j.execution_actor_id,j.actor_id)=u.id AND j.org_id=u.org_id WHERE j.id=? AND j.org_id=? AND NOT u.is_delete AND u.status='active'`, id, org).Scan(&actor)
+		result := tx.Raw(`SELECT u.id,j.org_id,j.owner_scope_id AS scope_id FROM identity."user" u JOIN workspace.project_copy_job j ON COALESCE(j.execution_actor_id,j.actor_id)=u.id WHERE j.id=? AND j.org_id=? AND NOT u.is_delete AND u.status='active'`, id, org).Scan(&actor)
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
 			return identityapp.ErrForbidden
 		}
-		return requireCurrentActor(tx, actor)
+		_, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
+		return err
 	})
 	return actor, err
 }

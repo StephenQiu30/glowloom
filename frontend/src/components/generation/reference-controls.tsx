@@ -1,5 +1,12 @@
 "use client";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import { useEffect, useEffectEvent, useRef, useState, useId } from "react";
 import {
   resolvePromptUpload,
   validatePromptFragment,
@@ -97,6 +104,8 @@ export function ReferenceControls({
   disabled?: boolean;
   authorized?: boolean;
 }) {
+  const formFieldId = useId();
+
   const [picker, setPicker] = useState<{
       kind: MediaKind;
       replace?: string;
@@ -116,6 +125,7 @@ export function ReferenceControls({
   } | null>(null);
   const [fileIds, setFileIds] = useState<string[]>([]);
   const [unavailablePaste, setUnavailablePaste] = useState<string | null>(null);
+  const referenceUploadInput = useRef<HTMLInputElement>(null);
   const files = useRef(new Map<string, File>()),
     [uploading, setUploading] = useState<string[]>([]);
   const [mention, setMention] = useState<{
@@ -444,9 +454,17 @@ export function ReferenceControls({
         >
           添加主体
         </Button>
-        <label className="cursor-pointer rounded border px-3 py-2 text-sm">
-          上传参考
-          <input
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => referenceUploadInput.current?.click()}
+          >
+            上传参考
+          </Button>
+          <Input
+            ref={referenceUploadInput}
             aria-label="上传参考文件"
             type="file"
             accept="image/*,video/*,audio/*"
@@ -458,21 +476,23 @@ export function ReferenceControls({
               e.target.value = "";
             }}
           />
-        </label>
+        </div>
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        新参考角色
-        <select
+      <Field>
+        <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+          <span>新参考角色</span>
+        </FieldLabel>
+        <NativeSelect
+          id={`${formFieldId}-field-2`}
           aria-label="新参考角色"
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          className="rounded border bg-background p-2"
         >
           {roles.map((r) => (
-            <option key={r}>{r}</option>
+            <NativeSelectOption key={r}>{r}</NativeSelectOption>
           ))}
-        </select>
-      </label>
+        </NativeSelect>
+      </Field>
       {menu && (
         <div className="rounded border p-3" aria-label="引用候选">
           <Input
@@ -576,11 +596,11 @@ export function ReferenceControls({
             {!authorized && ref.source.kind !== "pending_upload" && (
               <p className="text-sm">来源待核验；确认权限前隐藏内容。</p>
             )}
-            <select
+            <NativeSelect
               aria-label={`${referenceLabel(draft.labelState, ref.id)}角色`}
               disabled={disabled}
               value={ref.role}
-              className="w-full rounded border bg-background p-1"
+              className="w-full"
               onChange={(e) =>
                 session.replaceReference(ref.id, {
                   ...ref,
@@ -589,9 +609,9 @@ export function ReferenceControls({
               }
             >
               {roles.map((r) => (
-                <option key={r}>{r}</option>
+                <NativeSelectOption key={r}>{r}</NativeSelectOption>
               ))}
-            </select>
+            </NativeSelect>
             {ref.source.kind === "pending_upload" && (
               <div className="space-y-2 text-sm">
                 <p>
@@ -606,7 +626,7 @@ export function ReferenceControls({
                 >
                   查询原上传结果
                 </Button>
-                <input
+                <Input
                   aria-label={`重选${referenceLabel(draft.labelState, ref.id)}`}
                   type="file"
                   accept={`${ref.mediaKind}/*`}
@@ -717,16 +737,23 @@ export function ReferenceControls({
         ))}
       </div>
       {draft.references.some((r) => r.source.kind === "pending_upload") && (
-        <label className="flex gap-2 text-sm">
-          <input
-            type="checkbox"
+        <Field orientation="horizontal">
+          <Checkbox
+            id={`${formFieldId}-field-3`}
+
             checked={review}
-            onChange={(e) => setReview(e.target.checked)}
+            onCheckedChange={(e) => setReview(e === true)}
           />
-          我已确认这些素材可以用于本次创作
-        </label>
+          <FieldLabel htmlFor={`${formFieldId}-field-3`}>
+            <span>我已确认这些素材可以用于本次创作</span>
+          </FieldLabel>
+        </Field>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       {unavailablePaste !== null && (
         <div className="rounded border p-3">
           <p>

@@ -50,6 +50,9 @@ func (s *Store) LoadWorkflowBatch(ctx context.Context, batchID uuid.UUID) (appli
 	}
 	var snapshot application.WorkflowBatch
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireBatchWorker(tx, batchID, false); err != nil {
+			return err
+		}
 		var row batchRow
 		result := tx.Raw(`
 			SELECT b.id, b.project_id, b.kind, b.scope, b.status,
@@ -136,6 +139,9 @@ func (s *Store) MarkWorkflowBatchRunning(ctx context.Context, batchID uuid.UUID)
 		return application.ErrInvalidWorkflowBatch
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireBatchWorker(tx, batchID, true); err != nil {
+			return err
+		}
 		result := tx.Exec(`
 			UPDATE operation.batch AS b
 			SET status = 'running', update_time = now()
@@ -225,6 +231,9 @@ func (s *Store) ResumeWorkflowBatch(ctx context.Context, batchID uuid.UUID) erro
 		return application.ErrInvalidWorkflowBatch
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireBatchWorker(tx, batchID, true); err != nil {
+			return err
+		}
 		updated := tx.Exec(`
 			UPDATE operation.batch SET paused_reason = NULL, update_time = now()
 			WHERE id = ?::uuid AND status = 'running' AND paused_reason IS NOT NULL

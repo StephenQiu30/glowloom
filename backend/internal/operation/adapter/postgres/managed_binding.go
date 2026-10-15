@@ -74,7 +74,7 @@ func admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIden
 	isTrial := trial.ActorID != uuid.Nil
 	if isTrial {
 		var authorized int
-		r := tx.Raw(`SELECT 1 FROM identity."user" WHERE id=? AND platform_role='platform_admin' AND status='active' AND NOT is_delete AND NOT must_change_password FOR SHARE`, trial.ActorID).Scan(&authorized)
+		r := tx.Raw(`SELECT 1 FROM identity."user" WHERE id=? AND platform_role='platform_admin' AND status='active' AND NOT is_delete FOR SHARE`, trial.ActorID).Scan(&authorized)
 		if r.Error != nil {
 			return r.Error
 		}
@@ -149,7 +149,7 @@ func admitManagedDispatch(tx *gorm.DB, identity application.ProviderDispatchIden
 
 // LoadManagedCredential accepts draining only for the exact previously bound
 // operation. Revoked keys stop every subsequent query and content download.
-func (s *Store) LoadManagedCredential(ctx context.Context, operationID uuid.UUID) (application.ManagedCredential, error) {
+func (s *Store) loadManagedCredential(ctx context.Context, operationID uuid.UUID) (application.ManagedCredential, error) {
 	if s == nil || s.db == nil {
 		return application.ManagedCredential{}, ErrUnavailable
 	}
@@ -172,7 +172,7 @@ func (s *Store) LoadManagedCredential(ctx context.Context, operationID uuid.UUID
 }
 
 // ManagedMediaKey checks project ownership and review state before URL signing.
-func (s *Store) ManagedMediaKey(ctx context.Context, projectID, assetID uuid.UUID) (string, error) {
+func (s *Store) managedMediaKey(ctx context.Context, projectID, assetID uuid.UUID) (string, error) {
 	var row struct{ ObjectKey string }
 	r := s.db.WithContext(ctx).Raw(`SELECT object_key FROM media.media_asset WHERE id=? AND project_id=? AND status='ready' AND moderation_status IN ('passed','skipped') AND NOT is_delete`, assetID, projectID).Scan(&row)
 	if r.Error != nil {
@@ -182,4 +182,46 @@ func (s *Store) ManagedMediaKey(ctx context.Context, projectID, assetID uuid.UUI
 		return "", application.ErrWorkflowInputNotReady
 	}
 	return row.ObjectKey, nil
+}
+
+// LoadManagedCredential rechecks current execution authority before exposing a bound key.
+func (s *Store) LoadManagedCredential(ctx context.Context, id uuid.UUID) (application.ManagedCredential, error) {
+	if s == nil || s.db == nil {
+		return application.ManagedCredential{}, ErrUnavailable
+	}
+	var result application.ManagedCredential
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, id, true); err != nil {
+			return err
+		}
+		var err error
+		result, err = s.withDB(tx).loadManagedCredential(ctx, id)
+		return err
+	})
+	return result, err
+}
+
+// ManagedMediaKey validates the operation's frozen project and current actor before signing inputs.
+func (s *Store) ManagedMediaKey(ctx context.Context, operationID, projectID, assetID uuid.UUID) (string, error) {
+	if s == nil || s.db == nil {
+		return "", ErrUnavailable
+	}
+	var key string
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, operationID, true); err != nil {
+			return err
+		}
+		var present int
+		r := tx.Raw(`SELECT 1 FROM operation.operation o JOIN operation.operation_input i ON i.operation_id=o.id WHERE o.id=? AND o.project_id=? AND (i.media_asset_id=? OR i.mask_asset_id=?) AND NOT o.is_delete AND NOT i.is_delete LIMIT 1`, operationID, projectID, assetID, assetID).Scan(&present)
+		if r.Error != nil {
+			return r.Error
+		}
+		if r.RowsAffected != 1 {
+			return ErrNotFound
+		}
+		var err error
+		key, err = s.withDB(tx).managedMediaKey(ctx, projectID, assetID)
+		return err
+	})
+	return key, err
 }

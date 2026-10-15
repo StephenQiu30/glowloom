@@ -142,6 +142,10 @@ func (h *Handler) List(c *gin.Context) {
 	page, err := h.list.Execute(c.Request.Context(), actor, input)
 	if err != nil {
 		switch {
+		case errors.Is(err, identityapp.ErrSessionInvalid):
+			httpapi.WriteProblem(c, 401, "unauthorized", nil)
+		case errors.Is(err, application.ErrScopeNotFound):
+			httpapi.WriteProblem(c, 404, "not_found", nil)
 		case errors.Is(err, identityapp.ErrForbidden):
 			httpapi.WriteProblem(c, 403, "forbidden", nil)
 		case errors.Is(err, application.ErrInvalidProjectList):

@@ -1,10 +1,267 @@
+const identityUUID =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// Explicit current identity contracts. Adding a handler requires a reviewed entry here.
+const identityRoutes: {
+  pattern: string;
+  methods: string[];
+  query: string[];
+}[] = [
+  { pattern: `sessions`, methods: ["POST"], query: [] },
+  { pattern: `session`, methods: ["GET"], query: [] },
+  { pattern: `auth-policy`, methods: ["GET"], query: [] },
+  { pattern: `registrations`, methods: ["POST"], query: [] },
+  {
+    pattern: `registrations/${identityUUID}/(resend|verify|complete)`,
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `password-resets`, methods: ["POST"], query: [] },
+  { pattern: `password-resets/complete`, methods: ["POST"], query: [] },
+  { pattern: `me`, methods: ["GET", "PATCH"], query: [] },
+  { pattern: `me/avatar`, methods: ["GET"], query: [] },
+  { pattern: `me/avatar/uploads`, methods: ["POST"], query: [] },
+  { pattern: `me/email-change`, methods: ["POST"], query: [] },
+  {
+    pattern: `me/email-change/${identityUUID}`,
+    methods: ["DELETE"],
+    query: [],
+  },
+  {
+    pattern: `me/email-change/${identityUUID}/(verify|complete)`,
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `me/preferences`, methods: ["GET", "PATCH"], query: [] },
+  { pattern: `me/(reauthentication|password)`, methods: ["POST"], query: [] },
+  { pattern: `me/sessions`, methods: ["GET"], query: [] },
+  { pattern: `me/sessions/revoke-others`, methods: ["POST"], query: [] },
+  { pattern: `sessions/${identityUUID}`, methods: ["DELETE"], query: [] },
+  {
+    pattern: `me/deletion(/(preview|challenge))?`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `me/security-events`,
+    methods: ["GET"],
+    query: ["cursor", "limit", "action", "from", "to"],
+  },
+  {
+    pattern: `platform/user-statistics`,
+    methods: ["GET"],
+    query: [
+      "search",
+      "status",
+      "platform_role",
+      "verified",
+      "in_team",
+      "order",
+      "from",
+      "to",
+    ],
+  },
+  { pattern: `platform/user-exports`, methods: ["POST"], query: [] },
+  {
+    pattern: `platform/user-exports/${identityUUID}(/download)?`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `teams/${identityUUID}/member-statistics`,
+    methods: ["GET"],
+    query: ["search", "status", "role", "from", "to"],
+  },
+  {
+    pattern: `teams/${identityUUID}/member-exports`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `teams/${identityUUID}/member-exports/${identityUUID}(/download)?`,
+    methods: ["GET"],
+    query: [],
+  },
+  { pattern: `me/spaces`, methods: ["GET"], query: [] },
+  {
+    pattern: `me/authority-proposals`,
+    methods: ["GET"],
+    query: ["cursor", "limit", "status"],
+  },
+  {
+    pattern: `me/authority-proposals/${identityUUID}/(accept|decline)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/users`,
+    methods: ["GET"],
+    query: [
+      "limit",
+      "cursor",
+      "search",
+      "status",
+      "platform_role",
+      "order",
+      "verified",
+      "in_team",
+      "from",
+      "to",
+    ],
+  },
+  { pattern: `platform/users/${identityUUID}`, methods: ["GET"], query: [] },
+  {
+    pattern: `platform/users/${identityUUID}/(disable|enable|unlock|revoke-admin|revoke-sessions|profile-reset|password-reset)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/teams`,
+    methods: ["GET"],
+    query: [
+      "cursor",
+      "limit",
+      "id",
+      "search",
+      "status",
+      "administrator_id",
+      "created_from",
+      "created_to",
+      "governance_blocked",
+    ],
+  },
+  {
+    pattern: `platform/teams/${identityUUID}`,
+    methods: ["GET", "PATCH"],
+    query: [],
+  },
+  {
+    pattern: `platform/teams/${identityUUID}/avatar`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `platform/teams/${identityUUID}/(suspend|restore)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/teams/${identityUUID}/invitations/${identityUUID}/revoke`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/teams/${identityUUID}/invitations`,
+    methods: ["GET", "POST"],
+    query: ["cursor", "limit", "status"],
+  },
+  { pattern: `teams/${identityUUID}/avatar`, methods: ["GET"], query: [] },
+  {
+    pattern: `teams/${identityUUID}/members/${identityUUID}/avatar`,
+    methods: ["GET"],
+    query: [],
+  },
+  { pattern: `platform/settings`, methods: ["GET", "PATCH"], query: [] },
+  {
+    pattern: `platform/admin-grants`,
+    methods: ["GET", "POST"],
+    query: ["cursor", "limit", "status"],
+  },
+  {
+    pattern: `platform/admin-grants/${identityUUID}/cancel`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/teams/${identityUUID}/admin-transfers`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `platform/audit-events`,
+    methods: ["GET"],
+    query: [
+      "cursor",
+      "limit",
+      "action",
+      "from",
+      "to",
+      "actor_id",
+      "target_user_id",
+      "team_id",
+    ],
+  },
+  {
+    pattern: `platform/account-invitations`,
+    methods: ["GET", "POST"],
+    query: ["cursor", "limit", "status"],
+  },
+  {
+    pattern: `platform/account-invitations/${identityUUID}/(resend|revoke)`,
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `teams`, methods: ["POST"], query: [] },
+  { pattern: `teams/${identityUUID}`, methods: ["GET", "PATCH"], query: [] },
+  {
+    pattern: `teams/${identityUUID}/members`,
+    methods: ["GET"],
+    query: ["limit", "cursor", "search", "role", "status", "from", "to"],
+  },
+  {
+    pattern: `teams/${identityUUID}/members/${identityUUID}`,
+    methods: ["GET"],
+    query: [],
+  },
+  {
+    pattern: `teams/${identityUUID}/members/${identityUUID}/role`,
+    methods: ["PATCH"],
+    query: [],
+  },
+  {
+    pattern: `teams/${identityUUID}/members/${identityUUID}/(suspend|restore|remove)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `teams/${identityUUID}/(leave|archive|restore)`,
+    methods: ["POST"],
+    query: [],
+  },
+  { pattern: `teams/${identityUUID}/settings`, methods: ["PATCH"], query: [] },
+  {
+    pattern: `teams/${identityUUID}/admin-transfers`,
+    methods: ["GET", "POST"],
+    query: ["cursor", "limit", "status"],
+  },
+  {
+    pattern: `teams/${identityUUID}/admin-transfers/${identityUUID}/cancel`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `teams/${identityUUID}/audit-events`,
+    methods: ["GET"],
+    query: ["cursor", "limit", "action", "from", "to"],
+  },
+  {
+    pattern: `teams/${identityUUID}/invitations`,
+    methods: ["GET", "POST"],
+    query: ["cursor", "limit", "status"],
+  },
+  {
+    pattern: `teams/${identityUUID}/invitations/${identityUUID}/(resend|revoke)`,
+    methods: ["POST"],
+    query: [],
+  },
+  {
+    pattern: `invitations/(preview|accept|decline)`,
+    methods: ["POST"],
+    query: [],
+  },
+];
+
 // The browser cannot choose an upstream host or use this slice as a general proxy.
 const resources: Record<string, readonly string[]> = {
-  "accounts/register": ["POST"],
-  sessions: ["POST"],
-  session: ["GET"],
-  "me/password": ["POST"],
-  "accounts/availability": ["GET"],
   projects: ["GET", "POST"],
   "media/library": ["GET"],
   "media/library/commands": ["POST"],
@@ -21,46 +278,42 @@ async function proxy(
   const matches = (pattern: string) =>
     new RegExp(`^${pattern}$`, "i").test(resource);
   const flowMethods =
-    resource === "admin/users"
-      ? ["GET", "POST"]
-      : matches(`admin/users/${uuid}`)
-        ? ["PUT"]
-        : matches(`admin/users/${uuid}/(disable|enable|password|unlock)`)
+    resource === "models"
+      ? ["GET"]
+      : matches(`projects/${uuid}/(operations|media)`)
+        ? ["GET"]
+        : matches(`projects/${uuid}/(free-operations|media/uploads)`)
           ? ["POST"]
-          : resource === "models"
+          : matches(`projects/${uuid}/media/${uuid}/preview`)
             ? ["GET"]
-            : matches(`projects/${uuid}/(operations|media)`)
+            : matches(`operations/${uuid}`)
               ? ["GET"]
-              : matches(`projects/${uuid}/(free-operations|media/uploads)`)
+              : matches(`operations/${uuid}/(confirm|cancel)`)
                 ? ["POST"]
-                : matches(`projects/${uuid}/media/${uuid}/preview`)
-                  ? ["GET"]
-                  : matches(`operations/${uuid}`)
-                    ? ["GET"]
-                    : matches(`operations/${uuid}/(confirm|cancel)`)
+                : matches(`projects/${uuid}/bible/(character|location|prop)`)
+                  ? ["GET", "POST"]
+                  : matches(
+                        `projects/${uuid}/bible/(character|location|prop)/${uuid}`,
+                      )
+                    ? ["GET", "PUT", "DELETE"]
+                    : matches(
+                          `projects/${uuid}/bible/(character|location|prop)/${uuid}/(restore|confirm|looks)`,
+                        )
                       ? ["POST"]
                       : matches(
-                            `projects/${uuid}/bible/(character|location|prop)`,
+                            `projects/${uuid}/bible/character/${uuid}/looks/${uuid}/references`,
                           )
-                        ? ["GET", "POST"]
+                        ? ["PUT"]
                         : matches(
-                              `projects/${uuid}/bible/(character|location|prop)/${uuid}`,
+                              `projects/${uuid}/bible/(character|location|prop)/${uuid}/versions`,
                             )
-                          ? ["GET", "PUT", "DELETE"]
-                          : matches(
-                                `projects/${uuid}/bible/(character|location|prop)/${uuid}/(restore|confirm|looks)`,
-                              )
-                            ? ["POST"]
-                            : matches(
-                                  `projects/${uuid}/bible/character/${uuid}/looks/${uuid}/references`,
-                                )
-                              ? ["PUT"]
-                              : matches(
-                                    `projects/${uuid}/bible/(character|location|prop)/${uuid}/versions`,
-                                  )
-                                ? ["GET"]
-                                : undefined;
+                          ? ["GET"]
+                          : undefined;
+  const identity = identityRoutes.find((rule) =>
+    new RegExp(`^${rule.pattern}$`, "i").test(resource),
+  );
   const methods =
+    identity?.methods ??
     flowMethods ??
     resources[resource] ??
     (matches(`projects/${uuid}/canvases`) ? ["GET", "POST"] : undefined) ??
@@ -90,18 +343,29 @@ async function proxy(
       { code: "method_not_allowed" },
       { status: 405, headers: { ...noStore, Allow: methods.join(", ") } },
     );
+  const incoming = new URL(request.url);
+  if (identity) {
+    for (const key of incoming.searchParams.keys()) {
+      if (
+        request.method !== "GET" ||
+        !identity.query.includes(key) ||
+        incoming.searchParams.getAll(key).length !== 1
+      )
+        return Response.json(
+          { code: "invalid_request" },
+          { status: 422, headers: noStore },
+        );
+    }
+  }
   let uploadTooLarge = false;
   try {
     const upstream = new URL(
       `/api/${resource}`,
       process.env.LV_BACKEND_ORIGIN ?? "http://127.0.0.1:8080",
     );
-    const incoming = new URL(request.url);
-    if (resource === "accounts/availability")
-      upstream.searchParams.set(
-        "login_name",
-        incoming.searchParams.get("login_name") ?? "",
-      );
+    if (identity)
+      for (const [key, value] of incoming.searchParams)
+        upstream.searchParams.set(key, value);
     if (resource === "projects")
       for (const key of ["q", "limit", "cursor"])
         if (incoming.searchParams.has(key))
@@ -155,11 +419,14 @@ async function proxy(
       "Idempotency-Key",
       "Content-Type",
       "X-Request-Id",
+      "X-CSRF-Token",
+      "X-Creation-Scope",
     ]) {
       const value = request.headers.get(key);
       if (value) headers.set(key, value);
     }
     if (
+      resource === "me/avatar/uploads" ||
       resource === "media/library/uploads" ||
       matches(`projects/${uuid}/media/uploads`)
     ) {
@@ -232,6 +499,7 @@ async function proxy(
       "Content-Type",
       "X-Request-Id",
       "Content-Disposition",
+      "Retry-After",
       "X-Content-Type-Options",
     ]) {
       const value = response.headers.get(key);
@@ -260,3 +528,5 @@ export const POST = proxy;
 export const DELETE = proxy;
 
 export const PUT = proxy;
+
+export const PATCH = proxy;

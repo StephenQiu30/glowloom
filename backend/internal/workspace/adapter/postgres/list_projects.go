@@ -27,12 +27,12 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 	}
 	var page application.ProjectListPage
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireScope(ctx, tx, actor, false); err != nil {
 			return err
 		}
 		if input.FolderID != nil && *input.FolderID != uuid.Nil {
 			var exists bool
-			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.project_folder WHERE id=? AND org_id=? AND actor_id=? AND NOT is_delete)`, *input.FolderID, actor.OrgID, actor.ID).Scan(&exists).Error; err != nil {
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM workspace.project_folder WHERE id=? AND org_id=? AND actor_id=? AND owner_scope_id=? AND NOT is_delete)`, *input.FolderID, actor.OrgID, actor.ID, actor.ScopeID).Scan(&exists).Error; err != nil {
 				return err
 			}
 			if !exists {
@@ -47,11 +47,11 @@ func (s *Store) ListProjectsForActor(ctx context.Context, actor identityapp.Prin
 			       p.create_time, p.update_time, f.id AS folder_id,
 			       coalesce(m.revision,0) AS placement_revision
 			FROM workspace.project AS p
-			LEFT JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id AND m.actor_id=?::uuid
-			LEFT JOIN workspace.project_folder f ON f.id=m.folder_id AND f.org_id=m.org_id AND f.actor_id=m.actor_id AND NOT f.is_delete
-			WHERE p.org_id = ?::uuid AND p.owner_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
+			LEFT JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id AND m.owner_scope_id=p.owner_scope_id AND m.actor_id=?::uuid
+			LEFT JOIN workspace.project_folder f ON f.id=m.folder_id AND f.org_id=m.org_id AND f.actor_id=m.actor_id AND f.owner_scope_id=m.owner_scope_id AND NOT f.is_delete
+			WHERE p.org_id = ?::uuid AND p.owner_scope_id = ?::uuid AND p.is_delete = ? AND p.status IN ('active','archived')
 		`
-		args := []any{actor.ID.String(), actor.OrgID.String(), actor.ID.String(), input.Deleted}
+		args := []any{actor.ID.String(), actor.OrgID.String(), actor.ScopeID.String(), input.Deleted}
 		if input.FolderID != nil {
 			if *input.FolderID == uuid.Nil {
 				query += ` AND f.id IS NULL`

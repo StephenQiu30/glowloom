@@ -17,20 +17,20 @@ import (
 
 // PublishPriceRuleWithAudit rechecks current rights and commits an immutable
 // price, model revision, and safe audit in one transaction.
-func (s *Store) publishPriceRuleWithAuditOnce(ctx context.Context, actorID, orgID uuid.UUID, price domain.PriceRuleVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+func (s *Store) publishPriceRuleWithAuditOnce(ctx context.Context, actor identityapp.Principal, price domain.PriceRuleVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
 	validator, err := pricevalidation.NewValidator()
 	if err != nil {
 		return domain.PriceRuleVersion{}, fmt.Errorf("prepare price validation: %w", err)
 	}
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		price.Validate() != nil || validator.Validate(price) != nil ||
-		price.CreateBy != actorID || expectedRevision < 1 ||
-		!validPriceRulePublishedAudit(actorID, orgID, price, expectedRevision, event) {
+		price.CreateBy != actor.ID || expectedRevision < 1 ||
+		!validPriceRulePublishedAudit(actor.ID, actor.OrgID, price, expectedRevision, event) {
 		return domain.PriceRuleVersion{}, application.ErrInvalidPublishPriceRule
 	}
 	var saved domain.PriceRuleVersion
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		if err := appendPriceRuleInTx(tx, price, expectedRevision); err != nil {

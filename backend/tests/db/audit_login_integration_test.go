@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -146,17 +148,17 @@ func TestAuditRestrictedLoginCanAppendAndReadButCannotRewrite(t *testing.T) {
 		t.Fatalf("insert administrator through restricted login: %v", err)
 	}
 	read := auditapp.NewReadQuery(store)
-	adminPage, err := read.List(ctx, actorID, record.OrgID, domain.Filter{Limit: 10})
+	adminPage, err := read.List(ctx, identityapp.Principal{ID: actorID}, record.OrgID, domain.Filter{Limit: 10})
 	if err != nil || len(adminPage.Items) != 1 || adminPage.Items[0].ID != record.ID {
 		t.Fatalf("restricted-login administrator page = %+v, error = %v", adminPage, err)
 	}
-	if _, err := read.Get(ctx, actorID, uuid.New(), record.ID); !errors.Is(err, auditapp.ErrForbidden) {
+	if _, err := read.Get(ctx, identityapp.Principal{ID: actorID}, uuid.New(), record.ID); !errors.Is(err, auditapp.ErrForbidden) {
 		t.Fatalf("cross-organization administrator read = %v, want forbidden", err)
 	}
 	if err := tx.Exec(`UPDATE identity."user" SET role = 'producer' WHERE id = ?::uuid`, actorID.String()).Error; err != nil {
 		t.Fatalf("revoke administrator through restricted login: %v", err)
 	}
-	if _, err := read.List(ctx, actorID, record.OrgID, domain.Filter{Limit: 10}); !errors.Is(err, auditapp.ErrForbidden) {
+	if _, err := read.List(ctx, identityapp.Principal{ID: actorID}, record.OrgID, domain.Filter{Limit: 10}); !errors.Is(err, auditapp.ErrForbidden) {
 		t.Fatalf("revoked administrator read = %v, want forbidden", err)
 	}
 	var actualPartition string

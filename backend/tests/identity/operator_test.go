@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
-	"github.com/google/uuid"
 )
 
 func TestMigrationOperatorUsesConfiguredKeysAndExistingDatabase(t *testing.T) {
@@ -52,11 +53,13 @@ func TestOperatorMailCannotSendAnotherFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := auth.StartRegistration(t.Context(), "first@example.invalid", "")
+	_, _ = verifiedTestActor(t, tx, "first@example.invalid", time.Now())
+	_, _ = verifiedTestActor(t, tx, "second@example.invalid", time.Now())
+	first, err := auth.StartPasswordReset(t.Context(), "first@example.invalid", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := auth.StartRegistration(t.Context(), "second@example.invalid", ""); err != nil {
+	if _, err := auth.StartPasswordReset(t.Context(), "second@example.invalid", ""); err != nil {
 		t.Fatal(err)
 	}
 	jobs, err := pgidentity.NewOperationMailStore(tx, first.OperationID).Claim(t.Context(), 10, time.Now())

@@ -3,17 +3,23 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
+// SessionDirectoryStore checks current identity before listing or revoking sessions.
 type SessionDirectoryStore struct{ db *gorm.DB }
 
+// NewSessionDirectoryStore constructs SessionDirectoryStore with explicit caller-supplied dependencies.
 func NewSessionDirectoryStore(db *gorm.DB) *SessionDirectoryStore {
 	return &SessionDirectoryStore{db: db}
 }
+
+// ListSelfSessions returns only valid sessions belonging to the actor.
 func (s *SessionDirectoryStore) ListSelfSessions(ctx context.Context, actor application.Principal, now time.Time) ([]application.SessionSummary, error) {
 	out := []application.SessionSummary{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -24,6 +30,8 @@ func (s *SessionDirectoryStore) ListSelfSessions(ctx context.Context, actor appl
 	})
 	return out, err
 }
+
+// RevokeSelfSession revokes one owned session idempotently.
 func (s *SessionDirectoryStore) RevokeSelfSession(ctx context.Context, actor application.Principal, id uuid.UUID, now time.Time) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if _, err := lockSelfActor(tx, actor, now); err != nil {
@@ -49,6 +57,8 @@ func (s *SessionDirectoryStore) RevokeSelfSession(ctx context.Context, actor app
 		return appendSelfEvent(tx, actor.ID, "session.revoked", now)
 	})
 }
+
+// RevokeOtherSessions preserves the requesting session while revoking the others.
 func (s *SessionDirectoryStore) RevokeOtherSessions(ctx context.Context, actor application.Principal, now time.Time) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if _, err := lockSelfActor(tx, actor, now); err != nil {

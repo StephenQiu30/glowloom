@@ -13,7 +13,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ErrModelCatalogProjectNotFound also hides projects outside the actor's organization.
@@ -26,8 +25,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 		(input.After != nil && (strings.TrimSpace(input.After.Key) == "" || input.After.ID == uuid.Nil)) {
 		return application.ModelCatalogPage{}, application.ErrInvalidModelCatalog
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return application.ModelCatalogPage{}, identityapp.ErrForbidden
 	}
 	if input.Limit == 0 {
@@ -35,7 +33,7 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 	}
 	page := application.ModelCatalogPage{Models: []application.ModelCatalogItem{}}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentModelCatalogActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, input.ProjectID); err != nil {
 			return err
 		}
 		var project struct{ AllowOverseasModels bool }
@@ -122,25 +120,11 @@ func (s *Store) ListModelsForProject(ctx context.Context, actor identityapp.Prin
 	return page, nil
 }
 
-func requireCurrentModelCatalogActor(tx *gorm.DB, actor identityapp.Principal) error {
-	var present int
-	result := tx.Raw(`
-		SELECT 1
-		FROM identity."user" AS u
-		JOIN workspace.organization AS o ON o.id = u.org_id
-		WHERE u.id = ?::uuid AND u.org_id = ?::uuid
-		  AND u.role IN ('admin', 'producer')
-		  AND u.status = 'active' AND NOT u.is_delete AND NOT u.must_change_password
-		  AND o.status = 'active' AND NOT o.is_delete
-		FOR SHARE OF u, o
-	`, actor.ID.String(), actor.OrgID.String()).Scan(&present)
-	if result.Error != nil {
-		return fmt.Errorf("check current model catalog actor: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
+func (s *Store) requireProject(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID) error {
+	if s.projects == nil || s.projects(tx) == nil {
 		return identityapp.ErrForbidden
 	}
-	return nil
+	return s.projects(tx).AuthorizeCatalog(tx.Statement.Context, actor, project)
 }
 
 type modelCatalogRow struct {

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrInvalidEventFilter rejects unsupported or inconsistent event filters.
 var ErrInvalidEventFilter = errors.New("invalid security event filter")
 
 // EventFilter fixes the authority scope as well as the page selection.
@@ -32,6 +33,7 @@ type SecurityEvent struct {
 	CreatedAt                         time.Time
 }
 
+// EventPage contains redacted events and an authenticated continuation cursor.
 type EventPage struct {
 	Items      []SecurityEvent
 	NextCursor *string
@@ -45,20 +47,24 @@ type EventPosition struct {
 	ID        uuid.UUID `json:"id"`
 }
 
+// EventStore supplies authorized security event reads.
 type EventStore interface {
 	ReadEvents(context.Context, Principal, EventFilter, EventPosition, time.Time) ([]SecurityEvent, error)
 }
 
+// EventSigner authenticates continuation cursors without exposing key material.
 type EventSigner interface {
 	Digest(string, uuid.UUID, string) []byte
 }
 
+// EventQuery validates filters and binds event cursors to current authority.
 type EventQuery struct {
 	store  EventStore
 	signer EventSigner
 	now    func() time.Time
 }
 
+// NewEventQuery constructs EventQuery with explicit caller-supplied dependencies.
 func NewEventQuery(store EventStore, signer EventSigner, now func() time.Time) *EventQuery {
 	return &EventQuery{store: store, signer: signer, now: now}
 }
@@ -116,6 +122,7 @@ func (q *EventQuery) cursorDigest(actor Principal, f EventFilter, payload string
 	return q.signer.Digest("security_event_cursor", actor.ID, string(bound))
 }
 
+// List validates current authority, filters and cursor before redaction.
 func (q *EventQuery) List(ctx context.Context, actor Principal, filter EventFilter) (EventPage, error) {
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil {
 		return EventPage{}, ErrSessionInvalid
@@ -164,13 +171,14 @@ func (q *EventQuery) List(ctx context.Context, actor Principal, filter EventFilt
 			}
 		}
 		e.SafeDiff = diff
-		if f.ScopeKind == "self" {
+		switch f.ScopeKind {
+		case "self":
 			e.Reason = ""
 			e.RequestID = ""
 			if e.ActorID != nil && *e.ActorID != actor.ID {
 				e.ActorID = nil
 			}
-		} else if f.ScopeKind == "team" {
+		case "team":
 			e.RequestID = ""
 		}
 		page.Items = append(page.Items, e)

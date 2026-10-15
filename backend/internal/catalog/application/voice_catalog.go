@@ -17,7 +17,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 var (
@@ -106,7 +105,7 @@ func NewVoiceCatalog(store VoiceModelStore, validator ModelVersionValidator) *Vo
 }
 
 func (q *VoiceCatalog) authorize(actor identityapp.Principal, project uuid.UUID) error {
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword || actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return identityapp.ErrForbidden
 	}
 	if q == nil || q.store == nil || q.validator == nil {

@@ -1,8 +1,14 @@
 "use client";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { RichGeneration, type CanvasComposerOwner } from "./rich-generation";
 import type { PromptDraft } from "./prompt-document";
 import { useEffect, useRef, useState } from "react";
-import { History, LoaderCircle, RotateCw } from "lucide-react";
+import { History, RotateCw, ChevronDown } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { type Project } from "@/components/projects/project";
 import { ProjectMediaPreview } from "@/components/media/project-media";
@@ -172,7 +179,11 @@ function GenerationForm({
           onCloseGuard(next);
         }}
       />
-      {reuseError && <p role="alert">{reuseError}</p>}
+      {reuseError && (
+        <Alert variant="destructive">
+          <AlertDescription>{reuseError}</AlertDescription>
+        </Alert>
+      )}
       <TaskHistory
         projectID={project.id}
         capability={seed.capability + ".generate"}
@@ -241,19 +252,28 @@ function TaskHistory({
         <History />
         {pending ? "正在读取…" : "查看生成历史"}
       </Button>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       {open && (
         <>
           <div className="task-list">
             {items.map((t) => (
-              <button key={t.id} onClick={() => setSelected(t.id!)}>
+              <Button
+                variant="ghost"
+                className="h-auto p-0"
+                key={t.id}
+                onClick={() => setSelected(t.id!)}
+              >
                 <span>
                   {t.model_name} · {taskLabels[t.status!]}
                 </span>
                 <small>
                   {new Date(t.create_time!).toLocaleString("zh-CN")}
                 </small>
-              </button>
+              </Button>
             ))}
           </div>
           {items.length === 0 && (
@@ -375,9 +395,7 @@ export function TaskDetail({
     <section className="task-detail" aria-live="polite">
       <div className="flex items-center gap-3">
         <h3>{task ? taskLabels[task.status] : "读取任务…"}</h3>
-        {task && activeTask(task.status) && (
-          <LoaderCircle className="animate-spin" size={16} />
-        )}
+        {task && activeTask(task.status) && <Spinner aria-label="任务进行中" />}
         <Button
           variant="ghost"
           className="ml-auto"
@@ -388,32 +406,49 @@ export function TaskDetail({
         </Button>
       </div>
       {error && (
-        <p role="alert" className="flow-error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
       {task?.editor_draft && (
-        <details className="rounded border p-3 text-sm">
-          <summary>当时使用的完整输入</summary>
-          <p>
-            模式：{task.editor_draft.mode} · 编译：
-            {task.editor_compiler_version}
-          </p>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap">
-            {task.inputs
-              ?.filter((i) => i.text)
-              .map((i) => i.text)
-              .join("\n")}
-          </pre>
-          <ul>
-            {task.editor_reference_mapping?.map((m) => (
-              <li key={m.reference_id}>
-                {m.label} · {m.role} · 媒体位置{" "}
-                {m.media_seq_nos?.join("、") || "仅描述"}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <Collapsible className="rounded border p-3 text-sm">
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              className="group/collapsible h-auto w-full justify-between whitespace-normal"
+            >
+              <span>当时使用的完整输入</span>
+              <ChevronDown
+                data-icon="inline-end"
+                className="transition-transform group-data-[state=open]/collapsible:rotate-180"
+              />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent
+            forceMount
+            className="pt-3 data-[state=closed]:hidden"
+          >
+            <p>
+              模式：{task.editor_draft.mode} · 编译：
+              {task.editor_compiler_version}
+            </p>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap">
+              {task.inputs
+                ?.filter((i) => i.text)
+                .map((i) => i.text)
+                .join("\n")}
+            </pre>
+            <ul>
+              {task.editor_reference_mapping?.map((m) => (
+                <li key={m.reference_id}>
+                  {m.label} · {m.role} · 媒体位置{" "}
+                  {m.media_seq_nos?.join("、") || "仅描述"}
+                </li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
       )}
       {task?.failure_code && (
         <p>

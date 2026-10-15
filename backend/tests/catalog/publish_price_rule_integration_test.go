@@ -51,7 +51,7 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 		ID: uuid.New(), Key: "video.generate." + uuid.NewString(), OutputType: domain.OutputVideo,
 		Modes: []string{"image2video"}, InputRoles: []string{"subject"},
 	}
-	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, capability); err != nil {
+	if err := store.CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
 		t.Fatal(err)
 	}
 	registered, err := catalogapp.NewCreateModelCommand(store, time.Now).Execute(ctx, actor, catalogapp.CreateModelInput{
@@ -135,7 +135,7 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	}
 	direct := validPriceVersion(registered.ID)
 	direct.VersionNo, direct.CreateBy = 2, actor.ID
-	if _, err := store.PublishPriceRuleWithAudit(ctx, actor.ID, actor.OrgID, direct, 3, identityapp.OutboxEvent{}); !errors.Is(err, catalogapp.ErrInvalidPublishPriceRule) {
+	if _, err := store.PublishPriceRuleWithAudit(ctx, actor, direct, 3, identityapp.OutboxEvent{}); !errors.Is(err, catalogapp.ErrInvalidPublishPriceRule) {
 		t.Fatalf("price without audit accepted: %v", err)
 	}
 	if _, err := publishPrice.Execute(ctx, actor, effective); err != nil {
@@ -200,7 +200,7 @@ func TestPublishPriceRuleCommitsHistoryAndAuditOnLocalPostgres(t *testing.T) {
 	if err := conn.DB.WithContext(ctx).Raw(`SELECT count(*) FROM catalog.price_rule_version WHERE model_profile_id = ?::uuid`, registered.ID.String()).Scan(&count).Error; err != nil || count != 2 {
 		t.Fatalf("failed audit left %d prices: %v", count, err)
 	}
-	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, registered.ID)
+	loaded, err := store.FindModelForAdmin(ctx, actor, registered.ID)
 	if err != nil || loaded.Revision != 4 {
 		t.Fatalf("failed audit advanced model revision: %+v, %v", loaded, err)
 	}

@@ -15,15 +15,15 @@ import (
 
 // PublishModelVersionWithAudit rechecks current rights and commits the
 // immutable version, current pointer, and safe audit in one transaction.
-func (s *Store) publishModelVersionWithAuditOnce(ctx context.Context, actorID, orgID uuid.UUID, version domain.ModelVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelVersion, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
-		version.Validate() != nil || version.CreateBy != actorID || expectedRevision < 1 ||
-		!validModelVersionPublishedAudit(actorID, orgID, version, expectedRevision, event) {
+func (s *Store) publishModelVersionWithAuditOnce(ctx context.Context, actor identityapp.Principal, version domain.ModelVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelVersion, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
+		version.Validate() != nil || version.CreateBy != actor.ID || expectedRevision < 1 ||
+		!validModelVersionPublishedAudit(actor.ID, actor.OrgID, version, expectedRevision, event) {
 		return domain.ModelVersion{}, application.ErrInvalidPublishModelVersion
 	}
 	var saved domain.ModelVersion
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		if err := appendModelVersionInTx(tx, version, expectedRevision); err != nil {

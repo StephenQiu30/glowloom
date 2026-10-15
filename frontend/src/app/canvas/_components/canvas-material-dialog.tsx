@@ -302,7 +302,8 @@ function MaterialList({
         ),
       );
       if (controller.signal.aborted) return;
-      if (page.next_cursor === cursor) throw new RequestError("invalid_receipt");
+      if (page.next_cursor === cursor)
+        throw new RequestError("invalid_receipt");
       setItems((previous) => [
         ...new Map(
           [...previous, ...page.items!].map((a) => [a.id, a]),
@@ -358,16 +359,17 @@ function MaterialList({
           {filtered.map((a) => {
             const chosen = selected.some((i) => i.id === a.id);
             return (
-              <button
+              <Button
+                variant="ghost"
                 key={a.id}
                 type="button"
-                className="canvas-material-card"
+                className="canvas-material-card h-auto p-0 whitespace-normal"
                 aria-label={`选择素材 ${a.file_name || "未命名素材"}`}
                 aria-pressed={chosen}
                 disabled={!chosen && selected.length >= 24}
                 onClick={() => onToggle(a)}
               >
-                <Card variant="media">
+                <Card variant="media" className="w-full">
                   <CardContent>
                     <div className="canvas-material-preview">
                       {kind === "image" || kind === "video" ? (
@@ -397,7 +399,7 @@ function MaterialList({
                     </CardDescription>
                   </CardHeader>
                 </Card>
-              </button>
+              </Button>
             );
           })}
           {loading &&

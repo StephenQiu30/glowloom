@@ -20,7 +20,7 @@ type ProjectContentAccess struct {
 
 // ProjectContentChangedEvent invalidates current project content without exposing it.
 func ProjectContentChangedEvent(actor identityapp.Principal, project uuid.UUID, revision int64, now time.Time) (identityapp.OutboxEvent, error) {
-	if !canManageModelDefaults(actor) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return identityapp.OutboxEvent{}, identityapp.ErrForbidden
 	}
 	if project == uuid.Nil || revision < 1 || revision > math.MaxInt32 || now.IsZero() {

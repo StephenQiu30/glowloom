@@ -11,7 +11,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 var (
@@ -22,7 +21,10 @@ var (
 )
 
 // Store keeps the database handle injected by the application composition root.
-type Store struct{ db *gorm.DB }
+type Store struct {
+	db     *gorm.DB
+	access ProjectAccessFactory
+}
 
 // NewStore injects the caller's database handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
@@ -37,7 +39,7 @@ func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, pro
 	}
 	var budget domain.Budget
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`
@@ -72,7 +74,7 @@ func (s *Store) FindLedgerEntry(ctx context.Context, actor identityapp.Principal
 	}
 	var entry domain.LedgerEntry
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`
@@ -97,29 +99,4 @@ func (s *Store) FindLedgerEntry(ctx context.Context, actor identityapp.Principal
 		return domain.LedgerEntry{}, fmt.Errorf("find ledger entry: %w", err)
 	}
 	return entry, nil
-}
-
-func requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
-		return identityapp.ErrForbidden
-	}
-	var present int
-	result := tx.Raw(`
-		SELECT 1
-		FROM identity."user" AS u
-		JOIN workspace.organization AS o ON o.id = u.org_id
-		WHERE u.id = ?::uuid AND u.org_id = ?::uuid
-		  AND u.role IN ('admin', 'producer')
-		  AND u.status = 'active' AND NOT u.is_delete AND NOT u.must_change_password
-		  AND o.status = 'active' AND NOT o.is_delete
-		FOR SHARE OF u, o
-	`, actor.ID.String(), actor.OrgID.String()).Scan(&present)
-	if result.Error != nil {
-		return fmt.Errorf("check current billing actor: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return identityapp.ErrForbidden
-	}
-	return nil
 }

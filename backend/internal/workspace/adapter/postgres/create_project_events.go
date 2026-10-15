@@ -13,7 +13,6 @@ import (
 
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
@@ -47,13 +46,13 @@ func (s *Store) createProject(ctx context.Context, actor identityapp.Principal, 
 		project.PurgeAfter != nil || !validProjectCreatedEvents(actor, project, events) {
 		return domain.Project{}, application.ErrInvalidCreateProject
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
+		(actor.ScopeID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1) {
 		return domain.Project{}, identityapp.ErrForbidden
 	}
 	var saved domain.Project
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireScope(ctx, tx, actor, true); err != nil {
 			return err
 		}
 		if request != nil {
@@ -62,10 +61,10 @@ func (s *Store) createProject(ctx context.Context, actor identityapp.Principal, 
 				return err
 			}
 		}
-		if err := requireUsablePreset(tx, project); err != nil {
+		if err := requireUsablePreset(tx, project, actor.ScopeID); err != nil {
 			return err
 		}
-		if err := createProjectRowsInTx(tx, project); err != nil {
+		if err := createProjectRowsInTx(tx, project, actor.ScopeID); err != nil {
 			return err
 		}
 		for _, event := range events {

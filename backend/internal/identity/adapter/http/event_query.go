@@ -13,34 +13,38 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
+// EventHandler exposes separate self, team and platform security event queries.
 type EventHandler struct{ query *application.EventQuery }
 
+// NewEventHandler constructs EventHandler with explicit caller-supplied dependencies.
 func NewEventHandler(query *application.EventQuery) *EventHandler { return &EventHandler{query: query} }
 
 // Register requires email session middleware; the store rechecks current authority.
 func (h *EventHandler) Register(group *gin.RouterGroup) {
-	group.GET("/me/security-events", h.list("self"))
-	group.GET("/teams/:id/audit-events", h.list("team"))
-	group.GET("/platform/audit-events", h.list("platform"))
+	group.GET("/me/security-events", h.self)
+	group.GET("/teams/:id/audit-events", h.team)
+	group.GET("/platform/audit-events", h.platform)
 }
 
+// SecurityEventView contains the authorized, redacted event projection.
 type SecurityEventView struct {
-	ID           uuid.UUID         `json:"id"`
-	ActorID      *uuid.UUID        `json:"actor_id"`
-	TargetUserID *uuid.UUID        `json:"target_user_id"`
-	TeamID       *uuid.UUID        `json:"team_id"`
-	Action       string            `json:"action"`
-	Result       string            `json:"result"`
-	Reason       string            `json:"reason"`
-	RequestID    string            `json:"request_id"`
-	SafeDiff     map[string]string `json:"safe_diff"`
-	CreatedAt    time.Time         `json:"created_at"`
+	ID           uuid.UUID         `json:"id" binding:"required"`
+	ActorID      *uuid.UUID        `json:"actor_id" binding:"required"`
+	TargetUserID *uuid.UUID        `json:"target_user_id" binding:"required"`
+	TeamID       *uuid.UUID        `json:"team_id" binding:"required"`
+	Action       string            `json:"action" binding:"required"`
+	Result       string            `json:"result" binding:"required"`
+	Reason       string            `json:"reason" binding:"required"`
+	RequestID    string            `json:"request_id" binding:"required"`
+	SafeDiff     map[string]string `json:"safe_diff" binding:"required"`
+	CreatedAt    time.Time         `json:"created_at" binding:"required"`
 }
 
+// SecurityEventPageView returns a bounded event page and its query snapshot.
 type SecurityEventPageView struct {
-	Items      []SecurityEventView `json:"items"`
-	NextCursor *string             `json:"next_cursor"`
-	AsOf       time.Time           `json:"as_of"`
+	Items      []SecurityEventView `json:"items" binding:"required"`
+	NextCursor *string             `json:"next_cursor" binding:"required"`
+	AsOf       time.Time           `json:"as_of" binding:"required"`
 }
 
 func parseEventFilter(c *gin.Context, scope string) (application.EventFilter, error) {
@@ -129,3 +133,39 @@ func (h *EventHandler) list(scope string) gin.HandlerFunc {
 		c.JSON(200, SecurityEventPageView{Items: items, NextCursor: page.NextCursor, AsOf: page.AsOf})
 	}
 }
+
+// @Summary getMySecurityEvents
+// @Param cursor query string false "Continuation cursor"
+// @Param limit query int false "Page size"
+// @ID getMySecurityEvents
+// @Tags identity
+// @Accept json
+// @Produce json
+// @Success 200 {object} SecurityEventPageView
+// @Failure 401 {object} httpapi.Problem
+// @Failure 409 {object} httpapi.Problem
+// @Router /api/me/security-events [get]
+func (h *EventHandler) self(c *gin.Context) { h.list("self")(c) }
+
+// @Summary getTeamSecurityEvents
+// @ID getTeamSecurityEvents
+// @Tags identity
+// @Accept json
+// @Produce json
+// @Param id path string true "Resource UUID"
+// @Success 200 {object} SecurityEventPageView
+// @Failure 401 {object} httpapi.Problem
+// @Failure 409 {object} httpapi.Problem
+// @Router /api/teams/{id}/audit-events [get]
+func (h *EventHandler) team(c *gin.Context) { h.list("team")(c) }
+
+// @Summary getPlatformSecurityEvents
+// @ID getPlatformSecurityEvents
+// @Tags identity
+// @Accept json
+// @Produce json
+// @Success 200 {object} SecurityEventPageView
+// @Failure 401 {object} httpapi.Problem
+// @Failure 409 {object} httpapi.Problem
+// @Router /api/platform/audit-events [get]
+func (h *EventHandler) platform(c *gin.Context) { h.list("platform")(c) }

@@ -14,7 +14,7 @@ import (
 func (s *Store) ListCredentialHistory(ctx context.Context, actor identityapp.Principal, id uuid.UUID) ([]application.ProviderCredentialSummary, error) {
 	items := []application.ProviderCredentialSummary{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		var rows []credentialDisplayRow

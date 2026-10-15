@@ -13,7 +13,6 @@ import (
 
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
@@ -25,8 +24,8 @@ func (s *Store) UpdateProjectWithEvents(ctx context.Context, actor identityapp.P
 	if s == nil || s.db == nil {
 		return domain.Project{}, ErrUnavailable
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
+		(actor.ScopeID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1) {
 		return domain.Project{}, identityapp.ErrForbidden
 	}
 	if before.Validate() != nil || after.Validate() != nil ||
@@ -44,7 +43,7 @@ func (s *Store) UpdateProjectWithEvents(ctx context.Context, actor identityapp.P
 	}
 	var saved domain.Project
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.authorizeProject(ctx, tx, actor, before.ID, true); err != nil {
 			return err
 		}
 		var locked int
@@ -73,7 +72,7 @@ func (s *Store) UpdateProjectWithEvents(ctx context.Context, actor identityapp.P
 		if err := s.requireProjectCover(ctx, tx, actor, after); err != nil {
 			return err
 		}
-		if err := requireUsablePreset(tx, after); err != nil {
+		if err := requireUsablePreset(tx, after, actor.ScopeID); err != nil {
 			return err
 		}
 		var presetID any

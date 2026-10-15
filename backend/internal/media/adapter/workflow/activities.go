@@ -55,6 +55,10 @@ type Activities struct {
 // NewActivities wires the database, private bucket, and explicit result URL
 // allowlist. It does not make an outbound request during construction.
 func NewActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPolicy) (*Activities, error) {
+	return newScopedActivities(db, objects, policy, nil)
+}
+
+func newScopedActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPolicy, scopes pgmedia.ScopeAccessFactory) (*Activities, error) {
 	if db == nil || objects == nil {
 		return nil, fmt.Errorf("configure media activity: %w", ErrResultUnavailable)
 	}
@@ -62,7 +66,7 @@ func NewActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPo
 	if err != nil {
 		return nil, err
 	}
-	repo := pgmedia.NewIngestRepository(db)
+	repo := pgmedia.NewScopedIngestRepository(db, scopes)
 	service := application.NewIngestService(repo, downloader, FFProber{}, FFRenderer{}, objectStore{client: objects})
 	return &Activities{ingest: service, repo: repo}, nil
 }
@@ -70,10 +74,15 @@ func NewActivities(db *gorm.DB, objects *objectstorage.Client, policy DownloadPo
 // NewActivitiesWithStaging accepts both existing result URLs and private receipts.
 // Both inputs use the same verification, rendering, and candidate repository.
 func NewActivitiesWithStaging(db *gorm.DB, objects *objectstorage.Client, policy DownloadPolicy, source application.StagedSource) (*Activities, error) {
+	return NewScopedActivitiesWithStaging(db, objects, policy, source, nil)
+}
+
+// NewScopedActivitiesWithStaging explicitly binds independent worker authorization.
+func NewScopedActivitiesWithStaging(db *gorm.DB, objects *objectstorage.Client, policy DownloadPolicy, source application.StagedSource, scopes pgmedia.ScopeAccessFactory) (*Activities, error) {
 	if source == nil {
 		return nil, fmt.Errorf("configure staged media activity: %w", application.ErrInvalidIngest)
 	}
-	activities, err := NewActivities(db, objects, policy)
+	activities, err := newScopedActivities(db, objects, policy, scopes)
 	if err != nil {
 		return nil, err
 	}

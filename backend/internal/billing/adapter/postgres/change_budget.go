@@ -33,7 +33,7 @@ func (s *Store) ChangeBudgetWithEvents(ctx context.Context, actor identityapp.Pr
 	}
 	var saved domain.Budget
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, before.ProjectID, true); err != nil {
 			return err
 		}
 		var project struct {

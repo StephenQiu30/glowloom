@@ -40,8 +40,3 @@ func initializeQuoteExpirySetup(ctx context.Context, cfg config.Config, logger *
 	wire.Build(provideSetupTrace, provideTemporal, provideQuoteExpiryScheduleInstaller)
 	return nil, nil, nil
 }
-
-func initializeAdminBootstrap(ctx context.Context, cfg config.Config, logger *zap.Logger) (*identityapp.BootstrapAdminCommand, func(), error) {
-	wire.Build(provideBootstrapTrace, provideDB, provideIdentityStore, provideBootstrapAdminCommand)
-	return nil, nil, nil
-}

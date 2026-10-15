@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 )
 
 const (
@@ -31,6 +32,8 @@ type ProcessedStore interface {
 
 // ConfirmedStore verifies the committed operation and lists stale confirmations.
 type ConfirmedStore interface {
+	AuthorizeWorker(context.Context, uuid.UUID, bool) error
+	AuthorizeBatchWorker(context.Context, uuid.UUID) error
 	ConfirmedSingle(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) (bool, error)
 	StaleConfirmedSingles(context.Context, time.Time, int, int) ([]uuid.UUID, error)
 	ConfirmedBatch(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (bool, error)
@@ -69,6 +72,11 @@ func (h *WorkflowStarterHandler) Handle(ctx context.Context, record inbox.Record
 	}
 	_, err = h.processed.ProcessExternalOnce(ctx, workflowStarterConsumer, event.id.String(), func(ctx context.Context) error {
 		eligible, err := h.store.ConfirmedSingle(ctx, event.orgID, event.projectID, event.operationID, event.reservationID)
+		if errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+			// Only acknowledge this obsolete start event. Durable operation,
+			// reservation and supplier evidence remain available for closure.
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("check confirmed operation %s: %w", event.operationID, err)
 		}
@@ -90,6 +98,11 @@ func (h *WorkflowStarterHandler) handleBatch(ctx context.Context, record inbox.R
 	}
 	_, err = h.processed.ProcessExternalOnce(ctx, workflowStarterConsumer, event.id.String(), func(ctx context.Context) error {
 		eligible, err := h.store.ConfirmedBatch(ctx, event.orgID, event.projectID, event.batchID)
+		if errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+			// Only acknowledge this obsolete start event. Durable operation,
+			// reservation and supplier evidence remain available for closure.
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("check confirmed batch %s: %w", event.batchID, err)
 		}
@@ -121,6 +134,13 @@ func (h *WorkflowStarterHandler) SweepOnce(ctx context.Context, now time.Time) e
 		}
 	}
 	for _, id := range operations {
+		if err := h.store.AuthorizeWorker(ctx, id, true); err != nil {
+			if errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+				continue
+			}
+			return fmt.Errorf("authorize stale confirmed operation: %w", err)
+		}
+
 		if err := h.starter.StartOperation(ctx, id); err != nil {
 			return fmt.Errorf("start stale confirmed operation %s: %w", id, err)
 		}
@@ -146,6 +166,13 @@ func (h *WorkflowStarterHandler) SweepBatchesOnce(ctx context.Context, now time.
 		}
 	}
 	for _, id := range batches {
+		if err := h.store.AuthorizeBatchWorker(ctx, id); err != nil {
+			if errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+				continue
+			}
+			return fmt.Errorf("authorize stale confirmed batch: %w", err)
+		}
+
 		if err := h.starter.StartBatch(ctx, id); err != nil {
 			return fmt.Errorf("start stale confirmed batch %s: %w", id, err)
 		}

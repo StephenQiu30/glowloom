@@ -58,7 +58,7 @@ func (s *Store) transaction(ctx context.Context, actor identityapp.Principal, pr
 			return application.ErrUnavailable
 		}
 		facts, err := access.Authorize(ctx, actor, project, write)
-		if errors.Is(err, workspaceapp.ErrProjectNotFound) {
+		if errors.Is(err, workspaceapp.ErrProjectNotFound) || errors.Is(err, workspaceapp.ErrScopeNotFound) {
 			return errors.Join(application.ErrNotFound, err)
 		}
 		if err != nil {

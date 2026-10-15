@@ -14,10 +14,12 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
 )
 
+// PlatformDirectoryHandler serves platform-authorized user directory queries.
 type PlatformDirectoryHandler struct {
 	directory *application.PlatformDirectory
 }
 
+// NewPlatformDirectoryHandler constructs PlatformDirectoryHandler with explicit caller-supplied dependencies.
 func NewPlatformDirectoryHandler(directory *application.PlatformDirectory) *PlatformDirectoryHandler {
 	return &PlatformDirectoryHandler{directory: directory}
 }
@@ -28,41 +30,44 @@ func (h *PlatformDirectoryHandler) Register(group *gin.RouterGroup) {
 	group.GET("/platform/users/:id", h.detail)
 }
 
+// PlatformUserView excludes credentials and private creation data from the directory.
 type PlatformUserView struct {
-	ID                 uuid.UUID  `json:"id"`
-	Email              string     `json:"email"`
-	EmailVerifiedAt    *time.Time `json:"email_verified_at"`
-	DisplayName        string     `json:"display_name"`
-	AvatarAssetID      *uuid.UUID `json:"avatar_asset_id"`
-	Status             string     `json:"status"`
-	PlatformRole       string     `json:"platform_role"`
-	Revision           string     `json:"revision"`
-	CreateTime         time.Time  `json:"create_time"`
-	LastLoginAt        *time.Time `json:"last_login_at"`
-	ActiveTeamCount    int        `json:"active_team_count"`
-	MustChangePassword bool       `json:"must_change_password"`
+	ID                 uuid.UUID  `json:"id" binding:"required"`
+	Email              string     `json:"email" binding:"required"`
+	EmailVerifiedAt    *time.Time `json:"email_verified_at" binding:"required"`
+	DisplayName        string     `json:"display_name" binding:"required"`
+	AvatarAssetID      *uuid.UUID `json:"avatar_asset_id" binding:"required"`
+	Status             string     `json:"status" binding:"required"`
+	PlatformRole       string     `json:"platform_role" binding:"required"`
+	Revision           string     `json:"revision" binding:"required"`
+	CreateTime         time.Time  `json:"create_time" binding:"required"`
+	LastLoginAt        *time.Time `json:"last_login_at" binding:"required"`
+	ActiveTeamCount    int        `json:"active_team_count" binding:"required"`
 }
 
+// PlatformUserPageView returns a bounded directory page and stable cursor.
 type PlatformUserPageView struct {
-	Items      []PlatformUserView `json:"items"`
-	NextCursor *string            `json:"next_cursor"`
-	AsOf       time.Time          `json:"as_of"`
+	Items      []PlatformUserView `json:"items" binding:"required"`
+	NextCursor *string            `json:"next_cursor" binding:"required"`
+	AsOf       time.Time          `json:"as_of" binding:"required"`
 }
 
+// TeamMembershipView summarizes a membership without exposing team content.
 type TeamMembershipView struct {
-	TeamID uuid.UUID `json:"team_id"`
-	Role   string    `json:"role"`
-	Status string    `json:"status"`
+	TeamID uuid.UUID `json:"team_id" binding:"required"`
+	Role   string    `json:"role" binding:"required"`
+	Status string    `json:"status" binding:"required"`
 }
 
+// PlatformUserDetailView combines the permitted account and membership projections.
 type PlatformUserDetailView struct {
-	User           PlatformUserView     `json:"user"`
-	Teams          []TeamMembershipView `json:"teams"`
-	AllowedActions []string             `json:"allowed_actions"`
+	User           PlatformUserView     `json:"user" binding:"required"`
+	Teams          []TeamMembershipView `json:"teams" binding:"required"`
+	AllowedActions []string             `json:"allowed_actions" binding:"required"`
 }
 
 func platformUserView(u application.UserSummary) PlatformUserView {
-	return PlatformUserView{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, AvatarAssetID: u.AvatarAssetID, Status: u.Status, PlatformRole: u.PlatformRole, Revision: strconv.FormatInt(u.Revision, 10), CreateTime: u.CreatedAt, LastLoginAt: u.LastLoginAt, ActiveTeamCount: u.ActiveTeamCount, MustChangePassword: u.MustChangePassword}
+	return PlatformUserView{ID: u.ID, Email: u.Email, EmailVerifiedAt: u.EmailVerifiedAt, DisplayName: u.DisplayName, AvatarAssetID: u.AvatarAssetID, Status: u.Status, PlatformRole: u.PlatformRole, Revision: strconv.FormatInt(u.Revision, 10), CreateTime: u.CreatedAt, LastLoginAt: u.LastLoginAt, ActiveTeamCount: u.ActiveTeamCount}
 }
 
 func parseDirectoryFilter(raw string) (application.DirectoryFilter, error) {
@@ -130,6 +135,21 @@ func directoryProblem(c *gin.Context, err error) {
 	}
 }
 
+// @Summary listPlatformUsers
+// @ID listPlatformUsers
+// @Tags identity
+// @Produce json
+// @Param limit query int false "Filter"
+// @Param cursor query string false "Filter"
+// @Param search query string false "Filter"
+// @Param status query string false "Filter"
+// @Param platform_role query string false "Filter"
+// @Param order query string false "Filter"
+// @Param verified query boolean false "Filter"
+// @Param in_team query boolean false "Filter"
+// @Success 200 {object} PlatformUserPageView
+// @Failure 403 {object} httpapi.Problem
+// @Router /api/platform/users [get]
 func (h *PlatformDirectoryHandler) list(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	f, err := parseDirectoryFilter(c.Request.URL.RawQuery)
@@ -149,6 +169,14 @@ func (h *PlatformDirectoryHandler) list(c *gin.Context) {
 	c.JSON(200, PlatformUserPageView{Items: items, NextCursor: page.NextCursor, AsOf: page.AsOf})
 }
 
+// @Summary getPlatformUser
+// @ID getPlatformUser
+// @Tags identity
+// @Produce json
+// @Param id path string true "User UUID"
+// @Success 200 {object} PlatformUserDetailView
+// @Failure 403 {object} httpapi.Problem
+// @Router /api/platform/users/{id} [get]
 func (h *PlatformDirectoryHandler) detail(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	id, ok := httpapi.PathUUID(c, "id")
@@ -165,5 +193,5 @@ func (h *PlatformDirectoryHandler) detail(c *gin.Context) {
 		teams = append(teams, TeamMembershipView{TeamID: m.TeamID, Role: m.Role, Status: m.Status})
 	}
 	// Governance actions remain closed until atomic team freeze and grants exist.
-	c.JSON(200, PlatformUserDetailView{User: platformUserView(detail.User), Teams: teams, AllowedActions: []string{}})
+	c.JSON(200, PlatformUserDetailView{User: platformUserView(detail.User), Teams: teams, AllowedActions: detail.AllowedActions})
 }

@@ -16,15 +16,15 @@ import (
 
 // SetModelStatusWithAudit rechecks current administrator rights and commits
 // the model status, revision, and audit in one PostgreSQL transaction.
-func (s *Store) SetModelStatusWithAudit(ctx context.Context, actorID, orgID, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || modelID == uuid.Nil ||
+func (s *Store) SetModelStatusWithAudit(ctx context.Context, actor identityapp.Principal, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || modelID == uuid.Nil ||
 		expectedRevision < 1 || expectedRevision >= math.MaxInt32 ||
-		!validModelStatusAudit(actorID, orgID, modelID, status, expectedRevision, event) {
+		!validModelStatusAudit(actor.ID, actor.OrgID, modelID, status, expectedRevision, event) {
 		return domain.ModelProfile{}, application.ErrInvalidSetModelStatus
 	}
 	var saved domain.ModelProfile
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		if err := setModelStatusInTx(tx, modelID, status, expectedRevision); err != nil {

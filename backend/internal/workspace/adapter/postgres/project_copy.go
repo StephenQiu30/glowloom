@@ -32,6 +32,8 @@ type ProjectCopyBibleOwnerFactory func(*gorm.DB, application.ProjectCopyAuthorit
 // ProjectCopyStore owns one concrete project's admission, worker fence and publication.
 type ProjectCopyStore struct {
 	db         *gorm.DB
+	requests   RequestScopeFactory
+	workers    WorkerScopeFactory
 	work       ProjectWorkFactory
 	owners     ProjectCopyOwnersFactory
 	script     ProjectCopyScriptOwnerFactory
@@ -119,7 +121,7 @@ func copyPresets(tx *gorm.DB, source domain.Project, job uuid.UUID, target uuid.
 		StyleSubtype                                    *string
 		ReferenceAssets                                 []byte
 	}
-	if err := tx.Raw(`SELECT id,org_id,project_id,name,style_type,style_subtype,prompt_fragment,negative_prompt,array_to_json(reference_asset_ids) AS reference_assets FROM workspace.style_preset WHERE org_id=? AND NOT is_delete AND (project_id=? OR id=?) ORDER BY id`, source.OrgID, source.ID, source.StylePresetID).Scan(&rows).Error; err != nil {
+	if err := tx.Raw(`SELECT id,org_id,project_id,name,style_type,style_subtype,prompt_fragment,negative_prompt,array_to_json(reference_asset_ids) AS reference_assets FROM workspace.style_preset WHERE org_id=? AND owner_scope_id=(SELECT owner_scope_id FROM workspace.project WHERE id=?) AND NOT is_delete AND (project_id=? OR id=?) ORDER BY id`, source.OrgID, source.ID, source.ID, source.StylePresetID).Scan(&rows).Error; err != nil {
 		return nil, uuid.Nil, fmt.Errorf("freeze copy style presets: %w", err)
 	}
 	presets := make([]domain.StylePreset, 0, len(rows))
@@ -156,7 +158,7 @@ func copyPresets(tx *gorm.DB, source domain.Project, job uuid.UUID, target uuid.
 	return presets, selected, nil
 }
 
-func createCopyTarget(tx *gorm.DB, source domain.Project, owner uuid.UUID, target uuid.UUID, name string, now time.Time) (domain.Project, error) {
+func createCopyTarget(tx *gorm.DB, source domain.Project, owner uuid.UUID, scope uuid.UUID, target uuid.UUID, name string, now time.Time) (domain.Project, error) {
 	p := source
 	p.ID, p.Name, p.StylePresetID = target, name, uuid.Nil
 	p.CoverAssetID = nil
@@ -171,7 +173,7 @@ func createCopyTarget(tx *gorm.DB, source domain.Project, owner uuid.UUID, targe
 	if p.StyleSubtype != "" {
 		subtype = p.StyleSubtype
 	}
-	if err := tx.Exec(`INSERT INTO workspace.project(id,org_id,owner_id,style_key,name,description,aspect_ratio,style_type,style_subtype,resolution,allow_overseas_models,status,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,'copying',1,?,?)`, p.ID, p.OrgID, p.OwnerID, p.StyleKey, p.Name, p.Description, p.AspectRatio, p.StyleType, subtype, p.Resolution, p.AllowOverseasModels, now, now).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO workspace.project(id,org_id,owner_scope_id,owner_id,style_key,name,description,aspect_ratio,style_type,style_subtype,resolution,allow_overseas_models,status,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'copying',1,?,?)`, p.ID, p.OrgID, scope, p.OwnerID, p.StyleKey, p.Name, p.Description, p.AspectRatio, p.StyleType, subtype, p.Resolution, p.AllowOverseasModels, now, now).Error; err != nil {
 		return domain.Project{}, fmt.Errorf("create unpublished project target: %w", err)
 	}
 	return p, nil
@@ -187,7 +189,7 @@ func persistCopySettings(tx *gorm.DB, snapshot copyWorkspaceSnapshot) error {
 		if preset.StyleSubtype != "" {
 			subtype = preset.StyleSubtype
 		}
-		if err := tx.Exec(`INSERT INTO workspace.style_preset(id,org_id,project_id,name,style_type,style_subtype,prompt_fragment,negative_prompt,reference_asset_ids) VALUES(?,?,?,?,?,?,?,?,ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid))`, preset.ID, preset.OrgID, preset.ProjectID, preset.Name, preset.StyleType, subtype, preset.PromptFragment, preset.NegativePrompt, string(assets)).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO workspace.style_preset(id,org_id,owner_scope_id,project_id,name,style_type,style_subtype,prompt_fragment,negative_prompt,reference_asset_ids) VALUES(?,?,(SELECT owner_scope_id FROM workspace.project WHERE id=?),?,?,?,?,?,?,ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid))`, preset.ID, preset.OrgID, preset.ProjectID, preset.ProjectID, preset.Name, preset.StyleType, subtype, preset.PromptFragment, preset.NegativePrompt, string(assets)).Error; err != nil {
 			return fmt.Errorf("copy private style preset: %w", err)
 		}
 	}
@@ -221,25 +223,33 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 	now = now.UTC().Truncate(time.Microsecond)
 	var saved domain.ProjectCopyJob
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireRequest(ctx, tx, actor, true); err != nil {
 			return err
 		}
 		if err := LockProjectLibrary(ctx, tx, actor); err != nil {
 			return err
 		}
 		var locked int
-		if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.ID.String()+":"+input.IdempotencyKey.String()).Scan(&locked).Error; err != nil {
+		if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.ScopeID.String()+":"+actor.ID.String()+":"+input.IdempotencyKey.String()).Scan(&locked).Error; err != nil {
 			return err
 		}
 		var accepted struct {
+			OwnerScopeID      uuid.UUID
+			ID                uuid.UUID
 			RequestSHA256     string
 			AdmissionResponse []byte
 		}
-		replayed := tx.Raw(`SELECT request_sha256,admission_response FROM workspace.project_copy_job WHERE actor_id=? AND org_id=? AND idem_key=?`, actor.ID, actor.OrgID, input.IdempotencyKey).Scan(&accepted)
+		replayed := tx.Raw(`SELECT id,owner_scope_id,request_sha256,admission_response FROM workspace.project_copy_job WHERE actor_id=? AND org_id=? AND idem_key=?`, actor.ID, actor.OrgID, input.IdempotencyKey).Scan(&accepted)
 		if replayed.Error != nil {
 			return replayed.Error
 		}
 		if replayed.RowsAffected == 1 {
+			if accepted.OwnerScopeID != actor.ScopeID {
+				return application.ErrIdempotencyConflict
+			}
+			if _, err := s.authorizedCopy(ctx, tx, actor, accepted.ID, true, false); err != nil {
+				return err
+			}
 			if accepted.RequestSHA256 != fingerprint || copyJSON(accepted.AdmissionResponse, &saved) != nil || saved.Validate() != nil {
 				return application.ErrIdempotencyConflict
 			}
@@ -251,6 +261,9 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		}
 		if existing == 1 {
 			return application.ErrIdempotencyConflict
+		}
+		if err := (&Store{scopes: s.requests}).authorizeProject(ctx, tx, actor, input.SourceProjectID, true); err != nil {
+			return err
 		}
 		placement, err := FreezeCopyPlacement(ctx, tx, actor, input.SourceProjectID, input.Placement)
 		if err != nil {
@@ -282,7 +295,7 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 			return err
 		}
 		saved = domain.ProjectCopyJob{RequestID: input.RequestID, ID: uuid.New(), OrgID: actor.OrgID, ActorID: actor.ID, SourceProjectID: input.SourceProjectID, SourceRevision: input.ExpectedRevision, TargetProjectID: uuid.New(), TargetName: input.TargetName, Status: "queued", Stage: "media", Revision: 1}
-		target, err := createCopyTarget(tx, source.Project, actor.ID, saved.TargetProjectID, input.TargetName, now)
+		target, err := createCopyTarget(tx, source.Project, actor.ID, actor.ScopeID, saved.TargetProjectID, input.TargetName, now)
 		if err != nil {
 			return err
 		}
@@ -387,7 +400,7 @@ func (s *ProjectCopyStore) Create(ctx context.Context, actor identityapp.Princip
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response,request_id) VALUES(?,?,?,?,?,?,?,'queued','media',?::jsonb,?::jsonb,?,?,?::jsonb,?)`, saved.ID, saved.OrgID, saved.ActorID, saved.SourceProjectID, saved.SourceRevision, saved.TargetProjectID, saved.TargetName, string(manifest), string(body), input.IdempotencyKey, fingerprint, string(response), input.RequestID).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO workspace.project_copy_job(id,org_id,owner_scope_id,actor_id,source_project_id,source_revision,target_project_id,target_name,status,stage,manifest,workspace_snapshot,idem_key,request_sha256,admission_response,request_id) VALUES(?,?,?,?,?,?,?,?,'queued','media',?::jsonb,?::jsonb,?,?,?::jsonb,?)`, saved.ID, saved.OrgID, actor.ScopeID, saved.ActorID, saved.SourceProjectID, saved.SourceRevision, saved.TargetProjectID, saved.TargetName, string(manifest), string(body), input.IdempotencyKey, fingerprint, string(response), input.RequestID).Error; err != nil {
 			return fmt.Errorf("admit complete frozen copy: %w", err)
 		}
 		if err := tx.Exec(`INSERT INTO infra.idempotency_record(id,actor_id,idem_key,request_hash,status_code,response_body,expires_at) VALUES(?,?,?,?,202,?::jsonb,statement_timestamp()+interval '24 hours') ON CONFLICT(actor_id,idem_key) DO UPDATE SET request_hash=excluded.request_hash,status_code=202,response_body=excluded.response_body,expires_at=excluded.expires_at,is_delete=false,update_time=statement_timestamp()`, uuid.New(), actor.ID, input.IdempotencyKey.String(), fingerprint, string(response)).Error; err != nil {

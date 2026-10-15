@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
 // ProjectCopyTransferError separates a known validation failure from an unknown write.
@@ -34,8 +35,16 @@ type ProjectCopyObjectRepository interface {
 	ConfirmObjectRemoved(context.Context, identityapp.Principal, ProjectCopyBinding, ProjectCopySnapshot, uuid.UUID, string) error
 }
 
-// ProjectCopyObjects reads and creates immutable private objects and removes exact owned keys.
-// Adapters translate conditional existence into ErrObjectAlreadyExists.
+// PhysicalTransferObjects requires a complete source or target location at every I/O.
+type PhysicalTransferObjects interface {
+	Get(context.Context, domain.ObjectRef) (io.ReadCloser, error)
+	Exists(context.Context, domain.ObjectRef) (bool, error)
+	PutIfAbsent(context.Context, domain.ObjectRef, io.Reader, int64, string, string) error
+	Remove(context.Context, domain.ObjectRef) error
+}
+
+// ProjectCopyObjects preserves the original explicitly bound single-bucket port.
+// Adapters translate conditional creation into ErrObjectAlreadyExists.
 type ProjectCopyObjects interface {
 	Get(context.Context, string) (io.ReadCloser, error)
 	Exists(context.Context, string) (bool, error)
@@ -45,14 +54,20 @@ type ProjectCopyObjects interface {
 
 // ProjectCopyTransfer owns bounded bytes and closes/removes every temporary file.
 type ProjectCopyTransfer struct {
-	repo    ProjectCopyObjectRepository
-	objects ProjectCopyObjects
-	tempDir string
+	repo     ProjectCopyObjectRepository
+	objects  ProjectCopyObjects
+	physical PhysicalTransferObjects
+	tempDir  string
 }
 
 // NewProjectCopyTransfer injects fenced receipts, object access and private temporary storage.
 func NewProjectCopyTransfer(repo ProjectCopyObjectRepository, objects ProjectCopyObjects, tempDir string) *ProjectCopyTransfer {
 	return &ProjectCopyTransfer{repo: repo, objects: objects, tempDir: tempDir}
+}
+
+// NewRoutedProjectCopyTransfer reads and writes only manifest-persisted physical refs.
+func NewRoutedProjectCopyTransfer(repo ProjectCopyObjectRepository, objects PhysicalTransferObjects, tempDir string) *ProjectCopyTransfer {
+	return &ProjectCopyTransfer{repo: repo, physical: objects, tempDir: tempDir}
 }
 
 type copyContextReader struct {
@@ -88,11 +103,11 @@ func copyObjectBytes(ctx context.Context, reader io.Reader, output io.Writer, ex
 }
 
 func (s *ProjectCopyTransfer) verifyTarget(ctx context.Context, object ProjectCopyObject) error {
-	return verifyTransferredObject(ctx, s.objects, object)
+	return verifyTransferredObject(ctx, s.objects, s.physical, object)
 }
 
 func (s *ProjectCopyTransfer) transferObject(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot, object ProjectCopyObject) error {
-	return transferPrivateObject(ctx, s.objects, s.tempDir, object,
+	return transferPrivateObject(ctx, s.objects, s.physical, s.tempDir, object,
 		func(sha string, size int64) error {
 			return s.repo.RecordObjectDigest(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind, sha, size)
 		},
@@ -108,7 +123,7 @@ func (s *ProjectCopyTransfer) transferObject(ctx context.Context, actor identity
 // Transfer copies the entire frozen object set with receipt-before-write ordering.
 // Recovery calls use exactly these same keys after workspace claims reconciliation.
 func (s *ProjectCopyTransfer) Transfer(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
-	if s == nil || s.repo == nil || s.objects == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID {
+	if s == nil || s.repo == nil || s.objects == nil && s.physical == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID {
 		return ErrUnavailable
 	}
 	objects, err := s.repo.Objects(ctx, actor, binding, snapshot)
@@ -126,7 +141,7 @@ func (s *ProjectCopyTransfer) Transfer(ctx context.Context, actor identityapp.Pr
 // Cleanup removes only this snapshot's private keys after ownership/digest checks.
 // Missing objects still require a durable removal receipt; an unknown collision fails closed.
 func (s *ProjectCopyTransfer) Cleanup(ctx context.Context, actor identityapp.Principal, binding ProjectCopyBinding, snapshot ProjectCopySnapshot) error {
-	if s == nil || s.repo == nil || s.objects == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID {
+	if s == nil || s.repo == nil || s.objects == nil && s.physical == nil || binding.Validate() != nil || binding.OrgID != actor.OrgID {
 		return ErrUnavailable
 	}
 	objects, err := s.repo.Objects(ctx, actor, binding, snapshot)
@@ -137,7 +152,7 @@ func (s *ProjectCopyTransfer) Cleanup(ctx context.Context, actor identityapp.Pri
 		if err := s.repo.AuthorizeObjectRemoval(ctx, actor, binding, snapshot, object.TargetAssetID, object.RenditionKind); err != nil {
 			return err
 		}
-		exists, err := s.objects.Exists(ctx, object.TargetObjectKey)
+		exists, err := copyObjectExists(ctx, s.objects, s.physical, object.TargetLocation, object.TargetObjectKey)
 		if err != nil {
 			return err
 		}
@@ -148,10 +163,10 @@ func (s *ProjectCopyTransfer) Cleanup(ctx context.Context, actor identityapp.Pri
 			if err := s.verifyTarget(ctx, object); err != nil {
 				return &ProjectCopyTransferError{Code: "cleanup_ownership_unverified", NeedsReconciliation: true, Cause: err}
 			}
-			if err := s.objects.Remove(ctx, object.TargetObjectKey); err != nil {
+			if err := removeCopyObject(ctx, s.objects, s.physical, object.TargetLocation, object.TargetObjectKey); err != nil {
 				return &ProjectCopyTransferError{Code: "object_remove_unknown", NeedsReconciliation: true, Cause: err}
 			}
-			if exists, err := s.objects.Exists(ctx, object.TargetObjectKey); err != nil || exists {
+			if exists, err := copyObjectExists(ctx, s.objects, s.physical, object.TargetLocation, object.TargetObjectKey); err != nil || exists {
 				return &ProjectCopyTransferError{Code: "object_remove_unverified", NeedsReconciliation: true, Cause: err}
 			}
 		}

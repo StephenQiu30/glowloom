@@ -14,7 +14,7 @@ export function Providers({ children }: { children: ReactNode }) {
       disableTransitionOnChange
     >
       <TooltipProvider>{children}</TooltipProvider>
-      <Toaster richColors />
+      <Toaster />
     </ThemeProvider>
   );
 }

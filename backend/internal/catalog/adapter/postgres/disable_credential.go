@@ -14,14 +14,14 @@ import (
 )
 
 // FindCredentialForAdmin returns only safe metadata of the current credential.
-func (s *Store) FindCredentialForAdmin(ctx context.Context, actorID, orgID, providerID, credentialID uuid.UUID) (application.CredentialToDisable, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+func (s *Store) FindCredentialForAdmin(ctx context.Context, actor identityapp.Principal, providerID, credentialID uuid.UUID) (application.CredentialToDisable, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		providerID == uuid.Nil || credentialID == uuid.Nil {
 		return application.CredentialToDisable{}, application.ErrInvalidDisableCredential
 	}
 	var target application.CredentialToDisable
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var provider int
@@ -57,17 +57,17 @@ func (s *Store) FindCredentialForAdmin(ctx context.Context, actorID, orgID, prov
 
 // DisableCredentialWithEvents rechecks current access and target state, then
 // commits the disable and its change/audit events as one transaction.
-func (s *Store) disableCredentialWithEventsOnce(ctx context.Context, actorID, orgID uuid.UUID, target application.CredentialToDisable, events []identityapp.OutboxEvent) (application.SavedCredential, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+func (s *Store) disableCredentialWithEventsOnce(ctx context.Context, actor identityapp.Principal, target application.CredentialToDisable, events []identityapp.OutboxEvent) (application.SavedCredential, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		target.ID == uuid.Nil || target.ProviderID == uuid.Nil ||
 		!utf8.ValidString(target.Last4) || utf8.RuneCountInString(target.Last4) != 4 ||
-		!validCredentialLifecycleEvents(actorID, orgID, target.ID, target.ProviderID,
+		!validCredentialLifecycleEvents(actor.ID, actor.OrgID, target.ID, target.ProviderID,
 			target.Last4, "disabled", "credential.disabled", events) {
 		return application.SavedCredential{}, application.ErrInvalidDisableCredential
 	}
 	var saved application.SavedCredential
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var provider int

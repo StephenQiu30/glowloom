@@ -10,18 +10,19 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ListProvidersForAdmin reads one keyset page with safe credential columns and
 // counts non-deleted model profiles after checking current administrator rights.
-func (s *Store) ListProvidersForAdmin(ctx context.Context, actorID, orgID uuid.UUID, limit int, after *application.ProviderListCursor) (application.ProviderListPage, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || limit < 1 || limit > 200 ||
+func (s *Store) ListProvidersForAdmin(ctx context.Context, actor identityapp.Principal, limit int, after *application.ProviderListCursor) (application.ProviderListPage, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || limit < 1 || limit > 200 ||
 		(after != nil && (after.ID == uuid.Nil || after.CreateTime.IsZero())) {
 		return application.ProviderListPage{}, application.ErrInvalidProviderList
 	}
 	var page application.ProviderListPage
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		const baseQuery = `

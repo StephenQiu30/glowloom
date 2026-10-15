@@ -23,24 +23,13 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	// ErrSessionInvalid means authentication state is absent, expired or revoked.
 	ErrSessionInvalid = errors.New("invalid session")
-	// ErrLoginTaken means the global registration namespace already owns the name.
-	ErrLoginTaken = errors.New("login already exists")
 	// ErrCurrentPassword means a password change failed current credential verification.
 	ErrCurrentPassword = errors.New("current password invalid")
 )
 
-// AuthStore owns the transaction boundary for credentials, sessions and events.
-type AuthStore interface {
-	Transaction(context.Context, func(AuthTx) error) error
-	LoginAvailable(context.Context, string) (bool, error)
-}
-
 // AuthTx exposes only the persistence operations used by this identity slice.
 // Account reads lock the account; the first session lookup is deliberately unlocked.
 type AuthTx interface {
-	RegistrationOrganization() (uuid.UUID, error)
-	CreateAccount(domain.User) error
-	AccountByLogin(string) (domain.User, error)
 	AccountByID(uuid.UUID) (domain.User, error)
 	UpdateAccount(domain.User) error
 	Guard(string) (domain.LoginGuard, error)
@@ -57,13 +46,9 @@ type AuthTx interface {
 
 // Auth coordinates registration and server-authoritative authentication.
 type Auth struct {
-	store AuthStore
 	now   func() time.Time
 	email *emailRuntime
 }
-
-// NewAuth injects persistence and the server clock.
-func NewAuth(store AuthStore, now func() time.Time) *Auth { return &Auth{store: store, now: now} }
 
 // AuthResult keeps transport credentials separate from public DTOs.
 type AuthResult struct {
@@ -73,96 +58,9 @@ type AuthResult struct {
 	CSRFToken string
 }
 
-// Register creates a producer and a session atomically, with no privileged input.
-func (a *Auth) Register(ctx context.Context, login, display, password, confirmation string) (AuthResult, error) {
-	key, err := domain.NormalizeLogin(login)
-	display = strings.TrimSpace(display)
-	if err != nil || !utf8.ValidString(display) || utf8.RuneCountInString(display) < 1 || utf8.RuneCountInString(display) > 32 || password != confirmation {
-		return AuthResult{}, domain.ErrInvalidProfile
-	}
-	for _, r := range display {
-		if unicode.IsControl(r) {
-			return AuthResult{}, domain.ErrInvalidProfile
-		}
-	}
-	hash, err := domain.HashPassword(password, "")
-	if err != nil {
-		return AuthResult{}, err
-	}
-	var result AuthResult
-	err = a.store.Transaction(ctx, func(tx AuthTx) error {
-		org, err := tx.RegistrationOrganization()
-		if err != nil {
-			return err
-		}
-		now := a.now().UTC()
-		user := domain.User{ID: uuid.New(), OrgID: org, LoginName: key, DisplayName: display, Role: domain.RoleProducer, Status: domain.StatusActive, PasswordHash: hash, SessionEpoch: 1, Revision: 1, PasswordChangedAt: now}
-		if err := tx.CreateAccount(user); err != nil {
-			return err
-		}
-		result, err = a.newSession(tx, user, false, now)
-		if err != nil {
-			return err
-		}
-		return tx.AppendAuthEvent(user.ID, "registered", now)
-	})
-	return result, err
-}
-
-const unavailableHash = "$2a$12$yf3ZHVlB9i79td5BSH3Gv.O.0R9lLRkVHKFWANWrD4JaTsx7VGoa2"
-
-// Login commits failed attempts as well as successful sessions under the login lock.
-func (a *Auth) Login(ctx context.Context, login, password string, persistent bool) (AuthResult, error) {
-	if a.email != nil {
-		return a.loginEmail(ctx, login, password, persistent)
-	}
-	key, err := domain.NormalizeLogin(login)
-	if err != nil {
-		domain.VerifyPassword(unavailableHash, password)
-		return AuthResult{}, ErrInvalidCredentials
-	}
-	var result AuthResult
-	var rejected error
-	err = a.store.Transaction(ctx, func(tx AuthTx) error {
-		guard, err := tx.Guard(key)
-		if err != nil {
-			return err
-		}
-		user, err := tx.AccountByLogin(key)
-		if err != nil && !errors.Is(err, domain.ErrUserNotFound) {
-			return err
-		}
-		hash := unavailableHash
-		if err == nil {
-			hash = user.PasswordHash
-		}
-		correct := domain.VerifyPassword(hash, password)
-		now := a.now().UTC()
-		if !correct || err != nil || user.Status != domain.StatusActive || guard.Locked(now) || now.Before(user.LockedUntil) {
-			guard.Fail(now)
-			if err := tx.SaveGuard(key, guard); err != nil {
-				return err
-			}
-			rejected = ErrInvalidCredentials
-			return tx.AppendAuthEvent(user.ID, "login_failed", now)
-		}
-		if err := tx.SaveGuard(key, domain.LoginGuard{}); err != nil {
-			return err
-		}
-		user.RegisterLoginSuccess(now)
-		if err := tx.UpdateAccount(user); err != nil {
-			return err
-		}
-		result, err = a.newSession(tx, user, persistent, now)
-		if err != nil {
-			return err
-		}
-		return tx.AppendAuthEvent(user.ID, "logged_in", now)
-	})
-	if err != nil {
-		return AuthResult{}, err
-	}
-	return result, rejected
+// Login verifies the existing email credential and creates an ordinary session.
+func (a *Auth) Login(ctx context.Context, email, password string, persistent bool) (AuthResult, error) {
+ return a.loginEmail(ctx, email, password, persistent)
 }
 
 // Current validates durable state and advances last activity under account/session locks.
@@ -242,15 +140,6 @@ func (a *Auth) ChangePassword(ctx context.Context, token string, revision int64,
 		return tx.AppendAuthEvent(user.ID, "password_changed", now)
 	})
 	return result, err
-}
-
-// Available provides registration feedback; the unique constraint remains authoritative.
-func (a *Auth) Available(ctx context.Context, login string) (bool, error) {
-	key, err := domain.NormalizeLogin(login)
-	if err != nil {
-		return false, err
-	}
-	return a.store.LoginAvailable(ctx, key)
 }
 
 func (a *Auth) withSession(ctx context.Context, token string, execute func(AuthTx, domain.User, domain.AuthSession, time.Time) error) error {

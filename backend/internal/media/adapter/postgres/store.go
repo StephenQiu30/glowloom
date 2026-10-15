@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	workspacedomain "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
@@ -29,10 +28,18 @@ var (
 )
 
 // Store keeps the database handle injected by the composition root.
-type Store struct{ db *gorm.DB }
+type Store struct {
+	db *gorm.DB
+	scopeAuthority
+}
 
 // NewStore creates a media store using the caller's database handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
+
+// NewScopedStore injects transaction-bound content authority.
+func NewScopedStore(db *gorm.DB, scopes ScopeAccessFactory) *Store {
+	return &Store{db: db, scopeAuthority: scopeAuthority{scopes: scopes}}
+}
 
 // CreateAsset records metadata for a new upload or generated result. Object
 // transfer and ingest are separate steps; this method does not mark it ready.
@@ -48,10 +55,10 @@ func (s *Store) CreateAsset(ctx context.Context, actor identityapp.Principal, as
 		return domain.ErrInvalidMediaAsset
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if err := requireProject(tx, actor, asset.ProjectID, true); err != nil {
+		if err := s.requireProject(tx, actor, asset.ProjectID, true); err != nil {
 			return err
 		}
 		result := tx.Exec(`
@@ -101,18 +108,18 @@ func (s *Store) findAsset(ctx context.Context, actor identityapp.Principal, proj
 	}
 	var row assetRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if newBinding {
-			library, err := projectMediaLibrary(tx, actor, projectID)
+			library, err := s.projectMediaLibrary(tx, actor, projectID)
 			if err != nil {
 				return err
 			}
 			if err := requireNewMediaVisible(tx, library.ID, []uuid.UUID{assetID}); err != nil {
 				return err
 			}
-		} else if err := requireProject(tx, actor, projectID, false); err != nil {
+		} else if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`
@@ -164,10 +171,13 @@ func (s *Store) AddRendition(ctx context.Context, actor identityapp.Principal, p
 		return domain.ErrInvalidRendition
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		parentKey, err := visibleAssetKey(tx, actor, projectID, rendition.MediaAssetID)
+		if err := s.requireProject(tx, actor, projectID, true); err != nil {
+			return err
+		}
+		parentKey, err := s.visibleAssetKey(tx, actor, projectID, rendition.MediaAssetID)
 		if err != nil {
 			return err
 		}
@@ -207,10 +217,10 @@ func (s *Store) FindRenditions(ctx context.Context, actor identityapp.Principal,
 	}
 	var rows []renditionRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if _, err := visibleAssetKey(tx, actor, projectID, assetID); err != nil {
+		if _, err := s.visibleAssetKey(tx, actor, projectID, assetID); err != nil {
 			return err
 		}
 		result := tx.Raw(`
@@ -244,56 +254,11 @@ func (s *Store) FindRenditions(ctx context.Context, actor identityapp.Principal,
 	return result, nil
 }
 
-func requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
-		return identityapp.ErrForbidden
-	}
-	var present int
-	result := tx.Raw(`
-		SELECT 1 FROM identity."user" AS u
-		JOIN workspace.organization AS org ON org.id = u.org_id
-		WHERE u.id = ?::uuid AND u.org_id = ?::uuid AND u.role = ?
-		  AND u.status = 'active' AND NOT u.is_delete AND NOT u.must_change_password
-		  AND org.status = 'active' AND NOT org.is_delete
-		FOR SHARE OF u, org
-	`, actor.ID.String(), actor.OrgID.String(), string(actor.Role)).Scan(&present)
-	if result.Error != nil {
-		return fmt.Errorf("check current media actor: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return identityapp.ErrForbidden
-	}
-	return nil
-}
-
-func requireProject(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, forWrite bool) error {
-	if projectID == uuid.Nil {
-		return ErrNotFound
-	}
-	var row struct{ Status string }
-	result := tx.Raw(`
-		SELECT status FROM workspace.project
-		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete AND status IN ('active','archived')
-		FOR SHARE
-	`, projectID.String(), actor.OrgID.String()).Scan(&row)
-	if result.Error != nil {
-		return fmt.Errorf("check media project: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return ErrNotFound
-	}
-	if forWrite && row.Status != "active" {
-		return ErrProjectStateConflict
-	}
-	return nil
-}
-
-func visibleAssetKey(tx *gorm.DB, actor identityapp.Principal, projectID, assetID uuid.UUID) (string, error) {
+func (s scopeAuthority) visibleAssetKey(tx *gorm.DB, actor identityapp.Principal, projectID, assetID uuid.UUID) (string, error) {
 	if projectID == uuid.Nil || assetID == uuid.Nil {
 		return "", ErrNotFound
 	}
-	library, err := projectMediaLibrary(tx, actor, projectID)
+	library, err := s.projectMediaLibrary(tx, actor, projectID)
 	if err != nil {
 		return "", err
 	}
@@ -424,10 +389,10 @@ func (s *Store) ListReadyAssets(ctx context.Context, actor identityapp.Principal
 	}
 	var rows []assetRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if err := requireProject(tx, actor, projectID, false); err != nil {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		library, err := readLibrary(tx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &projectID}, false)

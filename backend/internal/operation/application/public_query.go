@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
 
@@ -147,7 +146,7 @@ type PublicQuery struct{ store PublicQueryStore }
 func NewPublicQuery(store PublicQueryStore) *PublicQuery { return &PublicQuery{store: store} }
 
 func publicActor(actor identityapp.Principal) error {
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword || (actor.Role != identitydomain.RoleProducer && actor.Role != identitydomain.RoleAdmin) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return identityapp.ErrForbidden
 	}
 	return nil

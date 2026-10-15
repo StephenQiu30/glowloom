@@ -40,7 +40,7 @@ func (s *TransferStore) VerifyTransferDelivery(ctx context.Context, d applicatio
 		if actor.ID != d.ActorID || actor.OrgID != d.OrgID {
 			return domain.ErrInvalidLibrary
 		}
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, actor, d.JobID, false)
@@ -48,7 +48,7 @@ func (s *TransferStore) VerifyTransferDelivery(ctx context.Context, d applicatio
 			return err
 		}
 		source, target := row.scopes()
-		if _, err := s.access(ctx, tx, actor, source, target, false); err != nil {
+		if _, err := s.access(ctx, tx, actor, source, target, true); err != nil {
 			return err
 		}
 		valid = row.Attempt == d.Attempt && row.Status != "succeeded" && row.Status != "cancelled" && row.Status != "failed" && row.Status != "partial_failed"

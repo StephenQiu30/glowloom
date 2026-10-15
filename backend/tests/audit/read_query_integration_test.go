@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gorm.io/gorm"
@@ -68,29 +70,29 @@ func TestAuditReadRechecksCurrentAdminWithRealPostgres(t *testing.T) {
 	query := auditapp.NewReadQuery(pgaudit.NewStore(tx))
 	assertDenied := func() {
 		t.Helper()
-		if _, err := query.List(ctx, actorID, orgID, domain.Filter{}); !errors.Is(err, auditapp.ErrForbidden) {
+		if _, err := query.List(ctx, identityapp.Principal{ID: actorID}, orgID, domain.Filter{}); !errors.Is(err, auditapp.ErrForbidden) {
 			t.Fatalf("revoked administrator list: %v", err)
 		}
-		if _, err := query.Get(ctx, actorID, orgID, firstID); !errors.Is(err, auditapp.ErrForbidden) {
+		if _, err := query.Get(ctx, identityapp.Principal{ID: actorID}, orgID, firstID); !errors.Is(err, auditapp.ErrForbidden) {
 			t.Fatalf("revoked administrator detail: %v", err)
 		}
 	}
-	page, err := query.List(ctx, actorID, orgID, domain.Filter{Limit: 1, ProjectID: &projectID})
+	page, err := query.List(ctx, identityapp.Principal{ID: actorID}, orgID, domain.Filter{Limit: 1, ProjectID: &projectID})
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != firstID || page.Next != nil {
 		t.Fatalf("scoped project page = %+v, %v", page, err)
 	}
-	page, err = query.List(ctx, actorID, orgID, domain.Filter{Limit: 1})
+	page, err = query.List(ctx, identityapp.Principal{ID: actorID}, orgID, domain.Filter{Limit: 1})
 	if err != nil || len(page.Items) != 1 || page.Next == nil {
 		t.Fatalf("first keyset page = %+v, %v", page, err)
 	}
-	page, err = query.List(ctx, actorID, orgID, domain.Filter{Limit: 1, Before: page.Next})
+	page, err = query.List(ctx, identityapp.Principal{ID: actorID}, orgID, domain.Filter{Limit: 1, Before: page.Next})
 	if err != nil || len(page.Items) != 1 || page.Next != nil {
 		t.Fatalf("second keyset page = %+v, %v", page, err)
 	}
-	if _, err := query.Get(ctx, actorID, orgID, foreignID); !errors.Is(err, pgaudit.ErrNotFound) {
+	if _, err := query.Get(ctx, identityapp.Principal{ID: actorID}, orgID, foreignID); !errors.Is(err, pgaudit.ErrNotFound) {
 		t.Fatalf("cross-organization detail: %v", err)
 	}
-	if _, err := query.List(ctx, outsiderID, orgID, domain.Filter{}); !errors.Is(err, auditapp.ErrForbidden) {
+	if _, err := query.List(ctx, identityapp.Principal{ID: outsiderID}, orgID, domain.Filter{}); !errors.Is(err, auditapp.ErrForbidden) {
 		t.Fatalf("cross-organization administrator: %v", err)
 	}
 
@@ -134,7 +136,7 @@ func TestAuditReadHoldsAdminLockAcrossReadTransaction(t *testing.T) {
 	}
 	defer tx.Rollback()
 	query := auditapp.NewReadQuery(pgaudit.NewStore(tx))
-	if _, err := query.List(ctx, actorID, orgID, domain.Filter{}); err != nil {
+	if _, err := query.List(ctx, identityapp.Principal{ID: actorID}, orgID, domain.Filter{}); err != nil {
 		t.Fatalf("read with current administrator: %v", err)
 	}
 
@@ -157,7 +159,7 @@ func TestAuditReadHoldsAdminLockAcrossReadTransaction(t *testing.T) {
 	`, actorID.String()).Error; err != nil {
 		t.Fatalf("revoke administrator after read: %v", err)
 	}
-	if _, err := auditapp.NewReadQuery(pgaudit.NewStore(conn.DB)).List(ctx, actorID, orgID, domain.Filter{}); !errors.Is(err, auditapp.ErrForbidden) {
+	if _, err := auditapp.NewReadQuery(pgaudit.NewStore(conn.DB)).List(ctx, identityapp.Principal{ID: actorID}, orgID, domain.Filter{}); !errors.Is(err, auditapp.ErrForbidden) {
 		t.Fatalf("read after revocation: %v", err)
 	}
 }

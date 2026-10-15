@@ -39,9 +39,9 @@ type publishPriceStore struct {
 	err              error
 }
 
-func (s *publishPriceStore) PublishPriceRuleWithAudit(_ context.Context, actorID, orgID uuid.UUID, price domain.PriceRuleVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
+func (s *publishPriceStore) PublishPriceRuleWithAudit(_ context.Context, actor identityapp.Principal, price domain.PriceRuleVersion, expectedRevision int64, event identityapp.OutboxEvent) (domain.PriceRuleVersion, error) {
 	s.called = true
-	s.actorID, s.orgID = actorID, orgID
+	s.actorID, s.orgID = actor.ID, actor.OrgID
 	s.price, s.expectedRevision, s.event = price, expectedRevision, event
 	if s.err != nil {
 		return domain.PriceRuleVersion{}, s.err

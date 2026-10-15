@@ -31,7 +31,7 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 		return result, err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := transferLock(tx, actor.ID, key); err != nil {
@@ -42,10 +42,10 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 			return err
 		}
 		source, target := row.scopes()
-		if _, err := s.access(ctx, tx, actor, source, target, false); err != nil {
+		if _, err := s.access(ctx, tx, actor, source, target, true); err != nil {
 			return err
 		}
-		cached, err := transferReplay(tx, actor, key, hash, action)
+		cached, err := s.transferReplay(tx, actor, key, hash, action)
 		if err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ func (s *TransferStore) ControlTransfer(ctx context.Context, actor identityapp.P
 			result = *cached
 			return nil
 		}
-		if _, _, err := ensureTransferLibraries(tx, actor, source, target); err != nil {
+		if _, _, err := s.ensureTransferLibraries(tx, actor, source, target); err != nil {
 			return err
 		}
 		row, err = s.readJob(tx, actor, id, true)

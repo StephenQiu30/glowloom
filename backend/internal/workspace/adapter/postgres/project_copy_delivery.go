@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,7 +19,24 @@ func (s *ProjectCopyStore) VerifyDelivery(ctx context.Context, d application.Pro
 		return false, domain.ErrInvalidProjectCopy
 	}
 	var valid bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM infra.outbox o JOIN workspace.project_copy_job j ON j.id=? AND j.org_id=? WHERE o.id=? AND o.topic='lanverse.workspace.project_copy_requested.v1' AND o.partition_key=? AND o.payload->>'org_id'=? AND o.payload->'data'->>'copy_job_id'=? AND o.payload->'data'->>'source_project_id'=? AND o.payload->'data'->>'target_project_id'=? AND (o.payload->'data'->>'revision')::bigint=? AND o.payload->'data'->>'action'=? AND o.payload->'data'->>'status'=? AND o.payload->'data'->>'stage'=? AND o.payload->'actor'->>'id'=? AND o.payload->'actor'->>'kind'='user' AND o.payload->>'occurred_at'=? AND j.source_project_id=? AND j.target_project_id=? AND j.status NOT IN ('succeeded','cancelled'))`, d.JobID, d.OrgID, d.EventID, d.JobID.String(), d.OrgID.String(), d.JobID.String(), d.SourceProjectID.String(), d.TargetProjectID.String(), d.Revision, d.Action, d.Status, d.Stage, d.ActorID.String(), d.OccurredAt.UTC().Format(time.RFC3339Nano), d.SourceProjectID, d.TargetProjectID).Scan(&valid).Error
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM infra.outbox o JOIN workspace.project_copy_job j ON j.id=? AND j.org_id=? WHERE o.id=? AND o.topic='lanverse.workspace.project_copy_requested.v1' AND o.partition_key=? AND o.payload->>'org_id'=? AND o.payload->'data'->>'copy_job_id'=? AND o.payload->'data'->>'source_project_id'=? AND o.payload->'data'->>'target_project_id'=? AND (o.payload->'data'->>'revision')::bigint=? AND o.payload->'data'->>'action'=? AND o.payload->'data'->>'status'=? AND o.payload->'data'->>'stage'=? AND o.payload->'actor'->>'id'=? AND o.payload->'actor'->>'kind'='user' AND o.payload->>'occurred_at'=? AND j.source_project_id=? AND j.target_project_id=?)`, d.JobID, d.OrgID, d.EventID, d.JobID.String(), d.OrgID.String(), d.JobID.String(), d.SourceProjectID.String(), d.TargetProjectID.String(), d.Revision, d.Action, d.Status, d.Stage, d.ActorID.String(), d.OccurredAt.UTC().Format(time.RFC3339Nano), d.SourceProjectID, d.TargetProjectID).Scan(&valid).Error; err != nil {
+			return err
+		}
+		if !valid {
+			return domain.ErrInvalidProjectCopy
+		}
+		job, err := s.authorizedCopy(ctx, tx, identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}, d.JobID, true, true)
+		if errors.Is(err, application.ErrScopeNotFound) || errors.Is(err, application.ErrProjectNotFound) || errors.Is(err, identityapp.ErrForbidden) {
+			valid = false
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		valid = job.Status != "succeeded" && job.Status != "cancelled"
+		return nil
+	})
 	return valid, err
 }
 

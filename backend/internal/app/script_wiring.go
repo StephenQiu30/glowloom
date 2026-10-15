@@ -12,7 +12,6 @@ import (
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	pgscript "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/postgres"
 	scriptapp "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 )
 
 func provideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {
@@ -20,13 +19,13 @@ func provideScriptSourceStore(database *gorm.DB) *pgscript.SourceStore {
 }
 
 func provideScriptProjectAccess(tx *gorm.DB) scriptapp.ProjectAccess {
-	return pgworkspace.NewProjectContentAccessStore(tx)
+	return provideProjectContentAccess(tx)
 }
 
 func provideScriptImportStore(database *gorm.DB) *pgscript.ImportStore {
-	return pgscript.NewImportStore(database, provideScriptProjectAccess, func(tx *gorm.DB) scriptapp.SourceAssetReader {
+	return pgscript.NewImportStoreWithWorkerAccess(database, provideScriptProjectAccess, provideScriptWorkerAccess, func(tx *gorm.DB) scriptapp.SourceAssetReader {
 		// Admission freezes media facts in this transaction, without object I/O.
-		return mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(tx), nil)
+		return mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(tx, provideMediaScopeAccess), nil)
 	})
 }
 
@@ -51,12 +50,16 @@ func provideScriptImportWorker(database *gorm.DB, storage *objectstorage.Client)
 	objects := scriptobjects.NewStorage(storage)
 	services := provideScriptServices(database, storage)
 	publication := func(authority scriptapp.ImportAuthority) *scriptapp.SourceService {
-		return scriptapp.NewSourceServiceSharingIO(pgscript.NewImportSourceStore(database, provideScriptProjectAccess, authority), objects, time.Now, services.sources)
+		return scriptapp.NewSourceServiceSharingIO(pgscript.NewImportSourceStore(database, provideScriptWorkerAccess, authority), objects, time.Now, services.sources)
 	}
-	recovery := scriptapp.NewSourceRecovery(pgscript.NewImportRecoveryStore(database, provideScriptProjectAccess), services.sources, time.Now)
+	recovery := scriptapp.NewSourceRecovery(pgscript.NewImportRecoveryStore(database, provideScriptWorkerAccess), services.sources, time.Now)
 	// One worker owns extraction and publication I/O until the synchronous
 	// publication call and its durable exit proof both finish. Recovery runs
 	// after that join and checks the source owner's persistent I/O facts.
-	worker := scriptapp.NewImportWorker(store, mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(database), storage), scriptextract.NewExtractor(), publication, recovery, time.Now)
+	worker := scriptapp.NewImportWorker(store, mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, provideMediaWorkerScopeAccess), storage), scriptextract.NewExtractor(), publication, recovery, time.Now)
 	return worker, store
+}
+
+func provideScriptWorkerAccess(tx *gorm.DB) scriptapp.ProjectAccess {
+	return provideWorkerProjectContentAccess(tx)
 }

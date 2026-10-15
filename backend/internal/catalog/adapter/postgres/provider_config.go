@@ -39,7 +39,7 @@ func readConnectionConfig(tx *gorm.DB, id uuid.UUID) (application.ConnectionConf
 func (s *Store) ReadConnectionConfig(ctx context.Context, actor identityapp.Principal, id uuid.UUID) (application.ConnectionConfig, error) {
 	var config application.ConnectionConfig
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		var err error
@@ -82,7 +82,7 @@ func previewConfigUpgrade(tx *gorm.DB, id uuid.UUID, input application.ConfigUpg
 func (s *Store) PreviewConfigUpgrade(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.ConfigUpgradeInput) (application.ConfigUpgradePreview, error) {
 	var preview application.ConfigUpgradePreview
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		var err error
@@ -94,7 +94,7 @@ func (s *Store) PreviewConfigUpgrade(ctx context.Context, actor identityapp.Prin
 
 // ApplyConfigUpgrade preserves old snapshots, credentials and release bindings.
 func (s *Store) ApplyConfigUpgrade(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.ApplyConfigInput) (application.ConnectionConfig, error) {
-	return catalogMutation(ctx, s.db, actor, "config.upgrade", id, input.RequestID, input, func(tx *gorm.DB) (application.ConnectionConfig, error) {
+	return catalogMutation(ctx, s.db, s.actors, actor, "config.upgrade", id, input.RequestID, input, func(tx *gorm.DB) (application.ConnectionConfig, error) {
 		// Lock the preset first, then provider, consistently with dispatch admission.
 		var locked int
 		if err := tx.Raw(`SELECT 1 FROM catalog.provider_preset p JOIN catalog.provider_preset_version v ON v.preset_id=p.id WHERE v.id=? FOR SHARE OF p`, input.Upgrade.PresetVersionID).Scan(&locked).Error; err != nil {

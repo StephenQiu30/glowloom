@@ -9,7 +9,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
-func createProjectRowsInTx(tx *gorm.DB, project domain.Project) error {
+func createProjectRowsInTx(tx *gorm.DB, project domain.Project, ownerScope uuid.UUID) error {
 	var subtype, presetID, ownerID, canvasID any
 	if project.OwnerID != uuid.Nil {
 		ownerID = project.OwnerID
@@ -26,10 +26,10 @@ func createProjectRowsInTx(tx *gorm.DB, project domain.Project) error {
 	inserted := tx.Exec(`
 			INSERT INTO workspace.project
 			  (id, org_id, name, description, aspect_ratio, style_type,
-			   style_subtype, style_preset_id, resolution, owner_id, initial_canvas_id, style_key)
-			VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?::uuid, ?, ?::uuid, ?::uuid, ?)
+			   style_subtype, style_preset_id, resolution, owner_id, initial_canvas_id, style_key, owner_scope_id)
+			VALUES (?::uuid, ?::uuid, ?, ?, ?, ?, ?, ?::uuid, ?, ?::uuid, ?::uuid, ?, ?::uuid)
 		`, project.ID.String(), project.OrgID.String(), project.Name, project.Description,
-		project.AspectRatio, project.StyleType, subtype, presetID, project.Resolution, ownerID, canvasID, project.StyleKey)
+		project.AspectRatio, project.StyleType, subtype, presetID, project.Resolution, ownerID, canvasID, project.StyleKey, ownerScope)
 	if inserted.Error != nil {
 		return fmt.Errorf("insert project: %w", inserted.Error)
 	}
@@ -58,7 +58,7 @@ func createProjectRowsInTx(tx *gorm.DB, project domain.Project) error {
 	return nil
 }
 
-func requireUsablePreset(tx *gorm.DB, project domain.Project) error {
+func requireUsablePreset(tx *gorm.DB, project domain.Project, scope uuid.UUID) error {
 	if project.StylePresetID == uuid.Nil {
 		return nil
 	}
@@ -69,10 +69,10 @@ func requireUsablePreset(tx *gorm.DB, project domain.Project) error {
 	result := tx.Raw(`
 		SELECT style_type, style_subtype
 		FROM workspace.style_preset
-		WHERE id = ?::uuid AND org_id = ?::uuid AND NOT is_delete
+		WHERE id = ?::uuid AND org_id = ?::uuid AND owner_scope_id = ?::uuid AND NOT is_delete
 		  AND (project_id IS NULL OR project_id = ?::uuid)
 		FOR SHARE
-	`, project.StylePresetID.String(), project.OrgID.String(), project.ID.String()).Scan(&row)
+	`, project.StylePresetID.String(), project.OrgID.String(), scope, project.ID.String()).Scan(&row)
 	if result.Error != nil {
 		return fmt.Errorf("check project style preset: %w", result.Error)
 	}

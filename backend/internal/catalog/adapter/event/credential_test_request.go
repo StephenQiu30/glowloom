@@ -60,6 +60,9 @@ func (h *CredentialTestHandler) Handle(ctx context.Context, record inbox.Record)
 	}
 	_, err = h.processed.ProcessExternalOnce(ctx, "catalog-credential-test", eventID.String(), func(ctx context.Context) error {
 		if err := h.store.VerifyCredentialTestRequest(ctx, request, eventID); err != nil {
+			if errors.Is(err, application.ErrCredentialTestRevoked) {
+				return nil
+			}
 			return fmt.Errorf("verify credential test request: %w", err)
 		}
 		return h.starter.StartCredentialTest(ctx, request)

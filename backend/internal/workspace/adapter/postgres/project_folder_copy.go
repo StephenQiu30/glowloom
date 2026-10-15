@@ -74,7 +74,7 @@ func AttachCopyPlacement(ctx context.Context, tx *gorm.DB, actor identityapp.Pri
 	var folder any
 	if source.FolderID != nil {
 		folder = *source.FolderID
-		write := tx.Exec(`UPDATE workspace.project_folder SET revision=revision+1,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND revision=? AND revision<2147483647 AND NOT is_delete`, now, folder, actor.OrgID, actor.ID, frozen.FolderRevision)
+		write := tx.Exec(`UPDATE workspace.project_folder SET revision=revision+1,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND owner_scope_id=? AND revision=? AND revision<2147483647 AND NOT is_delete`, now, folder, actor.OrgID, actor.ID, actor.ScopeID, frozen.FolderRevision)
 		if write.Error != nil {
 			return domain.FolderPlacement{}, write.Error
 		}
@@ -84,7 +84,7 @@ func AttachCopyPlacement(ctx context.Context, tx *gorm.DB, actor identityapp.Pri
 	}
 	out := domain.FolderPlacement{OrgID: actor.OrgID, ActorID: actor.ID, ProjectID: target, FolderID: source.FolderID, Revision: 1}
 	// Selecting the just-created copying target prevents accidental attachment of an unrelated project.
-	write := tx.Exec(`INSERT INTO workspace.project_folder_placement(org_id,actor_id,project_id,folder_id,revision,create_time,update_time)SELECT ?,?,p.id,?,1,?,? FROM workspace.project p WHERE p.id=? AND p.org_id=? AND p.status='copying' AND NOT p.is_delete`, actor.OrgID, actor.ID, folder, now, now, target, actor.OrgID)
+	write := tx.Exec(`INSERT INTO workspace.project_folder_placement(org_id,owner_scope_id,actor_id,project_id,folder_id,revision,create_time,update_time)SELECT ?,?,?,p.id,?,1,?,? FROM workspace.project p WHERE p.id=? AND p.org_id=? AND p.owner_scope_id=? AND p.status='copying' AND NOT p.is_delete`, actor.OrgID, actor.ScopeID, actor.ID, folder, now, now, target, actor.OrgID, actor.ScopeID)
 	if write.Error != nil {
 		return domain.FolderPlacement{}, write.Error
 	}
@@ -100,7 +100,7 @@ func verifyCopyPlacement(tx *gorm.DB, job domain.ProjectCopyJob, frozen copyPlac
 		return domain.ErrInvalidProjectCopy
 	}
 	var actual domain.FolderPlacement
-	read := tx.Raw(`SELECT org_id,actor_id,project_id,folder_id,revision FROM workspace.project_folder_placement WHERE org_id=? AND actor_id=? AND project_id=? FOR SHARE`, job.OrgID, job.ActorID, job.TargetProjectID).Scan(&actual)
+	read := tx.Raw(`SELECT org_id,actor_id,project_id,folder_id,revision FROM workspace.project_folder_placement WHERE org_id=? AND actor_id=? AND project_id=? AND owner_scope_id=(SELECT owner_scope_id FROM workspace.project_copy_job WHERE id=?) FOR SHARE`, job.OrgID, job.ActorID, job.TargetProjectID, job.ID).Scan(&actual)
 	if read.Error != nil {
 		return read.Error
 	}

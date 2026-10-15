@@ -334,9 +334,7 @@ function HomeContent() {
                   onClick={() => chooseSkill(s.name)}
                 >
                   / {s.name}
-                  <Badge variant={s.badge === "New" ? "new" : "hot"}>
-                    {s.badge}
-                  </Badge>
+                  <Badge variant="outline">{s.badge}</Badge>
                 </Button>
               ))}
               <Button

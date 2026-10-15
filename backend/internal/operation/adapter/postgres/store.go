@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 )
@@ -26,9 +25,13 @@ var (
 
 // Store keeps the database handle injected by the composition root.
 type Store struct {
-	db              *gorm.DB
-	editorSnapshots func(*gorm.DB) application.EditorSnapshots
-	promptCompiler  func(*gorm.DB) application.QuotePromptCompiler
+	storageAdmission OperationStorageFactory
+	db               *gorm.DB
+	requestAccess    ProjectAccessFactory
+	workerAccess     ProjectAccessFactory
+	platformAccess   PlatformAccessFactory
+	editorSnapshots  func(*gorm.DB) application.EditorSnapshots
+	promptCompiler   func(*gorm.DB) application.QuotePromptCompiler
 }
 
 // NewStore injects the caller's database handle.
@@ -49,7 +52,7 @@ func (s *Store) FindBatch(ctx context.Context, actor identityapp.Principal, proj
 	}
 	var row batchRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`
@@ -89,7 +92,7 @@ func (s *Store) FindOperation(ctx context.Context, actor identityapp.Principal, 
 	}
 	var row operationRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`
@@ -134,7 +137,7 @@ func (s *Store) FindOperationInputs(ctx context.Context, actor identityapp.Princ
 	}
 	var rows []operationInputRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		var visible int
@@ -175,29 +178,6 @@ func (s *Store) FindOperationInputs(ctx context.Context, actor identityapp.Princ
 		inputs = append(inputs, input)
 	}
 	return inputs, nil
-}
-
-func requireCurrentActor(tx *gorm.DB, actor identityapp.Principal) error {
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
-		return identityapp.ErrForbidden
-	}
-	var present int
-	result := tx.Raw(`
-		SELECT 1 FROM identity."user" AS u
-		JOIN workspace.organization AS org ON org.id = u.org_id
-		WHERE u.id = ?::uuid AND u.org_id = ?::uuid AND u.role = ?
-		  AND u.status = 'active' AND NOT u.is_delete AND NOT u.must_change_password
-		  AND org.status = 'active' AND NOT org.is_delete
-		FOR SHARE OF u, org
-	`, actor.ID.String(), actor.OrgID.String(), string(actor.Role)).Scan(&present)
-	if result.Error != nil {
-		return fmt.Errorf("check current operation actor: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return identityapp.ErrForbidden
-	}
-	return nil
 }
 
 type batchRow struct {
@@ -296,4 +276,12 @@ func (r operationInputRow) domain() domain.OperationInput {
 // NewStoreWithEditor binds snapshot reads to the same quote/confirmation transaction.
 func NewStoreWithEditor(db *gorm.DB, compiler func(*gorm.DB) application.QuotePromptCompiler, snapshots func(*gorm.DB) application.EditorSnapshots) *Store {
 	return &Store{db: db, promptCompiler: compiler, editorSnapshots: snapshots}
+}
+
+// NewScopedStoreWithEditor preserves quote composition and explicit authority.
+func NewScopedStoreWithEditor(db *gorm.DB, compiler func(*gorm.DB) application.QuotePromptCompiler, snapshots func(*gorm.DB) application.EditorSnapshots, request, worker ProjectAccessFactory, platform ...PlatformAccessFactory) *Store {
+	s := NewScopedStore(db, request, worker, platform...)
+	s.promptCompiler = compiler
+	s.editorSnapshots = snapshots
+	return s
 }

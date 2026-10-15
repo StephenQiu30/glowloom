@@ -2,14 +2,12 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
@@ -71,17 +69,7 @@ func (s *DepthStore) depthControlActor(ctx context.Context, tx *gorm.DB, r depth
 		return actor, application.ErrInvalidDepthInput
 	}
 	actor = identityapp.Principal{ID: row.ActorID, OrgID: r.OrgID}
-	for _, role := range []identitydomain.Role{identitydomain.RoleAdmin, identitydomain.RoleProducer} {
-		candidate := identityapp.Principal{ID: row.ActorID, OrgID: r.OrgID, Role: role}
-		err := s.authorize(ctx, tx, candidate, r.ProjectID, true)
-		if err == nil {
-			return candidate, nil
-		}
-		if !errors.Is(err, identityapp.ErrForbidden) {
-			return actor, err
-		}
-	}
-	return actor, identityapp.ErrForbidden
+	return actor, s.authorize(ctx, tx, actor, r.ProjectID, true)
 }
 
 // depthHasNoOutput proves that an undispatched attempt has no private result

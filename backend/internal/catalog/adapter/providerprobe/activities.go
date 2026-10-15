@@ -7,6 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
+
+	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
+
 	"gorm.io/gorm"
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
@@ -15,8 +19,14 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/providerhttp"
 )
 
+// AcceptedTestAccess checks the exact accepted receipt and current authority.
+type AcceptedTestAccess interface {
+	VerifyCredentialTestRequest(context.Context, catalogapp.CredentialTestRequest, uuid.UUID) error
+}
+
 // Activities holds worker-only dependencies; no API handler receives a private key.
 type Activities struct {
+	access   AcceptedTestAccess
 	db       *gorm.DB
 	unsealer *credentialseal.Unsealer
 	client   *providerhttp.Client
@@ -30,11 +40,21 @@ func NewActivities(db *gorm.DB, unsealer *credentialseal.Unsealer, client *provi
 // TestCredential rechecks current authority and the exact saved configuration before probing.
 func (a *Activities) TestCredential(ctx context.Context, input catalogflow.AgentTestInput) (catalogflow.AgentTestOutput, error) {
 	unsupported := catalogflow.AgentTestOutput{Result: catalogdomain.TestUnsupported, AuthResult: "unknown", AdapterResult: "unsupported", DiscoveryResult: "unsupported"}
+	if a.access == nil {
+		return unsupported, catalogapp.ErrInvalidCredentialTest
+	}
+	request := catalogapp.CredentialTestRequest{TestID: input.TestID, ActorID: input.ActorID, OrgID: input.OrgID, ProviderID: input.ProviderID, CredentialID: input.Credential.ID, RequestID: input.RequestID}
+	authorize := func() error {
+		return a.access.VerifyCredentialTestRequest(ctx, request, uuid.NewSHA1(input.TestID, []byte("credential_test_requested")))
+	}
+	if err := authorize(); err != nil {
+		return unsupported, err
+	}
 	var row struct{ Config []byte }
 	// This is dispatch admission: current rights, exact check/config/credential and
 	// emergency controls are checked again immediately before using the key.
 	r := a.db.WithContext(ctx).Raw(`SELECT config.config FROM catalog.provider_check check_run
- JOIN identity."user" actor ON actor.id=? AND actor.id=check_run.actor_id AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete AND NOT actor.must_change_password
+ JOIN identity."user" actor ON actor.id=? AND actor.id=check_run.actor_id AND actor.platform_role='platform_admin' AND actor.status='active' AND NOT actor.is_delete
  JOIN catalog.provider p ON p.id=check_run.provider_id AND NOT p.is_delete
  JOIN catalog.provider_config_version config ON config.id=check_run.config_version_id
  JOIN catalog.provider_preset_version pv ON pv.id=config.preset_version_id
@@ -67,6 +87,9 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 	if json.Unmarshal(secret, &credential) != nil {
 		return unsupported, nil
 	}
+	if err := authorize(); err != nil {
+		return unsupported, err
+	}
 	result := a.client.Probe(ctx, configuration, credential.APIKey)
 	category := catalogdomain.TestUnreachable
 	switch result.Auth {
@@ -76,4 +99,9 @@ func (a *Activities) TestCredential(ctx context.Context, input catalogflow.Agent
 		category = catalogdomain.TestAuthFailed
 	}
 	return catalogflow.AgentTestOutput{Result: category, AuthResult: result.Auth, AdapterResult: result.Adapter, DiscoveryResult: result.Discovery, Candidates: result.Candidates}, nil
+}
+
+// NewScopedActivities injects receipt/current-epoch authority at the actual key owner.
+func NewScopedActivities(db *gorm.DB, unsealer *credentialseal.Unsealer, client *providerhttp.Client, access AcceptedTestAccess) *Activities {
+	return &Activities{db: db, unsealer: unsealer, client: client, access: access}
 }

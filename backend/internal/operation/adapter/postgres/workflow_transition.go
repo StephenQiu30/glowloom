@@ -36,6 +36,11 @@ func (s *Store) TransitionWorkflowOperation(ctx context.Context, input applicati
 	}
 	var status domain.Status
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if input.To != domain.StatusUnknown && input.To != domain.StatusManual && input.To != domain.StatusCancelling {
+			if err := s.requireWorker(tx, input.OperationID, true); err != nil {
+				return err
+			}
+		}
 		var row workflowTransitionRow
 		result := tx.Raw(`
 			SELECT id, project_id, batch_id, target_type, target_id, status,

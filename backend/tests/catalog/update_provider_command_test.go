@@ -25,11 +25,11 @@ type updateProviderStore struct {
 	writes   int
 }
 
-func (s *updateProviderStore) FindProviderForAdmin(_ context.Context, _, _, _ uuid.UUID) (domain.Provider, error) {
+func (s *updateProviderStore) FindProviderForAdmin(_ context.Context, _ identityapp.Principal, _ uuid.UUID) (domain.Provider, error) {
 	return s.provider, nil
 }
 
-func (s *updateProviderStore) UpdateProviderWithEvents(_ context.Context, _, _ uuid.UUID, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
+func (s *updateProviderStore) UpdateProviderWithEvents(_ context.Context, _ identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
 	s.writes++
 	s.before, s.after, s.events = before, after, events
 	after.CreateTime = time.Now()

@@ -1,5 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
+import { FieldSet, Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import { useRef, useState, useId } from "react";
 import { ImagePlus } from "lucide-react";
 import {
   Dialog,
@@ -8,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -44,6 +46,8 @@ export function SubjectEditor({
   onClose: () => void;
   onSaved: (s: Subject) => void;
 }) {
+  const formFieldId = useId();
+
   const [name, setName] = useState(initial ? subjectText(initial).name! : "");
   const [description, setDescription] = useState(
     initial ? (subjectText(initial).description ?? "") : "",
@@ -214,84 +218,102 @@ export function SubjectEditor({
               void save();
             }}
           >
-            <fieldset disabled={pending || frozen}>
-              {kind === "character" && (
-                <label className="form-label">
-                  参考主体 <span>*</span>
-                  <button
-                    type="button"
-                    className="subject-upload"
-                    aria-label="选择主体参考图"
-                    onClick={() => setPicker(true)}
-                  >
-                    {image ? (
-                      <ProjectMediaPreview
-                        projectID={projectID}
-                        id={image}
-                        large
-                      />
-                    ) : (
-                      <>
-                        <ImagePlus size={32} />
-                        <strong>添加主参考图</strong>
-                        <span>从项目素材选择，或上传本地图片</span>
-                      </>
-                    )}
-                  </button>
-                </label>
+            <FieldGroup>
+              <FieldSet disabled={pending || frozen}>
+                <FieldGroup>
+                  {kind === "character" && (
+                    <Field>
+                      <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+                        <span>
+                          参考主体 <span>*</span>
+                        </span>
+                      </FieldLabel>
+                      <Button
+                        id={`${formFieldId}-field-1`}
+                        variant="ghost"
+                        type="button"
+                        className="subject-upload h-auto p-0"
+                        aria-label="选择主体参考图"
+                        onClick={() => setPicker(true)}
+                      >
+                        {image ? (
+                          <ProjectMediaPreview
+                            projectID={projectID}
+                            id={image}
+                            large
+                          />
+                        ) : (
+                          <>
+                            <ImagePlus size={32} />
+                            <strong>添加主参考图</strong>
+                            <span>从项目素材选择，或上传本地图片</span>
+                          </>
+                        )}
+                      </Button>
+                    </Field>
+                  )}
+                  <Field>
+                    <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+                      <span>
+                        主体名称 <span>*</span>
+                      </span>
+                    </FieldLabel>
+                    <Input
+                      id={`${formFieldId}-field-2`}
+                      autoFocus
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      maxLength={20}
+                      placeholder="为主体起个名字"
+                      aria-label="主体名称"
+                    />
+                    <small>{name.length}/20</small>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`${formFieldId}-field-3`}>
+                      <span>主体描述</span>
+                    </FieldLabel>
+                    <Textarea
+                      id={`${formFieldId}-field-3`}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      maxLength={2000}
+                      placeholder="描述外观、特征和创作中需要保持的细节"
+                      aria-label="主体描述"
+                    />
+                    <small>{description.length}/2000</small>
+                  </Field>
+                </FieldGroup>
+              </FieldSet>
+              {partial && error && (
+                <p className="flow-notice">
+                  名称与描述已保存。参考图尚未确认，重试将继续完成同一个主体。
+                </p>
               )}
-              <label className="form-label">
-                主体名称 <span>*</span>
-                <Input
-                  autoFocus
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  maxLength={20}
-                  placeholder="为主体起个名字"
-                  aria-label="主体名称"
-                />
-                <small>{name.length}/20</small>
-              </label>
-              <label className="form-label">
-                主体描述
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  maxLength={2000}
-                  placeholder="描述外观、特征和创作中需要保持的细节"
-                  aria-label="主体描述"
-                />
-                <small>{description.length}/2000</small>
-              </label>
-            </fieldset>
-            {partial && error && (
-              <p className="flow-notice">
-                名称与描述已保存。参考图尚未确认，重试将继续完成同一个主体。
-              </p>
-            )}
-            {error && (
-              <p role="alert" className="flow-error">
-                {error}
-              </p>
-            )}
-            <div className="flow-actions">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={pending}
-                onClick={close}
-              >
-                取消
-              </Button>
-              <Button
-                disabled={
-                  pending || !name.trim() || (kind === "character" && !image)
-                }
-              >
-                {pending ? "正在保存…" : frozen ? "重试原保存" : "保存主体"}
-              </Button>
-            </div>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div className="flow-actions">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={close}
+                >
+                  取消
+                </Button>
+                <Button
+                  disabled={
+                    pending || !name.trim() || (kind === "character" && !image)
+                  }
+                >
+                  {pending ? "正在保存…" : frozen ? "重试原保存" : "保存主体"}
+                </Button>
+              </div>
+            </FieldGroup>
           </form>
         </DialogContent>
       </Dialog>

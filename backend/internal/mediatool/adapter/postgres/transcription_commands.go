@@ -119,7 +119,7 @@ func (s *TranscriptionStore) Control(ctx context.Context, actor identityapp.Prin
 			if (row.Status != "failed" && row.Status != "cancelled") || row.Attempt >= 100 || row.ActiveWorker != nil || row.InferenceState == "submitted" || row.InferenceState == "unknown" {
 				return application.ErrConflict
 			}
-			if err := s.validateSource(ctx, tx, row); err != nil {
+			if err := s.validateSource(ctx, tx, actor, row); err != nil {
 				return err
 			}
 			row.Status = "queued"
@@ -131,7 +131,7 @@ func (s *TranscriptionStore) Control(ctx context.Context, actor identityapp.Prin
 			row.ResultSHA256 = nil
 			row.FailureCode = nil
 			row.ActorID = actor.ID
-			row.ActorRole = string(actor.Role)
+			row.ActorRole = nil
 			emit = "start"
 		}
 		row.Revision++
@@ -146,7 +146,7 @@ func (s *TranscriptionStore) Control(ctx context.Context, actor identityapp.Prin
 }
 
 // VerifyDelivery rejects injected commands and safely ignores retired attempt events.
-func (s *TranscriptionStore) VerifyDelivery(ctx context.Context, d application.TranscriptionDelivery) (bool, error) {
+func (s *TranscriptionStore) verifyDelivery(ctx context.Context, d application.TranscriptionDelivery) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
@@ -176,4 +176,36 @@ func (s *TranscriptionStore) VerifyDelivery(ctx context.Context, d application.T
 func transcriptionRuntimeAudit(tx *gorm.DB, row transcriptionRow, action string) error {
 	key := uuid.NewSHA1(row.ID, []byte(fmt.Sprintf("transcription-%d-%s", row.Attempt, action)))
 	return recordTranscriptionAudit(tx, row.actor(), key, action, row.public())
+}
+
+// VerifyDelivery retains live scope authority until durable command validation completes.
+func (s *TranscriptionStore) VerifyDelivery(ctx context.Context, d application.TranscriptionDelivery) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, application.ErrUnavailable
+	}
+	valid := false
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		scoped := *s
+		scoped.db = tx
+		var err error
+		valid, err = scoped.verifyDelivery(ctx, d)
+		if err != nil || !valid {
+			return err
+		}
+		row, err := readTranscription(tx, d.ProjectID, d.JobID, false)
+		if err != nil {
+			return err
+		}
+		if err := s.authorize(ctx, tx, identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}, d.ProjectID, true); err != nil {
+			return err
+		}
+		if d.Action == "start" {
+			return s.authorize(ctx, tx, row.actor(), d.ProjectID, true)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return valid, nil
 }

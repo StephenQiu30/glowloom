@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	catalogdomain "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -39,7 +38,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 	}
 	var result application.CreateFreeQuoteResult
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
 		if err := lockQuoteRequest(tx, actor, requestID); err != nil {
@@ -98,7 +97,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 		if editorDraft != nil && (item.Operation.ModelProfileVersionID == nil || item.Operation.ModelProfileVersionID.String() != *editorDraft.ModelVersion) {
 			return application.ErrFreeQuoteModelMissing
 		}
-		budget, err := pgbilling.NewStore(tx).FindBudget(ctx, actor, input.ProjectID)
+		budget, err := s.billingStore(tx).FindBudget(ctx, actor, input.ProjectID)
 		if err != nil {
 			return err
 		}
@@ -106,7 +105,7 @@ func (s *Store) CreateFreeQuote(ctx context.Context, actor identityapp.Principal
 		if err != nil {
 			return err
 		}
-		if err := NewStore(tx).CreateQuoteSnapshot(ctx, actor, nil, []QuoteItem{item}); err != nil {
+		if err := s.withDB(tx).CreateQuoteSnapshot(ctx, actor, nil, []QuoteItem{item}); err != nil {
 			return err
 		}
 		result = application.CreateFreeQuoteResult{
@@ -204,7 +203,7 @@ func (s *Store) prepareFreeQuoteItem(ctx context.Context, tx *gorm.DB, actor ide
 		return QuoteItem{}, "", err
 	}
 	if prepared.Reusable && !input.ForceRegenerate {
-		candidateID, findErr := NewStore(tx).FindReusableCompleted(ctx, actor, input.ProjectID, prepared.Operation.InputHash)
+		candidateID, findErr := s.withDB(tx).FindReusableCompleted(ctx, actor, input.ProjectID, prepared.Operation.InputHash)
 		if findErr != nil && !errors.Is(findErr, ErrNotFound) {
 			return QuoteItem{}, "", findErr
 		}

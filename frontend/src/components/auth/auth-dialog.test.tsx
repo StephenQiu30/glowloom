@@ -14,7 +14,7 @@ vi.mock("./auth-view", () => ({
   }) => {
     return (
       <div>
-        <label htmlFor="name">登录名</label>
+        <label htmlFor="name">邮箱</label>
         <input id="name" />
         <button onClick={onContinueGuest}>暂不登录，继续浏览</button>
         <button onClick={() => onPendingChange(true)}>提交{mode}</button>
@@ -24,11 +24,11 @@ vi.mock("./auth-view", () => ({
 }));
 afterEach(cleanup);
 
-it("弹窗有可访问标题和关联面板，默认聚焦登录名，提交期间锁定切换但允许继续浏览", () => {
+it("弹窗有可访问标题和关联面板，默认聚焦邮箱，提交期间锁定切换但允许继续浏览", () => {
   const close = vi.fn();
   render(<AuthDialog open onOpenChange={close} onAuthenticated={vi.fn()} />);
   expect(screen.getByRole("dialog", { name: "登录织光" })).toBeTruthy();
-  expect(document.activeElement).toBe(screen.getByLabelText("登录名"));
+  expect(document.activeElement).toBe(screen.getByLabelText("邮箱"));
   fireEvent.mouseDown(screen.getByRole("tab", { name: "注册" }), {
     button: 0,
     ctrlKey: false,

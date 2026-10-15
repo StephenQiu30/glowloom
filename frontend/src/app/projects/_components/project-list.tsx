@@ -1,4 +1,6 @@
 "use client";
+import { LoadingState } from "@/components/layout/loading-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Grid2X2 } from "lucide-react";
@@ -73,31 +75,33 @@ export function ProjectList({ query, view }: { query: string; view: string }) {
   return (
     <div aria-busy={loading}>
       {loading && !page && (
-        <p role="status" className="py-10 text-muted-foreground">
+        <LoadingState className="py-10 text-muted-foreground">
           正在读取画布…
-        </p>
+        </LoadingState>
       )}
       {error && (
-        <div role="alert" className="mb-4 rounded-xl border p-4">
-          <p>{error}</p>
-          <Button
-            variant="outline"
-            className="mt-2"
-            disabled={loading}
-            onClick={() => {
-              if (page?.next_cursor) {
-                void loadMore();
-              } else {
-                setPage(null);
-                setError("");
-                setLoading(true);
-                setRetry((n) => n + 1);
-              }
-            }}
-          >
-            重试读取
-          </Button>
-        </div>
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>
+            <p>{error}</p>
+            <Button
+              variant="outline"
+              className="mt-2"
+              disabled={loading}
+              onClick={() => {
+                if (page?.next_cursor) {
+                  void loadMore();
+                } else {
+                  setPage(null);
+                  setError("");
+                  setLoading(true);
+                  setRetry((n) => n + 1);
+                }
+              }}
+            >
+              重试读取
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
       {page?.items.length === 0 && (
         <div className="rounded-2xl border border-dashed p-12 text-center">

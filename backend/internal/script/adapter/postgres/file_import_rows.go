@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
@@ -19,14 +18,14 @@ import (
 func readImport(tx *gorm.DB, actor identityapp.Principal, project, id uuid.UUID, lock bool) (application.ImportRecord, error) {
 	var row struct {
 		ID, ProjectID, OrgID, ActorID, PublicationKey                       uuid.UUID
-		ActorRole, Status, Stage, FailureCode, IOState, Positions           string
+		Status, Stage, FailureCode, IOState, Positions                      string
 		Revision, ExpectedScriptRevision, LatestScriptRevision              int64
 		Attempt                                                             int
 		LatestVersionID, BaseVersionID, IOOwnerID                           *uuid.UUID
 		CancellationRequested, ReconciliationRequested, NeedsReconciliation bool
 		CreatedAt, UpdatedAt                                                time.Time
 	}
-	query := `SELECT j.id,j.org_id,j.project_id,j.actor_id,j.actor_role,j.expected_script_revision,j.created_at,s.revision,s.attempt,s.status,s.stage,s.latest_script_revision,s.latest_version_id,s.cancellation_requested,s.reconciliation_requested,s.needs_reconciliation,s.failure_code,s.io_owner_id,s.io_state,s.updated_at,a.base_version_id,a.publication_key,to_json(a.positions)::text AS positions FROM script.import_job j JOIN script.import_state s ON s.job_id=j.id JOIN script.import_attempt a ON a.job_id=j.id AND a.attempt=s.attempt WHERE j.org_id=? AND j.project_id=? AND j.id=?`
+	query := `SELECT j.id,j.org_id,j.project_id,j.actor_id,j.expected_script_revision,j.created_at,s.revision,s.attempt,s.status,s.stage,s.latest_script_revision,s.latest_version_id,s.cancellation_requested,s.reconciliation_requested,s.needs_reconciliation,s.failure_code,s.io_owner_id,s.io_state,s.updated_at,a.base_version_id,a.publication_key,to_json(a.positions)::text AS positions FROM script.import_job j JOIN script.import_state s ON s.job_id=j.id JOIN script.import_attempt a ON a.job_id=j.id AND a.attempt=s.attempt WHERE j.org_id=? AND j.project_id=? AND j.id=?`
 	if lock {
 		query += ` FOR UPDATE OF s`
 	}
@@ -37,7 +36,7 @@ func readImport(tx *gorm.DB, actor identityapp.Principal, project, id uuid.UUID,
 	if read.RowsAffected != 1 {
 		return application.ImportRecord{}, application.ErrNotFound
 	}
-	r := application.ImportRecord{Actor: identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID, Role: identitydomain.Role(row.ActorRole)}, BaseVersionID: row.BaseVersionID, PublicationKey: row.PublicationKey, OwnerID: row.IOOwnerID, IOState: row.IOState}
+	r := application.ImportRecord{Actor: identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, BaseVersionID: row.BaseVersionID, PublicationKey: row.PublicationKey, OwnerID: row.IOOwnerID, IOState: row.IOState}
 	j := application.ImportJob{ID: row.ID, ProjectID: row.ProjectID, Revision: row.Revision, Attempt: row.Attempt, Status: row.Status, Stage: row.Stage, ExpectedScriptRevision: row.ExpectedScriptRevision, LatestScriptRevision: row.LatestScriptRevision, LatestVersionID: row.LatestVersionID, CancellationRequested: row.CancellationRequested, ReconciliationRequested: row.ReconciliationRequested, NeedsReconciliation: row.NeedsReconciliation, ActiveIO: row.IOOwnerID != nil, FailureCode: row.FailureCode, Files: []application.ImportFile{}, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
 	var positions []int
 	if err := json.Unmarshal([]byte(row.Positions), &positions); err != nil {
@@ -120,7 +119,7 @@ func readImport(tx *gorm.DB, actor identityapp.Principal, project, id uuid.UUID,
 		j.Files = append(j.Files, f)
 	}
 	j.Retryable = actor.ID == row.ActorID && domain.CanRetryImport(j.Status, j.ActiveIO, row.IOState == "unknown", j.NeedsReconciliation, failures)
-	j.CanControl = j.Status != "succeeded" && j.Status != "cancelled" && (actor.ID == row.ActorID || actor.Role == identitydomain.RoleAdmin)
+	j.CanControl = j.Status != "succeeded" && j.Status != "cancelled"
 	r.Job = j
 	return r, nil
 }

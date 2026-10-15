@@ -203,7 +203,7 @@ it("生成、主体与管理员接口保持封闭路径和查询范围", async (
   expect((fetcher.mock.calls[0][0] as URL).searchParams.has("org_id")).toBe(
     false,
   );
-  const route = `admin/users/${pid}`;
+  const route = `platform/users/${pid}`;
   expect(
     (
       await PUT(
@@ -214,7 +214,7 @@ it("生成、主体与管理员接口保持封闭路径和查询范围", async (
         context(route),
       )
     ).status,
-  ).toBe(200);
+  ).toBe(405);
   expect(
     (
       await POST(
@@ -256,3 +256,217 @@ it.each(["GET", "POST"])(
     expect(fetcher).not.toHaveBeenCalled();
   },
 );
+
+it("邮箱策略、本人 PATCH 与授权头实际经过 BFF，未知查询拒绝", async () => {
+  const fetcher = vi
+    .fn()
+    .mockImplementation(
+      async () =>
+        new Response("{}", { headers: { "Content-Type": "application/json" } }),
+    );
+  vi.stubGlobal("fetch", fetcher);
+  const policy = await GET(
+    new Request("http://localhost/api/auth-policy"),
+    context("auth-policy"),
+  );
+  expect(policy.status).toBe(200);
+  const { PATCH } = await import("./route");
+  const result = await PATCH(
+    new Request("http://localhost/api/me/preferences", {
+      method: "PATCH",
+      headers: {
+        Origin: "http://localhost",
+        "X-CSRF-Token": "bound-proof",
+        "X-Creation-Scope": "11111111-1111-4111-8111-111111111111",
+      },
+      body: '{"theme":"dark"}',
+    }),
+    context("me/preferences"),
+  );
+  expect(result.status).toBe(200);
+  expect(fetcher.mock.calls.at(-1)![1].headers.get("X-CSRF-Token")).toBe(
+    "bound-proof",
+  );
+  expect(fetcher.mock.calls.at(-1)![1].headers.get("X-Creation-Scope")).toBe(
+    "11111111-1111-4111-8111-111111111111",
+  );
+  const invalid = await GET(
+    new Request("http://localhost/api/platform/users?host=other"),
+    context("platform/users"),
+  );
+  expect(invalid.status).toBe(422);
+});
+
+it("all current registered identity handler contracts cross the bounded BFF", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const handlers = await import("./route");
+  const sources = await Promise.all(
+    [
+      "identity/adapter/http/auth_policy.go",
+      "identity/adapter/http/email_auth.go",
+      "identity/adapter/http/self_profile.go",
+      "identity/adapter/http/session_directory.go",
+      "identity/adapter/http/account_deletion.go",
+      "identity/adapter/http/email_change.go",
+      "identity/adapter/http/directory_export.go",
+      "identity/adapter/http/governance_directory.go",
+      "identity/adapter/http/platform_password_reset.go",
+      "identity/adapter/http/platform_team_invitation.go",
+      "workspace/adapter/http/platform_team.go",
+      "workspace/adapter/http/team_avatar.go",
+      "media/adapter/http/avatar.go",
+      "identity/adapter/http/event_query.go",
+      "identity/adapter/http/platform_users.go",
+      "identity/adapter/http/governance.go",
+      "identity/adapter/http/invitation.go",
+      "workspace/adapter/http/team.go",
+      "workspace/adapter/http/team_lifecycle.go",
+    ].map((file) => readFile(`../backend/internal/${file}`, "utf8")),
+  );
+  const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  for (const source of sources)
+    for (const match of source.matchAll(
+      /@Router (\/api\/\S+) \[(get|post|patch|put|delete)\]/g,
+    )) {
+      const path = match[1]
+        .slice(5)
+        .replace(/\{[^}]+\}/g, "11111111-1111-4111-8111-111111111111");
+      const method = match[2].toUpperCase() as
+        "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+      const response = await handlers[method](
+        new Request(`http://localhost/api/${path}`, { method }),
+        context(path),
+      );
+      expect(response.status, `${method} ${path}`).toBe(200);
+    }
+});
+it.each([
+  "accounts/register",
+  "accounts/availability",
+  "admin/users",
+  "admin/users/11111111-1111-4111-8111-111111111111",
+  "teams/wrong/members",
+  "platform/users/11111111-1111-4111-8111-111111111111/delete",
+])("retired or unknown route %s is never forwarded", async (path) => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const response = await POST(
+    new Request(`http://localhost/api/${path}`, { method: "POST" }),
+    context(path),
+  );
+  expect(response.status).toBe(404);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+it("identity query filters preserve exact values and reject duplicates", async () => {
+  const fetcher = vi.fn().mockResolvedValue(new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  const path = "platform/users";
+  await GET(
+    new Request(
+      `http://localhost/api/${path}?search=alice%2Btag%40example.com&status=active&verified=true`,
+    ),
+    context(path),
+  );
+  expect(fetcher.mock.calls[0][0].searchParams.get("search")).toBe(
+    "alice+tag@example.com",
+  );
+  fetcher.mockClear();
+  const duplicate = await GET(
+    new Request(`http://localhost/api/${path}?limit=1&limit=100`),
+    context(path),
+  );
+  expect(duplicate.status).toBe(422);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("平台团队精确筛选经过 BFF 且拒绝未知或重复参数", async () => {
+  const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  const path = "platform/teams";
+  const response = await GET(
+    new Request(
+      `http://localhost/api/${path}?id=11111111-1111-4111-8111-111111111111&administrator_id=11111111-1111-4111-8111-111111111111&created_from=2026-01-01T00:00:00Z&created_to=2027-01-01T00:00:00Z`,
+    ),
+    context(path),
+  );
+  expect(response.status).toBe(200);
+  expect(fetcher.mock.calls[0][0].searchParams.get("created_from")).toBe(
+    "2026-01-01T00:00:00Z",
+  );
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?id=one&id=two`),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await GET(
+        new Request(`http://localhost/api/${path}?scope_id=private`),
+        context(path),
+      )
+    ).status,
+  ).toBe(422);
+});
+
+it("统计查询不能携带分页或越范围字段，CSV下载保留授权与附件头", async () => {
+  const fetcher = vi.fn().mockImplementation(
+    async () =>
+      new Response("id,name\n1,safe", {
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": "attachment; filename=directory-export.csv",
+        },
+      }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const id = "11111111-1111-4111-8111-111111111111";
+  const stats = `teams/${id}/member-statistics`;
+  expect(
+    (
+      await GET(
+        new Request(
+          `http://localhost/api/${stats}?role=member&status=suspended&from=2026-01-01T00:00:00Z`,
+        ),
+        context(stats),
+      )
+    ).status,
+  ).toBe(200);
+  expect(fetcher.mock.calls[0][0].searchParams.get("role")).toBe("member");
+  expect(
+    (
+      await GET(
+        new Request(
+          `http://localhost/api/${stats}?platform_role=platform_admin`,
+        ),
+        context(stats),
+      )
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await GET(
+        new Request(
+          "http://localhost/api/platform/user-statistics?cursor=foreign",
+        ),
+        context("platform/user-statistics"),
+      )
+    ).status,
+  ).toBe(422);
+  const path = `platform/user-exports/${id}/download`;
+  const response = await GET(
+    new Request(`http://localhost/api/${path}`, {
+      headers: { Cookie: "session=bound" },
+    }),
+    context(path),
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Content-Disposition")).toContain(
+    "directory-export.csv",
+  );
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(await response.text()).toContain("safe");
+});

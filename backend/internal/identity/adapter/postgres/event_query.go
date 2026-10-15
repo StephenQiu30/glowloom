@@ -12,10 +12,13 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
+// EventStore supplies authorized security event reads.
 type EventStore struct{ db *gorm.DB }
 
+// NewEventStore constructs EventStore with explicit caller-supplied dependencies.
 func NewEventStore(db *gorm.DB) *EventStore { return &EventStore{db: db} }
 
+// ReadEvents rechecks current authority before querying the requested event scope.
 func (s *EventStore) ReadEvents(ctx context.Context, actor application.Principal, f application.EventFilter, pos application.EventPosition, now time.Time) ([]application.SecurityEvent, error) {
 	items := make([]application.SecurityEvent, 0)
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

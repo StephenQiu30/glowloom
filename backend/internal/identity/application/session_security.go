@@ -14,9 +14,6 @@ import (
 )
 
 func (a *Auth) sessionTransaction(ctx context.Context, run func(AuthTx) error) error {
-	if a.email == nil {
-		return a.store.Transaction(ctx, run)
-	}
 	return a.email.store.EmailTransaction(ctx, func(tx EmailTx) error {
 		if _, err := tx.RegistrationEnabled(); err != nil {
 			return err

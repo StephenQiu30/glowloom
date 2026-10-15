@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -16,16 +15,15 @@ import (
 func (s *PurgeStore) workerActor(tx *gorm.DB, id uuid.UUID) (identityapp.Principal, error) {
 	var row struct {
 		ActorID, OrgID uuid.UUID
-		Role           string
 	}
-	read := tx.Raw(`SELECT j.actor_id,j.org_id,u.role FROM media.purge_job j JOIN identity."user" u ON u.id=j.actor_id AND u.org_id=j.org_id WHERE j.id=?`, id).Scan(&row)
+	read := tx.Raw(`SELECT j.actor_id,j.org_id FROM media.purge_job j WHERE j.id=?`, id).Scan(&row)
 	if read.Error != nil {
 		return identityapp.Principal{}, read.Error
 	}
 	if read.RowsAffected != 1 {
 		return identityapp.Principal{}, application.ErrNotFound
 	}
-	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID, Role: identitydomain.Role(row.Role)}, nil
+	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, nil
 }
 
 func (s *PurgeStore) withLease(ctx context.Context, lease application.PurgeLease, ended bool, consume func(*gorm.DB, purgeJobRow, libraryRow, application.LibraryProjectFacts) error) error {
@@ -37,7 +35,7 @@ func (s *PurgeStore) withLease(ctx context.Context, lease application.PurgeLease
 		return domain.ErrPurgeConflict
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, lease.Actor); err != nil {
+		if err := s.requireCurrentActor(tx, lease.Actor); err != nil {
 			return err
 		}
 		facts, err := s.access(ctx, tx, lease.Actor, lease.Scope, true)
@@ -74,7 +72,7 @@ func (s *PurgeStore) ClaimPurge(ctx context.Context, work application.PurgeWorkI
 		if err != nil {
 			return err
 		}
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, actor, work.JobID, false)
@@ -211,18 +209,10 @@ func (s *PurgeStore) StartPurgeItem(ctx context.Context, lease application.Purge
 		if err := validatePurgeItem(tx, row, frozen); err != nil {
 			return err
 		}
-		if frozen.Asset != nil && row.ProjectID != nil {
-			if s.references == nil || s.references(tx) == nil {
-				return application.ErrUnavailable
-			}
-			used, err := s.references(tx).HasMediaReferences(ctx, lease.Actor, *row.ProjectID, frozen.Asset.ID)
-			if err != nil {
-				return err
-			}
-			if used {
-				return domain.ErrPurgeConflict
-			}
+		if err := s.requirePurgeUnreferenced(ctx, tx, lease.Actor, row, frozen); err != nil {
+			return err
 		}
+
 		return libraryChanged(tx, `UPDATE media.purge_item SET status='running',failure_code=NULL WHERE job_id=? AND item_index=? AND status IN ('queued','running','needs_reconciliation')`, row.ID, index)
 	})
 	return done, err
@@ -266,4 +256,27 @@ func (s *PurgeStore) FailPurgeItem(ctx context.Context, lease application.PurgeL
 		}
 		return libraryChanged(tx, `UPDATE media.purge_job SET needs_reconciliation=true,revision=revision+1,updated_at=? WHERE id=?`, s.clock().UTC(), row.ID)
 	})
+}
+
+// requirePurgeUnreferenced runs after validatePurgeItem has locked the original.
+// Avatar owners retain references after account/team deletion and do not grant access.
+func (s *PurgeStore) requirePurgeUnreferenced(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, row purgeJobRow, frozen application.FrozenPurgeItem) error {
+	if frozen.Asset == nil {
+		return nil
+	}
+	if s.references == nil || s.references(tx) == nil {
+		return application.ErrUnavailable
+	}
+	project := uuid.Nil
+	if row.ProjectID != nil {
+		project = *row.ProjectID
+	}
+	used, err := s.references(tx).HasMediaReferences(ctx, actor, project, frozen.Asset.ID)
+	if err != nil {
+		return err
+	}
+	if used {
+		return domain.ErrPurgeConflict
+	}
+	return nil
 }

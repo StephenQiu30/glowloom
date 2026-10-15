@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 var (
@@ -117,8 +116,8 @@ func (s *ModelDefaultsService) Save(ctx context.Context, actor identityapp.Princ
 }
 
 func canManageModelDefaults(actor identityapp.Principal) bool {
-	return actor.ID != uuid.Nil && actor.OrgID != uuid.Nil && !actor.MustChangePassword &&
-		(actor.Role == identitydomain.RoleAdmin || actor.Role == identitydomain.RoleProducer)
+	return actor.ID != uuid.Nil && actor.OrgID != uuid.Nil &&
+		actor.ScopeID != uuid.Nil && actor.SessionID != uuid.Nil && actor.CredentialEpoch > 0
 }
 
 func validDefaultModels(defaults map[string]string) bool {

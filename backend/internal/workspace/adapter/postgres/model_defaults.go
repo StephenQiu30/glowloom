@@ -31,7 +31,7 @@ func (s *Store) ReadModelDefaults(ctx context.Context, actor identityapp.Princip
 	}
 	var snapshot application.ModelDefaults
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.authorizeProject(ctx, tx, actor, projectID, false); err != nil {
 			return err
 		}
 		row, err := readDefaultsRow(tx, actor.OrgID, projectID, false)
@@ -70,7 +70,7 @@ func (s *Store) SaveModelDefaults(ctx context.Context, actor identityapp.Princip
 	fingerprint := hex.EncodeToString(hash[:])
 	var saved application.ModelDefaults
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.authorizeProject(ctx, tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
 		var locked int

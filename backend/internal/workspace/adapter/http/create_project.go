@@ -151,19 +151,21 @@ func cursorBinding(actor identityapp.Principal, resource string, filters any) st
 	// This prevents accidental reuse under another query. Durable authorization
 	// is always rechecked independently in PostgreSQL.
 	body, _ := json.Marshal(struct {
-		Actor, Org uuid.UUID
-		Resource   string
-		Filters    any
-	}{actor.ID, actor.OrgID, resource, filters})
+		Actor, Org, Scope uuid.UUID
+		Resource          string
+		Filters           any
+	}{actor.ID, actor.OrgID, actor.ScopeID, resource, filters})
 	hash := sha256.Sum256(body)
 	return hex.EncodeToString(hash[:])
 }
 
 func writeError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
+	case errors.Is(err, application.ErrScopeNotFound), errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_key_reused", nil)

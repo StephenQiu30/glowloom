@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -23,6 +25,12 @@ func (s *Store) ReserveInTransaction(ctx context.Context, tx *gorm.DB, input app
 		return application.ReserveResult{}, err
 	}
 	tx = tx.WithContext(ctx)
+	if input.Actor.ID != input.ActorID {
+		return application.ReserveResult{}, identityapp.ErrForbidden
+	}
+	if err := s.requireProject(tx, input.Actor, input.ProjectID, true); err != nil {
+		return application.ReserveResult{}, err
+	}
 	var budget domain.Budget
 	row := tx.Raw(`
 		SELECT id, project_id, limit_micros, reserved_micros,

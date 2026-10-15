@@ -118,6 +118,7 @@ type ProviderReceiptRepository interface {
 // ProviderStageService makes private artifact and manifest writes recoverable.
 // It does not release a reservation, select a result, or infer image pricing.
 type ProviderStageService struct {
+	factory ProviderStagingFactory
 	objects ProviderStagingObjects
 	repo    ProviderReceiptRepository
 }
@@ -127,9 +128,35 @@ func NewProviderStageService(objects ProviderStagingObjects, repo ProviderReceip
 	return &ProviderStageService{objects: objects, repo: repo}
 }
 
+// NewRoutedProviderStageService injects dispatch-scoped physical storage.
+func NewRoutedProviderStageService(factory ProviderStagingFactory, repo ProviderReceiptRepository) *ProviderStageService {
+	return &ProviderStageService{factory: factory, repo: repo}
+}
+
+func (s *ProviderStageService) scoped(ctx context.Context, identity ProviderDispatchIdentity) (*ProviderStageService, error) {
+	if s == nil || s.factory == nil || identity.Validate() != nil {
+		return nil, ErrInvalidProviderCall
+	}
+	objects, err := s.factory.ForProviderDispatch(ctx, identity)
+	if err != nil {
+		return nil, err
+	}
+	if objects == nil {
+		return nil, ErrInvalidProviderCall
+	}
+	return &ProviderStageService{objects: objects, repo: s.repo}, nil
+}
+
 // StageImage writes the artifact, verifies it, publishes the full manifest last,
 // then records completion. A failed DB write can recover that same manifest.
 func (s *ProviderStageService) StageImage(ctx context.Context, identity ProviderDispatchIdentity, evidence ProviderImageEvidence, output ProviderReceiptOutput, data []byte) (ProviderReceipt, error) {
+	if s != nil && s.factory != nil {
+		scoped, err := s.scoped(ctx, identity)
+		if err != nil {
+			return ProviderReceipt{}, err
+		}
+		return scoped.StageImage(ctx, identity, evidence, output, data)
+	}
 	manifest := ProviderImageManifest{Version: 1, Identity: identity, Evidence: evidence, Outputs: []ProviderReceiptOutput{output}, CostEvidenceComplete: false}
 	if s == nil || s.objects == nil || s.repo == nil || manifest.Validate() != nil || int64(len(data)) != output.SizeBytes || imageDigest(data) != output.SHA256 {
 		return ProviderReceipt{}, ErrInvalidProviderCall
@@ -155,6 +182,13 @@ func (s *ProviderStageService) StageImage(ctx context.Context, identity Provider
 // RecoverImage only examines server-derived keys for this same attempt. Missing
 // manifests stay uncertain; this method cannot issue a new provider request.
 func (s *ProviderStageService) RecoverImage(ctx context.Context, identity ProviderDispatchIdentity) (*ProviderReceipt, error) {
+	if s != nil && s.factory != nil {
+		scoped, err := s.scoped(ctx, identity)
+		if err != nil {
+			return nil, err
+		}
+		return scoped.RecoverImage(ctx, identity)
+	}
 	if s == nil || s.objects == nil || s.repo == nil || identity.Validate() != nil {
 		return nil, ErrInvalidProviderCall
 	}
@@ -195,6 +229,13 @@ func (s *ProviderStageService) VerifyReceipt(ctx context.Context, receipt Provid
 // ReadImage binds an existing receipt to its durable call and complete private
 // manifest, then verifies the artifact bytes. It accepts no caller object key.
 func (s *ProviderStageService) ReadImage(ctx context.Context, receipt ProviderReceipt) (ProviderReceiptOutput, []byte, error) {
+	if s != nil && s.factory != nil {
+		scoped, err := s.scoped(ctx, receipt.Identity)
+		if err != nil {
+			return ProviderReceiptOutput{}, nil, err
+		}
+		return scoped.ReadImage(ctx, receipt)
+	}
 	if s == nil || s.objects == nil {
 		return ProviderReceiptOutput{}, nil, ErrInvalidProviderCall
 	}
@@ -280,12 +321,14 @@ func imageDigest(data []byte) string {
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
-func providerStagePrefix(i ProviderDispatchIdentity) string {
+
+// ProviderStagePrefix is the stable private namespace for one dispatch attempt.
+func ProviderStagePrefix(i ProviderDispatchIdentity) string {
 	return path.Join("private", "provider-results", i.ProjectID.String(), i.OperationID.String(), i.Action, fmt.Sprint(i.Attempt))
 }
 func providerStageImageKey(i ProviderDispatchIdentity) string {
-	return path.Join(providerStagePrefix(i), "1.image")
+	return path.Join(ProviderStagePrefix(i), "1.image")
 }
 func providerStageManifestKey(i ProviderDispatchIdentity) string {
-	return path.Join(providerStagePrefix(i), "manifest.json")
+	return path.Join(ProviderStagePrefix(i), "manifest.json")
 }

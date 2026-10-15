@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,7 +29,7 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 	digest := sha256.Sum256([]byte("credential-test/" + actor.OrgID.String() + "/" + request.ProviderID.String() + "/" + request.CredentialID.String()))
 	hash := hex.EncodeToString(digest[:])
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actor.ID, actor.OrgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actor.ID.String()+"/"+requestID.String()).Error; err != nil {
@@ -77,7 +78,10 @@ func (s *Store) RequestCredentialTest(ctx context.Context, actor identityapp.Pri
 			return fmt.Errorf("record credential test request: %w", err)
 		}
 		result = application.CredentialTestAccepted{TestID: request.TestID, CheckID: request.TestID, EventID: eventID, ProviderID: request.ProviderID, CredentialID: request.CredentialID, Accepted: true}
-		body, err := json.Marshal(result)
+		body, err := json.Marshal(struct {
+			application.CredentialTestAccepted
+			PlatformEpoch int64 `json:"platform_epoch"`
+		}{result, actor.PlatformEpoch})
 		if err != nil {
 			return fmt.Errorf("encode credential test receipt: %w", err)
 		}
@@ -94,14 +98,27 @@ func (s *Store) VerifyCredentialTestRequest(ctx context.Context, request applica
 	if s == nil || s.db == nil || eventID == uuid.Nil {
 		return application.ErrInvalidCredentialTest
 	}
-	var row struct{ Body string }
-	result := s.db.WithContext(ctx).Raw(`SELECT response_body::text AS body FROM infra.idempotency_record WHERE actor_id=?::uuid AND idem_key=? AND status_code=202`, request.ActorID, request.RequestID).Scan(&row)
-	if result.Error != nil {
-		return fmt.Errorf("read accepted credential test: %w", result.Error)
-	}
-	var accepted application.CredentialTestAccepted
-	if result.RowsAffected != 1 || json.Unmarshal([]byte(row.Body), &accepted) != nil || !accepted.Accepted || accepted.EventID != eventID || accepted.TestID != request.TestID || accepted.ProviderID != request.ProviderID || accepted.CredentialID != request.CredentialID {
+	requestID, err := uuid.Parse(request.RequestID)
+	if err != nil || requestID.String() != request.RequestID || request.TestID != uuid.NewSHA1(requestID, []byte(request.ActorID.String()+request.OrgID.String()+request.ProviderID.String()+request.CredentialID.String())) || eventID != uuid.NewSHA1(request.TestID, []byte("credential_test_requested")) {
 		return application.ErrInvalidCredentialTest
 	}
-	return nil
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row struct{ Body string }
+		result := tx.Raw(`SELECT response_body::text AS body FROM infra.idempotency_record WHERE actor_id=?::uuid AND idem_key=? AND status_code=202 AND NOT is_delete FOR SHARE`, request.ActorID, request.RequestID).Scan(&row)
+		if result.Error != nil {
+			return fmt.Errorf("read accepted credential test: %w", result.Error)
+		}
+		var accepted application.CredentialTestAccepted
+		if result.RowsAffected != 1 || json.Unmarshal([]byte(row.Body), &accepted) != nil || !accepted.Accepted || accepted.EventID != eventID || accepted.TestID != request.TestID || accepted.ProviderID != request.ProviderID || accepted.CredentialID != request.CredentialID {
+			return application.ErrInvalidCredentialTest
+		}
+		if s.actors == nil || s.actors(tx) == nil {
+			return fmt.Errorf("catalog authority unavailable")
+		}
+		err := s.requireWorkerPlatform(tx, request)
+		if errors.Is(err, identityapp.ErrForbidden) {
+			return application.ErrCredentialTestRevoked
+		}
+		return err
+	})
 }

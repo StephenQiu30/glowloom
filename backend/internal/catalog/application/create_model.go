@@ -20,7 +20,7 @@ var ErrInvalidCreateModel = errors.New("invalid create-model command")
 
 // CreateModelStore commits a disabled model and its audit in one transaction.
 type CreateModelStore interface {
-	CreateModelWithAudit(context.Context, uuid.UUID, uuid.UUID, domain.ModelProfile, identityapp.OutboxEvent) (domain.ModelProfile, error)
+	CreateModelWithAudit(context.Context, identityapp.Principal, domain.ModelProfile, identityapp.OutboxEvent) (domain.ModelProfile, error)
 }
 
 // CreateModelInput identifies the provider and capability of a new model.
@@ -89,7 +89,7 @@ func (c *CreateModelCommand) Execute(ctx context.Context, actor identityapp.Prin
 	if err != nil {
 		return CreatedModel{}, fmt.Errorf("build model created audit: %w", err)
 	}
-	saved, err := c.store.CreateModelWithAudit(ctx, actor.ID, actor.OrgID, model, event)
+	saved, err := c.store.CreateModelWithAudit(ctx, actor, model, event)
 	if err != nil {
 		return CreatedModel{}, fmt.Errorf("create model with audit: %w", err)
 	}

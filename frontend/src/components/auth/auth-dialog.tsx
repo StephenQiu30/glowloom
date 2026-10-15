@@ -25,7 +25,7 @@ export function AuthDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAuthenticated: (session: API.SessionView) => void;
+  onAuthenticated: (session: API.EmailSessionView) => void;
   initialMode?: AuthMode;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
 }) {
@@ -38,7 +38,6 @@ export function AuthDialog({
       <DialogContent
         ref={content}
         className="auth-dialog"
-        overlayClassName="auth-dialog-overlay"
         showCloseButton={false}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -88,7 +87,7 @@ export function AuthDialog({
           }}
           className="auth-tabs"
         >
-          <TabsList variant="auth" aria-label="登录或注册">
+          <TabsList className="w-full" aria-label="登录或注册">
             <TabsTrigger value="login" disabled={pending}>
               登录
             </TabsTrigger>

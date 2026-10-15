@@ -125,6 +125,9 @@ func (w *TranscriptionWorker) Execute(ctx context.Context, id TranscriptionWorkI
 		return domain.TranscriptionJob{}, err
 	}
 	digest := sha256.Sum256(raw)
+	if err := w.store.AuthorizeObjectWrite(finalize, id); err != nil {
+		return domain.TranscriptionJob{}, err
+	}
 	if err := w.objects.PutIfAbsent(finalize, key, bytes.NewReader(raw), int64(len(raw)), "application/json", hex.EncodeToString(digest[:])); err != nil && !errors.Is(err, mediaapp.ErrObjectAlreadyExists) {
 		return domain.TranscriptionJob{}, err
 	}

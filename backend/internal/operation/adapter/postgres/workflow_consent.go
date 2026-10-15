@@ -30,6 +30,9 @@ func (s *Store) CheckSubmissionInputs(ctx context.Context, operationID uuid.UUID
 		return ErrNotFound
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, operationID, true); err != nil {
+			return err
+		}
 		var operation struct{ ProjectID uuid.UUID }
 		result := tx.Raw(`
 			SELECT project_id FROM operation.operation

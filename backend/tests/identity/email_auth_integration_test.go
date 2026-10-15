@@ -60,6 +60,13 @@ func existingIdentityTransaction(t *testing.T) *gorm.DB {
 			t.Fatal(err)
 		}
 	}
+	governanceMigration, err := os.ReadFile("../../db/migrations/006_identity_governance.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec(string(governanceMigration)).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := tx.Exec("UPDATE identity.platform_settings SET registration_enabled=true").Error; err != nil {
 		t.Fatal(err)
 	}
@@ -128,11 +135,11 @@ func TestEmailSessionRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	now = now.Add(30 * time.Minute)
-	if err := auth.CompletePasswordReset(t.Context(), payload.Token, "new long password", "new long password"); !errors.Is(err, identity.ErrProofInvalid) {
+	if err := auth.CompletePasswordReset(t.Context(), payload.Token, "new8Pass", "new8Pass"); !errors.Is(err, identity.ErrProofInvalid) {
 		t.Fatalf("exact expiry = %v", err)
 	}
 	now = now.Add(-time.Nanosecond)
-	if err := auth.CompletePasswordReset(t.Context(), payload.Token, "new long password", "new long password"); err != nil {
+	if err := auth.CompletePasswordReset(t.Context(), payload.Token, "new8Pass", "new8Pass"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := auth.Current(t.Context(), login.Token); !errors.Is(err, identity.ErrSessionInvalid) {
@@ -144,12 +151,12 @@ func TestEmailSessionRecovery(t *testing.T) {
 	if _, err := auth.Login(t.Context(), "recover@identity.invalid", "old long password", false); !errors.Is(err, identity.ErrInvalidCredentials) {
 		t.Fatal("old password survived reset")
 	}
-	if _, err := auth.Login(t.Context(), "recover@identity.invalid", "new long password", false); err != nil {
+	if _, err := auth.Login(t.Context(), "recover@identity.invalid", "new8Pass", false); err != nil {
 		t.Fatal(err)
 	}
 	// SMTP budgets or registration policy being unavailable must not break login.
 	loginOnly := identity.NewEmailAuth(store, protector, identity.EmailPolicy{}, func() time.Time { return now })
-	if _, err := loginOnly.Login(t.Context(), "recover@identity.invalid", "new long password", false); err != nil {
+	if _, err := loginOnly.Login(t.Context(), "recover@identity.invalid", "new8Pass", false); err != nil {
 		t.Fatalf("registration configuration blocked existing login: %v", err)
 	}
 }
@@ -197,7 +204,7 @@ func TestRegistrationReplayAndBudget(t *testing.T) {
 	if err != nil || proof.Outcome != "set_password" {
 		t.Fatalf("verify: %v", err)
 	}
-	input := identity.CompleteRegistrationInput{OperationID: start.OperationID, FlowSecret: start.FlowSecret, Grant: proof.Grant, DisplayName: "创作者", Password: "a long pass phrase", ConfirmPassword: "a long pass phrase", TermsVersion: "test-terms", TermsAccepted: true}
+	input := identity.CompleteRegistrationInput{OperationID: start.OperationID, FlowSecret: start.FlowSecret, Grant: proof.Grant, DisplayName: "创作者", Password: "join8Pwd", ConfirmPassword: "join8Pwd", TermsVersion: "test-terms", TermsAccepted: true}
 	for _, invalid := range []identity.CompleteRegistrationInput{
 		func() identity.CompleteRegistrationInput { v := input; v.TermsAccepted = false; return v }(),
 		func() identity.CompleteRegistrationInput { v := input; v.TermsVersion = "older-terms"; return v }(),

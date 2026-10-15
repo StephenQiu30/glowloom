@@ -10,12 +10,12 @@ import (
 )
 
 func TestPasswordPolicyAndHash(t *testing.T) {
-	for _, candidate := range []string{"short1A", strings.Repeat("a", 14), "12345678901", strings.Repeat("a", 129)} {
+	for _, candidate := range []string{"short1A", strings.Repeat("界", 7), strings.Repeat("a", 129)} {
 		if err := domain.ValidatePassword(candidate, ""); !errors.Is(err, domain.ErrWeakPassword) {
 			t.Errorf("invalid password accepted: %v", err)
 		}
 	}
-	const password = "validPassword123"
+	const password = "a7bc8def"
 	hash, err := domain.HashPassword(password, "")
 	if err != nil {
 		t.Fatalf("hash valid password: %v", err)

@@ -25,6 +25,7 @@ var ErrObjectMissing = errors.New("export private object missing")
 // WorkerStore fences renderer progress and output publication against cancellation.
 type WorkerStore interface {
 	Claim(context.Context, WorkID) (Work, error)
+	AuthorizeObjectWrite(context.Context, WorkID) error
 	Progress(context.Context, WorkID, int, string) error
 	Commit(context.Context, WorkID, mediadomain.MediaAsset, []mediadomain.Rendition) (domain.ExportJob, error)
 	Finish(context.Context, WorkID, bool, string) error
@@ -103,7 +104,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 		if err != nil {
 			return domain.ExportJob{}, err
 		}
-		if err = w.put(ctx, key, output); err != nil {
+		if err = w.put(ctx, id, key, output); err != nil {
 			_ = output.Close()
 			if !errors.Is(err, mediaapp.ErrObjectAlreadyExists) {
 				return domain.ExportJob{}, err
@@ -182,7 +183,7 @@ func (w *Worker) Execute(ctx context.Context, id WorkID) (domain.ExportJob, erro
 			return domain.ExportJob{}, ErrInvalidExport
 		}
 		objectKey := path.Join(key[:len(key)-len(path.Ext(key))], string(file.Kind)+"."+file.Ext)
-		if err := w.put(ctx, objectKey, file.Result); err != nil && !errors.Is(err, mediaapp.ErrObjectAlreadyExists) {
+		if err := w.put(ctx, id, objectKey, file.Result); err != nil && !errors.Is(err, mediaapp.ErrObjectAlreadyExists) {
 			return domain.ExportJob{}, err
 		}
 		// Recreated previews may differ across FFmpeg builds. A private existing
@@ -267,11 +268,14 @@ func (w *Worker) readChecked(ctx context.Context, key string, size int64, mime, 
 	keep = true
 	return result, nil
 }
-func (w *Worker) put(ctx context.Context, key string, file *mediaapp.Downloaded) error {
+func (w *Worker) put(ctx context.Context, id WorkID, key string, file *mediaapp.Downloaded) error {
 	if file == nil || file.File == nil || file.Size < 1 || file.Size > 500<<20 {
 		return ErrInvalidExport
 	}
 	if _, err := file.File.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	if err := w.store.AuthorizeObjectWrite(ctx, id); err != nil {
 		return err
 	}
 	return w.objects.PutIfAbsent(ctx, key, file.File, file.Size, file.MIMEType, file.SHA256)

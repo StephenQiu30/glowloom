@@ -28,11 +28,11 @@ type credentialCommandStore struct {
 	saveErr  error
 }
 
-func (s *credentialCommandStore) FindProviderForAdmin(_ context.Context, _, _, _ uuid.UUID) (domain.Provider, error) {
+func (s *credentialCommandStore) FindProviderForAdmin(_ context.Context, _ identityapp.Principal, _ uuid.UUID) (domain.Provider, error) {
 	return s.provider, nil
 }
 
-func (s *credentialCommandStore) ReplaceWithEvents(_ context.Context, _, _ uuid.UUID, credential domain.Credential, events []identityapp.OutboxEvent) (domain.Credential, error) {
+func (s *credentialCommandStore) ReplaceWithEvents(_ context.Context, _ identityapp.Principal, credential domain.Credential, events []identityapp.OutboxEvent) (domain.Credential, error) {
 	s.called = true
 	if s.saveErr != nil {
 		return domain.Credential{}, s.saveErr

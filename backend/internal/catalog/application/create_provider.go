@@ -21,7 +21,7 @@ var ErrInvalidCreateProvider = errors.New("invalid create-provider command")
 
 // CreateProviderStore checks current administrator rights and commits the audit.
 type CreateProviderStore interface {
-	CreateProviderWithAudit(context.Context, uuid.UUID, uuid.UUID, domain.Provider, identityapp.OutboxEvent) (domain.Provider, error)
+	CreateProviderWithAudit(context.Context, identityapp.Principal, domain.Provider, identityapp.OutboxEvent) (domain.Provider, error)
 }
 
 // ProviderAdapters declares the adapter names with supported credential fields.
@@ -99,7 +99,7 @@ func (c *CreateProviderCommand) Execute(ctx context.Context, actor identityapp.P
 	if err != nil {
 		return CreatedProvider{}, fmt.Errorf("build provider audit: %w", err)
 	}
-	saved, err := c.store.CreateProviderWithAudit(ctx, actor.ID, actor.OrgID, provider, event)
+	saved, err := c.store.CreateProviderWithAudit(ctx, actor, provider, event)
 	if err != nil {
 		return CreatedProvider{}, fmt.Errorf("create provider with audit: %w", err)
 	}

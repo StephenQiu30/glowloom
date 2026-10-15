@@ -20,7 +20,7 @@ import (
 func (s *Store) FreezeTimeline(ctx context.Context, actor identityapp.Principal, project, canvas, node uuid.UUID, revision int64) (domain.TimelineConfig, error) {
 	var result domain.TimelineConfig
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := authorize(tx, actor, project, true); err != nil {
+		if err := s.authorize(tx, actor, project, true); err != nil {
 			return err
 		}
 		doc, err := load(tx, canvas, false)

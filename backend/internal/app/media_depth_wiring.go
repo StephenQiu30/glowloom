@@ -18,23 +18,29 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
-func provideMediaToolSource(tx *gorm.DB) toolapp.TranscriptionSourceReader {
-	return canvasapp.NewTranscriptionSourceReader(pgcanvas.NewStore(tx,
+func provideMediaToolSourceWithAccess(tx *gorm.DB, scopes pgmedia.ScopeAccessFactory) toolapp.TranscriptionSourceReader {
+	return canvasapp.NewTranscriptionSourceReader(pgcanvas.NewScopedStore(tx,
 		func(mediaTx *gorm.DB) canvasapp.MediaReader {
-			return mediaapp.NewAssetQuery(pgmedia.NewStore(mediaTx), nil)
-		}))
+			return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes), nil)
+		}, func(tx *gorm.DB) canvasapp.ProjectAccess { return scopes(tx) }))
 }
 
 // provideMediaDepthStore retains read, cancellation and exact reconciliation
 // while unconfigured inference refuses new creation and retry before writes.
 func provideMediaDepthStore(database *gorm.DB, enabled bool) *pgtool.DepthStore {
+	return provideMediaDepthStoreWithAccess(database, enabled, provideMediaScopeAccess)
+}
+
+func provideMediaDepthStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.DepthStore {
 	var source pgtool.TranscriptionSourceFactory
 	if enabled {
-		source = provideMediaToolSource
+		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
+			return provideMediaToolSourceWithAccess(tx, scopes)
+		}
 	}
 	return pgtool.NewDepthStore(database, source,
 		func(tx *gorm.DB) toolapp.DepthDerivedMedia {
-			return mediaapp.NewDerivedService(pgmedia.NewStore(tx))
+			return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
 		})
 }
 
@@ -56,7 +62,7 @@ func provideMediaDepthWorker(database *gorm.DB, storage *objectstorage.Client, c
 			return nil, nil, fmt.Errorf("configure offline video depth inference: %w", err)
 		}
 	}
-	store := provideMediaDepthStore(database, processor != nil)
+	store := provideMediaDepthStoreWithAccess(database, processor != nil, provideMediaWorkerScopeAccess)
 	consumer := toolapp.NewDepthWorker(store, toolflow.NewObjects(storage), processor, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{}, verifier)
 	return consumer, store, nil
 }

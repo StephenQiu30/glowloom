@@ -22,7 +22,7 @@ func (s *PurgeStore) ListPurges(ctx context.Context, actor identityapp.Principal
 	}
 	result := make([]domain.PurgeJob, 0, size)
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if _, err := s.access(ctx, tx, actor, scope, false); err != nil {
@@ -74,14 +74,14 @@ func (s *PurgeStore) VerifyPurgeDelivery(ctx context.Context, d application.Purg
 		if actor.ID != d.ActorID || actor.OrgID != d.OrgID {
 			return domain.ErrInvalidLibrary
 		}
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, actor, d.JobID, false)
 		if err != nil {
 			return err
 		}
-		if _, err := s.access(ctx, tx, actor, row.scope(), false); err != nil {
+		if _, err := s.access(ctx, tx, actor, row.scope(), true); err != nil {
 			return err
 		}
 		valid = row.Attempt == d.Attempt && row.Status != "succeeded" && row.Status != "partial_failed" && row.Status != "failed" && row.Status != "cancelled"

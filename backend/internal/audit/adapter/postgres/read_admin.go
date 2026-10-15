@@ -3,6 +3,9 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
+
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -12,13 +15,13 @@ import (
 )
 
 // ListForAdmin locks the actor's current account until the scoped page is read.
-func (s *Store) ListForAdmin(ctx context.Context, actorID, orgID uuid.UUID, filter domain.Filter) (domain.Page, error) {
+func (s *Store) ListForAdmin(ctx context.Context, actor identityapp.Principal, orgID uuid.UUID, filter domain.Filter) (domain.Page, error) {
 	if s == nil || s.db == nil {
 		return domain.Page{}, application.ErrInvalidRead
 	}
 	var page domain.Page
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentAuditAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requireCurrentAuditAdmin(tx, actor); err != nil {
 			return err
 		}
 		var err error
@@ -28,17 +31,20 @@ func (s *Store) ListForAdmin(ctx context.Context, actorID, orgID uuid.UUID, filt
 	if err != nil {
 		return domain.Page{}, fmt.Errorf("read administrator audit page: %w", err)
 	}
+	for i := range page.Items {
+		page.Items[i] = metadata(page.Items[i])
+	}
 	return page, nil
 }
 
 // GetForAdmin locks the actor's current account until the scoped detail is read.
-func (s *Store) GetForAdmin(ctx context.Context, actorID, orgID, recordID uuid.UUID) (domain.Record, error) {
+func (s *Store) GetForAdmin(ctx context.Context, actor identityapp.Principal, orgID, recordID uuid.UUID) (domain.Record, error) {
 	if s == nil || s.db == nil {
 		return domain.Record{}, application.ErrInvalidRead
 	}
 	var record domain.Record
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentAuditAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requireCurrentAuditAdmin(tx, actor); err != nil {
 			return err
 		}
 		var err error
@@ -48,27 +54,26 @@ func (s *Store) GetForAdmin(ctx context.Context, actorID, orgID, recordID uuid.U
 	if err != nil {
 		return domain.Record{}, fmt.Errorf("read administrator audit detail: %w", err)
 	}
-	return record, nil
+	return metadata(record), nil
 }
 
-func requireCurrentAuditAdmin(tx *gorm.DB, actorID, orgID uuid.UUID) error {
-	if actorID == uuid.Nil || orgID == uuid.Nil {
+func (s *Store) requireCurrentAuditAdmin(tx *gorm.DB, actor identityapp.Principal) error {
+	if s.actors == nil || s.actors(tx) == nil {
 		return application.ErrForbidden
 	}
-	var authorized int
-	result := tx.Raw(`
-		SELECT 1 FROM identity."user"
-		WHERE id = ?::uuid AND org_id = ?::uuid AND role = 'admin'
-		  AND status = 'active' AND NOT must_change_password AND NOT is_delete
-		FOR SHARE
-	`, actorID.String(), orgID.String()).Scan(&authorized)
-	if result.Error != nil {
-		return fmt.Errorf("check current audit administrator: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return application.ErrForbidden
-	}
-	return nil
+	return s.actors(tx).CheckPlatformSession(tx.Statement.Context, actor, time.Now().UTC())
+}
+
+// NewScopedStore injects current platform-session authority for metadata reads.
+func NewScopedStore(db *gorm.DB, actors func(*gorm.DB) application.ActorAccess) *Store {
+	return &Store{db: db, actors: actors}
+}
+
+func metadata(record domain.Record) domain.Record {
+	record.Before = nil
+	record.After = nil
+	record.IP = ""
+	return record
 }
 
 var _ application.ReadStore = (*Store)(nil)

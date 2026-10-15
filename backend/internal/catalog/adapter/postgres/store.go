@@ -31,7 +31,9 @@ var (
 // Store keeps the provider tables behind an explicitly injected database handle.
 // Administrator authorization belongs to the application command or query.
 type Store struct {
-	db *gorm.DB
+	db       *gorm.DB
+	actors   ActorAccessFactory
+	projects ProjectAccessFactory
 }
 
 // NewStore injects the database handle for catalog persistence.
@@ -292,3 +294,15 @@ func requireCredentialProvider(tx *gorm.DB, providerID uuid.UUID) error {
 	}
 	return nil
 }
+
+// ActorAccessFactory retains session locks in the catalog transaction.
+type ActorAccessFactory func(*gorm.DB) application.ActorAccess
+
+// ProjectAccessFactory supplies exact creation-scope model availability.
+type ProjectAccessFactory func(*gorm.DB) application.ProjectAccess
+
+// NewScopedStore injects current request and worker authority.
+func NewScopedStore(db *gorm.DB, actors ActorAccessFactory, projects ProjectAccessFactory) *Store {
+	return &Store{db: db, actors: actors, projects: projects}
+}
+func (s *Store) withDB(db *gorm.DB) *Store { bound := *s; bound.db = db; return &bound }

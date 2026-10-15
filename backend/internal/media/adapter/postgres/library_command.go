@@ -79,7 +79,7 @@ func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor identityap
 	}
 	var cached *application.LibraryReceipt
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := libraryCommandLock(tx, actor.ID, c.Key); err != nil {
@@ -100,7 +100,7 @@ func (s *LibraryStore) ApplyLibraryCommand(ctx context.Context, actor identityap
 	}
 	var result application.LibraryReceipt
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := libraryCommandLock(tx, actor.ID, c.Key); err != nil {

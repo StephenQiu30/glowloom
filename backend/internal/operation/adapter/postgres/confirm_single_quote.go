@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	inbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/application"
@@ -57,7 +56,7 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 	var result application.ConfirmSingleQuoteResult
 	var stale error
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
 		submissionID, err := s.lockEditorConfirmation(ctx, tx, actor, input)
@@ -98,11 +97,11 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 			return application.ErrConfirmationTargetUnavailable
 		}
 		confirmedAt := time.Now().UTC()
-		currentModel, currentPrice, err := NewStore(tx).ReadCurrentQuoteCatalog(ctx, actor, quoted, confirmedAt)
+		currentModel, currentPrice, err := s.withDB(tx).ReadCurrentQuoteCatalog(ctx, actor, quoted, confirmedAt)
 		if err != nil {
 			return err
 		}
-		reuseAvailable, err := NewStore(tx).ReadReuseSourceAvailable(ctx, actor, quoted)
+		reuseAvailable, err := s.withDB(tx).ReadReuseSourceAvailable(ctx, actor, quoted)
 		if err != nil {
 			return err
 		}
@@ -144,7 +143,7 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 		if read.RowsAffected != 1 || model.ModelKey == "" {
 			return application.ErrQuoteStale
 		}
-		reserve, err := pgbilling.NewStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{
+		reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor,
 			ProjectID: quoted.ProjectID, OperationID: quoted.ID, ActorID: actor.ID,
 			AmountMicros: *quoted.QuoteMicros, ModelKey: &model.ModelKey,
 			Region: quoted.Region, OccurredAt: confirmedAt,
@@ -155,7 +154,7 @@ func (s *Store) confirmSingleQuote(ctx context.Context, actor identityapp.Princi
 		// Budget contention can cross quote expiry or a future price's
 		// effective instant. Recheck time-based facts after acquiring its lock.
 		confirmedAt = time.Now().UTC()
-		currentModel, currentPrice, err = NewStore(tx).ReadCurrentQuoteCatalog(ctx, actor, quoted, confirmedAt)
+		currentModel, currentPrice, err = s.withDB(tx).ReadCurrentQuoteCatalog(ctx, actor, quoted, confirmedAt)
 		if err != nil {
 			return err
 		}

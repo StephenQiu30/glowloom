@@ -7,6 +7,8 @@ import (
 	"errors"
 	"strconv"
 
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
@@ -180,9 +182,11 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.As(err, &impact):
 		httpapi.WriteProblem(c, 409, "impact_acknowledgment_required", map[string]any{"impact": impact.Proof})
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrNotFound):
+	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, application.ErrNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):
 		httpapi.WriteProblem(c, 409, "idempotency_conflict", nil)

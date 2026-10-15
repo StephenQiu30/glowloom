@@ -1,5 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { LoadingState } from "@/components/layout/loading-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  FieldSet,
+  FieldLegend,
+  Field,
+  FieldLabel,
+  FieldGroup,
+} from "@/components/ui/field";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import { useEffect, useState, useId } from "react";
 import { listMediaAssets } from "@/api/media";
 import { getBibleEntry, listBibleEntries } from "@/api/bible";
 import {
@@ -9,7 +23,14 @@ import {
 } from "@/components/subjects/contracts";
 import { ProjectMediaPreview } from "@/components/media/project-media";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandGroup,
+  CommandItem,
+  CommandEmpty,
+} from "@/components/ui/command";
 import { flowError } from "./contracts";
 
 type Candidate = {
@@ -40,6 +61,8 @@ export function ReferenceSearch({
   onSelect: (value: { media?: API.AssetSummary; subject?: Subject }[]) => void;
   onClose: () => void;
 }) {
+  const formFieldId = useId();
+
   const [query, setQuery] = useState(initialQuery),
     [kind, setKind] = useState<Kind>("image");
   const [budget, setBudget] = useState(1),
@@ -50,14 +73,12 @@ export function ReferenceSearch({
     more: boolean;
     error: string;
   }>({ items: [], loading: true, more: false, error: "" });
-  const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<Candidate[]>([]);
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
     const timer = setTimeout(() => {
       setResult({ items: [], loading: true, more: false, error: "" });
-      setIndex(0);
       setSelected([]);
       void (async () => {
         const items: Candidate[] = [];
@@ -159,46 +180,17 @@ export function ReferenceSearch({
   }, [projectID, query, kind, budget, retry]);
   return (
     <div
-      className="space-y-2 rounded border p-3"
+      className="flex flex-col gap-2 rounded-lg border p-3"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
           onClose();
         }
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-          event.preventDefault();
-          setIndex(
-            (value) =>
-              (value +
-                (event.key === "ArrowDown" ? 1 : -1) +
-                Math.max(1, result.items.length)) %
-              Math.max(1, result.items.length),
-          );
-        }
-        if (
-          event.key === "Enter" &&
-          event.target instanceof HTMLInputElement &&
-          result.items[index]
-        ) {
-          event.preventDefault();
-          onSelect([result.items[index]]);
-        }
       }}
     >
-      <Input
-        autoFocus
-        aria-label="搜索项目引用"
-        placeholder="输入完整文件名或主体名称"
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setBudget(1);
-          setResult({ items: [], loading: true, more: false, error: "" });
-        }}
-      />
-      <select
+      <NativeSelect
         aria-label="引用检索类型"
-        className="w-full rounded border bg-background p-2"
+        className="w-full"
         value={kind}
         onChange={(event) => {
           setKind(event.target.value as Kind);
@@ -207,81 +199,96 @@ export function ReferenceSearch({
         }}
       >
         {Object.entries(kinds).map(([value, label]) => (
-          <option key={value} value={value}>
+          <NativeSelectOption key={value} value={value}>
             {label}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
-      {result.loading && <p role="status">正在检索当前项目…</p>}
+      </NativeSelect>
+      {result.loading && <LoadingState>正在检索当前项目…</LoadingState>}
       {result.error && (
-        <p role="alert">
-          {result.error}
-          <Button variant="ghost" onClick={() => setRetry((n) => n + 1)}>
-            重试检索
-          </Button>
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            {result.error}
+            <Button variant="ghost" onClick={() => setRetry((n) => n + 1)}>
+              重试检索
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
-      {!result.loading && !result.error && !result.items.length && (
-        <p>没有匹配的授权来源。</p>
-      )}
-      <div
-        role="listbox"
-        aria-label="项目引用候选"
-        className="max-h-72 overflow-y-auto"
-      >
-        {result.items.map((item, position) => (
-          <button
-            type="button"
-            role="option"
-            aria-selected={index === position}
-            key={item.id}
-            className="flex w-full items-center gap-2 rounded border p-2 text-left aria-selected:bg-accent"
-            onClick={() => onSelect([item])}
-          >
-            {item.media && (
-              <span className="relative block size-12 shrink-0 overflow-hidden">
-                <ProjectMediaPreview
-                  projectID={projectID}
-                  id={item.id}
-                  kind={item.media.kind}
-                />
-              </span>
-            )}
-            <span className="min-w-0 break-all">
-              {item.name}
-              <span className="block text-xs text-muted-foreground">
-                {kinds[kind]} · {item.id}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
+      <Command shouldFilter={false} loop>
+        <CommandInput
+          autoFocus
+          aria-label="搜索项目引用"
+          placeholder="输入完整文件名或主体名称"
+          value={query}
+          onValueChange={(value) => {
+            setQuery(value);
+            setBudget(1);
+            setResult({ items: [], loading: true, more: false, error: "" });
+          }}
+        />
+        <CommandList aria-label="项目引用候选">
+          {!result.loading && !result.error && (
+            <CommandEmpty>没有匹配的授权来源。</CommandEmpty>
+          )}
+          <CommandGroup>
+            {result.items.map((item) => (
+              <CommandItem
+                value={item.id}
+                key={item.id}
+                onSelect={() => onSelect([item])}
+              >
+                {item.media && (
+                  <span className="relative block size-12 shrink-0 overflow-hidden">
+                    <ProjectMediaPreview
+                      projectID={projectID}
+                      id={item.id}
+                      kind={item.media.kind}
+                    />
+                  </span>
+                )}
+                <span className="min-w-0 break-all">
+                  {item.name}
+                  <span className="block text-xs text-muted-foreground">
+                    {kinds[kind]} · {item.id}
+                  </span>
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
       {!!result.items.length && (
-        <fieldset className="space-y-1">
-          <legend>按勾选顺序批量插入</legend>
-          {result.items.map((item) => (
-            <label key={item.id} className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.some((s) => s.id === item.id)}
-                onChange={(event) =>
-                  setSelected((previous) =>
-                    event.target.checked
-                      ? [...previous, item]
-                      : previous.filter((s) => s.id !== item.id),
-                  )
-                }
-              />
-              {item.name}
-            </label>
-          ))}
-          <Button
-            disabled={!selected.length}
-            onClick={() => onSelect(selected)}
-          >
-            插入所选 {selected.length} 项
-          </Button>
-        </fieldset>
+        <FieldSet>
+          <FieldLegend>按勾选顺序批量插入</FieldLegend>
+          <FieldGroup>
+            {result.items.map((item, fieldIndex0) => (
+              <Field key={item.id} orientation="horizontal">
+                <Checkbox
+                  id={`${formFieldId}-field-1-${fieldIndex0}`}
+
+                  checked={selected.some((s) => s.id === item.id)}
+                  onCheckedChange={(event) =>
+                    setSelected((previous) =>
+                      event === true
+                        ? [...previous, item]
+                        : previous.filter((s) => s.id !== item.id),
+                    )
+                  }
+                />
+                <FieldLabel htmlFor={`${formFieldId}-field-1-${fieldIndex0}`}>
+                  <span>{item.name}</span>
+                </FieldLabel>
+              </Field>
+            ))}
+            <Button
+              disabled={!selected.length}
+              onClick={() => onSelect(selected)}
+            >
+              插入所选 {selected.length} 项
+            </Button>
+          </FieldGroup>
+        </FieldSet>
       )}
       {result.more && (
         <Button variant="ghost" onClick={() => setBudget((n) => n + 1)}>

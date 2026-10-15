@@ -56,7 +56,9 @@ afterEach(cleanup);
 it("reviews actual zero references and submits the exact accepted proof", async () => {
   api.remove
     .mockRejectedValueOnce(
-      new RequestError("impact_acknowledgment_required", 409, { impact: proof }),
+      new RequestError("impact_acknowledgment_required", 409, {
+        impact: proof,
+      }),
     )
     .mockResolvedValue({
       entry_id: id,
@@ -86,7 +88,9 @@ it("reviews actual zero references and submits the exact accepted proof", async 
 it("unknown deletion retries the same key and cannot dismiss the pending intent", async () => {
   api.remove
     .mockRejectedValueOnce(
-      new RequestError("impact_acknowledgment_required", 409, { impact: proof }),
+      new RequestError("impact_acknowledgment_required", 409, {
+        impact: proof,
+      }),
     )
     .mockRejectedValueOnce(new RequestError("network_error"))
     .mockResolvedValue({
@@ -170,7 +174,9 @@ it("blocks a stale revision until the subject is refreshed", async () => {
 it("accepts a committed receipt when a later restore already advanced the head", async () => {
   api.remove
     .mockRejectedValueOnce(
-      new RequestError("impact_acknowledgment_required", 409, { impact: proof }),
+      new RequestError("impact_acknowledgment_required", 409, {
+        impact: proof,
+      }),
     )
     .mockResolvedValue({
       entry_id: id,

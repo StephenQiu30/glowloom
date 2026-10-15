@@ -22,7 +22,7 @@ func (s *Store) FindBudget(ctx context.Context, actor identityapp.Principal, pro
 	}
 	var budget billingdomain.Budget
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.authorizeProject(ctx, tx, actor, projectID, false); err != nil {
 			return err
 		}
 		result := tx.Raw(`

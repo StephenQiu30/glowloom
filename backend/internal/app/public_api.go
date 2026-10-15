@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 	biblehttp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/adapter/http"
 	bibleapp "github.com/StephenQiu30/glowloom-server/backend/internal/bible/application"
 	canvashttp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/adapter/http"
@@ -24,7 +24,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/credentialseal"
 	cataloghttp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/http"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/paramvalidation"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/pricevalidation"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
@@ -48,7 +47,6 @@ import (
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	scripthttp "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/http"
 	workspacehttp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/http"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
@@ -89,11 +87,21 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	router.NoMethod(func(c *gin.Context) { httpapi.WriteProblem(c, 405, "method_not_allowed", nil) })
 	api := router.Group("/api")
 	protected := api.Group("")
-	auth := identityhttp.NewAuthHandler(identityapp.NewAuth(pgidentity.NewStore(database), time.Now), strings.HasPrefix(cfg.PublicOrigin, "https://"))
+	emailAuth, err := identityruntime.NewAuth(database, cfg, time.Now)
+	if err != nil {
+		return nil, fmt.Errorf("configure email authentication: %w", err)
+	}
+	auth, registerSelf, err := identityruntime.RegisterSelf(database, emailAuth, cfg, storage, api, time.Now)
+	if err != nil {
+		return nil, fmt.Errorf("configure self account services: %w", err)
+	}
 	auth.Register(api)
+	identityhttp.NewAuthPolicyHandler(identityapp.NewAuthPolicyQuery(pgidentity.NewStore(database), identityhttp.AcceptedLegalVersion(cfg.IdentityTermsVersion), identityhttp.LegalPackageVersion(), cfg.SMTPEnabled && cfg.IdentityMailSourceHourlyLimit > 0 && cfg.IdentityMailGlobalHourlyLimit > 0)).Register(api)
 	protected.Use(auth.RequireSession())
-	provideIdentityAdmin(database).Register(protected)
+	registerSelf(protected)
+	identityProtected := protected.Group("")
 	workspaceStore := provideWorkspaceLifecycleStore(database)
+	protected.Use(workspacehttp.RequireCreationScope(provideRequestScopeAccess(database)))
 	protected.Use(workspacehttp.RequireProjectAccess(workspaceStore))
 	workspacehttp.NewHandler(workspaceapp.NewListProjectsQuery(workspaceStore), workspaceapp.NewCreateProjectCommand(workspaceStore, time.Now), workspaceapp.NewListStylePresetsQuery(workspaceStore)).Register(protected)
 	workspacehttp.NewProjectLifecycleHandler(workspaceapp.NewProjectLifecycle(workspaceStore, time.Now)).Register(protected)
@@ -102,11 +110,13 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	mediahttp.NewPurgeHandler(provideMediaPurgeStore(database)).Register(protected)
 	mediahttp.NewStorageUsageHandler(provideMediaStorageUsage(database, storage)).Register(protected)
 	workspacehttp.NewProjectFolderHandler(workspaceapp.NewProjectFolders(provideProjectFolderStore(database), time.Now)).Register(protected)
-	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader { return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil) }
-	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewStore(database, mediaFactory))).Register(protected)
-	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewStore(database), storage)).Register(protected)
-	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewDocumentSourceStore(database), storage)).Register(protected)
-	library := pgmedia.NewLibraryStore(database, provideMediaLibraryProjectAccess, time.Now)
+	mediaFactory := func(tx *gorm.DB) canvasapp.MediaReader {
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, provideMediaScopeAccess), nil)
+	}
+	canvashttp.NewHandler(canvasapp.NewService(pgcanvas.NewScopedStore(database, mediaFactory, provideCanvasProjectAccess))).Register(protected)
+	mediahttp.NewHandler(mediaapp.NewAssetQuery(pgmedia.NewScopedStore(database, provideMediaScopeAccess), storage)).Register(protected)
+	mediahttp.NewDocumentHandler(mediaapp.NewDocumentSources(pgmedia.NewScopedDocumentSourceStore(database, provideMediaScopeAccess), storage)).Register(protected)
+	library := pgmedia.NewScopedLibraryStore(database, provideMediaLibraryProjectAccess, time.Now, provideMediaScopeAccess)
 	mediahttp.NewLibraryHandler(library).Register(protected)
 	mediahttp.NewLibraryMediaHandler(mediaapp.NewLibraryMediaQuery(library, storage, storage)).Register(protected)
 	script := provideScriptServices(database, storage)
@@ -119,7 +129,7 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	if err != nil {
 		return nil, fmt.Errorf("configure model upload validation: %w", err)
 	}
-	uploadStore := pgmedia.NewStore(database)
+	uploadStore := pgmedia.NewScopedStore(database, provideMediaScopeAccess)
 	scopedUpload := mediaapp.NewScopedUploadService(uploadStore, uploadStore, mediaflow.NewUploadProber(modelValidator), mediaflow.FFUploadNormalizer{}, mediaflow.FFUploadRenderer{}, mediaflow.NewUploadObjects(storage), time.Now)
 	mediahttp.NewUploadHandler(scopedUpload).Register(protected)
 	mediahttp.NewPackageHandler(provideMediaPackages(database, storage, scopedUpload)).Register(protected)
@@ -132,13 +142,13 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 	toolhttp.NewTranscriptionHandler(provideMediaTranscriptionStore(database, transcriber != nil)).Register(protected)
 	depths := provideMediaDepthStore(database, cfg.VideoDepthPythonPath != "")
 	toolhttp.NewDepthHandler(depths, toolapp.NewDepthQuery(depths, storage, storage)).Register(protected)
-	catalogStore := pgcatalog.NewStore(database)
-	cataloghttp.NewPresetHandler(catalogapp.NewProviderPresets(catalogStore)).Register(protected)
-	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(protected)
-	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(protected)
-	cataloghttp.NewCheckHandler(catalogapp.NewProviderChecks(catalogStore)).Register(protected)
-	cataloghttp.NewCredentialHistoryHandler(catalogapp.NewCredentialHistory(catalogStore)).Register(protected)
-	cataloghttp.NewReceiptHandler(catalogapp.NewConfigReceipts(catalogStore)).Register(protected)
+	catalogStore := provideCatalogStore(database)
+	cataloghttp.NewPresetHandler(catalogapp.NewProviderPresets(catalogStore)).Register(identityProtected)
+	cataloghttp.NewConfigHandler(catalogapp.NewProviderConfigs(catalogStore)).Register(identityProtected)
+	cataloghttp.NewReleaseHandler(catalogapp.NewModelReleases(catalogStore)).Register(identityProtected)
+	cataloghttp.NewCheckHandler(catalogapp.NewProviderChecks(catalogStore)).Register(identityProtected)
+	cataloghttp.NewCredentialHistoryHandler(catalogapp.NewCredentialHistory(catalogStore)).Register(identityProtected)
+	cataloghttp.NewReceiptHandler(catalogapp.NewConfigReceipts(catalogStore)).Register(identityProtected)
 	credentialSchema := credentialschema.NewRegistry()
 	parameterValidator, err := paramvalidation.NewValidator()
 	if err != nil {
@@ -172,10 +182,10 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		clear(macKey)
 	}
 	cataloghttp.NewHandler(catalogapp.NewListModelsQuery(catalogStore)).Register(protected)
-	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(pgworkspace.NewStore(database), time.Now)).Register(protected)
-	prompthttp.NewHandler(promptapp.NewPreferences(pgprompt.NewStore(database), time.Now)).Register(protected)
+	workspacehttp.NewModelDefaultsHandler(workspaceapp.NewModelDefaultsService(workspaceStore, time.Now)).Register(protected)
+	prompthttp.NewHandler(promptapp.NewPreferences(providePromptPreferenceStore(database), time.Now)).Register(identityProtected)
 	prompthttp.NewDraftHandler(pgprompt.NewDraftStore(database, func(tx *gorm.DB) promptapp.DraftAccess {
-		return promptDraftAccess{pgworkspace.NewProjectContentAccessStore(tx)}
+		return promptDraftAccess{provideProjectContentAccess(tx)}
 	})).Register(protected)
 	cataloghttp.NewAdminHandler(cataloghttp.AdminDependencies{
 		Providers:         catalogapp.NewListProvidersQuery(catalogStore),
@@ -190,14 +200,14 @@ func NewBusinessRouter(logger *zap.Logger, ready ReadyCheck, tp trace.TracerProv
 		PublishVersion:    catalogapp.NewPublishModelVersionCommand(catalogStore, parameterValidator, time.Now),
 		PublishPrice:      catalogapp.NewPublishPriceRuleCommand(catalogStore, priceValidator, time.Now),
 		SetModelStatus:    catalogapp.NewSetModelStatusCommand(catalogStore, time.Now),
-	}).Register(protected)
-	operations := pgoperation.NewStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
-		return promptapp.NewCompiler(pgprompt.NewStore(tx))
+	}).Register(identityProtected)
+	operations := pgoperation.NewScopedStoreWithEditor(database, func(tx *gorm.DB) operationapp.QuotePromptCompiler {
+		return promptapp.NewCompiler(providePromptPreferenceStore(tx))
 	}, func(tx *gorm.DB) operationapp.EditorSnapshots {
 		return pgprompt.NewDraftStore(tx, func(ownerTx *gorm.DB) promptapp.DraftAccess {
-			return promptDraftAccess{pgworkspace.NewProjectContentAccessStore(ownerTx)}
+			return promptDraftAccess{provideProjectContentAccess(ownerTx)}
 		})
-	})
+	}, provideOperationProjectAccess, provideOperationWorkerAccess, provideOperationPlatformAccess)
 	operationhttp.NewSubmissionHandler(operations).Register(protected)
 	operationhttp.NewProviderTrialHandler(operations).Register(protected)
 	operationhttp.NewHandler(operationhttp.Dependencies{

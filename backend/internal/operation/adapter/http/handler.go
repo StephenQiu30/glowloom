@@ -20,6 +20,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/operation/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 
 	promptapp "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/application"
 	promptdomain "github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
@@ -396,7 +397,7 @@ func (h *Handler) List(c *gin.Context) {
 	encoded, err := json.Marshal(struct {
 		Actor, Org uuid.UUID
 		Input      application.ListTasksInput
-	}{actor.ID, actor.OrgID, input})
+	}{actor.ID, actor.ScopeID, input})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -597,6 +598,10 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, 422, "reference_unavailable", nil)
 	case errors.Is(err, application.ErrQuoteSourceStale), errors.Is(err, promptdomain.ErrInputStale):
 		httpapi.WriteProblem(c, 409, "canvas_revision_conflict", nil)
+	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
+		httpapi.WriteProblem(c, 404, "not_found", nil)
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "session_invalid", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrPublicNotFound):

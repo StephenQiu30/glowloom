@@ -90,16 +90,13 @@ func (s *Store) ReadProjectSnapshot(ctx context.Context, actor identityapp.Princ
 	}
 	var saved application.ProjectSnapshot
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.authorizeProject(ctx, tx, actor, id, false); err != nil {
 			return err
 		}
 		var err error
 		saved, err = readLifecycleProject(tx, actor.OrgID, id, false)
 		if err != nil {
 			return err
-		}
-		if saved.Project.OwnerID != actor.ID {
-			return ErrProjectNotFound
 		}
 		saved.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, saved.Project)
 		return err
@@ -133,7 +130,7 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 				saved.CoverUnavailable, err = s.projectCoverUnavailable(ctx, tx, actor, saved.Project)
 			}
 		}()
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.authorizeProject(ctx, tx, actor, input.Patch.ProjectID, true); err != nil {
 			return err
 		}
 		var locked int
@@ -196,7 +193,7 @@ func (s *Store) ApplyProjectChange(ctx context.Context, actor identityapp.Princi
 			return recordProjectChange(tx, actor, input, fingerprint, saved)
 		}
 		if input.Action == "patch" {
-			if err := requireUsablePreset(tx, after); err != nil {
+			if err := requireUsablePreset(tx, after, actor.ScopeID); err != nil {
 				return err
 			}
 		}

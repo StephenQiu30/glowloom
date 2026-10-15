@@ -24,6 +24,7 @@ import (
 
 // Store owns database transactions and current project access checks.
 type Store struct {
+	projectAuthority
 	db    *gorm.DB
 	media MediaReaderFactory
 }
@@ -36,34 +37,6 @@ func NewStore(database *gorm.DB, media MediaReaderFactory) *Store {
 	return &Store{db: database, media: media}
 }
 
-func authorize(tx *gorm.DB, a identityapp.Principal, projectID uuid.UUID, write bool) error {
-	if a.ID == uuid.Nil || a.OrgID == uuid.Nil || a.MustChangePassword {
-		return identityapp.ErrForbidden
-	}
-	var current int
-	r := tx.Raw(`SELECT 1 FROM identity."user" u JOIN workspace.organization o ON o.id=u.org_id
-	 WHERE u.id=? AND u.org_id=? AND u.status='active' AND NOT u.is_delete AND NOT u.must_change_password
-	 AND u.role IN ('admin','producer') AND o.status='active' AND NOT o.is_delete FOR SHARE OF u,o`, a.ID, a.OrgID).Scan(&current)
-	if r.Error != nil {
-		return fmt.Errorf("check canvas actor: %w", r.Error)
-	}
-	if r.RowsAffected != 1 {
-		return identityapp.ErrForbidden
-	}
-	query := `SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND owner_id=? AND NOT is_delete AND status IN ('active','archived')`
-	if write {
-		query += ` AND status='active'`
-	}
-	query += ` FOR SHARE`
-	r = tx.Raw(query, projectID, a.OrgID, a.ID).Scan(&current)
-	if r.Error != nil {
-		return fmt.Errorf("check canvas project: %w", r.Error)
-	}
-	if r.RowsAffected != 1 {
-		return application.ErrNotFound
-	}
-	return nil
-}
 func documentProject(tx *gorm.DB, id uuid.UUID) (uuid.UUID, error) {
 	var row struct{ ProjectID uuid.UUID }
 	r := tx.Raw(`SELECT project_id FROM canvas.document WHERE id=? AND NOT is_delete`, id).Scan(&row)
@@ -80,7 +53,7 @@ func documentProject(tx *gorm.DB, id uuid.UUID) (uuid.UUID, error) {
 func (s *Store) List(ctx context.Context, a identityapp.Principal, p uuid.UUID) ([]domain.Document, error) {
 	items := make([]domain.Document, 0)
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := authorize(tx, a, p, false); err != nil {
+		if err := s.authorize(tx, a, p, false); err != nil {
 			return err
 		}
 		var rows []documentRow
@@ -107,7 +80,7 @@ func (s *Store) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID) 
 		if err != nil {
 			return err
 		}
-		if err = authorize(tx, a, p, false); err != nil {
+		if err = s.authorize(tx, a, p, false); err != nil {
 			return err
 		}
 		doc, err = load(tx, id, false)
@@ -120,7 +93,7 @@ func (s *Store) Get(ctx context.Context, a identityapp.Principal, id uuid.UUID) 
 func (s *Store) Create(ctx context.Context, a identityapp.Principal, p uuid.UUID, key string, input application.CreateInput) (domain.Document, error) {
 	var doc domain.Document
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := authorize(tx, a, p, true); err != nil {
+		if err := s.authorize(tx, a, p, true); err != nil {
 			return err
 		}
 		body, err := json.Marshal(input)
@@ -153,7 +126,7 @@ func (s *Store) Execute(ctx context.Context, a identityapp.Principal, id uuid.UU
 		if err != nil {
 			return err
 		}
-		if err = authorize(tx, a, p, true); err != nil {
+		if err = s.authorize(tx, a, p, true); err != nil {
 			return err
 		}
 		body, err := json.Marshal(input)
@@ -611,7 +584,7 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		if r.RowsAffected != 1 {
 			return application.ErrNotFound
 		}
-		if err := authorize(tx, a, row.ProjectID, true); err != nil {
+		if err := s.authorize(tx, a, row.ProjectID, true); err != nil {
 			return err
 		}
 		body, err := json.Marshal(input)
@@ -658,4 +631,9 @@ func (s *Store) mutateDocument(ctx context.Context, a identityapp.Principal, id 
 		}
 		return receipt(tx, a.ID, key, hash, 200, result)
 	})
+}
+
+// NewScopedStore injects transaction-bound project ownership checks.
+func NewScopedStore(db *gorm.DB, media MediaReaderFactory, project ProjectAccessFactory) *Store {
+	return &Store{db: db, media: media, projectAuthority: projectAuthority{project: project}}
 }

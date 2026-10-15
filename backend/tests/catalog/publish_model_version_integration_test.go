@@ -50,7 +50,7 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 		ID: uuid.New(), Key: "video.generate." + uuid.NewString(), OutputType: domain.OutputVideo,
 		Modes: []string{"image2video", "text2video"}, InputRoles: []string{"subject"},
 	}
-	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, capability); err != nil {
+	if err := store.CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
 		t.Fatal(err)
 	}
 	registered, err := catalogapp.NewCreateModelCommand(store, time.Now).Execute(ctx, actor, catalogapp.CreateModelInput{
@@ -71,7 +71,7 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 	if err != nil || first.ID == uuid.Nil || first.VersionNo != 1 || first.Revision != 2 {
 		t.Fatalf("first version %+v: %v", first, err)
 	}
-	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, registered.ID)
+	loaded, err := store.FindModelForAdmin(ctx, actor, registered.ID)
 	if err != nil || loaded.CurrentVersionID != first.ID || loaded.Revision != 2 || loaded.Status != domain.ModelDisabled {
 		t.Fatalf("model head after first publication %+v: %v", loaded, err)
 	}
@@ -163,7 +163,7 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 		firstRow.MaxOutputs != "1" || firstRow.Description != "private-parameter-description" {
 		t.Fatalf("historical version changed: %+v, %v", firstRow, err)
 	}
-	loaded, err = store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, registered.ID)
+	loaded, err = store.FindModelForAdmin(ctx, actor, registered.ID)
 	if err != nil || loaded.CurrentVersionID != second.ID || loaded.Revision != 3 {
 		t.Fatalf("model head after second publication %+v: %v", loaded, err)
 	}
@@ -199,7 +199,7 @@ func TestPublishModelVersionCommitsAuditAndPreservesHistoryOnLocalPostgres(t *te
 	`, registered.ID.String()).Scan(&versionCount).Error; err != nil || versionCount != 2 {
 		t.Fatalf("failed audit left %d versions: %v", versionCount, err)
 	}
-	loaded, err = store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, registered.ID)
+	loaded, err = store.FindModelForAdmin(ctx, actor, registered.ID)
 	if err != nil || loaded.CurrentVersionID != second.ID || loaded.Revision != 3 {
 		t.Fatalf("failed audit changed model head %+v: %v", loaded, err)
 	}

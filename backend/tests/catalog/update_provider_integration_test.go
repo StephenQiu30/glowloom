@@ -24,11 +24,11 @@ type interveningUpdateProviderStore struct {
 	beforeWrite func(context.Context) error
 }
 
-func (s interveningUpdateProviderStore) UpdateProviderWithEvents(ctx context.Context, actorID, orgID uuid.UUID, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
+func (s interveningUpdateProviderStore) UpdateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
 	if err := s.beforeWrite(ctx); err != nil {
 		return domain.Provider{}, err
 	}
-	return s.UpdateProviderStore.UpdateProviderWithEvents(ctx, actorID, orgID, before, after, events)
+	return s.UpdateProviderStore.UpdateProviderWithEvents(ctx, actor, before, after, events)
 }
 
 func TestUpdateProviderCommitsEventsAndRejectsStaleAdminOnLocalPostgres(t *testing.T) {

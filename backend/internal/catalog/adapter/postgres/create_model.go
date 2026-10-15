@@ -15,16 +15,16 @@ import (
 
 // CreateModelWithAudit rechecks the administrator and commits the new model
 // identity and audit event in one PostgreSQL transaction.
-func (s *Store) createModelWithAuditOnce(ctx context.Context, actorID, orgID uuid.UUID, model domain.ModelProfile, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+func (s *Store) createModelWithAuditOnce(ctx context.Context, actor identityapp.Principal, model domain.ModelProfile, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		model.Validate() != nil || model.Status != domain.ModelDisabled ||
 		model.CurrentVersionID != uuid.Nil || model.Revision != 1 ||
-		!validModelCreatedAudit(actorID, orgID, model, event) {
+		!validModelCreatedAudit(actor.ID, actor.OrgID, model, event) {
 		return domain.ModelProfile{}, application.ErrInvalidCreateModel
 	}
 	var saved domain.ModelProfile
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		if err := createModelInTx(tx, model); err != nil {

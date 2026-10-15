@@ -38,7 +38,7 @@ func (s *Store) AuthorizePersonalUpload(ctx context.Context, actor identityapp.P
 	if s == nil || s.db == nil {
 		return application.ErrUnavailable
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return requireCurrentActor(tx, actor) })
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return s.requirePersonal(tx, actor, true) })
 }
 
 // FindPersonalUpload checks current authorization before reading a scoped receipt.
@@ -52,7 +52,7 @@ func (s *Store) FindPersonalUpload(ctx context.Context, actor identityapp.Princi
 	var result application.PersonalUploadResult
 	var found bool
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requirePersonal(tx, actor, true); err != nil {
 			return err
 		}
 		if err := personalUploadLock(tx, *r.Personal); err != nil {
@@ -121,7 +121,7 @@ func (s *Store) CommitPersonalUpload(ctx context.Context, actor identityapp.Prin
 	}
 	var result application.PersonalUploadResult
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requirePersonal(tx, actor, true); err != nil {
 			return err
 		}
 		if err := personalUploadLock(tx, *r.Personal); err != nil {

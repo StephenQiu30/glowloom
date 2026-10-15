@@ -161,7 +161,7 @@ export function ProjectPicker({
         </Button>
       )}
       {error ? (
-        <Alert variant="danger">
+        <Alert variant="destructive">
           <AlertDescription>
             {error}
             <Button

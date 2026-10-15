@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -24,7 +26,10 @@ var (
 
 // IngestRepository writes one generated media asset and its operation output
 // in the same database transaction. It owns no other operation lifecycle state.
-type IngestRepository struct{ db *gorm.DB }
+type IngestRepository struct {
+	db *gorm.DB
+	scopeAuthority
+}
 
 // NewIngestRepository binds generated-media writes to the caller's database.
 func NewIngestRepository(db *gorm.DB) *IngestRepository { return &IngestRepository{db: db} }
@@ -34,7 +39,17 @@ func (r *IngestRepository) FindOutput(ctx context.Context, operationID uuid.UUID
 	if r == nil || r.db == nil {
 		return application.IngestOutput{}, false, ErrUnavailable
 	}
-	return findOutput(r.db.WithContext(ctx), operationID, seq)
+	var out application.IngestOutput
+	var found bool
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := r.authorizeOperation(tx, operationID, false); err != nil {
+			return err
+		}
+		var err error
+		out, found, err = findOutput(tx, operationID, seq)
+		return err
+	})
+	return out, found, err
 }
 
 func findOutput(tx *gorm.DB, operationID uuid.UUID, seq int) (application.IngestOutput, bool, error) {
@@ -72,7 +87,7 @@ func findOutput(tx *gorm.DB, operationID uuid.UUID, seq int) (application.Ingest
 }
 
 // LoadOperation reads the persisted source and rejects non-ingesting operations.
-func (r *IngestRepository) LoadOperation(ctx context.Context, operationID uuid.UUID) (application.SourceOperation, error) {
+func (r *IngestRepository) loadOperation(ctx context.Context, operationID uuid.UUID) (application.SourceOperation, error) {
 	if r == nil || r.db == nil {
 		return application.SourceOperation{}, ErrUnavailable
 	}
@@ -125,6 +140,9 @@ func (r *IngestRepository) SaveOutput(ctx context.Context, asset domain.MediaAss
 	}
 	var saved application.IngestOutput
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := r.authorizeOperation(tx, *asset.SourceOperationID, true); err != nil {
+			return err
+		}
 		var row struct{ Status string }
 		result := tx.Raw(`
 			SELECT status FROM operation.operation
@@ -210,7 +228,7 @@ func (r *IngestRepository) SaveOutput(ctx context.Context, asset domain.MediaAss
 }
 
 // FindRenditions returns the durable preview rows attached to one media asset.
-func (r *IngestRepository) FindRenditions(ctx context.Context, assetID uuid.UUID) ([]domain.Rendition, error) {
+func (r *IngestRepository) findRenditions(ctx context.Context, assetID uuid.UUID) ([]domain.Rendition, error) {
 	if r == nil || r.db == nil {
 		return nil, ErrUnavailable
 	}
@@ -259,6 +277,9 @@ func (r *IngestRepository) RecordModeration(ctx context.Context, operationID, ou
 		return ErrOutputConflict
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := r.authorizeOperation(tx, operationID, true); err != nil {
+			return err
+		}
 		var op struct{ Status string }
 		result := tx.Raw(`SELECT status FROM operation.operation WHERE id = ?::uuid AND NOT is_delete FOR UPDATE`,
 			operationID.String()).Scan(&op)
@@ -334,4 +355,65 @@ func (r *IngestRepository) RecordModeration(ctx context.Context, operationID, ou
 		}
 		return nil
 	})
+}
+
+// NewScopedIngestRepository binds provider-result ingestion to independent live worker authority.
+func NewScopedIngestRepository(db *gorm.DB, scopes ScopeAccessFactory) *IngestRepository {
+	return &IngestRepository{db: db, scopeAuthority: scopeAuthority{scopes: scopes}}
+}
+func (r *IngestRepository) authorizeOperation(tx *gorm.DB, id uuid.UUID, write bool) error {
+	var row struct {
+		ProjectID, OrgID uuid.UUID
+		ConfirmedBy      *uuid.UUID
+	}
+	result := tx.Raw(`SELECT o.project_id,o.confirmed_by,p.org_id FROM operation.operation o JOIN workspace.project p ON p.id=o.project_id WHERE o.id=? AND NOT o.is_delete`, id).Scan(&row)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 || row.ConfirmedBy == nil {
+		return ErrNotFound
+	}
+	return r.requireProject(tx, identityapp.Principal{ID: *row.ConfirmedBy, OrgID: row.OrgID}, row.ProjectID, write)
+}
+
+// LoadOperation authorizes the durable confirming actor before any object I/O.
+func (r *IngestRepository) LoadOperation(ctx context.Context, id uuid.UUID) (application.SourceOperation, error) {
+	var out application.SourceOperation
+	if r == nil || r.db == nil {
+		return out, ErrUnavailable
+	}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := r.authorizeOperation(tx, id, true); err != nil {
+			return err
+		}
+		var err error
+		out, err = NewScopedIngestRepository(tx, r.scopes).loadOperation(ctx, id)
+		return err
+	})
+	return out, err
+}
+
+// FindRenditions authorizes the generated asset's actual operation before returning private keys.
+func (r *IngestRepository) FindRenditions(ctx context.Context, id uuid.UUID) ([]domain.Rendition, error) {
+	var out []domain.Rendition
+	if r == nil || r.db == nil {
+		return nil, ErrUnavailable
+	}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row struct{ SourceOperationID *uuid.UUID }
+		q := tx.Raw(`SELECT source_operation_id FROM media.media_asset WHERE id=? AND NOT is_delete`, id).Scan(&row)
+		if q.Error != nil {
+			return q.Error
+		}
+		if q.RowsAffected != 1 || row.SourceOperationID == nil {
+			return ErrNotFound
+		}
+		if err := r.authorizeOperation(tx, *row.SourceOperationID, false); err != nil {
+			return err
+		}
+		var err error
+		out, err = NewScopedIngestRepository(tx, r.scopes).findRenditions(ctx, id)
+		return err
+	})
+	return out, err
 }

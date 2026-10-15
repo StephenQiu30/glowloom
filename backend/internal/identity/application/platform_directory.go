@@ -13,8 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrInvalidDirectoryFilter rejects unsupported directory filters or cursors.
 var ErrInvalidDirectoryFilter = errors.New("invalid platform directory filter")
 
+// DirectoryFilter defines the supported platform account search and ordering.
 type DirectoryFilter struct {
 	Search, Status, PlatformRole, Order, Cursor string
 	Verified, InTeam                            *bool
@@ -30,49 +32,57 @@ type UserSummary struct {
 	EmailVerifiedAt                          *time.Time
 	AvatarAssetID                            *uuid.UUID
 	ActiveTeamCount                          int
-	MustChangePassword                       bool
 	Revision                                 int64
 	CreatedAt                                time.Time
 	LastLoginAt                              *time.Time
 }
 
+// UserPage contains authorized account summaries and a continuation cursor.
 type UserPage struct {
 	Items      []UserSummary
 	NextCursor *string
 	AsOf       time.Time
 }
 
+// TeamMembershipSummary contains team relationship metadata without private content.
 type TeamMembershipSummary struct {
 	TeamID       uuid.UUID
 	Role, Status string
 }
 
+// UserDetail combines account metadata with permitted governance summaries.
 type UserDetail struct {
-	User  UserSummary
-	Teams []TeamMembershipSummary
+	User           UserSummary
+	Teams          []TeamMembershipSummary
+	AllowedActions []string
 }
 
+// DirectoryPosition stores a stable keyset position and snapshot bound.
 type DirectoryPosition struct {
 	AsOf      time.Time `json:"as_of"`
 	CreatedAt time.Time `json:"created_at"`
 	ID        uuid.UUID `json:"id"`
 }
 
+// PlatformDirectoryStore supplies platform-authorized account projections.
 type PlatformDirectoryStore interface {
 	ReadDirectory(context.Context, Principal, DirectoryFilter, DirectoryPosition, time.Time) ([]UserSummary, error)
 	ReadUserDetail(context.Context, Principal, uuid.UUID, time.Time) (UserDetail, error)
 }
 
+// DirectorySigner authenticates directory cursors for one authority and filter.
 type DirectorySigner interface {
 	Digest(string, uuid.UUID, string) []byte
 }
 
+// PlatformDirectory validates directory queries and enforces cursor binding.
 type PlatformDirectory struct {
 	store  PlatformDirectoryStore
 	signer DirectorySigner
 	now    func() time.Time
 }
 
+// NewPlatformDirectory constructs PlatformDirectory with explicit caller-supplied dependencies.
 func NewPlatformDirectory(store PlatformDirectoryStore, signer DirectorySigner, now func() time.Time) *PlatformDirectory {
 	return &PlatformDirectory{store: store, signer: signer, now: now}
 }
@@ -91,7 +101,7 @@ func normalizeDirectoryFilter(f DirectoryFilter) (DirectoryFilter, error) {
 	if f.Order != "created_desc" && f.Order != "created_asc" {
 		return f, ErrInvalidDirectoryFilter
 	}
-	if f.Status != "" && f.Status != "active" && f.Status != "disabled" && f.Status != "pending_deletion" && f.Status != "deleted" {
+	if f.Status != "" && f.Status != "active" && f.Status != "disabled" && f.Status != "deleted" {
 		return f, ErrInvalidDirectoryFilter
 	}
 	if f.PlatformRole != "" && f.PlatformRole != "creator" && f.PlatformRole != "platform_admin" {
@@ -122,6 +132,7 @@ func (d *PlatformDirectory) cursorDigest(actor Principal, f DirectoryFilter, pay
 	return d.signer.Digest("platform_directory_cursor", actor.ID, string(bound))
 }
 
+// List validates filters and a cursor bound to current authority.
 func (d *PlatformDirectory) List(ctx context.Context, actor Principal, filter DirectoryFilter) (UserPage, error) {
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil {
 		return UserPage{}, ErrSessionInvalid
@@ -168,6 +179,7 @@ func (d *PlatformDirectory) List(ctx context.Context, actor Principal, filter Di
 	return page, nil
 }
 
+// Detail returns an authorized account detail by stable ID.
 func (d *PlatformDirectory) Detail(ctx context.Context, actor Principal, id uuid.UUID) (UserDetail, error) {
 	if id == uuid.Nil {
 		return UserDetail{}, ErrInvalidDirectoryFilter

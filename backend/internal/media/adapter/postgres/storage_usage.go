@@ -96,8 +96,8 @@ func storageUsageMediaKeys(tx *gorm.DB, actor identityapp.Principal, scope domai
 		 UNION SELECT o.source_object_key,o.source_location_id FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.source_project_id=? AND s.org_id=?
 		 UNION SELECT o.target_object_key,o.target_location_id FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.target_project_id=? AND s.org_id=?`
 	} else {
-		query += ` UNION SELECT o.source_object_key,o.source_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.org_id=? AND j.actor_id=?
-		 UNION SELECT o.target_object_key,o.target_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.org_id=? AND j.actor_id=?`
+		query += ` UNION SELECT o.source_object_key,o.source_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.source_org_id=? AND j.actor_id=?
+		 UNION SELECT o.target_object_key,o.target_location_id FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.target_org_id=? AND j.actor_id=?`
 	}
 	query += `) held ORDER BY object_key LIMIT 50001`
 	if err := tx.Raw(query, args...).Scan(&rows).Error; err != nil {
@@ -115,4 +115,9 @@ func storageUsageMediaKeys(tx *gorm.DB, actor identityapp.Principal, scope domai
 		keys = append(keys, row.ObjectKey)
 	}
 	return keys, nil
+}
+
+// NewScopedStorageUsageStore binds library scope checks to the inventory transaction.
+func NewScopedStorageUsageStore(db *gorm.DB, project LibraryProjectAccessFactory, intents StorageUsageIntentFactory, scopes ScopeAccessFactory) *StorageUsageStore {
+	return &StorageUsageStore{library: NewScopedLibraryStore(db, project, nil, scopes), intents: intents}
 }

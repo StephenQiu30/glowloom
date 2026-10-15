@@ -26,8 +26,8 @@ type CredentialToDisable struct {
 
 // DisableCredentialStore checks current access and commits status plus events.
 type DisableCredentialStore interface {
-	FindCredentialForAdmin(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) (CredentialToDisable, error)
-	DisableCredentialWithEvents(context.Context, uuid.UUID, uuid.UUID, CredentialToDisable, []identityapp.OutboxEvent) (SavedCredential, error)
+	FindCredentialForAdmin(context.Context, identityapp.Principal, uuid.UUID, uuid.UUID) (CredentialToDisable, error)
+	DisableCredentialWithEvents(context.Context, identityapp.Principal, CredentialToDisable, []identityapp.OutboxEvent) (SavedCredential, error)
 }
 
 // DisableCredentialInput identifies the exact active credential to disable.
@@ -60,7 +60,7 @@ func (c *DisableCredentialCommand) Execute(ctx context.Context, actor identityap
 	if input.ProviderID == uuid.Nil || input.CredentialID == uuid.Nil || err != nil || requestID.String() != input.RequestID {
 		return SavedCredential{}, ErrInvalidDisableCredential
 	}
-	target, err := c.store.FindCredentialForAdmin(ctx, actor.ID, actor.OrgID, input.ProviderID, input.CredentialID)
+	target, err := c.store.FindCredentialForAdmin(ctx, actor, input.ProviderID, input.CredentialID)
 	if err != nil {
 		return SavedCredential{}, fmt.Errorf("find credential to disable: %w", err)
 	}
@@ -76,7 +76,7 @@ func (c *DisableCredentialCommand) Execute(ctx context.Context, actor identityap
 	if err != nil {
 		return SavedCredential{}, fmt.Errorf("build credential disable events: %w", err)
 	}
-	saved, err := c.store.DisableCredentialWithEvents(ctx, actor.ID, actor.OrgID, target, events)
+	saved, err := c.store.DisableCredentialWithEvents(ctx, actor, target, events)
 	if err != nil {
 		return SavedCredential{}, fmt.Errorf("disable credential with events: %w", err)
 	}

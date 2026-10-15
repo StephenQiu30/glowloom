@@ -13,7 +13,6 @@ import (
 
 	"github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 const (
@@ -56,8 +55,7 @@ func (c *ChangeBudgetCommand) Execute(ctx context.Context, actor identityapp.Pri
 	if c == nil || c.store == nil || c.now == nil {
 		return domain.Budget{}, ErrInvalidChangeBudget
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return domain.Budget{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)

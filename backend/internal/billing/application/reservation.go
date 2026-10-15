@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 // ErrInvalidReserveInput means the confirmation supplied incomplete billing facts.
@@ -15,6 +17,7 @@ var ErrInvalidReserveInput = errors.New("invalid operation reserve input")
 // operation confirmation coordinator. The caller owns the transaction and
 // must lock and recheck the quoted operation before reserving its amount.
 type ReserveInput struct {
+	Actor        identityapp.Principal
 	ProjectID    uuid.UUID
 	OperationID  uuid.UUID
 	ActorID      uuid.UUID

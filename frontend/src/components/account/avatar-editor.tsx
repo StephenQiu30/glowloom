@@ -1,0 +1,286 @@
+"use client";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FieldLabel } from "@/components/ui/field";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { uploadMyAvatar } from "@/api/media";
+import { authErrorMessage } from "@/components/auth/contracts";
+import { RequestError } from "@/lib/request";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+type Preview = { url?: string; expires_at?: string };
+export function BoundAvatar({
+  load,
+  assetID,
+  label = "头像",
+}: {
+  load: (signal: AbortSignal) => Promise<Preview>;
+  assetID?: string;
+  label?: string;
+}) {
+  const [url, setURL] = useState("");
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const host = useRef<HTMLDivElement>(null);
+  const readPreview = useEffectEvent(load);
+  useEffect(() => {
+    if (!assetID) return;
+    const c = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let visible = document.visibilityState !== "hidden";
+    let reading = false;
+    async function read() {
+      if (reading || !visible || c.signal.aborted) return;
+      reading = true;
+      clearTimeout(timer);
+      try {
+        const p = await readPreview(c.signal);
+        if (!c.signal.aborted && visible) {
+          if (!p.url) throw new Error("头像预览不可用");
+          setURL(p.url);
+          setError("");
+          timer = setTimeout(
+            () => {
+              if (visible) void read();
+            },
+            Math.max(
+              5000,
+              new Date(p.expires_at ?? "").getTime() - Date.now() - 10000,
+            ) || 45000,
+          );
+        }
+      } catch (e) {
+        if (!c.signal.aborted) {
+          setURL("");
+          if (!(e instanceof RequestError && e.status === 404))
+            setError(authErrorMessage(e));
+        }
+      } finally {
+        reading = false;
+      }
+    }
+    const observe =
+      typeof IntersectionObserver !== "undefined"
+        ? new IntersectionObserver((entries) => {
+            visible =
+              (entries[0]?.isIntersecting ?? false) &&
+              document.visibilityState !== "hidden";
+            if (!visible) {
+              clearTimeout(timer);
+              setURL("");
+            } else void read();
+          })
+        : null;
+    if (observe && host.current) observe.observe(host.current);
+    else void read();
+    function visibility() {
+      visible = document.visibilityState !== "hidden";
+      if (visible) void read();
+      else {
+        clearTimeout(timer);
+        setURL("");
+      }
+    }
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      c.abort();
+      clearTimeout(timer);
+      observe?.disconnect();
+      document.removeEventListener("visibilitychange", visibility);
+    };
+  }, [assetID, retry]);
+  return (
+    <div ref={host}>
+      <Avatar className="size-14">
+        <AvatarImage src={url} alt={label} />
+        <AvatarFallback>头像</AvatarFallback>
+      </Avatar>
+      {error ? (
+        <div className="text-sm" role="alert">
+          {error}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setRetry((n) => n + 1)}
+          >
+            重新读取头像
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+async function cropSquare(file: File) {
+  const bitmap = await createImageBitmap(file);
+  try {
+    if (bitmap.width > 4096 || bitmap.height > 4096)
+      throw new RequestError("invalid_avatar_dimensions", 422);
+    const size = Math.min(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("无法裁剪图片");
+    ctx.drawImage(
+      bitmap,
+      (bitmap.width - size) / 2,
+      (bitmap.height - size) / 2,
+      size,
+      size,
+      0,
+      0,
+      size,
+      size,
+    );
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (v) => (v ? resolve(v) : reject(new Error("裁剪失败"))),
+        "image/png",
+      ),
+    );
+    return new File([blob], "avatar.png", { type: "image/png" });
+  } finally {
+    bitmap.close();
+  }
+}
+export function AvatarEditor({
+  assetID,
+  load,
+  bind,
+  onConflict,
+}: {
+  assetID?: string;
+  load: (signal: AbortSignal) => Promise<Preview>;
+  bind: (asset: string | null, signal: AbortSignal) => Promise<void>;
+  onConflict?: () => Promise<void> | void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [local, setLocal] = useState("");
+  const [crop, setCrop] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const flight = useRef<AbortController | null>(null);
+  const lock = useRef(false);
+  useEffect(
+    () => () => {
+      if (local) URL.revokeObjectURL(local);
+    },
+    [local],
+  );
+  useEffect(() => () => flight.current?.abort(), []);
+  async function save(remove = false) {
+    if (lock.current) return;
+    lock.current = true;
+    setPending(true);
+    setError("");
+    const c = new AbortController();
+    flight.current = c;
+    try {
+      let id: string | null = null;
+      if (!remove) {
+        if (!file) return;
+        const uploaded = await uploadMyAvatar(
+          {},
+          crop ? await cropSquare(file) : file,
+          { signal: c.signal },
+        );
+        if (!uploaded.id) throw new Error("头像上传回执不完整");
+        id = uploaded.id;
+      }
+      await bind(id, c.signal);
+      if (!c.signal.aborted) {
+        setFile(null);
+        setLocal("");
+        setCrop(false);
+        setNotice(remove ? "已恢复默认头像。" : "头像已保存并重新读取。");
+      }
+    } catch (e) {
+      if (!c.signal.aborted) {
+        setError(authErrorMessage(e));
+        if (e instanceof RequestError && e.status === 409) await onConflict?.();
+      }
+    } finally {
+      lock.current = false;
+      if (!c.signal.aborted) setPending(false);
+    }
+  }
+  return (
+    <section className="grid gap-3" aria-label="编辑头像">
+      <BoundAvatar key={assetID} assetID={assetID} load={load} />
+      <FieldLabel className="grid gap-2">
+        选择头像（JPEG、PNG、WebP，最多 5 MB）
+        <Input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={pending}
+          onChange={(e) => {
+            const next = e.target.files?.[0];
+            setError("");
+            setCrop(false);
+            if (next && next.size > 5 * 1024 * 1024) {
+              setError("图片不能超过 5 MB。");
+              return;
+            }
+            setFile(next ?? null);
+            setLocal(next ? URL.createObjectURL(next) : "");
+          }}
+        />
+      </FieldLabel>
+      {file ? (
+        <>
+          <Avatar className="size-24">
+            <AvatarImage
+              src={local}
+              alt="待上传的原图"
+              className={crop ? "rounded-none" : "object-contain"}
+            />
+            <AvatarFallback>预览</AvatarFallback>
+          </Avatar>
+          <FieldLabel className="flex items-center gap-2">
+            <Checkbox
+              checked={crop}
+              onCheckedChange={(value) => setCrop(value === true)}
+              disabled={pending}
+            />
+            将图片居中裁剪为正方形
+          </FieldLabel>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() => void save()}
+            >
+              上传并保存头像
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                setFile(null);
+                setLocal("");
+                setCrop(false);
+              }}
+            >
+              取消选择
+            </Button>
+          </div>
+        </>
+      ) : null}
+      {assetID ? (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={pending}
+          onClick={() => void save(true)}
+        >
+          恢复默认头像
+        </Button>
+      ) : null}
+      {pending ? <p role="status">正在保存头像…</p> : null}
+      {error ? <p role="alert">{error}</p> : null}
+      {notice ? <p role="status">{notice}</p> : null}
+    </section>
+  );
+}

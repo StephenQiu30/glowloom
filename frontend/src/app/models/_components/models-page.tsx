@@ -1,6 +1,13 @@
 "use client";
+import { LoadingState } from "@/components/layout/loading-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
 import Link from "next/link";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
@@ -20,6 +27,8 @@ import {
 import { ModelDetail } from "./model-detail";
 
 export function ModelsPage() {
+  const formFieldId = useId();
+
   const session = useSession();
   const [models, setModels] = useState<API.CreatedModel[]>([]);
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
@@ -71,7 +80,11 @@ export function ModelsPage() {
         ["image.generate", "text.generate"].includes(c.key ?? "")),
   );
   if (session.actor.platform_role !== "platform_admin")
-    return <p role="alert">此页面仅向平台管理员开放。</p>;
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>此页面仅向平台管理员开放。</AlertDescription>
+      </Alert>
+    );
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
       <header className="flex flex-wrap justify-between gap-3">
@@ -86,12 +99,11 @@ export function ModelsPage() {
         </Button>
       </header>
       {error ? (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : null}
       <form
-        className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2"
         onSubmit={async (event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
@@ -109,70 +121,91 @@ export function ModelsPage() {
           if (result?.id) setSelected(result.id);
         }}
       >
-        <h2 className="font-medium sm:col-span-2">添加模型</h2>
-        <label className="space-y-1 text-sm">
-          平台连接
-          <select
-            required
-            className="h-10 w-full rounded-md border bg-background px-3"
-            value={providerID}
-            onChange={(e) => setProviderID(e.target.value)}
-          >
-            <option value="">选择连接</option>
-            {providers
-              .filter((p) =>
-                ["volcengine_ark", "openrouter"].includes(
-                  p.provider?.adapter_key ?? "",
-                ),
-              )
-              .map((p) => (
-                <option key={p.provider?.id} value={p.provider?.id}>
-                  {p.provider?.name}
-                </option>
+        <FieldGroup className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2">
+          <h2 className="font-medium sm:col-span-2">添加模型</h2>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+              <span>平台连接</span>
+            </FieldLabel>
+            <NativeSelect
+              id={`${formFieldId}-field-1`}
+              required
+              className="h-10 w-full"
+              value={providerID}
+              onChange={(e) => setProviderID(e.target.value)}
+            >
+              <NativeSelectOption value="">选择连接</NativeSelectOption>
+              {providers
+                .filter((p) =>
+                  ["volcengine_ark", "openrouter"].includes(
+                    p.provider?.adapter_key ?? "",
+                  ),
+                )
+                .map((p) => (
+                  <NativeSelectOption
+                    key={p.provider?.id}
+                    value={p.provider?.id}
+                  >
+                    {p.provider?.name}
+                  </NativeSelectOption>
+                ))}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+              <span>生成能力</span>
+            </FieldLabel>
+            <NativeSelect
+              id={`${formFieldId}-field-2`}
+              key={providerID}
+              name="capability"
+              required
+              className="h-10 w-full"
+              defaultValue=""
+            >
+              <NativeSelectOption value="">选择能力</NativeSelectOption>
+              {supported.map((c) => (
+                <NativeSelectOption key={c.key} value={c.key}>
+                  {c.key === "video.generate"
+                    ? "视频生成"
+                    : c.key === "image.generate"
+                      ? "图片生成"
+                      : "文本生成"}
+                </NativeSelectOption>
               ))}
-          </select>
-        </label>
-        <label className="space-y-1 text-sm">
-          生成能力
-          <select
-            key={providerID}
-            name="capability"
-            required
-            className="h-10 w-full rounded-md border bg-background px-3"
-            defaultValue=""
-          >
-            <option value="">选择能力</option>
-            {supported.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.key === "video.generate"
-                  ? "视频生成"
-                  : c.key === "image.generate"
-                    ? "图片生成"
-                    : "文本生成"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="space-y-1 text-sm">
-          显示名称
-          <Input name="name" required maxLength={100} />
-        </label>
-        <label className="space-y-1 text-sm">
-          稳定标识
-          <Input
-            name="key"
-            required
-            pattern="[a-z][a-z0-9._-]*"
-            maxLength={128}
-            placeholder="例如 creative-video"
-          />
-        </label>
-        <Button className="w-fit" disabled={mutation.busy || !providerID}>
-          创建模型草稿
-        </Button>
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-3`}>
+              <span>显示名称</span>
+            </FieldLabel>
+            <Input
+              id={`${formFieldId}-field-3`}
+              name="name"
+              required
+              maxLength={100}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-4`}>
+              <span>稳定标识</span>
+            </FieldLabel>
+            <Input
+              id={`${formFieldId}-field-4`}
+              name="key"
+              required
+              pattern="[a-z][a-z0-9._-]*"
+              maxLength={128}
+              placeholder="例如 creative-video"
+            />
+          </Field>
+          <Button className="w-fit" disabled={mutation.busy || !providerID}>
+            创建模型草稿
+          </Button>
+        </FieldGroup>
       </form>
       <MutationStatus mutation={mutation} />
-      {loading ? <p role="status">正在加载模型…</p> : null}
+      {loading ? <LoadingState>正在加载模型…</LoadingState> : null}
       <div className="grid items-start gap-4 lg:grid-cols-[16rem_1fr]">
         <section className="min-w-0 space-y-2" aria-label="模型列表">
           {!loading && !models.length ? (

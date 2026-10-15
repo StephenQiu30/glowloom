@@ -57,7 +57,7 @@ func LoadFile(path string) (*Protector, error) {
 	if err != nil {
 		return nil, invalid
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	opened, err := f.Stat()
 	if err != nil || !os.SameFile(info, opened) || !opened.Mode().IsRegular() || opened.Mode().Perm()&0077 != 0 {
 		return nil, invalid

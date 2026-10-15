@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
@@ -16,16 +15,15 @@ import (
 func (s *TransferStore) workerActor(tx *gorm.DB, id uuid.UUID) (identityapp.Principal, error) {
 	var row struct {
 		ActorID, OrgID uuid.UUID
-		Role           string
 	}
-	read := tx.Raw(`SELECT j.actor_id,j.org_id,u.role FROM media.transfer_job j JOIN identity."user" u ON u.id=j.actor_id AND u.org_id=j.org_id WHERE j.id=?`, id).Scan(&row)
+	read := tx.Raw(`SELECT j.actor_id,j.org_id FROM media.transfer_job j WHERE j.id=?`, id).Scan(&row)
 	if read.Error != nil {
 		return identityapp.Principal{}, read.Error
 	}
 	if read.RowsAffected != 1 {
 		return identityapp.Principal{}, application.ErrNotFound
 	}
-	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID, Role: identitydomain.Role(row.Role)}, nil
+	return identityapp.Principal{ID: row.ActorID, OrgID: row.OrgID}, nil
 }
 
 func (s *TransferStore) withLease(ctx context.Context, lease application.TransferLease, ended, allowCancel bool, consume func(*gorm.DB, transferJobRow, libraryRow, libraryRow) error) error {
@@ -37,7 +35,7 @@ func (s *TransferStore) withLease(ctx context.Context, lease application.Transfe
 		return domain.ErrTransferConflict
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, lease.Actor); err != nil {
+		if err := s.requireCurrentActor(tx, lease.Actor); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, lease.Actor, lease.Work.JobID, false)
@@ -48,7 +46,7 @@ func (s *TransferStore) withLease(ctx context.Context, lease application.Transfe
 		if _, err := s.access(ctx, tx, lease.Actor, source, target, true); err != nil {
 			return err
 		}
-		sourceLibrary, targetLibrary, err := ensureTransferLibraries(tx, lease.Actor, source, target)
+		sourceLibrary, targetLibrary, err := s.ensureTransferLibraries(tx, lease.Actor, source, target)
 		if err != nil {
 			return err
 		}
@@ -84,7 +82,7 @@ func (s *TransferStore) ClaimTransfer(ctx context.Context, work application.Tran
 		if err != nil {
 			return err
 		}
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, actor, work.JobID, false)
@@ -95,7 +93,7 @@ func (s *TransferStore) ClaimTransfer(ctx context.Context, work application.Tran
 		if _, err := s.access(ctx, tx, actor, source, target, true); err != nil {
 			return err
 		}
-		if _, _, err := ensureTransferLibraries(tx, actor, source, target); err != nil {
+		if _, _, err := s.ensureTransferLibraries(tx, actor, source, target); err != nil {
 			return err
 		}
 		row, err = s.readJob(tx, actor, work.JobID, true)
@@ -171,6 +169,10 @@ func readTransferItem(tx *gorm.DB, id uuid.UUID, index int) (transferItemRow, ap
 
 func validateTransferSource(tx *gorm.DB, actor identityapp.Principal, row transferJobRow, source libraryRow, item application.FrozenTransferItem) error {
 	scope, _ := row.scopes()
+	if row.SourceOrgID == nil || row.SourceScopeID == nil {
+		return application.ErrNotFound
+	}
+	actor.OrgID, actor.ScopeID = *row.SourceOrgID, *row.SourceScopeID
 	items, err := lockLibraryItems(tx, actor, scope, source.ID, []uuid.UUID{item.SourceItem.ID})
 	if err != nil || !equalCopyMedia(item.SourceItem, items[item.SourceItem.ID]) {
 		return &application.TransferItemError{Code: "source_changed", Cause: err}

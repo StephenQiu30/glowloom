@@ -3,19 +3,51 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
+// ActorAccessFactory binds current-account checks to the content transaction.
 type ActorAccessFactory func(*gorm.DB) application.ActorAccess
+
+// ScopeStore loads durable ownership and membership facts under row locks.
 type ScopeStore struct {
-	db     *gorm.DB
-	actors ActorAccessFactory
+	db       *gorm.DB
+	actors   ActorAccessFactory
+	sessions SessionActorAccessFactory
 }
 
+// SessionActorAccessFactory binds request-session checks to the content transaction.
+type SessionActorAccessFactory func(*gorm.DB) application.SessionActorAccess
+
+// NewRequestScopeStore constructs RequestScopeStore with explicit caller-supplied dependencies.
+func NewRequestScopeStore(db *gorm.DB, sessions SessionActorAccessFactory) *ScopeStore {
+	return &ScopeStore{db: db, sessions: sessions, actors: func(tx *gorm.DB) application.ActorAccess { return sessions(tx) }}
+}
+
+// LoadRequestScopeFacts retains session and scope locks until the outer transaction ends.
+func (s *ScopeStore) LoadRequestScopeFacts(ctx context.Context, actor identity.Principal, scope uuid.UUID, now time.Time) (application.ScopeFacts, error) {
+	var facts application.ScopeFacts
+	if s.sessions == nil {
+		return facts, application.ErrScopeNotFound
+	}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.sessions(tx).CheckSession(ctx, actor, now); err != nil {
+			return err
+		}
+		var err error
+		facts, err = NewScopeStore(tx, s.actors).LoadScopeFacts(ctx, actor.ID, scope)
+		return err
+	})
+	return facts, err
+}
+
+// NewScopeStore constructs ScopeStore with explicit caller-supplied dependencies.
 func NewScopeStore(db *gorm.DB, actors ActorAccessFactory) *ScopeStore {
 	return &ScopeStore{db: db, actors: actors}
 }

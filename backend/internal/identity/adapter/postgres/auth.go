@@ -15,57 +15,11 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
-// Transaction commits authentication state and safe events together.
-func (s *Store) Transaction(ctx context.Context, execute func(application.AuthTx) error) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return execute(&authTx{db: tx}) })
+type authTx struct {
+	db              *gorm.DB
+	invitationTeams TeamGovernanceFactory
 }
 
-// LoginAvailable checks the global, case-insensitive account namespace.
-func (s *Store) LoginAvailable(ctx context.Context, key string) (bool, error) {
-	var exists bool
-	err := s.db.WithContext(ctx).Raw(`SELECT EXISTS(SELECT 1 FROM identity."user" WHERE lower(btrim(login_name::text)) = ? AND NOT is_delete)`, key).Scan(&exists).Error
-	if err != nil {
-		return false, fmt.Errorf("check login availability: %w", err)
-	}
-	return !exists, nil
-}
-
-type authTx struct{ db *gorm.DB }
-
-func (t *authTx) RegistrationOrganization() (uuid.UUID, error) {
-	if err := t.db.Exec(`SELECT pg_advisory_xact_lock(69210, 1)`).Error; err != nil {
-		return uuid.Nil, fmt.Errorf("lock registration scope: %w", err)
-	}
-	id, err := NewStore(t.db).FindBootstrapOrganization(t.db.Statement.Context)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if id != uuid.Nil {
-		return id, nil
-	}
-	id = uuid.New()
-	if err := t.db.Exec(`INSERT INTO workspace.organization(id,name) VALUES(?::uuid,'本机工作区')`, id.String()).Error; err != nil {
-		return uuid.Nil, fmt.Errorf("create registration scope: %w", err)
-	}
-	return id, nil
-}
-
-func (t *authTx) CreateAccount(u domain.User) error {
-	err := t.db.Exec(`INSERT INTO identity."user"(id,org_id,login_name,display_name,role,status,password_hash,must_change_password,password_changed_at,last_login_at)
- VALUES(?::uuid,?::uuid,?,?,?,'active',?,false,?,?)`, u.ID.String(), u.OrgID.String(), u.LoginName, u.DisplayName, string(u.Role), u.PasswordHash, u.PasswordChangedAt, u.PasswordChangedAt).Error
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" && (pgErr.ConstraintName == "uq_user_login_global" || pgErr.ConstraintName == "uq_user_login_name") {
-		return application.ErrLoginTaken
-	}
-	if err != nil {
-		return fmt.Errorf("insert registered account: %w", err)
-	}
-	return nil
-}
-
-func (t *authTx) AccountByLogin(key string) (domain.User, error) {
-	return t.account(`lower(btrim(login_name::text)) = ?`, key)
-}
 func (t *authTx) AccountByID(id uuid.UUID) (domain.User, error) {
 	return t.account(`id = ?::uuid`, id.String())
 }

@@ -27,6 +27,8 @@ type TransferItemResult struct {
 // TransferJob is a current authorized view of a durable media ownership transfer.
 // It carries no private object key, source notes or model execution history.
 type TransferJob struct {
+	SourceScopeID         uuid.UUID            `json:"source_scope_id"`
+	TargetScopeID         uuid.UUID            `json:"target_scope_id"`
 	ID                    uuid.UUID            `json:"id"`
 	CurrentActorID        uuid.UUID            `json:"current_actor_id"`
 	CurrentOrgID          uuid.UUID            `json:"current_org_id"`

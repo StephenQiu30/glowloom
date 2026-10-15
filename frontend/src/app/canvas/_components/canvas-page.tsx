@@ -1,4 +1,9 @@
 "use client";
+import {
+  ApplicationLoading,
+  ApplicationState,
+} from "@/components/layout/application-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -16,7 +21,7 @@ import { RequestError } from "@/lib/request";
 import dynamic from "next/dynamic";
 const CanvasEditor = dynamic(
   () => import("./canvas-editor").then((m) => m.CanvasEditor),
-  { loading: () => <p role="status">正在加载画布编辑器…</p> },
+  { loading: () => <ApplicationLoading message="正在加载画布编辑器…" /> },
 );
 import { requireCanvas, type Canvas } from "./editor-state";
 
@@ -55,32 +60,29 @@ function LoadedCanvas({
 
   if (result && !error)
     return <CanvasEditor project={result.project} initial={result.canvas} />;
+  if (!error) return <ApplicationLoading message="正在读取项目与画布…" />;
   return (
-    <main className="grid min-h-dvh place-items-center p-6">
-      {error ? (
-        <div
-          role="alert"
-          className="max-w-md space-y-4 rounded-xl border bg-card p-6"
-        >
-          <p>{error}</p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setError("");
-              setResult(null);
-              setRetry((n) => n + 1);
-            }}
-          >
-            重新读取
-          </Button>
-          <Button asChild variant="ghost">
-            <Link href="/projects">返回我的画布</Link>
-          </Button>
-        </div>
-      ) : (
-        <p role="status">正在读取项目与画布…</p>
-      )}
-    </main>
+    <ApplicationState
+      title="暂时无法打开画布"
+      description="请重试读取，或返回我的画布选择其他项目。"
+    >
+      <Alert variant="destructive">
+        <AlertDescription className="break-words">{error}</AlertDescription>
+      </Alert>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setError("");
+          setResult(null);
+          setRetry((n) => n + 1);
+        }}
+      >
+        重新读取
+      </Button>
+      <Button asChild variant="ghost">
+        <Link href="/projects">返回我的画布</Link>
+      </Button>
+    </ApplicationState>
   );
 }
 
@@ -93,15 +95,14 @@ export function CanvasPage({
 }) {
   if (!isProjectID(projectID) || !isProjectID(canvasID))
     return (
-      <main className="grid min-h-dvh place-items-center p-6">
-        <div className="space-y-4 text-center">
-          <h1 className="text-xl font-semibold">请选择有效的项目与画布</h1>
-          <p className="text-muted-foreground">从我的画布打开创作以继续。</p>
-          <Button asChild>
-            <Link href="/projects">返回我的画布</Link>
-          </Button>
-        </div>
-      </main>
+      <ApplicationState
+        title="请选择有效的项目与画布"
+        description="从我的画布打开创作以继续。"
+      >
+        <Button asChild>
+          <Link href="/projects">返回我的画布</Link>
+        </Button>
+      </ApplicationState>
     );
   return (
     <LoadedCanvas

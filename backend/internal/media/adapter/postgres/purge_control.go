@@ -68,7 +68,7 @@ func (s *PurgeStore) ControlPurge(ctx context.Context, actor identityapp.Princip
 	}
 	var cached *domain.PurgeJob
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := purgeLock(tx, actor.ID, key); err != nil {
@@ -91,7 +91,7 @@ func (s *PurgeStore) ControlPurge(ctx context.Context, actor identityapp.Princip
 		return *cached, nil
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := purgeLock(tx, actor.ID, key); err != nil {

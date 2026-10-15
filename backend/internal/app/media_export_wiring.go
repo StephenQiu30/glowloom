@@ -14,14 +14,18 @@ import (
 // provideMediaExportStore binds source authorization and media publication to
 // the export command transaction through their owning application ports.
 func provideMediaExportStore(database *gorm.DB) *pgtool.Store {
+	return provideMediaExportStoreWithAccess(database, provideMediaScopeAccess)
+}
+
+func provideMediaExportStoreWithAccess(database *gorm.DB, scopes pgmedia.ScopeAccessFactory) *pgtool.Store {
 	return pgtool.NewStore(database,
 		func(tx *gorm.DB) toolapp.TimelineReader {
-			return canvasapp.NewTimelineReader(pgcanvas.NewStore(tx,
+			return canvasapp.NewTimelineReader(pgcanvas.NewScopedStore(tx,
 				func(mediaTx *gorm.DB) canvasapp.MediaReader {
-					return mediaapp.NewAssetQuery(pgmedia.NewStore(mediaTx), nil)
-				}))
+					return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(mediaTx, scopes), nil)
+				}, func(tx *gorm.DB) canvasapp.ProjectAccess { return scopes(tx) }))
 		},
 		func(tx *gorm.DB) toolapp.DerivedMedia {
-			return mediaapp.NewDerivedService(pgmedia.NewStore(tx))
+			return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
 		})
 }

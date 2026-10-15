@@ -17,6 +17,7 @@ import (
 	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/httpapi"
+	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
 // Handler adapts the current-project model query to HTTP.
@@ -113,7 +114,7 @@ func (h *Handler) ListModels(c *gin.Context) {
 		Actor, Organization, Project uuid.UUID
 		Capability, Mode             string
 		Limit                        int
-	}{actor.ID, actor.OrgID, project, input.Capability, input.Mode, input.Limit})
+	}{actor.ID, actor.ScopeID, project, input.Capability, input.Mode, input.Limit})
 	if err != nil {
 		httpapi.WriteProblem(c, 503, "dependency_unavailable", nil)
 		return
@@ -132,6 +133,10 @@ func (h *Handler) ListModels(c *gin.Context) {
 	page, err := h.models.Execute(c.Request.Context(), actor, input)
 	if err != nil {
 		switch {
+		case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
+			httpapi.WriteProblem(c, 404, "not_found", nil)
+		case errors.Is(err, identityapp.ErrSessionInvalid):
+			httpapi.WriteProblem(c, 401, "session_invalid", nil)
 		case errors.Is(err, identityapp.ErrForbidden):
 			httpapi.WriteProblem(c, 403, "forbidden", nil)
 		case errors.Is(err, application.ErrModelCatalogProjectNotFound):

@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	"github.com/StephenQiu30/glowloom-server/backend/internal/app/identityruntime"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/config"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/db"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
@@ -93,14 +94,24 @@ func provideReadyCheck(dbConn *db.Connection, redisConn *redisconn.Connection, t
 	}
 }
 
-func provideAPIServer(cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Client) (*http.Server, error) {
+func provideAPIServer(ctx context.Context, cfg config.Config, logger *zap.Logger, ready ReadyCheck, tracerProvider trace.TracerProvider, dbConn *db.Connection, storage *objectstorage.Client) (*http.Server, func(), error) {
 	router, err := NewBusinessRouter(logger, ready, tracerProvider, cfg, dbConn.DB, storage)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	cleanup, err := identityruntime.StartMailLoop(ctx, dbConn.DB, cfg, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	stopExports, err := identityruntime.StartDirectoryExportLoop(ctx, dbConn.DB, cfg, storage, logger)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	stopIdentity := func() { stopExports(); cleanup() }
 	return &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
 		ReadHeaderTimeout: 10 * time.Second,
-	}, nil
+	}, stopIdentity, nil
 }

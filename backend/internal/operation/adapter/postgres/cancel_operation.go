@@ -33,7 +33,7 @@ func (s *Store) RequestWorkflowControl(ctx context.Context, actor identityapp.Pr
 	sum := sha256.Sum256([]byte("workflow-control:" + actor.OrgID.String() + ":" + input.ProjectID.String() + ":" + input.TargetType + ":" + input.TargetID.String() + ":" + input.Action))
 	hash := hex.EncodeToString(sum[:])
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePublicProject(tx, actor, input.ProjectID, true); err != nil {
+		if err := s.requirePublicProject(tx, actor, input.ProjectID, true); err != nil {
 			return err
 		}
 		if err := lockQuoteRequest(tx, actor, requestID); err != nil {

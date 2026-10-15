@@ -67,6 +67,8 @@ func validRetainedHistory(a domain.MediaAsset, p *RetainedHistoryProof) bool {
 // ProjectCopyObject binds one exact source object to one unpublished target object.
 // Size and SHA may be absent only until bounded reading establishes a durable intent.
 type ProjectCopyObject struct {
+	SourceLocation  *domain.ObjectLocation `json:"source_location,omitempty"`
+	TargetLocation  *domain.ObjectLocation `json:"target_location,omitempty"`
 	TargetAssetID   uuid.UUID
 	RenditionKind   string
 	SourceObjectKey string
@@ -161,6 +163,7 @@ func PrepareProjectMediaCopy(binding ProjectCopyBinding, sources []ProjectCopySo
 		a := &item.Asset
 		a.ID = uuid.NewSHA1(binding.JobID, []byte("asset/"+original.ID.String()))
 		a.ProjectID = binding.TargetProjectID
+		a.ObjectLocation = nil
 		a.IsDelete, a.DeleteTime, a.PurgeAfter = false, nil, nil
 		a.ObjectKey = fmt.Sprintf("projects/%s/%s/%04d/%02d/%s%s", binding.TargetProjectID, a.Kind, now.Year(), now.Month(), a.ID, path.Ext(original.ObjectKey))
 		a.SourceOperationID, a.ProviderKey, a.ModelKey, a.Region, a.UploadID = nil, nil, nil, nil, nil
@@ -171,7 +174,7 @@ func PrepareProjectMediaCopy(binding ProjectCopyBinding, sources []ProjectCopySo
 		if a.Validate() != nil {
 			return ProjectMediaCopy{}, ErrProjectCopyMediaUnavailable
 		}
-		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: "pending"})
+		result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, SourceObjectKey: original.ObjectKey, SourceLocation: original.ObjectLocation, TargetObjectKey: a.ObjectKey, ByteSize: &a.ByteSize, ContentType: a.MimeType, SHA256: a.SHA256, Status: "pending"})
 		kinds := make(map[domain.RenditionKind]bool)
 		for j := range item.Renditions {
 			r := &item.Renditions[j]
@@ -185,9 +188,10 @@ func PrepareProjectMediaCopy(binding ProjectCopyBinding, sources []ProjectCopySo
 			kinds[source.Kind], renditionIDs[source.ID] = true, true
 			r.ID = uuid.NewSHA1(binding.JobID, []byte("rendition/"+source.ID.String()))
 			r.MediaAssetID = a.ID
+			r.ObjectLocation = nil
 			r.ObjectKey = strings.TrimSuffix(a.ObjectKey, path.Ext(a.ObjectKey)) + "/" + string(r.Kind) + ext
 			r.CreateTime, r.UpdateTime = now, now
-			result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(r.Kind), SourceObjectKey: source.ObjectKey, TargetObjectKey: r.ObjectKey, ByteSize: r.ByteSize, ContentType: mimeType, Status: "pending"})
+			result.Objects = append(result.Objects, ProjectCopyObject{TargetAssetID: a.ID, RenditionKind: string(r.Kind), SourceObjectKey: source.ObjectKey, SourceLocation: source.ObjectLocation, TargetObjectKey: r.ObjectKey, ByteSize: r.ByteSize, ContentType: mimeType, Status: "pending"})
 		}
 	}
 	return result, nil

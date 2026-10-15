@@ -72,6 +72,7 @@ type ManagedResultRepository interface {
 
 // ManagedResults stages manifests independently of database acknowledgements.
 type ManagedResults struct {
+	factory ProviderStagingFactory
 	objects ProviderStagingObjects
 	repo    ManagedResultRepository
 }
@@ -81,8 +82,27 @@ func NewManagedResults(objects ProviderStagingObjects, repo ManagedResultReposit
 	return &ManagedResults{objects: objects, repo: repo}
 }
 
+// NewRoutedManagedResults scopes artifact and manifest I/O to the admitted operation.
+func NewRoutedManagedResults(factory ProviderStagingFactory, repo ManagedResultRepository) *ManagedResults {
+	return &ManagedResults{factory: factory, repo: repo}
+}
+
+func (s *ManagedResults) scoped(ctx context.Context, identity ProviderDispatchIdentity) (*ManagedResults, error) {
+	if s == nil || s.factory == nil || identity.Validate() != nil {
+		return nil, ErrInvalidProviderCall
+	}
+	objects, err := s.factory.ForProviderDispatch(ctx, identity)
+	if err != nil {
+		return nil, err
+	}
+	if objects == nil {
+		return nil, ErrInvalidProviderCall
+	}
+	return &ManagedResults{objects: objects, repo: s.repo}, nil
+}
+
 func managedPrefix(i ProviderDispatchIdentity) string {
-	return path.Join(providerStagePrefix(i), "managed-v1")
+	return path.Join(ProviderStagePrefix(i), "managed-v1")
 }
 func managedArtifactKey(i ProviderDispatchIdentity, seq int) string {
 	return path.Join(managedPrefix(i), fmt.Sprintf("%d.artifact", seq))
@@ -90,6 +110,13 @@ func managedArtifactKey(i ProviderDispatchIdentity, seq int) string {
 
 // StageArtifact creates immutable private bytes before the manifest is committed.
 func (s *ManagedResults) StageArtifact(ctx context.Context, i ProviderDispatchIdentity, seq int, data []byte, mime string) (ManagedArtifact, error) {
+	if s != nil && s.factory != nil {
+		scoped, err := s.scoped(ctx, i)
+		if err != nil {
+			return ManagedArtifact{}, err
+		}
+		return scoped.StageArtifact(ctx, i, seq, data, mime)
+	}
 	a := ManagedArtifact{Sequence: seq, Size: int64(len(data)), MIME: mime, SHA256: imageDigest(data)}
 	if i.Validate() != nil || seq < 1 || seq > 8 || len(data) == 0 || len(data) > 512<<20 {
 		return ManagedArtifact{}, ErrInvalidProviderCall
@@ -102,6 +129,13 @@ func (s *ManagedResults) StageArtifact(ctx context.Context, i ProviderDispatchId
 
 // Save publishes a complete private manifest then records it in the database.
 func (s *ManagedResults) Save(ctx context.Context, r ManagedResult) error {
+	if s != nil && s.factory != nil {
+		scoped, err := s.scoped(ctx, r.Identity)
+		if err != nil {
+			return err
+		}
+		return scoped.Save(ctx, r)
+	}
 	if r.Validate() != nil {
 		return ErrInvalidProviderCall
 	}
@@ -118,6 +152,13 @@ func (s *ManagedResults) Save(ctx context.Context, r ManagedResult) error {
 
 // Recover checks terminal evidence first; an absent manifest remains unknown.
 func (s *ManagedResults) Recover(ctx context.Context, i ProviderDispatchIdentity) (*ManagedResult, error) {
+	if s != nil && s.factory != nil {
+		scoped, err := s.scoped(ctx, i)
+		if err != nil {
+			return nil, err
+		}
+		return scoped.Recover(ctx, i)
+	}
 	if i.Validate() != nil {
 		return nil, ErrInvalidProviderCall
 	}
@@ -168,6 +209,13 @@ func (s *ManagedResults) Recover(ctx context.Context, i ProviderDispatchIdentity
 
 // ReadArtifact verifies server-derived object metadata and bounded bytes.
 func (s *ManagedResults) ReadArtifact(ctx context.Context, i ProviderDispatchIdentity, seq int) (ManagedArtifact, []byte, error) {
+	if s != nil && s.factory != nil {
+		scoped, err := s.scoped(ctx, i)
+		if err != nil {
+			return ManagedArtifact{}, nil, err
+		}
+		return scoped.ReadArtifact(ctx, i, seq)
+	}
 	r, err := s.repo.ReadManagedResult(ctx, i)
 	if err != nil {
 		return ManagedArtifact{}, nil, err

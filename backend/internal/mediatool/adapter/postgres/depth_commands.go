@@ -113,7 +113,7 @@ func (s *DepthStore) Control(ctx context.Context, actor identityapp.Principal, p
 			if err := depthQuota(tx, project); err != nil {
 				return err
 			}
-			if err := s.validateSource(ctx, tx, r); err != nil {
+			if err := s.validateSource(ctx, tx, actor, r); err != nil {
 				return err
 			}
 			if err := state.Retry(); err != nil {
@@ -182,7 +182,7 @@ func (s *DepthStore) Review(ctx context.Context, actor identityapp.Principal, id
 		if !found || a.Asset.SHA256 == nil || *a.Asset.SHA256 != in.SHA256 {
 			return application.ErrConflict
 		}
-		if err := s.validateSource(ctx, tx, r); err != nil {
+		if err := s.validateSource(ctx, tx, actor, r); err != nil {
 			return err
 		}
 		if err := verifyDepthObjects(tx, r, "verified"); err != nil {

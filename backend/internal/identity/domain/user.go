@@ -19,7 +19,7 @@ const (
 
 var (
 	// ErrWeakPassword means a password violates the account policy.
-	ErrWeakPassword = errors.New("password must contain 15 to 128 Unicode characters")
+	ErrWeakPassword = errors.New("password must contain 8 to 128 Unicode characters")
 	// ErrPasswordReused means the new password equals the current password.
 	ErrPasswordReused = errors.New("new password must differ from current password")
 	// ErrAccountLocked means a temporary login lock has not expired.

@@ -21,6 +21,7 @@ import (
 )
 
 type fakeStarterStore struct {
+	revoked       map[uuid.UUID]bool
 	eligible      bool
 	stale         []uuid.UUID
 	batchEligible bool
@@ -29,8 +30,11 @@ type fakeStarterStore struct {
 	offsets       []int
 }
 
-func (s *fakeStarterStore) ConfirmedSingle(_ context.Context, _, _, _, _ uuid.UUID) (bool, error) {
+func (s *fakeStarterStore) ConfirmedSingle(_ context.Context, _, _, id, _ uuid.UUID) (bool, error) {
 	s.checked++
+	if s.revoked[id] {
+		return false, operationapp.ErrExecutionAuthorityRevoked
+	}
 	return s.eligible, nil
 }
 
@@ -43,8 +47,11 @@ func (s *fakeStarterStore) StaleConfirmedSingles(_ context.Context, _ time.Time,
 	return s.stale[offset:end], nil
 }
 
-func (s *fakeStarterStore) ConfirmedBatch(_ context.Context, _, _, _ uuid.UUID) (bool, error) {
+func (s *fakeStarterStore) ConfirmedBatch(_ context.Context, _, _, id uuid.UUID) (bool, error) {
 	s.checked++
+	if s.revoked[id] {
+		return false, operationapp.ErrExecutionAuthorityRevoked
+	}
 	return s.batchEligible, nil
 }
 
@@ -421,4 +428,50 @@ func containsOperationID(ids []uuid.UUID, target uuid.UUID) bool {
 		}
 	}
 	return false
+}
+
+func (s *fakeStarterStore) AuthorizeWorker(_ context.Context, id uuid.UUID, _ bool) error {
+	if s.revoked[id] {
+		return operationapp.ErrExecutionAuthorityRevoked
+	}
+	return nil
+}
+func (s *fakeStarterStore) AuthorizeBatchWorker(ctx context.Context, id uuid.UUID) error {
+	return s.AuthorizeWorker(ctx, id, true)
+}
+func TestSweepSkipsRevokedCandidatesWithoutStarvingLaterPages(t *testing.T) {
+	ids := make([]uuid.UUID, 101)
+	for i := range ids {
+		ids[i] = uuid.New()
+	}
+	store := &fakeStarterStore{stale: ids, staleBatches: ids, revoked: map[uuid.UUID]bool{ids[0]: true}}
+	starter := &fakeWorkflowStarter{}
+	handler := operationevent.NewWorkflowStarterHandler(&fakeStarterInbox{done: map[string]bool{}}, store, starter)
+	if err := handler.SweepOnce(t.Context(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := handler.SweepBatchesOnce(t.Context(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if len(starter.started) != 100 || len(starter.startedBatches) != 100 || starter.started[0] != ids[1] || starter.started[99] != ids[100] {
+		t.Fatalf("revoked candidate starved or entered workflow: singles %d, batches %d", len(starter.started), len(starter.startedBatches))
+	}
+}
+
+func TestRevokedConfirmationDoesNotBlockQueue(t *testing.T) {
+	for _, batch := range []bool{false, true} {
+		project, id, eventID := uuid.New(), uuid.New(), uuid.New()
+		topic, kind, data := operationevent.OperationConfirmedTopic, "operation", fmt.Sprintf(`{"operation_id":%q,"reservation_id":%q,"quote_micros":0}`, id, uuid.New())
+		if batch {
+			topic, kind, data = operationevent.BatchConfirmedTopic, "batch", fmt.Sprintf(`{"batch_id":%q,"total_count":1,"quote_total_micros":0}`, id)
+		}
+		store := &fakeStarterStore{eligible: true, batchEligible: true, revoked: map[uuid.UUID]bool{id: true}}
+		started := &fakeWorkflowStarter{}
+		processed := &fakeStarterInbox{done: map[string]bool{}}
+		handler := operationevent.NewWorkflowStarterHandler(processed, store, started)
+		record := inbox.Record{Topic: topic, Key: []byte(project.String()), Value: []byte(fmt.Sprintf(`{"event_id":%q,"event_type":%q,"project_id":%q,"org_id":%q,"occurred_at":%q,"actor":{"kind":"user","id":%q},"aggregate":{"type":%q,"id":%q},"data":%s}`, eventID, topic, project, uuid.New(), time.Now().UTC().Format(time.RFC3339Nano), uuid.New(), kind, id, data))}
+		if err := handler.Handle(t.Context(), record); err != nil || !processed.done[eventID.String()] || len(started.started)+len(started.startedBatches) != 0 {
+			t.Fatalf("revoked confirmation blocked queue or executed, batch=%v: %v", batch, err)
+		}
+	}
 }

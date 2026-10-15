@@ -70,6 +70,9 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 		var err error
 		progress, err = step("submit")
 		if err != nil {
+			if isApplicationErrorType(err, "execution_authority_revoked") {
+				return err
+			}
 			progress = application.ManagedProgress{State: "unknown"}
 		}
 		for progress.State == "waiting" {
@@ -78,6 +81,9 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 			}
 			progress, err = step("submit")
 			if err != nil {
+				if isApplicationErrorType(err, "execution_authority_revoked") {
+					return err
+				}
 				progress = application.ManagedProgress{State: "unknown"}
 			}
 		}
@@ -105,6 +111,9 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 			var err error
 			progress, err = step("recover")
 			if err != nil {
+				if isApplicationErrorType(err, "execution_authority_revoked") {
+					return err
+				}
 				progress = application.ManagedProgress{State: "unknown"}
 			}
 		}
@@ -153,6 +162,9 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 			}
 		}
 		recovered, err := step("recover")
+		if isApplicationErrorType(err, "execution_authority_revoked") {
+			return err
+		}
 		if err == nil && recovered.State == "succeeded" && recovered.TaskID == "" {
 			if err := completeManaged(application.CompleteProviderCallInput{OperationID: id, Action: "submit", Attempt: 1, Outcome: "ok", State: "completed", Managed: true}); err != nil {
 				return err
@@ -199,6 +211,9 @@ func runManagedProvider(ctx, flowCtx workflow.Context, loaded application.Workfl
 			}
 			if err := complete(evidence); err != nil {
 				return err
+			}
+			if isApplicationErrorType(queryErr, "execution_authority_revoked") {
+				return queryErr
 			}
 			if evidence.State == "succeeded" {
 				if err := transition(flowCtx, id, []domain.Status{status}, domain.StatusSucceeded, "provider_succeeded", nil, nil); err != nil {

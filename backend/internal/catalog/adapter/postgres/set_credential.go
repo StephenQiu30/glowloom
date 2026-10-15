@@ -14,17 +14,16 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // FindProviderForAdmin checks current account rights before exposing provider settings.
-func (s *Store) FindProviderForAdmin(ctx context.Context, actorID, orgID, providerID uuid.UUID) (domain.Provider, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || providerID == uuid.Nil {
+func (s *Store) FindProviderForAdmin(ctx context.Context, actor identityapp.Principal, providerID uuid.UUID) (domain.Provider, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || providerID == uuid.Nil {
 		return domain.Provider{}, identityapp.ErrForbidden
 	}
 	var provider domain.Provider
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var err error
@@ -39,15 +38,15 @@ func (s *Store) FindProviderForAdmin(ctx context.Context, actorID, orgID, provid
 
 // ReplaceWithEvents rechecks administrator rights and saves a sealed credential
 // together with its cache-invalidation and audit events in one transaction.
-func (s *Store) ReplaceWithEvents(ctx context.Context, actorID, orgID uuid.UUID, credential domain.Credential, events []identityapp.OutboxEvent) (domain.Credential, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+func (s *Store) ReplaceWithEvents(ctx context.Context, actor identityapp.Principal, credential domain.Credential, events []identityapp.OutboxEvent) (domain.Credential, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		len(credential.RequestFingerprint) != 64 || credential.Validate() != nil || credential.Status != domain.CredentialActive ||
-		credential.LastTestResult != "" || !validCredentialEvents(actorID, orgID, credential, events) {
+		credential.LastTestResult != "" || !validCredentialEvents(actor.ID, actor.OrgID, credential, events) {
 		return domain.Credential{}, domain.ErrInvalidCredential
 	}
 	var saved domain.Credential
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var event credentialAuditEvent
@@ -55,14 +54,14 @@ func (s *Store) ReplaceWithEvents(ctx context.Context, actorID, orgID uuid.UUID,
 			return domain.ErrInvalidCredential
 		}
 		requestID := event.Data.RequestID
-		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actorID.String()+"/credential.set/"+credential.ProviderID.String()+"/"+requestID).Error; err != nil {
+		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actor.ID.String()+"/credential.set/"+credential.ProviderID.String()+"/"+requestID).Error; err != nil {
 			return err
 		}
 		var receipt struct {
 			Fingerprint string
 			Result      []byte
 		}
-		r := tx.Raw(`SELECT fingerprint,result FROM catalog.config_request WHERE actor_id=? AND action='credential.set' AND target_id=? AND request_id=?::uuid`, actorID, credential.ProviderID, requestID).Scan(&receipt)
+		r := tx.Raw(`SELECT fingerprint,result FROM catalog.config_request WHERE actor_id=? AND action='credential.set' AND target_id=? AND request_id=?::uuid`, actor.ID, credential.ProviderID, requestID).Scan(&receipt)
 		if r.Error != nil {
 			return r.Error
 		}
@@ -109,7 +108,7 @@ func (s *Store) ReplaceWithEvents(ctx context.Context, actorID, orgID uuid.UUID,
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO catalog.config_request(actor_id,action,target_id,request_id,fingerprint,result) VALUES(?,'credential.set',?,?::uuid,?,?::jsonb)`, actorID, credential.ProviderID, requestID, credential.RequestFingerprint, string(receiptBody)).Error
+		return tx.Exec(`INSERT INTO catalog.config_request(actor_id,action,target_id,request_id,fingerprint,result) VALUES(?,'credential.set',?,?::uuid,?,?::jsonb)`, actor.ID, credential.ProviderID, requestID, credential.RequestFingerprint, string(receiptBody)).Error
 	})
 	if err != nil {
 		return domain.Credential{}, fmt.Errorf("replace credential transaction: %w", err)
@@ -117,21 +116,22 @@ func (s *Store) ReplaceWithEvents(ctx context.Context, actorID, orgID uuid.UUID,
 	return saved, nil
 }
 
-func requireCurrentCatalogAdmin(tx *gorm.DB, actorID, orgID uuid.UUID) error {
-	var actor struct {
-		Role               string
-		Status             string
-		MustChangePassword bool
+func (s *Store) requireWorkerPlatform(tx *gorm.DB, request application.CredentialTestRequest) error {
+	if s.actors == nil || s.actors(tx) == nil {
+		return identityapp.ErrForbidden
 	}
-	result := tx.Raw(`
-		SELECT platform_role AS role, status, must_change_password FROM identity."user"
-		WHERE org_id = ?::uuid AND id = ?::uuid AND NOT is_delete FOR SHARE
-	`, orgID.String(), actorID.String()).Scan(&actor)
-	if result.Error != nil {
-		return fmt.Errorf("read current catalog administrator: %w", result.Error)
+	if err := s.actors(tx).CheckActive(tx.Statement.Context, request.ActorID); err != nil {
+		return err
 	}
-	if result.RowsAffected != 1 || actor.Role != "platform_admin" ||
-		actor.Status != string(identitydomain.StatusActive) || actor.MustChangePassword {
+	var present int
+	r := tx.Raw(`SELECT 1 FROM identity."user" u JOIN infra.idempotency_record r ON r.actor_id=u.id
+ WHERE u.id=? AND u.platform_role='platform_admin' AND r.idem_key=? AND r.status_code=202
+ AND r.response_body->>'test_id'=? AND r.response_body->>'provider_id'=? AND r.response_body->>'credential_id'=?
+ AND r.response_body->>'platform_epoch'=u.platform_epoch::text AND NOT r.is_delete FOR SHARE OF u,r`, request.ActorID, request.RequestID, request.TestID.String(), request.ProviderID.String(), request.CredentialID.String()).Scan(&present)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
 		return identityapp.ErrForbidden
 	}
 	return nil

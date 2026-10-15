@@ -7,9 +7,12 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
 
 	"github.com/swaggo/swag"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -37,7 +40,7 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
 	}, &gorm.DB{}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -53,13 +56,13 @@ func TestPublicRouterGeneratedSwaggerContract(t *testing.T) {
 
 func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
 	}, &gorm.DB{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, route := range router.Routes() {
-		if strings.HasPrefix(route.Path, "/api/auth/") {
+		if strings.HasPrefix(route.Path, "/api/auth/") || strings.HasPrefix(route.Path, "/api/accounts/") {
 			t.Fatalf("removed authentication route remains registered: %s", route.Path)
 		}
 	}
@@ -76,19 +79,18 @@ func TestPublicRouterRemovedAuthenticationRoutes(t *testing.T) {
 
 func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
 	}, &gorm.DB{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	identityRoutes := map[string]bool{
-		"POST /api/accounts/register":      true,
-		"POST /api/sessions":               true,
-		"GET /api/accounts/availability":   true,
-		"GET /api/session":                 true,
-		"DELETE /api/sessions/:session_id": true,
-		"POST /api/me/password":            true,
+		"GET /api/auth-policy": true, "POST /api/registrations": true,
+		"POST /api/invitations/preview":      true,
+		"POST /api/registrations/:id/resend": true, "POST /api/registrations/:id/verify": true, "POST /api/registrations/:id/complete": true,
+		"POST /api/sessions": true, "GET /api/session": true, "POST /api/password-resets": true, "POST /api/password-resets/complete": true,
 	}
+
 	for _, route := range router.Routes() {
 		if !strings.HasPrefix(route.Path, "/api/") || identityRoutes[route.Method+" "+route.Path] {
 			continue
@@ -108,7 +110,7 @@ func TestPublicBusinessRoutesRequireSession(t *testing.T) {
 
 func TestPublicRouterRemovedSwaggerRoutes(t *testing.T) {
 	router, err := app.NewBusinessRouter(zap.NewNop(), nil, noop.NewTracerProvider(), config.Config{
-		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000",
+		Env: "local", HTTPAddr: "127.0.0.1:8080", PublicOrigin: "http://localhost:3000", IdentityKeyFile: publicTestKey(t),
 	}, &gorm.DB{}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -308,4 +310,13 @@ func publicContractPath(path string) bool {
 	lower := strings.ToLower(path)
 	return strings.HasPrefix(path, "/api/") && !strings.HasPrefix(lower, "/api/internal/") &&
 		lower != "/api/internal" && !strings.Contains(lower, "callback") && !strings.Contains(lower, "webhook")
+}
+
+func publicTestKey(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "identity.key")
+	if err := credentialproof.CreateFile(path); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

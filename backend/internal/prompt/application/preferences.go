@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/prompt/domain"
 )
 
@@ -150,6 +149,5 @@ func (p *Preferences) Save(ctx context.Context, actor identityapp.Principal, inp
 }
 
 func canCustomize(actor identityapp.Principal) bool {
-	return actor.ID != uuid.Nil && actor.OrgID != uuid.Nil && !actor.MustChangePassword &&
-		(actor.Role == identitydomain.RoleAdmin || actor.Role == identitydomain.RoleProducer)
+	return actor.ID != uuid.Nil && actor.OrgID != uuid.Nil
 }

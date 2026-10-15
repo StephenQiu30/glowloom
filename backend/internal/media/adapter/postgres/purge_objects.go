@@ -23,6 +23,9 @@ func (s *PurgeStore) PurgeObjects(ctx context.Context, lease application.PurgeLe
 		if err := validatePurgeItem(tx, row, frozen); err != nil {
 			return err
 		}
+		if err := s.requirePurgeUnreferenced(ctx, tx, lease.Actor, row, frozen); err != nil {
+			return err
+		}
 		result = make([]application.PurgeObject, 0, 17)
 		if err := tx.Raw(`SELECT object_key,byte_size,sha256,verified,removal_started,removed FROM media.purge_object WHERE job_id=? AND item_index=? ORDER BY rendition_kind FOR UPDATE`, row.ID, index).Scan(&result).Error; err != nil {
 			return err
@@ -60,6 +63,9 @@ func (s *PurgeStore) withObject(ctx context.Context, lease application.PurgeLeas
 			return domain.ErrPurgeConflict
 		}
 		if err := validatePurgeItem(tx, row, frozen); err != nil {
+			return err
+		}
+		if err := s.requirePurgeUnreferenced(ctx, tx, lease.Actor, row, frozen); err != nil {
 			return err
 		}
 		allowed := frozen.Asset != nil && frozen.Asset.ObjectKey == key
@@ -145,6 +151,9 @@ func (s *PurgeStore) CompletePurgeItem(ctx context.Context, lease application.Pu
 			return domain.ErrPurgeConflict
 		}
 		if err := validatePurgeItem(tx, row, frozen); err != nil {
+			return err
+		}
+		if err := s.requirePurgeUnreferenced(ctx, tx, lease.Actor, row, frozen); err != nil {
 			return err
 		}
 		var proof struct {

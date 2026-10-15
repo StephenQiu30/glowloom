@@ -33,6 +33,7 @@ func decodePackageFrozen(data []byte, value any) error {
 
 // PackageStore owns complete frozen import batches and atomic catalog publication.
 type PackageStore struct {
+	scopeAuthority
 	db      *gorm.DB
 	library *LibraryStore
 	guards  LibraryWorkGuardFactory
@@ -121,7 +122,7 @@ func (s *PackageStore) AuthorizePackage(ctx context.Context, actor identityapp.P
 	}
 	aspect := "16:9"
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if _, err := s.library.authorize(ctx, tx, actor, scope, write); err != nil {
@@ -129,7 +130,7 @@ func (s *PackageStore) AuthorizePackage(ctx context.Context, actor identityapp.P
 		}
 		if scope.Kind == domain.LibraryProject && write {
 			var err error
-			aspect, err = NewStore(tx).AuthorizeUpload(ctx, actor, *scope.ProjectID)
+			aspect, err = NewScopedStore(tx, s.scopes).AuthorizeUpload(ctx, actor, *scope.ProjectID)
 			return err
 		}
 		return nil
@@ -154,7 +155,7 @@ func (s *PackageStore) FindPackageImport(ctx context.Context, actor identityapp.
 		return job, plan, found, err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := packageCommandLock(tx, actor.ID, in.Key); err != nil {
@@ -197,7 +198,7 @@ func (s *PackageStore) FindPackageImport(ctx context.Context, actor identityapp.
 }
 
 func (s *PackageStore) scopeLock(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (libraryRow, application.LibraryProjectFacts, error) {
-	if err := requireCurrentActor(tx, actor); err != nil {
+	if err := s.requireCurrentActor(tx, actor); err != nil {
 		return libraryRow{}, application.LibraryProjectFacts{}, err
 	}
 	facts, err := s.library.authorize(ctx, tx, actor, scope, write)
@@ -237,7 +238,7 @@ func (s *PackageStore) AdmitPackageImport(ctx context.Context, actor identityapp
 		return result, err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := packageCommandLock(tx, actor.ID, in.Key); err != nil {
@@ -340,7 +341,7 @@ func (s *PackageStore) GetPackage(ctx context.Context, actor identityapp.Princip
 		return result, application.ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		row, plan, err := s.readPackage(tx, actor, id, false)
@@ -448,7 +449,7 @@ func (s *PackageStore) runPackage(ctx context.Context, actor identityapp.Princip
 		return result, application.ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if command != nil {
@@ -649,7 +650,7 @@ func (s *PackageStore) HasInflightPackageWork(ctx context.Context, actor identit
 		return false, application.ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if _, err := s.library.authorize(ctx, tx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, false); err != nil {
@@ -809,4 +810,12 @@ func (s *PackageStore) InspectPackageExport(ctx context.Context, actor identitya
 		}
 		return consume(export)
 	})
+}
+
+// NewScopedPackageStore binds live scope authority explicitly.
+func NewScopedPackageStore(db *gorm.DB, project LibraryProjectAccessFactory, guards LibraryWorkGuardFactory, clock func() time.Time, scopes ScopeAccessFactory) *PackageStore {
+	s := NewPackageStore(db, project, guards, clock)
+	s.scopeAuthority = scopeAuthority{scopes: scopes}
+	s.library.scopeAuthority = s.scopeAuthority
+	return s
 }

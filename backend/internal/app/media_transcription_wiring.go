@@ -18,13 +18,19 @@ import (
 // provideMediaTranscriptionStore retains query and cancel access when native
 // inference is disabled, while refusing new commands before any side effect.
 func provideMediaTranscriptionStore(database *gorm.DB, enabled bool) *pgtool.TranscriptionStore {
+	return provideMediaTranscriptionStoreWithAccess(database, enabled, provideMediaScopeAccess)
+}
+
+func provideMediaTranscriptionStoreWithAccess(database *gorm.DB, enabled bool, scopes pgmedia.ScopeAccessFactory) *pgtool.TranscriptionStore {
 	var source pgtool.TranscriptionSourceFactory
 	if enabled {
-		source = provideMediaToolSource
+		source = func(tx *gorm.DB) toolapp.TranscriptionSourceReader {
+			return provideMediaToolSourceWithAccess(tx, scopes)
+		}
 	}
 	return pgtool.NewTranscriptionStore(database, source,
 		func(tx *gorm.DB) toolapp.DerivedMedia {
-			return mediaapp.NewDerivedService(pgmedia.NewStore(tx))
+			return mediaapp.NewDerivedService(pgmedia.NewScopedStore(tx, scopes))
 		})
 }
 

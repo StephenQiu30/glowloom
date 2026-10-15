@@ -1,4 +1,6 @@
 "use client";
+import { LoadingState } from "@/components/layout/loading-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ImageIcon, Upload, RotateCw } from "lucide-react";
@@ -202,22 +204,29 @@ export function ProjectMediaPicker({
             从本地添加
           </Button>
           {error && (
-            <div role="alert">
-              {error}
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setLoading(true);
-                  setRetry((n) => n + 1);
-                }}
-              >
-                重新读取
-              </Button>
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription>
+                {error}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setLoading(true);
+                    setRetry((n) => n + 1);
+                  }}
+                >
+                  重新读取
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
           <div className="media-picker-grid">
             {items.map((a) => (
-              <button key={a.id} onClick={() => onSelect(a)}>
+              <Button
+                variant="ghost"
+                className="h-auto p-0"
+                key={a.id}
+                onClick={() => onSelect(a)}
+              >
                 <span className="media-picker-image">
                   <ProjectMediaPreview
                     projectID={projectID}
@@ -226,11 +235,11 @@ export function ProjectMediaPicker({
                   />
                 </span>
                 <span>{a.file_name}</span>
-              </button>
+              </Button>
             ))}
           </div>
           {loading ? (
-            <p role="status">正在读取素材…</p>
+            <LoadingState>正在读取素材…</LoadingState>
           ) : !error && items.length === 0 ? (
             <p>当前项目还没有可用素材。上传完成后可以继续选择。</p>
           ) : null}

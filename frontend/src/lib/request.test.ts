@@ -150,3 +150,144 @@ it("超时转换为未确认错误，主动取消保持 Axios 取消语义", asy
   expect(axios.isCancel(error)).toBe(true);
   expect(error).not.toBeInstanceOf(RequestError);
 });
+
+it("401 invalidation is bound to the sending session generation and keeps the original proof", async () => {
+  const { setCSRFToken, subscribeSessionInvalidation } =
+    await import("./request");
+  const notifications: number[] = [];
+  const unsubscribe = subscribeSessionInvalidation((generation) =>
+    notifications.push(generation),
+  );
+  let rejectOld!: () => void;
+  let originalProof = "";
+  setCSRFToken("old-proof");
+  const pending = request("/api/me/password", {
+    method: "POST",
+    adapter: async (config) =>
+      new Promise((_resolve, reject) => {
+        originalProof = String(config.headers.get("X-CSRF-Token"));
+        rejectOld = () =>
+          reject(
+            new axios.AxiosError(
+              "unauthenticated",
+              undefined,
+              config,
+              undefined,
+              {
+                status: 401,
+                statusText: "Unauthorized",
+                headers: {},
+                config,
+                data: { code: "unauthenticated" },
+              },
+            ),
+          );
+      }),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  setCSRFToken("new-proof");
+  rejectOld();
+  await expect(pending).rejects.toEqual(
+    new RequestError("unauthenticated", 401),
+  );
+  expect(originalProof).toBe("old-proof");
+  expect(notifications).toEqual([]);
+  await expect(
+    request("/api/me", {
+      adapter: async (config) => {
+        throw new axios.AxiosError(
+          "unauthenticated",
+          undefined,
+          config,
+          undefined,
+          {
+            status: 401,
+            statusText: "Unauthorized",
+            headers: {},
+            config,
+            data: { code: "unauthenticated" },
+          },
+        );
+      },
+    }),
+  ).rejects.toEqual(new RequestError("unauthenticated", 401));
+  expect(notifications).toHaveLength(1);
+  unsubscribe();
+  setCSRFToken(null);
+});
+
+it("wrong reauthentication password preserves the current session, other private invalid_credentials does not", async () => {
+  const { setCSRFToken, subscribeSessionInvalidation } =
+    await import("./request");
+  const calls: number[] = [];
+  const stop = subscribeSessionInvalidation((generation) =>
+    calls.push(generation),
+  );
+  setCSRFToken("proof");
+  const adapter: import("axios").AxiosAdapter = async (config) => {
+    throw new axios.AxiosError(
+      "invalid_credentials",
+      undefined,
+      config,
+      undefined,
+      {
+        status: 401,
+        statusText: "Unauthorized",
+        headers: {},
+        config,
+        data: { code: "invalid_credentials" },
+      },
+    );
+  };
+  await expect(
+    request("/api/me/reauthentication", { method: "POST", adapter }),
+  ).rejects.toEqual(new RequestError("invalid_credentials", 401));
+  expect(calls).toEqual([]);
+  await expect(request("/api/me", { adapter })).rejects.toEqual(
+    new RequestError("invalid_credentials", 401),
+  );
+  expect(calls).toHaveLength(1);
+  stop();
+  setCSRFToken(null);
+});
+
+it("切换空间取消旧读取，切换期间阻止新写入，完成后只发送新范围", async () => {
+  const { setCreationScope, setScopeSwitching } = await import("./request");
+  setCreationScope("old");
+  const pending = request("/slow", { baseURL });
+  setScopeSwitching(true);
+  setCreationScope("new");
+  expect(axios.isCancel(await pending.catch((e) => e))).toBe(true);
+  await expect(request("/echo", { baseURL, method: "POST" })).rejects.toEqual(
+    new RequestError("scope_switch_pending", 409),
+  );
+  setScopeSwitching(false);
+  const read = await request<Echo>("/echo", { baseURL });
+  expect(read.headers["x-creation-scope"]).toBe("new");
+  setCreationScope(null);
+});
+
+it("旧身份的成功响应在新身份激活后同样作废", async () => {
+  const { setCSRFToken } = await import("./request");
+  setCSRFToken("old-success-proof");
+  let finish!: () => void;
+  const pending = request("/api/me", {
+    adapter: async (config) =>
+      new Promise((resolve) => {
+        finish = () =>
+          resolve({
+            data: { email: "old@example.com" },
+            status: 200,
+            statusText: "OK",
+            headers: {},
+            config,
+          });
+      }),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  setCSRFToken("new-success-proof");
+  finish();
+  const result = await pending.catch((e) => e);
+  expect(axios.isCancel(result)).toBe(true);
+  setCSRFToken(null);
+});

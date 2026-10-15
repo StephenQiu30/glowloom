@@ -14,6 +14,9 @@ import (
 // adds new output rows pointing at the same media assets. The caller must keep
 // tx open through zero-cost settlement and the terminal Operation write.
 func (s *Store) CopyReuseOutputsInTransaction(ctx context.Context, tx *gorm.DB, operationID uuid.UUID) error {
+	if err := s.requireWorker(tx, operationID, true); err != nil {
+		return err
+	}
 	if s == nil || s.db == nil || tx == nil {
 		return ErrUnavailable
 	}

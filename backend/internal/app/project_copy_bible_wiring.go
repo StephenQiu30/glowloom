@@ -76,10 +76,14 @@ func projectCopyBibleError(err error) error {
 	return err
 }
 func provideBibleProjectCopyStore(database *gorm.DB, authority workspaceapp.ProjectCopyAuthority, mediaSnapshot mediaapp.ProjectCopySnapshot) *pgbible.ProjectCopyStore {
+	scopes := provideMediaScopeAccess
+	if authority.WorkerID != uuid.Nil {
+		scopes = provideMediaWorkerScopeAccess
+	}
 	return pgbible.NewProjectCopyStore(database, func(tx *gorm.DB) bibleapp.ProjectCopyAccess {
-		return projectCopyBibleAccess{store: pgworkspace.NewProjectCopyAccessStore(tx, authority)}
+		return projectCopyBibleAccess{store: provideCopyAccess(tx, authority)}
 	}, func(tx *gorm.DB) bibleapp.ProjectCopyMedia {
-		return projectCopyBibleMedia{query: mediaapp.NewProjectCopyReferenceQuery(pgmedia.NewProjectCopyStore(tx), nil), snapshot: mediaSnapshot}
+		return projectCopyBibleMedia{query: mediaapp.NewProjectCopyReferenceQuery(pgmedia.NewScopedProjectCopyStore(tx, scopes), nil), snapshot: mediaSnapshot}
 	}, func(tx *gorm.DB) bibleapp.ProjectCopyScopes {
 		return projectCopyBibleScopes{store: provideScriptProjectCopyStore(tx, authority)}
 	})

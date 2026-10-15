@@ -18,8 +18,18 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/platform/objectstorage"
 )
 
+// IngestStore is the operation-owned authority and frozen result boundary.
+type IngestStore interface {
+	LoadWorkflowOperation(context.Context, uuid.UUID) (application.WorkflowOperation, error)
+	ReadManagedResult(context.Context, application.ProviderDispatchIdentity) (*application.ManagedResult, error)
+	IngestManagedText(context.Context, application.ProviderDispatchIdentity) error
+	AuthorizeWorker(context.Context, uuid.UUID, bool) error
+}
+
 // IngestActivities use the existing media pipeline on its media queue.
 type IngestActivities struct {
+	store   IngestStore
+	scopes  mediapg.ScopeAccessFactory
 	db      *gorm.DB
 	objects *objectstorage.Client
 	results *application.ManagedResults
@@ -27,12 +37,23 @@ type IngestActivities struct {
 
 // NewIngestActivities shares the private immutable staging store with the worker.
 func NewIngestActivities(db *gorm.DB, objects *objectstorage.Client, results *application.ManagedResults) *IngestActivities {
-	return &IngestActivities{db: db, objects: objects, results: results}
+	return &IngestActivities{db: db, objects: objects, results: results, store: operationpg.NewStore(db)}
 }
 
 // Ingest retries transfer and registration without access to a supplier Key.
-func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) error {
-	store := operationpg.NewStore(a.db)
+func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) (resultErr error) {
+	store := a.store
+	if store == nil {
+		return executionAuthorityError(application.ErrExecutionAuthorityRevoked)
+	}
+	defer func() {
+		if resultErr != nil {
+			if err := store.AuthorizeWorker(ctx, operationID, true); errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+				resultErr = err
+			}
+			resultErr = executionAuthorityError(resultErr)
+		}
+	}()
 	loaded, err := store.LoadWorkflowOperation(ctx, operationID)
 	if err != nil {
 		return err
@@ -51,7 +72,7 @@ func (a *IngestActivities) Ingest(ctx context.Context, operationID uuid.UUID) er
 	if result.Text != "" {
 		return store.IngestManagedText(ctx, identity)
 	}
-	repo := mediapg.NewIngestRepository(a.db)
+	repo := mediapg.NewScopedIngestRepository(a.db, a.scopes)
 	service := mediaapp.NewIngestService(repo, artifactDownload{results: a.results, identity: identity}, mediaflow.FFProber{}, mediaflow.FFRenderer{}, mediaObjects{client: a.objects})
 	for _, artifact := range result.Artifacts {
 		output, err := service.Ingest(ctx, mediaapp.IngestInput{OperationID: operationID.String(), SeqNo: artifact.Sequence, URL: strconv.Itoa(artifact.Sequence)})
@@ -98,4 +119,9 @@ func (s mediaObjects) PutIfAbsent(ctx context.Context, key string, r io.Reader, 
 func (s mediaObjects) Stat(ctx context.Context, key string) (mediaapp.ObjectInfo, error) {
 	info, err := s.client.Stat(ctx, key)
 	return mediaapp.ObjectInfo{Size: info.Size, ContentType: info.ContentType, SHA256: info.SHA256}, err
+}
+
+// NewScopedIngestActivities supplies current media worker authority explicitly.
+func NewScopedIngestActivities(db *gorm.DB, objects *objectstorage.Client, results *application.ManagedResults, scopes mediapg.ScopeAccessFactory, store IngestStore) *IngestActivities {
+	return &IngestActivities{db: db, objects: objects, results: results, scopes: scopes, store: store}
 }

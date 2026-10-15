@@ -20,7 +20,7 @@ type Store interface {
 	LoadWorkflowOperation(context.Context, uuid.UUID) (application.WorkflowOperation, error)
 	ClaimProviderDispatch(context.Context, application.ProviderDispatchIdentity) (application.ProviderDispatchResult, error)
 	LoadManagedCredential(context.Context, uuid.UUID) (application.ManagedCredential, error)
-	ManagedMediaKey(context.Context, uuid.UUID, uuid.UUID) (string, error)
+	ManagedMediaKey(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (string, error)
 }
 
 // Unsealer authenticates a saved credential's connection identity.
@@ -54,7 +54,8 @@ func NewActivities(store Store, keys Unsealer, client application.GenerationProv
 }
 
 // Step never resubmits a claimed operation, even after a timeout or worker crash.
-func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (application.ManagedProgress, error) {
+func (a *Activities) Step(ctx context.Context, input application.ManagedStep) (output application.ManagedProgress, resultErr error) {
+	defer func() { resultErr = executionAuthorityError(resultErr) }()
 	unknown := application.ManagedProgress{State: "unknown"}
 	if input.OperationID == uuid.Nil || (input.Action != "submit" && input.Action != "query" && input.Action != "recover") {
 		return unknown, application.ErrInvalidProviderCall
@@ -224,7 +225,7 @@ func (a *Activities) request(ctx context.Context, loaded application.WorkflowOpe
 			texts = append(texts, *input.TextValue)
 		}
 		if input.MediaAssetID != nil {
-			key, err := a.store.ManagedMediaKey(ctx, op.ProjectID, *input.MediaAssetID)
+			key, err := a.store.ManagedMediaKey(ctx, op.ID, op.ProjectID, *input.MediaAssetID)
 			if err != nil {
 				return request, err
 			}

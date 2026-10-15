@@ -11,7 +11,6 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	pgmediatool "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/postgres"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
@@ -38,14 +37,14 @@ func (g projectWorkGuard) HasInflightWork(ctx context.Context, actor identityapp
 }
 
 func provideWorkspaceLifecycleStore(database *gorm.DB) *pgworkspace.Store {
-	return pgworkspace.NewStoreWithProjectCover(database, provideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
-		return mediaapp.NewAssetQuery(pgmedia.NewStore(tx), nil)
+	return pgworkspace.NewScopedStore(database, provideRequestScopeAccess, provideProjectWorkGuard, func(tx *gorm.DB) workspaceapp.ProjectCoverReference {
+		return mediaapp.NewAssetQuery(pgmedia.NewScopedStore(tx, provideMediaScopeAccess), nil)
 	})
 }
 
 func provideProjectWorkGuard(tx *gorm.DB) workspaceapp.ProjectWorkGuard {
 	return projectWorkGuard{owners: []workspaceapp.ProjectWorkGuard{
-		pgoperation.NewStore(tx), pgmedia.NewStore(tx), pgmediatool.NewStore(tx, nil, nil), provideMediaTranscriptionStore(tx, false),
+		provideOperationStore(tx), pgmedia.NewScopedStore(tx, provideMediaScopeAccess), pgmediatool.NewStore(tx, nil, nil), provideMediaTranscriptionStore(tx, false),
 		pgworkspace.NewProjectCopyStore(tx, nil, nil),
 		provideMediaDepthStore(tx, false),
 		provideScriptSourceStore(tx),

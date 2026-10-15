@@ -29,7 +29,7 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 	}
 	var cached *domain.PurgeJob
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := purgeLock(tx, actor.ID, in.Key); err != nil {
@@ -49,7 +49,7 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 		return *cached, nil
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := purgeLock(tx, actor.ID, in.Key); err != nil {
@@ -115,11 +115,15 @@ func (s *PurgeStore) CreatePurge(ctx context.Context, actor identityapp.Principa
 			frozen := application.FrozenPurgeItem{ItemID: item.ID, CatalogRevision: item.Revision, Renditions: []domain.Rendition{}}
 			state := "queued"
 			var failure *string
-			if item.AssetID != nil && in.Scope.Kind == domain.LibraryProject {
+			if item.AssetID != nil {
 				if s.references == nil || s.references(tx) == nil {
 					return application.ErrUnavailable
 				}
-				used, err := s.references(tx).HasMediaReferences(ctx, actor, *in.Scope.ProjectID, *item.AssetID)
+				project := uuid.Nil
+				if in.Scope.ProjectID != nil {
+					project = *in.Scope.ProjectID
+				}
+				used, err := s.references(tx).HasMediaReferences(ctx, actor, project, *item.AssetID)
 				if err != nil {
 					return err
 				}

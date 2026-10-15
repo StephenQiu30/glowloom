@@ -272,9 +272,11 @@ func writeProjectSnapshot(c *gin.Context, s application.ProjectSnapshot) {
 
 func writeLifecycleError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, 401, "unauthorized", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
-	case errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
+	case errors.Is(err, application.ErrScopeNotFound), errors.Is(err, application.ErrProjectNotFound), errors.Is(err, application.ErrStylePresetNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", nil)
 	case errors.Is(err, domain.ErrProjectRevisionConflict):
 		httpapi.WriteProblem(c, 409, "revision_conflict", nil)

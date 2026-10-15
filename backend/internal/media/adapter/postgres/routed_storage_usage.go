@@ -122,8 +122,8 @@ func storageUsageMediaLocations(tx *gorm.DB, actor identityapp.Principal, scope 
   UNION ALL SELECT o.source_location_id,o.source_object_key FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.source_project_id=? AND s.org_id=?
   UNION ALL SELECT o.target_location_id,o.target_object_key FROM media.project_copy_object o JOIN media.project_copy_snapshot s ON s.id=o.snapshot_id WHERE s.target_project_id=? AND s.org_id=?`
 	} else {
-		query += ` UNION ALL SELECT o.source_location_id,o.source_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.org_id=? AND j.actor_id=?
-  UNION ALL SELECT o.target_location_id,o.target_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.org_id=? AND j.actor_id=?`
+		query += ` UNION ALL SELECT o.source_location_id,o.source_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.source_kind='personal' AND j.source_org_id=? AND j.actor_id=?
+  UNION ALL SELECT o.target_location_id,o.target_object_key FROM media.transfer_object o JOIN media.transfer_job j ON j.id=o.job_id WHERE j.target_kind='personal' AND j.target_org_id=? AND j.actor_id=?`
 	}
 	query += `) held LEFT JOIN media.object_location l ON l.id=held.location_id AND l.object_key=held.object_key ORDER BY held.location_id,held.object_key LIMIT 50001`
 	var rows []struct{ ProfileID, Bucket, ObjectKey string }

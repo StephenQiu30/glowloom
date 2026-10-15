@@ -90,3 +90,39 @@ it("rejects a response from a different project", async () => {
   await screen.findByRole("alert");
   expect(screen.queryByText("私有图片")).toBeNull();
 });
+
+it("uses command keyboard selection without submitting the separate batch checkboxes", async () => {
+  api.media.mockResolvedValue({
+    items: ["first", "second"].map((id) => ({
+      id,
+      project_id: "project",
+      kind: "image",
+      file_name: `${id}.png`,
+    })),
+  });
+  const chosen = vi.fn();
+  render(
+    <ReferenceSearch
+      projectID="project"
+      initialQuery=""
+      onSelect={chosen}
+      onClose={() => {}}
+    />,
+  );
+  await screen.findByRole("option", { name: /second.png/ });
+  const search = screen.getByLabelText("搜索项目引用");
+  fireEvent.keyDown(search, { key: "ArrowDown" });
+  fireEvent.keyDown(search, { key: "Enter" });
+  expect(chosen).toHaveBeenCalledTimes(1);
+  expect(chosen).toHaveBeenCalledWith([
+    expect.objectContaining({ id: "second" }),
+  ]);
+
+  chosen.mockClear();
+  fireEvent.click(screen.getByRole("checkbox", { name: "first.png" }));
+  expect(chosen).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "插入所选 1 项" }));
+  expect(chosen).toHaveBeenCalledWith([
+    expect.objectContaining({ id: "first" }),
+  ]);
+});

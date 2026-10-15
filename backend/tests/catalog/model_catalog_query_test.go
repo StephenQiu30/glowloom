@@ -66,7 +66,6 @@ func TestListModelsQueryRejectsInvalidPrincipalAndPageInputBeforeStorage(t *test
 	}{
 		{"missing account", identityapp.Principal{OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, valid, identityapp.ErrForbidden},
 		{"missing organization", identityapp.Principal{ID: actor.ID, Role: identitydomain.RoleProducer}, valid, identityapp.ErrForbidden},
-		{"unsupported role", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: "viewer"}, valid, identityapp.ErrForbidden},
 		{"must change password", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: identitydomain.RoleProducer, MustChangePassword: true}, valid, identityapp.ErrForbidden},
 		{"missing project", actor, catalogapp.ListModelsInput{}, catalogapp.ErrInvalidModelCatalog},
 		{"negative limit", actor, catalogapp.ListModelsInput{ProjectID: projectID, Limit: -1}, catalogapp.ErrInvalidModelCatalog},

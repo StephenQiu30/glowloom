@@ -1,4 +1,9 @@
 "use client";
+import { LoadingState } from "@/components/layout/loading-state";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
@@ -8,7 +13,10 @@ import { PromptEditor } from "./prompt-editor";
 import { emptyPromptDraft } from "./prompt-document";
 const RichGeneration = dynamic(
   () => import("./rich-generation").then((m) => m.RichGeneration),
-  { ssr: false, loading: () => <p role="status">正在打开创作编辑器…</p> },
+  {
+    ssr: false,
+    loading: () => <LoadingState>正在打开创作编辑器…</LoadingState>,
+  },
 );
 /** The home workspace expands in place, so its owner and undo history survive view changes. */
 export function GenerationComposer() {
@@ -45,15 +53,15 @@ export function GenerationComposer() {
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <select
+        <NativeSelect
           aria-label="资产生成类型"
-          className="rounded border bg-background px-3"
+
           value={capability}
           onChange={(e) => setCapability(e.target.value as "image" | "video")}
         >
-          <option value="image">图片生成</option>
-          <option value="video">视频生成</option>
-        </select>
+          <NativeSelectOption value="image">图片生成</NativeSelectOption>
+          <NativeSelectOption value="video">视频生成</NativeSelectOption>
+        </NativeSelect>
         <Button variant="outline" onClick={() => setChoosing(true)}>
           参考素材与主体
         </Button>

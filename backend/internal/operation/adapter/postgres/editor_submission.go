@@ -77,7 +77,7 @@ func readEditorSubmission(tx *gorm.DB, a identityapp.Principal, p, id uuid.UUID)
 func (s *Store) CurrentSubmission(ctx context.Context, a identityapp.Principal, p uuid.UUID, source promptdomain.InputSource) (application.SubmissionCurrent, error) {
 	var out application.SubmissionCurrent
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, a); err != nil {
+		if err := s.requireProject(tx, a, p, true); err != nil {
 			return err
 		}
 		var err error
@@ -210,7 +210,7 @@ func (s *Store) ResolveSubmission(ctx context.Context, a identityapp.Principal, 
 	hash := sha256.Sum256(raw)
 	fingerprint := hex.EncodeToString(hash[:])
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, a); err != nil {
+		if err := s.requireProject(tx, a, in.ProjectID, true); err != nil {
 			return err
 		}
 		if err := tx.Exec(`SELECT pg_advisory_xact_lock(69360,hashtext(?))`, a.ID.String()+":"+in.Key.String()).Error; err != nil {

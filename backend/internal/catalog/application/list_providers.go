@@ -36,7 +36,7 @@ type ProviderListPage struct {
 
 // ListProvidersStore rechecks current administrator rights in its read transaction.
 type ListProvidersStore interface {
-	ListProvidersForAdmin(context.Context, uuid.UUID, uuid.UUID, int, *ProviderListCursor) (ProviderListPage, error)
+	ListProvidersForAdmin(context.Context, identityapp.Principal, int, *ProviderListCursor) (ProviderListPage, error)
 }
 
 // ListProvidersInput requests a bounded internal page.
@@ -69,7 +69,7 @@ func (q *ListProvidersQuery) Execute(ctx context.Context, actor identityapp.Prin
 	if limit == 0 {
 		limit = 50
 	}
-	page, err := q.store.ListProvidersForAdmin(ctx, actor.ID, actor.OrgID, limit, input.After)
+	page, err := q.store.ListProvidersForAdmin(ctx, actor, limit, input.After)
 	if err != nil {
 		return ProviderListPage{}, fmt.Errorf("list providers: %w", err)
 	}

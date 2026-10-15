@@ -46,6 +46,12 @@ func (s *Store) RecordManualNotExecuted(ctx context.Context, input application.M
 		return err
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if input.Actor.ID != input.AdminID {
+			return application.ErrManualResolutionUnverified
+		}
+		if err := s.requirePlatform(tx, input.Actor); err != nil {
+			return err
+		}
 		var op struct {
 			ProjectID uuid.UUID
 			Status    string
@@ -59,6 +65,9 @@ func (s *Store) RecordManualNotExecuted(ctx context.Context, input application.M
 		}
 		if result.RowsAffected != 1 {
 			return ErrNotFound
+		}
+		if err := s.requireProject(tx, input.Actor, op.ProjectID, true); err != nil {
+			return err
 		}
 		if err := rejectManualExecutedCall(tx, op.ProjectID, input.OperationID); err != nil {
 			return err
@@ -86,21 +95,7 @@ func (s *Store) RecordManualNotExecuted(ctx context.Context, input application.M
 		if op.Status != "manual" {
 			return application.ErrInvalidProviderCall
 		}
-		var authorized int
-		result = tx.Raw(`
-			SELECT 1 FROM identity."user" AS u
-			JOIN workspace.project AS p ON p.org_id = u.org_id
-			WHERE u.id = ?::uuid AND p.id = ?::uuid
-			  AND u.role = 'admin' AND u.status = 'active'
-			  AND NOT u.must_change_password AND NOT u.is_delete AND NOT p.is_delete
-			FOR SHARE OF u, p
-		`, input.AdminID.String(), op.ProjectID.String()).Scan(&authorized)
-		if result.Error != nil {
-			return fmt.Errorf("verify manual provider administrator: %w", result.Error)
-		}
-		if result.RowsAffected != 1 {
-			return application.ErrManualResolutionUnverified
-		}
+
 		detail, err := json.Marshal(map[string]string{
 			"admin_id": input.AdminID.String(), "evidence": input.Evidence,
 		})
@@ -168,6 +163,9 @@ func (s *Store) BeginProviderCall(ctx context.Context, input application.BeginPr
 		return err
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, input.OperationID, true); err != nil {
+			return err
+		}
 		var op struct {
 			ProjectID             uuid.UUID
 			Status                string
@@ -354,7 +352,7 @@ func (s *Store) CompleteProviderCall(ctx context.Context, input application.Comp
 				return application.ErrProviderCallConflict
 			}
 			identity.RequestKey = *op.ProviderRequestKey
-			evidence, err := NewStore(tx).ReadManagedResult(ctx, identity)
+			evidence, err := s.withDB(tx).ReadManagedResult(ctx, identity)
 			if err != nil {
 				return err
 			}

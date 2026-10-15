@@ -75,8 +75,8 @@ type publicBatchRow struct {
 	CancelRequestedAt                                     *time.Time
 }
 
-func requirePublicProject(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, active bool) error {
-	if err := requireCurrentActor(tx, actor); err != nil {
+func (s *Store) requirePublicProject(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, active bool) error {
+	if err := s.requireProject(tx, actor, projectID, active); err != nil {
 		return err
 	}
 	var found int
@@ -101,7 +101,7 @@ func (s *Store) ListPublicTasks(ctx context.Context, actor identityapp.Principal
 		return page, application.ErrInvalidPublicQuery
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePublicProject(tx, actor, input.ProjectID, false); err != nil {
+		if err := s.requirePublicProject(tx, actor, input.ProjectID, false); err != nil {
 			return err
 		}
 		query := publicTaskSelect + publicTaskJoin + ` WHERE o.project_id=?::uuid AND NOT o.is_delete
@@ -150,7 +150,7 @@ func (s *Store) ReadPublicTask(ctx context.Context, actor identityapp.Principal,
 		return result, ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePublicProject(tx, actor, projectID, false); err != nil {
+		if err := s.requirePublicProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		var task publicTaskDetailRow
@@ -231,7 +231,7 @@ func (s *Store) ReadPublicBatch(ctx context.Context, actor identityapp.Principal
 		return result, ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePublicProject(tx, actor, projectID, false); err != nil {
+		if err := s.requirePublicProject(tx, actor, projectID, false); err != nil {
 			return err
 		}
 		var batch publicBatchRow

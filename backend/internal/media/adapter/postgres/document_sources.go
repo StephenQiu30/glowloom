@@ -46,10 +46,10 @@ func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor i
 	}
 	var rows []assetRow
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if err := requireProject(tx, actor, project, false); err != nil {
+		if err := s.requireProject(tx, actor, project, false); err != nil {
 			return err
 		}
 		library, err := readLibrary(tx, actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, false)
@@ -92,4 +92,9 @@ func (s *DocumentSourceStore) FreezeDocumentSources(ctx context.Context, actor i
 		assets[i] = byID[id]
 	}
 	return assets, nil
+}
+
+// NewScopedDocumentSourceStore retains exact request or worker authority.
+func NewScopedDocumentSourceStore(db *gorm.DB, scopes ScopeAccessFactory) *DocumentSourceStore {
+	return &DocumentSourceStore{Store: NewScopedStore(db, scopes)}
 }

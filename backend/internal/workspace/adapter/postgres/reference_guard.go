@@ -15,17 +15,25 @@ import (
 )
 
 // MediaReferenceGuard reads only workspace-owned current and permanent historical facts.
-type MediaReferenceGuard struct{ tx *gorm.DB }
+type MediaReferenceGuard struct {
+	tx     *gorm.DB
+	access *ProjectContentAccessStore
+}
 
 // NewMediaReferenceGuard keeps authority and reference locks in the caller's transaction.
 func NewMediaReferenceGuard(tx *gorm.DB) *MediaReferenceGuard { return &MediaReferenceGuard{tx: tx} }
 
+// NewScopedMediaReferenceGuard binds current request authority to reference checks.
+func NewScopedMediaReferenceGuard(tx *gorm.DB, access *ProjectContentAccessStore) *MediaReferenceGuard {
+	return &MediaReferenceGuard{tx: tx, access: access}
+}
+
 // HasMediaReferences includes recycled directories, old covers and retained style presets.
 func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor identityapp.Principal, project, asset uuid.UUID) (bool, error) {
-	if g == nil || g.tx == nil || asset == uuid.Nil {
+	if g == nil || g.tx == nil || g.access == nil || asset == uuid.Nil {
 		return false, application.ErrProjectDependencyUnavailable
 	}
-	if _, err := NewProjectContentAccessStore(g.tx).Authorize(ctx, actor, project, false); err != nil {
+	if _, err := g.access.Authorize(ctx, actor, project, false); err != nil {
 		return false, err
 	}
 	tx := g.tx.WithContext(ctx)

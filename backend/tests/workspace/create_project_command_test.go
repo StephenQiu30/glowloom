@@ -52,11 +52,11 @@ func createProjectCommandInput() workspaceapp.CreateProjectInput {
 }
 
 func projectCommandActor(role identitydomain.Role) identityapp.Principal {
-	return identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), Role: role}
+	return identityapp.Principal{ID: uuid.New(), OrgID: uuid.New(), ScopeID: uuid.New(), SessionID: uuid.New(), CredentialEpoch: 1, Role: role}
 }
 
 func TestCreateProjectCommandCreatesSafeProjectAndEvents(t *testing.T) {
-	for _, role := range []identitydomain.Role{identitydomain.RoleProducer, identitydomain.RoleAdmin} {
+	for _, role := range []identitydomain.Role{"", identitydomain.RoleProducer, identitydomain.RoleAdmin} {
 		t.Run(string(role), func(t *testing.T) {
 			actor := projectCommandActor(role)
 			input := createProjectCommandInput()
@@ -152,7 +152,7 @@ func TestCreateProjectCommandRejectsInvalidCallerAndInputBeforeStorage(t *testin
 	}{
 		{"missing actor", identityapp.Principal{OrgID: actor.OrgID, Role: identitydomain.RoleProducer}, nil, identityapp.ErrForbidden},
 		{"missing organization", identityapp.Principal{ID: actor.ID, Role: identitydomain.RoleProducer}, nil, identityapp.ErrForbidden},
-		{"unknown role", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID}, nil, identityapp.ErrForbidden},
+		{"missing session and scope", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID}, nil, identityapp.ErrForbidden},
 		{"must change password", identityapp.Principal{ID: actor.ID, OrgID: actor.OrgID, Role: actor.Role, MustChangePassword: true}, nil, identityapp.ErrForbidden},
 		{"blank name", actor, func(v *workspaceapp.CreateProjectInput) { v.Name = " \t" }, workspaceapp.ErrInvalidCreateProject},
 		{"long name", actor, func(v *workspaceapp.CreateProjectInput) { v.Name = strings.Repeat("剧", 51) }, workspaceapp.ErrInvalidCreateProject},

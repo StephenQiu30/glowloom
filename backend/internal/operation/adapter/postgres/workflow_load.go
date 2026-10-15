@@ -26,6 +26,9 @@ func (s *Store) LoadWorkflowOperation(ctx context.Context, operationID uuid.UUID
 	}
 	var loaded application.WorkflowOperation
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, operationID, false); err != nil {
+			return err
+		}
 		var row operationRow
 		result := tx.Raw(`
 			SELECT id, project_id, batch_id, target_type, target_id, target_key,

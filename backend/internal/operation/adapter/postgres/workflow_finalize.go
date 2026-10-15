@@ -25,6 +25,16 @@ func (s *Store) PrepareFinalizationInTransaction(ctx context.Context, tx *gorm.D
 	if err := validateFinalizationInput(input); err != nil {
 		return application.FinalizePreparation{}, err
 	}
+	if input.FailureCode == "execution_authority_revoked" {
+		if err := s.requireRevoked(tx.WithContext(ctx), input.OperationID); err != nil {
+			return application.FinalizePreparation{}, err
+		}
+	}
+	if input.To == domain.StatusCompleted {
+		if err := s.requireWorker(tx, input.OperationID, true); err != nil {
+			return application.FinalizePreparation{}, err
+		}
+	}
 	var row struct {
 		ProjectID     uuid.UUID
 		ReservationID *uuid.UUID
@@ -59,7 +69,7 @@ func (s *Store) PrepareFinalizationInTransaction(ctx context.Context, tx *gorm.D
 	if row.SettledMicros != nil || !containsTransitionFrom(input.From, current) {
 		return application.FinalizePreparation{}, ErrTransitionConflict
 	}
-	if err := current.CanTransitionTo(input.To); err != nil {
+	if err := current.CanTransitionTo(input.To); err != nil && !revocationFinalization(input, current) {
 		return application.FinalizePreparation{}, err
 	}
 	return preparation, nil
@@ -143,7 +153,7 @@ func validateFinalizationInput(input application.FinalizeInput) error {
 		return ErrInvalidFinalizationInput
 	}
 	for _, from := range input.From {
-		if from.IsTerminal() || from == input.To || from.CanTransitionTo(input.To) != nil {
+		if from.IsTerminal() || from == input.To || (from.CanTransitionTo(input.To) != nil && !revocationFinalization(input, from)) {
 			return ErrInvalidFinalizationInput
 		}
 	}

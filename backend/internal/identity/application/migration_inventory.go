@@ -11,7 +11,9 @@ import (
 )
 
 var (
-	ErrInvalidMigrationInventory  = errors.New("invalid migration inventory")
+	// ErrInvalidMigrationInventory rejects an incomplete or ambiguous ownership inventory.
+	ErrInvalidMigrationInventory = errors.New("invalid migration inventory")
+	// ErrAmbiguousResourceOwnership rejects an inferred or conflicting resource owner.
 	ErrAmbiguousResourceOwnership = errors.New("ambiguous resource ownership")
 )
 
@@ -37,18 +39,21 @@ type VerifiedBinding struct {
 	PlatformAdmin bool
 }
 
+// ResourceOwnership records explicit owner evidence for one migration resource.
 type ResourceOwnership struct {
 	ResourceID, ScopeID uuid.UUID
 	Kind                string
 	OwnerID             uuid.UUID
 }
 
+// MigrationInventory collects identity and resource facts without guessing mappings.
 type MigrationInventory struct {
 	Users     []LegacyUser
 	Resources []LegacyResource
 	Bindings  []VerifiedBinding
 }
 
+// MigrationAssessment reports mapping blockers before any migration write.
 type MigrationAssessment struct {
 	BlockedUserIDs, UnmappedResourceIDs []uuid.UUID
 	VerifiedBindings                    []VerifiedBinding

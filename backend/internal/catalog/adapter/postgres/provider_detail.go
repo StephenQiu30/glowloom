@@ -15,14 +15,14 @@ import (
 
 // FindProviderDetailForAdmin reads a provider and only the current credential's
 // display columns after checking live administrator rights in one transaction.
-func (s *Store) FindProviderDetailForAdmin(ctx context.Context, actorID, orgID, providerID uuid.UUID) (domain.Provider, *application.ProviderCredentialSummary, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil || providerID == uuid.Nil {
+func (s *Store) FindProviderDetailForAdmin(ctx context.Context, actor identityapp.Principal, providerID uuid.UUID) (domain.Provider, *application.ProviderCredentialSummary, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || providerID == uuid.Nil {
 		return domain.Provider{}, nil, identityapp.ErrForbidden
 	}
 	var provider domain.Provider
 	var credential *application.ProviderCredentialSummary
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var providerData providerRow

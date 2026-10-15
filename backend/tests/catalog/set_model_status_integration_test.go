@@ -51,7 +51,7 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 		ID: uuid.New(), Key: "video.generate." + uuid.NewString(), OutputType: domain.OutputVideo,
 		Modes: []string{"image2video"}, InputRoles: []string{"subject"},
 	}
-	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, capability); err != nil {
+	if err := store.CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
 		t.Fatal(err)
 	}
 	created, err := catalogapp.NewCreateModelCommand(store, time.Now).Execute(ctx, actor, catalogapp.CreateModelInput{
@@ -106,7 +106,7 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	if _, err := publishPrice.Execute(ctx, actor, effectivePrice); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.SetModelStatusWithAudit(ctx, actor.ID, actor.OrgID, created.ID,
+	if _, err := store.SetModelStatusWithAudit(ctx, actor, created.ID,
 		domain.ModelActive, 4, identityapp.OutboxEvent{}); !errors.Is(err, catalogapp.ErrInvalidSetModelStatus) {
 		t.Fatalf("model enabled without audit: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestSetModelStatusCommitsAuditAndGuardsActivationOnLocalPostgres(t *testing
 	if _, err := command.Execute(ctx, actor, disable); err == nil {
 		t.Fatal("audit failure committed model disable")
 	}
-	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, created.ID)
+	loaded, err := store.FindModelForAdmin(ctx, actor, created.ID)
 	if err != nil || loaded.Status != domain.ModelActive || loaded.Revision != 5 {
 		t.Fatalf("audit failure changed model %+v: %v", loaded, err)
 	}

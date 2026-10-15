@@ -12,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
-	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	billingapp "github.com/StephenQiu30/glowloom-server/backend/internal/billing/application"
 	billingdomain "github.com/StephenQiu30/glowloom-server/backend/internal/billing/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
@@ -56,7 +55,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 	}
 	var result application.ConfirmBatchQuoteResult
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		rows, err := lockBatchQuotes(tx, actor, input)
+		rows, err := s.lockBatchQuotes(tx, actor, input)
 		if err != nil {
 			return err
 		}
@@ -93,7 +92,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 			if excluded[row.ID] {
 				reasons = []string{"excluded_by_user"}
 			} else {
-				reasons, err = batchQuoteFreshness(ctx, tx, actor, quoted, at)
+				reasons, err = s.batchQuoteFreshness(ctx, tx, actor, quoted, at)
 				if err != nil {
 					return err
 				}
@@ -118,7 +117,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 	var discovered []application.BatchConfirmationItem
 	postBudgetStale := make(map[uuid.UUID]bool)
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		rows, err := lockBatchQuotes(tx, actor, input)
+		rows, err := s.lockBatchQuotes(tx, actor, input)
 		if err != nil {
 			return err
 		}
@@ -129,7 +128,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 				continue
 			}
 			quoted := row.domain()
-			reasons, err := batchQuoteFreshness(ctx, tx, actor, quoted, at)
+			reasons, err := s.batchQuoteFreshness(ctx, tx, actor, quoted, at)
 			if err != nil {
 				return err
 			}
@@ -178,7 +177,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 			if read.RowsAffected != 1 || model.ModelKey == "" {
 				return application.ErrQuoteStale
 			}
-			reserve, err := pgbilling.NewStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{
+			reserve, err := s.billingStore(tx).ReserveInTransaction(ctx, tx, billingapp.ReserveInput{Actor: actor,
 				ProjectID: input.ProjectID, OperationID: quoted.ID, ActorID: actor.ID,
 				AmountMicros: *quoted.QuoteMicros, ModelKey: &model.ModelKey,
 				Region: quoted.Region, OccurredAt: at,
@@ -209,7 +208,7 @@ func (s *Store) confirmBatchQuote(ctx context.Context, actor identityapp.Princip
 		// The budget lock may have waited past a quote or price boundary.
 		at = time.Now().UTC()
 		for _, quoted := range selected {
-			reasons, err := batchQuoteFreshness(ctx, tx, actor, quoted, at)
+			reasons, err := s.batchQuoteFreshness(ctx, tx, actor, quoted, at)
 			if err != nil {
 				return err
 			}
@@ -301,7 +300,7 @@ func (s *Store) persistStaleBatchQuotes(ctx context.Context, actor identityapp.P
 ) ([]application.BatchConfirmationItem, error) {
 	var persisted []application.BatchConfirmationItem
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		rows, err := lockBatchQuotes(tx, actor, input)
+		rows, err := s.lockBatchQuotes(tx, actor, input)
 		if err != nil {
 			return err
 		}
@@ -316,7 +315,7 @@ func (s *Store) persistStaleBatchQuotes(ctx context.Context, actor identityapp.P
 				continue
 			}
 			quoted := row.domain()
-			reasons, err := batchQuoteFreshness(ctx, tx, actor, quoted, at)
+			reasons, err := s.batchQuoteFreshness(ctx, tx, actor, quoted, at)
 			if err != nil {
 				return err
 			}
@@ -344,8 +343,8 @@ func (s *Store) persistStaleBatchQuotes(ctx context.Context, actor identityapp.P
 	return persisted, err
 }
 
-func lockBatchQuotes(tx *gorm.DB, actor identityapp.Principal, input application.ConfirmBatchQuoteInput) ([]operationRow, error) {
-	if err := requireCurrentActor(tx, actor); err != nil {
+func (s *Store) lockBatchQuotes(tx *gorm.DB, actor identityapp.Principal, input application.ConfirmBatchQuoteInput) ([]operationRow, error) {
+	if err := s.requireProject(tx, actor, input.ProjectID, true); err != nil {
 		return nil, err
 	}
 	var batch batchRow
@@ -383,16 +382,16 @@ func lockBatchQuotes(tx *gorm.DB, actor identityapp.Principal, input application
 	return rows, nil
 }
 
-func batchQuoteFreshness(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, quoted domain.Operation, at time.Time) ([]string, error) {
+func (s *Store) batchQuoteFreshness(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, quoted domain.Operation, at time.Time) ([]string, error) {
 	if quoted.TargetType != "free" || quoted.TargetVersionNo != nil ||
 		quoted.ModelProfileVersionID == nil {
 		return nil, application.ErrConfirmationTargetUnavailable
 	}
-	currentModel, currentPrice, err := NewStore(tx).ReadCurrentQuoteCatalog(ctx, actor, quoted, at)
+	currentModel, currentPrice, err := s.withDB(tx).ReadCurrentQuoteCatalog(ctx, actor, quoted, at)
 	if err != nil {
 		return nil, err
 	}
-	reuseAvailable, err := NewStore(tx).ReadReuseSourceAvailable(ctx, actor, quoted)
+	reuseAvailable, err := s.withDB(tx).ReadReuseSourceAvailable(ctx, actor, quoted)
 	if err != nil {
 		return nil, err
 	}

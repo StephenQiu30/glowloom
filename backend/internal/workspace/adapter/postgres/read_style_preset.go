@@ -23,7 +23,7 @@ func (s *Store) ListStylePresets(ctx context.Context, actor identityapp.Principa
 	}
 	var presets []domain.StylePreset
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireScope(ctx, tx, actor, false); err != nil {
 			return err
 		}
 		query := `
@@ -31,11 +31,14 @@ func (s *Store) ListStylePresets(ctx context.Context, actor identityapp.Principa
 			       prompt_fragment, negative_prompt,
 			       array_to_json(reference_asset_ids)::text AS reference_asset_ids_json
 			FROM workspace.style_preset
-			WHERE org_id = ?::uuid AND project_id IS NULL AND NOT is_delete
+			WHERE org_id = ?::uuid AND owner_scope_id = ?::uuid AND project_id IS NULL AND NOT is_delete
 			ORDER BY name, id
 		`
-		args := []any{actor.OrgID.String()}
+		args := []any{actor.OrgID.String(), actor.ScopeID.String()}
 		if projectID != nil {
+			if err := s.authorizeProject(ctx, tx, actor, *projectID, false); err != nil {
+				return err
+			}
 			var visible int
 			result := tx.Raw(`
 				SELECT 1 FROM workspace.project
@@ -53,7 +56,7 @@ func (s *Store) ListStylePresets(ctx context.Context, actor identityapp.Principa
 				       prompt_fragment, negative_prompt,
 				       array_to_json(reference_asset_ids)::text AS reference_asset_ids_json
 				FROM workspace.style_preset
-				WHERE org_id = ?::uuid AND (project_id IS NULL OR project_id = ?::uuid)
+				WHERE org_id = ?::uuid AND owner_scope_id = ?::uuid AND (project_id IS NULL OR project_id = ?::uuid)
 				  AND NOT is_delete
 				ORDER BY name, id
 			`

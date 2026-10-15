@@ -30,9 +30,9 @@ type setModelStatusStore struct {
 	err              error
 }
 
-func (s *setModelStatusStore) SetModelStatusWithAudit(_ context.Context, actorID, orgID, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
+func (s *setModelStatusStore) SetModelStatusWithAudit(_ context.Context, actor identityapp.Principal, modelID uuid.UUID, status domain.ModelStatus, expectedRevision int64, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
 	s.called = true
-	s.actorID, s.orgID, s.modelID = actorID, orgID, modelID
+	s.actorID, s.orgID, s.modelID = actor.ID, actor.OrgID, modelID
 	s.status, s.expectedRevision, s.event = status, expectedRevision, event
 	if s.err != nil {
 		return domain.ModelProfile{}, s.err

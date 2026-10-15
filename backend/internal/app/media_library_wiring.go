@@ -40,7 +40,12 @@ func (g mediaLibraryWorkGuards) HasInflightProjectWork(ctx context.Context, acto
 }
 
 func provideMediaLibraryProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
-	return mediaLibraryProjectAccess{store: pgworkspace.NewProjectContentAccessStore(tx)}
+	return mediaLibraryProjectAccess{store: provideProjectContentAccess(tx)}
+}
+
+// provideMediaLibraryWorkerProjectAccess never requires an initiating HTTP session.
+func provideMediaLibraryWorkerProjectAccess(tx *gorm.DB) mediaapp.LibraryProjectAccess {
+	return mediaLibraryProjectAccess{store: provideWorkerProjectContentAccess(tx)}
 }
 
 func (a mediaLibraryProjectAccess) Authorize(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, write bool) (mediaapp.LibraryProjectFacts, error) {
@@ -60,9 +65,9 @@ func mediaLibraryProjectError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, identityapp.ErrForbidden), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, identityapp.ErrSessionInvalid), errors.Is(err, identityapp.ErrForbidden), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return err
-	case errors.Is(err, workspaceapp.ErrProjectNotFound):
+	case errors.Is(err, workspaceapp.ErrScopeNotFound), errors.Is(err, workspaceapp.ErrProjectNotFound):
 		return errors.Join(mediaapp.ErrNotFound, err)
 	case errors.Is(err, workspacedomain.ErrProjectRevisionConflict):
 		return errors.Join(mediaapp.ErrLibraryConflict, err)

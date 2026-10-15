@@ -1,12 +1,21 @@
 "use client";
+import { LoadingState } from "@/components/layout/loading-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
 import Link from "next/link";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
+import { DownloadButton } from "@/components/media/download-button";
 import { Input } from "@/components/ui/input";
 import {
   connectProviderPreset,
+  exportProviderPreset,
   listAdminProviders,
   listProviderPresets,
   updateProviderPresetState,
@@ -20,6 +29,8 @@ import { PresetEditor } from "./preset-editor";
 import { ConnectionDetail } from "./connection-detail";
 
 export function ProvidersPage() {
+  const formFieldId = useId();
+
   const session = useSession();
   const [tab, setTab] = useState<"connections" | "presets">("connections");
   const [providers, setProviders] = useState<API.ProviderListItem[]>([]);
@@ -54,7 +65,11 @@ export function ProvidersPage() {
     return () => controller.abort();
   }, [refresh]);
   if (session.actor.platform_role !== "platform_admin")
-    return <p role="alert">此页面仅向平台管理员开放。</p>;
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>此页面仅向平台管理员开放。</AlertDescription>
+      </Alert>
+    );
   const preset = presets.find((item) => item.id === presetID);
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
@@ -88,22 +103,23 @@ export function ProvidersPage() {
       </div>
       <MutationStatus mutation={mutation} />
       {error ? (
-        <div role="alert" className="rounded-lg border p-4">
-          <p>{error}</p>
-          <Button
-            className="mt-2"
-            variant="outline"
-            onClick={() => setRefresh((v) => v + 1)}
-          >
-            重新加载
-          </Button>
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <p>{error}</p>
+            <Button
+              className="mt-2"
+              variant="outline"
+              onClick={() => setRefresh((v) => v + 1)}
+            >
+              重新加载
+            </Button>
+          </AlertDescription>
+        </Alert>
       ) : null}
-      {loading ? <p role="status">正在加载平台配置…</p> : null}
+      {loading ? <LoadingState>正在加载平台配置…</LoadingState> : null}
       {tab === "connections" ? (
         <>
           <form
-            className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2"
             onSubmit={async (event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
@@ -125,52 +141,63 @@ export function ProvidersPage() {
               if (result?.provider_id) setSelected(result.provider_id);
             }}
           >
-            <h2 className="font-medium sm:col-span-2">添加连接</h2>
-            <label className="space-y-1 text-sm">
-              平台预设
-              <select
-                required
-                value={presetID}
-                onChange={(e) => setPresetID(e.target.value)}
-                className="h-10 w-full rounded-md border bg-background px-3"
-              >
-                <option value="">选择平台</option>
-                {presets
-                  .filter((p) => !p.archived && !p.emergency_disabled)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.document?.name} · v{p.version}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label className="space-y-1 text-sm">
-              连接名称
-              <Input
-                name="name"
-                required
-                maxLength={100}
-                placeholder="例如：主生产连接"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              连接标识
-              <Input
-                name="key"
-                required
-                pattern="[a-z][a-z0-9_-]{0,63}"
-                placeholder="例如：ark-primary"
-              />
-            </label>
-            <div className="flex items-end">
-              <Button disabled={mutation.busy || !preset}>创建连接</Button>
-            </div>
-            {preset ? (
-              <p className="text-xs break-all text-muted-foreground sm:col-span-2">
-                {preset.document?.config?.base_url} ·
-                创建后处于禁用状态，验证发布后才接受新任务。
-              </p>
-            ) : null}
+            <FieldGroup className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2">
+              <h2 className="font-medium sm:col-span-2">添加连接</h2>
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+                  <span>平台预设</span>
+                </FieldLabel>
+                <NativeSelect
+                  id={`${formFieldId}-field-1`}
+                  required
+                  value={presetID}
+                  onChange={(e) => setPresetID(e.target.value)}
+                  className="h-10 w-full"
+                >
+                  <NativeSelectOption value="">选择平台</NativeSelectOption>
+                  {presets
+                    .filter((p) => !p.archived && !p.emergency_disabled)
+                    .map((p) => (
+                      <NativeSelectOption key={p.id} value={p.id}>
+                        {p.document?.name} · v{p.version}
+                      </NativeSelectOption>
+                    ))}
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+                  <span>连接名称</span>
+                </FieldLabel>
+                <Input
+                  id={`${formFieldId}-field-2`}
+                  name="name"
+                  required
+                  maxLength={100}
+                  placeholder="例如：主生产连接"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-3`}>
+                  <span>连接标识</span>
+                </FieldLabel>
+                <Input
+                  id={`${formFieldId}-field-3`}
+                  name="key"
+                  required
+                  pattern="[a-z][a-z0-9_-]{0,63}"
+                  placeholder="例如：ark-primary"
+                />
+              </Field>
+              <div className="flex items-end">
+                <Button disabled={mutation.busy || !preset}>创建连接</Button>
+              </div>
+              {preset ? (
+                <p className="text-xs break-all text-muted-foreground sm:col-span-2">
+                  {preset.document?.config?.base_url} ·
+                  创建后处于禁用状态，验证发布后才接受新任务。
+                </p>
+              ) : null}
+            </FieldGroup>
           </form>
           <div className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_minmax(0,2fr)]">
             <div className="space-y-2" role="region" aria-label="连接列表">
@@ -180,11 +207,13 @@ export function ProvidersPage() {
                 </p>
               ) : null}
               {providers.map(({ provider, credential, model_count }) => (
-                <button
+                <Button
+                  variant={selected === provider?.id ? "secondary" : "outline"}
                   type="button"
                   key={provider?.id}
                   onClick={() => setSelected(provider?.id ?? "")}
-                  className={`w-full rounded-xl border p-4 text-left ${selected === provider?.id ? "border-primary bg-muted" : ""}`}
+                  aria-pressed={selected === provider?.id}
+                  className="h-auto w-full flex-col items-start gap-1 p-4 text-left whitespace-normal"
                 >
                   <span className="block font-medium">{provider?.name}</span>
                   <span className="mt-1 block text-xs text-muted-foreground">
@@ -197,7 +226,7 @@ export function ProvidersPage() {
                       ? `Key ••••${credential.last4}`
                       : "未配置 Key"}
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
             {selected ? (
@@ -246,14 +275,23 @@ export function ProvidersPage() {
                   >
                     {p.origin === "builtin" ? "复制为自定义" : "编辑新版本"}
                   </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <a
-                      href={`/api/admin/provider-presets/${p.id}/export`}
-                      download
-                    >
-                      导出
-                    </a>
-                  </Button>
+                  <DownloadButton
+                    filename={`provider-preset-${p.id}.json`}
+                    load={async () =>
+                      new Blob(
+                        [
+                          JSON.stringify(
+                            await exportProviderPreset({ id: p.id! }),
+                            null,
+                            2,
+                          ),
+                        ],
+                        { type: "application/json" },
+                      )
+                    }
+                  >
+                    导出
+                  </DownloadButton>
                   <Button
                     size="sm"
                     variant="outline"

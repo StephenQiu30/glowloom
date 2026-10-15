@@ -10,16 +10,17 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
-func (s *TranscriptionStore) validateSource(ctx context.Context, tx *gorm.DB, row transcriptionRow) error {
+func (s *TranscriptionStore) validateSource(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, row transcriptionRow) error {
 	var frozen domain.FrozenTranscription
 	if json.Unmarshal(row.Frozen, &frozen) != nil || frozen.Language != row.Language || !domain.ValidTranscriptionLanguage(frozen.Language) {
 		return application.ErrInvalidTranscription
 	}
-	assets, err := s.media(tx).Sources(ctx, row.actor(), row.ProjectID, []uuid.UUID{frozen.Input.AssetID})
+	assets, err := s.media(tx).Sources(ctx, actor, row.ProjectID, []uuid.UUID{frozen.Input.AssetID})
 	if err != nil {
 		return normalize(err)
 	}
@@ -49,6 +50,9 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
+			return err
+		}
+		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if row.Attempt != id.Attempt {
@@ -99,7 +103,7 @@ func (s *TranscriptionStore) Claim(ctx context.Context, id application.Transcrip
 		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
-		if err := s.validateSource(ctx, tx, row); err != nil {
+		if err := s.validateSource(ctx, tx, row.actor(), row); err != nil {
 			return err
 		}
 		row.ActiveWorker = &id.ExecutionID
@@ -164,6 +168,9 @@ func (s *TranscriptionStore) StartInference(ctx context.Context, id application.
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
+			return err
+		}
+		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if err := ownTranscription(row, id); err != nil {
@@ -254,7 +261,7 @@ func (s *TranscriptionStore) Complete(ctx context.Context, id application.Transc
 			if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 				return err
 			}
-			if err := s.validateSource(ctx, tx, row); err != nil {
+			if err := s.validateSource(ctx, tx, row.actor(), row); err != nil {
 				return err
 			}
 			row.Status = "succeeded"
@@ -402,5 +409,32 @@ func (s *TranscriptionStore) FailWorkflow(ctx context.Context, id application.Tr
 		row.Revision++
 		row.UpdatedAt = time.Now().UTC()
 		return updateTranscription(tx, row)
+	})
+}
+
+// AuthorizeObjectWrite rechecks the live durable actor after native termination,
+// without discarding the terminal/unknown receipt or granting a second inference.
+func (s *TranscriptionStore) AuthorizeObjectWrite(ctx context.Context, id application.TranscriptionWorkID) error {
+	if s == nil || s.db == nil || id.ExecutionID == uuid.Nil {
+		return application.ErrUnavailable
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		row, err := readTranscription(tx, uuid.Nil, id.JobID, true)
+		if err != nil {
+			return err
+		}
+		if err = s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
+			return err
+		}
+		if err = ownTranscription(row, id); err != nil {
+			return err
+		}
+		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+			return application.ErrCancelled
+		}
+		if row.Status != "running" || row.InferenceState != "terminal" {
+			return application.ErrConflict
+		}
+		return nil
 	})
 }

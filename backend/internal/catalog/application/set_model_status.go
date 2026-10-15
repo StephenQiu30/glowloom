@@ -19,7 +19,7 @@ var ErrInvalidSetModelStatus = errors.New("invalid set-model-status command")
 
 // SetModelStatusStore commits the state transition and audit atomically.
 type SetModelStatusStore interface {
-	SetModelStatusWithAudit(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.ModelStatus, int64, identityapp.OutboxEvent) (domain.ModelProfile, error)
+	SetModelStatusWithAudit(context.Context, identityapp.Principal, uuid.UUID, domain.ModelStatus, int64, identityapp.OutboxEvent) (domain.ModelProfile, error)
 }
 
 // SetModelStatusInput identifies the requested administrator transition.
@@ -72,7 +72,7 @@ func (c *SetModelStatusCommand) Execute(ctx context.Context, actor identityapp.P
 	if err != nil {
 		return ChangedModelStatus{}, fmt.Errorf("build model status audit: %w", err)
 	}
-	saved, err := c.store.SetModelStatusWithAudit(ctx, actor.ID, actor.OrgID, input.ModelID, input.Status, input.ExpectedRevision, event)
+	saved, err := c.store.SetModelStatusWithAudit(ctx, actor, input.ModelID, input.Status, input.ExpectedRevision, event)
 	if err != nil {
 		return ChangedModelStatus{}, fmt.Errorf("set model status with audit: %w", err)
 	}

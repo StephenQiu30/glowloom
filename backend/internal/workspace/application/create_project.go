@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/workspace/domain"
 )
 
@@ -100,6 +99,7 @@ func (c *CreateProjectCommand) ExecuteIdempotent(ctx context.Context, actor iden
 	}
 	body, err := json.Marshal(struct {
 		OrgID         uuid.UUID
+		ScopeID       uuid.UUID
 		Name          string
 		Description   string
 		AspectRatio   string
@@ -107,7 +107,7 @@ func (c *CreateProjectCommand) ExecuteIdempotent(ctx context.Context, actor iden
 		StyleSubtype  string
 		StylePresetID uuid.UUID
 		StyleKey      *string
-	}{actor.OrgID, input.Name, input.Description, input.AspectRatio, input.StyleType, input.StyleSubtype, input.StylePresetID, input.StyleKey})
+	}{actor.OrgID, actor.ScopeID, input.Name, input.Description, input.AspectRatio, input.StyleType, input.StyleSubtype, input.StylePresetID, input.StyleKey})
 	if err != nil {
 		return CreatedProject{}, fmt.Errorf("encode project creation request: %w", err)
 	}
@@ -119,8 +119,8 @@ func (c *CreateProjectCommand) execute(ctx context.Context, actor identityapp.Pr
 	if c == nil || c.store == nil || c.now == nil {
 		return CreatedProject{}, ErrInvalidCreateProject
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword ||
-		(actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer) {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
+		(actor.ScopeID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1) {
 		return CreatedProject{}, identityapp.ErrForbidden
 	}
 	requestID, err := uuid.Parse(input.RequestID)

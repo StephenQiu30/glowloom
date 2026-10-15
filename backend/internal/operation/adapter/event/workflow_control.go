@@ -57,6 +57,9 @@ func (h *WorkflowControlHandler) Handle(ctx context.Context, record inbox.Record
 	}
 	_, err = h.processed.ProcessExternalOnce(ctx, "workflow-control", event.EventID.String(), func(ctx context.Context) error {
 		eligible, err := h.store.CanDeliverWorkflowControl(ctx, event)
+		if errors.Is(err, application.ErrExecutionAuthorityRevoked) {
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("verify workflow control: %w", err)
 		}

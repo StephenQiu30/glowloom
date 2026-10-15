@@ -13,9 +13,10 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
+// EmailTransaction commits proofs, accounts and mail together.
 func (s *Store) EmailTransaction(ctx context.Context, run func(application.EmailTx) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return run(&emailAuthTx{authTx: &authTx{db: tx}})
+		return run(&emailAuthTx{authTx: &authTx{db: tx, invitationTeams: s.invitationTeams}})
 	})
 }
 
@@ -69,6 +70,13 @@ func (t *authTx) AccountByEmail(email string) (domain.User, error) {
 	return t.account(`email_key=?`, email)
 }
 
+// EmailReserved includes deleted identities; deletion never releases the mailbox.
+func (t *authTx) EmailReserved(email string) (bool, error) {
+	var reserved bool
+	err := t.db.Raw(`SELECT EXISTS(SELECT 1 FROM identity."user" WHERE email_key=?)`, email).Scan(&reserved).Error
+	return reserved, err
+}
+
 func (t *authTx) Challenge(operation uuid.UUID, purpose string) (domain.EmailChallenge, error) {
 	var c domain.EmailChallenge
 	r := t.db.Raw(`SELECT * FROM identity.auth_challenge WHERE operation_id=? AND purpose=? ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE`, operation, purpose).Scan(&c)
@@ -82,8 +90,8 @@ func (t *authTx) Challenge(operation uuid.UUID, purpose string) (domain.EmailCha
 }
 
 func (t *authTx) InsertChallenge(c domain.EmailChallenge) error {
-	if err := t.db.Exec(`INSERT INTO identity.auth_challenge(id,operation_id,purpose,email_key,user_id,email_version,credential_epoch,proof_digest,proof_key_id,flow_secret_digest,attempts,expires_at,created_at,invitation_id)
-	VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, c.ID, c.OperationID, c.Purpose, c.EmailKey, c.UserID, c.EmailVersion, c.CredentialEpoch, c.ProofDigest, c.ProofKeyID, c.FlowSecretDigest, c.Attempts, c.ExpiresAt, c.CreatedAt, c.InvitationID).Error; err != nil {
+	if err := t.db.Exec(`INSERT INTO identity.auth_challenge(id,operation_id,purpose,email_key,user_id,email_version,credential_epoch,proof_digest,proof_key_id,flow_secret_digest,attempts,expires_at,created_at,invitation_id,invitation_revision)
+	VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, c.ID, c.OperationID, c.Purpose, c.EmailKey, c.UserID, c.EmailVersion, c.CredentialEpoch, c.ProofDigest, c.ProofKeyID, c.FlowSecretDigest, c.Attempts, c.ExpiresAt, c.CreatedAt, c.InvitationID, c.InvitationRevision).Error; err != nil {
 		return fmt.Errorf("insert email proof: %w", err)
 	}
 	return nil
@@ -148,8 +156,8 @@ func (t *authTx) CreatePersonalAccount(u domain.User) error {
 }
 
 func (t *authTx) EnqueueMail(m application.QueuedMail) error {
-	if err := t.db.Exec(`INSERT INTO identity.mail_delivery(event_id,challenge_id,template,recipient,encrypted_payload,key_id,next_attempt_at,expires_at,created_at,updated_at)
-	VALUES(?,?,?,?,?,?,?,?,?,?)`, m.EventID, m.ChallengeID, m.Template, m.Recipient, m.EncryptedPayload, m.KeyID, m.CreatedAt, m.ExpiresAt, m.CreatedAt, m.CreatedAt).Error; err != nil {
+	if err := t.db.Exec(`INSERT INTO identity.mail_delivery(event_id,challenge_id,template,recipient,encrypted_payload,key_id,next_attempt_at,expires_at,created_at,updated_at,invitation_id,invitation_revision)
+	VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, m.EventID, m.ChallengeID, m.Template, m.Recipient, m.EncryptedPayload, m.KeyID, m.CreatedAt, m.ExpiresAt, m.CreatedAt, m.CreatedAt, m.InvitationID, m.InvitationRevision).Error; err != nil {
 		return fmt.Errorf("enqueue identity mail: %w", err)
 	}
 	return nil

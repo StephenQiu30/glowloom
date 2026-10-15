@@ -48,7 +48,7 @@ func TestCreateModelCommitsAuditAndRechecksAdminOnLocalPostgres(t *testing.T) {
 		ID: uuid.New(), Key: "video.generate." + uuid.NewString(),
 		OutputType: domain.OutputVideo, Modes: []string{"image2video"},
 	}
-	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, capability); err != nil {
+	if err := store.CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
 		t.Fatal(err)
 	}
 	command := catalogapp.NewCreateModelCommand(store, time.Now)
@@ -60,7 +60,7 @@ func TestCreateModelCommitsAuditAndRechecksAdminOnLocalPostgres(t *testing.T) {
 	if err != nil || created.ID == uuid.Nil || created.Status != domain.ModelDisabled || created.Revision != 1 {
 		t.Fatalf("create model %+v: %v", created, err)
 	}
-	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, created.ID)
+	loaded, err := store.FindModelForAdmin(ctx, actor, created.ID)
 	if err != nil || loaded.Key != input.Key || loaded.ProviderID != provider.ID || loaded.Capability != capability.Key {
 		t.Fatalf("persisted model %+v: %v", loaded, err)
 	}

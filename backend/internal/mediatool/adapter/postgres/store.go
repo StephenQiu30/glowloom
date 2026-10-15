@@ -16,7 +16,6 @@ import (
 	canvasapp "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/application"
 	canvasdomain "github.com/StephenQiu30/glowloom-server/backend/internal/canvas/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -43,7 +42,7 @@ func NewStore(db *gorm.DB, timeline TimelineFactory, media MediaFactory) *Store 
 
 type jobRow struct {
 	ID, ProjectID, OrgID, ActorID, CanvasID, NodeID uuid.UUID
-	ActorRole                                       string
+	ActorRole                                       *string
 	OutputKind                                      string
 	SourceRevision                                  int64
 	Frozen                                          []byte
@@ -60,7 +59,7 @@ func (r jobRow) public() domain.ExportJob {
 	return domain.ExportJob{ID: r.ID, ProjectID: r.ProjectID, OutputKind: domain.OutputKind(r.OutputKind).Effective(), Source: domain.Source{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Status: domain.Status(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, AssetID: r.AssetID, SHA256: r.SHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (r jobRow) actor() identityapp.Principal {
-	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID, Role: identitydomain.Role(r.ActorRole)}
+	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID}
 }
 func readJob(tx *gorm.DB, project, id uuid.UUID, lock bool) (jobRow, error) {
 	var row jobRow
@@ -281,7 +280,7 @@ func (s *Store) Create(ctx context.Context, actor identityapp.Principal, project
 		}
 		now := time.Now().UTC()
 		job = domain.ExportJob{ID: uuid.New(), ProjectID: project, OutputKind: kind, Source: domain.Source{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Status: domain.Queued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,output_kind,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',0,1,1,?,?)`, job.ID, project, actor.OrgID, actor.ID, string(actor.Role), input.CanvasID, input.NodeID, input.Revision, string(raw), kind, now, now).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO mediatool.export_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,frozen,output_kind,status,stage,progress,attempt,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?::jsonb,?,'queued','queued',0,1,1,?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, input.CanvasID, input.NodeID, input.Revision, string(raw), kind, now, now).Error; err != nil {
 			return err
 		}
 		return recordCommand(tx, actor, key, hash, "requested", job, "start")

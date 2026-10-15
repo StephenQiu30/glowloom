@@ -16,7 +16,7 @@ import (
 
 func readPlacement(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID) (domain.FolderPlacement, error) {
 	out := domain.FolderPlacement{OrgID: actor.OrgID, ActorID: actor.ID, ProjectID: project}
-	read := tx.Raw(`SELECT org_id,actor_id,project_id,folder_id,revision FROM workspace.project_folder_placement WHERE actor_id=? AND org_id=? AND project_id=? FOR UPDATE`, actor.ID, actor.OrgID, project).Scan(&out)
+	read := tx.Raw(`SELECT org_id,actor_id,project_id,folder_id,revision FROM workspace.project_folder_placement WHERE actor_id=? AND org_id=? AND project_id=? AND owner_scope_id=? FOR UPDATE`, actor.ID, actor.OrgID, project, actor.ScopeID).Scan(&out)
 	if read.Error != nil {
 		return domain.FolderPlacement{}, fmt.Errorf("read project library assignment: %w", read.Error)
 	}
@@ -24,7 +24,7 @@ func readPlacement(tx *gorm.DB, actor identityapp.Principal, project uuid.UUID) 
 }
 
 func bumpFolder(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, now time.Time) error {
-	write := tx.Exec(`UPDATE workspace.project_folder SET revision=revision+1,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND NOT is_delete AND revision<?`, now, id, actor.OrgID, actor.ID, math.MaxInt32)
+	write := tx.Exec(`UPDATE workspace.project_folder SET revision=revision+1,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND owner_scope_id=? AND NOT is_delete AND revision<?`, now, id, actor.OrgID, actor.ID, actor.ScopeID, math.MaxInt32)
 	if write.Error != nil {
 		return write.Error
 	}
@@ -34,7 +34,7 @@ func bumpFolder(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, now time
 	return nil
 }
 
-func (s *FolderStore) moveProjectFolder(_ context.Context, tx *gorm.DB, actor identityapp.Principal, in application.FolderChangeInput, now time.Time) (application.FolderChangeResult, error) {
+func (s *FolderStore) moveProjectFolder(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, in application.FolderChangeInput, now time.Time) (application.FolderChangeResult, error) {
 	var target *domain.ProjectFolder
 	if in.FolderID != uuid.Nil {
 		f, err := readFolder(tx, actor, in.FolderID, false)
@@ -45,6 +45,9 @@ func (s *FolderStore) moveProjectFolder(_ context.Context, tx *gorm.DB, actor id
 			return application.FolderChangeResult{}, domain.ErrProjectFolderRevisionConflict
 		}
 		target = &f
+	}
+	if err := (&Store{scopes: s.scopes}).authorizeProject(ctx, tx, actor, in.ProjectID, true); err != nil {
+		return application.FolderChangeResult{}, err
 	}
 	project, err := readLifecycleProject(tx, actor.OrgID, in.ProjectID, true)
 	if err != nil {
@@ -89,7 +92,7 @@ func (s *FolderStore) moveProjectFolder(_ context.Context, tx *gorm.DB, actor id
 	if target != nil {
 		after.FolderID = &target.ID
 	}
-	write := tx.Exec(`INSERT INTO workspace.project_folder_placement(org_id,actor_id,project_id,folder_id,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?) ON CONFLICT(actor_id,project_id) DO UPDATE SET folder_id=excluded.folder_id,revision=excluded.revision,update_time=excluded.update_time WHERE workspace.project_folder_placement.org_id=? AND workspace.project_folder_placement.revision=?`, actor.OrgID, actor.ID, in.ProjectID, id, after.Revision, now, now, actor.OrgID, before.Revision)
+	write := tx.Exec(`INSERT INTO workspace.project_folder_placement(org_id,owner_scope_id,actor_id,project_id,folder_id,revision,create_time,update_time) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(actor_id,project_id) DO UPDATE SET folder_id=excluded.folder_id,revision=excluded.revision,update_time=excluded.update_time WHERE workspace.project_folder_placement.owner_scope_id=excluded.owner_scope_id AND workspace.project_folder_placement.org_id=? AND workspace.project_folder_placement.revision=?`, actor.OrgID, actor.ScopeID, actor.ID, in.ProjectID, id, after.Revision, now, now, actor.OrgID, before.Revision)
 	if write.Error != nil {
 		return application.FolderChangeResult{}, write.Error
 	}
@@ -117,7 +120,7 @@ func (s *FolderStore) recycleFolder(ctx context.Context, tx *gorm.DB, actor iden
 	// Lock even already-deleted members so concurrent Restore cannot slip into
 	// an unobserved gap between the membership query and the lifecycle update.
 	var ids []uuid.UUID
-	if err := tx.Raw(`SELECT p.id FROM workspace.project p JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id WHERE m.org_id=? AND m.actor_id=? AND m.folder_id=? ORDER BY p.id FOR UPDATE OF p`, actor.OrgID, actor.ID, f.ID).Scan(&ids).Error; err != nil {
+	if err := tx.Raw(`SELECT p.id FROM workspace.project p JOIN workspace.project_folder_placement m ON m.project_id=p.id AND m.org_id=p.org_id WHERE m.org_id=? AND m.actor_id=? AND m.folder_id=? AND m.owner_scope_id=? AND p.owner_scope_id=? ORDER BY p.id FOR UPDATE OF p`, actor.OrgID, actor.ID, f.ID, actor.ScopeID, actor.ScopeID).Scan(&ids).Error; err != nil {
 		return application.FolderChangeResult{}, fmt.Errorf("lock complete directory membership: %w", err)
 	}
 	out := application.FolderChangeResult{RecycledProjectIDs: []uuid.UUID{}}
@@ -155,14 +158,14 @@ func (s *FolderStore) recycleFolder(ctx context.Context, tx *gorm.DB, actor iden
 		}
 		out.RecycledProjectIDs = append(out.RecycledProjectIDs, id)
 	}
-	if err := tx.Exec(`UPDATE workspace.project_folder_placement SET folder_id=NULL,revision=revision+1,update_time=? WHERE org_id=? AND actor_id=? AND folder_id=?`, now, actor.OrgID, actor.ID, f.ID).Error; err != nil {
+	if err := tx.Exec(`UPDATE workspace.project_folder_placement SET folder_id=NULL,revision=revision+1,update_time=? WHERE org_id=? AND actor_id=? AND folder_id=? AND owner_scope_id=?`, now, actor.OrgID, actor.ID, f.ID, actor.ScopeID).Error; err != nil {
 		return application.FolderChangeResult{}, err
 	}
 	f.IsDelete = true
 	f.DeleteTime = &now
 	f.Revision++
 	f.UpdateTime = now
-	write := tx.Exec(`UPDATE workspace.project_folder SET is_delete=true,delete_time=?,revision=?,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND revision=? AND NOT is_delete`, now, f.Revision, now, f.ID, actor.OrgID, actor.ID, in.ExpectedRevision)
+	write := tx.Exec(`UPDATE workspace.project_folder SET is_delete=true,delete_time=?,revision=?,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND owner_scope_id=? AND revision=? AND NOT is_delete`, now, f.Revision, now, f.ID, actor.OrgID, actor.ID, actor.ScopeID, in.ExpectedRevision)
 	if write.Error != nil {
 		return application.FolderChangeResult{}, write.Error
 	}

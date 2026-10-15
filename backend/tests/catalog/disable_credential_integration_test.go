@@ -26,8 +26,8 @@ type revokeAfterCredentialReadStore struct {
 	revoke func(context.Context) error
 }
 
-func (s *revokeAfterCredentialReadStore) FindCredentialForAdmin(ctx context.Context, actorID, orgID, providerID, credentialID uuid.UUID) (catalogapp.CredentialToDisable, error) {
-	target, err := s.store.FindCredentialForAdmin(ctx, actorID, orgID, providerID, credentialID)
+func (s *revokeAfterCredentialReadStore) FindCredentialForAdmin(ctx context.Context, actor identityapp.Principal, providerID, credentialID uuid.UUID) (catalogapp.CredentialToDisable, error) {
+	target, err := s.store.FindCredentialForAdmin(ctx, actor, providerID, credentialID)
 	if err != nil {
 		return catalogapp.CredentialToDisable{}, err
 	}
@@ -37,8 +37,8 @@ func (s *revokeAfterCredentialReadStore) FindCredentialForAdmin(ctx context.Cont
 	return target, nil
 }
 
-func (s *revokeAfterCredentialReadStore) DisableCredentialWithEvents(ctx context.Context, actorID, orgID uuid.UUID, target catalogapp.CredentialToDisable, events []identityapp.OutboxEvent) (catalogapp.SavedCredential, error) {
-	return s.store.DisableCredentialWithEvents(ctx, actorID, orgID, target, events)
+func (s *revokeAfterCredentialReadStore) DisableCredentialWithEvents(ctx context.Context, actor identityapp.Principal, target catalogapp.CredentialToDisable, events []identityapp.OutboxEvent) (catalogapp.SavedCredential, error) {
+	return s.store.DisableCredentialWithEvents(ctx, actor, target, events)
 }
 
 func TestDisableCredentialCommitsSafeEventsAndRollsBackOnAuditFailure(t *testing.T) {

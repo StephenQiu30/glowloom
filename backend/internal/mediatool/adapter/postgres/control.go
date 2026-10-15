@@ -83,7 +83,7 @@ func (s *Store) Control(ctx context.Context, actor identityapp.Principal, projec
 			if active >= 2 {
 				return application.ErrConflict
 			}
-			if err := s.validateSources(ctx, tx, row); err != nil {
+			if err := s.validateSources(ctx, tx, actor, row); err != nil {
 				return err
 			}
 			row.Status = "queued"
@@ -95,7 +95,7 @@ func (s *Store) Control(ctx context.Context, actor identityapp.Principal, projec
 			row.SHA256 = nil
 			row.FailureCode = nil
 			row.ActorID = actor.ID
-			row.ActorRole = string(actor.Role)
+			row.ActorRole = nil
 			emit = "start"
 		}
 		row.Revision++

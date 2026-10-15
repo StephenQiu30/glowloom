@@ -16,7 +16,7 @@ import (
 func (s *Store) ReadConfigReceipt(ctx context.Context, actor identityapp.Principal, action string, target, id uuid.UUID) (application.ConfigReceipt, error) {
 	result := application.ConfigReceipt{Action: action, TargetID: target, RequestID: id}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, actor.ID.String()+"/"+action+"/"+target.String()+"/"+id.String()).Error; err != nil {

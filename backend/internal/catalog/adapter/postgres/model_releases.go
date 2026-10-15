@@ -56,7 +56,7 @@ func decodeRelease(row releaseRow) (application.ModelRelease, error) {
 func (s *Store) ListModelReleases(ctx context.Context, actor identityapp.Principal, id uuid.UUID) ([]application.ModelRelease, error) {
 	items := []application.ModelRelease{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		var rows []releaseRow
@@ -77,7 +77,7 @@ func (s *Store) ListModelReleases(ctx context.Context, actor identityapp.Princip
 
 // CreateModelRelease accepts only versions belonging to the same provider/model.
 func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.CreateReleaseInput) (application.ModelRelease, error) {
-	return catalogMutation(ctx, s.db, actor, "release.create", id, input.RequestID, input, func(tx *gorm.DB) (application.ModelRelease, error) {
+	return catalogMutation(ctx, s.db, s.actors, actor, "release.create", id, input.RequestID, input, func(tx *gorm.DB) (application.ModelRelease, error) {
 		var found int
 		r := tx.Raw(`SELECT 1 FROM catalog.model_profile m
  JOIN catalog.model_profile_version v ON v.model_profile_id=m.id AND NOT v.is_delete
@@ -117,7 +117,7 @@ func (s *Store) CreateModelRelease(ctx context.Context, actor identityapp.Princi
 // ActivateModelRelease atomically switches the model and optional default after
 // locking emergency controls, provider, credential and model in that order.
 func (s *Store) ActivateModelRelease(ctx context.Context, actor identityapp.Principal, id uuid.UUID, input application.ActivateReleaseInput) (application.ModelRelease, error) {
-	return catalogMutation(ctx, s.db, actor, "release.activate", id, input.RequestID, input, func(tx *gorm.DB) (application.ModelRelease, error) {
+	return catalogMutation(ctx, s.db, s.actors, actor, "release.activate", id, input.RequestID, input, func(tx *gorm.DB) (application.ModelRelease, error) {
 		var binding struct{ ModelID, ProviderID, ConfigID uuid.UUID }
 		r := tx.Raw(`SELECT r.model_id,m.provider_id,r.config_version_id AS config_id FROM catalog.model_release r JOIN catalog.model_profile m ON m.id=r.model_id WHERE r.id=?`, id).Scan(&binding)
 		if r.Error != nil {
@@ -242,7 +242,7 @@ func equalNullableUUID(a, b *uuid.UUID) bool {
 func (s *Store) ListCapabilityDefaults(ctx context.Context, actor identityapp.Principal) ([]application.CapabilityDefault, error) {
 	items := []application.CapabilityDefault{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requirePlatformCatalogAdmin(tx, actor); err != nil {
+		if err := requirePlatformCatalogAdmin(tx, s.actors, actor); err != nil {
 			return err
 		}
 		return tx.Raw(`SELECT capability,release_id,revision FROM catalog.capability_default ORDER BY capability`).Scan(&items).Error

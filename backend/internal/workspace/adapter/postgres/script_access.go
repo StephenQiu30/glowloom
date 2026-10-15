@@ -15,29 +15,91 @@ import (
 )
 
 // ProjectContentAccessStore binds script access to its already-open transaction.
-type ProjectContentAccessStore struct{ tx *gorm.DB }
+type ProjectContentAccessStore struct {
+	tx      *gorm.DB
+	scopes  application.RequestScopeResolver
+	workers application.WorkerScopeResolver
+}
 
-// NewProjectContentAccessStore accepts the transaction held by the content owner.
-// Calls reject a connection pool, which would release locks before content writes.
+// NewProjectContentAccessStore is retained for callers awaiting scope migration.
+// It has no authority and fails closed. Use a request or worker constructor.
 func NewProjectContentAccessStore(tx *gorm.DB) *ProjectContentAccessStore {
 	return &ProjectContentAccessStore{tx: tx}
 }
 
+// NewScopedProjectContentAccessStore binds explicit ownership and request-session
+// authorization to the content transaction during the coordinated scope cutover.
+func NewScopedProjectContentAccessStore(tx *gorm.DB, scopes application.RequestScopeResolver) *ProjectContentAccessStore {
+	return &ProjectContentAccessStore{tx: tx, scopes: scopes}
+}
+
+// NewWorkerProjectContentAccessStore binds background work to live account and
+// membership checks. The durable project row supplies ownership, never an event role.
+func NewWorkerProjectContentAccessStore(tx *gorm.DB, scopes application.WorkerScopeResolver) *ProjectContentAccessStore {
+	return &ProjectContentAccessStore{tx: tx, workers: scopes}
+}
+
 // Authorize checks current account and project facts, retaining its row lock.
 func (s *ProjectContentAccessStore) Authorize(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, write bool) (application.ProjectContentAccess, error) {
+	return s.authorizeStatus(ctx, actor, projectID, write, false)
+}
+
+// AuthorizeCopyTarget authorizes only unpublished targets in the coordinator transaction.
+func (s *ProjectContentAccessStore) AuthorizeCopyTarget(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID) (application.ProjectContentAccess, error) {
+	return s.authorizeStatus(ctx, actor, projectID, true, true)
+}
+
+func (s *ProjectContentAccessStore) authorizeStatus(ctx context.Context, actor identityapp.Principal, projectID uuid.UUID, write, copying bool) (application.ProjectContentAccess, error) {
 	if s == nil || s.tx == nil || s.tx.Statement == nil {
 		return application.ProjectContentAccess{}, application.ErrProjectDependencyUnavailable
 	}
 	if _, transaction := s.tx.Statement.ConnPool.(gorm.TxCommitter); !transaction {
 		return application.ProjectContentAccess{}, application.ErrProjectDependencyUnavailable
 	}
-	if err := requireCurrentActor(s.tx.WithContext(ctx), actor); err != nil {
-		return application.ProjectContentAccess{}, err
+	if s.scopes == nil && s.workers == nil {
+		return application.ProjectContentAccess{}, application.ErrProjectDependencyUnavailable
+	}
+	ownerScope := actor.ScopeID
+	if s.workers != nil {
+		// Read an ownership candidate first, then acquire account/scope locks and
+		// recheck the exact mapping in the locked project query below.
+		var binding struct{ OwnerScopeID *uuid.UUID }
+		read := s.tx.WithContext(ctx).Raw(`SELECT owner_scope_id FROM workspace.project WHERE id=? AND org_id=?`, projectID, actor.OrgID).Scan(&binding)
+		if read.Error != nil {
+			return application.ProjectContentAccess{}, fmt.Errorf("read worker project ownership: %w", read.Error)
+		}
+		if read.RowsAffected != 1 || binding.OwnerScopeID == nil {
+			return application.ProjectContentAccess{}, application.ErrProjectNotFound
+		}
+		ownerScope = *binding.OwnerScopeID
+		scope, err := s.workers.Resolve(ctx, actor.ID, ownerScope, write)
+		if err != nil {
+			return application.ProjectContentAccess{}, err
+		}
+		if scope.ID != ownerScope || scope.PhysicalScopeID != actor.OrgID {
+			return application.ProjectContentAccess{}, application.ErrScopeNotFound
+		}
+	} else {
+		scope, err := s.scopes.Resolve(ctx, actor, ownerScope, write)
+		if err != nil {
+			return application.ProjectContentAccess{}, err
+		}
+		if scope.ID != ownerScope || scope.PhysicalScopeID != actor.OrgID {
+			return application.ProjectContentAccess{}, application.ErrScopeNotFound
+		}
 	}
 	if projectID == uuid.Nil {
 		return application.ProjectContentAccess{}, application.ErrProjectNotFound
 	}
-	query := `SELECT id AS project_id,org_id,revision,status FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete AND status IN ('active','archived')`
+	query := `SELECT id AS project_id,org_id,revision,status FROM workspace.project WHERE id=? AND org_id=? AND NOT is_delete`
+	if copying {
+		query += ` AND status='copying'`
+	} else {
+		query += ` AND status IN ('active','archived')`
+	}
+	args := []any{projectID, actor.OrgID}
+	query += ` AND owner_scope_id=?`
+	args = append(args, ownerScope)
 	if write {
 		query += ` FOR UPDATE`
 	} else {
@@ -47,14 +109,14 @@ func (s *ProjectContentAccessStore) Authorize(ctx context.Context, actor identit
 		application.ProjectContentAccess
 		Status string
 	}
-	read := s.tx.WithContext(ctx).Raw(query, projectID, actor.OrgID).Scan(&row)
+	read := s.tx.WithContext(ctx).Raw(query, args...).Scan(&row)
 	if read.Error != nil {
 		return application.ProjectContentAccess{}, fmt.Errorf("authorize script project: %w", read.Error)
 	}
 	if read.RowsAffected != 1 {
 		return application.ProjectContentAccess{}, application.ErrProjectNotFound
 	}
-	if write && row.Status != "active" {
+	if write && !copying && row.Status != "active" {
 		return application.ProjectContentAccess{}, domain.ErrProjectStateConflict
 	}
 	if row.ProjectID != projectID || row.OrgID != actor.OrgID || row.Revision < 1 {
@@ -98,4 +160,20 @@ func (s *ProjectContentAccessStore) TouchContent(ctx context.Context, actor iden
 		return 0, application.ErrProjectDependencyUnavailable
 	}
 	return expected + 1, nil
+}
+
+// OwnerScopeID returns an authorized project's durable mapping to transfer consumers.
+func (s *ProjectContentAccessStore) OwnerScopeID(ctx context.Context, actor identityapp.Principal, id uuid.UUID, write bool) (uuid.UUID, error) {
+	if _, err := s.Authorize(ctx, actor, id, write); err != nil {
+		return uuid.Nil, err
+	}
+	var row struct{ OwnerScopeID uuid.UUID }
+	r := s.tx.WithContext(ctx).Raw(`SELECT owner_scope_id FROM workspace.project WHERE id=? AND org_id=? FOR SHARE`, id, actor.OrgID).Scan(&row)
+	if r.Error != nil {
+		return uuid.Nil, r.Error
+	}
+	if r.RowsAffected != 1 || row.OwnerScopeID == uuid.Nil {
+		return uuid.Nil, application.ErrProjectNotFound
+	}
+	return row.OwnerScopeID, nil
 }

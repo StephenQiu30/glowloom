@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
@@ -51,7 +50,7 @@ func (s *SourceStore) sourceWriteRecord(tx *gorm.DB, actor identityapp.Principal
 	if internal != s.importRecovery {
 		return r, application.ErrNotFound
 	}
-	r.View = application.SourceWriteIntent{ID: id, Revision: row.Revision, Action: row.Action, Status: row.Status, ExpectedScriptRevision: r.Plan.Command.ExpectedRevision, BaseVersionID: r.Plan.Command.BaseVersionID, ObjectCount: len(r.Plan.Objects), CancellationRequested: row.CancellationRequested, NeedsReconciliation: row.NeedsReconciliation, ActiveIO: row.IOOwnerID != nil, CanControl: row.Status == "pending" && (actor.ID == row.ActorID || actor.Role == identitydomain.RoleAdmin), CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
+	r.View = application.SourceWriteIntent{ID: id, Revision: row.Revision, Action: row.Action, Status: row.Status, ExpectedScriptRevision: r.Plan.Command.ExpectedRevision, BaseVersionID: r.Plan.Command.BaseVersionID, ObjectCount: len(r.Plan.Objects), CancellationRequested: row.CancellationRequested, NeedsReconciliation: row.NeedsReconciliation, ActiveIO: row.IOOwnerID != nil, CanControl: row.Status == "pending", CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
 	var objects []struct {
 		ObjectKey, SHA256, MIME        string
 		ByteSize                       int64
@@ -79,7 +78,7 @@ func (s *SourceStore) sourceWriteRecord(tx *gorm.DB, actor identityapp.Principal
 // ListSourceWrites lists current scoped intents so an unknown response can be recovered.
 func (s *SourceStore) ListSourceWrites(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (application.SourceWritePage, error) {
 	result := application.SourceWritePage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Items: []application.SourceWriteIntent{}}
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		var ids []struct{ ID uuid.UUID }
 		if err := tx.Raw(`SELECT s.id FROM script.command c JOIN script.command_state s ON s.actor_id=c.actor_id AND s.request_id=c.request_id WHERE c.org_id=? AND c.project_id=? AND EXISTS(SELECT 1 FROM script.import_job j JOIN script.import_attempt a ON a.job_id=j.id WHERE j.actor_id=c.actor_id AND j.org_id=c.org_id AND j.project_id=c.project_id AND a.publication_key=c.request_id)=? ORDER BY c.created_at DESC,s.id DESC OFFSET ? LIMIT ?`, actor.OrgID, project, s.importRecovery, after, limit+1).Scan(&ids).Error; err != nil {
 			return err
@@ -94,6 +93,7 @@ func (s *SourceStore) ListSourceWrites(ctx context.Context, actor identityapp.Pr
 			if err != nil {
 				return err
 			}
+			r.View.CanControl = r.View.CanControl && canWrite
 			result.Items = append(result.Items, r.View)
 		}
 		return nil
@@ -104,9 +104,10 @@ func (s *SourceStore) ListSourceWrites(ctx context.Context, actor identityapp.Pr
 // SourceWrite never exposes the private plan through the public handler.
 func (s *SourceStore) SourceWrite(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (application.SourceIntentRecord, error) {
 	var result application.SourceIntentRecord
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		var err error
 		result, err = s.sourceWriteRecord(tx, actor, project, id, false)
+		result.View.CanControl = result.View.CanControl && canWrite
 		return err
 	})
 	return result, err
@@ -170,9 +171,6 @@ func (s *SourceStore) ControlSourceWrite(ctx context.Context, actor identityapp.
 		}
 		if read.RowsAffected == 1 {
 			return json.Unmarshal([]byte(prior.Response), &result)
-		}
-		if actor.ID != r.Plan.ActorID && actor.Role != identitydomain.RoleAdmin {
-			return identityapp.ErrForbidden
 		}
 		if r.View.Status != "pending" || r.View.Revision != input.ExpectedRevision {
 			return application.ErrConflict

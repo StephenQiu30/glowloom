@@ -3,6 +3,53 @@
 import { request } from "@/lib/request";
 import type { RequestOptions } from "@/lib/request";
 
+/** 此处后端没有提供注释 GET /api/me/avatar */
+export async function getMyAvatar(options?: RequestOptions) {
+  return request<API.AvatarPreview>("/api/me/avatar", {
+    method: "GET",
+    ...(options || {}),
+  });
+}
+
+/** 此处后端没有提供注释 POST /api/me/avatar/uploads */
+export async function uploadMyAvatar(
+  body: {},
+  file?: File,
+  options?: RequestOptions,
+) {
+  const formData = new FormData();
+
+  if (file) {
+    formData.append("file", file);
+  }
+
+  Object.keys(body).forEach((ele) => {
+    const item = (body as any)[ele];
+
+    if (item !== undefined && item !== null) {
+      if (typeof item === "object" && !(item instanceof File)) {
+        if (item instanceof Array) {
+          item.forEach((f) => formData.append(ele, f || ""));
+        } else {
+          formData.append(
+            ele,
+            new Blob([JSON.stringify(item)], { type: "application/json" }),
+          );
+        }
+      } else {
+        formData.append(ele, item);
+      }
+    }
+  });
+
+  return request<API.LibraryAssetSummary>("/api/me/avatar/uploads", {
+    method: "POST",
+    data: formData,
+    requestType: "form",
+    ...(options || {}),
+  });
+}
+
 /** 个人或项目完整素材库分页 GET /api/media/library */
 export async function listMediaLibrary(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

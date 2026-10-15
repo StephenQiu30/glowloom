@@ -34,20 +34,13 @@ export function AccountMenu({
   actor,
   onLogout,
 }: {
-  actor: { display_name: string };
+  actor: API.EmailSessionView["actor"];
   onLogout: () => void;
 }) {
   const isMobile = useIsMobile();
   const name = actor.display_name.trim() || "创作者";
-  const accountName =
-    "email" in actor && typeof actor.email === "string"
-      ? actor.email.trim()
-      : "login_name" in actor && typeof actor.login_name === "string"
-        ? actor.login_name.trim()
-        : "";
-  const isAdmin =
-    ("platform_role" in actor && actor.platform_role === "platform_admin") ||
-    ("role" in actor && actor.role === "admin");
+  const accountName = actor.email.trim();
+  const isAdmin = actor.platform_role === "platform_admin";
 
   return (
     <DropdownMenu>

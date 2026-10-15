@@ -22,6 +22,7 @@ type LibraryWorkGuardFactory func(*gorm.DB) application.LibraryWorkGuards
 
 // TransferStore holds permanent admission, per-item results and private intents.
 type TransferStore struct {
+	scopeAuthority
 	db      *gorm.DB
 	project LibraryProjectAccessFactory
 	guards  LibraryWorkGuardFactory
@@ -37,6 +38,7 @@ func NewTransferStore(db *gorm.DB, project LibraryProjectAccessFactory, guards L
 }
 
 type transferJobRow struct {
+	SourceScopeID, TargetScopeID, SourceOrgID, TargetOrgID                         *uuid.UUID
 	ID, OrgID, ActorID, SourceLibraryID, TargetLibraryID                           uuid.UUID
 	SourceKind, TargetKind                                                         string
 	SourceProjectID, TargetProjectID, TargetFolderID                               *uuid.UUID
@@ -67,12 +69,20 @@ func (s *TransferStore) access(ctx context.Context, tx *gorm.DB, actor identitya
 	if source.Validate() != nil || target.Validate() != nil || source.Kind == target.Kind || s.project == nil {
 		return application.LibraryProjectFacts{}, application.ErrUnavailable
 	}
+	sourceActor, targetActor, err := s.transferActors(tx, actor, source, target, write)
+	if err != nil {
+		return application.LibraryProjectFacts{}, err
+	}
+	projectActor := sourceActor
+	if target.Kind == domain.LibraryProject {
+		projectActor = targetActor
+	}
 	owner := s.project(tx)
 	if owner == nil {
 		return application.LibraryProjectFacts{}, application.ErrUnavailable
 	}
 	id := transferProject(source, target)
-	facts, err := owner.Authorize(ctx, actor, id, write && target.Kind == domain.LibraryProject)
+	facts, err := owner.Authorize(ctx, projectActor, id, write && target.Kind == domain.LibraryProject)
 	if err != nil {
 		return facts, err
 	}
@@ -92,7 +102,7 @@ func transferHash(value any) (string, error) {
 func transferLock(tx *gorm.DB, actor, key uuid.UUID) error {
 	return tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?,0))`, "media-transfer/"+actor.String()+"/"+key.String()).Error
 }
-func transferReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string) (*domain.TransferJob, error) {
+func (s *TransferStore) transferReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, hash, action string) (*domain.TransferJob, error) {
 	var row struct {
 		OrgID, JobID          uuid.UUID
 		RequestSHA256, Action string
@@ -110,6 +120,14 @@ func transferReplay(tx *gorm.DB, actor identityapp.Principal, key uuid.UUID, has
 	}
 	var job domain.TransferJob
 	if len(row.ResponseBody) > 1<<20 || strictCopyMedia(row.ResponseBody, &job) != nil || job.ID != row.JobID || job.CurrentActorID != actor.ID || job.CurrentOrgID != actor.OrgID || job.Revision < 1 {
+		return nil, application.ErrUnavailable
+	}
+	binding, err := s.readJob(tx, actor, job.ID, false)
+	if err != nil {
+		return nil, err
+	}
+	source, target := binding.scopes()
+	if job.Source.Kind != source.Kind || job.Target.Kind != target.Kind || !sameScopeProject(job.Source.ProjectID, source.ProjectID) || !sameScopeProject(job.Target.ProjectID, target.ProjectID) || job.SourceScopeID != uuid.Nil && job.SourceScopeID != *binding.SourceScopeID || job.TargetScopeID != uuid.Nil && job.TargetScopeID != *binding.TargetScopeID {
 		return nil, application.ErrUnavailable
 	}
 	return &job, nil
@@ -131,11 +149,24 @@ func (s *TransferStore) readJob(tx *gorm.DB, actor identityapp.Principal, id uui
 	if source.Validate() != nil || target.Validate() != nil || source.Kind == target.Kind || row.Revision < 1 || row.Attempt < 1 || row.ItemCount < 1 || row.ItemCount > 200 {
 		return row, application.ErrUnavailable
 	}
+	if row.SourceScopeID == nil || row.TargetScopeID == nil || row.SourceOrgID == nil || row.TargetOrgID == nil {
+		return row, application.ErrNotFound
+	}
+	sa, ta, err := s.transferActors(tx, actor, source, target, false)
+	if err != nil {
+		return row, err
+	}
+	if sa.ScopeID != *row.SourceScopeID || ta.ScopeID != *row.TargetScopeID || sa.OrgID != *row.SourceOrgID || ta.OrgID != *row.TargetOrgID {
+		return row, application.ErrNotFound
+	}
 	return row, nil
 }
 func transferView(tx *gorm.DB, row transferJobRow) (domain.TransferJob, error) {
+	if row.SourceScopeID == nil || row.TargetScopeID == nil || row.SourceOrgID == nil || row.TargetOrgID == nil {
+		return domain.TransferJob{}, application.ErrNotFound
+	}
 	source, target := row.scopes()
-	job := domain.TransferJob{ID: row.ID, CurrentActorID: row.ActorID, CurrentOrgID: row.OrgID, Source: source, Target: target, TargetFolderID: row.TargetFolderID, Status: row.Status, Stage: row.Stage, Attempt: row.Attempt, Revision: row.Revision, NeedsReconciliation: row.NeedsReconciliation, CancellationRequested: row.CancellationRequested, ExecutionUnconfirmed: row.ExecutionUnconfirmed, Items: []domain.TransferItemResult{}, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
+	job := domain.TransferJob{ID: row.ID, CurrentActorID: row.ActorID, CurrentOrgID: row.OrgID, Source: source, Target: target, SourceScopeID: *row.SourceScopeID, TargetScopeID: *row.TargetScopeID, TargetFolderID: row.TargetFolderID, Status: row.Status, Stage: row.Stage, Attempt: row.Attempt, Revision: row.Revision, NeedsReconciliation: row.NeedsReconciliation, CancellationRequested: row.CancellationRequested, ExecutionUnconfirmed: row.ExecutionUnconfirmed, Items: []domain.TransferItemResult{}, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
 	var rows []struct {
 		ItemIndex                  int
 		SourceItemID, TargetItemID uuid.UUID
@@ -165,7 +196,7 @@ func (s *TransferStore) GetTransfer(ctx context.Context, actor identityapp.Princ
 		return result, application.ErrUnavailable
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		row, err := s.readJob(tx, actor, id, false)
@@ -192,8 +223,13 @@ func (s *TransferStore) ListTransfers(ctx context.Context, actor identityapp.Pri
 	}
 	jobs := []domain.TransferJob{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
+		}
+		if scope.Kind == domain.LibraryPersonal {
+			if err := s.requirePersonal(tx, actor, false); err != nil {
+				return err
+			}
 		}
 		if scope.Kind == domain.LibraryProject {
 			if s.project == nil || s.project(tx) == nil {
@@ -216,8 +252,10 @@ func (s *TransferStore) ListTransfers(ctx context.Context, actor identityapp.Pri
 			return err
 		}
 		for _, row := range rows {
-			source, target := row.scopes()
-			if _, err := s.access(ctx, tx, actor, source, target, false); err != nil {
+			if row.SourceScopeID == nil || row.TargetScopeID == nil || row.SourceOrgID == nil || row.TargetOrgID == nil {
+				continue
+			}
+			if _, err := s.readJob(tx, actor, row.ID, false); err != nil {
 				if errors.Is(err, application.ErrNotFound) {
 					continue
 				}
@@ -234,24 +272,34 @@ func (s *TransferStore) ListTransfers(ctx context.Context, actor identityapp.Pri
 	return jobs, err
 }
 
-func ensureTransferLibraries(tx *gorm.DB, actor identityapp.Principal, source, target domain.LibraryScope) (libraryRow, libraryRow, error) {
-	first, _ := source.Identity(actor.OrgID, actor.ID)
-	second, _ := target.Identity(actor.OrgID, actor.ID)
+func (s *TransferStore) ensureTransferLibraries(tx *gorm.DB, actor identityapp.Principal, source, target domain.LibraryScope) (libraryRow, libraryRow, error) {
+	sourceActor, targetActor, err := s.transferActors(tx, actor, source, target, true)
+	if err != nil {
+		return libraryRow{}, libraryRow{}, err
+	}
+	first, _ := source.Identity(sourceActor.OrgID, actor.ID)
+	second, _ := target.Identity(targetActor.OrgID, actor.ID)
 	scopes := []domain.LibraryScope{source, target}
 	if bytes.Compare(first[:], second[:]) > 0 {
 		scopes[0], scopes[1] = scopes[1], scopes[0]
 	}
 	byID := make(map[uuid.UUID]libraryRow, 2)
 	for _, scope := range scopes {
-		id, _ := scope.Identity(actor.OrgID, actor.ID)
+		sideActor := sourceActor
+		if scope.Kind == target.Kind {
+			sideActor = targetActor
+		}
+		id, _ := scope.Identity(sideActor.OrgID, actor.ID)
 		var personal *uuid.UUID
 		if scope.Kind == domain.LibraryPersonal {
 			personal = &actor.ID
 		}
-		if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,personal_actor_id,revision) VALUES(?,?,?,?,?,0) ON CONFLICT(id) DO NOTHING`, id, string(scope.Kind), actor.OrgID, scope.ProjectID, personal).Error; err != nil {
-			return libraryRow{}, libraryRow{}, err
+		if scope.Kind == target.Kind {
+			if err := tx.Exec(`INSERT INTO media.library(id,kind,org_id,project_id,personal_actor_id,revision) VALUES(?,?,?,?,?,0) ON CONFLICT(id) DO NOTHING`, id, string(scope.Kind), sideActor.OrgID, scope.ProjectID, personal).Error; err != nil {
+				return libraryRow{}, libraryRow{}, err
+			}
 		}
-		row, err := readLibrary(tx, actor, scope, true)
+		row, err := readLibrary(tx, sideActor, scope, scope.Kind == target.Kind)
 		if err != nil {
 			return row, row, err
 		}
@@ -306,4 +354,31 @@ func transferSourceFile(tx *gorm.DB, actor identityapp.Principal, scope domain.L
 		result.Renditions = append(result.Renditions, r.domain())
 	}
 	return result, nil
+}
+
+// NewScopedTransferStore binds live scope authority explicitly.
+func NewScopedTransferStore(db *gorm.DB, project LibraryProjectAccessFactory, guards LibraryWorkGuardFactory, clock func() time.Time, scopes ScopeAccessFactory) *TransferStore {
+	s := NewTransferStore(db, project, guards, clock)
+	s.scopeAuthority = scopeAuthority{scopes: scopes}
+	return s
+}
+
+func (s *TransferStore) transferActors(tx *gorm.DB, actor identityapp.Principal, source, target domain.LibraryScope, write bool) (identityapp.Principal, identityapp.Principal, error) {
+	access, err := s.accessScope(tx)
+	if err != nil {
+		return actor, actor, err
+	}
+	transfer, ok := access.(application.TransferScopeAccess)
+	if !ok {
+		return actor, actor, application.ErrUnavailable
+	}
+	sa, err := transfer.TransferActor(tx.Statement.Context, actor, source, false)
+	if err != nil {
+		return actor, actor, err
+	}
+	ta, err := transfer.TransferActor(tx.Statement.Context, actor, target, write)
+	if err != nil {
+		return actor, actor, err
+	}
+	return sa, ta, nil
 }

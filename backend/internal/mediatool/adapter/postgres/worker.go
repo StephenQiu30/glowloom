@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -13,7 +15,7 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
 )
 
-func (s *Store) validateSources(ctx context.Context, tx *gorm.DB, row jobRow) error {
+func (s *Store) validateSources(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, row jobRow) error {
 	var frozen domain.FrozenExport
 	if json.Unmarshal(row.Frozen, &frozen) != nil {
 		return application.ErrInvalidExport
@@ -26,7 +28,7 @@ func (s *Store) validateSources(ctx context.Context, tx *gorm.DB, row jobRow) er
 	for _, input := range frozen.Inputs {
 		ids = append(ids, input.AssetID)
 	}
-	assets, err := s.media(tx).Sources(ctx, row.actor(), row.ProjectID, ids)
+	assets, err := s.media(tx).Sources(ctx, actor, row.ProjectID, ids)
 	if err != nil {
 		return normalize(err)
 	}
@@ -56,6 +58,9 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		row, err := readJob(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
+			return err
+		}
+		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if row.Attempt != id.Attempt {
@@ -90,7 +95,7 @@ func (s *Store) Claim(ctx context.Context, id application.WorkID) (application.W
 		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
-		if err := s.validateSources(ctx, tx, row); err != nil {
+		if err := s.validateSources(ctx, tx, row.actor(), row); err != nil {
 			return err
 		}
 		if row.Status == "queued" {
@@ -124,6 +129,9 @@ func (s *Store) Progress(ctx context.Context, id application.WorkID, progress in
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		row, err := readJob(tx, uuid.Nil, id.JobID, true)
 		if err != nil {
+			return err
+		}
+		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
 		if row.Attempt != id.Attempt {
@@ -182,7 +190,7 @@ func (s *Store) Commit(ctx context.Context, id application.WorkID, asset mediado
 		if err := s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
 			return err
 		}
-		if err := s.validateSources(ctx, tx, row); err != nil {
+		if err := s.validateSources(ctx, tx, row.actor(), row); err != nil {
 			return err
 		}
 		if err := s.media(tx).Store(ctx, row.actor(), asset, renditions); err != nil {
@@ -240,7 +248,7 @@ func (s *Store) Finish(ctx context.Context, id application.WorkID, cancelled boo
 }
 
 // VerifyDelivery binds the outbox event to a committed command and current attempt.
-func (s *Store) VerifyDelivery(ctx context.Context, d application.Delivery) (bool, error) {
+func (s *Store) verifyDelivery(ctx context.Context, d application.Delivery) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
@@ -317,5 +325,64 @@ func (s *Store) Release(ctx context.Context, id application.WorkID) error {
 		}
 		row.ActiveWorker = nil
 		return updateJob(tx, row)
+	})
+}
+
+// VerifyDelivery retains live scope authority until durable command validation completes.
+func (s *Store) VerifyDelivery(ctx context.Context, d application.Delivery) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, application.ErrUnavailable
+	}
+	valid := false
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		scoped := *s
+		scoped.db = tx
+		var err error
+		valid, err = scoped.verifyDelivery(ctx, d)
+		if err != nil || !valid {
+			return err
+		}
+		row, err := readJob(tx, d.ProjectID, d.JobID, false)
+		if err != nil {
+			return err
+		}
+		if err := s.authorize(ctx, tx, identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}, d.ProjectID, true); err != nil {
+			return err
+		}
+		if d.Action == "start" {
+			return s.authorize(ctx, tx, row.actor(), d.ProjectID, true)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return valid, nil
+}
+
+// AuthorizeObjectWrite checks the durable attempt and live account/scope immediately
+// before each external Put. It never changes prior object or cessation evidence.
+func (s *Store) AuthorizeObjectWrite(ctx context.Context, id application.WorkID) error {
+	if s == nil || s.db == nil || id.ExecutionID == uuid.Nil {
+		return application.ErrUnavailable
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		row, err := readJob(tx, uuid.Nil, id.JobID, true)
+		if err != nil {
+			return err
+		}
+		if err = s.authorize(ctx, tx, row.actor(), row.ProjectID, true); err != nil {
+			return err
+		}
+		if row.Attempt != id.Attempt || row.ActiveWorker == nil || *row.ActiveWorker != id.ExecutionID {
+			return application.ErrConflict
+		}
+		if row.Status == "cancel_requested" || row.Status == "cancelled" {
+			return application.ErrCancelled
+		}
+		if row.Status != "running" {
+			return application.ErrConflict
+		}
+		return nil
 	})
 }

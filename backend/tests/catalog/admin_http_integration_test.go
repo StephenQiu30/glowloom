@@ -121,7 +121,7 @@ func TestAdminCatalogHTTPManagementKeepsRolesAndRealPublication(t *testing.T) {
 		t.Fatalf("durable test request=%v", err)
 	}
 	capability := domain.Capability{ID: uuid.New(), Key: "http.image." + uuid.NewString(), OutputType: domain.OutputImage, Modes: []string{"text_to_image"}, InputRoles: []string{"prompt"}}
-	if err := pgcatalog.NewStore(database).CreateCapabilityForAdmin(ctx, actor.ID, org, capability); err != nil {
+	if err := pgcatalog.NewStore(database).CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
 		t.Fatal(err)
 	}
 	res = adminCatalogRequest(t, router, "POST", "/api/admin/models", fmt.Sprintf(`{"model_key":"http-model-%s","provider_id":"%s","capability":"%s","display_name":"HTTP Model"}`, uuid.New(), provider.ID, capability.Key), uuid.NewString())

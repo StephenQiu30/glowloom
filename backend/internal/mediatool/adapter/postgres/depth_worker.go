@@ -93,7 +93,7 @@ func (s *DepthStore) Claim(ctx context.Context, id application.DepthWorkID) (app
 			return application.ErrConflict
 		}
 		if !r.CancellationRequested && !id.Reconcile {
-			if err := s.validateSource(ctx, tx, r); err != nil {
+			if err := s.validateSource(ctx, tx, r.actor(), r); err != nil {
 				return err
 			}
 		}
@@ -180,7 +180,7 @@ func (s *DepthStore) Commit(ctx context.Context, id application.DepthWorkID) (do
 		if r.ProcessState != "ended" {
 			return application.ErrConflict
 		}
-		if err := s.validateSource(ctx, tx, r); err != nil {
+		if err := s.validateSource(ctx, tx, r.actor(), r); err != nil {
 			return err
 		}
 		a, found, err := loadDepthArtifact(tx, r)
@@ -388,7 +388,7 @@ func depthRuntimeAuditKey(r depthRow) uuid.UUID {
 }
 
 // VerifyDelivery proves the immutable command and exact committed event first.
-func (s *DepthStore) VerifyDelivery(ctx context.Context, d application.DepthDelivery) (bool, error) {
+func (s *DepthStore) verifyDelivery(ctx context.Context, d application.DepthDelivery) (bool, error) {
 	if s == nil || s.db == nil {
 		return false, application.ErrUnavailable
 	}
@@ -418,3 +418,35 @@ func (s *DepthStore) VerifyDelivery(ctx context.Context, d application.DepthDeli
 }
 
 var _ application.DepthWorkerStore = (*DepthStore)(nil)
+
+// VerifyDelivery retains live scope authority until durable command validation completes.
+func (s *DepthStore) VerifyDelivery(ctx context.Context, d application.DepthDelivery) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, application.ErrUnavailable
+	}
+	valid := false
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		scoped := *s
+		scoped.db = tx
+		var err error
+		valid, err = scoped.verifyDelivery(ctx, d)
+		if err != nil || !valid {
+			return err
+		}
+		row, err := readDepth(tx, d.ProjectID, d.JobID, false)
+		if err != nil {
+			return err
+		}
+		if err := s.authorize(ctx, tx, identityapp.Principal{ID: d.ActorID, OrgID: d.OrgID}, d.ProjectID, true); err != nil {
+			return err
+		}
+		if d.Action == "start" {
+			return s.authorize(ctx, tx, row.actor(), d.ProjectID, true)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return valid, nil
+}

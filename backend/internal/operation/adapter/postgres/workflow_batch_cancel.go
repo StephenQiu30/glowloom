@@ -70,7 +70,7 @@ func (s *Store) MarkQueuedWorkflowOperationCancelling(ctx context.Context, batch
 		switch domain.Status(item.Status) {
 		case domain.StatusConfirmed, domain.StatusSubmitting:
 			from := domain.Status(item.Status)
-			_, err := NewStore(tx).TransitionWorkflowOperation(ctx, application.TransitionInput{
+			_, err := s.withDB(tx).TransitionWorkflowOperation(ctx, application.TransitionInput{
 				OperationID: operationID, From: []domain.Status{from},
 				To: domain.StatusCancelling, Reason: "batch_cancel_queued",
 			})

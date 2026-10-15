@@ -6,6 +6,37 @@ import { cn } from "cn";
 
 import { Label } from "@/components/ui/label";
 
+function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
+  return (
+    <fieldset
+      data-slot="field-set"
+      className={cn(
+        "flex flex-col gap-4 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function FieldLegend({
+  className,
+  variant = "legend",
+  ...props
+}: React.ComponentProps<"legend"> & { variant?: "legend" | "label" }) {
+  return (
+    <legend
+      data-slot="field-legend"
+      data-variant={variant}
+      className={cn(
+        "mb-1.5 font-medium data-[variant=label]:text-sm data-[variant=legend]:text-base",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -163,6 +194,8 @@ function FieldError({
 }
 
 export {
+  FieldSet,
+  FieldLegend,
   Field,
   FieldLabel,
   FieldDescription,

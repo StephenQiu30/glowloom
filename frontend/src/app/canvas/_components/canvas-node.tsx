@@ -168,9 +168,10 @@ export function CanvasNode({
         } as CSSProperties
       }
     >
-      <button
+      <Button
+        variant="ghost"
         type="button"
-        className="canvas-node-external-header"
+        className="canvas-node-external-header h-auto p-0"
         aria-label={editable ? `移动 ${node.title}` : `查看 ${node.title}`}
         onClick={onSelect}
         onPointerDown={onDragStart}
@@ -197,7 +198,7 @@ export function CanvasNode({
       >
         <Icon className="size-3 shrink-0" />
         <span className="truncate">{node.title}</span>
-      </button>
+      </Button>
       {editable &&
         (onDuplicate ? (
           <DropdownMenu>
@@ -252,9 +253,10 @@ export function CanvasNode({
             <Pencil data-icon="inline-start" />
           </Button>
         ))}
-      <button
+      <Button
+        variant="ghost"
         type="button"
-        className="canvas-node-shell"
+        className="canvas-node-shell h-auto p-0"
         onClick={onSelect}
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
@@ -283,11 +285,13 @@ export function CanvasNode({
               ? ""
               : node.title}
         </span>
-      </button>
+      </Button>
       {editable &&
         selected &&
         (["nw", "ne", "sw", "se"] as const).map((corner) => (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             key={corner}
             className={`canvas-resize-handle canvas-resize-${corner}`}
             type="button"

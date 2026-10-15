@@ -13,7 +13,6 @@ import (
 	pgmedia "github.com/StephenQiu30/glowloom-server/backend/internal/media/adapter/postgres"
 	mediaapp "github.com/StephenQiu30/glowloom-server/backend/internal/media/application"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
-	pgworkspace "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/adapter/postgres"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
 )
 
@@ -78,11 +77,11 @@ func (r projectCopyBibleMediaReader) read(ctx context.Context, actor identityapp
 	var result mediaapp.ProjectCopyReferenceFiles
 	err := r.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		binding := workspaceapp.ProjectCopyBinding{JobID: b.JobID, OrgID: b.OrgID, SourceProjectID: b.SourceProjectID, TargetProjectID: b.TargetProjectID}
-		if err := pgworkspace.NewProjectCopyAccessStore(tx, r.authority).Authorize(ctx, actor, binding, true); err != nil {
+		if err := provideCopyAccess(tx, r.authority).Authorize(ctx, actor, binding, true); err != nil {
 			return err
 		}
 		var err error
-		owner := pgmedia.NewProjectCopyStore(tx)
+		owner := pgmedia.NewScopedProjectCopyStore(tx, provideMediaWorkerScopeAccess)
 		if transferred {
 			result, err = owner.ReadTransferredCopyReference(ctx, actor, b, s, f)
 		} else {

@@ -22,9 +22,10 @@ type FolderMediaFactory func(*gorm.DB) application.FolderMediaReader
 
 // FolderStore owns personal classification and guarded whole-folder recycling.
 type FolderStore struct {
-	db    *gorm.DB
-	work  ProjectWorkFactory
-	media FolderMediaFactory
+	db     *gorm.DB
+	work   ProjectWorkFactory
+	media  FolderMediaFactory
+	scopes RequestScopeFactory
 }
 
 // NewFolderStore explicitly injects current work and cover ownership evidence.
@@ -32,14 +33,23 @@ func NewFolderStore(db *gorm.DB, work ProjectWorkFactory, media FolderMediaFacto
 	return &FolderStore{db: db, work: work, media: media}
 }
 
+// NewScopedFolderStore binds every directory operation to the current request authority.
+func NewScopedFolderStore(db *gorm.DB, scopes RequestScopeFactory, work ProjectWorkFactory, media FolderMediaFactory) *FolderStore {
+	return &FolderStore{db: db, scopes: scopes, work: work, media: media}
+}
+
+func (s *FolderStore) requireScope(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, write bool) error {
+	return (&Store{scopes: s.scopes}).requireScope(ctx, tx, actor, write)
+}
+
 // LockProjectLibrary serializes one actor's assignments before taking project locks.
 // Copy admission must take the same lock before its source project FOR UPDATE.
 func LockProjectLibrary(ctx context.Context, tx *gorm.DB, actor identityapp.Principal) error {
-	if tx == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
+	if tx == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.ScopeID == uuid.Nil {
 		return application.ErrProjectDependencyUnavailable
 	}
 	var locked int
-	if err := tx.WithContext(ctx).Raw(`SELECT 1 FROM pg_advisory_xact_lock(69370,hashtext(?))`, actor.OrgID.String()+":"+actor.ID.String()).Scan(&locked).Error; err != nil {
+	if err := tx.WithContext(ctx).Raw(`SELECT 1 FROM pg_advisory_xact_lock(69370,hashtext(?))`, actor.ScopeID.String()+":"+actor.ID.String()).Scan(&locked).Error; err != nil {
 		return fmt.Errorf("lock personal project library: %w", err)
 	}
 	return nil
@@ -67,11 +77,11 @@ func (r folderRow) folder() (domain.ProjectFolder, error) {
 
 func readFolder(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, deleted bool) (domain.ProjectFolder, error) {
 	var row folderRow
-	query := `SELECT id,org_id,actor_id,name,cover_project_id,cover_asset_id,revision,is_delete,delete_time,create_time,update_time FROM workspace.project_folder WHERE id=? AND org_id=? AND actor_id=?`
+	query := `SELECT id,org_id,actor_id,name,cover_project_id,cover_asset_id,revision,is_delete,delete_time,create_time,update_time FROM workspace.project_folder WHERE id=? AND org_id=? AND actor_id=? AND owner_scope_id=?`
 	if !deleted {
 		query += ` AND NOT is_delete`
 	}
-	read := tx.Raw(query+` FOR UPDATE`, id, actor.OrgID, actor.ID).Scan(&row)
+	read := tx.Raw(query+` FOR UPDATE`, id, actor.OrgID, actor.ID, actor.ScopeID).Scan(&row)
 	if read.Error != nil {
 		return domain.ProjectFolder{}, fmt.Errorf("read personal project directory: %w", read.Error)
 	}
@@ -92,8 +102,9 @@ func (s *FolderStore) ChangeFolder(ctx context.Context, actor identityapp.Princi
 	request := struct {
 		Contract string
 		Org      uuid.UUID
+		Scope    uuid.UUID
 		Input    application.FolderChangeInput
-	}{"workspace.folder.v1", actor.OrgID, in}
+	}{"workspace.folder.v2", actor.OrgID, actor.ScopeID, in}
 	request.Input.RequestID = ""
 	request.Input.IdempotencyKey = uuid.Nil
 	if request.Input.Name != nil {
@@ -108,23 +119,23 @@ func (s *FolderStore) ChangeFolder(ctx context.Context, actor identityapp.Princi
 	fingerprint := hex.EncodeToString(hash[:])
 	var out application.FolderChangeResult
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireScope(ctx, tx, actor, true); err != nil {
 			return err
 		}
 		if err := LockProjectLibrary(ctx, tx, actor); err != nil {
 			return err
 		}
 		var receipt struct {
-			OrgID         uuid.UUID
-			RequestSHA256 string
-			ResponseBody  json.RawMessage
+			OrgID, OwnerScopeID uuid.UUID
+			RequestSHA256       string
+			ResponseBody        json.RawMessage
 		}
-		read := tx.Raw(`SELECT org_id,request_sha256,response_body FROM workspace.project_folder_command WHERE actor_id=? AND idem_key=?`, actor.ID, in.IdempotencyKey).Scan(&receipt)
+		read := tx.Raw(`SELECT org_id,owner_scope_id,request_sha256,response_body FROM workspace.project_folder_command WHERE actor_id=? AND idem_key=?`, actor.ID, in.IdempotencyKey).Scan(&receipt)
 		if read.Error != nil {
 			return read.Error
 		}
 		if read.RowsAffected == 1 {
-			if receipt.OrgID != actor.OrgID || receipt.RequestSHA256 != fingerprint {
+			if receipt.OrgID != actor.OrgID || receipt.OwnerScopeID != actor.ScopeID || receipt.RequestSHA256 != fingerprint {
 				return application.ErrIdempotencyConflict
 			}
 			if err := json.Unmarshal(receipt.ResponseBody, &out); err != nil {
@@ -159,7 +170,7 @@ func (s *FolderStore) ChangeFolder(ctx context.Context, actor identityapp.Princi
 		if err != nil {
 			return err
 		}
-		return tx.Exec(`INSERT INTO workspace.project_folder_command(id,org_id,actor_id,idem_key,action,request_sha256,response_body,create_time) VALUES(?,?,?,?,?,?,?::jsonb,?)`, uuid.New(), actor.OrgID, actor.ID, in.IdempotencyKey, in.Action, fingerprint, string(body), now).Error
+		return tx.Exec(`INSERT INTO workspace.project_folder_command(id,org_id,owner_scope_id,actor_id,idem_key,action,request_sha256,response_body,create_time) VALUES(?,?,?,?,?,?,?,?::jsonb,?)`, uuid.New(), actor.OrgID, actor.ScopeID, actor.ID, in.IdempotencyKey, in.Action, fingerprint, string(body), now).Error
 	})
 	if err != nil {
 		return application.FolderChangeResult{}, fmt.Errorf("personal directory transaction: %w", err)
@@ -198,7 +209,7 @@ func (s *FolderStore) createFolder(ctx context.Context, tx *gorm.DB, actor ident
 		project = f.Cover.ProjectID
 		asset = f.Cover.AssetID
 	}
-	if err := tx.Exec(`INSERT INTO workspace.project_folder(id,org_id,actor_id,name,cover_project_id,cover_asset_id,create_time,update_time) VALUES(?,?,?,?,?,?,?,?)`, f.ID, f.OrgID, f.ActorID, f.Name, project, asset, now, now).Error; err != nil {
+	if err := tx.Exec(`INSERT INTO workspace.project_folder(id,org_id,owner_scope_id,actor_id,name,cover_project_id,cover_asset_id,create_time,update_time) VALUES(?,?,?,?,?,?,?,?,?)`, f.ID, f.OrgID, actor.ScopeID, f.ActorID, f.Name, project, asset, now, now).Error; err != nil {
 		return application.FolderChangeResult{}, err
 	}
 	return application.FolderChangeResult{Folder: &f}, nil
@@ -228,7 +239,7 @@ func (s *FolderStore) patchFolder(ctx context.Context, tx *gorm.DB, actor identi
 		project = f.Cover.ProjectID
 		asset = f.Cover.AssetID
 	}
-	write := tx.Exec(`UPDATE workspace.project_folder SET name=?,cover_project_id=?,cover_asset_id=?,revision=?,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND revision=? AND NOT is_delete`, f.Name, project, asset, f.Revision, now, f.ID, actor.OrgID, actor.ID, in.ExpectedRevision)
+	write := tx.Exec(`UPDATE workspace.project_folder SET name=?,cover_project_id=?,cover_asset_id=?,revision=?,update_time=? WHERE id=? AND org_id=? AND actor_id=? AND owner_scope_id=? AND revision=? AND NOT is_delete`, f.Name, project, asset, f.Revision, now, f.ID, actor.OrgID, actor.ID, actor.ScopeID, in.ExpectedRevision)
 	if write.Error != nil {
 		return application.FolderChangeResult{}, write.Error
 	}

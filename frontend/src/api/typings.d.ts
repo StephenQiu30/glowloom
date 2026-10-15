@@ -1,4 +1,27 @@
 declare namespace API {
+  type AcceptedView = {
+    operation_id: string;
+    retry_after_seconds: number;
+  };
+
+  type acceptProposalParams = {
+    /** Proposal ID */
+    id: string;
+  };
+
+  type AccountInvitationRequest = {
+    email?: string;
+  };
+
+  type accountListInvitationsParams = {
+    /** Signed cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Invitation status */
+    status?: string;
+  };
+
   type activateModelReleaseParams = {
     /** 发布ID */
     id: string;
@@ -12,23 +35,6 @@ declare namespace API {
     expected_revision?: number;
     request_id?: string;
     set_default?: boolean;
-  };
-
-  type Actor = {
-    credential_revision: number;
-    display_name: string;
-    id: string;
-    login_name: string;
-    must_change_password: boolean;
-    platform_role?: "creator" | "platform_admin";
-    role: "creator" | "admin";
-  };
-
-  type AdminCreateRequest = {
-    display_name?: string;
-    initial_password?: string;
-    login_name?: string;
-    role?: "creator" | "admin";
   };
 
   type AdminModelDetail = {
@@ -58,21 +64,6 @@ declare namespace API {
     version_no?: number;
   };
 
-  type AdminMutationReceipt = {
-    display_name?: string;
-    id?: string;
-    login_unlocked?: boolean;
-    must_change_password?: boolean;
-    revision?: number;
-    role?: "creator" | "admin";
-    status?: "active" | "disabled";
-  };
-
-  type AdminPasswordRequest = {
-    expected_revision?: number;
-    new_password?: string;
-  };
-
   type AdminPrice = {
     create_time?: string;
     currency?: string;
@@ -82,33 +73,6 @@ declare namespace API {
     rule?: Record<string, any>;
     unit?: string;
     version_no?: number;
-  };
-
-  type AdminRevisionRequest = {
-    expected_revision?: number;
-  };
-
-  type AdminUpdateRequest = {
-    display_name?: string;
-    expected_revision?: number;
-    role?: "creator" | "admin";
-  };
-
-  type AdminUser = {
-    create_time?: string;
-    display_name?: string;
-    id?: string;
-    last_login_at?: string;
-    login_locked?: boolean;
-    login_name?: string;
-    revision?: number;
-    role?: "creator" | "admin";
-    status?: "active" | "disabled";
-  };
-
-  type AdminUserPage = {
-    items?: AdminUser[];
-    next_cursor?: string;
   };
 
   type adoptBibleResultParams = {
@@ -166,6 +130,11 @@ declare namespace API {
     pid: string;
   };
 
+  type archiveTeamParams = {
+    /** Team ID */
+    id: string;
+  };
+
   type AssetPage = {
     items?: AssetSummary[];
     next_cursor?: string;
@@ -184,8 +153,38 @@ declare namespace API {
     width?: number;
   };
 
-  type AvailabilityView = {
-    available: boolean;
+  type AuthorityProposal = {
+    created_at?: string;
+    expires_at?: string;
+    id?: string;
+    kind?: string;
+    reason?: string;
+    revision?: string;
+    source_user_id?: string;
+    status?: string;
+    target_user_id?: string;
+    team_id?: string;
+  };
+
+  type AuthorityProposalRequest = {
+    expected_revision?: string;
+    reason?: string;
+    target_user_id?: string;
+  };
+
+  type AuthPolicyView = {
+    available_terms_version: string;
+    closed_reason: string;
+    privacy_url: string;
+    registration_enabled: boolean;
+    terms_url: string;
+    terms_version: string;
+  };
+
+  type AvatarPreview = {
+    asset?: LibraryAssetSummary;
+    expires_at?: string;
+    url?: string;
   };
 
   type BatchDetail = {
@@ -253,6 +252,11 @@ declare namespace API {
     id: string;
   };
 
+  type cancelEmailChangeParams = {
+    /** Operation UUID */
+    id: string;
+  };
+
   type cancelMediaDepthParams = {
     /** Depth UUID */
     job_id: string;
@@ -298,6 +302,11 @@ declare namespace API {
     id: string;
   };
 
+  type cancelProposalParams = {
+    /** Proposal ID */
+    id: string;
+  };
+
   type cancelScriptFileImportParams = {
     /** Project UUID */
     pid: string;
@@ -310,6 +319,13 @@ declare namespace API {
     pid: string;
     /** 保存意图UUID */
     wid: string;
+  };
+
+  type cancelTeamTransferParams = {
+    /** Team ID */
+    id: string;
+    /** Proposal ID */
+    pid: string;
   };
 
   type CanvasCreateInput = {
@@ -378,6 +394,13 @@ declare namespace API {
     update_time?: string;
   };
 
+  type changeTeamMemberRoleParams = {
+    /** Resource UUID */
+    id: string;
+    /** Resource UUID */
+    uid: string;
+  };
+
   type CharacterContent = {
     aliases?: string[];
     definition?: CharacterDefinition;
@@ -430,6 +453,16 @@ declare namespace API {
   type CommandsInput = {
     commands?: Command[];
     expected_revision?: number;
+  };
+
+  type completeEmailChangeParams = {
+    /** Operation UUID */
+    id: string;
+  };
+
+  type completeRegistrationParams = {
+    /** Operation UUID */
+    id: string;
   };
 
   type ConfigReceipt = {
@@ -679,6 +712,11 @@ declare namespace API {
     provider_id?: string;
   };
 
+  type createPlatformTeamInvitationParams = {
+    /** Team ID */
+    id: string;
+  };
+
   type createProjectCopyParams = {
     /** 源项目UUID */
     pid: string;
@@ -731,6 +769,16 @@ declare namespace API {
     pid: string;
   };
 
+  type createTeamInvitationParams = {
+    /** Team ID */
+    id: string;
+  };
+
+  type createTeamMemberExportParams = {
+    /** Team ID */
+    id: string;
+  };
+
   type CredentialField = {
     name?: string;
     required?: boolean;
@@ -769,6 +817,11 @@ declare namespace API {
     operation?: string;
     revision?: number;
     update_time?: string;
+  };
+
+  type declineProposalParams = {
+    /** Proposal ID */
+    id: string;
   };
 
   type DefaultPage = {
@@ -837,8 +890,22 @@ declare namespace API {
   };
 
   type deleteSessionParams = {
-    /** Current session UUID */
-    session_id: string;
+    /** Resource UUID */
+    id: string;
+  };
+
+  type DeletionConfirmRequest = {
+    code: string;
+    expected_revision: string;
+    operation_id: string;
+    policy_version: string;
+  };
+
+  type DeletionImpactView = {
+    blocking_duties: string[];
+    policy_version: string;
+    revision: string;
+    team_ids: string[];
   };
 
   type DepthCreateInput = {
@@ -1084,16 +1151,36 @@ declare namespace API {
     scale?: number[];
   };
 
+  type DirectoryExportFilter = {
+    from?: string;
+    in_team?: boolean;
+    order?: string;
+    platform_role?: string;
+    role?: string;
+    search?: string;
+    status?: string;
+    to?: string;
+    verified?: boolean;
+  };
+
+  type DirectoryExportRequest = {
+    filter: DirectoryExportFilter;
+  };
+
+  type DirectoryExportView = {
+    as_of: string;
+    error_category?: string;
+    expires_at: string;
+    id: string;
+    row_count: number;
+    status: string;
+  };
+
   type disableAdminCredentialParams = {
     /** 渠道UUID */
     id: string;
     /** 凭据UUID */
     credential_id: string;
-  };
-
-  type disableAdminUserParams = {
-    /** User UUID */
-    id: string;
   };
 
   type downloadDocumentAssetParams = {
@@ -1140,6 +1227,18 @@ declare namespace API {
     project_id: string;
   };
 
+  type downloadPlatformUserExportParams = {
+    /** Export ID */
+    id: string;
+  };
+
+  type downloadTeamMemberExportParams = {
+    /** Team ID */
+    id: string;
+    /** Export ID */
+    eid: string;
+  };
+
   type DraftPage = {
     items?: DraftSnapshot[];
     next_cursor?: string;
@@ -1178,9 +1277,41 @@ declare namespace API {
     reference_mapping?: ReferenceMapping[];
   };
 
-  type enableAdminUserParams = {
-    /** User UUID */
-    id: string;
+  type EmailChangeCompleteRequest = {
+    expected_revision: string;
+  };
+
+  type EmailChangeStartRequest = {
+    expected_revision: string;
+    new_email: string;
+  };
+
+  type EmailChangeVerifyRequest = {
+    code: string;
+    side: string;
+  };
+
+  type EmailLoginRequest = {
+    email: string;
+    password: string;
+    persistent: boolean;
+  };
+
+  type EmailPasswordChangeRequest = {
+    confirm_password: string;
+    current_password: string;
+    expected_credential_epoch: string;
+    new_password: string;
+  };
+
+  type EmailSessionView = {
+    absolute_expires_at: string;
+    actor: MeView;
+    credential_epoch: string;
+    csrf_token: string;
+    last_active_at: string;
+    persistent: boolean;
+    session_id: string;
   };
 
   type Episode = {
@@ -1393,11 +1524,6 @@ declare namespace API {
     target_id: string;
   };
 
-  type getLoginAvailabilityParams = {
-    /** ASCII login name */
-    login_name: string;
-  };
-
   type getMediaDepthParams = {
     /** Depth UUID */
     job_id: string;
@@ -1464,6 +1590,13 @@ declare namespace API {
     job_id: string;
   };
 
+  type getMySecurityEventsParams = {
+    /** Continuation cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+  };
+
   type getOperationBatchParams = {
     /** Batch UUID */
     id: string;
@@ -1476,6 +1609,35 @@ declare namespace API {
     id: string;
     /** 项目UUID */
     project_id: string;
+  };
+
+  type getPlatformUserExportParams = {
+    /** Export ID */
+    id: string;
+  };
+
+  type getPlatformUserParams = {
+    /** User UUID */
+    id: string;
+  };
+
+  type getPlatformUserStatisticsParams = {
+    /** Filter */
+    search?: string;
+    /** Account status */
+    status?: string;
+    /** Platform role */
+    platform_role?: string;
+    /** Verified email */
+    verified?: boolean;
+    /** Available team member */
+    in_team?: boolean;
+    /** Directory order */
+    order?: string;
+    /** Created from inclusive RFC3339 */
+    from?: string;
+    /** Created before RFC3339 */
+    to?: string;
   };
 
   type getProjectCopyParams = {
@@ -1577,6 +1739,54 @@ declare namespace API {
   type getScriptWorkspaceParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type getTeamMemberExportParams = {
+    /** Team ID */
+    id: string;
+    /** Export ID */
+    eid: string;
+  };
+
+  type getTeamMemberParams = {
+    /** Resource UUID */
+    id: string;
+    /** Resource UUID */
+    uid: string;
+  };
+
+  type getTeamMemberStatisticsParams = {
+    /** Team ID */
+    id: string;
+    /** Filter */
+    search?: string;
+    /** Membership status */
+    status?: string;
+    /** Team role */
+    role?: string;
+    /** Joined from inclusive RFC3339 */
+    from?: string;
+    /** Joined before RFC3339 */
+    to?: string;
+  };
+
+  type getTeamParams = {
+    /** Resource UUID */
+    id: string;
+  };
+
+  type getTeamSecurityEventsParams = {
+    /** Resource UUID */
+    id: string;
+  };
+
+  type GovernanceMutation = {
+    expected_revision?: string;
+    reason?: string;
+  };
+
+  type GovernanceVersion = {
+    expected_revision?: string;
   };
 
   type Head = {
@@ -1681,6 +1891,36 @@ declare namespace API {
     revision?: number;
   };
 
+  type Invitation = {
+    created_at?: string;
+    email?: string;
+    expires_at?: string;
+    id?: string;
+    inviter_id?: string;
+    kind?: string;
+    revision?: string;
+    status?: string;
+    team_id?: string;
+    team_role?: string;
+  };
+
+  type InvitationListPage = {
+    as_of?: string;
+    items?: Invitation[];
+    next_cursor?: string;
+  };
+
+  type InvitationPreview = {
+    expires_at?: string;
+    kind?: string;
+    team_id?: string;
+    team_role?: string;
+  };
+
+  type InvitationTokenRequest = {
+    token?: string;
+  };
+
   type Kind = "character" | "location" | "prop";
 
   type LabelAllocation = {
@@ -1691,6 +1931,11 @@ declare namespace API {
   type LabelState = {
     allocations?: Record<string, any>;
     highWater?: Record<string, any>;
+  };
+
+  type leaveTeamParams = {
+    /** Resource UUID */
+    id: string;
   };
 
   type LibraryAssetSummary = {
@@ -1869,13 +2114,6 @@ declare namespace API {
     cursor?: string;
   };
 
-  type listAdminUsersParams = {
-    /** 1..200, default 50 */
-    limit?: number;
-    /** Actor and organization scoped cursor */
-    cursor?: string;
-  };
-
   type listBibleEntriesParams = {
     /** Return soft-deleted entries only */
     deleted?: boolean;
@@ -2031,6 +2269,36 @@ declare namespace API {
   type listModelReleasesParams = {
     /** 模型ID */
     id: string;
+  };
+
+  type listPlatformTeamInvitationsParams = {
+    /** Team ID */
+    id: string;
+    /** Signed cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Invitation status */
+    status?: string;
+  };
+
+  type listPlatformUsersParams = {
+    /** Filter */
+    limit?: number;
+    /** Filter */
+    cursor?: string;
+    /** Filter */
+    search?: string;
+    /** Filter */
+    status?: string;
+    /** Filter */
+    platform_role?: string;
+    /** Filter */
+    order?: string;
+    /** Filter */
+    verified?: boolean;
+    /** Filter */
+    in_team?: boolean;
   };
 
   type listProjectCopiesParams = {
@@ -2199,17 +2467,26 @@ declare namespace API {
     cursor?: string;
   };
 
+  type listTeamMembersParams = {
+    /** Resource UUID */
+    id: string;
+    /** Filter */
+    limit?: number;
+    /** Filter */
+    cursor?: string;
+    /** Filter */
+    search?: string;
+    /** Filter */
+    role?: string;
+    /** Filter */
+    status?: string;
+  };
+
   type LocationContent = {
     aliases?: string[];
     description?: string;
     name?: string;
     prompt?: string;
-  };
-
-  type LoginRequest = {
-    login_name: string;
-    password: string;
-    persistent: boolean;
   };
 
   type LookContent = {
@@ -2283,6 +2560,18 @@ declare namespace API {
     expected_revision?: number;
     expected_target_revision?: number;
     target_id?: string;
+  };
+
+  type MeView = {
+    avatar_asset_id: string;
+    capabilities: string[];
+    display_name: string;
+    email: string;
+    email_verified_at: string;
+    id: string;
+    platform_role: string;
+    revision: string;
+    status: string;
   };
 
   type Mode = "inherit" | "append" | "rewrite";
@@ -2372,6 +2661,15 @@ declare namespace API {
   type moveProjectToFolderParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type myProposalsParams = {
+    /** Signed cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Proposal status */
+    status?: string;
   };
 
   type Name = {
@@ -2486,16 +2784,163 @@ declare namespace API {
     parent_id?: string;
   };
 
-  type PasswordChange = {
+  type PasswordResetCompleteRequest = {
     confirm_password: string;
-    current_password: string;
-    expected_credential_revision: number;
-    new_password: string;
+    password: string;
+    token: string;
+  };
+
+  type PasswordResetStartRequest = {
+    email: string;
   };
 
   type PersonalUploadResult = {
     asset?: LibraryAssetSummary;
     duplicate_of?: string;
+  };
+
+  type platformDisableParams = {
+    /** Account ID */
+    id: string;
+  };
+
+  type platformEnableParams = {
+    /** Account ID */
+    id: string;
+  };
+
+  type platformProposalsParams = {
+    /** Signed cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Proposal status */
+    status?: string;
+  };
+
+  type platformResetProfileParams = {
+    /** Account ID */
+    id: string;
+  };
+
+  type platformRevokeAdminParams = {
+    /** Account ID */
+    id: string;
+  };
+
+  type platformRevokeSessionsParams = {
+    /** Account ID */
+    id: string;
+  };
+
+  type platformSendPasswordResetParams = {
+    /** User ID */
+    id: string;
+  };
+
+  type PlatformSettings = {
+    registration_enabled?: boolean;
+    revision?: string;
+    team_creation_enabled?: boolean;
+  };
+
+  type PlatformStatisticsView = {
+    account_states: Record<string, any>;
+    active_team_users: number;
+    as_of: string;
+    filter: DirectoryExportFilter;
+    membership_count: number;
+    total_users: number;
+    verified_users: number;
+  };
+
+  type PlatformTeam = {
+    administrator_count?: number;
+    avatar_asset_id?: string;
+    created_at?: string;
+    created_by?: string;
+    governance_blocked?: boolean;
+    id?: string;
+    invitation_enabled?: boolean;
+    member_count?: number;
+    name?: string;
+    resume_status?: string;
+    revision?: string;
+    status?: string;
+  };
+
+  type platformTeamAvatarParams = {
+    /** Team ID */
+    id: string;
+  };
+
+  type PlatformTeamInvitationRequest = {
+    email?: string;
+    reason?: string;
+    team_role?: string;
+  };
+
+  type PlatformTeamPage = {
+    as_of?: string;
+    items?: PlatformTeam[];
+    next_cursor?: string;
+  };
+
+  type platformTeamParams = {
+    /** Team ID */
+    id: string;
+  };
+
+  type platformTeamsParams = {
+    /** Signed cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Name contains */
+    search?: string;
+    /** Exact team UUID */
+    id?: string;
+    /** Current eligible team administrator UUID */
+    administrator_id?: string;
+    /** Inclusive creation time (RFC3339) */
+    created_from?: string;
+    /** Exclusive creation time (RFC3339) */
+    created_to?: string;
+    /** Team status */
+    status?: string;
+    /** Governance freeze */
+    governance_blocked?: boolean;
+  };
+
+  type platformUnlockParams = {
+    /** Account ID */
+    id: string;
+  };
+
+  type PlatformUserDetailView = {
+    allowed_actions: string[];
+    teams: TeamMembershipView[];
+    user: PlatformUserView;
+  };
+
+  type PlatformUserPageView = {
+    as_of: string;
+    items: PlatformUserView[];
+    next_cursor: string;
+  };
+
+  type PlatformUserView = {
+    active_team_count: number;
+    avatar_asset_id: string;
+    create_time: string;
+    display_name: string;
+    email: string;
+    email_verified_at: string;
+    id: string;
+    last_login_at: string;
+    platform_role: string;
+    revision: string;
+    status: string;
   };
 
   type Preference = {
@@ -2506,6 +2951,18 @@ declare namespace API {
 
   type PreferencesResponse = {
     items?: Preference[];
+  };
+
+  type PreferencesUpdateRequest = {
+    expected_revision: string;
+    prompt_suffix: string;
+    theme: string;
+  };
+
+  type PreferencesView = {
+    prompt_suffix: string;
+    revision: string;
+    theme: string;
   };
 
   type Preset = {
@@ -2602,6 +3059,19 @@ declare namespace API {
     status?: number;
     title?: string;
     type?: string;
+  };
+
+  type ProfileGovernanceRequest = {
+    expected_revision?: string;
+    reason?: string;
+    reset_avatar?: boolean;
+    reset_display_name?: boolean;
+  };
+
+  type ProfileUpdateRequest = {
+    avatar_asset_id?: string;
+    display_name: string;
+    expected_revision: string;
   };
 
   type ProjectCopyBibleCounts = {
@@ -2862,6 +3332,22 @@ declare namespace API {
     prompt?: string;
   };
 
+  type ProposalListPage = {
+    as_of?: string;
+    items?: AuthorityProposal[];
+    next_cursor?: string;
+  };
+
+  type proposeTakeoverParams = {
+    /** Team ID */
+    id: string;
+  };
+
+  type proposeTransferParams = {
+    /** Team ID */
+    id: string;
+  };
+
   type ProviderCheck = {
     adapter_result?: string;
     auth_result?: string;
@@ -3081,6 +3567,10 @@ declare namespace API {
     id: string;
   };
 
+  type ReauthenticationRequest = {
+    password: string;
+  };
+
   type Receipt = {
     confirmed_version_id?: string;
     content_sha256?: string;
@@ -3182,15 +3672,43 @@ declare namespace API {
 
   type Region = "domestic" | "overseas";
 
-  type RegisterRequest = {
+  type RegistrationCompleteRequest = {
     confirm_password: string;
     display_name: string;
-    login_name: string;
     password: string;
+    registration_grant: string;
+    terms_accepted: boolean;
+    terms_version: string;
+  };
+
+  type RegistrationCompleteView = {
+    account_id: string;
+    next: string;
+  };
+
+  type RegistrationStartRequest = {
+    email: string;
+    invitation_token: string;
+  };
+
+  type RegistrationVerifyRequest = {
+    code: string;
+  };
+
+  type RegistrationVerifyView = {
+    outcome: string;
+    registration_grant: string;
   };
 
   type ReleasePage = {
     items?: ModelRelease[];
+  };
+
+  type removeTeamMemberParams = {
+    /** Resource UUID */
+    id: string;
+    /** Resource UUID */
+    uid: string;
   };
 
   type renameCanvasParams = {
@@ -3201,6 +3719,11 @@ declare namespace API {
   type RenameInput = {
     expected_revision?: number;
     name?: string;
+  };
+
+  type renameTeamParams = {
+    /** Resource UUID */
+    id: string;
   };
 
   type reorderScriptSourcesParams = {
@@ -3219,9 +3742,21 @@ declare namespace API {
     look: string;
   };
 
-  type resetAdminPasswordParams = {
-    /** User UUID */
+  type resendAccountInvitationParams = {
+    /** Invitation ID */
     id: string;
+  };
+
+  type resendRegistrationParams = {
+    /** Operation UUID */
+    id: string;
+  };
+
+  type resendTeamInvitationParams = {
+    /** Team ID */
+    id: string;
+    /** Invitation ID */
+    iid: string;
   };
 
   type resolvePromptSubmissionParams = {
@@ -3257,9 +3792,26 @@ declare namespace API {
     id: string;
   };
 
+  type restorePlatformTeamParams = {
+    /** Team ID */
+    id: string;
+  };
+
   type restoreProjectParams = {
     /** 项目UUID */
     pid: string;
+  };
+
+  type restoreTeamMemberParams = {
+    /** Resource UUID */
+    id: string;
+    /** Resource UUID */
+    uid: string;
+  };
+
+  type restoreTeamParams = {
+    /** Team ID */
+    id: string;
   };
 
   type Result = {
@@ -3339,6 +3891,25 @@ declare namespace API {
   type reviewMediaExportParams = {
     /** Export UUID */
     job_id: string;
+  };
+
+  type revokeAccountInvitationParams = {
+    /** Invitation ID */
+    id: string;
+  };
+
+  type revokePlatformTeamInvitationParams = {
+    /** Team ID */
+    id: string;
+    /** Invitation ID */
+    iid: string;
+  };
+
+  type revokeTeamInvitationParams = {
+    /** Team ID */
+    id: string;
+    /** Invitation ID */
+    iid: string;
   };
 
   type RichAttrs = {
@@ -3425,12 +3996,43 @@ declare namespace API {
     start?: number;
   };
 
-  type SessionView = {
+  type SecurityEventPageView = {
+    as_of: string;
+    items: SecurityEventView[];
+    next_cursor: string;
+  };
+
+  type SecurityEventView = {
+    action: string;
+    actor_id: string;
+    created_at: string;
+    id: string;
+    reason: string;
+    request_id: string;
+    result: string;
+    safe_diff: Record<string, any>;
+    target_user_id: string;
+    team_id: string;
+  };
+
+  type SessionGovernanceRequest = {
+    expected_revision?: string;
+    reason?: string;
+  };
+
+  type SessionItemView = {
     absolute_expires_at: string;
-    actor: Actor;
+    created_at: string;
+    current: boolean;
+    device_summary: string;
+    id: string;
     last_active_at: string;
-    persistent: boolean;
-    session_id: string;
+  };
+
+  type SessionPageView = {
+    as_of: string;
+    items: SessionItemView[];
+    next_cursor: string;
   };
 
   type setAdminCredentialParams = {
@@ -3462,6 +4064,13 @@ declare namespace API {
   type SetModelStatusRequest = {
     expected_revision?: number;
     status?: ModelStatus;
+  };
+
+  type SettingsGovernanceRequest = {
+    expected_revision?: string;
+    reason?: string;
+    registration_enabled?: boolean;
+    team_creation_enabled?: boolean;
   };
 
   type Size = {
@@ -3670,6 +4279,19 @@ declare namespace API {
     title?: string;
   };
 
+  type SpacePageView = {
+    items: SpaceView[];
+  };
+
+  type SpaceView = {
+    id: string;
+    kind: string;
+    name: string;
+    role: string;
+    team_id: string;
+    writable: boolean;
+  };
+
   type splitBibleCharacterParams = {
     /** Project UUID */
     pid: string;
@@ -3859,6 +4481,18 @@ declare namespace API {
     name?: string;
   };
 
+  type suspendPlatformTeamParams = {
+    /** Team ID */
+    id: string;
+  };
+
+  type suspendTeamMemberParams = {
+    /** Resource UUID */
+    id: string;
+    /** Resource UUID */
+    uid: string;
+  };
+
   type TaskDetail = {
     batch_id?: string;
     cancel_requested?: boolean;
@@ -3947,6 +4581,136 @@ declare namespace API {
     target_id?: string;
     target_type?: string;
     update_time?: string;
+  };
+
+  type teamAuthorityProposalsParams = {
+    /** Team ID */
+    id: string;
+    /** Signed cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Proposal status */
+    status?: string;
+  };
+
+  type teamAvatarParams = {
+    /** Team ID */
+    id: string;
+  };
+
+  type TeamAvatarPreview = {
+    asset_id?: string;
+    expires_at?: string;
+    url?: string;
+  };
+
+  type TeamCreateRequest = {
+    avatar_asset_id?: string;
+    name: string;
+  };
+
+  type TeamInvitationRequest = {
+    email?: string;
+    team_role?: string;
+  };
+
+  type TeamInvitationSettingsRequest = {
+    expected_revision?: string;
+    invitation_enabled?: boolean;
+  };
+
+  type TeamLeaveRequest = {
+    expected_revision: string;
+  };
+
+  type TeamLifecycleRequest = {
+    expected_revision?: string;
+    reason?: string;
+  };
+
+  type teamListInvitationsParams = {
+    /** Team ID */
+    id: string;
+    /** Signed cursor */
+    cursor?: string;
+    /** Page size */
+    limit?: number;
+    /** Invitation status */
+    status?: string;
+  };
+
+  type teamMemberAvatarParams = {
+    /** Team ID */
+    id: string;
+    /** Member ID */
+    uid: string;
+  };
+
+  type TeamMemberPageView = {
+    as_of: string;
+    items: TeamMemberView[];
+    next_cursor: string;
+  };
+
+  type TeamMembershipView = {
+    role: string;
+    status: string;
+    team_id: string;
+  };
+
+  type TeamMemberStatisticsView = {
+    as_of: string;
+    filter: DirectoryExportFilter;
+    member_states: Record<string, any>;
+    team_id: string;
+    total_members: number;
+  };
+
+  type TeamMemberView = {
+    access_available?: boolean;
+    avatar_asset_id: string;
+    display_name: string;
+    email?: string;
+    joined_at?: string;
+    last_team_activity_at?: string;
+    revision?: string;
+    role: string;
+    source?: string;
+    status?: string;
+    user_id: string;
+  };
+
+  type TeamMutation = {
+    expected_revision: string;
+    reason: string;
+  };
+
+  type TeamProfileRequest = {
+    avatar_asset_id?: string;
+    expected_revision?: string;
+    name?: string;
+    reason?: string;
+  };
+
+  type TeamRoleRequest = {
+    expected_revision: string;
+    reason: string;
+    role: string;
+  };
+
+  type TeamView = {
+    avatar_asset_id?: string;
+    capabilities: string[];
+    governance_blocked: boolean;
+    id: string;
+    invitation_enabled: boolean;
+    member_count: number;
+    membership_revision: string;
+    name: string;
+    revision: string;
+    role: string;
+    status: string;
   };
 
   type TemplateRequest = {
@@ -4131,10 +4895,12 @@ declare namespace API {
     needs_reconciliation?: boolean;
     revision?: number;
     source?: LibraryScope;
+    source_scope_id?: string;
     stage?: string;
     status?: string;
     target?: LibraryScope;
     target_folder_id?: string;
+    target_scope_id?: string;
     updated_at?: string;
   };
 
@@ -4172,18 +4938,8 @@ declare namespace API {
     id: string;
   };
 
-  type unlockAdminUserParams = {
-    /** User UUID */
-    id: string;
-  };
-
   type updateAdminProviderParams = {
     /** 渠道UUID */
-    id: string;
-  };
-
-  type updateAdminUserParams = {
-    /** User UUID */
     id: string;
   };
 
@@ -4205,6 +4961,11 @@ declare namespace API {
     id: string;
     /** Appearance UUID */
     look: string;
+  };
+
+  type updatePlatformTeamParams = {
+    /** Team ID */
+    id: string;
   };
 
   type updateProjectFolderParams = {
@@ -4234,6 +4995,11 @@ declare namespace API {
     pid: string;
     /** 稳定来源UUID */
     lineage: string;
+  };
+
+  type updateTeamSettingsParams = {
+    /** Team ID */
+    id: string;
   };
 
   type uploadMediaAssetParams = {
@@ -4267,6 +5033,16 @@ declare namespace API {
   type Variable = {
     label?: string;
     placeholder?: string;
+  };
+
+  type verifyEmailChangeParams = {
+    /** Operation UUID */
+    id: string;
+  };
+
+  type verifyRegistrationParams = {
+    /** Operation UUID */
+    id: string;
   };
 
   type Version = {

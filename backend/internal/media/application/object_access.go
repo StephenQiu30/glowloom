@@ -12,6 +12,9 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 )
 
+// ErrObjectMissing is confirmed physical absence, distinct from denied reads.
+var ErrObjectMissing = errors.New("media object missing")
+
 // AccessGrant carries the signer's actual expiry, including temporary credentials.
 // Only an authorized response projection may expose its private URL.
 type AccessGrant struct {

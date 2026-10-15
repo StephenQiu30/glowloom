@@ -25,14 +25,17 @@ func (s *Store) AuthorizeUpload(ctx context.Context, actor identityapp.Principal
 	var aspect string
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
-		aspect, err = authorizeUpload(tx, actor, projectID, false)
+		aspect, err = s.authorizeUpload(tx, actor, projectID, false)
 		return err
 	})
 	return aspect, err
 }
 
-func authorizeUpload(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, lock bool) (string, error) {
-	if err := requireCurrentActor(tx, actor); err != nil {
+func (s scopeAuthority) authorizeUpload(tx *gorm.DB, actor identityapp.Principal, projectID uuid.UUID, lock bool) (string, error) {
+	if err := s.requireCurrentActor(tx, actor); err != nil {
+		return "", err
+	}
+	if err := s.requireProject(tx, actor, projectID, true); err != nil {
 		return "", err
 	}
 	if projectID == uuid.Nil {
@@ -72,7 +75,7 @@ func (s *Store) FindUpload(ctx context.Context, actor identityapp.Principal, r a
 	var result application.UploadResult
 	var found bool
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := authorizeUpload(tx, actor, r.ProjectID, false); err != nil {
+		if _, err := s.authorizeUpload(tx, actor, r.ProjectID, false); err != nil {
 			return err
 		}
 		var err error
@@ -132,7 +135,7 @@ func (s *Store) CommitUpload(ctx context.Context, actor identityapp.Principal, r
 	}
 	var result application.UploadResult
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := authorizeUpload(tx, actor, r.ProjectID, true); err != nil {
+		if _, err := s.authorizeUpload(tx, actor, r.ProjectID, true); err != nil {
 			return err
 		}
 		if prior, found, err := replayUpload(tx, actor, r); err != nil || found {

@@ -143,22 +143,31 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION media.check_transfer_scope() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
+CREATE FUNCTION media.protect_transfer_ownership() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.actor_id,NEW.org_id,NEW.source_library_id,NEW.target_library_id,NEW.source_kind,NEW.target_kind,NEW.source_project_id,NEW.target_project_id,NEW.source_scope_id,NEW.target_scope_id,NEW.source_org_id,NEW.target_org_id)
+ IS DISTINCT FROM ROW(OLD.actor_id,OLD.org_id,OLD.source_library_id,OLD.target_library_id,OLD.source_kind,OLD.target_kind,OLD.source_project_id,OLD.target_project_id,OLD.source_scope_id,OLD.target_scope_id,OLD.source_org_id,OLD.target_org_id)
+ THEN RAISE EXCEPTION 'media transfer ownership is immutable' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION media.check_transfer_scope() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE source media.library%ROWTYPE; target media.library%ROWTYPE;
 BEGIN
-  SELECT * INTO STRICT source FROM media.library WHERE id=NEW.source_library_id;
-  SELECT * INTO STRICT target FROM media.library WHERE id=NEW.target_library_id;
-  IF source.org_id<>NEW.org_id OR target.org_id<>NEW.org_id OR source.kind<>NEW.source_kind OR target.kind<>NEW.target_kind
-    OR source.project_id IS DISTINCT FROM NEW.source_project_id OR target.project_id IS DISTINCT FROM NEW.target_project_id
-    OR (source.kind='personal' AND source.personal_actor_id<>NEW.actor_id)
-    OR (target.kind='personal' AND target.personal_actor_id<>NEW.actor_id) THEN
-    RAISE EXCEPTION 'media transfer scope mismatch' USING ERRCODE='23514';
-  END IF;
-  RETURN NEW;
-END;
-$$;
+ SELECT * INTO STRICT source FROM media.library WHERE id=NEW.source_library_id;
+ SELECT * INTO STRICT target FROM media.library WHERE id=NEW.target_library_id;
+ IF NEW.source_scope_id IS NULL OR NEW.target_scope_id IS NULL OR NEW.source_org_id IS NULL OR NEW.target_org_id IS NULL
+ OR source.org_id<>NEW.source_org_id OR target.org_id<>NEW.target_org_id OR source.kind<>NEW.source_kind OR target.kind<>NEW.target_kind
+ OR source.project_id IS DISTINCT FROM NEW.source_project_id OR target.project_id IS DISTINCT FROM NEW.target_project_id
+ OR (source.kind='personal' AND source.personal_actor_id<>NEW.actor_id) OR (target.kind='personal' AND target.personal_actor_id<>NEW.actor_id)
+ OR NOT EXISTS(SELECT 1 FROM workspace.creation_scope s WHERE s.id=NEW.source_scope_id AND s.physical_scope_id=source.org_id AND
+ ((source.kind='personal' AND s.kind='personal' AND s.owner_user_id=NEW.actor_id) OR (source.kind='project' AND EXISTS(SELECT 1 FROM workspace.project p WHERE p.id=source.project_id AND p.owner_scope_id=s.id))))
+ OR NOT EXISTS(SELECT 1 FROM workspace.creation_scope s WHERE s.id=NEW.target_scope_id AND s.physical_scope_id=target.org_id AND
+ ((target.kind='personal' AND s.kind='personal' AND s.owner_user_id=NEW.actor_id) OR (target.kind='project' AND EXISTS(SELECT 1 FROM workspace.project p WHERE p.id=target.project_id AND p.owner_scope_id=s.id))))
+ OR (source.kind='project' AND source.org_id<>NEW.org_id) OR (target.kind='project' AND target.org_id<>NEW.org_id)
+ THEN RAISE EXCEPTION 'media transfer scope mismatch' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
 
 CREATE FUNCTION media.check_upload_receipt_scope() RETURNS trigger
     LANGUAGE plpgsql
@@ -1289,6 +1298,10 @@ CREATE TABLE media.transfer_job (
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
+    source_scope_id uuid,
+    target_scope_id uuid,
+    source_org_id uuid,
+    target_org_id uuid,
     source_library_id uuid NOT NULL,
     target_library_id uuid NOT NULL,
     source_kind text NOT NULL,
@@ -1392,7 +1405,7 @@ CREATE TABLE mediatool.depth_job (
     project_id uuid NOT NULL,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
-    actor_role text NOT NULL,
+    actor_role text,
     canvas_id uuid NOT NULL,
     node_id uuid NOT NULL,
     source_revision bigint NOT NULL,
@@ -1486,7 +1499,7 @@ CREATE TABLE mediatool.export_job (
     project_id uuid NOT NULL,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
-    actor_role text NOT NULL,
+    actor_role text,
     canvas_id uuid NOT NULL,
     node_id uuid NOT NULL,
     source_revision bigint NOT NULL,
@@ -1538,7 +1551,7 @@ CREATE TABLE mediatool.transcription_job (
     project_id uuid NOT NULL,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
-    actor_role text NOT NULL,
+    actor_role text,
     canvas_id uuid NOT NULL,
     node_id uuid NOT NULL,
     source_revision bigint NOT NULL,
@@ -2018,7 +2031,7 @@ CREATE TABLE script.import_job (
     org_id uuid NOT NULL,
     project_id uuid NOT NULL,
     actor_id uuid NOT NULL,
-    actor_role text NOT NULL,
+    actor_role text,
     request_id uuid NOT NULL,
     request_hash text NOT NULL,
     expected_script_revision bigint NOT NULL,
@@ -2354,6 +2367,7 @@ CREATE TABLE workspace.project_copy_command (
 );
 
 CREATE TABLE workspace.project_copy_job (
+    owner_scope_id uuid,
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
@@ -2403,6 +2417,7 @@ CREATE TABLE workspace.project_copy_job (
 );
 
 CREATE TABLE workspace.project_folder (
+    owner_scope_id uuid,
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
@@ -2421,6 +2436,7 @@ CREATE TABLE workspace.project_folder (
 );
 
 CREATE TABLE workspace.project_folder_command (
+    owner_scope_id uuid,
     id uuid NOT NULL,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
@@ -2435,6 +2451,7 @@ CREATE TABLE workspace.project_folder_command (
 );
 
 CREATE TABLE workspace.project_folder_placement (
+    owner_scope_id uuid,
     org_id uuid NOT NULL,
     actor_id uuid NOT NULL,
     project_id uuid NOT NULL,
@@ -3322,6 +3339,8 @@ CREATE TRIGGER purge_scope BEFORE INSERT ON media.purge_job FOR EACH ROW EXECUTE
 
 CREATE TRIGGER transfer_command_immutable BEFORE DELETE OR UPDATE ON media.transfer_command FOR EACH ROW EXECUTE FUNCTION media.reject_transfer_command_mutation();
 
+CREATE TRIGGER transfer_ownership_immutable BEFORE UPDATE ON media.transfer_job FOR EACH ROW EXECUTE FUNCTION media.protect_transfer_ownership();
+
 CREATE TRIGGER transfer_scope BEFORE INSERT ON media.transfer_job FOR EACH ROW EXECUTE FUNCTION media.check_transfer_scope();
 
 CREATE TRIGGER upload_request_scope_guard BEFORE INSERT ON media.upload_request FOR EACH ROW EXECUTE FUNCTION media.check_upload_receipt_scope();
@@ -3506,7 +3525,8 @@ ALTER TABLE ONLY media.library_command
     ADD CONSTRAINT library_command_library_id_fkey FOREIGN KEY (library_id) REFERENCES media.library(id);
 
 ALTER TABLE ONLY media.library_command
-    ADD CONSTRAINT library_command_org_id_actor_id_fkey FOREIGN KEY (org_id, actor_id) REFERENCES identity."user"(org_id, id);
+    ADD CONSTRAINT library_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+ALTER TABLE media.library_command ADD CONSTRAINT library_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.library_folder
     ADD CONSTRAINT library_folder_library_id_library_kind_fkey FOREIGN KEY (library_id, library_kind) REFERENCES media.library(id, kind);
@@ -3542,13 +3562,15 @@ ALTER TABLE ONLY media.package_command
     ADD CONSTRAINT package_command_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.package_job(id);
 
 ALTER TABLE ONLY media.package_command
-    ADD CONSTRAINT package_command_org_id_actor_id_fkey FOREIGN KEY (org_id, actor_id) REFERENCES identity."user"(org_id, id);
+    ADD CONSTRAINT package_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+ALTER TABLE media.package_command ADD CONSTRAINT package_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.package_job
     ADD CONSTRAINT package_job_library_id_fkey FOREIGN KEY (library_id) REFERENCES media.library(id);
 
 ALTER TABLE ONLY media.package_job
-    ADD CONSTRAINT package_job_org_id_actor_id_fkey FOREIGN KEY (org_id, actor_id) REFERENCES identity."user"(org_id, id);
+    ADD CONSTRAINT package_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+ALTER TABLE media.package_job ADD CONSTRAINT package_job_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.package_job
     ADD CONSTRAINT package_job_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
@@ -3578,7 +3600,8 @@ ALTER TABLE ONLY media.purge_command
     ADD CONSTRAINT purge_command_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.purge_job(id);
 
 ALTER TABLE ONLY media.purge_command
-    ADD CONSTRAINT purge_command_org_id_actor_id_fkey FOREIGN KEY (org_id, actor_id) REFERENCES identity."user"(org_id, id);
+    ADD CONSTRAINT purge_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+ALTER TABLE media.purge_command ADD CONSTRAINT purge_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.purge_item
     ADD CONSTRAINT purge_item_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES media.media_asset(id);
@@ -3593,7 +3616,8 @@ ALTER TABLE ONLY media.purge_job
     ADD CONSTRAINT purge_job_library_id_fkey FOREIGN KEY (library_id) REFERENCES media.library(id);
 
 ALTER TABLE ONLY media.purge_job
-    ADD CONSTRAINT purge_job_org_id_actor_id_fkey FOREIGN KEY (org_id, actor_id) REFERENCES identity."user"(org_id, id);
+    ADD CONSTRAINT purge_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+ALTER TABLE media.purge_job ADD CONSTRAINT purge_job_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.purge_job
     ADD CONSTRAINT purge_job_project_id_fkey FOREIGN KEY (project_id) REFERENCES workspace.project(id);
@@ -3608,7 +3632,8 @@ ALTER TABLE ONLY media.transfer_command
     ADD CONSTRAINT transfer_command_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.transfer_job(id);
 
 ALTER TABLE ONLY media.transfer_command
-    ADD CONSTRAINT transfer_command_org_id_actor_id_fkey FOREIGN KEY (org_id, actor_id) REFERENCES identity."user"(org_id, id);
+    ADD CONSTRAINT transfer_command_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+ALTER TABLE media.transfer_command ADD CONSTRAINT transfer_command_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.transfer_item
     ADD CONSTRAINT transfer_item_job_id_fkey FOREIGN KEY (job_id) REFERENCES media.transfer_job(id);
@@ -3617,7 +3642,8 @@ ALTER TABLE ONLY media.transfer_item
     ADD CONSTRAINT transfer_item_source_asset_id_fkey FOREIGN KEY (source_asset_id) REFERENCES media.media_asset(id);
 
 ALTER TABLE ONLY media.transfer_job
-    ADD CONSTRAINT transfer_job_org_id_actor_id_fkey FOREIGN KEY (org_id, actor_id) REFERENCES identity."user"(org_id, id);
+    ADD CONSTRAINT transfer_job_actor_scope_user_fk FOREIGN KEY (actor_id) REFERENCES identity."user"(id);
+ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_job_physical_org_fk FOREIGN KEY(org_id) REFERENCES workspace.organization(id);
 
 ALTER TABLE ONLY media.transfer_job
     ADD CONSTRAINT transfer_job_source_library_id_fkey FOREIGN KEY (source_library_id) REFERENCES media.library(id);
@@ -4443,10 +4469,24 @@ CREATE TABLE workspace.creation_scope (
 CREATE UNIQUE INDEX creation_scope_personal_unique ON workspace.creation_scope(owner_user_id) WHERE owner_user_id IS NOT NULL;
 CREATE UNIQUE INDEX creation_scope_team_unique ON workspace.creation_scope(team_id) WHERE team_id IS NOT NULL;
 
+ALTER TABLE workspace.creation_scope ADD CONSTRAINT creation_scope_physical_unique UNIQUE (id,physical_scope_id);
+ALTER TABLE workspace.project
+    ADD COLUMN owner_scope_id uuid,
+    ADD CONSTRAINT project_owner_scope_fk FOREIGN KEY (owner_scope_id,org_id)
+        REFERENCES workspace.creation_scope(id,physical_scope_id) ON DELETE RESTRICT;
+CREATE INDEX project_owner_scope_idx ON workspace.project(owner_scope_id,is_delete,update_time DESC,id DESC);
+
+ALTER TABLE workspace.style_preset
+    ADD COLUMN owner_scope_id uuid,
+    ADD CONSTRAINT style_preset_owner_scope_fk FOREIGN KEY (owner_scope_id,org_id)
+        REFERENCES workspace.creation_scope(id,physical_scope_id) ON DELETE RESTRICT;
+CREATE INDEX style_preset_owner_scope_idx ON workspace.style_preset(owner_scope_id,is_delete);
+
+
 CREATE TABLE identity.auth_challenge (
     id uuid PRIMARY KEY,
     operation_id uuid NOT NULL,
-    purpose text NOT NULL CHECK (purpose IN ('registration_code','registration_grant','password_reset','email_old','email_new','deletion_confirm','deletion_cancel','migration_bind')),
+    purpose text NOT NULL CHECK (purpose IN ('registration_code','registration_grant','password_reset','email_old','email_new','deletion_confirm','migration_bind')),
     email_key text NOT NULL,
     user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
     email_version bigint CHECK (email_version > 0),
@@ -4722,6 +4762,59 @@ CREATE TABLE operation.provider_trial (
 );
 GRANT SELECT,INSERT ON operation.provider_trial TO lanverse_app;
 
+-- User governance final-state additions (006).
+-- Reviewed incremental expansion only. Application is an operator action; no runner applies this file.
+CREATE TABLE IF NOT EXISTS identity.authority_proposal (
+ id uuid PRIMARY KEY,
+ kind text NOT NULL CHECK (kind IN ('platform_grant','team_transfer','platform_takeover')),
+ team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
+ source_user_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
+ target_user_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
+ status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','declined','cancelled','expired')),
+ expires_at timestamptz NOT NULL,
+ reason text NOT NULL CHECK (char_length(reason) BETWEEN 5 AND 500),
+ source_authority_revision bigint NOT NULL CHECK (source_authority_revision>0),
+ target_revision bigint NOT NULL CHECK (target_revision>0),
+ team_revision bigint,
+ revision bigint NOT NULL DEFAULT 1 CHECK (revision>0),
+ created_at timestamptz NOT NULL,
+ updated_at timestamptz NOT NULL,
+ CHECK ((kind='platform_grant')=(team_id IS NULL)),
+ CHECK ((team_id IS NULL)=(team_revision IS NULL)),
+ CHECK (source_user_id<>target_user_id)
+);
+CREATE INDEX IF NOT EXISTS authority_proposal_target_idx ON identity.authority_proposal(target_user_id,status,expires_at);
+CREATE INDEX IF NOT EXISTS authority_proposal_team_idx ON identity.authority_proposal(team_id,status);
+CREATE UNIQUE INDEX IF NOT EXISTS authority_proposal_platform_pending_idx ON identity.authority_proposal(target_user_id) WHERE kind='platform_grant' AND status='pending';
+CREATE UNIQUE INDEX IF NOT EXISTS authority_proposal_team_pending_idx ON identity.authority_proposal(team_id) WHERE kind IN ('team_transfer','platform_takeover') AND status='pending';
+GRANT SELECT,INSERT,UPDATE ON identity.authority_proposal TO lanverse_app;
+CREATE TABLE IF NOT EXISTS identity.invitation (
+ id uuid PRIMARY KEY,
+ kind text NOT NULL CHECK (kind IN ('account','team')),
+ team_id uuid REFERENCES workspace.team(id) ON DELETE RESTRICT,
+ email_key text NOT NULL,
+ team_role text CHECK (team_role IN ('member','team_admin')),
+ inviter_id uuid NOT NULL REFERENCES identity."user"(id) ON DELETE RESTRICT,
+ status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined','revoked','expired')),
+ token_hash bytea NOT NULL UNIQUE CHECK(octet_length(token_hash)=32),
+ expires_at timestamptz NOT NULL,
+ accepted_user_id uuid REFERENCES identity."user"(id) ON DELETE RESTRICT,
+ membership_revision bigint,
+ revision bigint NOT NULL DEFAULT 1 CHECK(revision>0),
+ created_at timestamptz NOT NULL,
+ updated_at timestamptz NOT NULL,
+ CHECK ((kind='account' AND team_id IS NULL AND team_role IS NULL) OR (kind='team' AND team_id IS NOT NULL AND team_role IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS invitation_pending_team_idx ON identity.invitation(team_id,email_key) WHERE kind='team' AND status='pending';
+CREATE UNIQUE INDEX IF NOT EXISTS invitation_pending_account_idx ON identity.invitation(email_key) WHERE kind='account' AND status='pending';
+GRANT SELECT,INSERT,UPDATE ON identity.invitation TO lanverse_app;
+
+-- Transfer ownership constraints (migration 007).
+ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_source_scope_fkey FOREIGN KEY(source_scope_id) REFERENCES workspace.creation_scope(id);
+ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_target_scope_fkey FOREIGN KEY(target_scope_id) REFERENCES workspace.creation_scope(id);
+ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_source_org_fkey FOREIGN KEY(source_org_id) REFERENCES workspace.organization(id);
+ALTER TABLE media.transfer_job ADD CONSTRAINT transfer_target_org_fkey FOREIGN KEY(target_org_id) REFERENCES workspace.organization(id);
+
 -- Object storage identity and phased location expansion (migration 008).
 -- 既有业务库增量：先登记物理身份与位置，禁止猜测或自动回填旧 MinIO。
 -- 在独立副本审阅、核对后以单事务执行；不得重放 schema.sql。
@@ -4857,6 +4950,13 @@ END $$;
 CREATE INDEX IF NOT EXISTS object_location_cleanup_idx ON media.object_location(state,updated_at) WHERE state IN ('reserved','present','delete_pending','unknown');
 GRANT SELECT,INSERT,UPDATE ON media.upload_admission TO lanverse_app;
 
+-- Bind registration proofs and outbox attempts to the exact invitation revision.
+ALTER TABLE identity.auth_challenge ADD COLUMN IF NOT EXISTS invitation_revision bigint CHECK(invitation_revision>0);
+ALTER TABLE identity.mail_delivery ADD COLUMN IF NOT EXISTS invitation_id uuid REFERENCES identity.invitation(id) ON DELETE RESTRICT;
+ALTER TABLE identity.mail_delivery ADD COLUMN IF NOT EXISTS invitation_revision bigint CHECK(invitation_revision>0);
+ALTER TABLE identity.authority_proposal ADD COLUMN IF NOT EXISTS target_email_version bigint NOT NULL DEFAULT 1 CHECK(target_email_version>0);
+ALTER TABLE identity.authority_proposal ADD COLUMN IF NOT EXISTS target_credential_epoch bigint NOT NULL DEFAULT 1 CHECK(target_credential_epoch>0);
+
 CREATE OR REPLACE FUNCTION media.keep_upload_admission() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF (to_jsonb(NEW)-'accepted_asset_id') IS DISTINCT FROM (to_jsonb(OLD)-'accepted_asset_id')
@@ -4870,3 +4970,222 @@ DO $$ BEGIN
   CREATE TRIGGER keep_upload_admission BEFORE UPDATE ON media.upload_admission FOR EACH ROW EXECUTE FUNCTION media.keep_upload_admission();
  END IF;
 END $$;
+
+ALTER TABLE identity.invitation ADD COLUMN IF NOT EXISTS platform_issued boolean NOT NULL DEFAULT false;
+
+-- Workspace secondary ownership, migration 009.
+ALTER TABLE workspace.project_folder ADD CONSTRAINT project_folder_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
+ALTER TABLE workspace.project_folder_command ADD CONSTRAINT project_folder_command_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
+ALTER TABLE workspace.project_folder_placement ADD CONSTRAINT project_folder_placement_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
+ALTER TABLE workspace.project_copy_job ADD CONSTRAINT project_copy_job_scope_fk FOREIGN KEY(owner_scope_id,org_id) REFERENCES workspace.creation_scope(id,physical_scope_id);
+CREATE INDEX project_folder_scope_actor_idx ON workspace.project_folder(owner_scope_id,actor_id,update_time DESC,id DESC);
+CREATE INDEX project_copy_scope_idx ON workspace.project_copy_job(owner_scope_id,source_project_id,create_time DESC,id DESC);
+
+CREATE FUNCTION workspace.validate_secondary_scope() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME='project_copy_job' THEN
+  IF TG_OP='UPDATE' AND (NEW.owner_scope_id,NEW.org_id,NEW.actor_id,NEW.source_project_id,NEW.target_project_id) IS DISTINCT FROM (OLD.owner_scope_id,OLD.org_id,OLD.actor_id,OLD.source_project_id,OLD.target_project_id) THEN
+   RAISE EXCEPTION 'copy scope binding is immutable';
+  END IF;
+  IF TG_OP='INSERT' AND (NEW.owner_scope_id IS NULL OR NOT EXISTS(SELECT 1 FROM workspace.project p JOIN workspace.project t ON t.id=NEW.target_project_id WHERE p.id=NEW.source_project_id AND p.org_id=NEW.org_id AND t.org_id=NEW.org_id AND p.owner_scope_id=NEW.owner_scope_id AND t.owner_scope_id=NEW.owner_scope_id)) THEN
+   RAISE EXCEPTION 'copy scope binding invalid';
+  END IF;
+ ELSE
+  IF NEW.owner_scope_id IS NULL OR NOT EXISTS(SELECT 1 FROM workspace.project p WHERE p.id=NEW.project_id AND p.org_id=NEW.org_id AND p.owner_scope_id=NEW.owner_scope_id) OR (NEW.folder_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM workspace.project_folder f WHERE f.id=NEW.folder_id AND f.org_id=NEW.org_id AND f.actor_id=NEW.actor_id AND f.owner_scope_id=NEW.owner_scope_id)) THEN
+   RAISE EXCEPTION 'folder placement scope binding invalid';
+  END IF;
+  IF TG_OP='UPDATE' AND (NEW.owner_scope_id,NEW.org_id,NEW.actor_id,NEW.project_id) IS DISTINCT FROM (OLD.owner_scope_id,OLD.org_id,OLD.actor_id,OLD.project_id) THEN
+   RAISE EXCEPTION 'folder placement scope binding is immutable';
+  END IF;
+ END IF;
+ RETURN NEW;
+END;
+$$;
+CREATE TRIGGER project_copy_scope_binding BEFORE INSERT OR UPDATE ON workspace.project_copy_job FOR EACH ROW EXECUTE FUNCTION workspace.validate_secondary_scope();
+CREATE TRIGGER project_folder_placement_scope_binding BEFORE INSERT OR UPDATE ON workspace.project_folder_placement FOR EACH ROW EXECUTE FUNCTION workspace.validate_secondary_scope();
+
+-- Storage cutover evidence and resumable migration (migration 010).
+-- 对象存储受控升级：原资源证明和逐对象回填回执，不推断默认桶。
+-- 仅在隔离副本演练并审阅后执行；schema.sql 仍是空库完整结构源。
+CREATE TABLE IF NOT EXISTS media.storage_legacy_binding (
+ singleton integer PRIMARY KEY CHECK(singleton=1),
+ profile_id text NOT NULL,
+ bucket text NOT NULL,
+ resource_identity text NOT NULL CHECK(resource_identity ~ '^[a-f0-9]{64}$'),
+ evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket)
+);
+CREATE TABLE IF NOT EXISTS media.storage_legacy_receipt (
+ profile_id text NOT NULL,
+ bucket text NOT NULL,
+ object_key text NOT NULL,
+ snapshot_sha256 text NOT NULL CHECK(snapshot_sha256 ~ '^[a-f0-9]{64}$'),
+ location_id uuid NOT NULL,
+ byte_size bigint NOT NULL CHECK(byte_size>=0),
+ sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),
+ mime_type text NOT NULL,
+ reference_count integer NOT NULL CHECK(reference_count>0),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(profile_id,bucket,object_key,snapshot_sha256),
+ FOREIGN KEY(location_id,object_key) REFERENCES media.object_location(id,object_key),
+ FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket)
+);
+CREATE OR REPLACE FUNCTION media.keep_storage_evidence() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ RAISE EXCEPTION 'storage evidence is immutable' USING ERRCODE='23514';
+END $$;
+DO $$ DECLARE name text; BEGIN
+ FOREACH name IN ARRAY ARRAY['storage_legacy_binding','storage_legacy_receipt'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=format('media.%I',name)::regclass AND tgname='keep_storage_evidence') THEN
+   EXECUTE format('CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.%I FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence()',name);
+  END IF;
+ END LOOP;
+END $$;
+GRANT SELECT,INSERT ON media.storage_legacy_binding,media.storage_legacy_receipt TO lanverse_app;
+
+CREATE TABLE IF NOT EXISTS media.storage_work_intent (
+ id uuid PRIMARY KEY,
+ kind text NOT NULL CHECK(kind IN ('operation','script','export','depth','transcription','package','transfer','project-copy')),
+ owner_id uuid NOT NULL CHECK(owner_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+ work_id uuid NOT NULL CHECK(work_id<>'00000000-0000-0000-0000-000000000000'::uuid),
+ profile_id text NOT NULL,
+ bucket text NOT NULL,
+ config_revision text NOT NULL,
+ state text NOT NULL DEFAULT 'open' CHECK(state IN ('open','accepted','cancelled')),
+ closed_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(kind,owner_id,work_id),
+ UNIQUE(id,profile_id,bucket),
+ FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket),
+ CHECK((state='open' AND closed_at IS NULL) OR (state<>'open' AND closed_at IS NOT NULL))
+);
+ALTER TABLE media.object_location ADD COLUMN IF NOT EXISTS owner_intent_id uuid;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='media.object_location'::regclass AND conname='object_location_work_owner_fkey') THEN
+  ALTER TABLE media.object_location ADD CONSTRAINT object_location_work_owner_fkey FOREIGN KEY(owner_intent_id,profile_id,bucket) REFERENCES media.storage_work_intent(id,profile_id,bucket);
+  ALTER TABLE media.object_location ADD CONSTRAINT object_location_single_owner_check CHECK(num_nonnulls(owner_session_id,owner_intent_id)<=1);
+ END IF;
+END $$;
+CREATE OR REPLACE FUNCTION media.keep_storage_work() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME='object_location' THEN
+  IF OLD.owner_intent_id IS DISTINCT FROM NEW.owner_intent_id THEN
+   RAISE EXCEPTION 'storage work object owner is immutable' USING ERRCODE='23514';
+  END IF;
+ ELSE
+  IF (to_jsonb(OLD)-'state'-'closed_at') IS DISTINCT FROM (to_jsonb(NEW)-'state'-'closed_at')
+   OR (OLD.state<>'open' AND NEW.state<>OLD.state)
+   OR (OLD.closed_at IS NOT NULL AND NEW.closed_at IS DISTINCT FROM OLD.closed_at) THEN
+   RAISE EXCEPTION 'storage work target is immutable' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_work_intent'::regclass AND tgname='keep_storage_work') THEN
+  CREATE TRIGGER keep_storage_work BEFORE UPDATE ON media.storage_work_intent FOR EACH ROW EXECUTE FUNCTION media.keep_storage_work();
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.object_location'::regclass AND tgname='keep_storage_work') THEN
+  CREATE TRIGGER keep_storage_work BEFORE UPDATE ON media.object_location FOR EACH ROW EXECUTE FUNCTION media.keep_storage_work();
+ END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS storage_work_open_profile_idx ON media.storage_work_intent(profile_id,state);
+GRANT SELECT,INSERT,UPDATE ON media.storage_work_intent TO lanverse_app;
+
+CREATE TABLE IF NOT EXISTS media.storage_runtime (
+ instance_id uuid PRIMARY KEY,
+ role text NOT NULL CHECK(role IN ('api','worker','relay','setup')),
+ revision text NOT NULL,
+ config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
+ capabilities jsonb NOT NULL CHECK(jsonb_typeof(capabilities)='array'),
+ expires_at timestamptz NOT NULL,
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS media.storage_deployment_evidence (
+ config_sha256 text PRIMARY KEY CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
+ evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
+ recorded_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS media.storage_probe_evidence (
+ id uuid PRIMARY KEY,
+ profile_id text NOT NULL REFERENCES media.storage_profile(id),
+ resource_identity text NOT NULL,
+ config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
+ evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[a-f0-9]{64}$'),
+ expires_at timestamptz NOT NULL,
+ recorded_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS media.storage_activation_guard (
+ revision text PRIMARY KEY REFERENCES media.storage_activation(revision),
+ config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
+ deployment_evidence_sha256 text NOT NULL,
+ activated_at timestamptz NOT NULL DEFAULT now()
+);
+DO $$ DECLARE name text; BEGIN
+ FOREACH name IN ARRAY ARRAY['storage_deployment_evidence','storage_probe_evidence','storage_activation_guard'] LOOP
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=format('media.%I',name)::regclass AND tgname='keep_storage_evidence') THEN
+   EXECUTE format('CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.%I FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence()',name);
+  END IF;
+ END LOOP;
+END $$;
+GRANT SELECT,INSERT ON media.storage_deployment_evidence,media.storage_probe_evidence,media.storage_activation_guard TO lanverse_app;
+GRANT SELECT,INSERT,UPDATE ON media.storage_runtime TO lanverse_app;
+
+CREATE TABLE IF NOT EXISTS media.storage_config_revision (
+ revision text PRIMARY KEY,
+ config_sha256 text NOT NULL UNIQUE CHECK(config_sha256 ~ '^[a-f0-9]{64}$'),
+ profile_id text NOT NULL REFERENCES media.storage_profile(id),
+ upload_policy jsonb NOT NULL CHECK(jsonb_typeof(upload_policy)='object'),
+ session_ttl_seconds bigint NOT NULL CHECK(session_ttl_seconds BETWEEN 60 AND 604800),
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_config_revision'::regclass AND tgname='keep_storage_evidence') THEN
+  CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_config_revision FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+ END IF;
+END $$;
+GRANT SELECT,INSERT ON media.storage_config_revision TO lanverse_app;
+
+CREATE OR REPLACE FUNCTION media.keep_object_binding() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE old_id text; new_id text;
+BEGIN
+ old_id=to_jsonb(OLD)->>TG_ARGV[0];
+ new_id=to_jsonb(NEW)->>TG_ARGV[0];
+ IF old_id IS NOT NULL AND new_id IS DISTINCT FROM old_id THEN
+  RAISE EXCEPTION 'physical object binding is immutable' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+DO $$ DECLARE item record; trigger_name text; BEGIN
+ FOR item IN SELECT * FROM (VALUES
+  ('media','media_asset','object_location_id'),('media','rendition','object_location_id'),
+  ('media','package_object','object_location_id'),('media','project_copy_object','source_location_id'),('media','project_copy_object','target_location_id'),
+  ('media','transfer_object','source_location_id'),('media','transfer_object','target_location_id'),('media','purge_object','object_location_id'),
+  ('mediatool','depth_object','object_location_id'),('script','object_intent','object_location_id'),('script','object_state','object_location_id')
+ ) AS refs(schema_name,table_name,location_column) LOOP
+  trigger_name='keep_'||item.location_column;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=format('%I.%I',item.schema_name,item.table_name)::regclass AND tgname=trigger_name) THEN
+   EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON %I.%I FOR EACH ROW EXECUTE FUNCTION media.keep_object_binding(%L)',trigger_name,item.schema_name,item.table_name,item.location_column);
+  END IF;
+ END LOOP;
+END $$;
+
+CREATE TABLE IF NOT EXISTS media.storage_legacy_tombstone (
+ profile_id text NOT NULL,
+ bucket text NOT NULL,
+ object_key text NOT NULL,
+ snapshot_sha256 text NOT NULL CHECK(snapshot_sha256 ~ '^[a-f0-9]{64}$'),
+ location_id uuid NOT NULL,
+ reference_count integer NOT NULL CHECK(reference_count>0),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(profile_id,bucket,object_key,snapshot_sha256),
+ FOREIGN KEY(location_id,object_key) REFERENCES media.object_location(id,object_key),
+ FOREIGN KEY(profile_id,bucket) REFERENCES media.storage_profile(id,bucket)
+);
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='media.storage_legacy_tombstone'::regclass AND tgname='keep_storage_evidence') THEN
+  CREATE TRIGGER keep_storage_evidence BEFORE UPDATE OR DELETE ON media.storage_legacy_tombstone FOR EACH ROW EXECUTE FUNCTION media.keep_storage_evidence();
+ END IF;
+END $$;
+GRANT SELECT,INSERT ON media.storage_legacy_tombstone TO lanverse_app;

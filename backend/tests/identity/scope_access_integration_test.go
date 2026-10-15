@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,6 +16,31 @@ import (
 )
 
 type testScopeActor struct{ store *pgidentity.Store }
+
+func (a testScopeActor) CheckSession(ctx context.Context, actor identity.Principal, now time.Time) error {
+	return a.store.CheckSession(ctx, actor, now)
+}
+
+func TestScopeRejectsRevokedSession(t *testing.T) {
+	tx := existingIdentityTransaction(t)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	_, actor := verifiedTestActor(t, tx, "scope-session@example.invalid", now)
+	var row struct{ ID uuid.UUID }
+	if err := tx.Raw(`SELECT id FROM workspace.creation_scope WHERE owner_user_id=?`, actor.ID).Scan(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	scope := row.ID
+	access := workspace.NewRequestScopeAccess(pgworkspace.NewRequestScopeStore(tx, func(tx *gorm.DB) workspace.SessionActorAccess { return testScopeActor{store: pgidentity.NewStore(tx)} }), func() time.Time { return now })
+	if _, err := access.Resolve(t.Context(), actor, scope, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Exec(`UPDATE identity.user_session SET revoked_at=? WHERE id=?`, now, actor.SessionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := access.Resolve(t.Context(), actor, scope, false); !errors.Is(err, identity.ErrSessionInvalid) {
+		t.Fatalf("revoked session retained scope: %v", err)
+	}
+}
 
 func (a testScopeActor) CheckActive(ctx context.Context, id uuid.UUID) error {
 	err := a.store.CheckActive(ctx, id)

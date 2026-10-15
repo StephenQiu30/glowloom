@@ -23,7 +23,7 @@ type createModelStore struct {
 	called  bool
 }
 
-func (s *createModelStore) CreateModelWithAudit(_ context.Context, _, _ uuid.UUID, model domain.ModelProfile, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
+func (s *createModelStore) CreateModelWithAudit(_ context.Context, _ identityapp.Principal, model domain.ModelProfile, event identityapp.OutboxEvent) (domain.ModelProfile, error) {
 	s.called = true
 	s.created = model
 	s.event = event

@@ -56,7 +56,7 @@ func TestMultiProfileStoredReadsRetainOriginalAndRenditionLocations(t *testing.T
 			t.Fatal("rendition reader lost historical identity")
 		}
 	}
-	library := pgmedia.NewLibraryStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, time.Now)
+	library := pgmedia.NewScopedLibraryStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, time.Now, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
 	for _, read := range []func() (mediaapp.LibraryMediaFile, error){
 		func() (mediaapp.LibraryMediaFile, error) {
 			return library.FindLibraryMedia(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, asset.ID)
@@ -116,7 +116,7 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 	if _, err := service.Upload(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}
-	library := pgmedia.NewLibraryStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, time.Now)
+	library := pgmedia.NewScopedLibraryStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, time.Now, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
 	buckets := []mediaapp.StorageUsageBucket{{ProfileID: "minio-main", Bucket: "storage-test"}, {ProfileID: "cos-main", Bucket: "storage-test-123"}}
 	source := pgmedia.NewRoutedStorageUsageStore(library, buckets, func(*gorm.DB) mediaapp.StorageUsageLocationSource { return emptyLocationIntents{} })
 	called := false
@@ -136,14 +136,16 @@ func TestRoutedUsageSourceReadsSavedLocationsAfterSwitch(t *testing.T) {
 		t.Fatal("read physical inventory", err)
 	}
 	// The legacy source must not erase the FK and silently count the original bucket.
-	legacy := pgmedia.NewStorageUsageStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, func(*gorm.DB) mediaapp.StorageUsageIntentSource { return usageIntentFixture{} })
+	legacy := pgmedia.NewScopedStorageUsageStore(db, func(*gorm.DB) mediaapp.LibraryProjectAccess { return routingProjectAccess{} }, func(*gorm.DB) mediaapp.StorageUsageIntentSource { return usageIntentFixture{} }, func(*gorm.DB) mediaapp.ScopeAccess { return routingScopeStub{} })
 	legacyCalled := false
 	legacyErr := legacy.InspectStorageUsage(t.Context(), actor, domain.LibraryScope{Kind: domain.LibraryProject, ProjectID: &project}, func(mediaapp.StorageUsageInventory) error { legacyCalled = true; return nil })
 	if !errors.Is(legacyErr, mediaapp.ErrUnavailable) || legacyCalled {
 		t.Fatal("legacy usage source erased a saved location", legacyErr)
 	}
 	// A key-only row is unresolved migration debt, never a guessed current profile.
-	if err := db.Exec(`UPDATE media.media_asset SET object_location_id=NULL WHERE project_id=?`, project).Error; err != nil {
+	legacyAsset := sourceDocumentAsset([]byte("unproved legacy"))
+	legacyAsset.ObjectKey = "projects/" + project.String() + "/document/2026/10/" + legacyAsset.ID.String() + ".txt"
+	if err := db.Exec(`INSERT INTO media.media_asset(id,project_id,kind,origin,status,object_key,file_name,mime_type,byte_size,sha256,codec,moderation_status,revision) VALUES(?,?,'document','upload','ready',?,?,?,?,?,'txt','passed',1)`, legacyAsset.ID, project, legacyAsset.ObjectKey, legacyAsset.FileName, legacyAsset.MimeType, legacyAsset.ByteSize, *legacyAsset.SHA256).Error; err != nil {
 		t.Fatal(err)
 	}
 	called = false

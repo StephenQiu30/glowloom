@@ -1,3 +1,4 @@
+// Package identityoperator implements explicit, operator-invoked identity maintenance.
 package identityoperator
 
 import (
@@ -74,7 +75,8 @@ func parseIdentityCommand(args []string) (identityCommand, error) {
 	return command, nil
 }
 
-func Run(args []string) error {
+// Run executes one explicit identity operator command against existing resources.
+func Run(args []string) (runErr error) {
 	command, err := parseIdentityCommand(args)
 	if err != nil {
 		return err
@@ -98,7 +100,11 @@ func Run(args []string) error {
 	if err != nil {
 		return errors.New("connect configured identity database failed")
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			runErr = errors.Join(runErr, errors.New("close configured identity database failed"))
+		}
+	}()
 	// Operator commands never run schema migrations or turn on public routes.
 	var ready bool
 	if err := conn.DB.WithContext(ctx).Raw(`SELECT to_regclass('identity.auth_challenge') IS NOT NULL AND to_regclass('workspace.creation_scope') IS NOT NULL`).Scan(&ready).Error; err != nil || !ready {

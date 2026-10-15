@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/domain"
 	workspaceapp "github.com/StephenQiu30/glowloom-server/backend/internal/workspace/application"
@@ -21,14 +20,29 @@ type ImportSourcesFactory func(*gorm.DB) application.SourceAssetReader
 
 // ImportStore owns immutable original manifests and small state/attempt fences.
 type ImportStore struct {
-	db      *gorm.DB
-	access  ProjectAccessFactory
-	sources ImportSourcesFactory
+	db           *gorm.DB
+	access       ProjectAccessFactory
+	workerAccess ProjectAccessFactory
+	sources      ImportSourcesFactory
 }
 
 // NewImportStore injects current project authorization and owning document sources.
 func NewImportStore(db *gorm.DB, access ProjectAccessFactory, sources ImportSourcesFactory) *ImportStore {
 	return &ImportStore{db: db, access: access, sources: sources}
+}
+
+// NewImportStoreWithWorkerAccess keeps background authority separate from request sessions.
+func NewImportStoreWithWorkerAccess(db *gorm.DB, access, workers ProjectAccessFactory, sources ImportSourcesFactory) *ImportStore {
+	return &ImportStore{db: db, access: access, workerAccess: workers, sources: sources}
+}
+
+func (s *ImportStore) workerTransaction(ctx context.Context, actor identityapp.Principal, project uuid.UUID, f func(*gorm.DB) error) error {
+	if s.workerAccess == nil {
+		return application.ErrUnavailable
+	}
+	return NewSourceStore(s.db, s.workerAccess).transaction(ctx, actor, project, true, func(tx *gorm.DB, _ application.ProjectAccess, _ workspaceapp.ProjectContentAccess) error {
+		return f(tx)
+	})
 }
 
 func (s *ImportStore) transaction(ctx context.Context, actor identityapp.Principal, project uuid.UUID, write bool, f func(*gorm.DB) error) error {
@@ -113,7 +127,7 @@ func (s *ImportStore) CreateImport(ctx context.Context, actor identityapp.Princi
 		if err := registerRequest(tx, actor, in.ProjectID, in.Key, "file_import_create", hash, now); err != nil {
 			return err
 		}
-		if err := exactlyOne(tx.Exec(`INSERT INTO script.import_job(id,org_id,project_id,actor_id,actor_role,request_id,request_hash,expected_script_revision,base_version_id,rights_confirmed_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, id, actor.OrgID, in.ProjectID, actor.ID, actor.Role, in.Key, hash, in.ExpectedRevision, in.BaseVersionID, now, now)); err != nil {
+		if err := exactlyOne(tx.Exec(`INSERT INTO script.import_job(id,org_id,project_id,actor_id,actor_role,request_id,request_hash,expected_script_revision,base_version_id,rights_confirmed_at,created_at) VALUES(?,?,?,?,NULL,?,?,?,?,?,?)`, id, actor.OrgID, in.ProjectID, actor.ID, in.Key, hash, in.ExpectedRevision, in.BaseVersionID, now, now)); err != nil {
 			return err
 		}
 		if err := exactlyOne(tx.Exec(`INSERT INTO script.import_state(job_id,revision,attempt,status,stage,latest_script_revision,latest_version_id,io_state,updated_at) VALUES(?,1,1,'queued','queued',?,?,'idle',?)`, id, in.ExpectedRevision, in.BaseVersionID, now)); err != nil {
@@ -170,7 +184,7 @@ func insertImportAttempt(tx *gorm.DB, id uuid.UUID, attempt int, revision int64,
 // ListImports provides a current scoped recovery path after unknown acceptance.
 func (s *ImportStore) ListImports(ctx context.Context, actor identityapp.Principal, project uuid.UUID, after int64, limit int) (application.ImportPage, error) {
 	page := application.ImportPage{CurrentActorID: actor.ID, CurrentOrgID: actor.OrgID, Items: []application.ImportJob{}}
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB) error {
+	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		var ids []uuid.UUID
 		if err := tx.Raw(`SELECT id FROM script.import_job WHERE org_id=? AND project_id=? ORDER BY created_at DESC,id DESC OFFSET ? LIMIT ?`, actor.OrgID, project, after, limit+1).Scan(&ids).Error; err != nil {
 			return err
@@ -185,6 +199,8 @@ func (s *ImportStore) ListImports(ctx context.Context, actor identityapp.Princip
 			if err != nil {
 				return err
 			}
+			r.Job.CanControl = r.Job.CanControl && canWrite
+			r.Job.Retryable = r.Job.Retryable && canWrite
 			page.Items = append(page.Items, r.Job)
 		}
 		return nil
@@ -195,9 +211,11 @@ func (s *ImportStore) ListImports(ctx context.Context, actor identityapp.Princip
 // Import exposes actual file outcomes, excluding object keys and editable bodies.
 func (s *ImportStore) Import(ctx context.Context, actor identityapp.Principal, project, id uuid.UUID) (application.ImportJob, error) {
 	var result application.ImportJob
-	err := s.transaction(ctx, actor, project, false, func(tx *gorm.DB) error {
+	err := readWithControls(ctx, s.db, s.access, actor, project, func(tx *gorm.DB, canWrite bool) error {
 		r, err := readImport(tx, actor, project, id, false)
 		result = r.Job
+		result.CanControl = result.CanControl && canWrite
+		result.Retryable = result.Retryable && canWrite
 		return err
 	})
 	return result, err
@@ -228,7 +246,7 @@ func (s *ImportStore) ControlImport(ctx context.Context, actor identityapp.Princ
 		if err != nil {
 			return err
 		}
-		if actor.ID != r.Actor.ID && actor.Role != identitydomain.RoleAdmin || in.Action == "retry" && actor.ID != r.Actor.ID {
+		if in.Action == "retry" && actor.ID != r.Actor.ID {
 			return identityapp.ErrForbidden
 		}
 		if r.Job.Revision != in.ExpectedRevision {

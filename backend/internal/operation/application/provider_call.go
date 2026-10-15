@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+
 	"github.com/google/uuid"
 )
 
@@ -23,6 +25,7 @@ var (
 // ManualNotExecutedInput is written by an authenticated administrator command,
 // before the workflow receives its resolve_manual signal.
 type ManualNotExecutedInput struct {
+	Actor       identity.Principal
 	OperationID uuid.UUID
 	AdminID     uuid.UUID
 	Evidence    string

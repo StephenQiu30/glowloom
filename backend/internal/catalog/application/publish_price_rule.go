@@ -25,7 +25,7 @@ type PriceRuleValidator interface {
 
 // PublishPriceRuleStore commits the price, model revision, and audit atomically.
 type PublishPriceRuleStore interface {
-	PublishPriceRuleWithAudit(context.Context, uuid.UUID, uuid.UUID, domain.PriceRuleVersion, int64, identityapp.OutboxEvent) (domain.PriceRuleVersion, error)
+	PublishPriceRuleWithAudit(context.Context, identityapp.Principal, domain.PriceRuleVersion, int64, identityapp.OutboxEvent) (domain.PriceRuleVersion, error)
 }
 
 // PublishPriceRuleInput is the reviewed configuration for the next price version.
@@ -95,7 +95,7 @@ func (c *PublishPriceRuleCommand) Execute(ctx context.Context, actor identityapp
 	if err != nil {
 		return PublishedPriceRule{}, fmt.Errorf("build price audit: %w", err)
 	}
-	saved, err := c.store.PublishPriceRuleWithAudit(ctx, actor.ID, actor.OrgID, price, input.ExpectedRevision, event)
+	saved, err := c.store.PublishPriceRuleWithAudit(ctx, actor, price, input.ExpectedRevision, event)
 	if err != nil {
 		return PublishedPriceRule{}, fmt.Errorf("publish price with audit: %w", err)
 	}

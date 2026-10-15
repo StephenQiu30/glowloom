@@ -8,8 +8,6 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        new: "h-[18px] rounded-[5px] bg-brand/15 px-1 text-[10px] font-normal text-brand",
-        hot: "h-[18px] rounded-[5px] bg-warning/15 px-1 text-[10px] font-normal text-warning",
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
         secondary:
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",

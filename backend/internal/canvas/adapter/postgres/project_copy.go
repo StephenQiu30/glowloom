@@ -25,6 +25,7 @@ type CopyMediaReaderFactory func(*gorm.DB, application.ProjectCopyBinding) appli
 // Each method runs on the workspace coordinator's injected transaction; it never
 // starts an independent transaction or inspects workspace's job/finance tables.
 type ProjectCopyStore struct {
+	projectAuthority
 	db          *gorm.DB
 	sourceMedia MediaReaderFactory
 	targetMedia CopyMediaReaderFactory
@@ -33,18 +34,6 @@ type ProjectCopyStore struct {
 // NewProjectCopyStore injects the admission transaction and media owner readers.
 func NewProjectCopyStore(tx *gorm.DB, source MediaReaderFactory, target CopyMediaReaderFactory) *ProjectCopyStore {
 	return &ProjectCopyStore{db: tx, sourceMedia: source, targetMedia: target}
-}
-
-func copyTarget(tx *gorm.DB, binding application.ProjectCopyBinding) error {
-	var present int
-	read := tx.Raw(`SELECT 1 FROM workspace.project WHERE id=? AND org_id=? AND status='copying' AND NOT is_delete FOR SHARE`, binding.TargetProjectID, binding.OrgID).Scan(&present)
-	if read.Error != nil {
-		return fmt.Errorf("read unpublished canvas target: %w", read.Error)
-	}
-	if read.RowsAffected != 1 {
-		return application.ErrNotFound
-	}
-	return nil
 }
 
 func strictCopyJSON(body []byte, target any) error {
@@ -91,10 +80,10 @@ func (s *ProjectCopyStore) Freeze(ctx context.Context, actor identityapp.Princip
 		return application.ProjectCopySnapshot{}, domain.ErrInvalidProjectCopy
 	}
 	tx := s.db.WithContext(ctx)
-	if err := authorize(tx, actor, binding.SourceProjectID, false); err != nil {
+	if err := s.authorize(tx, actor, binding.SourceProjectID, false); err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
-	if err := copyTarget(tx, binding); err != nil {
+	if err := s.authorizeCopy(tx, actor, binding.TargetProjectID); err != nil {
 		return application.ProjectCopySnapshot{}, err
 	}
 	var rows []documentRow
@@ -141,7 +130,7 @@ func (s *ProjectCopyStore) Copy(ctx context.Context, actor identityapp.Principal
 		return application.ProjectCopyReceipt{}, domain.ErrInvalidProjectCopy
 	}
 	tx := s.db.WithContext(ctx)
-	if err := copyTarget(tx, binding); err != nil {
+	if err := s.authorizeCopy(tx, actor, binding.TargetProjectID); err != nil {
 		return application.ProjectCopyReceipt{}, err
 	}
 	var row struct {
@@ -233,7 +222,7 @@ func (s *ProjectCopyStore) Cleanup(ctx context.Context, actor identityapp.Princi
 		return domain.ErrInvalidProjectCopy
 	}
 	tx := s.db.WithContext(ctx)
-	if err := copyTarget(tx, binding); err != nil {
+	if err := s.authorizeCopy(tx, actor, binding.TargetProjectID); err != nil {
 		return err
 	}
 	var frozen struct{ Documents, AssetMapping []byte }
@@ -271,4 +260,9 @@ func (s *ProjectCopyStore) Cleanup(ctx context.Context, actor identityapp.Princi
 		}
 	}
 	return nil
+}
+
+// NewScopedProjectCopyStore preserves the coordinator transaction and scope authority.
+func NewScopedProjectCopyStore(tx *gorm.DB, source MediaReaderFactory, target CopyMediaReaderFactory, project ProjectAccessFactory) *ProjectCopyStore {
+	return &ProjectCopyStore{db: tx, sourceMedia: source, targetMedia: target, projectAuthority: projectAuthority{project: project}}
 }

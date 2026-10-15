@@ -16,10 +16,10 @@ func (s *Store) AuthorizeDerivedRemoval(ctx context.Context, actor identityapp.P
 		return ErrUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
-		if err := requireProject(tx, actor, in.ProjectID, true); err != nil {
+		if err := s.requireProject(tx, actor, in.ProjectID, true); err != nil {
 			return err
 		}
 		var rows []struct {

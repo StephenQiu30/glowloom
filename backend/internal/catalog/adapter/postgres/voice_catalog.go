@@ -12,7 +12,6 @@ import (
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/catalog/domain"
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 // ReadConfiguredVoiceModels holds mutable availability rows until the caller
@@ -22,7 +21,7 @@ func (s *Store) ReadConfiguredVoiceModels(ctx context.Context, actor identityapp
 	if s == nil || s.db == nil {
 		return nil, application.ErrVoiceCatalogUnavailable
 	}
-	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil || actor.MustChangePassword || actor.Role != identitydomain.RoleAdmin && actor.Role != identitydomain.RoleProducer {
+	if actor.ID == uuid.Nil || actor.OrgID == uuid.Nil {
 		return nil, identityapp.ErrForbidden
 	}
 	if projectID == uuid.Nil || input.Limit < 1 || input.Limit > 200 || len(input.ModelKey) > 512 || input.After != nil && (strings.TrimSpace(input.After.Key) == "" || len(input.After.Key) > 512) {
@@ -30,7 +29,7 @@ func (s *Store) ReadConfiguredVoiceModels(ctx context.Context, actor identityapp
 	}
 	models := []application.ConfiguredVoiceModel{}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentModelCatalogActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, projectID); err != nil {
 			return err
 		}
 		var project struct{ AllowOverseasModels bool }

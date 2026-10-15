@@ -23,16 +23,13 @@ func (s *Store) FindProject(ctx context.Context, actor identityapp.Principal, pr
 	}
 	var project domain.Project
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.authorizeProject(ctx, tx, actor, projectID, false); err != nil {
 			return err
 		}
 		var err error
 		project, err = readProjectInTx(tx, actor.OrgID, projectID)
 		if err != nil {
 			return err
-		}
-		if project.OwnerID != actor.ID {
-			return ErrProjectNotFound
 		}
 		unavailable, err := s.projectCoverUnavailable(ctx, tx, actor, project)
 		if err != nil {

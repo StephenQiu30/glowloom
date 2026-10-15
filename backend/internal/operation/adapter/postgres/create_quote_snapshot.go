@@ -41,7 +41,7 @@ func (s *Store) CreateQuoteSnapshot(ctx context.Context, actor identityapp.Princ
 		return err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireProject(tx, actor, items[0].Operation.ProjectID, true); err != nil {
 			return err
 		}
 		var project struct {
@@ -78,6 +78,15 @@ func (s *Store) CreateQuoteSnapshot(ctx context.Context, actor identityapp.Princ
 		for _, item := range items {
 			if err := insertQuotedOperation(tx, item.Operation, item.PromptPreparation); err != nil {
 				return err
+			}
+			if s.storageAdmission != nil {
+				admission := s.storageAdmission(tx)
+				if admission == nil {
+					return ErrUnavailable
+				}
+				if err := admission.PinOperationStorage(ctx, item.Operation.ProjectID, item.Operation.ID); err != nil {
+					return err
+				}
 			}
 			if item.trial != nil {
 				if err := freezeTrialRelease(tx, actor, item.Operation, *item.trial); err != nil {

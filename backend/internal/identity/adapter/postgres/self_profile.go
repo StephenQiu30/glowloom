@@ -4,19 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"time"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
+// AvatarAccessFactory binds avatar ownership checks to the profile transaction.
 type AvatarAccessFactory func(*gorm.DB) application.AvatarAccess
+
+// SelfProfileStore coordinates current-identity checks and profile updates.
 type SelfProfileStore struct {
 	db      *gorm.DB
 	avatars AvatarAccessFactory
 }
 
+// NewSelfProfileStore constructs SelfProfileStore with explicit caller-supplied dependencies.
 func NewSelfProfileStore(db *gorm.DB, avatars AvatarAccessFactory) *SelfProfileStore {
 	return &SelfProfileStore{db: db, avatars: avatars}
 }
@@ -29,7 +35,7 @@ type selfProfileTx struct {
 
 func (t *selfProfileTx) Account() domain.User { return t.user }
 
-// lockSelfActor locks user before session and rejects stale or restricted principals.
+// lockSelfActor locks user before session and rejects stale principals.
 func lockSelfActor(tx *gorm.DB, actor application.Principal, now time.Time) (domain.User, error) {
 	if actor.ID == uuid.Nil || actor.SessionID == uuid.Nil || actor.CredentialEpoch < 1 {
 		return domain.User{}, application.ErrSessionInvalid
@@ -56,11 +62,10 @@ func lockSelfActor(tx *gorm.DB, actor application.Principal, now time.Time) (dom
 	if r.RowsAffected != 1 || !session.Valid(user, now) || user.EmailVerifiedAt.IsZero() || user.SessionEpoch != actor.CredentialEpoch {
 		return domain.User{}, application.ErrSessionInvalid
 	}
-	if user.MustChangePassword {
-		return domain.User{}, application.ErrForbidden
-	}
 	return user, nil
 }
+
+// ProfileTransaction keeps identity checks and profile updates under the same locks.
 func (s *SelfProfileStore) ProfileTransaction(ctx context.Context, actor application.Principal, now time.Time, run func(application.SelfProfileTx) error) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		u, err := lockSelfActor(tx, actor, now)

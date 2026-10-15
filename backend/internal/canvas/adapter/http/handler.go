@@ -164,6 +164,8 @@ func writeError(c *gin.Context, err error) {
 		httpapi.WriteProblem(c, http.StatusConflict, "revision_conflict", map[string]any{"current_revision": conflict.CurrentRevision})
 	case errors.Is(err, application.ErrNotFound), errors.Is(err, mediaapp.ErrNotFound):
 		httpapi.WriteProblem(c, 404, "not_found", meta)
+	case errors.Is(err, identityapp.ErrSessionInvalid):
+		httpapi.WriteProblem(c, http.StatusUnauthorized, "session_invalid", nil)
 	case errors.Is(err, identityapp.ErrForbidden):
 		httpapi.WriteProblem(c, 403, "forbidden", nil)
 	case errors.Is(err, application.ErrIdempotencyConflict):

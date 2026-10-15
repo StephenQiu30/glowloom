@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm"
 
 	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	identitydomain "github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 	mediadomain "github.com/StephenQiu30/glowloom-server/backend/internal/media/domain"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/domain"
@@ -35,21 +34,22 @@ func NewTranscriptionStore(db *gorm.DB, source TranscriptionSourceFactory, media
 }
 
 type transcriptionRow struct {
-	ID, ProjectID, OrgID, ActorID, CanvasID, NodeID    uuid.UUID
-	ActorRole, Language, Status, Stage, InferenceState string
-	SourceRevision, Revision                           int64
-	Frozen, Result                                     []byte
-	Progress, Attempt                                  int
-	ResultSHA256, FailureCode                          *string
-	ActiveWorker                                       *uuid.UUID
-	CreatedAt, UpdatedAt                               time.Time
+	ActorRole                                       *string
+	ID, ProjectID, OrgID, ActorID, CanvasID, NodeID uuid.UUID
+	Language, Status, Stage, InferenceState         string
+	SourceRevision, Revision                        int64
+	Frozen, Result                                  []byte
+	Progress, Attempt                               int
+	ResultSHA256, FailureCode                       *string
+	ActiveWorker                                    *uuid.UUID
+	CreatedAt, UpdatedAt                            time.Time
 }
 
 func (r transcriptionRow) public() domain.TranscriptionJob {
 	return domain.TranscriptionJob{ID: r.ID, ProjectID: r.ProjectID, Source: domain.TranscriptionSource{CanvasID: r.CanvasID, NodeID: r.NodeID, Revision: r.SourceRevision}, Language: r.Language, Status: domain.TranscriptionStatus(r.Status), Stage: r.Stage, Progress: r.Progress, Attempt: r.Attempt, Revision: r.Revision, ResultSHA256: r.ResultSHA256, FailureCode: r.FailureCode, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 func (r transcriptionRow) actor() identityapp.Principal {
-	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID, Role: identitydomain.Role(r.ActorRole)}
+	return identityapp.Principal{ID: r.ActorID, OrgID: r.OrgID}
 }
 func readTranscription(tx *gorm.DB, project, id uuid.UUID, lock bool) (transcriptionRow, error) {
 	var row transcriptionRow
@@ -189,7 +189,7 @@ func (s *TranscriptionStore) Create(ctx context.Context, actor identityapp.Princ
 		}
 		now := time.Now().UTC()
 		job = domain.TranscriptionJob{ID: uuid.New(), ProjectID: project, Source: domain.TranscriptionSource{CanvasID: input.CanvasID, NodeID: input.NodeID, Revision: input.Revision}, Language: input.Language, Status: domain.TranscriptionQueued, Stage: "queued", Attempt: 1, Revision: 1, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Exec(`INSERT INTO mediatool.transcription_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,language,frozen,status,stage,progress,attempt,revision,inference_state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?::jsonb,'queued','queued',0,1,1,'none',?,?)`, job.ID, project, actor.OrgID, actor.ID, string(actor.Role), input.CanvasID, input.NodeID, input.Revision, input.Language, string(frozen), now, now).Error; err != nil {
+		if err := tx.Exec(`INSERT INTO mediatool.transcription_job(id,project_id,org_id,actor_id,actor_role,canvas_id,node_id,source_revision,language,frozen,status,stage,progress,attempt,revision,inference_state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?::jsonb,'queued','queued',0,1,1,'none',?,?)`, job.ID, project, actor.OrgID, actor.ID, nil, input.CanvasID, input.NodeID, input.Revision, input.Language, string(frozen), now, now).Error; err != nil {
 			return err
 		}
 		return recordTranscriptionCommand(tx, actor, key, hash, "requested", job, "start")

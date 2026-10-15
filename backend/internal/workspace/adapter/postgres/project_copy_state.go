@@ -62,20 +62,25 @@ func readCopyJob(tx *gorm.DB, actor identityapp.Principal, id uuid.UUID, write b
 	if read.RowsAffected != 1 {
 		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
 	}
+	// Both request reads and writes retain the exact source/target rows before
+	// taking the job lock. Writers acquire the strongest lock on their first read.
+	lock := " FOR SHARE"
 	if write {
-		// Lock both projects before the job. All checkpoints use this order, so
-		// target publication never upgrades a shared lock behind another worker.
-		var projects []struct{ ID uuid.UUID }
-		if err := tx.Raw(`SELECT id FROM workspace.project WHERE org_id=? AND id IN (?,?) ORDER BY id FOR UPDATE`, actor.OrgID, row.SourceProjectID, row.TargetProjectID).Scan(&projects).Error; err != nil {
-			return domain.ProjectCopyJob{}, err
-		}
-		if len(projects) != 2 {
-			return domain.ProjectCopyJob{}, application.ErrProjectNotFound
-		}
-		read = tx.Raw(`SELECT `+copyJobColumns+` FROM workspace.project_copy_job WHERE id=? AND org_id=? FOR UPDATE`, id, actor.OrgID).Scan(&row)
-		if read.Error != nil {
-			return domain.ProjectCopyJob{}, read.Error
-		}
+		lock = " FOR UPDATE"
+	}
+	var projects []struct{ ID uuid.UUID }
+	if err := tx.Raw(`SELECT id FROM workspace.project WHERE org_id=? AND id IN (?,?) ORDER BY id`+lock, actor.OrgID, row.SourceProjectID, row.TargetProjectID).Scan(&projects).Error; err != nil {
+		return domain.ProjectCopyJob{}, err
+	}
+	if len(projects) != 2 {
+		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
+	}
+	read = tx.Raw(`SELECT `+copyJobColumns+` FROM workspace.project_copy_job WHERE id=? AND org_id=?`+lock, id, actor.OrgID).Scan(&row)
+	if read.Error != nil {
+		return domain.ProjectCopyJob{}, read.Error
+	}
+	if read.RowsAffected != 1 {
+		return domain.ProjectCopyJob{}, application.ErrProjectNotFound
 	}
 	return row.job()
 }
@@ -87,11 +92,8 @@ func (s *ProjectCopyStore) Find(ctx context.Context, actor identityapp.Principal
 	}
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
 		var err error
-		saved, err = readCopyJob(tx, actor, id, false)
+		saved, err = s.authorizedCopy(ctx, tx, actor, id, false, false)
 		return err
 	})
 	return saved, err
@@ -175,10 +177,7 @@ func copyChanged(tx *gorm.DB, job domain.ProjectCopyJob, action string, now time
 func (s *ProjectCopyStore) Claim(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID, reconcile bool, now time.Time) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		before, err := readCopyJob(tx, actor, id, true)
+		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}
@@ -209,10 +208,7 @@ func (s *ProjectCopyStore) UseAttempt(ctx context.Context, actor identityapp.Pri
 		return application.ErrProjectDependencyUnavailable
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		job, err := readCopyJob(tx, actor, id, true)
+		job, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}
@@ -246,10 +242,7 @@ func (s *ProjectCopyStore) CompleteCanvases(ctx context.Context, actor identitya
 func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID, stage string) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		before, err := readCopyJob(tx, actor, id, true)
+		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}
@@ -302,10 +295,7 @@ func (s *ProjectCopyStore) completeOwner(ctx context.Context, actor identityapp.
 func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		before, err := readCopyJob(tx, actor, id, true)
+		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}
@@ -365,10 +355,7 @@ func (s *ProjectCopyStore) Publish(ctx context.Context, actor identityapp.Princi
 func (s *ProjectCopyStore) Fail(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID, code string, retryable, unknown bool) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		before, err := readCopyJob(tx, actor, id, true)
+		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}
@@ -391,10 +378,7 @@ func (s *ProjectCopyStore) Fail(ctx context.Context, actor identityapp.Principal
 func (s *ProjectCopyStore) FinishCancelled(ctx context.Context, actor identityapp.Principal, id, worker uuid.UUID) (domain.ProjectCopyJob, error) {
 	var saved domain.ProjectCopyJob
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
-		before, err := readCopyJob(tx, actor, id, true)
+		before, err := s.authorizedCopy(ctx, tx, actor, id, true, true)
 		if err != nil {
 			return err
 		}

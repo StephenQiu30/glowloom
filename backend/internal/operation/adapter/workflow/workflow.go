@@ -67,7 +67,7 @@ type SettlementInput struct {
 
 // OperationWorkflow runs the mock provider path. Every database and network
 // call is an Activity; workflow code uses only deterministic Temporal APIs.
-func OperationWorkflow(ctx workflow.Context, input OperationInput) error {
+func OperationWorkflow(ctx workflow.Context, input OperationInput) (resultErr error) {
 	id, err := uuid.Parse(input.OperationID)
 	if err != nil || id.String() != input.OperationID {
 		return ErrInvalidOperationInput
@@ -78,6 +78,11 @@ func OperationWorkflow(ctx workflow.Context, input OperationInput) error {
 			InitialInterval: time.Second, MaximumInterval: time.Minute,
 		},
 	})
+	defer func() {
+		if isApplicationErrorType(resultErr, "execution_authority_revoked") {
+			resultErr = workflow.ExecuteActivity(flowCtx, "flow.ResolveRevokedOperation", input.OperationID).Get(flowCtx, nil)
+		}
+	}()
 	var loaded application.WorkflowOperation
 	if err := workflow.ExecuteActivity(flowCtx, "flow.LoadOperation", input.OperationID).Get(flowCtx, &loaded); err != nil {
 		return err

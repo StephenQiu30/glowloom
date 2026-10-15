@@ -48,18 +48,18 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 		ID: uuid.New(), Key: "video.generate." + uuid.NewString(), OutputType: domain.OutputVideo,
 		Modes: []string{"image2video", "text2video"}, InputRoles: []string{"subject"},
 	}
-	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, capability); err != nil {
+	if err := store.CreateCapabilityForAdmin(ctx, actor, capability); err != nil {
 		t.Fatal(err)
 	}
 	withoutRoles := capability
 	withoutRoles.ID, withoutRoles.Key, withoutRoles.InputRoles = uuid.New(), "video.no-input."+uuid.NewString(), nil
-	if err := store.CreateCapabilityForAdmin(ctx, actor.ID, actor.OrgID, withoutRoles); err != nil {
+	if err := store.CreateCapabilityForAdmin(ctx, actor, withoutRoles); err != nil {
 		t.Fatalf("create capability without input roles: %v", err)
 	}
 	model := validModelProfile()
 	model.ProviderID, model.Capability = provider.ID, capability.Key
 	model.Key = "registry-" + model.ID.String()
-	if err := store.CreateModelForAdmin(ctx, actor.ID, actor.OrgID, model); err != nil {
+	if err := store.CreateModelForAdmin(ctx, actor, model); err != nil {
 		t.Fatal(err)
 	}
 	validator, err := paramvalidation.NewValidator()
@@ -147,7 +147,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	}); err != nil {
 		t.Fatalf("activate model with version and price: %v", err)
 	}
-	loaded, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, model.ID)
+	loaded, err := store.FindModelForAdmin(ctx, actor, model.ID)
 	if err != nil || loaded.Status != domain.ModelActive || loaded.CurrentVersionID != published2.ID || loaded.Revision != 6 {
 		t.Fatalf("loaded model %+v: %v", loaded, err)
 	}
@@ -162,7 +162,7 @@ func TestModelRegistryAppendOnlyWritesAndAdminRevocationOnLocalPostgres(t *testi
 	}); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator changed model: %v", err)
 	}
-	if _, err := store.FindModelForAdmin(ctx, actor.ID, actor.OrgID, model.ID); !errors.Is(err, identityapp.ErrForbidden) {
+	if _, err := store.FindModelForAdmin(ctx, actor, model.ID); !errors.Is(err, identityapp.ErrForbidden) {
 		t.Fatalf("revoked administrator read model: %v", err)
 	}
 }

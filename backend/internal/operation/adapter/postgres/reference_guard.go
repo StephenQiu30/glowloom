@@ -11,7 +11,10 @@ import (
 )
 
 // MediaReferenceGuard reads operation-owned inputs and outputs, including retained history.
-type MediaReferenceGuard struct{ tx *gorm.DB }
+type MediaReferenceGuard struct {
+	tx     *gorm.DB
+	access ProjectAccessFactory
+}
 
 // NewMediaReferenceGuard shares the caller's authority and reference transaction.
 func NewMediaReferenceGuard(tx *gorm.DB) *MediaReferenceGuard {
@@ -27,7 +30,7 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 		return false, fmt.Errorf("operation reference guard requires caller transaction")
 	}
 	tx := g.tx.WithContext(ctx)
-	if err := requirePublicProject(tx, actor, project, false); err != nil {
+	if err := NewScopedStore(tx, g.access, nil).requireProject(tx, actor, project, false); err != nil {
 		return false, err
 	}
 	var present bool
@@ -42,4 +45,9 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 		return false, fmt.Errorf("read retained operation media references: %w", err)
 	}
 	return present, nil
+}
+
+// NewScopedMediaReferenceGuard injects the caller-specific request or worker gate.
+func NewScopedMediaReferenceGuard(tx *gorm.DB, access ProjectAccessFactory) *MediaReferenceGuard {
+	return &MediaReferenceGuard{tx: tx, access: access}
 }

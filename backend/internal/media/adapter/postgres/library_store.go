@@ -19,6 +19,7 @@ type LibraryProjectAccessFactory func(*gorm.DB) application.LibraryProjectAccess
 
 // LibraryStore owns catalog metadata and permanent commands, not media execution.
 type LibraryStore struct {
+	scopeAuthority
 	db      *gorm.DB
 	project LibraryProjectAccessFactory
 	clock   func() time.Time
@@ -43,7 +44,7 @@ type libraryRow struct {
 
 func (s *LibraryStore) authorize(ctx context.Context, tx *gorm.DB, actor identityapp.Principal, scope domain.LibraryScope, write bool) (application.LibraryProjectFacts, error) {
 	if scope.Kind == domain.LibraryPersonal {
-		return application.LibraryProjectFacts{}, nil
+		return application.LibraryProjectFacts{}, s.requirePersonal(tx, actor, write)
 	}
 	if s.project == nil {
 		return application.LibraryProjectFacts{}, application.ErrUnavailable
@@ -148,7 +149,7 @@ func (s *LibraryStore) read(ctx context.Context, actor identityapp.Principal, sc
 		return domain.ErrInvalidLibrary
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if _, err := s.authorize(ctx, tx, actor, scope, false); err != nil {
@@ -160,4 +161,11 @@ func (s *LibraryStore) read(ctx context.Context, actor identityapp.Principal, sc
 		}
 		return consume(tx, row)
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+}
+
+// NewScopedLibraryStore binds live scope authority explicitly.
+func NewScopedLibraryStore(db *gorm.DB, project LibraryProjectAccessFactory, clock func() time.Time, scopes ScopeAccessFactory) *LibraryStore {
+	s := NewLibraryStore(db, project, clock)
+	s.scopeAuthority = scopeAuthority{scopes: scopes}
+	return s
 }

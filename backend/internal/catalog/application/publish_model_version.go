@@ -27,7 +27,7 @@ type ModelVersionValidator interface {
 
 // PublishModelVersionStore commits the version, model pointer, and audit atomically.
 type PublishModelVersionStore interface {
-	PublishModelVersionWithAudit(context.Context, uuid.UUID, uuid.UUID, domain.ModelVersion, int64, identityapp.OutboxEvent) (domain.ModelVersion, error)
+	PublishModelVersionWithAudit(context.Context, identityapp.Principal, domain.ModelVersion, int64, identityapp.OutboxEvent) (domain.ModelVersion, error)
 }
 
 // PublishModelVersionInput is the reviewed configuration for the next version.
@@ -106,7 +106,7 @@ func (c *PublishModelVersionCommand) Execute(ctx context.Context, actor identity
 	if err != nil {
 		return PublishedModelVersion{}, fmt.Errorf("build model version audit: %w", err)
 	}
-	saved, err := c.store.PublishModelVersionWithAudit(ctx, actor.ID, actor.OrgID, version, input.ExpectedRevision, event)
+	saved, err := c.store.PublishModelVersionWithAudit(ctx, actor, version, input.ExpectedRevision, event)
 	if err != nil {
 		return PublishedModelVersion{}, fmt.Errorf("publish model version with audit: %w", err)
 	}

@@ -22,7 +22,10 @@ const (
 )
 
 // MediaReferenceGuard protects current and retained canvas facts in the caller's transaction.
-type MediaReferenceGuard struct{ tx *gorm.DB }
+type MediaReferenceGuard struct {
+	tx *gorm.DB
+	projectAuthority
+}
 
 // NewMediaReferenceGuard never acquires a media reader or an independent transaction.
 func NewMediaReferenceGuard(tx *gorm.DB) *MediaReferenceGuard { return &MediaReferenceGuard{tx: tx} }
@@ -36,7 +39,7 @@ func (g *MediaReferenceGuard) HasMediaReferences(ctx context.Context, actor iden
 		return false, fmt.Errorf("canvas reference guard requires caller transaction")
 	}
 	tx := g.tx.WithContext(ctx)
-	if err := authorize(tx, actor, project, false); err != nil {
+	if err := g.authorize(tx, actor, project, false); err != nil {
 		return false, err
 	}
 	// Current canvas writers take a shared project lock. Upgrade only after
@@ -209,4 +212,9 @@ func configMediaReference(config domain.NodeConfig, asset uuid.UUID) (bool, erro
 		}
 	}
 	return false, nil
+}
+
+// NewScopedMediaReferenceGuard uses the caller request or worker authority.
+func NewScopedMediaReferenceGuard(tx *gorm.DB, project ProjectAccessFactory) *MediaReferenceGuard {
+	return &MediaReferenceGuard{tx: tx, projectAuthority: projectAuthority{project: project}}
 }

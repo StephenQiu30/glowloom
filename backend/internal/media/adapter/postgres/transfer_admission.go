@@ -72,7 +72,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 	}
 	var cached *domain.TransferJob
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := transferLock(tx, actor.ID, in.Key); err != nil {
@@ -82,7 +82,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 			return err
 		}
 		var err error
-		cached, err = transferReplay(tx, actor, in.Key, hash, "create")
+		cached, err = s.transferReplay(tx, actor, in.Key, hash, "create")
 		return err
 	})
 	if err != nil {
@@ -92,7 +92,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		return *cached, nil
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
+		if err := s.requireCurrentActor(tx, actor); err != nil {
 			return err
 		}
 		if err := transferLock(tx, actor.ID, in.Key); err != nil {
@@ -102,7 +102,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		if err != nil {
 			return err
 		}
-		replay, err := transferReplay(tx, actor, in.Key, hash, "create")
+		replay, err := s.transferReplay(tx, actor, in.Key, hash, "create")
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		if busy {
 			return domain.ErrTransferConflict
 		}
-		source, target, err := ensureTransferLibraries(tx, actor, in.Source, in.Target)
+		source, target, err := s.ensureTransferLibraries(tx, actor, in.Source, in.Target)
 		if err != nil {
 			return err
 		}
@@ -156,7 +156,11 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		for _, item := range in.Items {
 			ids = append(ids, item.ID)
 		}
-		items, err := lockLibraryItems(tx, actor, in.Source, source.ID, ids)
+		sourceActor, targetActor, err := s.transferActors(tx, actor, in.Source, in.Target, true)
+		if err != nil {
+			return err
+		}
+		items, err := lockLibraryItems(tx, sourceActor, in.Source, source.ID, ids)
 		if err != nil {
 			return err
 		}
@@ -173,13 +177,13 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 			}
 			var file *application.LibraryMediaFile
 			if item.AssetID != nil {
-				sourceFile, err := transferSourceFile(tx, actor, in.Source, *item.AssetID)
+				sourceFile, err := transferSourceFile(tx, sourceActor, in.Source, *item.AssetID)
 				if err != nil {
 					return err
 				}
 				file = &sourceFile
 			}
-			prepared, err := application.PrepareTransferItem(jobID, actor.OrgID, actor.ID, in.Target, in.TargetFolderID, item, file, now)
+			prepared, err := application.PrepareTransferItem(jobID, targetActor.OrgID, actor.ID, in.Target, in.TargetFolderID, item, file, now)
 			if err != nil {
 				return err
 			}
@@ -190,7 +194,7 @@ func (s *TransferStore) CreateTransfer(ctx context.Context, actor identityapp.Pr
 		if err != nil {
 			return err
 		}
-		if err := libraryChanged(tx, `INSERT INTO media.transfer_job(id,org_id,actor_id,source_library_id,target_library_id,source_kind,target_kind,source_project_id,target_project_id,target_folder_id,target_folder_revision,source_revision,target_revision,project_revision,manifest_sha256,item_count,status,stage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'queued','frozen',?,?)`, jobID, actor.OrgID, actor.ID, source.ID, target.ID, string(in.Source.Kind), string(in.Target.Kind), in.Source.ProjectID, in.Target.ProjectID, in.TargetFolderID, in.ExpectedFolderRevision, source.Revision, target.Revision, facts.Revision, manifest, len(frozen), now, now); err != nil {
+		if err := libraryChanged(tx, `INSERT INTO media.transfer_job(id,org_id,actor_id,source_scope_id,target_scope_id,source_org_id,target_org_id,source_library_id,target_library_id,source_kind,target_kind,source_project_id,target_project_id,target_folder_id,target_folder_revision,source_revision,target_revision,project_revision,manifest_sha256,item_count,status,stage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'queued','frozen',?,?)`, jobID, actor.OrgID, actor.ID, sourceActor.ScopeID, targetActor.ScopeID, sourceActor.OrgID, targetActor.OrgID, source.ID, target.ID, string(in.Source.Kind), string(in.Target.Kind), in.Source.ProjectID, in.Target.ProjectID, in.TargetFolderID, in.ExpectedFolderRevision, source.Revision, target.Revision, facts.Revision, manifest, len(frozen), now, now); err != nil {
 			return err
 		}
 		for index, item := range frozen {

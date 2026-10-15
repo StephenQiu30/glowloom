@@ -1,6 +1,9 @@
 "use client";
+import { FieldGroup, Field, FieldLabel } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { Input } from "@/components/ui/input";
 
 function values(form: FormData, name: string) {
@@ -115,46 +118,57 @@ export function ModelSetup({
   limits?: Record<string, unknown>;
   parameters?: unknown;
 }) {
+  const formFieldId = useId();
+
   const [advanced, setAdvanced] = useState(!!limits);
   return (
-    <div className="space-y-3">
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+    <FieldGroup className="gap-3">
+      <Field orientation="horizontal">
+        <Checkbox
+          id={`${formFieldId}-field-1`}
+
           checked={advanced}
-          onChange={(e) => setAdvanced(e.target.checked)}
+          onCheckedChange={(e) => setAdvanced(e === true)}
         />
-        编辑完整参数与素材规则
-      </label>
-      <input
+        <FieldLabel htmlFor={`${formFieldId}-field-1`}>
+          <span>编辑完整参数与素材规则</span>
+        </FieldLabel>
+      </Field>
+      <Input
         type="hidden"
         name="setup_mode"
         value={advanced ? "advanced" : "basic"}
       />
       {advanced ? (
         <>
-          <label className="block text-sm">
-            输入与输出限制
-            <textarea
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-2`}>
+              <span>输入与输出限制</span>
+            </FieldLabel>
+            <Textarea
+              id={`${formFieldId}-field-2`}
               name="limits"
               required
-              className="mt-1 min-h-28 w-full rounded-md border bg-background p-2 font-mono"
+              className="mt-1 min-h-28 w-full"
               defaultValue={JSON.stringify(
                 limits ?? { max_outputs: 1 },
                 null,
                 2,
               )}
             />
-          </label>
-          <label className="block text-sm">
-            参数表单定义
-            <textarea
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-3`}>
+              <span>参数表单定义</span>
+            </FieldLabel>
+            <Textarea
+              id={`${formFieldId}-field-3`}
               name="parameters"
               required
-              className="mt-1 min-h-28 w-full rounded-md border bg-background p-2 font-mono"
+              className="mt-1 min-h-28 w-full"
               defaultValue={JSON.stringify(parameters ?? [], null, 2)}
             />
-          </label>
+          </Field>
         </>
       ) : (
         <>
@@ -163,9 +177,12 @@ export function ModelSetup({
               基础配置会替换原有高级规则；保存后仍需创建发布并验证。
             </p>
           )}
-          <label className="block text-sm">
-            每次最多生成数量
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-4`}>
+              <span>每次最多生成数量</span>
+            </FieldLabel>
             <Input
+              id={`${formFieldId}-field-4`}
               name="max_outputs"
               type="number"
               min={1}
@@ -173,11 +190,14 @@ export function ModelSetup({
               required
               defaultValue={1}
             />
-          </label>
+          </Field>
           {capability !== "video.generate" && (
-            <label className="block text-sm">
-              OpenRouter 固定服务端点（可选）
+            <Field>
+              <FieldLabel htmlFor={`${formFieldId}-field-5`}>
+                <span>OpenRouter 固定服务端点（可选）</span>
+              </FieldLabel>
               <Input
+                id={`${formFieldId}-field-5`}
                 name="provider_endpoint"
                 maxLength={128}
                 placeholder="填写官方端点记录中的 provider_tag"
@@ -186,12 +206,15 @@ export function ModelSetup({
                 留空由 OpenRouter
                 首次路由；请求不启用失败回退，且必须支持所传参数。
               </span>
-            </label>
+            </Field>
           )}
           {capability === "text.generate" ? (
-            <label className="block text-sm">
-              最大输出 Token
+            <Field>
+              <FieldLabel htmlFor={`${formFieldId}-field-6`}>
+                <span>最大输出 Token</span>
+              </FieldLabel>
               <Input
+                id={`${formFieldId}-field-6`}
                 name="max_tokens"
                 type="number"
                 required
@@ -199,48 +222,60 @@ export function ModelSetup({
                 max={1000000}
                 placeholder="填写该模型允许的上限"
               />
-            </label>
+            </Field>
           ) : (
             <>
-              <label className="block text-sm">
-                支持的分辨率
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-7`}>
+                  <span>支持的分辨率</span>
+                </FieldLabel>
                 <Input
+                  id={`${formFieldId}-field-7`}
                   name="resolutions"
                   placeholder="按模型文档填写，用逗号分隔"
                 />
-              </label>
-              <label className="block text-sm">
-                支持的画面比例
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-8`}>
+                  <span>支持的画面比例</span>
+                </FieldLabel>
                 <Input
+                  id={`${formFieldId}-field-8`}
                   name="aspect_ratios"
                   placeholder="按模型文档填写，用逗号分隔"
                 />
-              </label>
-              <label className="block text-sm">
-                参考图数量上限
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${formFieldId}-field-9`}>
+                  <span>参考图数量上限</span>
+                </FieldLabel>
                 <Input
+                  id={`${formFieldId}-field-9`}
                   name="max_references"
                   type="number"
                   min={1}
                   max={100}
                   placeholder="参考图模式必填"
                 />
-              </label>
+              </Field>
               {capability === "video.generate" && (
-                <label className="block text-sm">
-                  支持的视频时长（秒）
+                <Field>
+                  <FieldLabel htmlFor={`${formFieldId}-field-10`}>
+                    <span>支持的视频时长（秒）</span>
+                  </FieldLabel>
                   <Input
+                    id={`${formFieldId}-field-10`}
                     name="durations"
                     required
                     placeholder="按模型文档填写，用逗号分隔"
                   />
-                </label>
+                </Field>
               )}
             </>
           )}
         </>
       )}
-    </div>
+    </FieldGroup>
   );
 }
 
@@ -263,54 +298,81 @@ export function priceRule(form: FormData) {
     : { base_micros: micros("base_rate") };
 }
 export function PriceSetup({ rule }: { rule?: Record<string, unknown> }) {
+  const formFieldId = useId();
+
   const [advanced, setAdvanced] = useState(!!rule);
   return (
-    <div className="space-y-3">
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+    <FieldGroup className="gap-3">
+      <Field orientation="horizontal">
+        <Checkbox
+          id={`${formFieldId}-field-11`}
+
           checked={advanced}
-          onChange={(e) => setAdvanced(e.target.checked)}
+          onCheckedChange={(e) => setAdvanced(e === true)}
         />
-        编辑完整计费规则
-      </label>
-      <input
+        <FieldLabel htmlFor={`${formFieldId}-field-11`}>
+          <span>编辑完整计费规则</span>
+        </FieldLabel>
+      </Field>
+      <Input
         type="hidden"
         name="price_mode"
         value={advanced ? "advanced" : "basic"}
       />
       {advanced ? (
-        <label className="block text-sm">
-          人民币微元计费规则
-          <textarea
+        <Field>
+          <FieldLabel htmlFor={`${formFieldId}-field-12`}>
+            <span>人民币微元计费规则</span>
+          </FieldLabel>
+          <Textarea
+            id={`${formFieldId}-field-12`}
             name="rule"
             required
-            className="mt-1 w-full rounded-md border bg-background p-2 font-mono"
+            className="mt-1 w-full"
             defaultValue={JSON.stringify(rule ?? { base_micros: 0 }, null, 2)}
           />
-        </label>
+        </Field>
       ) : (
         <>
-          <label className="block text-sm">
-            每单位价格（元；按千 Token 计费时忽略）
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-13`}>
+              <span>每单位价格（元；按千 Token 计费时忽略）</span>
+            </FieldLabel>
             <Input
+              id={`${formFieldId}-field-13`}
               name="base_rate"
               type="number"
               min={0}
               step="0.000001"
               defaultValue={0}
             />
-          </label>
-          <label className="block text-sm">
-            每千输入 Token（元）
-            <Input name="input_rate" type="number" min={0} step="0.000001" />
-          </label>
-          <label className="block text-sm">
-            每千输出 Token（元）
-            <Input name="output_rate" type="number" min={0} step="0.000001" />
-          </label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-14`}>
+              <span>每千输入 Token（元）</span>
+            </FieldLabel>
+            <Input
+              id={`${formFieldId}-field-14`}
+              name="input_rate"
+              type="number"
+              min={0}
+              step="0.000001"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${formFieldId}-field-15`}>
+              <span>每千输出 Token（元）</span>
+            </FieldLabel>
+            <Input
+              id={`${formFieldId}-field-15`}
+              name="output_rate"
+              type="number"
+              min={0}
+              step="0.000001"
+            />
+          </Field>
         </>
       )}
-    </div>
+    </FieldGroup>
   );
 }

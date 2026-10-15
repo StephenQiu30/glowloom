@@ -18,7 +18,6 @@ import (
 	auditapp "github.com/StephenQiu30/glowloom-server/backend/internal/audit/application"
 	pgbilling "github.com/StephenQiu30/glowloom-server/backend/internal/billing/adapter/postgres"
 	catalogevent "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/event"
-	pgcatalog "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/postgres"
 	catalogflow "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/adapter/workflow"
 	catalogapp "github.com/StephenQiu30/glowloom-server/backend/internal/catalog/application"
 	kafkainbox "github.com/StephenQiu30/glowloom-server/backend/internal/infra/inbox/adapter/kafka"
@@ -39,7 +38,6 @@ import (
 	toolflow "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/adapter/workflow"
 	toolapp "github.com/StephenQiu30/glowloom-server/backend/internal/mediatool/application"
 	operationevent "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/event"
-	pgoperation "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/postgres"
 	operationstaging "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/staging"
 	operationflow "github.com/StephenQiu30/glowloom-server/backend/internal/operation/adapter/workflow"
 	operationapp "github.com/StephenQiu30/glowloom-server/backend/internal/operation/application"
@@ -112,8 +110,8 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		mediaflow.RegisterPurgeWorkflow(queueWorker)
 		service := maintenanceapp.NewService(pgoutbox.NewPartitionStore(dbConn.DB), pginbox.NewStore(dbConn.DB))
 		maintenanceflow.Register(queueWorker, maintenanceflow.NewActivities(service, 500))
-		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(pgcatalog.NewStore(dbConn.DB)), pgcatalog.NewStore(dbConn.DB)))
-		operationStore := pgoperation.NewStore(dbConn.DB)
+		catalogflow.Register(queueWorker, catalogflow.NewActivities(catalogapp.NewCredentialTestService(provideCatalogStore(dbConn.DB)), provideCatalogStore(dbConn.DB)))
+		operationStore := provideOperationStore(dbConn.DB)
 		finalizer := NewOperationFinalizer(dbConn.DB, operationStore, pgbilling.NewStore(dbConn.DB))
 		var recovery operationflow.ProviderImageRecoverer
 		if cfg.ObjectStorageEndpoint != "" {
@@ -146,23 +144,23 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 				origins = append(origins, origin)
 			}
 		}
-		receiptService := operationapp.NewProviderStageService(operationstaging.NewObjects(storage), pgoperation.NewStore(dbConn.DB))
-		activities, err := mediaflow.NewActivitiesWithStaging(dbConn.DB, storage, mediaflow.DownloadPolicy{
+		receiptService := operationapp.NewProviderStageService(operationstaging.NewObjects(storage), provideOperationStore(dbConn.DB))
+		activities, err := mediaflow.NewScopedActivitiesWithStaging(dbConn.DB, storage, mediaflow.DownloadPolicy{
 			AllowedOrigins: origins, AllowTestLoopbackTLS: cfg.MediaAllowTestLoopbackTLS,
-		}, mediastaged.NewReader(receiptService))
+		}, mediastaged.NewReader(receiptService), provideMediaWorkerScopeAccess)
 		if err != nil {
 			return nil, fmt.Errorf("configure media activities: %w", err)
 		}
 
-		managedResults := operationapp.NewManagedResults(operationstaging.NewObjects(storage), pgoperation.NewStore(dbConn.DB))
-		managedIngest := managedprovider.NewIngestActivities(dbConn.DB, storage, managedResults)
+		managedResults := operationapp.NewManagedResults(operationstaging.NewObjects(storage), provideOperationStore(dbConn.DB))
+		managedIngest := managedprovider.NewScopedIngestActivities(dbConn.DB, storage, managedResults, provideMediaWorkerScopeAccess, provideOperationStore(dbConn.DB))
 		queueWorker.RegisterActivityWithOptions(managedIngest.Ingest, activity.RegisterOptions{Name: "media.IngestManaged"})
 		mediaflow.Register(queueWorker, activities)
 		exportRenderer, err := toolff.NewRenderer(mediaflow.FFProber{})
 		if err != nil {
 			return nil, fmt.Errorf("configure media export renderer: %w", err)
 		}
-		exports := provideMediaExportStore(dbConn.DB)
+		exports := provideMediaExportStoreWithAccess(dbConn.DB, provideMediaWorkerScopeAccess)
 		exportWorker := toolapp.NewWorker(exports, toolflow.NewObjects(storage), exportRenderer, mediaflow.FFProber{}, mediaflow.FFUploadRenderer{})
 		toolflow.RegisterActivities(queueWorker, toolflow.NewActivities(exportWorker, exports, exports))
 		transcriber, err := provideTranscriber(cfg)
@@ -173,7 +171,7 @@ func provideBackendWorker(ctx context.Context, cfg config.Config, dbConn *db.Con
 		if err != nil {
 			return nil, fmt.Errorf("configure speech audio preparation: %w", err)
 		}
-		transcriptions := provideMediaTranscriptionStore(dbConn.DB, transcriber != nil)
+		transcriptions := provideMediaTranscriptionStoreWithAccess(dbConn.DB, transcriber != nil, provideMediaWorkerScopeAccess)
 		transcriptionWorker := toolapp.NewTranscriptionWorker(transcriptions, toolflow.NewObjects(storage), audioPreprocessor, transcriber)
 		toolflow.RegisterTranscriptionActivities(queueWorker, toolflow.NewTranscriptionActivities(transcriptionWorker, transcriptions))
 		depthWorker, depths, err := provideMediaDepthWorker(dbConn.DB, storage, cfg)
@@ -236,18 +234,18 @@ func provideRelayRuntime(ctx context.Context, cfg config.Config, dbConn *db.Conn
 			return nil, nil, fmt.Errorf("configure relay Temporal: %w", err)
 		}
 		starterHandler := operationevent.NewWorkflowStarterHandler(processed,
-			pgoperation.NewStore(dbConn.DB), operationflow.NewStarter(temporalConn.Client))
+			provideOperationStore(dbConn.DB), operationflow.NewStarter(temporalConn.Client))
 		controlHandler := operationevent.NewWorkflowControlHandler(processed,
-			pgoperation.NewStore(dbConn.DB), operationflow.NewControl(temporalConn.Client))
+			provideOperationStore(dbConn.DB), operationflow.NewControl(temporalConn.Client))
 		credentialHandler := catalogevent.NewCredentialTestHandler(processed,
-			pgcatalog.NewStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
-		exportHandler := toolevent.NewHandler(processed, provideMediaExportStore(dbConn.DB), toolflow.NewStarter(temporalConn.Client))
-		transcriptionHandler := toolevent.NewTranscriptionHandler(processed, provideMediaTranscriptionStore(dbConn.DB, false), toolflow.NewTranscriptionStarter(temporalConn.Client))
-		depthHandler := toolevent.NewDepthHandler(processed, provideMediaDepthStore(dbConn.DB, false), toolflow.NewDepthStarter(temporalConn.Client))
-		copyHandler := workspaceevent.NewProjectCopyHandler(processed, provideProjectCopyStore(dbConn.DB), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
+			provideCatalogStore(dbConn.DB), catalogflow.NewTestStarter(temporalConn.Client))
+		exportHandler := toolevent.NewHandler(processed, provideMediaExportStoreWithAccess(dbConn.DB, provideMediaWorkerScopeAccess), toolflow.NewStarter(temporalConn.Client))
+		transcriptionHandler := toolevent.NewTranscriptionHandler(processed, provideMediaTranscriptionStoreWithAccess(dbConn.DB, false, provideMediaWorkerScopeAccess), toolflow.NewTranscriptionStarter(temporalConn.Client))
+		depthHandler := toolevent.NewDepthHandler(processed, provideMediaDepthStoreWithAccess(dbConn.DB, false, provideMediaWorkerScopeAccess), toolflow.NewDepthStarter(temporalConn.Client))
+		copyHandler := workspaceevent.NewProjectCopyHandler(processed, provideProjectCopyStoreWithAccess(dbConn.DB, provideMediaWorkerScopeAccess), workspaceflow.NewProjectCopyStarter(temporalConn.Client))
 		importHandler := scriptevent.NewImportHandler(processed, provideScriptImportStore(dbConn.DB), scriptflow.NewImportStarter(temporalConn.Client))
-		transferHandler := mediaevent.NewTransferHandler(processed, provideMediaTransferStore(dbConn.DB), mediaflow.NewTransferStarter(temporalConn.Client))
-		purgeHandler := mediaevent.NewPurgeHandler(processed, provideMediaPurgeStore(dbConn.DB), mediaflow.NewPurgeStarter(temporalConn.Client))
+		transferHandler := mediaevent.NewTransferHandler(processed, provideMediaTransferWorkerStore(dbConn.DB), mediaflow.NewTransferStarter(temporalConn.Client))
+		purgeHandler := mediaevent.NewPurgeHandler(processed, provideMediaPurgeWorkerStore(dbConn.DB), mediaflow.NewPurgeStarter(temporalConn.Client))
 		runtime.starter, err = kafkainbox.NewConsumer(cfg.KafkaBrokers, workflowStarterGroup,
 			[]string{operationevent.OperationConfirmedTopic, operationevent.BatchConfirmedTopic, operationevent.WorkflowControlTopic, catalogevent.CredentialTestTopic, toolevent.Topic, toolevent.TranscriptionTopic, toolevent.DepthTopic, workspaceevent.ProjectCopyTopic, scriptevent.ImportTopic, mediaevent.TransferTopic, mediaevent.PurgeTopic}, workflowDelivery{
 				operations: operationevent.NewWorkflowEventHandler(starterHandler, controlHandler), credentials: credentialHandler,

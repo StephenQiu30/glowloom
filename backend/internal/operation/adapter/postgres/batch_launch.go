@@ -24,6 +24,9 @@ func (s *Store) AcquireBatchLaunch(ctx context.Context, batchID, operationID uui
 	}
 	var acquired bool
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.requireWorker(tx, operationID, true); err != nil {
+			return err
+		}
 		var item struct {
 			ProjectID             uuid.UUID
 			BatchID               *uuid.UUID

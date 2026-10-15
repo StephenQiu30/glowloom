@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/google/uuid"
+
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 )
 
 func TestMigrationInventoryBlocksAmbiguity(t *testing.T) {

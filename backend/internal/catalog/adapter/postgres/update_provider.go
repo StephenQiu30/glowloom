@@ -15,20 +15,20 @@ import (
 
 // UpdateProviderWithEvents locks the current provider and writes the new
 // settings, cache event, and audit event in one transaction.
-func (s *Store) UpdateProviderWithEvents(ctx context.Context, actorID, orgID uuid.UUID, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
-	if s == nil || s.db == nil || actorID == uuid.Nil || orgID == uuid.Nil ||
+func (s *Store) UpdateProviderWithEvents(ctx context.Context, actor identityapp.Principal, before, after domain.Provider, events []identityapp.OutboxEvent) (domain.Provider, error) {
+	if s == nil || s.db == nil || actor.ID == uuid.Nil || actor.OrgID == uuid.Nil ||
 		before.Validate() != nil || after.Validate() != nil ||
 		before.ID != after.ID || before.Key != after.Key || before.Name != after.Name ||
 		before.AdapterKey != after.AdapterKey || before.Region != after.Region ||
 		before.Revision+1 != after.Revision ||
 		(before.Status == after.Status && before.ConcurrencyLimit == after.ConcurrencyLimit &&
 			before.RateLimitPerMin == after.RateLimitPerMin) ||
-		!validProviderUpdateEvents(actorID, orgID, before, after, events) {
+		!validProviderUpdateEvents(actor.ID, actor.OrgID, before, after, events) {
 		return domain.Provider{}, application.ErrInvalidUpdateProvider
 	}
 	var saved domain.Provider
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentCatalogAdmin(tx, actorID, orgID); err != nil {
+		if err := s.requirePlatformAdmin(tx, actor); err != nil {
 			return err
 		}
 		var row providerRow

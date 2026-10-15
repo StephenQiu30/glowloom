@@ -3,18 +3,20 @@ package identity_test
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
-	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
-	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
-	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
-	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/credentialproof"
+	identityhttp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/http"
+	pgidentity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/adapter/postgres"
+	identity "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
+	"github.com/StephenQiu30/glowloom-server/backend/internal/identity/domain"
 )
 
 func TestAuthOriginAndEnumeration(t *testing.T) {
@@ -41,7 +43,7 @@ func TestAuthOriginAndEnumeration(t *testing.T) {
 	handler.Register(router.Group("/api"))
 	request := func(path, origin string, payload any, cookie *http.Cookie, csrf string) *httptest.ResponseRecorder {
 		raw, _ := json.Marshal(payload)
-		r := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(raw))
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, bytes.NewReader(raw))
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Origin", origin)
 		r.Header.Set("Idempotency-Key", uuid.NewString())
@@ -110,7 +112,7 @@ func TestSelfProfileHTTPRejectsAuthorityFields(t *testing.T) {
 	identityhttp.NewSelfProfileHandler(identity.NewSelfProfile(pgidentity.NewSelfProfileStore(tx, nil), func() time.Time { return now })).Register(protected)
 	request := func(method, path string, body any) *httptest.ResponseRecorder {
 		data, _ := json.Marshal(body)
-		r := httptest.NewRequest(method, path, bytes.NewReader(data))
+		r := httptest.NewRequestWithContext(t.Context(), method, path, bytes.NewReader(data))
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Origin", "http://localhost:3200")
 		r.Header.Set("X-CSRF-Token", login.CSRFToken)

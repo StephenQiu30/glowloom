@@ -47,3 +47,18 @@ func TestProjectCopyMediaPreservesContentWithoutExecutionHistory(t *testing.T) {
 		t.Fatal("rejected source promoted or dropped", err)
 	}
 }
+
+func TestProjectCopyRoutedSourceKeepsSourceLocationAndLeavesTargetUnboundUntilAdmission(t *testing.T) {
+	source := validAsset()
+	source.Status = domain.StatusReady
+	source.ModerationStatus = domain.ModerationPassed
+	source.ObjectLocation = readLocation("minio-main", source.ObjectKey)
+	binding := application.ProjectCopyBinding{JobID: uuid.New(), OrgID: uuid.New(), SourceProjectID: source.ProjectID, TargetProjectID: uuid.New()}
+	copied, err := application.PrepareProjectMediaCopy(binding, []application.ProjectCopySourceAsset{{Asset: source}}, time.Now())
+	if err != nil {
+		t.Fatal("routed source cannot be copied", err)
+	}
+	if copied.Assets[0].Asset.ObjectLocation != nil || copied.Objects[0].SourceLocation == nil || copied.Objects[0].SourceLocation.Ref != source.ObjectLocation.Ref {
+		t.Fatal("copy retained old target binding or dropped source location")
+	}
+}

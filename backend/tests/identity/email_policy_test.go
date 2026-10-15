@@ -26,12 +26,12 @@ func TestEmailPolicyBoundaries(t *testing.T) {
 }
 
 func TestPasswordUnicodeBoundaries(t *testing.T) {
-	for _, password := range []string{strings.Repeat("界", 15), strings.Repeat("a", 128), "  my pass phrase  "} {
+	for _, password := range []string{strings.Repeat("界", 8), "a7bc8def", strings.Repeat("a", 14), strings.Repeat("a", 128), "  my pass phrase  "} {
 		if err := domain.ValidateNewPassword(password); err != nil {
 			t.Errorf("valid password rejected: %v", err)
 		}
 	}
-	for _, password := range []string{strings.Repeat("a", 14), strings.Repeat("界", 129), string([]byte{0xff}) + strings.Repeat("a", 20)} {
+	for _, password := range []string{strings.Repeat("a", 7), strings.Repeat("界", 7), strings.Repeat("界", 129), string([]byte{0xff}) + strings.Repeat("a", 20)} {
 		if err := domain.ValidateNewPassword(password); err == nil {
 			t.Fatal("invalid password accepted")
 		}

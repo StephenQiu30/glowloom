@@ -24,11 +24,11 @@ type disableCredentialStore struct {
 	called bool
 }
 
-func (s *disableCredentialStore) FindCredentialForAdmin(_ context.Context, _, _, _, _ uuid.UUID) (catalogapp.CredentialToDisable, error) {
+func (s *disableCredentialStore) FindCredentialForAdmin(_ context.Context, _ identityapp.Principal, _, _ uuid.UUID) (catalogapp.CredentialToDisable, error) {
 	return s.target, nil
 }
 
-func (s *disableCredentialStore) DisableCredentialWithEvents(_ context.Context, _, _ uuid.UUID, target catalogapp.CredentialToDisable, events []identityapp.OutboxEvent) (catalogapp.SavedCredential, error) {
+func (s *disableCredentialStore) DisableCredentialWithEvents(_ context.Context, _ identityapp.Principal, target catalogapp.CredentialToDisable, events []identityapp.OutboxEvent) (catalogapp.SavedCredential, error) {
 	s.called = true
 	s.events = events
 	return catalogapp.SavedCredential{

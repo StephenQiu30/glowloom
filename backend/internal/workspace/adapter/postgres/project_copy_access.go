@@ -15,6 +15,8 @@ import (
 // ProjectCopyAccessStore retains the coordinator's locks in the owner's transaction.
 type ProjectCopyAccessStore struct {
 	tx        *gorm.DB
+	requests  RequestScopeFactory
+	workers   WorkerScopeFactory
 	authority application.ProjectCopyAuthority
 }
 
@@ -36,8 +38,21 @@ func (s *ProjectCopyAccessStore) Authorize(ctx context.Context, actor identityap
 		return domain.ErrInvalidProjectCopy
 	}
 	tx := s.tx.WithContext(ctx)
-	if err := requireCurrentActor(tx, actor); err != nil {
-		return err
+	scope := actor.ScopeID
+	if a.Phase == "freeze" {
+		if err := (&Store{scopes: s.requests}).requireScope(ctx, tx, actor, true); err != nil {
+			return err
+		}
+	} else {
+		copyStore := &ProjectCopyStore{requests: s.requests, workers: s.workers}
+		if _, err := copyStore.authorizedCopy(ctx, tx, actor, binding.JobID, true, true); err != nil {
+			return err
+		}
+		var row struct{ OwnerScopeID uuid.UUID }
+		if err := tx.Raw(`SELECT owner_scope_id FROM workspace.project_copy_job WHERE id=?`, binding.JobID).Scan(&row).Error; err != nil {
+			return err
+		}
+		scope = row.OwnerScopeID
 	}
 	var projects []struct {
 		ID       uuid.UUID
@@ -45,7 +60,7 @@ func (s *ProjectCopyAccessStore) Authorize(ctx context.Context, actor identityap
 		Status   string
 		IsDelete bool
 	}
-	read := tx.Raw(`SELECT id,revision,status,is_delete FROM workspace.project WHERE org_id=? AND id IN (?,?) ORDER BY id FOR UPDATE`, binding.OrgID, binding.SourceProjectID, binding.TargetProjectID).Scan(&projects)
+	read := tx.Raw(`SELECT id,revision,status,is_delete FROM workspace.project WHERE org_id=? AND owner_scope_id=? AND id IN (?,?) ORDER BY id FOR UPDATE`, binding.OrgID, scope, binding.SourceProjectID, binding.TargetProjectID).Scan(&projects)
 	if read.Error != nil {
 		return fmt.Errorf("lock copying project scope: %w", read.Error)
 	}

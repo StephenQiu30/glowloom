@@ -32,14 +32,11 @@ func (s *ProjectCopyStore) Change(ctx context.Context, actor identityapp.Princip
 	fingerprint := hex.EncodeToString(digest[:])
 	var saved domain.ProjectCopyJob
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireCurrentActor(tx, actor); err != nil {
-			return err
-		}
 		var locked int
-		if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.ID.String()+":"+key.String()).Scan(&locked).Error; err != nil {
+		if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(69360,hashtext(?))`, actor.ScopeID.String()+":"+actor.ID.String()+":"+key.String()).Scan(&locked).Error; err != nil {
 			return err
 		}
-		before, err := readCopyJob(tx, actor, id, true)
+		before, err := s.authorizedCopy(ctx, tx, actor, id, true, false)
 		if err != nil {
 			return err
 		}
