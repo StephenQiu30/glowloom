@@ -7,6 +7,7 @@ import {
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
+import { AccountAvatar } from "@/components/account/account-avatar";
 import { ProductShell } from "@/components/layout/product-shell";
 import { useSession } from "@/components/auth/session";
 import { Button } from "@/components/ui/button";
@@ -44,9 +45,7 @@ function Settings() {
               <h2>个人资料</h2>
               <p>管理你的头像与创作者名称。</p>
               <div className="mt-6 flex items-center gap-4">
-                <span className="grid size-14 place-items-center rounded-full bg-accent text-xl">
-                  {Array.from(session.actor.display_name)[0]}
-                </span>
+                <AccountAvatar className="size-14" />
                 <Button
                   variant="outline"
                   onClick={() => setFeature("头像更新")}

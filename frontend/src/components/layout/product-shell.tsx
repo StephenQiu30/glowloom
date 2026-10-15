@@ -8,19 +8,10 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import Link from "next/link";
 import { cn } from "cn";
 import { useRouter } from "next/navigation";
-import {
-  Bell,
-  Folder,
-  Gift,
-  KeyRound,
-  LogOut,
-  Menu,
-  Shield,
-  UserRound,
-} from "lucide-react";
+import { Bell, Gift, Menu } from "lucide-react";
+import { AccountMenu } from "@/components/account/account-menu";
 import { Brand } from "@/components/brand/brand";
 import {
   SessionGate,
@@ -31,17 +22,7 @@ import {
 import { AuthDialog, type AuthMode } from "@/components/auth/auth-dialog";
 import { UnavailableDialog } from "@/components/availability/unavailable";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -161,67 +142,10 @@ function Shell({
                   <Button variant="ghost" onClick={() => setFeature("会员")}>
                     开通会员
                   </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="账号菜单"
-                      >
-                        <Avatar className="size-6">
-                          <AvatarFallback>
-                            {Array.from(session.actor.display_name)[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-60">
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel>
-                          {session.actor.display_name}
-                          <p className="mt-1 text-xs font-normal text-muted-foreground">
-                            {session.actor.login_name}
-                          </p>
-                        </DropdownMenuLabel>
-                      </DropdownMenuGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem asChild>
-                          <Link href="/account">
-                            <UserRound />
-                            账号设置
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href="/assets">
-                            <Folder />
-                            我的资产
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href="/reset-password">
-                            <KeyRound />
-                            修改密码
-                          </Link>
-                        </DropdownMenuItem>
-                        {session.actor.role === "admin" && (
-                          <DropdownMenuItem asChild>
-                            <Link href="/users">
-                              <Shield />
-                              用户管理
-                            </Link>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem onSelect={() => setLogout(true)}>
-                          <LogOut />
-                          退出登录
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <AccountMenu
+                    actor={session.actor}
+                    onLogout={() => setLogout(true)}
+                  />
                 </div>
               </>
             ) : (
