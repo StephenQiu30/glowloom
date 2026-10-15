@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	identityapp "github.com/StephenQiu30/glowloom-server/backend/internal/identity/application"
 	"github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/extract"
 	scriptobjects "github.com/StephenQiu30/glowloom-server/backend/internal/script/adapter/objects"
 	app "github.com/StephenQiu30/glowloom-server/backend/internal/script/application"
@@ -211,9 +210,7 @@ func TestScriptFileImportPGRevokedControllerCanBeRecoveredByNewExplicitControlle
 		t.Fatal(err)
 	}
 	worker := scriptImportWorker(db, storage, extract.NewExtractor())
-	if err := worker.Control(t.Context(), importDelivery(t, owner, first, command.Key)); !errors.Is(err, identityapp.ErrForbidden) {
-		t.Fatal("revoked controller authorized", err)
-	}
+	assertRevokedImportDelivery(t, owner, scriptImportStore(db, storage), worker, importDelivery(t, owner, first, command.Key))
 	current, err := service.Get(t.Context(), second, pid, accepted.ID)
 	if err != nil || current.Revision != response.Revision || !current.CancellationRequested || !current.CanControl {
 		t.Fatal("public recovery path lost", current, err)
