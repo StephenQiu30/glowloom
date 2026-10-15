@@ -368,10 +368,10 @@ func TestModelCatalogRejectsStaleActorAndInvisibleProjectOnLocalPostgres(t *test
 	if err := database.WithContext(ctx).Exec(`UPDATE workspace.project SET is_delete = false WHERE id = ?::uuid`, projectID.String()).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := database.WithContext(ctx).Exec(`UPDATE workspace.team SET status = 'disabled' WHERE id = ?::uuid`, team.String()).Error; err != nil {
+	if err := database.WithContext(ctx).Exec(`UPDATE workspace.team SET status = 'suspended', resume_status = 'active' WHERE id = ?::uuid`, team.String()).Error; err != nil {
 		t.Fatal(err)
 	}
 	if page, err := store.ListModelsForProject(ctx, actor, input); err == nil || len(page.Models) != 0 {
-		t.Fatalf("disabled team exposed catalog: %+v: %v", page, err)
+		t.Fatalf("suspended team exposed catalog: %+v: %v", page, err)
 	}
 }

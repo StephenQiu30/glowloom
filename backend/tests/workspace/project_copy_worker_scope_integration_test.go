@@ -71,6 +71,11 @@ func TestProjectCopyWorkerReadRechecksCurrentTeamMembership(t *testing.T) {
 	if _, err := store.FindForWorker(ctx, worker, job.ID); err != nil {
 		t.Fatal("active team worker read", err)
 	}
+	lifecycleFixtureSQL(t, tx, `UPDATE workspace.team SET status='suspended',resume_status='active' WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, actor.ScopeID)
+	if _, err := store.FindForWorker(ctx, worker, job.ID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
+		t.Fatal("suspended team retained worker read", err)
+	}
+	lifecycleFixtureSQL(t, tx, `UPDATE workspace.team SET status='active',resume_status=NULL WHERE id=(SELECT team_id FROM workspace.creation_scope WHERE id=?)`, actor.ScopeID)
 	lifecycleFixtureSQL(t, tx, `UPDATE workspace.team_member SET status='removed' WHERE team_id=(SELECT team_id FROM workspace.creation_scope WHERE id=?) AND user_id=?`, actor.ScopeID, actor.ID)
 	if _, err := store.FindForWorker(ctx, worker, job.ID); !errors.Is(err, workspaceapp.ErrScopeNotFound) {
 		t.Fatal("removed team member retained worker read", err)
